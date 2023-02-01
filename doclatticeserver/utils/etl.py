@@ -13,7 +13,7 @@ from typing_extensions import TypedDict
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
-from doclatticeserver.utils.data_types import (
+from doclatticeserver.types.dicts import (
     LabelLookupPythonType,
     DocLatticeDocAnnotationExport,
     DocLatticeSinglePageAnnotationType,
@@ -94,10 +94,7 @@ def build_document_export(
 
     from PyPDF2 import PdfFileReader, PdfFileWriter
 
-    from doclatticeserver.utils.pdf_tools import (
-        addHighlightToNewPage,
-        createHighlight,
-    )
+    from doclatticeserver.utils.pdf import addHighlightToNewPage, createHighlight
 
     try:
 

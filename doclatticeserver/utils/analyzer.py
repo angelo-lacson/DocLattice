@@ -11,17 +11,16 @@ from django.utils import timezone
 
 from doclatticeserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel, LabelSet
-from doclatticeserver.utils.data_types import (
+from doclatticeserver.types.dicts import (
     AnalyzerManifest,
-    AnnotationLabelPythonType,
     DocLatticeGeneratedCorpusPythonType,
     DocLatticeLabelSetType,
-    PermissionTypes,
 )
-from doclatticeserver.utils.packaging_tools import (
+from doclatticeserver.types.enums import AnnotationLabelPythonType, PermissionTypes
+from doclatticeserver.utils.packaging import (
     turn_base64_encoded_file_to_django_content_file,
 )
-from doclatticeserver.utils.permissioning_utils import set_permissions_for_obj_to_user
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 logger = logging.getLogger(__name__)
 

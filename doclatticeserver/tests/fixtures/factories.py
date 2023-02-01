@@ -6,7 +6,7 @@ import pathlib
 import random
 from typing import Optional
 
-from doclatticeserver.utils.data_types import (
+from doclatticeserver.types.dicts import (
     DocLatticeDocAnnotations,
     DocLatticeGeneratedCorpusPythonType,
 )

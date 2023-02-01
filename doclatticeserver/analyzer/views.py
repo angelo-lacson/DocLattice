@@ -10,11 +10,9 @@ from rest_framework.views import APIView
 
 from doclatticeserver.analyzer.models import Analysis
 from doclatticeserver.tasks.analyzer_tasks import import_analysis
-from doclatticeserver.utils.data_types import (
-    JobStatus,
-    DocLatticeGeneratedCorpusPythonType,
-)
-from doclatticeserver.utils.etl_utils import is_dict_instance_of_typed_dict
+from doclatticeserver.types.dicts import DocLatticeGeneratedCorpusPythonType
+from doclatticeserver.types.enums import JobStatus
+from doclatticeserver.utils.etl import is_dict_instance_of_typed_dict
 
 logger = logging.getLogger(__name__)
 

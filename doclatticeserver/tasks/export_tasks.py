@@ -11,13 +11,13 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from doclatticeserver.corpuses.models import Corpus
-from doclatticeserver.users.models import UserExport
-from doclatticeserver.utils.data_types import (
-    AnnotationLabelPythonType,
+from doclatticeserver.types.dicts import (
     DocLatticeDocAnnotationExport,
     DocLatticeExportDataJsonPythonType,
 )
-from doclatticeserver.utils.packaging_tools import (
+from doclatticeserver.types.enums import AnnotationLabelPythonType
+from doclatticeserver.users.models import UserExport
+from doclatticeserver.utils.packaging import (
     package_corpus_for_export,
     package_label_set_for_export,
 )

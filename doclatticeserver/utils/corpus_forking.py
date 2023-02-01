@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.tasks import fork_corpus
-from doclatticeserver.utils.data_types import PermissionTypes
-from doclatticeserver.utils.permissioning_utils import set_permissions_for_obj_to_user
+from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
 

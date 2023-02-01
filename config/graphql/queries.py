@@ -50,8 +50,8 @@ from doclatticeserver.annotations.models import (
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.shared.resolvers import resolve_oc_model_queryset
+from doclatticeserver.types.enums import LabelType
 from doclatticeserver.users.models import Assignment, UserExport, UserImport
-from doclatticeserver.utils.data_types import LabelType
 
 logger = logging.getLogger(__name__)
 

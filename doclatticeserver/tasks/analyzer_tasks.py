@@ -6,16 +6,16 @@ from django.utils import timezone
 from config import celery_app
 from doclatticeserver.analyzer.models import GremlinEngine
 from doclatticeserver.analyzer.utils import get_gremlin_manifests
+from doclatticeserver.types.dicts import (
+    AnalyzerManifest,
+    DocLatticeGeneratedCorpusPythonType,
+)
 
 # Excellent django logging guidance here: https://docs.python.org/3/howto/logging-cookbook.html
-from doclatticeserver.utils.analyzer_utils import (
+from doclatticeserver.utils.analyzer import (
     create_analysis_for_corpus_with_analyzer,
     import_annotations_from_analysis,
     install_analyzers,
-)
-from doclatticeserver.utils.data_types import (
-    AnalyzerManifest,
-    DocLatticeGeneratedCorpusPythonType,
 )
 
 logger = logging.getLogger(__name__)

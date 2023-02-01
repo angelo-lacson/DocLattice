@@ -7,7 +7,8 @@ import doclatticeserver.analyzer.models
 import doclatticeserver.shared.defaults
 import doclatticeserver.shared.fields
 import doclatticeserver.shared.utils
-import doclatticeserver.utils.data_types
+import doclatticeserver.types.dicts
+import doclatticeserver.types.enums
 import uuid
 
 
@@ -33,7 +34,17 @@ class Migration(migrations.Migration):
                 ('import_log', models.TextField(blank=True, null=True)),
                 ('analysis_started', models.DateTimeField(blank=True, null=True)),
                 ('analysis_completed', models.DateTimeField(blank=True, null=True)),
-                ('status', models.CharField(choices=[(doclatticeserver.utils.data_types.JobStatus['CREATED'], doclatticeserver.utils.data_types.JobStatus['CREATED']), (doclatticeserver.utils.data_types.JobStatus['QUEUED'], doclatticeserver.utils.data_types.JobStatus['QUEUED']), (doclatticeserver.utils.data_types.JobStatus['RUNNING'], doclatticeserver.utils.data_types.JobStatus['RUNNING']), (doclatticeserver.utils.data_types.JobStatus['COMPLETED'], doclatticeserver.utils.data_types.JobStatus['COMPLETED']), (doclatticeserver.utils.data_types.JobStatus['FAILED'], doclatticeserver.utils.data_types.JobStatus['FAILED'])], default='CREATED', max_length=24)),
+                ('status', models.CharField(choices=[(doclatticeserver.types.enums.JobStatus['CREATED'],
+                                                      doclatticeserver.types.enums.JobStatus['CREATED']),
+                                                     (doclatticeserver.types.enums.JobStatus['QUEUED'],
+                                                      doclatticeserver.types.enums.JobStatus['QUEUED']),
+                                                     (doclatticeserver.types.enums.JobStatus['RUNNING'],
+                                                      doclatticeserver.types.enums.JobStatus['RUNNING']),
+                                                     (doclatticeserver.types.enums.JobStatus['COMPLETED'],
+                                                      doclatticeserver.types.enums.JobStatus['COMPLETED']),
+                                                     (doclatticeserver.types.enums.JobStatus['FAILED'],
+                                                      doclatticeserver.types.enums.JobStatus['FAILED'])],
+                                            default='CREATED', max_length=24)),
             ],
             options={
                 'permissions': (('create_analysis', 'create Analysis'), ('read_analysis', 'read Analysis'), ('update_analysis', 'update Analysis'), ('remove_analysis', 'delete Analysis'), ('publish_analysis', 'publish Analysis'), ('permission_analysis', 'permission Analysis')),

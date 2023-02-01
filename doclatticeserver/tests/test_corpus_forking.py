@@ -9,9 +9,9 @@ from django.db import transaction
 from doclatticeserver.corpuses.models import Corpus, TemporaryFileHandle
 from doclatticeserver.tasks import import_corpus
 from doclatticeserver.tasks.utils import package_zip_into_base64
-from doclatticeserver.utils.data_types import PermissionTypes
-from doclatticeserver.utils.fork_utils import build_fork_corpus_task
-from doclatticeserver.utils.permissioning_utils import set_permissions_for_obj_to_user
+from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.corpus_forking import build_fork_corpus_task
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
 

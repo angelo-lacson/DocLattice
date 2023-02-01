@@ -13,12 +13,12 @@ from pydantic import validate_arguments
 
 from config import celery_app
 from doclatticeserver.documents.models import Document
-from doclatticeserver.utils.data_types import (
+from doclatticeserver.types.dicts import (
     LabelLookupPythonType,
     DocLatticeDocAnnotationExport,
 )
-from doclatticeserver.utils.etl_utils import build_document_export
-from doclatticeserver.utils.pdf_tools import base_64_encode_bytes
+from doclatticeserver.utils.etl import build_document_export
+from doclatticeserver.utils.pdf import base_64_encode_bytes
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
