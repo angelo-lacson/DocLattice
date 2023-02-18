@@ -8,7 +8,7 @@ from graphene.types.generic import GenericScalar
 from config.graphql.permission_annotator.middleware import (
     get_permissions_for_user_on_model_in_app,
 )
-from doclatticeserver.utils.data_types import PermissionTypes
+from doclatticeserver.types.enums import PermissionTypes
 
 User = get_user_model()
 

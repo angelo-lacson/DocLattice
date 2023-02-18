@@ -9,12 +9,12 @@ from django.core.files.base import ContentFile
 
 from doclatticeserver.annotations.models import LabelSet
 from doclatticeserver.corpuses.models import Corpus
-from doclatticeserver.utils.data_types import (
+from doclatticeserver.types.dicts import (
     DocLatticeCorpusType,
     DocLatticeLabelSetType,
-    PermissionTypes,
 )
-from doclatticeserver.utils.permissioning_utils import set_permissions_for_obj_to_user
+from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 logger = logging.getLogger(__name__)
 

@@ -5,8 +5,8 @@ import logging
 import requests
 
 from doclatticeserver.analyzer.models import GremlinEngine
-from doclatticeserver.utils.data_types import AnalyzerManifest
-from doclatticeserver.utils.etl_utils import is_dict_instance_of_typed_dict
+from doclatticeserver.types.dicts import AnalyzerManifest
+from doclatticeserver.utils.etl import is_dict_instance_of_typed_dict
 
 logger = logging.getLogger(__name__)
 

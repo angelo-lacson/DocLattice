@@ -10,7 +10,7 @@ from graphql_relay import to_global_id
 from config.graphql.schema import schema
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.tests import fixtures
-from doclatticeserver.utils.pdf_tools import base_64_encode_bytes
+from doclatticeserver.utils.pdf import base_64_encode_bytes
 
 User = get_user_model()
 

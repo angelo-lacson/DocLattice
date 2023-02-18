@@ -11,8 +11,8 @@ from config import celery_app
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel, LabelSet
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
-from doclatticeserver.utils.data_types import PermissionTypes
-from doclatticeserver.utils.permissioning_utils import set_permissions_for_obj_to_user
+from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 # Excellent django logging guidance here: https://docs.python.org/3/howto/logging-cookbook.html
 logger = logging.getLogger(__name__)

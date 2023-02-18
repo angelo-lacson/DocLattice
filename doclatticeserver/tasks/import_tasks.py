@@ -11,15 +11,13 @@ from config.graphql.serializers import AnnotationLabelSerializer
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.corpuses.models import TemporaryFileHandle
 from doclatticeserver.documents.models import Document
-from doclatticeserver.utils.data_types import (
-    DocLatticeExportDataJsonPythonType,
-    PermissionTypes,
-)
-from doclatticeserver.utils.packaging_tools import (
+from doclatticeserver.types.dicts import DocLatticeExportDataJsonPythonType
+from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.packaging import (
     unpack_corpus_from_export,
     unpack_label_set_from_export,
 )
-from doclatticeserver.utils.permissioning_utils import set_permissions_for_obj_to_user
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

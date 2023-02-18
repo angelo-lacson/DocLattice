@@ -1,6 +1,6 @@
 from config import celery_app
-from doclatticeserver.utils.data_types import LabelLookupPythonType
-from doclatticeserver.utils.etl_utils import build_label_lookups
+from doclatticeserver.types.dicts import LabelLookupPythonType
+from doclatticeserver.utils.etl import build_label_lookups
 
 
 @celery_app.task()

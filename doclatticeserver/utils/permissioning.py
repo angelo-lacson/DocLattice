@@ -16,7 +16,7 @@ from doclatticeserver.analyzer.models import Analysis
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
-from doclatticeserver.utils.data_types import PermissionTypes
+from doclatticeserver.types.enums import PermissionTypes
 
 User = get_user_model()
 

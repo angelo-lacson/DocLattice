@@ -10,7 +10,7 @@ from doclatticeserver.shared.defaults import jsonfield_default_value
 from doclatticeserver.shared.fields import NullableJSONField
 from doclatticeserver.shared.Models import BaseOCModel
 from doclatticeserver.shared.utils import calc_oc_file_path
-from doclatticeserver.utils.data_types import JobStatus
+from doclatticeserver.types.enums import JobStatus
 
 
 def calculate_analyzer_icon_path(instance, filename):
