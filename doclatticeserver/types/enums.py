@@ -3,6 +3,17 @@ import enum
 from typing_extensions import TypedDict
 
 
+class DocLatticeEnum(str, enum.Enum):
+    @classmethod
+    def choices(cls):
+        return [(key.value, key.name) for key in cls]
+
+
+class ExportType(DocLatticeEnum):
+    LANGCHAIN = "LangChain Format"
+    DOCLATTICE = "DocLattice Format"
+
+
 class LabelType(str, enum.Enum):
     DOC_TYPE_LABEL = "DOC_TYPE_LABEL"
     TOKEN_LABEL = "TOKEN_LABEL"
