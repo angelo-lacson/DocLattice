@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy as _
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
 from doclatticeserver.shared.utils import calc_oc_file_path
+from doclatticeserver.types.enums import ExportType
 from doclatticeserver.users.validators import UserUnicodeUsernameValidator
 
 
@@ -176,6 +177,14 @@ class UserExport(django.db.models.Model):
     started = django.db.models.DateTimeField(null=True)
     finished = django.db.models.DateTimeField(null=True)
     errors = django.db.models.TextField(blank=True)
+
+    format = django.db.models.CharField(
+        max_length=128,
+        blank=False,
+        null=False,
+        choices=ExportType.choices(),
+        default=ExportType.DOCLATTICE,
+    )
 
     # Backend stuff
     backend_lock = django.db.models.BooleanField(
