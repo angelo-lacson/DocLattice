@@ -15,6 +15,12 @@ export function notEmpty<TValue>(
 /**
  *  Types
  */
+
+export enum ExportTypes {
+  LANGCHAIN = "LangChain Format",
+  DOCLATTICE = "DocLattice Format"
+}
+
 export enum PermissionTypes {
   CAN_PERMISSION = "CAN_PERMISSION",
   CAN_PUBLISH = "CAN_PUBLISH",

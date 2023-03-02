@@ -103,7 +103,6 @@ LOCAL_APPS = [
     "doclatticeserver.documents",
     "doclatticeserver.corpuses",
     "doclatticeserver.annotations",
-    "doclatticeserver.analyzer",
 ]
 
 # If configuration specifies the Analyzer should be activated, add it to the LOCAL_APPS list
