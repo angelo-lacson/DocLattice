@@ -103,11 +103,8 @@ LOCAL_APPS = [
     "doclatticeserver.documents",
     "doclatticeserver.corpuses",
     "doclatticeserver.annotations",
+    "doclatticeserver.analyzer",
 ]
-
-# If configuration specifies the Analyzer should be activated, add it to the LOCAL_APPS list
-if USE_ANALYZER:
-    LOCAL_APPS += ["doclatticeserver.analyzer"]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
