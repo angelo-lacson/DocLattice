@@ -10,8 +10,8 @@ class DocLatticeEnum(str, enum.Enum):
 
 
 class ExportType(DocLatticeEnum):
-    LANGCHAIN = "LangChain Format"
-    DOCLATTICE = "DocLattice Format"
+    LANGCHAIN = "LANGCHAIN"
+    DOCLATTICE = "DOCLATTICE"
 
 
 class LabelType(str, enum.Enum):
