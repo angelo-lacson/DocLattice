@@ -52,6 +52,8 @@ from doclatticeserver.tasks import (
     package_annotated_docs,
 )
 from doclatticeserver.tasks.analyzer_tasks import start_analysis
+from doclatticeserver.tasks.doc_tasks import convert_doc_to_langchain_task
+from doclatticeserver.tasks.export_tasks import package_langchain_exports
 from doclatticeserver.tasks.permissioning_tasks import (
     make_analysis_public_task,
     make_corpus_public_task,
@@ -445,7 +447,13 @@ class StartCorpusExport(graphene.Mutation):
                 ok = True
                 message = "SUCCESS"
             elif export_format == ExportType.LANGCHAIN.value:
-                print("LANGCHAIN EXPORT")
+                chord(
+                    group(
+                        convert_doc_to_langchain_task.s(doc_id, corpus_pk)
+                        for doc_id in doc_ids
+                    ),
+                    package_langchain_exports.s(export.id, corpus_pk),
+                ).apply_async()
                 ok = True
                 message = "SUCCESS"
             else:
