@@ -12,6 +12,7 @@ class DocLatticeEnum(str, enum.Enum):
 class ExportType(DocLatticeEnum):
     LANGCHAIN = "LANGCHAIN"
     DOCLATTICE = "DOCLATTICE"
+    FUNSD = "FUNSD"
 
 
 class LabelType(str, enum.Enum):
