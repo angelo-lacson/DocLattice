@@ -15,7 +15,7 @@ from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.dicts import (
     LabelLookupPythonType,
-    DocLatticeDocAnnotationExport,
+    DocLatticeDocExport,
     DocLatticeSinglePageAnnotationType,
     PawlsPagePythonType,
 )
@@ -82,7 +82,7 @@ def build_label_lookups(corpus_id: str) -> LabelLookupPythonType:
 
 def build_document_export(
     label_lookups: LabelLookupPythonType, doc_id: int, corpus_id: int
-) -> tuple[str, str, DocLatticeDocAnnotationExport | None, Any, Any]:
+) -> tuple[str, str, DocLatticeDocExport | None, Any, Any]:
 
     """
     Fairly complex function to burn in the annotations for a given corpus on a given doc. This will alter the PDF
@@ -145,7 +145,7 @@ def build_document_export(
 
         page_highlights = {}
 
-        doc_annotation_json: DocLatticeDocAnnotationExport = {
+        doc_annotation_json: DocLatticeDocExport = {
             "doc_labels": [],
             "labelled_text": [],
             "title": doc.title,
