@@ -14,6 +14,7 @@ from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.dicts import (
+    BoundingBoxPythonType,
     LabelLookupPythonType,
     DocLatticeDocExport,
     DocLatticeSinglePageAnnotationType,
@@ -319,3 +320,14 @@ def is_dict_instance_of_typed_dict(instance: dict, typed_dict: type[TypedDict]):
     except pydantic.ValidationError as exc:
         print(f"ERROR: Invalid schema: {exc}")
         return False
+
+
+def pawls_bbox_to_funsd_box(
+    pawls_bbox: BoundingBoxPythonType,
+) -> tuple[float, float, float, float]:
+    return (
+        pawls_bbox["left"],
+        pawls_bbox["top"],
+        pawls_bbox["right"],
+        pawls_bbox["bottom"],
+    )
