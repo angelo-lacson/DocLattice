@@ -23,15 +23,14 @@ from doclatticeserver.annotations.models import (
 )
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.dicts import (
-    BoundingBoxPythonType,
     FunsdAnnotationType,
     FunsdTokenType,
     LabelLookupPythonType,
-    DocLatticeDocAnnotationExport,
+    DocLatticeDocExport,
     PawlsPagePythonType,
     PawlsTokenPythonType,
 )
-from doclatticeserver.utils.etl import build_document_export
+from doclatticeserver.utils.etl import build_document_export, pawls_bbox_to_funsd_box
 from doclatticeserver.utils.pdf import (
     extract_pawls_from_pdfs_bytes,
     split_pdf_into_images,
@@ -306,7 +305,7 @@ def split_pdf_for_processing(user_id: int, doc_id: int) -> list[tuple[int, str]]
 @validate_arguments
 def burn_doc_annotations(
     label_lookups: LabelLookupPythonType, doc_id: int, corpus_id: int
-) -> tuple[str, str, DocLatticeDocAnnotationExport | None, Any, Any]:
+) -> tuple[str, str, DocLatticeDocExport | None, Any, Any]:
     """
     Simple task wrapper for a fairly complex task to burn in the annotations for a given corpus on a given doc.
     This will alter the PDF and add highlight and labels.
@@ -348,16 +347,6 @@ def convert_doc_to_langchain_task(doc_id: int, corpus_id: int) -> tuple[str, dic
 def convert_doc_to_funsd(
     user_id: int, doc_id: int, corpus_id: int
 ) -> tuple[int, dict[int, list[FunsdAnnotationType]], list[tuple[int, str, str]]]:
-    def pawls_bbox_to_funsd_box(
-        pawls_bbox: BoundingBoxPythonType,
-    ) -> tuple[float, float, float, float]:
-        return (
-            pawls_bbox["left"],
-            pawls_bbox["top"],
-            pawls_bbox["right"],
-            pawls_bbox["bottom"],
-        )
-
     def pawls_token_to_funsd_token(pawls_token: PawlsTokenPythonType) -> FunsdTokenType:
         pawls_xleft = pawls_token["x"]
         pawls_ybottom = pawls_token["y"]
@@ -477,7 +466,7 @@ def convert_doc_to_funsd(
                 "linking": [],  # TODO - pull in any relationships for label. This could be pretty complex (actually no)
                 "text": page_annot_json["rawText"],
                 "box": pawls_bbox_to_funsd_box(page_annot_json["bounds"]),
-                "label": f"{label.id}",
+                "label": f"{label.text}",
                 "words": expanded_tokens,
             }
 
