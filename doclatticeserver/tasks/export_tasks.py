@@ -16,9 +16,8 @@ from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.types.dicts import (
     FunsdAnnotationType,
     DocLatticeDocExport,
-    DocLatticeExportDataJsonPythonType,
+    DocLatticeExportDataJsonPythonType, AnnotationLabelPythonType,
 )
-from doclatticeserver.types.enums import AnnotationLabelPythonType
 from doclatticeserver.users.models import UserExport
 from doclatticeserver.utils.packaging import (
     package_corpus_for_export,

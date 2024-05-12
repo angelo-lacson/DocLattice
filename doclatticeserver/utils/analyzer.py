@@ -14,9 +14,9 @@ from doclatticeserver.annotations.models import Annotation, AnnotationLabel, Lab
 from doclatticeserver.types.dicts import (
     AnalyzerManifest,
     DocLatticeGeneratedCorpusPythonType,
-    DocLatticeLabelSetType,
+    DocLatticeLabelSetType, AnnotationLabelPythonType,
 )
-from doclatticeserver.types.enums import AnnotationLabelPythonType, PermissionTypes
+from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.packaging import (
     turn_base64_encoded_file_to_django_content_file,
 )
