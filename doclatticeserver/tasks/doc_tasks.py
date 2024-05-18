@@ -6,7 +6,8 @@ import json
 import logging
 import pathlib
 import uuid
-from typing import Any
+import requests
+from typing import Any, Optional
 
 from celery import chord, group
 from django.conf import settings
@@ -16,10 +17,11 @@ from django.core.files.storage import default_storage
 from pydantic import validate_arguments
 
 from config import celery_app
+from config.graphql.serializers import AnnotationLabelSerializer
 from doclatticeserver.annotations.models import (
     METADATA_LABEL,
     TOKEN_LABEL,
-    Annotation,
+    Annotation, AnnotationLabel,
 )
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.dicts import (
@@ -30,11 +32,13 @@ from doclatticeserver.types.dicts import (
     PawlsPagePythonType,
     PawlsTokenPythonType,
 )
+from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.etl import build_document_export, pawls_bbox_to_funsd_box
 from doclatticeserver.utils.pdf import (
     extract_pawls_from_pdfs_bytes,
     split_pdf_into_images,
 )
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 from doclatticeserver.utils.text import __consolidate_common_equivalent_chars
 
 logger = logging.getLogger(__name__)
@@ -226,8 +230,6 @@ def nlm_ingest_pdf(user_id: int, doc_id: int) -> list[tuple[int, str]]:
 
     logger.info(f"nlm_ingest_pdf() - split doc {doc_id} for user {user_id}")
 
-    from PyPDF2 import PdfReader, PdfWriter
-
     doc = Document.objects.get(pk=doc_id)
     doc_path = doc.pdf_file.name
     doc_file = default_storage.open(doc_path, mode="rb")
@@ -243,7 +245,7 @@ def nlm_ingest_pdf(user_id: int, doc_id: int) -> list[tuple[int, str]]:
         'applyOcr': "yes" if settings.NLM_INGEST_USE_OCR else 'no'
     }  # Ensures calculate_doclattice_data is set to True
 
-    response = requests.post(settings.NLM_INGEST_HOSTNAME, headers=headers, files=files, params=params)
+    response = requests.post(settings.NLM_INGEST_HOSTNAME + "/api/parseDocument/", headers=headers, files=files, params=params)
 
     if not response.status_code == 200:
         response.raise_for_status()
@@ -274,9 +276,10 @@ def nlm_ingest_pdf(user_id: int, doc_id: int) -> list[tuple[int, str]]:
 
             if label_name not in existing_text_labels:
                 label_obj = AnnotationLabel.objects.filter(
-                    label_name=label_name,
+                    text=label_name,
                     creator_id=user_id,
-                    label_type=TOKEN_LABEL
+                    label_type=TOKEN_LABEL,
+                    read_only=True
                 )
                 if label_obj.count() > 0:
                     label_obj = label_obj[0]
@@ -304,7 +307,7 @@ def nlm_ingest_pdf(user_id: int, doc_id: int) -> list[tuple[int, str]]:
                 page=label_data["page"],
                 json=label_data["annotation_json"],
                 annotation_label=label_obj,
-                document=doc_obj,
+                document=doc,
                 creator_id=user_id,
             )
             annot_obj.save()
