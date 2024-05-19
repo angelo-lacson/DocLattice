@@ -1,13 +1,6 @@
-from typing import Optional
-
-import requests
-import numpy
 import logging
-
-from django.conf import settings
-import numpy as np
-
 from config import celery_app
+
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.documents.models import Document
 from doclatticeserver.utils.embeddings import calculate_embedding_for_text
