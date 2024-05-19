@@ -43,6 +43,10 @@ services:
     image: jscrudato/nlm-ingestor-doclattice
     container_name: nlm-ingestor
 
+  vector-embedder:
+    image: jscrudato/vector-embedder-microservice
+    container_name: vector-embedder
+
   celeryworker:
     <<: *django
     image: doclatticeserver_local_celeryworker
