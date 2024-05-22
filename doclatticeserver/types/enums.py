@@ -1,7 +1,5 @@
 import enum
 
-from typing_extensions import TypedDict
-
 
 class DocLatticeEnum(str, enum.Enum):
     @classmethod
