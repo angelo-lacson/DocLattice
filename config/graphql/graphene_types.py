@@ -4,6 +4,7 @@ import graphene
 from django.contrib.auth import get_user_model
 from graphene import relay
 from graphene.types.generic import GenericScalar
+from graphene_django import DjangoObjectType
 from graphene_django import DjangoObjectType as ModelType
 from graphene_django.filter import DjangoFilterConnectionField
 from graphql_relay import from_global_id
@@ -20,6 +21,13 @@ from doclatticeserver.annotations.models import (
 )
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
+from doclatticeserver.extracts.models import (
+    Column,
+    Extract,
+    Fieldset,
+    LanguageModel,
+    Row,
+)
 from doclatticeserver.users.models import Assignment, UserExport, UserImport
 
 User = get_user_model()
@@ -283,5 +291,40 @@ class GremlinEngineType_WRITE(AnnotatePermissionsForReadMixin, ModelType):
 class AnalysisType(AnnotatePermissionsForReadMixin, ModelType):
     class Meta:
         model = Analysis
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class LanguageModelType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        model = LanguageModel
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class FieldsetType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        model = Fieldset
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class ColumnType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        model = Column
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        model = Extract
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class RowType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        model = Row
         interfaces = [relay.Node]
         connection_class = CountableConnection

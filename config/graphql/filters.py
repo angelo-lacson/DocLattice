@@ -17,6 +17,13 @@ from doclatticeserver.annotations.models import (
 )
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
+from doclatticeserver.extracts.models import (
+    Column,
+    Extract,
+    Fieldset,
+    LanguageModel,
+    Row,
+)
 from doclatticeserver.users.models import Assignment, UserExport
 
 User = get_user_model()
@@ -378,4 +385,55 @@ class DocumentFilter(django_filters.FilterSet):
         fields = {
             "description": ["exact", "contains"],
             "id": ["exact"],
+        }
+
+
+class LanguageModelFilter(django_filters.FilterSet):
+    class Meta:
+        model = LanguageModel
+        fields = {
+            "model": ["exact", "contains"],
+        }
+
+
+class FieldsetFilter(django_filters.FilterSet):
+    class Meta:
+        model = Fieldset
+        fields = {
+            "name": ["exact", "contains"],
+            "description": ["contains"],
+        }
+
+
+class ColumnFilter(django_filters.FilterSet):
+    class Meta:
+        model = Column
+        fields = {
+            "query": ["contains"],
+            "match_text": ["contains"],
+            "output_type": ["exact"],
+            "limit_to_label": ["exact"],
+            "agentic": ["exact"],
+        }
+
+
+class ExtractFilter(django_filters.FilterSet):
+    class Meta:
+        model = Extract
+        fields = {
+            "name": ["exact", "contains"],
+            "created": ["lte", "gte"],
+            "started": ["lte", "gte"],
+            "finished": ["lte", "gte"],
+        }
+
+
+class RowFilter(django_filters.FilterSet):
+    class Meta:
+        model = Row
+        fields = {
+            "data_definition": ["exact"],
+            "started": ["lte", "gte"],
+            "completed": ["lte", "gte"],
+            "failed": ["lte", "gte"],
         }
