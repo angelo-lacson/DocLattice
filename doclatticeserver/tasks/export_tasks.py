@@ -14,9 +14,10 @@ from django.utils import timezone
 
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.types.dicts import (
+    AnnotationLabelPythonType,
     FunsdAnnotationType,
     DocLatticeDocExport,
-    DocLatticeExportDataJsonPythonType, AnnotationLabelPythonType,
+    DocLatticeExportDataJsonPythonType,
 )
 from doclatticeserver.users.models import UserExport
 from doclatticeserver.utils.packaging import (

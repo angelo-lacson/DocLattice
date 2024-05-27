@@ -13,8 +13,9 @@ from doclatticeserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel, LabelSet
 from doclatticeserver.types.dicts import (
     AnalyzerManifest,
+    AnnotationLabelPythonType,
     DocLatticeGeneratedCorpusPythonType,
-    DocLatticeLabelSetType, AnnotationLabelPythonType,
+    DocLatticeLabelSetType,
 )
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.packaging import (
