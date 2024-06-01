@@ -23,10 +23,10 @@ from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.extracts.models import (
     Column,
+    Datacell,
     Extract,
     Fieldset,
     LanguageModel,
-    Datacell,
 )
 from doclatticeserver.users.models import Assignment, UserExport, UserImport
 

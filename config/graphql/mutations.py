@@ -36,9 +36,11 @@ from config.graphql.graphene_types import (
 from config.graphql.serializers import (
     AnnotationLabelSerializer,
     AnnotationSerializer,
+    ColumnSerializer,
     CorpusSerializer,
     DocumentSerializer,
-    LabelsetSerializer, ExtractSerializer, ColumnSerializer,
+    ExtractSerializer,
+    LabelsetSerializer,
 )
 from doclatticeserver.analyzer.models import Analysis
 from doclatticeserver.annotations.models import (

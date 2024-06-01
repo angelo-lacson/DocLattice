@@ -9,10 +9,10 @@ from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.extracts.models import (
     Column,
+    Datacell,
     Extract,
     Fieldset,
     LanguageModel,
-    Datacell,
 )
 from doclatticeserver.tasks.extract_tasks import run_extract
 from doclatticeserver.tests.fixtures import SAMPLE_PDF_FILE_TWO_PATH

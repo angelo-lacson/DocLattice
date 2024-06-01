@@ -6,7 +6,7 @@ from django.utils import timezone
 from pgvector.django import L2Distance
 
 from doclatticeserver.annotations.models import Annotation
-from doclatticeserver.extracts.models import Extract, Datacell
+from doclatticeserver.extracts.models import Datacell, Extract
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.embeddings import calculate_embedding_for_text
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -48,7 +48,7 @@ def run_extract(extract_id, user_id):
                     column=column,
                     data_definition=column.output_type,
                     creator_id=user_id,
-                    document_id=document_id
+                    document_id=document_id,
                 )
                 set_permissions_for_obj_to_user(user_id, row, [PermissionTypes.CRUD])
 
