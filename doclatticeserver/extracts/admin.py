@@ -12,7 +12,7 @@ from doclatticeserver.extracts.models import (
 
 @admin.register(Fieldset)
 class FieldsetAdmin(GuardedModelAdmin):
-    list_display = ["id", "name", "description", "owner"]
+    list_display = ["id", "name", "description"]
 
 
 @admin.register(Column)
