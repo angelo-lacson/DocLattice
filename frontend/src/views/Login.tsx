@@ -130,7 +130,7 @@ export const Login = () => {
                   <Header.Subheader
                     style={{ marginTop: ".25em", fontSize: ".65em" }}
                   >
-                    The DocLattice Labeling Platform
+                    The DocLattice Analytics Platform
                   </Header.Subheader>
                 </Header>
               </div>
