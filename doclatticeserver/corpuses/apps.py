@@ -15,9 +15,7 @@ class CorpusesConfig(AppConfig):
         try:
             import doclatticeserver.corpuses.signals  # noqa F401
             from doclatticeserver.corpuses.models import CorpusQuery
-            from doclatticeserver.corpuses.signals import (
-                run_query_on_create,
-            )
+            from doclatticeserver.corpuses.signals import run_query_on_create
 
             # DOCUMENT SIGNALS #########################################################################################
             # When a new query is created, queue task to run query.
