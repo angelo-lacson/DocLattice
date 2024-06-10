@@ -31,7 +31,6 @@ class ColumnMutationTestCase(TestCase):
             model="TestModel", creator=self.user
         )
         self.fieldset = Fieldset.objects.create(
-            owner=self.user,
             name="TestFieldset",
             description="Test description",
             creator=self.user,
@@ -108,6 +107,7 @@ class ColumnMutationTestCase(TestCase):
         mutation = """
             mutation {{
                 createColumn(
+                    name: "Test Col",
                     fieldsetId: "{}",
                     query: "NewQuery",
                     outputType: "int",
