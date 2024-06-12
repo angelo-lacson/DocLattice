@@ -2,6 +2,7 @@ import django
 from django.contrib.auth import get_user_model
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
+from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.shared.defaults import jsonfield_default_value
@@ -166,6 +167,12 @@ class Datacell(BaseOCModel):
     )
     document = django.db.models.ForeignKey(
         Document, related_name="extracted_datacells", on_delete=django.db.models.CASCADE
+    )
+    sources = django.db.models.ManyToManyField(
+        Annotation,
+        blank=True,
+        related_name="referencing_cells",
+        related_query_name="referencing_cell",
     )
     data = NullableJSONField(default=jsonfield_default_value, null=True, blank=True)
     data_definition = django.db.models.TextField(null=False, blank=False)
