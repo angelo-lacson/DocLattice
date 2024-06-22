@@ -1,4 +1,5 @@
 import logging
+from typing import Optional, Callable
 
 import marvin
 from celery import chord, group, shared_task
@@ -8,7 +9,6 @@ from django.utils import timezone
 
 from config import celery_app
 from doclatticeserver.extracts.models import Datacell, Extract
-from doclatticeserver.tasks.data_extract_tasks import oc_llama_index_doc_query
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -18,8 +18,14 @@ logger = logging.getLogger(__name__)
 marvin.settings.openai.api_key = settings.OPENAI_API_KEY
 
 
-def get_task_by_name(task_name):
-    return celery_app.tasks.get(task_name)
+def get_task_by_name(task_name) -> Optional[Callable]:
+    """
+
+    """
+    try:
+        return celery_app.tasks.get(task_name)
+    except Exception:
+        return None
 
 
 @shared_task
