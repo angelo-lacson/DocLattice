@@ -1,5 +1,5 @@
-![DocLattice](/docs/assets/images/logos/DocLattice.webp)
-
+![DocLattice](/docs/assets/images/logos/OS_Legal_Logo.png)
+# DocLattice
 ## The Free and Open Source Document Analytics Platform
 
 ---

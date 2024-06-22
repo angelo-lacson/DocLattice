@@ -77,7 +77,7 @@ from doclatticeserver.tasks.export_tasks import (
     package_funsd_exports,
     package_langchain_exports,
 )
-from doclatticeserver.tasks.extract_tasks import run_extract
+from doclatticeserver.tasks.extract_orchestrator_tasks import run_extract
 from doclatticeserver.tasks.permissioning_tasks import (
     make_analysis_public_task,
     make_corpus_public_task,
