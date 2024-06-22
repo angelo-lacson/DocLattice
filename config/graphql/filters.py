@@ -17,12 +17,7 @@ from doclatticeserver.annotations.models import (
 )
 from doclatticeserver.corpuses.models import Corpus, CorpusQuery
 from doclatticeserver.documents.models import Document
-from doclatticeserver.extracts.models import (
-    Column,
-    Datacell,
-    Extract,
-    Fieldset,
-)
+from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.users.models import Assignment, UserExport
 
 User = get_user_model()
