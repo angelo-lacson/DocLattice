@@ -17,13 +17,7 @@ from doclatticeserver.annotations.models import (
 )
 from doclatticeserver.corpuses.models import Corpus, CorpusQuery
 from doclatticeserver.documents.models import Document
-from doclatticeserver.extracts.models import (
-    Column,
-    Datacell,
-    Extract,
-    Fieldset,
-    LanguageModel,
-)
+from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.users.models import Assignment, UserExport
 
 User = get_user_model()
@@ -378,14 +372,6 @@ class DocumentFilter(django_filters.FilterSet):
         fields = {
             "description": ["exact", "contains"],
             "id": ["exact"],
-        }
-
-
-class LanguageModelFilter(django_filters.FilterSet):
-    class Meta:
-        model = LanguageModel
-        fields = {
-            "model": ["exact", "contains"],
         }
 
 

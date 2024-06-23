@@ -9,18 +9,13 @@ from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.annotations.signals import process_annot_on_create_atomic
 from doclatticeserver.documents.models import Document
 from doclatticeserver.documents.signals import process_doc_on_create_atomic
-from doclatticeserver.extracts.models import (
-    Column,
-    Datacell,
-    Extract,
-    Fieldset,
-    LanguageModel,
-)
+from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
+from doclatticeserver.tasks import oc_llama_index_doc_query
 from doclatticeserver.tasks.doc_tasks import nlm_ingest_pdf
 from doclatticeserver.tasks.embeddings_task import (
     calculate_embedding_for_annotation_text,
 )
-from doclatticeserver.tasks.extract_tasks import llama_index_doc_query, run_extract
+from doclatticeserver.tasks.extract_orchestrator_tasks import run_extract
 from doclatticeserver.tests.fixtures import SAMPLE_PDF_FILE_TWO_PATH
 
 User = get_user_model()
@@ -41,10 +36,6 @@ class ExtractsTaskTestCase(TestCase):
         self.user = User.objects.create_user(
             username="testuser", password="testpassword"
         )
-
-        self.language_model = LanguageModel.objects.create(
-            model="TestModel", creator=self.user
-        )
         self.fieldset = Fieldset.objects.create(
             name="TestFieldset",
             description="Test description",
@@ -54,16 +45,16 @@ class ExtractsTaskTestCase(TestCase):
             fieldset=self.fieldset,
             query="What is the name of this document",
             output_type="str",
-            language_model=self.language_model,
             agentic=True,
             creator=self.user,
+            # Let's test setting extract engine dynamically
+            task_name="doclatticeserver.tasks.data_extract_tasks.llama_index_react_agent_query",
         )
         self.column = Column.objects.create(
             fieldset=self.fieldset,
             query="Provide a list of the defined terms ",
             match_text="A defined term is defined as a term that is defined...\n|||\nPerson shall mean a person.",
             output_type="str",
-            language_model=self.language_model,
             agentic=True,
             creator=self.user,
         )
@@ -169,5 +160,5 @@ class ExtractsTaskTestCase(TestCase):
             print(f"Cell started: {cell.started}")
             print(f"Cell completed: {cell.completed}")
             print(f"Cell failed: {cell.failed}")
-            llama_index_doc_query.delay(cell.id)
+            oc_llama_index_doc_query.delay(cell.id)
             self.assertIsNotNone(cell.data)
