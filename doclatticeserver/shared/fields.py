@@ -33,10 +33,6 @@ class PDFBase64File(Base64FileField):
 # Needed to override the default JSONField due to some undesired validation behavior where an empty dict throws a
 # validation error for JSONField.
 # See: https://stackoverflow.com/questions/55147169/django-admin-jsonfield-default-empty-dict-wont-save-in-admin
-class MyJSONField(JSONField):
-
-    empty_values = [None, "", [], ()]
-
 
 # Combined a couple things into a single custom JSON Field...
 #
@@ -52,7 +48,7 @@ class MyJSONField(JSONField):
 # http://blog.qax.io/unescaped-utf-8-in-djangos-admin-with-jsonfield/
 class UTF8JSONFormField(JSONField):
 
-    empty_values = [None, "", [], ()]
+    empty_values = [None, "", [], (), {}]
 
     def prepare_value(self, value):
         if isinstance(value, InvalidJSONInput):
@@ -70,7 +66,7 @@ class NullableJSONField(DbJSONField):
     Also lets you have null inputs, which otherwise throw a validation error...
     """
 
-    empty_values = [None, "", [], ()]
+    empty_values = [None, "", [], (), {}]
 
     def formfield(self, **kwargs):
         return super().formfield(**{"form_class": UTF8JSONFormField, **kwargs})
