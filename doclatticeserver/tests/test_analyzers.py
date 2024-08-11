@@ -189,7 +189,6 @@ class TestDocLatticeAnalyzers(TransactionTestCase):
             analysis_result = (
                 start_analysis.si(
                     analysis_id=analysis.id,
-                    user_id=self.user.id,
                 )
                 .apply()
                 .get()
@@ -251,7 +250,6 @@ class TestDocLatticeAnalyzers(TransactionTestCase):
             analysis_started = (
                 start_analysis.si(
                     analysis_id=analysis.id,
-                    user_id=self.user.id,
                 )
                 .apply()
                 .get()
