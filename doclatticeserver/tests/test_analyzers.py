@@ -39,7 +39,6 @@ User = get_user_model()
 
 
 class TestDocLatticeAnalyzers(TransactionTestCase):
-
     @factory.django.mute_signals(post_save)
     def setUp(self):
 

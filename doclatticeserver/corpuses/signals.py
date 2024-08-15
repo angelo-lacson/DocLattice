@@ -1,11 +1,11 @@
 from django.db import transaction
-
-from doclatticeserver.tasks.query_tasks import run_query
-
 from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
-from .models import Corpus
+
 from doclatticeserver.tasks.corpus_tasks import process_corpus_action
+from doclatticeserver.tasks.query_tasks import run_query
+
+from .models import Corpus
 
 
 @receiver(m2m_changed, sender=Corpus.documents.through)
