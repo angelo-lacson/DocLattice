@@ -1,7 +1,7 @@
 from django.contrib import admin
 from guardian.admin import GuardedModelAdmin
 
-from doclatticeserver.analyzer.models import Analysis, GremlinEngine, Analyzer
+from doclatticeserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 
 
 @admin.register(GremlinEngine)

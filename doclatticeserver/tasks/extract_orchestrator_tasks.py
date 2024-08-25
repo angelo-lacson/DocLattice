@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, Optional
+from typing import Optional
 
 import marvin
 from celery import chord, group, shared_task
@@ -7,10 +7,10 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from doclatticeserver.utils.celery_tasks import get_task_by_name
 from doclatticeserver.documents.models import DocumentAnalysisRow
 from doclatticeserver.extracts.models import Datacell, Extract
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.celery_tasks import get_task_by_name
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 logger = logging.getLogger(__name__)

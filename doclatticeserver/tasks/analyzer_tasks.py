@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from config import celery_app
-from doclatticeserver.analyzer.models import GremlinEngine, Analyzer, Analysis
+from doclatticeserver.analyzer.models import Analysis, GremlinEngine
 from doclatticeserver.analyzer.utils import get_gremlin_manifests
 from doclatticeserver.types.dicts import (
     AnalyzerManifest,
