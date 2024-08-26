@@ -16,7 +16,7 @@ from doclatticeserver.tasks.analyzer_tasks import (
 )
 from doclatticeserver.tasks.extract_orchestrator_tasks import mark_extract_complete
 from doclatticeserver.types.enums import PermissionTypes
-from doclatticeserver.utils.celery_tasks import get_task_by_name
+from doclatticeserver.utils.celery_tasks import get_task_by_name, get_doc_analyzer_task_by_name
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ def process_corpus_action(
         action_tasks = []
 
         if action.fieldset:
+
 
             tasks = []
 
@@ -110,7 +111,7 @@ def process_corpus_action(
             if action.analyzer.task_name:
 
                 task_name = action.analyzer.task_name
-                task_func = get_task_by_name(task_name)
+                task_func = get_doc_analyzer_task_by_name(task_name)
 
                 if task_func is None:
                     logger.error(
