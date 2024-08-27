@@ -1,4 +1,4 @@
-# CorpusAction System in DocLattice: Revised Explanation
+# CorpusAction System in DocLattice
 
 The CorpusAction system in DocLattice automates document processing when new documents are added to a corpus. This
 system is designed to be flexible, allowing for different types of actions to be triggered based on the configuration.
