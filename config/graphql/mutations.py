@@ -43,7 +43,7 @@ from config.graphql.serializers import (
     ExtractSerializer,
     LabelsetSerializer,
 )
-from doclatticeserver.analyzer.models import Analysis
+from doclatticeserver.analyzer.models import Analysis, Analyzer
 from doclatticeserver.annotations.models import (
     Annotation,
     AnnotationLabel,
@@ -63,6 +63,7 @@ from doclatticeserver.tasks import (
     package_annotated_docs,
 )
 from doclatticeserver.tasks.analyzer_tasks import start_analysis
+from doclatticeserver.tasks.corpus_tasks import process_corpus_action
 from doclatticeserver.tasks.doc_tasks import convert_doc_to_funsd
 from doclatticeserver.tasks.export_tasks import package_funsd_exports
 from doclatticeserver.tasks.extract_orchestrator_tasks import run_extract
@@ -73,6 +74,7 @@ from doclatticeserver.tasks.permissioning_tasks import (
 from doclatticeserver.types.dicts import DocLatticeAnnotatedDocumentImportType
 from doclatticeserver.types.enums import ExportType, PermissionTypes
 from doclatticeserver.users.models import UserExport
+from doclatticeserver.utils.analysis import create_and_setup_analysis
 from doclatticeserver.utils.etl import is_dict_instance_of_typed_dict
 from doclatticeserver.utils.permissioning import (
     set_permissions_for_obj_to_user,
@@ -1391,45 +1393,32 @@ class StartCorpusAnalysisMutation(graphene.Mutation):
 
     @login_required
     def mutate(root, info, corpus_id, analyzer_id):
-
-        obj = None
-        message = "SUCCESS"
-        ok = True
-
-        if (
-            info.context.user.is_usage_capped
-            and not settings.USAGE_CAPPED_USER_CAN_USE_ANALYZERS
-        ):
-            raise PermissionError(
-                "By default, new users cannot run analyzers. Please contact the admin to "
-                "authorize your account."
-            )
+        user = info.context.user
+        corpus_pk = from_global_id(corpus_id)[1]
+        analyzer_pk = from_global_id(analyzer_id)[1]
 
         try:
+            corpus = Corpus.objects.get(pk=corpus_pk)
+            analyzer = Analyzer.objects.get(pk=analyzer_pk)
 
-            corpus_pk = from_global_id(corpus_id)[1]
-            analyzer_pk = from_global_id(analyzer_id)[1]
+            analysis = create_and_setup_analysis(analyzer, corpus_pk, user.id)
 
-            obj = Analysis.objects.create(
-                analyzer_id=analyzer_pk,
-                analyzed_corpus_id=corpus_pk,
-                creator=info.context.user,
-            )
+            if analyzer.host_gremlin:
+                # Use the original web-based callback workflow
+                start_analysis.delay(analysis_id=analysis.id)
+            elif analyzer.task_name:
+                # Use the new task-based workflow
+                process_corpus_action.delay(
+                    corpus_id=corpus_pk,
+                    document_ids=list(corpus.documents.values_list('id', flat=True)),
+                    user_id=user.id
+                )
+            else:
+                raise ValueError("Analyzer has neither host_gremlin nor task_name")
 
-            logger.info(f"StartCorpusAnalysisMutation - retrieved analysis: {obj}")
-
-            transaction.on_commit(
-                lambda: start_analysis.s(
-                    analysis_id=obj.id,
-                ).apply_async()
-            )
-
+            return StartCorpusAnalysisMutation(ok=True, message="SUCCESS", obj=analysis)
         except Exception as e:
-            ok = False
-            message = f"Starting analysis failed due to unxpected error: {e}"
-            logger.error(message)
-
-        return StartCorpusAnalysisMutation(obj=obj, message=message, ok=ok)
+            return StartCorpusAnalysisMutation(ok=False, message=f"Error: {str(e)}")
 
 
 class DeleteAnalysisMutation(graphene.Mutation):

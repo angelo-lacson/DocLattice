@@ -6,7 +6,6 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from doclatticeserver.analyzer.models import Analysis
 from doclatticeserver.corpuses.models import CorpusAction
 from doclatticeserver.documents.models import DocumentAnalysisRow
 from doclatticeserver.extracts.models import Datacell, Extract
@@ -16,6 +15,7 @@ from doclatticeserver.tasks.analyzer_tasks import (
 )
 from doclatticeserver.tasks.extract_orchestrator_tasks import mark_extract_complete
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.analysis import create_and_setup_analysis
 from doclatticeserver.utils.celery_tasks import (
     get_doc_analyzer_task_by_name,
     get_task_by_name,
@@ -100,17 +100,13 @@ def process_corpus_action(
             )
 
         elif action.analyzer:
-
-            with transaction.atomic():
-                obj = Analysis.objects.create(
-                    analyzer=action.analyzer,
-                    analyzed_corpus_id=corpus_id,
-                    creator_id=user_id,
-                    analysis_started=timezone.now(),
-                    corpus_action=action
-                )
-
-            logger.info(f"Action uses analyzer: {obj}")
+            analysis = create_and_setup_analysis(
+                action.analyzer,
+                corpus_id,
+                user_id,
+                document_ids,
+                corpus_action=action
+            )
 
             if action.analyzer.task_name:
 
@@ -124,30 +120,25 @@ def process_corpus_action(
                     continue
 
                 logger.info(f"Added task {task_name} to queue: {task_func}")
-
-                # for document_id in document_ids:
-                #     task_func.si(doc_id=document_id, analysis_id=obj.id).apply_async()
-
-                # Add the task to the group
                 action_tasks.extend(
                     [
-                        task_func.s(doc_id=doc_id, analysis_id=obj.id)
+                        task_func.s(doc_id=doc_id, analysis_id=analysis.id)
                         for doc_id in document_ids
                     ]
+
                 )
 
                 transaction.on_commit(
                     lambda: chord(group(*action_tasks))(
-                        mark_analysis_complete.si(analysis_id=obj.id, doc_ids=document_ids)
+                        mark_analysis_complete.si(analysis_id=analysis.id, doc_ids=document_ids)
                     )
                 )
 
             else:
-
-                logger.info(f" - retrieved analysis: {obj}")
+                logger.info(f" - retrieved analysis: {analysis}")
 
                 action_tasks.append(
-                    start_analysis.s(analysis_id=obj.id, doc_ids=document_ids)
+                    start_analysis.s(analysis_id=analysis.id, doc_ids=document_ids)
                 )
 
                 transaction.on_commit(lambda: group(*action_tasks).apply_async())
@@ -156,8 +147,5 @@ def process_corpus_action(
             raise ValueError(
                 "Unexpected action configuration... no analyzer or fieldset."
             )
-
-    # Once we've run through all the actions, start tasks for processing.
-    #
 
     return True
