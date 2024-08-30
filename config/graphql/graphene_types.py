@@ -20,7 +20,7 @@ from doclatticeserver.annotations.models import (
     Relationship,
 )
 from doclatticeserver.corpuses.models import Corpus, CorpusQuery, CorpusAction
-from doclatticeserver.documents.models import Document
+from doclatticeserver.documents.models import Document, DocumentAnalysisRow
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.users.models import Assignment, UserExport, UserImport
 
@@ -439,7 +439,14 @@ class CorpusQueryType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         connection_class = CountableConnection
 
 
+class DocumentAnalysisRowType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        model = DocumentAnalysisRow
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
 class DocumentCorpusActionsType(graphene.ObjectType):
     corpus_actions = graphene.List(CorpusActionType)
     extracts = graphene.List(ExtractType)
-    analyses = graphene.List(AnalysisType)
+    analysis_rows = graphene.List(DocumentAnalysisRowType)
