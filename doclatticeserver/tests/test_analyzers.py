@@ -17,7 +17,7 @@ from rest_framework.test import APIClient
 
 from doclatticeserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel, LabelSet
-from doclatticeserver.corpuses.models import Corpus, CorpusAction
+from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.tasks.analyzer_tasks import (
     import_analysis,
