@@ -10,8 +10,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from doclatticeserver.analyzer.models import Analysis, Analyzer, GremlinEngine
-from doclatticeserver.documents.models import Document
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel, LabelSet
+from doclatticeserver.documents.models import Document
 from doclatticeserver.types.dicts import (
     AnalyzerManifest,
     AnnotationLabelPythonType,

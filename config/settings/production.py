@@ -15,8 +15,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.opensource.legal",
     "https://*.opensource.legal/",
     "https://doclattice.opensource.legal",
-    "https://doclattice.opensource.legal/"
-    "admin/login"
+    "https://doclattice.opensource.legal/" "admin/login",
 ]
 print(f"DocLattice Production CSRF Trusted Origins: {CSRF_TRUSTED_ORIGINS}")
 
