@@ -9,8 +9,16 @@ SECRET_KEY = env("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = env.list(
     "DJANGO_ALLOWED_HOSTS", default=["doclattice.opensource.legal"]
 )
-CSRF_TRUSTED_ORIGINS=env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=["https://*.opensource.legal", "https://doclattice.opensource.legal",
-    "https://doclattice.opensource.legal/"])
+print(f"DocLattice Production Allowed Hosts: {ALLOWED_HOSTS}")
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.opensource.legal",
+    "https://*.opensource.legal/",
+    "https://doclattice.opensource.legal",
+    "https://doclattice.opensource.legal/"
+    "admin/login"
+]
+print(f"DocLattice Production CSRF Trusted Origins: {CSRF_TRUSTED_ORIGINS}")
 
 # DATABASES
 # ------------------------------------------------------------------------------
@@ -102,16 +110,18 @@ ADMIN_URL = env("DJANGO_ADMIN_URL")
 # Anymail
 # ------------------------------------------------------------------------------
 # https://anymail.readthedocs.io/en/stable/installation/#installing-anymail
-INSTALLED_APPS += ["anymail"]  # noqa F405
-# https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
-# https://anymail.readthedocs.io/en/stable/installation/#anymail-settings-reference
-# https://anymail.readthedocs.io/en/stable/esps/mailgun/
-EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
-ANYMAIL = {
-    "MAILGUN_API_KEY": env("MAILGUN_API_KEY"),
-    "MAILGUN_SENDER_DOMAIN": env("MAILGUN_DOMAIN"),
-    "MAILGUN_API_URL": env("MAILGUN_API_URL", default="https://api.mailgun.net/v3"),
-}
+
+# UNCOMMENT TO USE ANYMAIL
+# INSTALLED_APPS += ["anymail"]  # noqa F405
+# # https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
+# # https://anymail.readthedocs.io/en/stable/installation/#anymail-settings-reference
+# # https://anymail.readthedocs.io/en/stable/esps/mailgun/
+# EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
+# ANYMAIL = {
+#     "MAILGUN_API_KEY": env("MAILGUN_API_KEY"),
+#     "MAILGUN_SENDER_DOMAIN": env("MAILGUN_DOMAIN"),
+#     "MAILGUN_API_URL": env("MAILGUN_API_URL", default="https://api.mailgun.net/v3"),
+# }
 
 # Collectfast
 # ------------------------------------------------------------------------------
@@ -166,5 +176,5 @@ LOGGING = {
 # CORS
 # ------------------------------------------------------------------------------
 CORS_ORIGIN_WHITELIST = ["https://doclattice.opensource.legal"]
-
+CORS_ALLOWED_ORIGINS = ["https://doclattice.opensource.legal"]
 CORS_ALLOW_CREDENTIALS = True
