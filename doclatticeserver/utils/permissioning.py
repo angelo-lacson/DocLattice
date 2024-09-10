@@ -19,7 +19,7 @@ from doclatticeserver.annotations.models import (
     AnnotationLabel,
     Relationship,
 )
-from doclatticeserver.corpuses.models import Corpus, CorpusAction, CorpusQuery
+from doclatticeserver.corpuses.models import Corpus, CorpusQuery
 from doclatticeserver.documents.models import Document, DocumentAnalysisRow
 from doclatticeserver.extracts.models import Datacell, Extract, Fieldset
 from doclatticeserver.types.enums import PermissionTypes
@@ -424,9 +424,9 @@ def make_corpus_public(corpus_id: int | str) -> MakePublicReturnType:
             logger.info(f"Made {updated_labels} annotation labels public")
 
         # Make human annotations public
-        updated_annotations = Annotation.objects.filter(
-            corpus=corpus
-        ).update(is_public=True)
+        updated_annotations = Annotation.objects.filter(corpus=corpus).update(
+            is_public=True
+        )
         logger.info(f"Made {updated_annotations} human annotations public")
 
         # Make extracts public
