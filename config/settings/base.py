@@ -106,6 +106,7 @@ LOCAL_APPS = [
     "doclatticeserver.annotations",
     "doclatticeserver.analyzer",
     "doclatticeserver.extracts",
+    "doclatticeserver.feedback",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
