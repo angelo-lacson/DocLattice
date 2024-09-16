@@ -3,9 +3,9 @@ from django.db import models
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
 from doclatticeserver.annotations.models import Annotation
-from doclatticeserver.shared.Managers import UserFeedbackManager
 from doclatticeserver.shared.defaults import jsonfield_default_value
 from doclatticeserver.shared.fields import NullableJSONField
+from doclatticeserver.shared.Managers import UserFeedbackManager
 from doclatticeserver.shared.Models import BaseOCModel
 
 

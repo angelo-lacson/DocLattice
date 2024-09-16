@@ -8,10 +8,14 @@ from django.db import transaction
 from django.db.models import Q
 
 from doclatticeserver.analyzer.models import Analysis, Analyzer
-from doclatticeserver.annotations.models import AnnotationLabel, Annotation, Relationship
+from doclatticeserver.annotations.models import (
+    Annotation,
+    AnnotationLabel,
+    Relationship,
+)
 from doclatticeserver.corpuses.models import Corpus, CorpusQuery
 from doclatticeserver.documents.models import Document, DocumentAnalysisRow
-from doclatticeserver.extracts.models import Extract, Datacell, Fieldset
+from doclatticeserver.extracts.models import Datacell, Extract, Fieldset
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
