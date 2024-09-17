@@ -9,7 +9,6 @@ SECRET_KEY = env("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = env.list(
     "DJANGO_ALLOWED_HOSTS", default=["doclattice.opensource.legal"]
 )
-print(f"DocLattice Production Allowed Hosts: {ALLOWED_HOSTS}")
 
 CSRF_TRUSTED_ORIGINS = [
     "https://*.opensource.legal",
@@ -17,7 +16,6 @@ CSRF_TRUSTED_ORIGINS = [
     "https://doclattice.opensource.legal",
     "https://doclattice.opensource.legal/" "admin/login",
 ]
-print(f"DocLattice Production CSRF Trusted Origins: {CSRF_TRUSTED_ORIGINS}")
 
 # DATABASES
 # ------------------------------------------------------------------------------

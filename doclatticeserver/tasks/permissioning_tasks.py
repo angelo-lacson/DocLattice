@@ -1,7 +1,7 @@
 #  Copyright (C) 2022  John Scrudato
 
 from config import celery_app
-from doclatticeserver.utils.permissioning import (
+from doclatticeserver.utils.sharing import (
     MakePublicReturnType,
     make_analysis_public,
     make_corpus_public,
