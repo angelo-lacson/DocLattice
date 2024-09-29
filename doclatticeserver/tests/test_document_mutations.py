@@ -8,7 +8,7 @@ from graphql_relay import to_global_id
 from config.graphql.schema import schema
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.enums import PermissionTypes
-from doclatticeserver.utils.pdf import base_64_encode_bytes
+from doclatticeserver.utils.files import base_64_encode_bytes
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()

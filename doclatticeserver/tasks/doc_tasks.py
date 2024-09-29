@@ -35,7 +35,7 @@ from doclatticeserver.types.dicts import (
 )
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.etl import build_document_export, pawls_bbox_to_funsd_box
-from doclatticeserver.utils.pdf import (
+from doclatticeserver.utils.files import (
     check_if_pdf_needs_ocr,
     extract_pawls_from_pdfs_bytes,
     split_pdf_into_images,
