@@ -21,13 +21,13 @@
  * - Provides a radial button cloud for each label with annotation actions
  * - Supports focusing and selecting annotations for detailed view or actions
  * - Handles overlapping annotations with multi-color highlighting
- * - Dynamically calculates and positions labels around annotated spans
+ * - Dynamically calculates and positions labels around the mouse position over the annotated text
  * - Supports approval and rejection of annotations (if enabled)
  *
  * State Management:
  * - Uses multiple useState hooks for managing component state
  * - Utilizes useEffect for side effects like span calculation and label positioning
- * - Implements useDebouncedCallback for optimizing hover effects
+ * - Implements timers for delaying hover effects
  *
  * Styling:
  * - Applies dynamic styles for highlighting and label positioning
@@ -35,7 +35,6 @@
  *
  * Performance Considerations:
  * - Memoized with React.memo to prevent unnecessary re-renders
- * - Uses debounced callbacks for hover effects to reduce computation
  *
  * Accessibility:
  * - Supports keyboard navigation and screen readers (to be verified)
@@ -52,12 +51,12 @@ import React, {
   useContext,
 } from "react";
 import { Label, LabelContainer, PaperContainer } from "./StyledComponents";
-import { useDebouncedCallback } from "use-debounce";
 import RadialButtonCloud, { CloudButtonItem } from "./RadialButtonCloud";
 import { Modal, Button, Dropdown } from "semantic-ui-react";
 import { AnnotationLabelType } from "../../../../graphql/types";
 import { ServerSpanAnnotation, AnnotationStore } from "../../context";
 import { TextSearchSpanResult } from "../../../types";
+import { PermissionTypes } from "../../../types";
 
 interface TxtAnnotatorProps {
   text: string;
@@ -86,7 +85,6 @@ interface TxtAnnotatorProps {
   selectedAnnotations: string[]; // Array of selected annotation IDs
   setSelectedAnnotations: (annotations: string[]) => void;
   showStructuralAnnotations: boolean;
-  /** New prop to handle selected search result index */
   selectedSearchResultIndex?: number;
 }
 
@@ -128,12 +126,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   const [labelsToRender, setLabelsToRender] = useState<LabelRenderData[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const debouncedSetHoveredSpanIndex = useDebouncedCallback(
-    (spanIndex: number | null) => {
-      setHoveredSpanIndex(spanIndex);
-    },
-    100
-  );
+  const hideLabelsTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const annotationStore = useContext(AnnotationStore);
   const { searchResultElementRefs } = annotationStore;
@@ -184,33 +177,55 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
    * Handles mouse entering a span.
    * @param spanIndex - Index of the hovered span
    */
-  const handleMouseEnter = useCallback(
-    (spanIndex: number) => {
-      debouncedSetHoveredSpanIndex(spanIndex);
+  const handleMouseEnter = useCallback((spanIndex: number) => {
+    if (hideLabelsTimeout.current) {
+      clearTimeout(hideLabelsTimeout.current);
+      hideLabelsTimeout.current = null;
+    }
+    setHoveredSpanIndex(spanIndex);
+  }, []);
+
+  /**
+   * Handles mouse movement over a span.
+   * Not updating mousePosition anymore.
+   */
+  const handleMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLSpanElement>, spanIndex: number) => {
+      // No need to update mousePosition
+      setHoveredSpanIndex(spanIndex);
     },
-    [debouncedSetHoveredSpanIndex]
+    []
   );
 
   /**
    * Handles mouse leaving a span.
    */
   const handleMouseLeave = useCallback(() => {
-    debouncedSetHoveredSpanIndex(null);
-  }, [debouncedSetHoveredSpanIndex]);
+    // Start a delay before hiding labels to allow time to move mouse to labels
+    hideLabelsTimeout.current = setTimeout(() => {
+      setHoveredSpanIndex(null);
+    }, 200); // Adjust delay as needed
+  }, []);
 
   /**
-   * Handles mouse entering a label, cancelling hover effects.
+   * Handles mouse entering a label or action button.
    */
   const handleLabelMouseEnter = useCallback(() => {
-    debouncedSetHoveredSpanIndex.cancel();
-  }, [debouncedSetHoveredSpanIndex]);
+    if (hideLabelsTimeout.current) {
+      clearTimeout(hideLabelsTimeout.current);
+      hideLabelsTimeout.current = null;
+    }
+  }, []);
 
   /**
-   * Handles mouse leaving a label.
+   * Handles mouse leaving a label or action button.
    */
   const handleLabelMouseLeave = useCallback(() => {
-    debouncedSetHoveredSpanIndex(null);
-  }, [debouncedSetHoveredSpanIndex]);
+    // Start a delay before hiding labels to allow time to move mouse back
+    hideLabelsTimeout.current = setTimeout(() => {
+      setHoveredSpanIndex(null);
+    }, 200); // Adjust delay as needed
+  }, []);
 
   /**
    * Handles clicking on a label to select or deselect an annotation.
@@ -362,7 +377,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
       const spanStart = boundaries[i];
       const spanEnd = boundaries[i + 1];
       const spanAnnotations = sortedAnnotations.filter(
-        (ann) => ann.json.start <= spanStart && ann.json.end >= spanEnd
+        (ann) => ann.json.start < spanEnd && ann.json.end > spanStart
       );
       addSpan(spanStart, spanEnd, spanAnnotations);
     }
@@ -377,8 +392,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
   useEffect(() => {
     /**
-     * Calculates label positions around the hovered span, considering only annotations
-     * that are applicable to the hovered character.
+     * Calculates label positions around the hovered span.
      */
     const calculateLabelPositions = () => {
       const newLabelsToRender: LabelRenderData[] = [];
@@ -392,9 +406,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
       if (!hoveredSpan) return;
 
       const selectedAnnotationsForSpan = hoveredSpan.annotations.filter(
-        (ann) =>
-          isAnnotationSelected(ann) &&
-          (showStructuralAnnotations || !ann.structural)
+        (ann) => showStructuralAnnotations || !ann.structural
       );
 
       if (selectedAnnotationsForSpan.length === 0) {
@@ -411,103 +423,41 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
         const containerRect = containerElement.getBoundingClientRect();
         const spanRect = spanElement.getBoundingClientRect();
 
-        const spanOffsetX = spanRect.left - containerRect.left;
-        const spanOffsetY = spanRect.top - containerRect.top;
+        // Get scroll positions
+        const scrollLeft = containerElement.scrollLeft;
+        const scrollTop = containerElement.scrollTop;
 
-        const margin = 10;
-        const layerMarginIncrement = 10;
+        // Calculate position relative to the container
+        const spanX = spanRect.left - containerRect.left + scrollLeft;
+        const spanY = spanRect.top - containerRect.top + scrollTop;
+
+        const baseX = spanX + spanRect.width / 2;
+        const baseY = spanY + spanRect.height / 2;
+
+        const radius = 50; // Adjust radius as needed
         const labelWidth = 100; // Adjust as needed
         const labelHeight = 30; // Adjust as needed
-        const labelSpacing = 10;
 
         selectedAnnotationsForSpan.forEach((annotation, index) => {
-          let layer = 0;
-          let labelsInPreviousLayers = 0;
+          const angle =
+            (index / selectedAnnotationsForSpan.length) * Math.PI * 2;
 
-          while (true) {
-            const rectWidth =
-              spanRect.width + 2 * (margin + layer * layerMarginIncrement);
-            const rectHeight =
-              spanRect.height + 2 * (margin + layer * layerMarginIncrement);
-
-            const perimeter = 2 * (rectWidth + rectHeight);
-
-            const maxLabelsInLayer = Math.floor(
-              perimeter / (Math.max(labelWidth, labelHeight) + labelSpacing)
-            );
-
-            if (index < labelsInPreviousLayers + maxLabelsInLayer) {
-              break;
-            } else {
-              labelsInPreviousLayers += maxLabelsInLayer;
-              layer++;
-            }
-          }
-
-          const positionInLayer = index - labelsInPreviousLayers;
-
-          const rectWidth =
-            spanRect.width + 2 * (margin + layer * layerMarginIncrement);
-          const rectHeight =
-            spanRect.height + 2 * (margin + layer * layerMarginIncrement);
-
-          const perimeter = 2 * (rectWidth + rectHeight);
-
-          const labelPositionAlongPerimeter =
-            positionInLayer *
-            (Math.max(labelWidth, labelHeight) + labelSpacing);
-
-          let x = 0;
-          let y = 0;
-
-          let positionRemaining = labelPositionAlongPerimeter % perimeter;
-
-          const leftEdgeX =
-            spanOffsetX - margin - layer * layerMarginIncrement - labelWidth;
-          const topEdgeY =
-            spanOffsetY - margin - layer * layerMarginIncrement - labelHeight;
-          const rightEdgeX =
-            spanOffsetX +
-            spanRect.width +
-            margin +
-            layer * layerMarginIncrement;
-          const bottomEdgeY =
-            spanOffsetY +
-            spanRect.height +
-            margin +
-            layer * layerMarginIncrement;
-
-          if (positionRemaining < rectWidth) {
-            // Top edge
-            x = leftEdgeX + labelWidth + positionRemaining;
-            y = topEdgeY;
-          } else if (positionRemaining < rectWidth + rectHeight) {
-            // Right edge
-            x = rightEdgeX;
-            y = topEdgeY + (positionRemaining - rectWidth) + labelHeight;
-          } else if (positionRemaining < 2 * rectWidth + rectHeight) {
-            // Bottom edge
-            x =
-              rightEdgeX -
-              (positionRemaining - (rectWidth + rectHeight)) -
-              labelWidth;
-            y = bottomEdgeY;
-          } else {
-            // Left edge
-            x = leftEdgeX;
-            y =
-              bottomEdgeY -
-              (positionRemaining - (2 * rectWidth + rectHeight)) -
-              labelHeight;
-          }
+          const x = baseX + radius * Math.cos(angle) - labelWidth / 2;
+          const y = baseY + radius * Math.sin(angle) - labelHeight / 2;
 
           // Adjust x and y to ensure labels are within bounds
-          x = Math.max(0, Math.min(x, containerRect.width - labelWidth));
-          y = Math.max(0, Math.min(y, containerRect.height - labelHeight));
+          const adjustedX = Math.max(
+            0,
+            Math.min(x, containerElement.scrollWidth - labelWidth)
+          );
+          const adjustedY = Math.max(
+            0,
+            Math.min(y, containerElement.scrollHeight - labelHeight)
+          );
 
           newLabelsToRender.push({
             annotation,
-            position: { x, y },
+            position: { x: adjustedX, y: adjustedY },
             labelIndex: index,
           });
         });
@@ -520,8 +470,8 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   }, [
     hoveredSpanIndex,
     spans,
-    isAnnotationSelected,
     showStructuralAnnotations,
+    // Removed mousePosition from dependencies
   ]);
 
   /**
@@ -554,6 +504,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     lineHeight: `${1.6 * zoom_level}`,
     position: "relative",
     flex: 1,
+    overflow: "auto", // Ensure container can scroll
   };
 
   return (
@@ -578,7 +529,6 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
             cursor: "text",
             userSelect: "text",
             whiteSpace: "pre-wrap",
-            borderRadius: "5px",
           };
 
           const selectedAnnotationsForSpan = spanAnnotations.filter(
@@ -646,6 +596,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
               data-span-index={index}
               onMouseEnter={() => handleMouseEnter(index)}
               onMouseLeave={handleMouseLeave}
+              onMouseMove={(e) => handleMouseMove(e, index)}
               ref={refCallback}
             >
               {spanText}
@@ -653,8 +604,15 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           );
         })}
         {labelsToRender.map(({ annotation, position, labelIndex }) => {
-          const actions: CloudButtonItem[] = [
-            {
+          // Build the list of actions based on permissions and structural property
+          const actions: CloudButtonItem[] = [];
+
+          // Include edit action if annotation is not structural and user has CAN_UPDATE permission
+          if (
+            !annotation.structural &&
+            annotation.myPermissions.includes(PermissionTypes.CAN_UPDATE)
+          ) {
+            actions.push({
               name: "edit",
               color: "#a3a3a3",
               tooltip: "Edit Annotation",
@@ -662,16 +620,23 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
                 setAnnotationToEdit(annotation);
                 setEditModalOpen(true);
               },
-            },
-            {
+            });
+          }
+
+          // Include delete action if annotation is not structural and user has CAN_REMOVE permission
+          if (
+            !annotation.structural &&
+            annotation.myPermissions.includes(PermissionTypes.CAN_REMOVE)
+          ) {
+            actions.push({
               name: "trash",
               color: "#d3d3d3",
               tooltip: "Delete Annotation",
               onClick: () => {
                 deleteAnnotation(annotation.id);
               },
-            },
-          ];
+            });
+          }
 
           if (approveAnnotation) {
             actions.push({
@@ -697,18 +662,20 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
           return (
             <LabelContainer
-              key={annotation.id}
+              key={`${annotation.id}-${labelIndex}`}
               style={{
-                left: position.x,
-                top: position.y,
+                position: "absolute",
+                left: `${position.x}px`,
+                top: `${position.y}px`,
                 transitionDelay: `${labelIndex * 0.05}s`,
-                opacity: isAnnotationSelected(annotation) ? 1 : 0.3,
+                opacity: 1,
+                pointerEvents: "auto", // Ensure labels can be interacted with
               }}
               onMouseEnter={handleLabelMouseEnter}
               onMouseLeave={handleLabelMouseLeave}
             >
               <Label
-                id={`label-${annotation.id}`}
+                id={`label-${annotation.id}-${labelIndex}`}
                 color={annotation.annotationLabel.color || "#cccccc"}
                 $index={labelIndex}
                 onClick={(e) => {
