@@ -8,7 +8,7 @@ from doclatticeserver.tests.fixtures import (
     NLM_INGESTOR_SAMPLE_PDF,
     NLM_INGESTOR_SAMPLE_PDF_NEEDS_OCR,
 )
-from doclatticeserver.utils.pdf import (
+from doclatticeserver.utils.files import (
     base_64_encode_bytes,
     check_if_pdf_needs_ocr,
     convert_hex_to_rgb_tuple,
