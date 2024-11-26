@@ -2,13 +2,11 @@ import { useEffect } from "react";
 import { useQuery, useLazyQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import _ from "lodash";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 
 import {
   AnalysisType,
   ExtractType,
-  DocumentType,
-  CorpusType,
   LabelType,
   LabelDisplayBehavior,
 } from "../../../types/graphql-api";
@@ -50,18 +48,20 @@ import {
   ServerTokenAnnotation,
   ServerSpanAnnotation,
 } from "../types/annotations";
+import {
+  selectedDocumentAtom,
+  selectedCorpusAtom,
+} from "../context/DocumentAtom";
 
 /**
  * Custom hook to manage analysis and extract data using Jotai atoms.
- *
- * @param opened_document The currently opened document.
- * @param opened_corpus   The currently opened corpus.
  * @returns An object containing analysis and extract data and related functions.
  */
-export const useAnalysisManager = (
-  opened_document: DocumentType | null,
-  opened_corpus?: CorpusType | null
-) => {
+export const useAnalysisManager = () => {
+  // Get document and corpus from atoms instead of props
+  const selectedDocument = useAtomValue(selectedDocumentAtom);
+  const selectedCorpus = useAtomValue(selectedCorpusAtom);
+
   // Use atoms for state management
   const [analysisRows, setAnalysisRows] = useAtom(analysisRowsAtom);
   const [dataCells, setDataCells] = useAtom(dataCellsAtom);
@@ -100,10 +100,10 @@ export const useAnalysisManager = (
     GetDocumentAnalysesAndExtractsInput
   >(GET_DOCUMENT_ANALYSES_AND_EXTRACTS, {
     variables: {
-      documentId: opened_document?.id ?? "",
-      ...(opened_corpus?.id ? { corpusId: opened_corpus.id } : {}),
+      documentId: selectedDocument?.id ?? "",
+      ...(selectedCorpus?.id ? { corpusId: selectedCorpus.id } : {}),
     },
-    skip: !opened_document?.id,
+    skip: !selectedDocument?.id,
     fetchPolicy: "network-only",
   });
 
@@ -171,10 +171,13 @@ export const useAnalysisManager = (
     }
   }, [analysesData]);
 
-  // Fetch analyses and extracts when the hook is initialized.
+  // Fetch analyses and extracts only when we have a valid document
   useEffect(() => {
-    fetchDocumentAnalysesAndExtracts();
-  }, []);
+    console.log("selectedDocument", selectedDocument);
+    if (selectedDocument?.id) {
+      fetchDocumentAnalysesAndExtracts();
+    }
+  }, [selectedDocument?.id]);
 
   // Reset states when the selected analysis or extract changes.
   useEffect(() => {
@@ -193,13 +196,13 @@ export const useAnalysisManager = (
       fetchAnnotationsForAnalysis({
         variables: {
           analysisId: selected_analysis.id,
-          documentId: opened_document?.id ?? "",
+          documentId: selectedDocument?.id ?? "",
         },
       });
     } else {
       setAllowUserInput(true);
     }
-  }, [selected_analysis, opened_document?.id, opened_corpus?.id]);
+  }, [selected_analysis, selectedDocument?.id, selectedCorpus?.id]);
 
   // Update query loading states and errors for annotations
   useEffect(() => {
@@ -287,7 +290,7 @@ export const useAnalysisManager = (
     } else {
       setAllowUserInput(true);
     }
-  }, [selected_extract, opened_document?.id, opened_corpus?.id]);
+  }, [selected_extract, selectedDocument?.id, selectedCorpus?.id]);
 
   // Update query loading states and errors for datacells
   useEffect(() => {
