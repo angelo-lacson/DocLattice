@@ -1,12 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchText } from "../context/DocumentAtom";
 import {
   useDocText,
   useSelectedDocument,
   usePages,
   usePageTokenTextMaps,
-  useTextSearchMatches,
-  useSelectedTextSearchMatchIndex,
+  useTextSearchState,
 } from "../context/DocumentAtom";
 import {
   TextSearchSpanResult,
@@ -22,19 +21,27 @@ export const useTextSearch = () => {
   const { selectedDocument } = useSelectedDocument();
   const { pages } = usePages();
   const { pageTokenTextMaps } = usePageTokenTextMaps();
-  const { setTextSearchMatches } = useTextSearchMatches();
-  const { setSelectedTextSearchMatchIndex } = useSelectedTextSearchMatchIndex();
+  const { setTextSearchState } = useTextSearchState();
+
+  // Use refs to store previous values
+  const previousSelectedDocumentRef = useRef(selectedDocument);
 
   useEffect(() => {
-    console.log("useTextSearch - searchText", searchText);
-    const searchHits: (TextSearchTokenResult | TextSearchSpanResult)[] = [];
+    // Check if selectedDocument has actually changed
+    const documentChanged =
+      previousSelectedDocumentRef.current !== selectedDocument;
 
-    // Guard clause to handle all required values
+    // Guard clause
     if (!selectedDocument || !searchText || !pageTokenTextMaps || !pages) {
-      setTextSearchMatches(searchHits);
-      setSelectedTextSearchMatchIndex(0);
+      // Only reset if the document changed
+      if (documentChanged) {
+        setTextSearchState({ matches: [], selectedIndex: 0 });
+      }
       return;
     }
+
+    // Proceed with search logic
+    const searchHits: (TextSearchTokenResult | TextSearchSpanResult)[] = [];
 
     // Now TypeScript knows these values are defined for the rest of the function
     const exactMatch = new RegExp(searchText, "gi");
@@ -146,15 +153,14 @@ export const useTextSearch = () => {
       }
     }
 
-    setTextSearchMatches(searchHits);
-    setSelectedTextSearchMatchIndex(0);
+    setTextSearchState({ matches: searchHits, selectedIndex: 0 });
+    previousSelectedDocumentRef.current = selectedDocument;
   }, [
     searchText,
     docText,
     selectedDocument,
     pages,
     pageTokenTextMaps,
-    setTextSearchMatches,
-    setSelectedTextSearchMatchIndex,
+    setTextSearchState,
   ]);
 };
