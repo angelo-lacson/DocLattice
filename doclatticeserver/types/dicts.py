@@ -142,7 +142,7 @@ class DocLatticeAnnotationPythonType(TypedDict):
     rawText: str
     page: int
     annotation_json: dict[Union[int, str], DocLatticeSinglePageAnnotationType]
-
+    parent_id: Optional[Union[str, int]]
 
 class TextSpan(TypedDict):
     """

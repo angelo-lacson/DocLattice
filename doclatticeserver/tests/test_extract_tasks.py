@@ -11,7 +11,7 @@ from doclatticeserver.documents.models import Document, DocumentAnalysisRow
 from doclatticeserver.documents.signals import process_doc_on_create_atomic
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.tasks import oc_llama_index_doc_query
-from doclatticeserver.tasks.doc_tasks import nlm_ingest_pdf
+from doclatticeserver.tasks.doc_tasks import ingest_doc
 from doclatticeserver.tasks.embeddings_task import (
     calculate_embedding_for_annotation_text,
 )
@@ -93,7 +93,7 @@ class ExtractsTaskTestCase(TestCase):
 
         # Run ingest pipeline SYNCHRONOUS and, with @responses.activate decorator, no API call ought to go out to
         # nlm-ingestor host
-        nlm_ingest_pdf.delay(user_id=self.user.id, doc_id=self.doc.id)
+        ingest_doc.delay(user_id=self.user.id, doc_id=self.doc.id)
 
         # Manually run the calcs for the embeddings as post_save hook is hard
         # to await for in test
@@ -111,7 +111,7 @@ class ExtractsTaskTestCase(TestCase):
 
         # Run ingest pipeline SYNCHRONOUS and, with @responses.activate decorator, no API call ought to go out to
         # nlm-ingestor host
-        nlm_ingest_pdf.delay(user_id=self.user.id, doc_id=self.doc2.id)
+        ingest_doc.delay(user_id=self.user.id, doc_id=self.doc2.id)
 
         # Manually run the calcs for the embeddings as post_save hook is hard
         # to await for in test
@@ -129,7 +129,7 @@ class ExtractsTaskTestCase(TestCase):
 
         # Run ingest pipeline SYNCHRONOUS and, with @responses.activate decorator, no API call ought to go out to
         # nlm-ingestor host
-        nlm_ingest_pdf.delay(user_id=self.user.id, doc_id=self.doc3.id)
+        ingest_doc.delay(user_id=self.user.id, doc_id=self.doc3.id)
 
         # Manually run the calcs for the embeddings as post_save hook is hard
         # to await for in test
