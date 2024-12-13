@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import Optional
+
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.types.dicts import DocLatticeDocExport
+
 
 class BaseParser(ABC):
     """
@@ -11,11 +13,13 @@ class BaseParser(ABC):
     title: str = ""
     description: str = ""
     author: str = ""
-    dependencies: List[str] = []
-    supported_file_types: List[FileTypeEnum] = []
+    dependencies: list[str] = []
+    supported_file_types: list[FileTypeEnum] = []
 
     @abstractmethod
-    def parse_document(self, user_id: int, doc_id: int) -> Optional[DocLatticeDocExport]:
+    def parse_document(
+        self, user_id: int, doc_id: int
+    ) -> Optional[DocLatticeDocExport]:
         """
         Abstract method to parse a document.
 
@@ -29,10 +33,7 @@ class BaseParser(ABC):
         pass
 
     def save_parsed_data(
-        self,
-        user_id: int,
-        doc_id: int,
-        doclattice_data: DocLatticeDocExport
+        self, user_id: int, doc_id: int, doclattice_data: DocLatticeDocExport
     ) -> None:
         """
         Saves the parsed data to the Document model.
@@ -44,13 +45,17 @@ class BaseParser(ABC):
         """
         import json
         import logging
+
         from django.core.files.base import ContentFile
-        from doclatticeserver.documents.models import Document
-        from doclatticeserver.annotations.models import Annotation, AnnotationLabel
-        from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
-        from config.graphql.serializers import AnnotationLabelSerializer
-        from doclatticeserver.types.enums import PermissionTypes
         from plasmapdf.models.PdfDataLayer import makePdfTranslationLayerFromPawlsTokens
+
+        from config.graphql.serializers import AnnotationLabelSerializer
+        from doclatticeserver.annotations.models import Annotation, AnnotationLabel
+        from doclatticeserver.documents.models import Document
+        from doclatticeserver.types.enums import PermissionTypes
+        from doclatticeserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
 
         logger = logging.getLogger(__name__)
 

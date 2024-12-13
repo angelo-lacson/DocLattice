@@ -144,6 +144,7 @@ class DocLatticeAnnotationPythonType(TypedDict):
     annotation_json: dict[Union[int, str], DocLatticeSinglePageAnnotationType]
     parent_id: Optional[Union[str, int]]
 
+
 class TextSpan(TypedDict):
     """
     Stores start and end indices of a span
