@@ -4,15 +4,18 @@ import logging
 from typing import Optional
 
 from django.core.files.base import ContentFile
+from django.conf import settings
 from plasmapdf.models.PdfDataLayer import makePdfTranslationLayerFromPawlsTokens
 
 from config.graphql.serializers import AnnotationLabelSerializer
-from doclatticeserver.annotations.models import Annotation, AnnotationLabel
+from doclatticeserver.annotations.models import TOKEN_LABEL, Annotation, AnnotationLabel
+from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.types.dicts import DocLatticeDocExport
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
+from doclatticeserver.utils.importing import load_or_create_labels, import_annotations
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,12 @@ class BaseParser(ABC):
         pass
 
     def save_parsed_data(
-        self, user_id: int, doc_id: int, doclattice_data: DocLatticeDocExport
+        self, 
+        user_id: int, 
+        doc_id: int, 
+        doclattice_data: DocLatticeDocExport, 
+        corpus_id: Optional[int] = None,
+        annotation_type: Optional[str] = None
     ) -> None:
         """
         Saves the parsed data to the Document model.
@@ -54,11 +62,21 @@ class BaseParser(ABC):
             user_id (int): ID of the user.
             doc_id (int): ID of the document.
             doclattice_data (DocLatticeDocExport): The parsed document data.
+            corpus_id (Optional[int]): ID of the corpus, if the document should be associated with one.
         """
         logger = logging.getLogger(__name__)
         logger.info(f"Saving parsed data for doc {doc_id}")
 
         document = Document.objects.get(pk=doc_id)
+
+        # Associate with corpus if provided
+        if corpus_id:
+            corpus_obj = Corpus.objects.get(id=corpus_id)
+            corpus_obj.documents.add(document)
+            corpus_obj.save()
+            logger.info(f"Associated document with corpus: {corpus_obj.title}")
+        else:
+            corpus_obj = None
 
         # Save content to txt_extract_file
         txt_content = doclattice_data.get("content", "")
@@ -86,55 +104,46 @@ class BaseParser(ABC):
 
         document.save()
 
+        # Load or create labels
+        logger.info(f"Loading or creating labels for document {doc_id} with file type {document.file_type}")
+        if annotation_type is not None:
+            target_label_type = annotation_type
+        else:
+            target_label_type = settings.ANNOTATION_LABELS.get(document.file_type, "SPAN_LABEL")
+        logger.info(f"Target label type: {target_label_type}")
         existing_text_labels = {}
+        label_data_dict = {
+            label_data["annotationLabel"]: {
+                "label_type": target_label_type,
+                "color": "grey", 
+                "description": "Parser Structural Label",
+                "icon": "expand",
+                "text": label_data["annotationLabel"],
+                "creator_id": user_id,
+                "read_only": True
+            } for label_data in doclattice_data.get("labelled_text", [])
+        }
+        
+        logger.info(f"Label data dict: {label_data_dict}")
+       
+        existing_text_labels = load_or_create_labels(
+            user_id,
+            None,  # No labelset in this context
+            label_data_dict,
+            existing_text_labels
+        )
+        
+        logger.info(f"Existing text label lookup: {existing_text_labels}")
 
-        # Annotate the document with any annotations from the parser
-        for label_data in doclattice_data.get("labelled_text", []):
-            label_name = label_data["annotationLabel"]
-
-            if label_name not in existing_text_labels:
-                label_obj = AnnotationLabel.objects.filter(
-                    text=label_name,
-                    creator_id=user_id,
-                    label_type=label_data.get("label_type", "SPAN_LABEL"),
-                    read_only=True,
-                ).first()
-
-                if label_obj:
-                    existing_text_labels[label_name] = label_obj
-                else:
-                    label_serializer = AnnotationLabelSerializer(
-                        data={
-                            "label_type": label_data.get("label_type", "SPAN_LABEL"),
-                            "color": "grey",
-                            "description": "Parser Structural Label",
-                            "icon": "expand",
-                            "text": label_name,
-                            "creator_id": user_id,
-                            "read_only": True,
-                        }
-                    )
-                    label_serializer.is_valid(raise_exception=True)
-                    label_obj = label_serializer.save()
-                    set_permissions_for_obj_to_user(
-                        user_id, label_obj, [PermissionTypes.ALL]
-                    )
-                    existing_text_labels[label_name] = label_obj
-            else:
-                label_obj = existing_text_labels[label_name]
-
-            annot_obj = Annotation.objects.create(
-                raw_text=label_data["rawText"],
-                page=label_data.get("page", 1),
-                json=label_data["annotation_json"],
-                annotation_label=label_obj,
-                document=document,
-                creator_id=user_id,
-                annotation_type=label_data.get("label_type", "SPAN_LABEL"),
-                structural=True,
-            )
-            annot_obj.save()
-            set_permissions_for_obj_to_user(user_id, annot_obj, [PermissionTypes.ALL])
+        # Import annotations
+        import_annotations(
+            user_id,
+            document,
+            corpus_obj,
+            doclattice_data.get("labelled_text", []),
+            existing_text_labels,
+            label_type=target_label_type
+        )
 
         logger.info(f"Document {doc_id} parsed and saved successfully")
 

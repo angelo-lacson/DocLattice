@@ -138,6 +138,7 @@ ALLOWED_DOCUMENT_MIMETYPES = [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/plain",
     "application/txt",
 ]
 
@@ -520,29 +521,10 @@ SENTENCE_TRANSFORMER_MODELS_PATH = env.str(
     "SENTENCE_TRANSFORMER_MODELS_PATH", default="/models/sentence-transformers"
 )
 
-# Parsers configuration
-PARSERS_DICT = {
-    "application/pdf": [
-        "doclatticeserver.parsers.nlm_ingest.parse_with_nlm",
-        "doclatticeserver.parsers.docling.parse_with_docling",
-    ],
-    "application/txt": [
-        "doclatticeserver.parsers.oc_txt_parser.parse_txt_document",
-    ],
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
-        "doclatticeserver.parsers.docling.parse_with_docling",
-    ],
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation": [
-        "doclatticeserver.parsers.docling.parse_with_docling",
-    ],
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
-        "doclatticeserver.parsers.docling.parse_with_docling",
-    ],
-}
-
 # Preferred parsers for each MIME type
 PREFERRED_PARSERS = {
     "application/pdf": "doclatticeserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser",
+    "text/plain": "doclatticeserver.pipeline.parsers.oc_text_parser.TxtParser",
     "application/txt": "doclatticeserver.pipeline.parsers.oc_text_parser.TxtParser",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.parsers.docling_parser.DoclingParser",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": "doclatticeserver.pipeline.parsers.docling_parser.DoclingParser",
@@ -553,6 +535,7 @@ PREFERRED_PARSERS = {
 THUMBNAIL_TASKS = {
     "application/pdf": "doclatticeserver.tasks.doc_tasks.extract_pdf_thumbnail",
     "application/txt": "doclatticeserver.tasks.doc_tasks.extract_txt_thumbnail",
+    "text/plain": "doclatticeserver.tasks.doc_tasks.extract_txt_thumbnail",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.tasks.doc_tasks.extract_docx_thumbnail",  # noqa
     # Add other MIME types and their thumbnail tasks as needed
 }
@@ -561,6 +544,7 @@ THUMBNAIL_TASKS = {
 ANNOTATION_LABELS = {
     "application/pdf": "TOKEN_LABEL",
     "application/txt": "SPAN_LABEL",
+    "text/plain": "SPAN_LABEL",
     "text/markdown": "SPAN_LABEL",
     "text/x-python": "SPAN_LABEL",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "SPAN_LABEL",

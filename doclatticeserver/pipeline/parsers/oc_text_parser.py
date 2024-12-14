@@ -99,11 +99,11 @@ class TxtParser(BaseParser):
                     "end": sentence.end_char,
                 },
                 "parent_id": None,
+                "annotation_type": "SPAN_LABEL",
+                "structural": True
             }
             labelled_text.append(annotation_entry)
 
         doclattice_data["labelled_text"] = labelled_text
 
-        # Save parsed data
-        self.save_parsed_data(user_id, doc_id, doclattice_data)
         return doclattice_data

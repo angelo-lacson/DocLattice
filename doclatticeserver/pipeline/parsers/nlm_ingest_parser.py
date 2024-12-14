@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 import requests
+import json
 from django.conf import settings
 from django.core.files.storage import default_storage
 
@@ -10,6 +11,7 @@ from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.pipeline.base.parser import BaseParser
 from doclatticeserver.types.dicts import DocLatticeDocExport
 from doclatticeserver.utils.files import check_if_pdf_needs_ocr
+from doclatticeserver.annotations.models import TOKEN_LABEL
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,8 @@ class NLMIngestParser(BaseParser):
         self, user_id: int, doc_id: int
     ) -> Optional[DocLatticeDocExport]:
         """
-        Parses a document using the NLM ingest service.
+        Parses a document using the NLM ingest service and ensures that all annotations
+        have 'structural' set to True and 'annotation_type' set to SPAN_LABEL.
 
         Args:
             user_id (int): ID of the user.
@@ -88,6 +91,13 @@ class NLMIngestParser(BaseParser):
             logger.error("No 'doclattice_data' found in NLM ingest service response")
             return None
 
+        # Ensure all annotations have 'structural' set to True and 'annotation_type' set to SPAN_LABEL
+        if 'labelled_text' in doclattice_data:
+            for annotation in doclattice_data['labelled_text']:
+                annotation['structural'] = True
+                annotation['annotation_type'] = TOKEN_LABEL
+        
+        logger.info(f"DocLattice data labelled text: {doclattice_data['labelled_text']}")
+
         # Save parsed data
-        self.save_parsed_data(user_id, doc_id, doclattice_data)
         return doclattice_data
