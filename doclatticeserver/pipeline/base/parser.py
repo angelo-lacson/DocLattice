@@ -1,21 +1,17 @@
-from abc import ABC, abstractmethod
 import json
 import logging
+from abc import ABC, abstractmethod
 from typing import Optional
 
-from django.core.files.base import ContentFile
 from django.conf import settings
+from django.core.files.base import ContentFile
 from plasmapdf.models.PdfDataLayer import makePdfTranslationLayerFromPawlsTokens
 
-from config.graphql.serializers import AnnotationLabelSerializer
-from doclatticeserver.annotations.models import TOKEN_LABEL, Annotation, AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.types.dicts import DocLatticeDocExport
-from doclatticeserver.types.enums import PermissionTypes
-from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
-from doclatticeserver.utils.importing import load_or_create_labels, import_annotations
+from doclatticeserver.utils.importing import import_annotations, load_or_create_labels
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +44,12 @@ class BaseParser(ABC):
         pass
 
     def save_parsed_data(
-        self, 
-        user_id: int, 
-        doc_id: int, 
-        doclattice_data: DocLatticeDocExport, 
+        self,
+        user_id: int,
+        doc_id: int,
+        doclattice_data: DocLatticeDocExport,
         corpus_id: Optional[int] = None,
-        annotation_type: Optional[str] = None
+        annotation_type: Optional[str] = None,
     ) -> None:
         """
         Saves the parsed data to the Document model.
@@ -105,34 +101,39 @@ class BaseParser(ABC):
         document.save()
 
         # Load or create labels
-        logger.info(f"Loading or creating labels for document {doc_id} with file type {document.file_type}")
+        logger.info(
+            f"Loading or creating labels for document {doc_id} with file type {document.file_type}"
+        )
         if annotation_type is not None:
             target_label_type = annotation_type
         else:
-            target_label_type = settings.ANNOTATION_LABELS.get(document.file_type, "SPAN_LABEL")
+            target_label_type = settings.ANNOTATION_LABELS.get(
+                document.file_type, "SPAN_LABEL"
+            )
         logger.info(f"Target label type: {target_label_type}")
         existing_text_labels = {}
         label_data_dict = {
             label_data["annotationLabel"]: {
                 "label_type": target_label_type,
-                "color": "grey", 
+                "color": "grey",
                 "description": "Parser Structural Label",
                 "icon": "expand",
                 "text": label_data["annotationLabel"],
                 "creator_id": user_id,
-                "read_only": True
-            } for label_data in doclattice_data.get("labelled_text", [])
+                "read_only": True,
+            }
+            for label_data in doclattice_data.get("labelled_text", [])
         }
-        
+
         logger.info(f"Label data dict: {label_data_dict}")
-       
+
         existing_text_labels = load_or_create_labels(
             user_id,
             None,  # No labelset in this context
             label_data_dict,
-            existing_text_labels
+            existing_text_labels,
         )
-        
+
         logger.info(f"Existing text label lookup: {existing_text_labels}")
 
         # Import annotations
@@ -142,12 +143,14 @@ class BaseParser(ABC):
             corpus_obj,
             doclattice_data.get("labelled_text", []),
             existing_text_labels,
-            label_type=target_label_type
+            label_type=target_label_type,
         )
 
         logger.info(f"Document {doc_id} parsed and saved successfully")
 
-    def process_document(self, user_id: int, doc_id: int) -> Optional[DocLatticeDocExport]:
+    def process_document(
+        self, user_id: int, doc_id: int
+    ) -> Optional[DocLatticeDocExport]:
         """
         Process a document by parsing it and saving the parsed data.
         This method combines parse_document and save_parsed_data into a single operation.
@@ -160,13 +163,13 @@ class BaseParser(ABC):
             Optional[DocLatticeDocExport]: The parsed document data, or None if parsing failed.
         """
         logger.info(f"Processing document {doc_id}")
-        
+
         parsed_data = self.parse_document(user_id, doc_id)
-        
+
         if parsed_data is not None:
             self.save_parsed_data(user_id, doc_id, parsed_data)
             logger.info(f"Document {doc_id} processed successfully")
         else:
             logger.warning(f"Document {doc_id} parsing failed")
-        
+
         return parsed_data

@@ -2,16 +2,15 @@ import logging
 from typing import Optional
 
 import requests
-import json
 from django.conf import settings
 from django.core.files.storage import default_storage
 
+from doclatticeserver.annotations.models import TOKEN_LABEL
 from doclatticeserver.documents.models import Document
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.pipeline.base.parser import BaseParser
 from doclatticeserver.types.dicts import DocLatticeDocExport
 from doclatticeserver.utils.files import check_if_pdf_needs_ocr
-from doclatticeserver.annotations.models import TOKEN_LABEL
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,9 @@ class NLMIngestParser(BaseParser):
             files = {"file": doc_file}
             params = {
                 "calculate_doclattice_data": "yes",
-                "applyOcr": "yes" if needs_ocr and settings.NLM_INGEST_USE_OCR else "no",
+                "applyOcr": "yes"
+                if needs_ocr and settings.NLM_INGEST_USE_OCR
+                else "no",
             }
 
             # Make the POST request to the NLM ingest service
@@ -79,7 +80,9 @@ class NLMIngestParser(BaseParser):
             )
 
         if response.status_code != 200:
-            logger.error(f"NLM ingest service returned status code {response.status_code}")
+            logger.error(
+                f"NLM ingest service returned status code {response.status_code}"
+            )
             response.raise_for_status()
 
         response_data = response.json()
@@ -92,12 +95,14 @@ class NLMIngestParser(BaseParser):
             return None
 
         # Ensure all annotations have 'structural' set to True and 'annotation_type' set to SPAN_LABEL
-        if 'labelled_text' in doclattice_data:
-            for annotation in doclattice_data['labelled_text']:
-                annotation['structural'] = True
-                annotation['annotation_type'] = TOKEN_LABEL
-        
-        logger.info(f"DocLattice data labelled text: {doclattice_data['labelled_text']}")
+        if "labelled_text" in doclattice_data:
+            for annotation in doclattice_data["labelled_text"]:
+                annotation["structural"] = True
+                annotation["annotation_type"] = TOKEN_LABEL
+
+        logger.info(
+            f"DocLattice data labelled text: {doclattice_data['labelled_text']}"
+        )
 
         # Save parsed data
         return doclattice_data
