@@ -11,7 +11,7 @@ from django.test import TestCase
 
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
-from doclatticeserver.parsers.nlm_ingest import parse_with_nlm
+from doclatticeserver.pipeline.parsers.nlm_ingest_parser import NLMIngestParser
 from doclatticeserver.tests.fixtures import (
     NLM_INGESTOR_EXPECTED_JSON,
     NLM_INGESTOR_SAMPLE_PDF,
@@ -64,7 +64,8 @@ class ParseWithNLMTestCase(TestCase):
         responses.add(nlm_parse_response)
 
         # Call the parse_with_nlm function
-        doclattice_data: DocLatticeDocExport = parse_with_nlm(
+        parser = NLMIngestParser()
+        doclattice_data: DocLatticeDocExport = parser.parse_document(
             user_id=self.user.id, doc_id=self.doc.id
         )
 
