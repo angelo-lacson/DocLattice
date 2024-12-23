@@ -12,7 +12,7 @@ from doclatticeserver.pipeline.parsers.docling_parser import DoclingParser
 from doclatticeserver.tests.fixtures import (
     SAMPLE_PAWLS_FILE_ONE_PATH,
     SAMPLE_PDF_FILE_ONE_PATH,
-    SAMPLE_TXT_FILE_ONE_PATH,
+    SAMPLE_TXT_FILE_ONE_PATH
 )
 from doclatticeserver.types.dicts import DocLatticeDocExport
 
@@ -42,7 +42,10 @@ class DoclingParserIntegrationTestCase(TestCase):
         # Use the sample PDF file from fixtures
         with SAMPLE_PDF_FILE_ONE_PATH.open("rb") as f:
             self.test_pdf = ContentFile(f.read(), name=SAMPLE_PDF_FILE_ONE_PATH.name)
-
+        
+        # with SAMPLE_PDF_FILE_TWO_PATH.open("rb") as f:
+        #     self.test_pdf = ContentFile(f.read(), name=SAMPLE_PDF_FILE_TWO_PATH.name)
+            
         with transaction.atomic():
             self.doc = Document.objects.create(
                 creator=self.user,
@@ -62,6 +65,53 @@ class DoclingParserIntegrationTestCase(TestCase):
         result: Optional[DocLatticeDocExport] = parser.parse_document(
             user_id=self.user.id, doc_id=self.doc.id
         )
+
+        # Assertions
+        self.assertIsNotNone(result, "Parser returned None")
+        assert result is not None  # For type checker
+
+        self.assertEqual(
+            result["title"],
+            "Exhibit 10.1"   
+        )
+
+        self.assertEqual(
+            result["page_count"],
+            23
+        )
+
+        # Assert token counts for each page
+        expected_token_counts = [
+            392, 374, 470, 350, 490, 431, 386, 585, 463, 577,
+            806, 276, 706, 563, 428, 426, 572, 616, 465, 335,
+            496, 43, 6
+        ]
+        
+        for page_idx, page in enumerate(result["pawls_file_content"]):
+            self.assertEqual(
+                len(page['tokens']),
+                expected_token_counts[page_idx],
+                f"Token count mismatch on page {page_idx + 1}"
+            )
+
+        # Assert labelled text length
+        self.assertEqual(
+            len(result["labelled_text"]),
+            272,
+            "Labelled text length mismatch"
+        )
+    
+    def test_docling_parser_force_ocr(self) -> None:
+        """
+        Test the DoclingParser by parsing a sample PDF document and comparing the result with expected outputs.
+        """
+        # Create an instance of the DoclingParser
+        parser = DoclingParser()
+
+        # Call the parse_document method
+        result: Optional[DocLatticeDocExport] = parser.parse_document(
+            user_id=self.user.id, doc_id=self.doc.id, force_ocr=True
+        )
         
         with open("result.json", "w") as f:
             json.dump(result, f, indent=4)
@@ -70,30 +120,40 @@ class DoclingParserIntegrationTestCase(TestCase):
         self.assertIsNotNone(result, "Parser returned None")
         assert result is not None  # For type checker
 
-        # Compare content
-        # self.assertEqual(
-        #     result["content"], self.expected_text,
-        #     "Parser content does not match expected text"
-        # )
+        self.assertEqual(
+            result["title"],
+            "Exhibit 10.1"   
+        )
 
-        # # Compare PAWLS file content
-        # self.assertEqual(
-        #     result["pawls_file_content"], self.expected_pawls,
-        #     "Parser PAWLS content does not match expected PAWLS"
-        # )
+        self.assertEqual(
+            result["page_count"],
+            23
+        )
 
-        # # Additional assertions can be added here
-        # # For example, check the title
-        # self.assertEqual(
-        #     result["title"], "Test Document",
-        #     "Parser title does not match expected title"
-        # )
+        for page_id, page in enumerate(result["pawls_file_content"]):
+            logger.info(f"Token count on page {page_id}: {len(page['tokens'])}")
 
-        # # Check page count
-        # self.assertEqual(
-        #     result["page_count"], len(self.expected_pawls),
-        #     "Parser page count does not match expected page count"
-        # )
+        # Assert token counts for each page
+        expected_token_counts = [
+            391, 374, 470, 350, 490, 431, 381, 569, 463, 577,
+            806, 276, 706, 563, 427, 426, 572, 616, 465, 335,
+            496, 43, 6
+        ]
+        
+        for page_idx, page in enumerate(result["pawls_file_content"]):
+            self.assertEqual(
+                len(page['tokens']),
+                expected_token_counts[page_idx],
+                f"Token count mismatch on page {page_idx + 1}"
+            )
+
+        # Assert labelled text length
+        self.assertEqual(
+            len(result["labelled_text"]),
+            272,
+            "Labelled text length mismatch"
+        )
+        
 
     def tearDown(self) -> None:
         """
