@@ -86,11 +86,18 @@ jobs:
 
       - name: Build the Stack
         run:  docker compose -f test.yml build
-      
-      - name: Clean up after build
+
+      - name: Clean Docker build cache and networks
         run: |
-          rm -rf ./* # Remove source
-          df -h # Check space
+          docker builder prune -f
+          docker network prune -f
+          docker system prune -f --filter "until=24h"
+          df -h
+
+      - name: Clean Docker volumes
+        run: |
+          docker volume prune -f
+          df -h
 
       - name: Run DB Migrations
         run:  docker compose -f test.yml run --rm django python manage.py migrate
