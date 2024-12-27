@@ -194,7 +194,7 @@ class PageAwareTextSpan(TypedDict):
     start: int
     end: int
     text: str
-    
+
 
 class DocLatticeCorpusTemplateType(TypedDict):
     title: str
@@ -246,10 +246,11 @@ class DocLatticeRelationshipPythonType(TypedDict):
     from these old ids to the new database IDs for any related objects (i.e. Annotations).
     """
 
-    id: Optional[Union[str, int]] 
+    id: Optional[Union[str, int]]
     relationshipLabel: str
     source_annotation_ids: list[Union[str, int]]
     target_annotation_ids: list[Union[str, int]]
+
 
 class DocLatticeDocAnnotations(TypedDict):
     # Can have multiple doc labels. Want array of doc label ids, which will be
@@ -258,10 +259,10 @@ class DocLatticeDocAnnotations(TypedDict):
 
     # The annotations are stored in a list of JSONS matching DocLatticeAnnotationPythonType
     labelled_text: list[DocLatticeAnnotationPythonType]
-    
-    # Relationships are stored in a list of JSONS matching DocLatticeRelationshipPythonType. 
+
+    # Relationships are stored in a list of JSONS matching DocLatticeRelationshipPythonType.
     # These in the DocLatticeDocAnnotations should only be for the annotations that are
-    # contained WITHIN document. Plan to add a separate attr at corpus level for cross-doc 
+    # contained WITHIN document. Plan to add a separate attr at corpus level for cross-doc
     # relationships.
     relationships: NotRequired[list[DocLatticeRelationshipPythonType]]
 
