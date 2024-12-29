@@ -2,7 +2,6 @@ import logging
 from typing import Optional
 
 import requests
-from django.conf import settings
 from django.core.files.storage import default_storage
 
 from doclatticeserver.annotations.models import TOKEN_LABEL
@@ -47,9 +46,9 @@ class NLMIngestParser(BaseParser):
         logger.info(f"NLMIngestParser - Parsing doc {doc_id} for user {user_id}")
 
         # Retrieve config from kwargs or fallback to settings
-        endpoint = kwargs.get("endpoint", settings.NLM_INGEST_HOSTNAME)
-        api_key = kwargs.get("api_key", settings.NLM_INGEST_API_KEY)
-        use_ocr_config = kwargs.get("use_ocr", settings.NLM_INGEST_USE_OCR)
+        endpoint = kwargs.get("endpoint", "http://nlm-ingestor:5001")
+        api_key = kwargs.get("api_key", "")
+        use_ocr_config = kwargs.get("use_ocr", False)
 
         # Retrieve the document
         document = Document.objects.get(pk=doc_id)
