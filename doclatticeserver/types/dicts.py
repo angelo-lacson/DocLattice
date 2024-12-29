@@ -196,6 +196,63 @@ class PageAwareTextSpan(TypedDict):
     text: str
 
 
+class DocLatticeCorpusTemplateType(TypedDict):
+    title: str
+    description: str
+    icon_data: Optional[str]
+    icon_name: Optional[str]
+    creator: str
+
+
+class DocLatticeCorpusType(DocLatticeCorpusTemplateType):
+    id: int
+    label_set: str
+
+
+class DocLatticeLabelSetType(TypedDict):
+    id: int | str
+    title: str
+    description: str
+    icon_data: Optional[str]
+    icon_name: str
+    creator: str
+
+
+class AnalyzerMetaDataType(TypedDict):
+    id: str
+    description: str
+    title: str
+    dependencies: list[str]
+    author_name: str
+    author_email: str
+    more_details_url: str
+    icon_base_64_data: str
+    icon_name: str
+
+
+class AnalyzerManifest(TypedDict):
+    metadata: AnalyzerMetaDataType
+    doc_labels: list[AnnotationLabelPythonType]
+    text_labels: list[AnnotationLabelPythonType]
+    label_set: DocLatticeLabelSetType
+
+
+class DocLatticeRelationshipPythonType(TypedDict):
+    """
+    Data type for individual DocLattice relationship data type converted
+    into JSON for import/export.
+
+    Note that typically any 'old' ID is not the actual DB ID, so you'll need a map
+    from these old ids to the new database IDs for any related objects (i.e. Annotations).
+    """
+
+    id: Optional[Union[str, int]]
+    relationshipLabel: str
+    source_annotation_ids: list[Union[str, int]]
+    target_annotation_ids: list[Union[str, int]]
+    structural: bool
+
+
 class DocLatticeDocAnnotations(TypedDict):
     # Can have multiple doc labels. Want array of doc label ids, which will be
     # mapped to proper objects after import.
@@ -203,6 +260,12 @@ class DocLatticeDocAnnotations(TypedDict):
 
     # The annotations are stored in a list of JSONS matching DocLatticeAnnotationPythonType
     labelled_text: list[DocLatticeAnnotationPythonType]
+
+    # Relationships are stored in a list of JSONS matching DocLatticeRelationshipPythonType.
+    # These in the DocLatticeDocAnnotations should only be for the annotations that are
+    # contained WITHIN document. Plan to add a separate attr at corpus level for cross-doc
+    # relationships.
+    relationships: NotRequired[list[DocLatticeRelationshipPythonType]]
 
 
 class DocLatticeDocExport(DocLatticeDocAnnotations):
@@ -226,28 +289,6 @@ class DocLatticeDocExport(DocLatticeDocAnnotations):
 
     # We need to have a page count for certain analyses
     page_count: int
-
-
-class DocLatticeCorpusTemplateType(TypedDict):
-    title: str
-    description: str
-    icon_data: Optional[str]
-    icon_name: Optional[str]
-    creator: str
-
-
-class DocLatticeCorpusType(DocLatticeCorpusTemplateType):
-    id: int
-    label_set: str
-
-
-class DocLatticeLabelSetType(TypedDict):
-    id: int | str
-    title: str
-    description: str
-    icon_data: Optional[str]
-    icon_name: str
-    creator: str
 
 
 class DocLatticeExportDataJsonPythonType(TypedDict):
@@ -319,23 +360,4 @@ class DocLatticeGeneratedCorpusPythonType(TypedDict):
     text_labels: dict[Union[str, int], AnnotationLabelPythonType]
 
     # Stores the label set (todo - make sure the icon gets stored as base64)
-    label_set: DocLatticeLabelSetType
-
-
-class AnalyzerMetaDataType(TypedDict):
-    id: str
-    description: str
-    title: str
-    dependencies: list[str]
-    author_name: str
-    author_email: str
-    more_details_url: str
-    icon_base_64_data: str
-    icon_name: str
-
-
-class AnalyzerManifest(TypedDict):
-    metadata: AnalyzerMetaDataType
-    doc_labels: list[AnnotationLabelPythonType]
-    text_labels: list[AnnotationLabelPythonType]
     label_set: DocLatticeLabelSetType
