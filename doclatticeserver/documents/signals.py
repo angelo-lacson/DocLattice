@@ -14,6 +14,8 @@ from doclatticeserver.tasks.embeddings_task import calculate_embedding_for_doc_t
 logger = logging.getLogger(__name__)
 
 
+# Kicks off document processing pipeline - including thumbnail extraction, ingestion, 
+# embedding calculation, and unlocking the document
 def process_doc_on_create_atomic(sender, instance, created, **kwargs):
     """
     Signal handler to process a document after it is created.
