@@ -2,8 +2,8 @@ import json
 from unittest.mock import patch
 
 from doclatticeserver.annotations.models import Annotation
-from doclatticeserver.tests.base import BaseFixtureTestCase
 from doclatticeserver.tasks.data_extract_tasks import annotation_window, text_search
+from doclatticeserver.tests.base import BaseFixtureTestCase
 from doclatticeserver.types.dicts import PawlsTokenPythonType
 
 
@@ -149,4 +149,4 @@ class TestDataExtractTasks(BaseFixtureTestCase):
             self.assertIsNotNone(result)
             # Count words in result
             word_count = len(result.split())
-            self.assertLessEqual(word_count, 1000) 
+            self.assertLessEqual(word_count, 1000)
