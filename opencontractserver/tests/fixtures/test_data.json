@@ -1,69 +1,7 @@
 [
   {
     "model": "users.user",
-    "pk": 1,
-    "fields": {
-      "password": "!9kOGRixonjvoROff9uQFqYGZGHjeSrFFlciuofal",
-      "last_login": null,
-      "is_superuser": false,
-      "username": "Anonymous",
-      "is_staff": false,
-      "date_joined": "2025-01-03T00:25:15.079Z",
-      "name": "",
-      "first_name": "",
-      "last_name": "",
-      "given_name": "",
-      "family_name": "",
-      "auth0_Id": "",
-      "phone": "",
-      "email": "",
-      "synced": false,
-      "is_active": true,
-      "email_verified": false,
-      "is_social_user": false,
-      "is_usage_capped": true,
-      "last_synced": null,
-      "first_signed_in": "2025-01-03T00:25:15.079Z",
-      "last_ip": "",
-      "groups": [],
-      "user_permissions": []
-    }
-  },
-  {
-    "model": "users.user",
-    "pk": 2,
-    "fields": {
-      "password": "argon2$argon2id$v=19$m=102400,t=2,p=8$VGtKN1dHTjNWNW5aeWlSTG1NTU9naQ$56GOsNbco/1Y4PAloQm7GwwyCiyl7VoBO+jaDhD7yXg",
-      "last_login": null,
-      "is_superuser": true,
-      "username": "admin",
-      "is_staff": true,
-      "date_joined": "2025-01-03T00:25:15.903Z",
-      "name": "",
-      "first_name": "",
-      "last_name": "",
-      "given_name": "",
-      "family_name": "",
-      "auth0_Id": "",
-      "phone": "",
-      "email": "support@opensource.legal",
-      "synced": false,
-      "is_active": true,
-      "email_verified": false,
-      "is_social_user": false,
-      "is_usage_capped": false,
-      "last_synced": null,
-      "first_signed_in": "2025-01-03T00:25:15.903Z",
-      "last_ip": "",
-      "groups": [
-        1
-      ],
-      "user_permissions": []
-    }
-  },
-  {
-    "model": "users.user",
-    "pk": 3,
+    "pk": 999,
     "fields": {
       "password": "argon2$argon2id$v=19$m=102400,t=2,p=8$VjNRT3RiaVMyWktYTVhxRVdDMm85bg$RUutA+GxmUrtWE9vu3jVZ7paUrSaccd/GUTMomRQPMM",
       "last_login": null,
