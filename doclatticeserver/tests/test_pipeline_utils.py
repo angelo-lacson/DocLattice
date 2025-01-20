@@ -98,6 +98,7 @@ class TestThumbnailer(BaseThumbnailGenerator):
         cls.post_processor_code = '''
 from doclatticeserver.pipeline.base.post_processor import BasePostProcessor
 from doclatticeserver.types.dicts import DocLatticeExportDataJsonPythonType
+from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from typing import List, Tuple
 
 class TestPostProcessor(BasePostProcessor):
@@ -109,6 +110,7 @@ class TestPostProcessor(BasePostProcessor):
     description: str = "A test post-processor for unit testing."
     author: str = "Test Author"
     dependencies: List[str] = []
+    supported_file_types: List[FileTypeEnum] = [FileTypeEnum.PDF]
 
     def process_export(
         self,
