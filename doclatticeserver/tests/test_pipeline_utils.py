@@ -103,6 +103,9 @@ from doclatticeserver.pipeline.base.post_processor import BasePostProcessor
 from doclatticeserver.types.dicts import DocLatticeExportDataJsonPythonType
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from typing import List, Tuple
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TestPostProcessor(BasePostProcessor):
     """
@@ -120,9 +123,15 @@ class TestPostProcessor(BasePostProcessor):
         zip_bytes: bytes,
         export_data: DocLatticeExportDataJsonPythonType,
     ) -> Tuple[bytes, DocLatticeExportDataJsonPythonType]:
+        # Add logging to debug the process
+        logger.info("TestPostProcessor.process_export called")
+        logger.info(f"Input export_data: {export_data}")
+        
         # Add a test field to export data
         new_export_data = export_data.copy()
         new_export_data["test_field"] = "test_value"
+        
+        logger.info(f"Modified export_data: {new_export_data}")
         return zip_bytes, new_export_data
 '''
 
