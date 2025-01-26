@@ -9,6 +9,8 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
+from doclatticeserver.shared.defaults import jsonfield_default_value
+from doclatticeserver.shared.fields import NullableJSONField
 from doclatticeserver.shared.utils import calc_oc_file_path
 from doclatticeserver.types.enums import ExportType
 from doclatticeserver.users.validators import UserUnicodeUsernameValidator
@@ -185,6 +187,17 @@ class UserExport(django.db.models.Model):
     started = django.db.models.DateTimeField(null=True)
     finished = django.db.models.DateTimeField(null=True)
     errors = django.db.models.TextField(blank=True)
+    post_processors = django.db.models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of fully qualified Python paths to post-processor functions",
+    )
+    input_kwargs = NullableJSONField(
+        default=jsonfield_default_value,
+        null=True,
+        blank=True,
+        help_text="Additional keyword arguments to pass to post-processors",
+    )
 
     format = django.db.models.CharField(
         max_length=128,
