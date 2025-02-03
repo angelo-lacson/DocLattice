@@ -15,6 +15,7 @@ from graphql_jwt.shortcuts import get_token
 from config.asgi import application
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.annotations.signals import process_annot_on_create_atomic
+from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.documents.signals import process_doc_on_create_atomic
 
@@ -189,6 +190,8 @@ class BaseFixtureTestCase(TransactionTestCase):
                         self.copy_fixture_file(file_path, media_path)
                         setattr(doc, field, media_path)
             doc.save()
+
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user, backend_lock=False)
 
 
 class WebsocketFixtureBaseTestCase(BaseFixtureTestCase):
