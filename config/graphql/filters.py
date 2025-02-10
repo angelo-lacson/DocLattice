@@ -15,12 +15,11 @@ from doclatticeserver.annotations.models import (
     LabelSet,
     Relationship,
 )
-from doclatticeserver.conversations.models import Conversation
+from doclatticeserver.conversations.models import ChatMessage, Conversation
 from doclatticeserver.corpuses.models import Corpus, CorpusQuery
 from doclatticeserver.documents.models import Document, DocumentRelationship
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.users.models import Assignment, UserExport
-from doclatticeserver.conversations.models import ChatMessage
 
 User = get_user_model()
 
@@ -475,6 +474,7 @@ class ConversationFilter(django_filters.FilterSet):
         model = Conversation
         fields = {
             "created_at": ["gte", "lte"],
+            "title": ["contains"],
         }
 
 
