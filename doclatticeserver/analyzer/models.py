@@ -225,6 +225,13 @@ class Analysis(BaseOCModel):
         "documents.Document", related_name="included_in_analyses", blank=True
     )
 
+    # Error handling
+    error_message = django.db.models.TextField(blank=True, null=True)
+    error_traceback = django.db.models.TextField(blank=True, null=True)
+
+    # Result message
+    result_message = django.db.models.TextField(blank=True, null=True)
+
     # Timing variables
     analysis_started = django.db.models.DateTimeField(blank=True, null=True)
     analysis_completed = django.db.models.DateTimeField(blank=True, null=True)
