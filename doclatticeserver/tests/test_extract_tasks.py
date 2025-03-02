@@ -19,6 +19,7 @@ from doclatticeserver.tests.base import BaseFixtureTestCase
 
 User = get_user_model()
 
+
 class ExtractsTaskTestCase(BaseFixtureTestCase):
     """
     TestCase covering the orchestration of document extracts.
