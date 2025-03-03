@@ -605,3 +605,6 @@ ANALYZER_KWARGS = {
 
 # Default embedder
 DEFAULT_EMBEDDER = "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder"
+
+# Default runner
+TEST_RUNNER = "doclatticeserver.tests.runner.TerminateConnectionsTestRunner"
