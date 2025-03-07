@@ -25,4 +25,4 @@ comment:
   require_changes: no
 
 ignore:
-  - "doclatticeserver/tasks/data_extract_tasks.py" 
+  - "doclatticeserver/tasks/data_extract_tasks.py"
