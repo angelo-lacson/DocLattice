@@ -579,6 +579,7 @@ PREFERRED_EMBEDDERS = {
     "application/pdf": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
     "text/plain": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",  # noqa
+    "text/html": "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
     # Add more MIME types as needed
 }
 
@@ -587,22 +588,29 @@ PREFERRED_EMBEDDERS = {
 DEFAULT_EMBEDDERS_BY_FILETYPE_AND_DIMENSION = {
     "application/pdf": {
         384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
-        768: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
+        768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
         1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
         3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
     },
     "text/plain": {
         384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
-        768: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
+        768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
+        1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
+        3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
+    },
+    "text/html": {
+        384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
+        768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
         1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
         3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
     },
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
         384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
-        768: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
+        768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
         1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
         3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
     },
+    # Add more MIME types as needed
 }
 
 # Default embedder
