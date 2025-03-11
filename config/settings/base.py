@@ -576,11 +576,43 @@ ANNOTATION_LABELS = {
 
 # Preferred embedders for each MIME type
 PREFERRED_EMBEDDERS = {
-    "application/pdf": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder",
-    "text/plain": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder",  # noqa
+    "application/pdf": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
+    "text/plain": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",  # noqa
     # Add more MIME types as needed
 }
+
+# Default embedders by filetype and dimension
+# This allows looking up a default embedder for a specific combination of filetype and dimension
+DEFAULT_EMBEDDERS_BY_FILETYPE_AND_DIMENSION = {
+    "application/pdf": {
+        384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
+        768: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
+        1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
+        3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
+    },
+    "text/plain": {
+        384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
+        768: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
+        1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
+        3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
+    },
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+        384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
+        768: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
+        1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
+        3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
+    },
+}
+
+# Default embedder
+DEFAULT_EMBEDDER = "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768"
+
+# Default embedding dimension
+DEFAULT_EMBEDDING_DIMENSION = 768
+
+# Default runner
+TEST_RUNNER = "doclatticeserver.tests.runner.TerminateConnectionsTestRunner"
 
 PARSER_KWARGS = {
     "doclatticeserver.pipeline.parsers.docling_parser.DoclingParser": {
@@ -602,9 +634,3 @@ ANALYZER_KWARGS = {
         "ANTHROPIC_API_KEY": env.str("ANTHROPIC_API_KEY", default=""),
     },
 }
-
-# Default embedder
-DEFAULT_EMBEDDER = "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder"
-
-# Default runner
-TEST_RUNNER = "doclatticeserver.tests.runner.TerminateConnectionsTestRunner"
