@@ -33,8 +33,9 @@ from doclatticeserver.documents.models import (
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.feedback.models import UserFeedback
 from doclatticeserver.pipeline.base.file_types import (
-    FileTypeEnum as FileTypeEnumModel,
+    FileTypeEnum as BackendFileTypeEnum,
 )
+from doclatticeserver.pipeline.utils import get_components_by_mimetype
 from doclatticeserver.shared.resolvers import resolve_oc_model_queryset
 from doclatticeserver.users.models import Assignment, UserExport, UserImport
 
@@ -975,10 +976,10 @@ class UserFeedbackType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 class FileTypeEnum(graphene.Enum):
     """Graphene enum for FileTypeEnum."""
 
-    PDF = FileTypeEnumModel.PDF.value
-    TXT = FileTypeEnumModel.TXT.value
-    DOCX = FileTypeEnumModel.DOCX.value
-    # Add more file types as needed
+    PDF = BackendFileTypeEnum.PDF.value
+    TXT = BackendFileTypeEnum.TXT.value
+    DOCX = BackendFileTypeEnum.DOCX.value
+    # HTML has been removed as we don't support it
 
 
 class PipelineComponentType(graphene.ObjectType):
@@ -1059,7 +1060,6 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         cte = With.recursive(get_descendants)
         descendants_qs = cte.queryset().with_cte(cte).order_by("id")
-
         descendants_list = list(descendants_qs)
         descendants_tree = build_flat_tree(
             descendants_list, type_name="NoteType", text_key="content"
@@ -1160,3 +1160,20 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     post_processors = graphene.List(
         PipelineComponentType, description="List of available post-processors."
     )
+
+
+def resolve_pipeline_components(self, info, mimetype=None):
+    from doclatticeserver.pipeline.base.file_types import FileTypeEnum
+
+    # Convert GraphQL string to backend enum
+    backend_enum = None
+    if mimetype:
+        try:
+            backend_enum = FileTypeEnum[
+                mimetype
+            ]  # This should work if the enum values match
+        except KeyError:
+            pass
+
+    components = get_components_by_mimetype(backend_enum)
+    return components
