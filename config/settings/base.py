@@ -570,54 +570,65 @@ ANNOTATION_LABELS = {
     "text/markdown": "SPAN_LABEL",
     "text/x-python": "SPAN_LABEL",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "SPAN_LABEL",  # noqa
-    "text/html": "SPAN_LABEL",
+    # "text/html": "SPAN_LABEL",  # Removed as we don't support HTML
     # Add other MIME types as needed
 }
 
-# Preferred embedders for each MIME type
-PREFERRED_EMBEDDERS = {
-    "application/pdf": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
-    "text/plain": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768",  # noqa
-    "text/html": "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
-    # Add more MIME types as needed
+# Map of MIME types to label types
+MIMETYPE_TO_LABEL_TYPE = {
+    "application/pdf": "SPAN_LABEL",
+    "text/plain": "SPAN_LABEL",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "SPAN_LABEL",
+    # "text/html": "SPAN_LABEL",  # Removed as we don't support HTML
 }
 
-# Default embedders by filetype and dimension
-# This allows looking up a default embedder for a specific combination of filetype and dimension
+# Map of MIME types to preferred embedders
+PREFERRED_EMBEDDERS = {
+    "application/pdf": "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",  # noqa:
+    "text/plain": "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",  # noqa:
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",  # noqa:
+    # "text/html": "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",  # Removed as we don't support HTML  # noqa:
+}
+
+# Default embedder to use if no preferred embedder is found
+DEFAULT_EMBEDDER = (
+    "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768"
+)
+
+# Default embedding dimension to use if no dimension is specified
+DEFAULT_EMBEDDING_DIMENSION = 768
+
+# Map of MIME types to default embedders for different dimensions
 DEFAULT_EMBEDDERS_BY_FILETYPE_AND_DIMENSION = {
     "application/pdf": {
-        384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
+        384: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder384",
         768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
-        1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
-        3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
+        1536: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder1536",
     },
     "text/plain": {
-        384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
+        384: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder384",
         768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
-        1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
-        3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
-    },
-    "text/html": {
-        384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
-        768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
-        1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
-        3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
+        1536: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder1536",
     },
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
-        384: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder384",
+        384: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder384",
         768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
-        1536: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder1536",
-        3072: "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder3072",
+        1536: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder1536",
     },
-    # Add more MIME types as needed
+    # "text/html": {  # Removed as we don't support HTML
+    #     384: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder384",
+    #     768: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
+    #     1536: "doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder1536",
+    # },
 }
 
-# Default embedder
-DEFAULT_EMBEDDER = "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder768"
-
-# Default embedding dimension
-DEFAULT_EMBEDDING_DIMENSION = 768
+# Map of MIME types to Minnesota Case Law embedders
+MINN_EMBEDDERS = {
+    "application/pdf": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
+    "text/plain": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",  # noqa:
+    # "text/html": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",  # Removed as we don't support HTML  # noqa:
+}
 
 # Default runner
 TEST_RUNNER = "doclatticeserver.tests.runner.TerminateConnectionsTestRunner"
