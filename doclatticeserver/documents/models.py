@@ -5,11 +5,11 @@ from django.core.exceptions import ValidationError
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from pgvector.django import VectorField
 
-from doclatticeserver.shared.Managers import DocumentManager
 from doclatticeserver.shared.defaults import jsonfield_default_value
 from doclatticeserver.shared.fields import NullableJSONField
-from doclatticeserver.shared.Models import BaseOCModel
+from doclatticeserver.shared.Managers import DocumentManager
 from doclatticeserver.shared.mixins import HasEmbeddingMixin
+from doclatticeserver.shared.Models import BaseOCModel
 from doclatticeserver.shared.utils import calc_oc_file_path
 
 
@@ -17,6 +17,7 @@ class Document(BaseOCModel, HasEmbeddingMixin):
     """
     Document
     """
+
     objects = DocumentManager()
 
     # Key fields

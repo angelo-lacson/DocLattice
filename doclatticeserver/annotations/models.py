@@ -1,9 +1,7 @@
 import uuid
-from typing import Optional
 
 import django
 from django.contrib.auth import get_user_model
-from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -23,12 +21,16 @@ from doclatticeserver.shared.defaults import (
     jsonfield_empty_array,
 )
 from doclatticeserver.shared.fields import NullableJSONField
-from doclatticeserver.shared.Models import BaseOCModel
-from doclatticeserver.shared.mixins import HasEmbeddingMixin
-from doclatticeserver.shared.utils import calc_oc_file_path
 
 # Import your new managers
-from doclatticeserver.shared.Managers import AnnotationManager, EmbeddingManager, NoteManager
+from doclatticeserver.shared.Managers import (
+    AnnotationManager,
+    EmbeddingManager,
+    NoteManager,
+)
+from doclatticeserver.shared.mixins import HasEmbeddingMixin
+from doclatticeserver.shared.Models import BaseOCModel
+from doclatticeserver.shared.utils import calc_oc_file_path
 
 User = get_user_model()
 
@@ -59,6 +61,7 @@ EMBEDDING_DIMENSIONS = [
     (EMBEDDING_DIM_1536, "1536"),
     (EMBEDDING_DIM_3072, "3072"),
 ]
+
 
 class AnnotationLabel(BaseOCModel):
 
@@ -432,7 +435,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
 
     # Vector for vector search - legacy field, will be deprecated
     embedding = VectorField(dimensions=384, null=True)
-    
+
     # New relationship to the Embedding model
     embeddings = django.db.models.ForeignKey(
         "annotations.Embedding",
@@ -605,7 +608,7 @@ class Note(BaseOCModel, HasEmbeddingMixin):
 
     # Vector for vector search - legacy field, will be deprecated
     embedding = VectorField(dimensions=384, null=True)
-    
+
     # New relationship to the Embedding model
     embeddings = django.db.models.ForeignKey(
         "annotations.Embedding",

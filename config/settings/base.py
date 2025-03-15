@@ -648,5 +648,5 @@ MINN_MODERNBERT_EMBEDDERS = {
     "application/pdf": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
     "text/plain": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
     "text/html": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",  # noqa
 }
