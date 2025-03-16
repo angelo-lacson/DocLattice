@@ -15,6 +15,7 @@ class DocumentsConfig(AppConfig):
             import doclatticeserver.documents.signals  # noqa F401
             from doclatticeserver.documents.models import Document
             from doclatticeserver.documents.signals import (
+                connect_corpus_document_signals,
                 process_doc_on_create_atomic,
             )
 
@@ -23,6 +24,9 @@ class DocumentsConfig(AppConfig):
             post_save.connect(
                 process_doc_on_create_atomic, sender=Document, dispatch_uid=uuid.uuid4()
             )
+
+            # Connect the m2m_changed signal for when documents are added to corpuses
+            connect_corpus_document_signals()
 
         except ImportError:
             pass
