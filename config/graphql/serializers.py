@@ -5,7 +5,6 @@ from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel, LabelSet
-from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.extracts.models import Column, Extract
 from doclatticeserver.shared.fields import PDFBase64File
@@ -26,7 +25,7 @@ class CorpusSerializer(serializers.ModelSerializer):
     icon = Base64ImageField(required=False)
 
     class Meta:
-        model = Corpus
+        model = "corpuses.Corpus"
         fields = [
             "id",
             "title",

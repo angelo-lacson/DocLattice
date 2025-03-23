@@ -11,9 +11,14 @@ from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from tree_queries.models import TreeNode
 
 from doclatticeserver.annotations.models import Annotation
+from doclatticeserver.pipeline.utils import (
+    get_component_by_name,
+    get_default_embedder,
+)
 from doclatticeserver.shared.Models import BaseOCModel
 from doclatticeserver.shared.QuerySets import PermissionedTreeQuerySet
 from doclatticeserver.shared.utils import calc_oc_file_path
+from doclatticeserver.utils.embeddings import generate_embeddings_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -168,16 +173,9 @@ class Corpus(TreeNode):
 
     def get_embedder_class(self) -> Optional[type]:
         """
-        Get the embedder class for this corpus based on preferred_embedder setting.
-
-        Returns:
-            Optional[type]: The embedder class or None if not found
+        Retrieve the embedder class (Python-based) if possible from the
+        corpus preferred_embedder, else from default embedder config.
         """
-        from doclatticeserver.pipeline.utils import (
-            get_component_by_name,
-            get_default_embedder,
-        )
-
         embedder_class = None
         try:
             if self.preferred_embedder:
@@ -186,43 +184,19 @@ class Corpus(TreeNode):
                 embedder_class = get_default_embedder()
         except Exception as e:
             logger.error(f"Failed to get embedder class: {e}")
-
         return embedder_class
 
     def embed_text(self, text: str) -> tuple[Optional[str], Optional[list[float]]]:
         """
-        Use the corpus's configured preferred_embedder to generate embeddings for the given text.
+        Use a unified embeddings function from utils to create embeddings for the text.
 
         Args:
-            text (str): The text to generate embeddings for
+            text (str): The text to embed
 
         Returns:
-            Tuple[str, Optional[list[float]]]: A tuple containing:
-                - The embedder instance name (or None if embedding failed)
-                - The generated embeddings (or None if embedding failed)
+            A tuple of (embedder path, embeddings list), or (None, None) on failure.
         """
-        name = None
-        embeddings = None
-
-        try:
-            embedder_class = self.get_embedder_class()
-            if embedder_class:
-                # Create an instance of the embedder
-                embedder = embedder_class()
-                # Generate embeddings
-                embeddings = embedder.embed_text(text)
-                # Set the name based on which embedder was used
-                name = (
-                    self.preferred_embedder
-                    if self.preferred_embedder
-                    else settings.DEFAULT_EMBEDDER
-                )
-        except Exception as e:
-            logger.error(
-                f"Failed to generate embeddings using corpus preferred embedder: {e}"
-            )
-
-        return name, embeddings
+        return generate_embeddings_from_text(text, corpus_id=self.pk)
 
     def get_embed_dim(self) -> int:
         """
