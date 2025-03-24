@@ -17,7 +17,7 @@ from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.shared.resolvers import resolve_oc_model_queryset
 from doclatticeserver.utils.embeddings import (
     generate_embeddings_from_text,
-    get_embedder_for_corpus,
+    get_embedder,
 )
 
 _logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class DjangoAnnotationVectorStore(BasePydanticVectorStore):
         # If a corpus is supplied, attempt to detect its configured embedder dimension
         if corpus_id is not None:
             try:
-                embedder_class, _ = get_embedder_for_corpus(int(corpus_id))
+                embedder_class, _ = get_embedder(int(corpus_id))
                 if embedder_class and hasattr(embedder_class, "vector_size"):
                     embed_dim = embedder_class.vector_size
             except Exception as exc:
