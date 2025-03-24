@@ -10,9 +10,7 @@ from django.contrib.auth import get_user_model
 from doclatticeserver.annotations.models import Annotation, Note
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
-from doclatticeserver.pipeline.utils import (
-    get_default_embedder,
-)
+from doclatticeserver.pipeline.utils import get_default_embedder
 from doclatticeserver.utils.embeddings import generate_embeddings_from_text
 
 User = get_user_model()
@@ -83,17 +81,21 @@ def calculate_embedding_for_annotation_text(
 
     corpus_id = annotation.corpus_id  # if your annotation references a corpus
     logger.info(f"Processing annotation {annotation_id} with corpus_id {corpus_id}")
-    
+
     text = annotation.raw_text or ""
     if not text.strip():
         logger.info(f"Annotation {annotation_id} has no raw_text to embed.")
         return
-    
-    logger.info(f"Generating embeddings for annotation {annotation_id} with text length {len(text)}")
+
+    logger.info(
+        f"Generating embeddings for annotation {annotation_id} with text length {len(text)}"
+    )
     # If we want to override the embedder path, do so. If not, generate_embeddings_from_text
     # will figure out from the corpus or fallback to default microservice or embedder.
     returned_path, vector = generate_embeddings_from_text(text, corpus_id=corpus_id)
-    logger.info(f"Generated embeddings for annotation {annotation_id} using {returned_path}")
+    logger.info(
+        f"Generated embeddings for annotation {annotation_id} using {returned_path}"
+    )
 
     if vector is None:
         logger.error(
