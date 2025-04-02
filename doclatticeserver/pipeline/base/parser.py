@@ -8,7 +8,6 @@ from django.core.files.base import ContentFile
 from plasmapdf.models.PdfDataLayer import build_translation_layer
 
 from doclatticeserver.annotations.models import RELATIONSHIP_LABEL
-from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.types.dicts import DocLatticeDocExport
@@ -84,6 +83,10 @@ class BaseParser(ABC):
 
         # Associate with corpus if provided
         if corpus_id:
+            # Use Django's lazy-loading with string reference to avoid circular import
+            from django.apps import apps
+
+            Corpus = apps.get_model("corpuses", "Corpus")
             corpus_obj = Corpus.objects.get(id=corpus_id)
             corpus_obj.documents.add(document)
             corpus_obj.save()
