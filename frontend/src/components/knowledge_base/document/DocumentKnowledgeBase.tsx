@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery } from "@apollo/client";
-import { Card, Button, Header, Modal } from "semantic-ui-react";
+import { Card, Button, Header, Modal, Loader } from "semantic-ui-react";
 import {
   MessageSquare,
   FileText,
@@ -106,10 +106,12 @@ import styled from "styled-components";
 import { Icon } from "semantic-ui-react";
 import { useChatSourceState } from "../../annotator/context/ChatSourceAtom";
 
-const pdfjsLib = require("pdfjs-dist");
+import { getDocument } from "pdfjs-dist";
+import workerSrc from "pdfjs-dist/build/pdf.worker?worker&url";
+import * as pdfjs from "pdfjs-dist";
 
 // Setting worker path to worker bundle.
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
 interface DocumentKnowledgeBaseProps {
   documentId: string;
@@ -491,6 +493,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const {
     data: combinedData,
     loading,
+    error: queryError,
     refetch,
   } = useQuery<
     GetDocumentKnowledgeAndAnnotationsOutput,
@@ -502,52 +505,87 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       analysisId: undefined,
     },
     onCompleted: (data) => {
+      if (!data?.document) {
+        console.error("onCompleted: No document data received.");
+        setViewState(ViewState.ERROR);
+        toast.error("Failed to load document details.");
+        return;
+      }
       setDocumentType(data.document.fileType ?? "");
       setDocument(data.document);
       setPermissions(data.document.myPermissions ?? []);
-
-      // --------------------------------------------------
-      // Call our processing function here:
-      // --------------------------------------------------
       processAnnotationsData(data);
 
-      // Load PDF or TXT as needed:
       if (
         data.document.fileType === "application/pdf" &&
         data.document.pdfFile
       ) {
-        const loadingTask: PDFDocumentLoadingTask = pdfjsLib.getDocument(
+        setViewState(ViewState.LOADING); // Set loading state
+        const loadingTask: PDFDocumentLoadingTask = getDocument(
           data.document.pdfFile
         );
         loadingTask.onProgress = (p: { loaded: number; total: number }) => {
           setProgress(Math.round((p.loaded / p.total) * 100));
         };
 
+        const pawlsPath = data.document.pawlsParseFile || "";
+
         Promise.all([
           loadingTask.promise,
-          getPawlsLayer(data.document.pawlsParseFile || ""),
+          getPawlsLayer(pawlsPath), // Fetches PAWLS via REST
         ])
           .then(([pdfDocProxy, pawlsData]) => {
+            // --- DETAILED LOGGING FOR PAWLS DATA ---
+            if (!pawlsData) {
+              console.error(
+                "onCompleted: PAWLS data received is null or undefined!"
+              );
+            }
+            // --- END DETAILED LOGGING ---
+
+            if (!pdfDocProxy) {
+              throw new Error("PDF document proxy is null or undefined.");
+            }
             setPdfDoc(pdfDocProxy);
 
-            const loadPages: Promise<PDFPageInfo>[] = [];
+            const loadPagesPromises: Promise<PDFPageInfo>[] = [];
             for (let i = 1; i <= pdfDocProxy.numPages; i++) {
-              loadPages.push(
-                pdfDocProxy.getPage(i).then((p) => {
+              const pageNum = i; // Capture page number for logging
+              loadPagesPromises.push(
+                pdfDocProxy.getPage(pageNum).then((p) => {
                   let pageTokens: Token[] = [];
-                  if (pawlsData.length === 0) {
-                    toast.error(
-                      "Token layer isn't available for this document... annotations can't be displayed."
+                  const pageIndex = p.pageNumber - 1;
+
+                  if (
+                    !pawlsData ||
+                    !Array.isArray(pawlsData) ||
+                    pageIndex >= pawlsData.length
+                  ) {
+                    console.warn(
+                      `Page ${pageNum}: PAWLS data index out of bounds. Index: ${pageIndex}, Length: ${pawlsData.length}`
                     );
+                    pageTokens = [];
                   } else {
-                    const pageIndex = p.pageNumber - 1;
-                    pageTokens = pawlsData[pageIndex].tokens;
+                    const pageData = pawlsData[pageIndex];
+
+                    if (!pageData) {
+                      pageTokens = [];
+                    } else if (typeof pageData.tokens === "undefined") {
+                      pageTokens = [];
+                    } else if (!Array.isArray(pageData.tokens)) {
+                      console.error(
+                        `Page ${pageNum}: CRITICAL - pageData.tokens is not an array at index ${pageIndex}! Type: ${typeof pageData.tokens}`
+                      );
+                      pageTokens = [];
+                    } else {
+                      pageTokens = pageData.tokens;
+                    }
                   }
                   return new PDFPageInfo(p, pageTokens, zoomLevel);
                 }) as unknown as Promise<PDFPageInfo>
               );
             }
-            return Promise.all(loadPages);
+            return Promise.all(loadPagesPromises);
           })
           .then((loadedPages) => {
             setPages(loadedPages);
@@ -558,28 +596,52 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               ...pageTextMaps,
             });
             setDocText(doc_text);
+            setViewState(ViewState.LOADED); // Set loaded state only after everything is done
           })
           .catch((err) => {
-            console.error("Error loading PDF document:", err);
+            // Log the specific error causing the catch
             setViewState(ViewState.ERROR);
+            toast.error(
+              `Error loading PDF details: ${
+                err instanceof Error ? err.message : String(err)
+              }`
+            );
           });
       } else if (
-        data.document.fileType === "application/txt" ||
-        data.document.fileType === "text/plain"
+        (data.document.fileType === "application/txt" ||
+          data.document.fileType === "text/plain") &&
+        data.document.txtExtractFile
       ) {
-        Promise.all([getDocumentRawText(data.document.txtExtractFile || "")])
-          .then(([txt]) => {
+        console.log("onCompleted: Loading TXT", data.document.txtExtractFile);
+        setViewState(ViewState.LOADING); // Set loading state
+        getDocumentRawText(data.document.txtExtractFile)
+          .then((txt) => {
             setDocText(txt);
             setViewState(ViewState.LOADED);
           })
           .catch((err) => {
-            console.error("Error loading TXT document:", err);
             setViewState(ViewState.ERROR);
+            toast.error(
+              `Error loading text content: ${
+                err instanceof Error ? err.message : String(err)
+              }`
+            );
           });
       } else {
-        // Unsupported or unknown file type
+        console.warn(
+          "onCompleted: Unsupported file type or missing file path.",
+          data.document.fileType
+        );
+        setViewState(ViewState.ERROR); // Treat unsupported as error
       }
     },
+    onError: (error) => {
+      console.error("GraphQL Query Error fetching document data:", error);
+      toast.error(`Failed to load document details: ${error.message}`);
+      setViewState(ViewState.ERROR);
+    },
+    fetchPolicy: "network-only",
+    nextFetchPolicy: "no-cache",
     skip: !documentId || !corpusId,
   });
 
@@ -989,7 +1051,17 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   if (metadata.fileType === "application/pdf") {
     viewerContent = (
       <PDFContainer id="pdf-container" ref={containerRefCallback}>
-        <PDF read_only={false} containerWidth={containerWidth} />
+        {viewState === ViewState.LOADED ? (
+          <PDF read_only={false} containerWidth={containerWidth} />
+        ) : viewState === ViewState.LOADING ? (
+          <Loader active inline="centered" content="Loading PDF..." />
+        ) : (
+          <EmptyState
+            icon={<FileText size={40} />}
+            title="Error Loading PDF"
+            description="Could not load the PDF document."
+          />
+        )}
       </PDFContainer>
     );
   } else if (
@@ -997,24 +1069,38 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     metadata.fileType === "text/plain"
   ) {
     viewerContent = (
-      <PDFContainer ref={containerRefCallback}>
-        <TxtAnnotatorWrapper readOnly={true} allowInput={false} />
+      <PDFContainer id="pdf-container" ref={containerRefCallback}>
+        {viewState === ViewState.LOADED ? (
+          <TxtAnnotatorWrapper readOnly={true} allowInput={false} />
+        ) : viewState === ViewState.LOADING ? (
+          <Loader active inline="centered" content="Loading Text..." />
+        ) : (
+          <EmptyState
+            icon={<FileText size={40} />}
+            title="Error Loading Text"
+            description="Could not load the text file."
+          />
+        )}
       </PDFContainer>
     );
   } else {
     viewerContent = (
-      <div style={{ padding: "2rem" }}>
-        {viewState === ViewState.ERROR ? (
+      <div
+        style={{
+          padding: "2rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+        }}
+      >
+        {viewState === ViewState.LOADING ? (
+          <Loader active inline="centered" content="Loading Document..." />
+        ) : (
           <EmptyState
             icon={<FileText size={40} />}
             title="Unsupported File"
             description="This document type can't be displayed."
-          />
-        ) : (
-          <EmptyState
-            icon={<FileText size={40} />}
-            title="Loading..."
-            description="Please wait for the document to finish loading."
           />
         )}
       </div>
