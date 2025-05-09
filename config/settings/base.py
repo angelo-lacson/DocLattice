@@ -554,12 +554,12 @@ SENTENCE_TRANSFORMER_MODELS_PATH = env.str(
 
 # Preferred parsers for each MIME type
 PREFERRED_PARSERS = {
-    "application/pdf": "doclatticeserver.pipeline.parsers.docling_parser.DoclingParser",
+    "application/pdf": "doclatticeserver.pipeline.parsers.docling_parser_rest.DoclingParser",
     "text/plain": "doclatticeserver.pipeline.parsers.oc_text_parser.TxtParser",
     "application/txt": "doclatticeserver.pipeline.parsers.oc_text_parser.TxtParser",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.parsers.docling_parser.DoclingParser",  # noqa
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "doclatticeserver.pipeline.parsers.docling_parser.DoclingParser",  # noqa
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "doclatticeserver.pipeline.parsers.docling_parser.DoclingParser",  # noqa
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.parsers.docling_parser_rest.DoclingParser",  # noqa
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "doclatticeserver.pipeline.parsers.docling_parser_rest.DoclingParser",  # noqa
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "doclatticeserver.pipeline.parsers.docling_parser_rest.DoclingParser",  # noqa
 }
 
 # Thumbnail extraction tasks
