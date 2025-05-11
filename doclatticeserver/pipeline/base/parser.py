@@ -16,6 +16,7 @@ from doclatticeserver.utils.importing import (
     import_relationships,
     load_or_create_labels,
 )
+
 from .base_component import PipelineComponentBase
 
 logger = logging.getLogger(__name__)
