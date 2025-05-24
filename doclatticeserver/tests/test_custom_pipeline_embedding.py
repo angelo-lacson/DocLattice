@@ -9,7 +9,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from llama_index.core.callbacks import CallbackManager
 
-from doclatticeserver.llms.custom_pipeline_embedding import (
+from doclatticeserver.llms.embeddings.custom_pipeline_embedding import (
     DocLatticePipelineEmbedding,
 )
 
