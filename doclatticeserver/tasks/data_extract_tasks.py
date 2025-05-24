@@ -18,7 +18,7 @@ from llama_index.core.tools import FunctionTool, QueryEngineTool, ToolMetadata
 from llama_index.llms.openai import OpenAI
 
 from doclatticeserver.extracts.models import Datacell
-from doclatticeserver.llms.embeddings.custom_pipeline_embedding import (
+from doclatticeserver.llms.embedders.custom_pipeline_embedding import (
     DocLatticePipelineEmbedding,
 )
 from doclatticeserver.llms.vector_stores.vector_store_factory import UnifiedVectorStoreFactory

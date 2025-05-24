@@ -26,7 +26,7 @@ from doclatticeserver.llms.agents.core_agents import (
     DocumentAgentContext,
     CorpusAgentContext,
 )
-from doclatticeserver.llms.embeddings.custom_pipeline_embedding import DocLatticePipelineEmbedding
+from doclatticeserver.llms.embedders.custom_pipeline_embedding import DocLatticePipelineEmbedding
 from doclatticeserver.llms.tools.core_tools import (
     get_md_summary_token_length,
     get_note_content_token_length_tool,
