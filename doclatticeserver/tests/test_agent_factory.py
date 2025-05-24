@@ -2,8 +2,7 @@
 Tests for the UnifiedAgentFactory and related tool conversion logic.
 """
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.test import TestCase
 from django.contrib.auth import get_user_model
@@ -11,7 +10,7 @@ from django.contrib.auth import get_user_model
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.llms.types import AgentFramework
-from doclatticeserver.llms.agents.core_agents import CoreAgent, AgentConfig, get_default_config
+from doclatticeserver.llms.agents.core_agents import CoreAgent, AgentConfig
 from doclatticeserver.llms.tools.tool_factory import CoreTool, UnifiedToolFactory as CoreUnifiedToolFactory # Alias to avoid confusion
 from doclatticeserver.llms.agents.agent_factory import UnifiedAgentFactory, _convert_tools_for_framework
 
@@ -19,8 +18,7 @@ from doclatticeserver.llms.agents.agent_factory import UnifiedAgentFactory, _con
 # These would normally be in their respective modules
 # For testing, we define simplified mocks here or assume they exist and can be patched.
 
-# Example: Mock LlamaIndexDocumentAgent (assuming it's in doclatticeserver.llms.agents.llama_index_agents)
-# We need to ensure the patch paths are correct based on your actual module structure.
+# Example: Mock LlamaIndexDocumentAgent
 # Using strings for now, adjust if these modules/classes don't exist at these paths.
 MOCK_LLAMA_INDEX_DOC_AGENT_PATH = "doclatticeserver.llms.agents.llama_index_agents.LlamaIndexDocumentAgent"
 MOCK_PYDANTIC_AI_DOC_AGENT_PATH = "doclatticeserver.llms.agents.pydantic_ai_agents.PydanticAIDocumentAgent"
