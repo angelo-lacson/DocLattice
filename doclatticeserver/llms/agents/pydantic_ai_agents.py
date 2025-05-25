@@ -5,6 +5,7 @@ from typing import Any, Optional, Union, List, AsyncGenerator
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
+from pydantic_ai import Agent
 
 from doclatticeserver.documents.models import Document
 from doclatticeserver.llms.agents.core_agents import (
