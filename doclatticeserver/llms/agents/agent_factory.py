@@ -4,6 +4,7 @@ import logging
 from typing import Optional, Union, List, Callable
 
 from doclatticeserver.conversations.models import ChatMessage, Conversation
+from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.llms.types import AgentFramework
 from doclatticeserver.llms.agents.core_agents import (
@@ -21,6 +22,7 @@ class UnifiedAgentFactory:
     @staticmethod
     async def create_document_agent(
         document: Union[str, int, Document],
+        corpus: Union[str, int, Corpus],
         framework: AgentFramework = AgentFramework.LLAMA_INDEX,
         user_id: Optional[int] = None,
         # Enhanced conversation management
@@ -89,16 +91,16 @@ class UnifiedAgentFactory:
 
         if framework == AgentFramework.LLAMA_INDEX:
             from doclatticeserver.llms.agents.llama_index_agents import LlamaIndexDocumentAgent
-            return await LlamaIndexDocumentAgent.create(document, config, framework_tools)
+            return await LlamaIndexDocumentAgent.create(document, corpus, config, framework_tools)
         elif framework == AgentFramework.PYDANTIC_AI:
             from doclatticeserver.llms.agents.pydantic_ai_agents import PydanticAIDocumentAgent
-            return await PydanticAIDocumentAgent.create(document, config, framework_tools)
+            return await PydanticAIDocumentAgent.create(document, corpus, config, framework_tools)
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
     @staticmethod
     async def create_corpus_agent(
-        corpus_id: Union[str, int],
+        corpus: Union[str, int, Corpus],
         framework: AgentFramework = AgentFramework.LLAMA_INDEX,
         user_id: Optional[int] = None,
         # Enhanced conversation management
@@ -167,10 +169,10 @@ class UnifiedAgentFactory:
 
         if framework == AgentFramework.LLAMA_INDEX:
             from doclatticeserver.llms.agents.llama_index_agents import LlamaIndexCorpusAgent
-            return await LlamaIndexCorpusAgent.create(corpus_id, config, framework_tools)
+            return await LlamaIndexCorpusAgent.create(corpus, config, framework_tools)
         elif framework == AgentFramework.PYDANTIC_AI:
             from doclatticeserver.llms.agents.pydantic_ai_agents import PydanticAICorpusAgent
-            return await PydanticAICorpusAgent.create(corpus_id, config, framework_tools)
+            return await PydanticAICorpusAgent.create(corpus, config, framework_tools)
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
