@@ -12,7 +12,7 @@ from doclatticeserver.conversations.models import ChatMessage, Conversation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.llms.vector_stores.core_vector_stores import CoreAnnotationVectorStore
-from doclatticeserver.utils.embeddings import get_embedder
+from doclatticeserver.utils.embeddings import get_embedder, aget_embedder
 
 logger = logging.getLogger(__name__)
 
@@ -335,10 +335,10 @@ class CoreDocumentAgentFactory:
             corpus = await Corpus.objects.aget(id=corpus)
         
         # ------------------------------------------------------------------
-        # Ensure an embedder is configured.
+        # Ensure an embedder is configured (async!).
         # ------------------------------------------------------------------
         if config.embedder_path is None:
-            _, name = get_embedder(corpus.id)
+            _, name = await aget_embedder(corpus.id)
             config.embedder_path = name
            
         # Set default system prompt if not provided
