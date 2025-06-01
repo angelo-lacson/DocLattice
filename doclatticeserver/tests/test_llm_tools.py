@@ -8,11 +8,11 @@ from doclatticeserver.annotations.models import Note
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.llms.tools import (
-    _token_count,
     get_md_summary_token_length,
     get_notes_for_document_corpus,
     load_document_md_summary,
 )
+from doclatticeserver.llms.tools.core_tools import _token_count
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
