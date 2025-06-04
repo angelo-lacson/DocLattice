@@ -23,7 +23,7 @@ from django.test.utils import (
 )
 
 from doclatticeserver.annotations.models import Annotation
-from doclatticeserver.annotations.signals import process_annot_on_create_atomic
+from doclatticeserver.annotations.signals import ANNOT_CREATE_UID, process_annot_on_create_atomic
 from doclatticeserver.documents.models import Document
 from doclatticeserver.documents.signals import process_doc_on_create_atomic
 from doclatticeserver.tasks.doc_tasks import ingest_doc
@@ -158,7 +158,7 @@ class Command(BaseCommand):
             self.setup_test_db()
 
             # Disconnect signals just like in the test
-            post_save.disconnect(process_annot_on_create_atomic, sender=Annotation)
+            post_save.disconnect(process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID)
             post_save.disconnect(process_doc_on_create_atomic, sender=Document)
 
             # Create default group for newly created user
@@ -235,6 +235,7 @@ class Command(BaseCommand):
                 "documents.document",
                 "annotations.annotationlabel",
                 "annotations.annotation",
+                "annotations.embedding",
                 "annotations.relationship",
             ]
 
