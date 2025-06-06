@@ -26,3 +26,4 @@ comment:
 
 ignore:
   - "doclatticeserver/tasks/data_extract_tasks.py"
+  - "doclatticeserver/tests/base.py"
