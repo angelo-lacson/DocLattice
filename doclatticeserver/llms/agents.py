@@ -5,7 +5,9 @@ from typing import Literal
 
 import nest_asyncio
 
-from doclatticeserver.llms.agents.agent_factory import AgentFramework
+from doclatticeserver.llms.agents.agent_factory import (
+    AgentFramework,
+)
 from doclatticeserver.llms.agents.agent_factory import (
     create_corpus_agent as unified_create_corpus_agent,
 )

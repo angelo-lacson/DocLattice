@@ -285,9 +285,9 @@ def build_document_export(
                     }
                 )
 
-                annotation_json: dict[
-                    str, DocLatticeSinglePageAnnotationType
-                ] = annot.json
+                annotation_json: dict[str, DocLatticeSinglePageAnnotationType] = (
+                    annot.json
+                )
 
                 for targ_page_num in annotation_json:
                     logger.info(

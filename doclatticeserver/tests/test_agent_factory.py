@@ -14,7 +14,9 @@ from doclatticeserver.llms.agents.agent_factory import (
     _convert_tools_for_framework,
 )
 from doclatticeserver.llms.agents.core_agents import AgentConfig, CoreAgent
-from doclatticeserver.llms.tools.tool_factory import CoreTool
+from doclatticeserver.llms.tools.tool_factory import (
+    CoreTool,
+)
 from doclatticeserver.llms.tools.tool_factory import (
     UnifiedToolFactory as CoreUnifiedToolFactory,  # Alias to avoid confusion
 )

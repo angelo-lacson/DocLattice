@@ -1,6 +1,7 @@
 """
 Tests for functions in doclatticeserver.utils.layout
 """
+
 import vcr
 from django.test import TestCase
 

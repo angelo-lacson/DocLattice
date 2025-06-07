@@ -19,7 +19,9 @@ from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.annotations.signals import (
     ANNOT_CREATE_UID,  # Import the static UID
 )
-from doclatticeserver.annotations.signals import process_annot_on_create_atomic
+from doclatticeserver.annotations.signals import (
+    process_annot_on_create_atomic,
+)
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.documents.signals import process_doc_on_create_atomic
