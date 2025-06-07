@@ -5,7 +5,7 @@ import logging
 from typing import Any, Callable, Optional, get_type_hints
 
 from pydantic import BaseModel, ConfigDict, Field
-from pydantic_ai import RunContext
+from pydantic_ai.tools import RunContext
 
 from doclatticeserver.llms.tools.tool_factory import CoreTool
 from doclatticeserver.llms.vector_stores.core_vector_stores import (

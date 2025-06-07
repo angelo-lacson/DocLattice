@@ -9,8 +9,9 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.test import TestCase, override_settings
 from pydantic import BaseModel
-from pydantic_ai import Agent, RunContext
+from pydantic_ai.agent import Agent
 from pydantic_ai.models.test import TestModel
+from pydantic_ai.tools import RunContext
 
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
