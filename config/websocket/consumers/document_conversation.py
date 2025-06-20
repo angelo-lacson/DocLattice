@@ -28,8 +28,10 @@ from doclatticeserver.documents.models import Document
 from doclatticeserver.llms import agents
 from doclatticeserver.llms.agents.core_agents import (
     ApprovalNeededEvent,
+    ApprovalResultEvent,
     ContentEvent,
     FinalEvent,
+    ResumeEvent,
     SourceEvent,
     ThoughtEvent,
 )
@@ -423,6 +425,26 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
                             data={
                                 "message_id": event.llm_message_id,
                                 "pending_tool_call": event.pending_tool_call,
+                            },
+                        )
+
+                    elif isinstance(event, ApprovalResultEvent):
+                        await self.send_standard_message(
+                            msg_type="ASYNC_APPROVAL_RESULT",
+                            content="",
+                            data={
+                                "message_id": event.llm_message_id,
+                                "decision": event.decision,
+                                "pending_tool_call": event.pending_tool_call,
+                            },
+                        )
+
+                    elif isinstance(event, ResumeEvent):
+                        await self.send_standard_message(
+                            msg_type="ASYNC_RESUME",
+                            content="",
+                            data={
+                                "message_id": event.llm_message_id,
                             },
                         )
 
