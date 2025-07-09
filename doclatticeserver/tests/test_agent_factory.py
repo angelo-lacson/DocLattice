@@ -11,14 +11,10 @@ from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.llms.agents.agent_factory import (
     UnifiedAgentFactory,
-    _convert_tools_for_framework,
 )
 from doclatticeserver.llms.agents.core_agents import AgentConfig, CoreAgent
 from doclatticeserver.llms.tools.tool_factory import (
     CoreTool,
-)
-from doclatticeserver.llms.tools.tool_factory import (
-    UnifiedToolFactory as CoreUnifiedToolFactory,  # Alias to avoid confusion
 )
 from doclatticeserver.llms.types import AgentFramework
 
@@ -157,6 +153,7 @@ class TestUnifiedAgentFactory(TestAgentFactorySetup):
             await UnifiedAgentFactory.create_corpus_agent(
                 self.corpus1, framework="invalid_framework_name"
             )
+
 
 #     @patch("doclatticeserver.llms.agents.pydantic_ai_agents.PydanticAIDocumentAgent")
 #     async def test_public_context_filters_approval_tools(
