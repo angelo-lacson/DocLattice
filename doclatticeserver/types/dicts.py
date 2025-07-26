@@ -334,9 +334,6 @@ class DocLatticeAnnotatedDocumentImportType(TypedDict):
     # Requisite text labels, mapped from label name to label data
     text_labels: dict[str, AnnotationLabelPythonType]
 
-    # Requisite metadata labels, mapped from label name to label data
-    metadata_labels: dict[str, AnnotationLabelPythonType]
-
 
 class DocLatticeAnalysisTaskResult(TypedDict):
     doc_id: int
