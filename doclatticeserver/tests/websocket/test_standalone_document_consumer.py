@@ -2,19 +2,21 @@
 Tests for StandaloneDocumentQueryConsumer using realistic data and fixtures.
 
 We rely on BaseFixtureTestCase/WebsocketFixtureBaseTestCase to load realistic
-documents and users. 
+documents and users.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from urllib.parse import quote
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import quote
 
 import pytest
+import vcr
 from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
+from django.conf import settings
 from django.test.utils import override_settings
 from graphql_relay import to_global_id
 
@@ -22,13 +24,14 @@ from config.websocket.consumers.standalone_document_conversation import (
     StandaloneDocumentQueryConsumer,
 )
 from doclatticeserver.annotations.models import Annotation, Embedding
+from doclatticeserver.conversations.models import Conversation
 from doclatticeserver.llms.agents.core_agents import (
     ContentEvent,
     FinalEvent,
-    ThoughtEvent,
     SourceEvent,
+    ThoughtEvent,
 )
-from doclatticeserver.conversations.models import Conversation
+from doclatticeserver.llms.types import AgentFramework
 from doclatticeserver.tests.base import WebsocketFixtureBaseTestCase
 
 logger = logging.getLogger(__name__)
@@ -38,16 +41,22 @@ logger = logging.getLogger(__name__)
 @pytest.mark.django_db(transaction=True)
 class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
     """End-to-end tests for the stand-alone (corpus-less) document chat consumer."""
+
     class _StubAgent:
         def __init__(self, gen_factory):
             self._gen_factory = gen_factory
             self.get_conversation = MagicMock(return_value=None)
 
-        def stream_query(self, user_query: str):
+        def stream(self, user_query: str):
             return self._gen_factory()
 
-        def resume_with_approval(self, llm_msg_id: int, approved: bool, stream: bool = True):
+        def resume_with_approval(
+            self, llm_msg_id: int, approved: bool, stream: bool = True
+        ):
             return self._gen_factory()
+
+        def get_conversation_id(self):
+            return None
 
     async def test_authenticated_user_with_permission(self) -> None:
         """Authenticated user with read permission can connect and chat."""
@@ -92,12 +101,14 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
     async def test_authenticated_user_without_permission(self) -> None:
         """Authenticated user without read permission should be rejected (private doc not owned by user)."""
         from django.contrib.auth import get_user_model
+
         OtherUser = get_user_model()
         other_user = await database_sync_to_async(OtherUser.objects.create_user)(
             username="someoneelse", password="pw123456!", email="x@example.com"
         )
         # Create a private document owned by someone else
         from doclatticeserver.documents.models import Document
+
         other_doc = await Document.objects.acreate(
             title="Private Other Doc", creator=other_user, is_public=False
         )
@@ -176,8 +187,8 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         result = await consumer.pick_document_embedder()
         self.assertEqual(result, settings.DEFAULT_EMBEDDER)
 
-    async def test_vector_store_failure_fallback(self) -> None:
-        """If vector store init fails, proceed with content-only chat."""
+    async def test_agent_called_with_embedder(self) -> None:
+        """Ensure the consumer passes the chosen embedder to the agent factory."""
         graphql_doc_id = to_global_id("DocumentType", self.doc.id)
         encoded_doc_id = quote(graphql_doc_id)
         ws_path = f"ws/standalone/document/{encoded_doc_id}/query/?token={self.token}"
@@ -187,29 +198,28 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
 
         with patch(
-            "config.websocket.consumers.standalone_document_conversation.CoreAnnotationVectorStore"
-        ) as mock_vs:
-            mock_vs.side_effect = Exception("init failed")
-            with patch(
-                "config.websocket.consumers.standalone_document_conversation.agents.for_document"
-            ) as mock_agent:
-                mock_agent.return_value = self._StubAgent(self._mock_stream_events)
+            "config.websocket.consumers.standalone_document_conversation.agents.for_document"
+        ) as mock_agent, patch(
+            "config.websocket.consumers.standalone_document_conversation.StandaloneDocumentQueryConsumer.pick_document_embedder"  # noqa: E501
+        ) as mock_picker:
+            embedder_path = "test/embedder/path"
+            mock_picker.return_value = embedder_path
+            mock_agent.return_value = self._StubAgent(self._mock_stream_events)
 
-                communicator = WebsocketCommunicator(self.application, ws_path)
-                connected, _ = await communicator.connect()
-                self.assertTrue(connected)
-                await communicator.send_to(json.dumps({"query": "Hi"}))
+            communicator = WebsocketCommunicator(self.application, ws_path)
+            connected, _ = await communicator.connect()
+            self.assertTrue(connected)
+            await communicator.send_to(json.dumps({"query": "Hi"}))
 
-                # Drain messages
-                while True:
-                    payload = json.loads(await communicator.receive_from(timeout=10))
-                    if payload.get("type") == "ASYNC_FINISH":
-                        break
+            # Drain messages
+            while True:
+                payload = json.loads(await communicator.receive_from(timeout=10))
+                if payload.get("type") == "ASYNC_FINISH":
+                    break
 
-                # Ensure agent was created; we cannot directly assert vector_store kw,
-                # but the absence of exception and successful stream implies fallback worked.
-                mock_agent.assert_called_once()
-                await communicator.disconnect()
+            mock_agent.assert_called_once()
+            self.assertEqual(mock_agent.call_args.kwargs.get("embedder"), embedder_path)
+            await communicator.disconnect()
 
     async def test_missing_document_id(self) -> None:
         """Missing document ID should reject connection with 4000."""
@@ -256,7 +266,9 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         )
 
     async def _mock_stream_events_with_thought_and_sources(self):
-        yield ThoughtEvent(thought="Considering context", llm_message_id=42, metadata={})
+        yield ThoughtEvent(
+            thought="Considering context", llm_message_id=42, metadata={}
+        )
         yield ContentEvent(content="Answer part 1 ", llm_message_id=42, metadata={})
         yield SourceEvent(llm_message_id=42, sources=[], metadata={})
         yield ContentEvent(content="Answer part 2", llm_message_id=42, metadata={})
@@ -269,7 +281,9 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         )
 
     async def _mock_resume_events(self):
-        yield ThoughtEvent(thought="Resuming after approval", llm_message_id=7, metadata={})
+        yield ThoughtEvent(
+            thought="Resuming after approval", llm_message_id=7, metadata={}
+        )
         yield ContentEvent(content="Approved content", llm_message_id=7, metadata={})
         yield FinalEvent(
             content="",
@@ -292,9 +306,7 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         )
         conv_gid = to_global_id("ConversationType", conv.id)
         doc_gid = to_global_id("DocumentType", self.doc.id)
-        ws_path = (
-            f"ws/standalone/document/{quote(doc_gid)}/query/?token={self.token}&load_from_conversation_id={quote(conv_gid)}"
-        )
+        ws_path = f"ws/standalone/document/{quote(doc_gid)}/query/?token={self.token}&load_from_conversation_id={quote(conv_gid)}"  # noqa: E501
 
         with patch(
             "config.websocket.consumers.standalone_document_conversation.agents.for_document"
@@ -326,7 +338,9 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
             self.assertEqual(call_kwargs.get("conversation_id"), conv.id)
             await communicator.disconnect()
 
-    async def test_stream_includes_thought_sources_and_message_id_consistency(self) -> None:
+    async def test_stream_includes_thought_sources_and_message_id_consistency(
+        self,
+    ) -> None:
         """Standalone stream should surface THOUGHT and SOURCES events with consistent message_id."""
         self.doc.is_public = True
         await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
@@ -337,12 +351,16 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         with patch(
             "config.websocket.consumers.standalone_document_conversation.agents.for_document"
         ) as mock_agent:
-            mock_agent.return_value = self._StubAgent(self._mock_stream_events_with_thought_and_sources)
+            mock_agent.return_value = self._StubAgent(
+                self._mock_stream_events_with_thought_and_sources
+            )
 
             communicator = WebsocketCommunicator(self.application, ws_path)
             connected, _ = await communicator.connect()
             self.assertTrue(connected)
-            await communicator.send_to(json.dumps({"query": "Thought and sources please"}))
+            await communicator.send_to(
+                json.dumps({"query": "Thought and sources please"})
+            )
 
             msgs = []
             while True:
@@ -365,7 +383,9 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         self.doc.is_public = False
         await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
         doc_gid = to_global_id("DocumentType", self.doc.id)
-        ws_path = f"ws/standalone/document/{quote(doc_gid)}/query/?token=not_a_real_token"
+        ws_path = (
+            f"ws/standalone/document/{quote(doc_gid)}/query/?token=not_a_real_token"
+        )
         communicator = WebsocketCommunicator(self.application, ws_path)
         connected, code = await communicator.connect()
         self.assertFalse(connected)
@@ -376,7 +396,9 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         self.doc.is_public = True
         await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
         doc_gid = to_global_id("DocumentType", self.doc.id)
-        ws_path = f"ws/standalone/document/{quote(doc_gid)}/query/?token=not_a_real_token"
+        ws_path = (
+            f"ws/standalone/document/{quote(doc_gid)}/query/?token=not_a_real_token"
+        )
 
         with patch(
             "config.websocket.consumers.standalone_document_conversation.agents.for_document"
@@ -398,17 +420,27 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         consumer = StandaloneDocumentQueryConsumer()
         consumer.session_id = "test-session"
         consumer.send = AsyncMock()
+
         # Attach stub agent that yields events for resume
         class _ResumeStub:
-            def resume_with_approval(self, llm_message_id: int, approved: bool, stream: bool = True):
+            def resume_with_approval(
+                self, llm_message_id: int, approved: bool, stream: bool = True
+            ):
                 return self._gen()
+
             def __init__(self, gen):
                 self._gen = gen
+
         consumer.agent = _ResumeStub(self._mock_resume_events)
 
-        await consumer._handle_approval_decision({"approval_decision": True, "llm_message_id": 7})
+        await consumer._handle_approval_decision(
+            {"approval_decision": True, "llm_message_id": 7}
+        )
         # Ensure messages sent include ASYNC_THOUGHT and ASYNC_FINISH
-        sent_types = [json.loads(call.args[0]).get("type") for call in consumer.send.call_args_list]
+        sent_types = [
+            json.loads(call.args[0]).get("type")
+            for call in consumer.send.call_args_list
+        ]
         self.assertIn("ASYNC_THOUGHT", sent_types)
         self.assertIn("ASYNC_FINISH", sent_types)
 
@@ -438,30 +470,164 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
             self.assertFalse(stub.get_conversation.called)
             await communicator.disconnect()
 
-    async def test_vector_store_success_path(self) -> None:
-        """If vector store initializes, ensure it is passed to the agent factory."""
+    async def test_agent_called_with_default_embedder_when_picker_not_mocked(
+        self,
+    ) -> None:
+        """If picker isn't mocked, ensure embedder is still provided (DEFAULT or from embeddings)."""
         self.doc.is_public = True
         await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
         doc_gid = to_global_id("DocumentType", self.doc.id)
         ws_path = f"ws/standalone/document/{quote(doc_gid)}/query/?token={self.token}"
 
         with patch(
-            "config.websocket.consumers.standalone_document_conversation.CoreAnnotationVectorStore"
-        ) as mock_vs:
-            vs_instance = object()
-            mock_vs.return_value = vs_instance
-            with patch(
-                "config.websocket.consumers.standalone_document_conversation.agents.for_document"
-            ) as mock_agent:
-                mock_agent.return_value = self._StubAgent(self._mock_stream_events)
-                communicator = WebsocketCommunicator(self.application, ws_path)
-                connected, _ = await communicator.connect()
-                self.assertTrue(connected)
-                await communicator.send_to(json.dumps({"query": "Hi"}))
-                while True:
-                    payload = json.loads(await communicator.receive_from(timeout=10))
-                    if payload.get("type") == "ASYNC_FINISH":
-                        break
-                # Ensure a vector store instance was passed
-                self.assertIsNotNone(mock_agent.call_args.kwargs.get("vector_store"))
-                await communicator.disconnect()
+            "config.websocket.consumers.standalone_document_conversation.agents.for_document"
+        ) as mock_agent:
+            mock_agent.return_value = self._StubAgent(self._mock_stream_events)
+            communicator = WebsocketCommunicator(self.application, ws_path)
+            connected, _ = await communicator.connect()
+            self.assertTrue(connected)
+            await communicator.send_to(json.dumps({"query": "Hi"}))
+            while True:
+                payload = json.loads(await communicator.receive_from(timeout=10))
+                if payload.get("type") == "ASYNC_FINISH":
+                    break
+            # Embedder should be present (either DEFAULT or discovered)
+            self.assertIn("embedder", mock_agent.call_args.kwargs)
+            await communicator.disconnect()
+
+
+@override_settings(USE_AUTH0=False)
+@pytest.mark.django_db(transaction=True)
+class StandaloneConversationVCRTestCase(WebsocketFixtureBaseTestCase):
+    """VCR-backed integration tests for standalone document conversation."""
+
+    async def _assert_stream_contract(
+        self, communicator: WebsocketCommunicator, query_text: str
+    ) -> list[dict]:
+        await communicator.send_to(json.dumps({"query": query_text}))
+        received: list[dict] = []
+        while True:
+            payload = json.loads(await communicator.receive_from(timeout=60))
+            received.append(payload)
+            if payload.get("type") == "ASYNC_FINISH":
+                break
+        # Basic contract
+        assert any(m["type"] == "ASYNC_START" for m in received)
+        assert any(m["type"] == "ASYNC_CONTENT" for m in received)
+        assert received[-1]["type"] == "ASYNC_FINISH"
+        # message_id consistency
+        start_id = received[0]["data"]["message_id"]
+        for m in received:
+            if "data" in m and "message_id" in m["data"]:
+                assert m["data"]["message_id"] == start_id
+        return received
+
+    async def _fetch_last_conversation(self) -> Conversation | None:
+        return await (
+            Conversation.objects.filter(creator=self.user, chat_with_document=self.doc)
+            .order_by("-created_at")
+            .afirst()
+        )
+
+    async def _assert_sources_and_timeline_persisted(
+        self, conversation: Conversation
+    ) -> None:
+        from doclatticeserver.conversations.models import ChatMessage
+
+        llm_messages = await database_sync_to_async(
+            lambda: list(
+                ChatMessage.objects.filter(conversation=conversation, msg_type="LLM")
+            )
+        )()
+        assert llm_messages, "No LLM messages persisted"
+        saw_timeline = False
+        for msg in llm_messages:
+            data = msg.data or {}
+            tl = data.get("timeline")
+            if isinstance(tl, list):
+                saw_timeline = True
+        assert saw_timeline, "Expected 'timeline' list on at least one LLM message"
+
+    @vcr.use_cassette(
+        "fixtures/vcr_cassettes/test_standalone_document_conversation_ws.yaml",
+        filter_headers=["authorization"],
+        record_mode="once",
+    )
+    @override_settings(
+        LLMS_DEFAULT_AGENT_FRAMEWORK="pydantic_ai",
+        LLMS_DOCUMENT_AGENT_FRAMEWORK="pydantic_ai",
+        LLMS_CORPUS_AGENT_FRAMEWORK="pydantic_ai",
+    )
+    async def test_multiturn_streaming_flow_new_vcr(self) -> None:
+        """Two-turn streaming flow for standalone route with VCR."""
+        # Ensure readability and persistence
+        self.doc.is_public = True
+        await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
+
+        doc_gid = to_global_id("DocumentType", self.doc.id)
+        ws_path = f"ws/standalone/document/{quote(doc_gid)}/query/?token={self.token}"
+        communicator = WebsocketCommunicator(self.application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+
+        await self._assert_stream_contract(communicator, "Please stream something")
+        await self._assert_stream_contract(
+            communicator, "Ok, please summarize the document."
+        )
+        await communicator.disconnect()
+
+        # Verify persistence and timeline
+        if (
+            getattr(settings, "LLMS_DOCUMENT_AGENT_FRAMEWORK", "pydantic_ai")
+            == AgentFramework.PYDANTIC_AI.value
+        ):
+            conv = await self._fetch_last_conversation()
+            self.assertIsNotNone(conv)
+            if conv:
+                await self._assert_sources_and_timeline_persisted(conv)
+
+    @vcr.use_cassette(
+        "fixtures/vcr_cassettes/test_standalone_document_conversation_ws_loaded.yaml",
+        filter_headers=["authorization"],
+        record_mode="once",
+    )
+    @override_settings(
+        LLMS_DEFAULT_AGENT_FRAMEWORK="pydantic_ai",
+        LLMS_DOCUMENT_AGENT_FRAMEWORK="pydantic_ai",
+        LLMS_CORPUS_AGENT_FRAMEWORK="pydantic_ai",
+    )
+    async def test_multiturn_streaming_flow_loaded_vcr(self) -> None:
+        """Two-turn streaming flow for standalone route when loading existing conversation (VCR)."""
+        # Ensure readability and persistence
+        self.doc.is_public = True
+        await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
+
+        # Create an existing conversation
+        conv = await Conversation.objects.acreate(
+            title="Pre-existing Standalone Conversation",
+            creator=self.user,
+            chat_with_document=self.doc,
+        )
+        conv_gid = to_global_id("ConversationType", conv.id)
+
+        doc_gid = to_global_id("DocumentType", self.doc.id)
+        ws_path = f"ws/standalone/document/{quote(doc_gid)}/query/?token={self.token}&load_from_conversation_id={quote(conv_gid)}"  # noqa: E501
+        communicator = WebsocketCommunicator(self.application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+
+        await self._assert_stream_contract(communicator, "Please stream something")
+        await self._assert_stream_contract(
+            communicator, "Ok, please summarize the document."
+        )
+        await communicator.disconnect()
+
+        # Verify persistence and timeline
+        if (
+            getattr(settings, "LLMS_DOCUMENT_AGENT_FRAMEWORK", "pydantic_ai")
+            == AgentFramework.PYDANTIC_AI.value
+        ):
+            conv_reloaded = await self._fetch_last_conversation()
+            self.assertIsNotNone(conv_reloaded)
+            if conv_reloaded:
+                await self._assert_sources_and_timeline_persisted(conv_reloaded)

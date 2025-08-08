@@ -5,8 +5,8 @@ from django.contrib.auth import get_user_model
 from factory import Faker, LazyAttribute, post_generation
 from factory.django import DjangoModelFactory
 
+from doclatticeserver.annotations.models import TOKEN_LABEL, Annotation
 from doclatticeserver.documents.models import Document
-from doclatticeserver.annotations.models import Annotation, TOKEN_LABEL
 
 
 class UserFactory(DjangoModelFactory):

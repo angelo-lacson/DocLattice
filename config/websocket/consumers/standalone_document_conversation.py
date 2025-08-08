@@ -14,12 +14,12 @@ Key differences from DocumentQueryConsumer:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import urllib.parse
 import uuid
 from typing import Any
-import asyncio
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -39,9 +39,6 @@ from doclatticeserver.llms.agents.core_agents import (
     ResumeEvent,
     SourceEvent,
     ThoughtEvent,
-)
-from doclatticeserver.llms.vector_stores.core_vector_stores import (
-    CoreAnnotationVectorStore,
 )
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.permissioning import user_has_permission_for_obj
@@ -104,7 +101,7 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
                 )(user, self.document, PermissionTypes.READ)
                 if not has_permission:
                     logger.warning(
-                        f"[Session {self.session_id}] User {user.id} lacks read permission on Document {self.document_id}"
+                        f"[Session {self.session_id}] User {user.id} lacks read permission on Document {self.document_id}"  # noqa: E501
                     )
                     await self.close(code=4000)
                     return
@@ -116,7 +113,7 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
                 # Anonymous user - only allow if document is public
                 if not self.document.is_public:
                     logger.warning(
-                        f"[Session {self.session_id}] Anonymous user trying to access non-public Document {self.document_id}"
+                        f"[Session {self.session_id}] Anonymous user trying to access non-public Document {self.document_id}"  # noqa: E501
                     )
                     await self.close(code=4000)
                     return
@@ -145,7 +142,7 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
         Handles the WebSocket disconnection event.
         """
         logger.debug(
-            f"[StandaloneConsumer {self.consumer_id} | Session {self.session_id}] disconnect() called with code {close_code}."
+            f"[StandaloneConsumer {self.consumer_id} | Session {self.session_id}] disconnect() called with code {close_code}."  # noqa: E501
         )
         self.agent = None
 
@@ -178,15 +175,15 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
         ).values_list("embedder_path", flat=True)
 
         paths = await database_sync_to_async(list)(embedder_qs.distinct())
-        
+
         if paths:
             logger.info(
-                f"[Session {self.session_id}] Using existing embedder: {paths[0]} for Document {getattr(self, 'document_id', 'unknown')}"
+                f"[Session {self.session_id}] Using existing embedder: {paths[0]} for Document {getattr(self, 'document_id', 'unknown')}"  # noqa: E501
             )
             return paths[0]
         else:
             logger.warning(
-                f"[Session {self.session_id}] No existing embedder found for Document {getattr(self, 'document_id', 'unknown')}, "
+                f"[Session {self.session_id}] No existing embedder found for Document {getattr(self, 'document_id', 'unknown')}, "  # noqa: E501
                 f"falling back to DEFAULT_EMBEDDER: {settings.DEFAULT_EMBEDDER}"
             )
             return settings.DEFAULT_EMBEDDER
@@ -230,11 +227,15 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
         try:
             if self.agent is None:
                 return
-            conversation = await database_sync_to_async(self.agent.get_conversation)()
-            if conversation and not getattr(conversation, "name", None):
-                title = await self.generate_conversation_title(user_query)
-                conversation.name = title
-                await database_sync_to_async(conversation.save)()
+            convo_id = self.agent.get_conversation_id()
+            if convo_id:
+                from doclatticeserver.conversations.models import Conversation
+
+                conversation = await Conversation.objects.aget(id=convo_id)
+                if conversation and not getattr(conversation, "title", None):
+                    title = await self.generate_conversation_title(user_query)
+                    conversation.title = title
+                    await conversation.asave(update_fields=["title"])
         except Exception as e:
             logger.error(
                 f"[Session {self.session_id}] Async title generation failed: {e}",
@@ -298,34 +299,16 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
                             f"[Session {self.session_id}] Failed to parse conversation ID: {e}"
                         )
 
-                # Create vector store with embedder fallback
-                vector_store = None
-                try:
-                    embedder_path = await self.pick_document_embedder()
-                    vector_store = await database_sync_to_async(
-                        CoreAnnotationVectorStore
-                    )(
-                        document_id=self.document.id,
-                        embedder_path=embedder_path,
-                        corpus_id=None,  # No corpus for standalone
-                    )
-                    logger.info(
-                        f"[Session {self.session_id}] Vector store initialized with embedder: {embedder_path}"
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"[Session {self.session_id}] Failed to initialize vector store: {e}. "
-                        "Proceeding with content-only chat."
-                    )
-                    vector_store = None
+                # Choose an embedder path (from document embeddings if available; else default)
+                embedder_path = await self.pick_document_embedder()
 
-                # Create the agent - corpus=None will trigger automatic tool filtering
+                # Create the agent - pass corpus=None; tool filtering occurs inside factory
                 self.agent = await agents.for_document(
                     document=self.document,
-                    corpus=None,  # No corpus - triggers tool filtering
-                    user_id=self.user_id,  # Will be None for anonymous users
+                    corpus=None,
+                    user_id=self.user_id,
                     conversation_id=conversation_id_from_query,
-                    vector_store=vector_store,
+                    embedder=embedder_path,
                 )
 
                 # Generate title for new conversations (authenticated users only) in background
@@ -336,7 +319,7 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
             logger.debug(f"[Session {self.session_id}] Starting streaming response...")
 
             try:
-                async for event in self.agent.stream_query(user_query):
+                async for event in self.agent.stream(user_query):
                     # Handle different event types
                     if isinstance(event, ApprovalNeededEvent):
                         await self.send_standard_message(
