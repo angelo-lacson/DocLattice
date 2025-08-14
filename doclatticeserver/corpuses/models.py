@@ -16,9 +16,9 @@ from tree_queries.models import TreeNode
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.shared.Models import BaseOCModel
 from doclatticeserver.shared.QuerySets import PermissionedTreeQuerySet
+from doclatticeserver.shared.slug_utils import generate_unique_slug, sanitize_slug
 from doclatticeserver.shared.utils import calc_oc_file_path
 from doclatticeserver.utils.embeddings import generate_embeddings_from_text
-from doclatticeserver.shared.slug_utils import generate_unique_slug, sanitize_slug
 
 logger = logging.getLogger(__name__)
 

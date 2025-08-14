@@ -9,17 +9,17 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
+from doclatticeserver.shared.db_utils import table_has_column
 from doclatticeserver.shared.defaults import jsonfield_default_value
+from doclatticeserver.shared.fields import NullableJSONField
 from doclatticeserver.shared.slug_utils import (
     generate_unique_slug,
     sanitize_slug,
     validate_user_slug_or_raise,
 )
-from doclatticeserver.shared.fields import NullableJSONField
 from doclatticeserver.shared.utils import calc_oc_file_path
 from doclatticeserver.types.enums import ExportType
 from doclatticeserver.users.validators import UserUnicodeUsernameValidator
-from doclatticeserver.shared.db_utils import table_has_column
 
 logger = logging.getLogger(__name__)
 
