@@ -11,7 +11,7 @@ import {
   Dropdown,
   Message,
 } from "semantic-ui-react";
-import { useQuery, useMutation } from "@apollo/client";
+import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
 import { debounce } from "lodash";
@@ -446,6 +446,12 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
         ((b as any).displayOrder ?? (b as any).orderIndex ?? 0)
     );
 
+  // Lazy query to fetch metadata for documents
+  const [fetchDocumentMetadata] = useLazyQuery<
+    GetDocumentMetadataDatacellsOutput,
+    GetDocumentMetadataDatacellsInput
+  >(GET_DOCUMENT_METADATA_DATACELLS);
+
   // Load metadata for each document
   // TODO: Replace with batch query when available
   useEffect(() => {
@@ -454,21 +460,47 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
 
       // For testing purposes, if documents have a metadata property, use it
       // This allows tests to provide pre-loaded metadata
+      let hasPreloadedData = false;
       documents.forEach((doc) => {
         if ((doc as any).metadata?.edges) {
           newDatacellsMap[doc.id] = (doc as any).metadata.edges.map(
             (edge: any) => edge.node
           );
+          hasPreloadedData = true;
         }
       });
 
-      if (Object.keys(newDatacellsMap).length > 0) {
+      // If no preloaded data, fetch from backend
+      if (!hasPreloadedData && corpusId && documents.length > 0) {
+        for (const doc of documents) {
+          try {
+            const { data } = await fetchDocumentMetadata({
+              variables: {
+                documentId: doc.id,
+                corpusId: corpusId,
+              },
+            });
+
+            if (data?.documentMetadataDatacells) {
+              newDatacellsMap[doc.id] =
+                data.documentMetadataDatacells as MetadataDatacell[];
+            }
+          } catch (error) {
+            console.error(
+              `Failed to fetch metadata for document ${doc.id}:`,
+              error
+            );
+          }
+        }
+      }
+
+      if (Object.keys(newDatacellsMap).length > 0 || documents.length > 0) {
         setDatacellsMap(newDatacellsMap);
       }
     };
 
     loadMetadata();
-  }, [documents]);
+  }, [documents, corpusId, fetchDocumentMetadata]);
 
   const loading = columnsLoading || documentsLoading;
 
