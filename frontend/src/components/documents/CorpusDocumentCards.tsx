@@ -38,7 +38,7 @@ const ViewToggleContainer = styled.div`
   position: absolute;
   top: 1rem;
   right: 1rem;
-  z-index: 10;
+  z-index: 100; /* Increased z-index to ensure it's above grid */
 `;
 
 const ViewToggleButton = styled(Button)`
@@ -222,7 +222,16 @@ export const CorpusDocumentCards = ({
   }, []);
 
   return (
-    <div style={{ height: "100%", width: "100%", position: "relative" }}>
+    <div
+      style={{
+        height: "100%",
+        width: "100%",
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
       <ViewToggleContainer>
         <Button.Group>
           <Popup
@@ -250,33 +259,58 @@ export const CorpusDocumentCards = ({
         </Button.Group>
       </ViewToggleContainer>
 
-      {viewMode === "cards" ? (
-        <DocumentCards
-          items={document_items}
-          loading={documents_loading}
-          loading_message="Documents Loading..."
-          pageInfo={documents_response?.documents.pageInfo}
-          style={{ minHeight: "70vh", overflowY: "" }}
-          fetchMore={fetchMoreDocuments}
-          onShiftClick={onSelect}
-          onClick={onOpen}
-          removeFromCorpus={
-            opened_corpus_id ? handleRemoveContracts : undefined
-          }
-          onDrop={onDrop}
-          corpusId={opened_corpus_id}
-        />
-      ) : (
-        <DocumentMetadataGrid
-          corpusId={opened_corpus_id || ""}
-          documents={document_items}
-          loading={documents_loading}
-          onDocumentClick={onOpen}
-          pageInfo={documents_response?.documents.pageInfo}
-          fetchMore={fetchMoreDocuments}
-          hasMore={documents_response?.documents.pageInfo?.hasNextPage ?? false}
-        />
-      )}
+      <div
+        style={{
+          flex: 1,
+          position: "relative",
+          overflow: "hidden",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {viewMode === "cards" ? (
+          <DocumentCards
+            items={document_items}
+            loading={documents_loading}
+            loading_message="Documents Loading..."
+            pageInfo={documents_response?.documents.pageInfo}
+            containerStyle={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              minHeight: 0,
+            }}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              height: "100%",
+              overflowY: "auto",
+            }}
+            fetchMore={fetchMoreDocuments}
+            onShiftClick={onSelect}
+            onClick={onOpen}
+            removeFromCorpus={
+              opened_corpus_id ? handleRemoveContracts : undefined
+            }
+            onDrop={onDrop}
+            corpusId={opened_corpus_id}
+          />
+        ) : (
+          <DocumentMetadataGrid
+            corpusId={opened_corpus_id || ""}
+            documents={document_items}
+            loading={documents_loading}
+            onDocumentClick={onOpen}
+            pageInfo={documents_response?.documents.pageInfo}
+            fetchMore={fetchMoreDocuments}
+            hasMore={
+              documents_response?.documents.pageInfo?.hasNextPage ?? false
+            }
+          />
+        )}
+      </div>
     </div>
   );
 };

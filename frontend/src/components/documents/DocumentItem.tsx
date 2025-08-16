@@ -44,6 +44,10 @@ const StyledCard = styled(Card)`
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
     overflow: hidden;
+    width: 100% !important;
+    margin: 0 !important;
+    display: flex;
+    flex-direction: column;
 
     &:hover {
       box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -52,12 +56,17 @@ const StyledCard = styled(Card)`
 
     .content {
       padding: 1.2em;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
     }
 
     .header {
       font-size: 1.2em;
       font-weight: 600;
       margin-bottom: 0.5em;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
 
     .meta {
@@ -69,6 +78,9 @@ const StyledCard = styled(Card)`
       margin-top: 1em;
       font-size: 0.95em;
       line-height: 1.4;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .extra {

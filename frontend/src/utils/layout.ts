@@ -3,19 +3,13 @@ import { SemanticWIDTHSNUMBER } from "semantic-ui-react";
 export const determineCardColCount = (
   viewport_width: number
 ): SemanticWIDTHSNUMBER => {
-  let card_col_count: SemanticWIDTHSNUMBER = Math.ceil(
-    viewport_width / 400
-  ) as SemanticWIDTHSNUMBER;
-
-  if (card_col_count < 1) {
-    return 1;
-  } else if (card_col_count > 16) {
-    return 16;
-  } else if (
-    card_col_count in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-  ) {
-    return card_col_count;
-  } else {
-    return 4;
-  }
+  // More responsive breakpoints for better card sizing
+  if (viewport_width < 480) return 1; // Mobile
+  if (viewport_width < 768) return 2; // Tablet portrait
+  if (viewport_width < 1024) return 3; // Tablet landscape
+  if (viewport_width < 1280) return 4; // Small desktop
+  if (viewport_width < 1600) return 5; // Medium desktop
+  if (viewport_width < 1920) return 6; // Large desktop
+  if (viewport_width < 2560) return 7; // Ultra-wide
+  return 8; // 4K and beyond
 };
