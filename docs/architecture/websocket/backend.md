@@ -38,20 +38,20 @@ Consumers use the unified LLM agent API (`opencontractserver.llms.agents`) which
 async def connect(self) -> None:
     # 1. Generate unique session ID
     self.session_id = str(uuid.uuid4())
-    
+
     # 2. Authenticate user
     if not self.scope["user"].is_authenticated:
         await self.close(code=4000)
         return
-    
+
     # 3. Extract and validate corpus/document IDs
     graphql_corpus_id = extract_websocket_path_id(self.scope["path"], "corpus")
     graphql_doc_id = extract_websocket_path_id(self.scope["path"], "document")
-    
+
     # 4. Load database records
     self.corpus = await Corpus.objects.aget(id=self.corpus_id)
     self.document = await Document.objects.aget(id=self.document_id)
-    
+
     # 5. Accept connection
     await self.accept()
 ```
@@ -76,7 +76,7 @@ if conversation_id:
     agent_kwargs["conversation_id"] = int(from_global_id(conversation_id)[1])
 
 self.agent = await agents.for_document(
-    **agent_kwargs, 
+    **agent_kwargs,
     framework=settings.LLMS_DEFAULT_AGENT_FRAMEWORK
 )
 ```
@@ -89,19 +89,19 @@ The `receive()` method handles incoming messages:
 async def receive(self, text_data: str) -> None:
     # 1. Parse JSON payload
     text_data_json = json.loads(text_data)
-    
+
     # 2. Handle approval decisions
     if "approval_decision" in text_data_json:
         await self._handle_approval_decision(text_data_json)
         return
-    
+
     # 3. Extract user query
     user_query = text_data_json.get("query", "").strip()
-    
+
     # 4. Create agent if needed
     if self.agent is None:
         # Agent creation logic...
-    
+
     # 5. Stream response
     async for event in self.agent.stream(user_query):
         # Event processing logic...
@@ -151,7 +151,7 @@ The approval system allows users to authorize tool execution:
 async def _handle_approval_decision(self, payload: dict[str, Any]) -> None:
     approved = bool(payload.get("approval_decision"))
     llm_msg_id = payload.get("llm_message_id")
-    
+
     # Resume agent with approval decision
     async for event in self.agent.resume_with_approval(
         llm_msg_id, approved, stream=True
@@ -178,12 +178,12 @@ async def connect(self) -> None:
     if not self.scope["user"].is_authenticated:
         await self.close(code=4000)
         return
-    
+
     # 2. Extract and validate corpus ID
     graphql_corpus_id = extract_websocket_path_id(self.scope["path"], "corpus")
     self.corpus_id = int(from_global_id(graphql_corpus_id)[1])
     self.corpus = await Corpus.objects.aget(id=self.corpus_id)
-    
+
     # 3. Accept connection
     await self.accept()
 ```
@@ -203,7 +203,7 @@ if getattr(self.corpus, "preferred_embedder", None):
     agent_kwargs["embedder"] = self.corpus.preferred_embedder
 
 self.agent = await agents.for_corpus(
-    **agent_kwargs, 
+    **agent_kwargs,
     framework=settings.LLMS_DEFAULT_AGENT_FRAMEWORK
 )
 ```
@@ -369,14 +369,14 @@ async def test_document_consumer():
     communicator = WebsocketCommunicator(DocumentQueryConsumer.as_asgi(), "/ws/test/")
     connected, subprotocol = await communicator.connect()
     assert connected
-    
+
     # Send test message
     await communicator.send_json_to({"query": "test question"})
-    
+
     # Receive response
     response = await communicator.receive_json_from()
     assert response["type"] == "ASYNC_START"
-    
+
     await communicator.disconnect()
 ```
 

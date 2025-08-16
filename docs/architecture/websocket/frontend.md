@@ -78,19 +78,19 @@ useEffect(() => {
     selectedConversationId,
     corpusId
   );
-  
+
   const newSocket = new WebSocket(wsUrl);
-  
+
   newSocket.onopen = () => {
     setWsReady(true);
     setWsError(null);
   };
-  
+
   newSocket.onmessage = (event) => {
     const messageData: MessageData = JSON.parse(event.data);
     // Message processing logic...
   };
-  
+
   // Cleanup on dependencies change
   return () => {
     if (socketRef.current) {
@@ -110,19 +110,19 @@ switch (msgType) {
   case "ASYNC_START":
     appendStreamingTokenToChat(content, data?.message_id);
     break;
-    
+
   case "ASYNC_CONTENT":
     appendStreamingTokenToChat(content, data?.message_id);
     break;
-    
+
   case "ASYNC_THOUGHT":
     appendThoughtToMessage(content, data);
     break;
-    
+
   case "ASYNC_SOURCES":
     mergeSourcesIntoMessage(data?.sources, data?.message_id);
     break;
-    
+
   case "ASYNC_APPROVAL_NEEDED":
     setPendingApproval({
       messageId: data.message_id,
@@ -130,7 +130,7 @@ switch (msgType) {
     });
     setShowApprovalModal(true);
     break;
-    
+
   case "ASYNC_FINISH":
     finalizeStreamingResponse(
       content,
@@ -139,7 +139,7 @@ switch (msgType) {
       data?.timeline
     );
     break;
-    
+
   case "ASYNC_ERROR":
     setWsError(data?.error || "Agent error");
     finalizeStreamingResponse(
@@ -209,7 +209,7 @@ const finalizeStreamingResponse = (
 ): void => {
   setChat((prev) => {
     if (!prev.length) return prev;
-    
+
     // Find message to update
     let updateIdx = prev.findIndex((m) => m.messageId === overrideId);
     if (updateIdx === -1) {
@@ -221,7 +221,7 @@ const finalizeStreamingResponse = (
 
     const updatedMessages = [...prev];
     const assistantMsg = updatedMessages[updateIdx];
-    
+
     updatedMessages[updateIdx] = {
       ...assistantMsg,
       content,
@@ -260,7 +260,7 @@ const handleCompleteMessage = (
 
   setChatSourceState((prev) => {
     const existingIndex = prev.messages.findIndex((m) => m.messageId === messageId);
-    
+
     if (existingIndex !== -1) {
       // Update existing message
       const updatedMessages = [...prev.messages];
@@ -298,12 +298,12 @@ const ApprovalOverlay = () => {
       <motion.div style={{ /* content styles */ }}>
         <h3>Tool Approval Required</h3>
         <p>The assistant wants to execute the following tool:</p>
-        
+
         <div style={{ /* tool display styles */ }}>
           <div>Tool: {pendingApproval.toolCall.name}</div>
           <pre>{JSON.stringify(pendingApproval.toolCall.arguments, null, 2)}</pre>
         </div>
-        
+
         <div>
           <Button onClick={() => sendApprovalDecision(false)}>Reject</Button>
           <Button onClick={() => sendApprovalDecision(true)}>Approve</Button>
@@ -379,12 +379,12 @@ switch (msgType) {
     setIsProcessing(true);
     appendStreamingTokenToChat(content, data?.message_id);
     break;
-    
+
   case "ASYNC_FINISH":
     finalizeStreamingResponse(content, data?.sources, data?.message_id, data?.timeline);
     setIsProcessing(false);
     break;
-    
+
   case "ASYNC_ERROR":
     setWsError(data?.error || "Agent error");
     finalizeStreamingResponse(data?.error || "Error", [], data?.message_id);
@@ -407,13 +407,13 @@ const ProcessingIndicator = styled(motion.div)`
   background: linear-gradient(135deg, #f0f7ff 0%, #e6f2ff 100%);
   color: #4a90e2;
   border-radius: 24px;
-  
+
   &::before {
     content: "";
     position: absolute;
     animation: shimmer 2s infinite;
   }
-  
+
   .pulse-dot {
     animation: pulse 1.5s ease-in-out infinite;
   }
@@ -475,7 +475,7 @@ const wsUrl = getWebSocketUrl(
   corpusId
 );
 
-// Corpus chat URL  
+// Corpus chat URL
 const wsUrl = getCorpusQueryWebSocket(
   corpusId,
   auth_token,
@@ -728,19 +728,19 @@ Use React Testing Library for component behavior:
 ```typescript
 test('sends message when form is submitted', async () => {
   const mockSocket = { send: jest.fn(), close: jest.fn() };
-  
+
   render(<ChatTray documentId="123" showLoad={false} setShowLoad={() => {}} />);
-  
+
   // Mock WebSocket connection
   jest.spyOn(window, 'WebSocket').mockImplementation(() => mockSocket);
-  
+
   // Simulate user input and submission
   const input = screen.getByTestId('chat-input');
   const sendButton = screen.getByRole('button', { name: /send/i });
-  
+
   fireEvent.change(input, { target: { value: 'test message' } });
   fireEvent.click(sendButton);
-  
+
   expect(mockSocket.send).toHaveBeenCalledWith(
     JSON.stringify({ query: 'test message' })
   );
@@ -754,24 +754,24 @@ Mock WebSocket for integration tests:
 ```typescript
 test('handles streaming response correctly', async () => {
   const component = render(<ChatTray {...props} />);
-  
+
   // Simulate WebSocket messages
   const mockSocket = getMockWebSocket();
-  
+
   // Send ASYNC_START
   mockSocket.simulateMessage({
     type: 'ASYNC_START',
     content: '',
     data: { message_id: 'msg_123' }
   });
-  
+
   // Send ASYNC_CONTENT
   mockSocket.simulateMessage({
     type: 'ASYNC_CONTENT',
     content: 'Hello',
     data: { message_id: 'msg_123' }
   });
-  
+
   // Verify UI updates
   expect(screen.getByText('Hello')).toBeInTheDocument();
 });
