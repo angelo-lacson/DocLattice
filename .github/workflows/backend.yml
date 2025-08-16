@@ -103,8 +103,8 @@ jobs:
         run: |
           # Run the full test suite with coverage
           docker compose -f test.yml run django coverage run -m pytest -x -v
-          # Generate XML coverage report with skip-empty flag to ignore missing files
-          docker compose -f test.yml run django coverage xml --skip-empty
+          # Generate XML coverage report (configuration in setup.cfg handles temporary files)
+          docker compose -f test.yml run django coverage xml
 
       - name: Copy Coverage File from Container
         run: |
