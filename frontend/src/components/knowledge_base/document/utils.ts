@@ -26,13 +26,9 @@ const getWebSocketUrl = (
 
   let url: string;
   if (corpusId) {
-    url = `${normalizedBaseUrl}/ws/document/${encodeURIComponent(
-      documentId
-    )}/query/corpus/${encodeURIComponent(corpusId)}/`;
+    url = `${normalizedBaseUrl}/ws/document/${documentId}/query/corpus/${corpusId}/`;
   } else {
-    url = `${normalizedBaseUrl}/ws/standalone/document/${encodeURIComponent(
-      documentId
-    )}/query/`;
+    url = `${normalizedBaseUrl}/ws/standalone/document/${documentId}/query/`;
   }
 
   const params: string[] = [];
