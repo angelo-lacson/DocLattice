@@ -101,17 +101,24 @@ jobs:
       - name: Build Pytest Coverage File
         timeout-minutes: 100
         run: |
-          # Run the full test suite
-          docker compose -f test.yml run django coverage run -m pytest --cov-report=xml --cov -x -v
+          # Run the full test suite with coverage
+          docker compose -f test.yml run django coverage run -m pytest -x -v
+          # Generate XML coverage report
+          docker compose -f test.yml run django coverage xml
+
+      - name: Copy Coverage File from Container
+        run: |
+          # Copy coverage.xml from container to host
+          docker compose -f test.yml run --rm -v $(pwd):/host django cp coverage.xml /host/coverage.xml
 
       - name: Upload Coverage Reports to Codecov
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-          COMMIT_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || env.GITHUB_SHA }}
-        run:  |
-              # use bash variable expression to get the substring
-              ci_env=`bash <(curl -s https://codecov.io/env)`
-              docker compose -f test.yml run $ci_env django /bin/codecov -v -t ${CODECOV_TOKEN} -R . -f coverage.xml -C ${COMMIT_SHA}
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
 
       - name: Tear down the Stack
         run:  docker compose -f test.yml down
