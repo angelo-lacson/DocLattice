@@ -1,8 +1,13 @@
 # Document Viewer Without Corpus Strategy
 
+> **Note**: This document has been reorganized. For comprehensive permission documentation, see [Permission System Documentation](../permissioning/README.md).
+> 
+> - For corpus-optional features implementation, see [Corpus-Optional Features](../permissioning/corpus-optional-features.md)
+> - For permission architecture, see [Permission Architecture](../permissioning/permission-architecture.md)
+
 ## Executive Summary
 
-This document outlines a strategy for viewing documents that are not yet assigned to any corpus or where the user lacks corpus access permissions. This enables users to interact with documents in a document management context before they are organized into research corpuses, while maintaining the ability to add them to appropriate corpuses.
+This document outlines implementation details for viewing documents without corpus context. For the complete corpus-optional features guide, see [Corpus-Optional Features](../permissioning/corpus-optional-features.md).
 
 ## Business Context
 

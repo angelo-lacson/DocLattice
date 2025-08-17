@@ -196,6 +196,7 @@ export const RESOLVE_DOCUMENT_BY_SLUGS_FULL = gql`
       isPublic
       pdfFile
       backendLock
+      myPermissions
       creator {
         id
         username
@@ -218,6 +219,7 @@ export const RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL = gql`
       description
       mdDescription
       isPublic
+      myPermissions
       creator {
         id
         username
@@ -241,6 +243,7 @@ export const RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL = gql`
       isPublic
       pdfFile
       backendLock
+      myPermissions
       creator {
         id
         username

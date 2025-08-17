@@ -1,5 +1,10 @@
 # Document Rendering and Annotation
 
+> **Note**: For permission-related aspects of document rendering and annotations, see:
+> - [Permission Flow](../permissioning/permission-flow.md) - How permissions affect rendering
+> - [Document Permissions](../permissioning/document-permissions.md) - Document-level access control
+> - [Corpus Permissions](../permissioning/corpus-permissions.md) - Corpus-level annotation permissions
+
 ## Overview
 
 The `DocumentKnowledgeBase` component is responsible for rendering documents and enabling annotation functionality. It automatically selects the appropriate renderer based on the document's file type and provides a unified annotation experience across different document formats.
@@ -77,6 +82,94 @@ Both renderers create annotations that include:
 
 The annotations are stored in the `pdfAnnotationsAtom` and synchronized with the backend through GraphQL mutations.
 
+## Smart Label Management
+
+### Overview
+
+The Smart Label System provides an intelligent, streamlined approach to managing annotation labels directly from the document view. This eliminates the need to navigate away from your document to create labels or labelsets.
+
+### Key Features
+
+1. **Inline Label Creation**: Create new labels without leaving the document
+2. **Automatic Labelset Management**: System automatically creates labelsets when needed
+3. **Smart Search**: Search existing labels with partial, case-insensitive matching
+4. **Type-Aware Labels**: Automatically determines label type based on document format
+
+### How It Works
+
+#### Label Selection and Creation Flow
+
+1. **Opening the Label Selector**
+   - Click the label selector button (tag icon) in the bottom-right corner
+   - The selector expands to show available labels and a search field
+
+2. **Searching for Labels**
+   - Start typing in the search field
+   - Results update in real-time with partial, case-insensitive matching
+   - If no match is found, a "Create" option appears
+
+3. **Creating New Labels**
+   - When no labelset exists:
+     - System prompts to create both labelset and label
+     - Labelset is automatically named based on corpus title
+     - Single operation creates all necessary components
+   - When labelset exists:
+     - Click "Create [label name]" from search results
+     - Enter color and description (optional)
+     - Label is immediately available for use
+
+### Smart Mutation System
+
+The system uses a unified `smartLabelSearchOrCreate` GraphQL mutation that:
+
+```graphql
+mutation SmartLabelSearchOrCreate(
+  $corpusId: String!
+  $searchTerm: String!
+  $labelType: String!
+  $createIfNotFound: Boolean
+) {
+  smartLabelSearchOrCreate(
+    corpusId: $corpusId
+    searchTerm: $searchTerm
+    labelType: $labelType
+    createIfNotFound: $createIfNotFound
+  ) {
+    labels { id, text, color }
+    labelset { id, title }
+    labelCreated
+    labelsetCreated
+  }
+}
+```
+
+This single mutation handles:
+- Searching for existing labels
+- Creating new labels
+- Creating labelsets when needed
+- Updating corpus associations
+- All in a single atomic transaction
+
+### Context-Aware Guidance
+
+When annotation conditions aren't met, the system provides helpful guidance:
+
+| Condition | Message | Action |
+|-----------|---------|--------|
+| No labelset | "No labelset configured" | Prompts to create labelset |
+| No labels | "No labels available" | Guides to label creation |
+| No label selected | "Select a label to annotate" | Points to label selector |
+| Read-only mode | "Document is read-only" | Explains restriction |
+| No permissions | "No corpus permissions" | Indicates permission issue |
+
+### Label Types by Document Format
+
+The system automatically selects the appropriate label type:
+
+- **PDF Documents**: Token labels (word/phrase level)
+- **Text Documents**: Span labels (character range)
+- **Document Labels**: Apply to entire document (available for all formats)
+
 ## Common Features
 
 Both renderers support:
@@ -86,3 +179,4 @@ Both renderers support:
 - Chat source highlighting
 - Hover effects showing annotation labels
 - Context menus for editing/deleting annotations
+- Smart label management system
