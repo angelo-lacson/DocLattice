@@ -6,6 +6,7 @@ import {
   GET_CHAT_MESSAGES,
   GET_CORPUSES,
 } from "../../src/graphql/queries";
+import { SMART_LABEL_SEARCH_OR_CREATE } from "../../src/graphql/mutations";
 
 import path from "path";
 
@@ -705,6 +706,93 @@ export const graphqlMocks: ReadonlyArray<MockedResponse> = [
             },
           ],
           pageInfo: createPageInfo(),
+        },
+      },
+    },
+  },
+  // Mock for smart label search or create mutation
+  {
+    request: {
+      query: SMART_LABEL_SEARCH_OR_CREATE,
+      variables: {
+        corpusId: CORPUS_ID,
+        searchTerm: "Test Label",
+        labelType: LabelType.TokenLabel,
+        color: "#1a75bc",
+        description: "",
+        createIfNotFound: true,
+        labelsetTitle: undefined,
+        labelsetDescription: undefined,
+      },
+    },
+    result: {
+      data: {
+        smartLabelSearchOrCreate: {
+          ok: true,
+          message: "Created label 'Test Label'",
+          labels: [
+            {
+              __typename: "AnnotationLabelType",
+              id: "new-label-1",
+              text: "Test Label",
+              description: "",
+              color: "#1a75bc",
+              icon: "tag",
+              labelType: LabelType.TokenLabel,
+            },
+          ],
+          labelset: {
+            __typename: "LabelSetType",
+            id: "ls-1",
+            title: "Test Corpus Labels",
+            description: "Labels for Test Corpus",
+          },
+          labelsetCreated: false,
+          labelCreated: true,
+        },
+      },
+    },
+  },
+  // Mock for smart label mutation with labelset creation
+  {
+    request: {
+      query: SMART_LABEL_SEARCH_OR_CREATE,
+      variables: {
+        corpusId: CORPUS_ID,
+        searchTerm: "New Label With Labelset",
+        labelType: LabelType.SpanLabel,
+        color: "#1a75bc",
+        description: "",
+        createIfNotFound: true,
+        labelsetTitle: "Test Corpus Labels",
+        labelsetDescription: "",
+      },
+    },
+    result: {
+      data: {
+        smartLabelSearchOrCreate: {
+          ok: true,
+          message:
+            "Created labelset 'Test Corpus Labels' and label 'New Label With Labelset'",
+          labels: [
+            {
+              __typename: "AnnotationLabelType",
+              id: "new-label-2",
+              text: "New Label With Labelset",
+              description: "",
+              color: "#1a75bc",
+              icon: "tag",
+              labelType: LabelType.SpanLabel,
+            },
+          ],
+          labelset: {
+            __typename: "LabelSetType",
+            id: "new-ls-1",
+            title: "Test Corpus Labels",
+            description: "",
+          },
+          labelsetCreated: true,
+          labelCreated: true,
         },
       },
     },

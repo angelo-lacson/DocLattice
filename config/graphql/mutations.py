@@ -46,6 +46,12 @@ from config.graphql.serializers import (
     DocumentSerializer,
     LabelsetSerializer,
 )
+
+# Import smart label mutations
+from config.graphql.smart_label_mutations import (
+    SmartLabelListMutation,
+    SmartLabelSearchOrCreateMutation,
+)
 from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import (
     Annotation,
@@ -3359,6 +3365,10 @@ class Mutation(graphene.ObjectType):
     delete_multiple_annotation_labels = DeleteMultipleLabelMutation.Field()
     create_annotation_label_for_labelset = CreateLabelForLabelsetMutation.Field()
     remove_annotation_labels_from_labelset = RemoveLabelsFromLabelsetMutation.Field()
+
+    # SMART LABEL MUTATIONS (search/create with auto labelset management)
+    smart_label_search_or_create = SmartLabelSearchOrCreateMutation.Field()
+    smart_label_list = SmartLabelListMutation.Field()
 
     # DOCUMENT MUTATIONS #######################################################
     upload_document = UploadDocument.Field()  # Limited by user.is_usage_capped

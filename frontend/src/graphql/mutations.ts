@@ -524,6 +524,108 @@ export const CREATE_ANNOTATION_LABEL_FOR_LABELSET = gql`
   }
 `;
 
+// Smart Label Mutations
+export interface SmartLabelSearchOrCreateInputs {
+  corpusId: string;
+  searchTerm: string;
+  labelType: string;
+  color?: string;
+  description?: string;
+  icon?: string;
+  createIfNotFound?: boolean;
+  labelsetTitle?: string;
+  labelsetDescription?: string;
+}
+
+export interface SmartLabelSearchOrCreateOutputs {
+  smartLabelSearchOrCreate: {
+    ok: boolean;
+    message: string;
+    labels: AnnotationLabelType[];
+    labelset?: LabelSetType;
+    labelsetCreated: boolean;
+    labelCreated: boolean;
+  };
+}
+
+export const SMART_LABEL_SEARCH_OR_CREATE = gql`
+  mutation (
+    $corpusId: String!
+    $searchTerm: String!
+    $labelType: String!
+    $color: String
+    $description: String
+    $icon: String
+    $createIfNotFound: Boolean
+    $labelsetTitle: String
+    $labelsetDescription: String
+  ) {
+    smartLabelSearchOrCreate(
+      corpusId: $corpusId
+      searchTerm: $searchTerm
+      labelType: $labelType
+      color: $color
+      description: $description
+      icon: $icon
+      createIfNotFound: $createIfNotFound
+      labelsetTitle: $labelsetTitle
+      labelsetDescription: $labelsetDescription
+    ) {
+      ok
+      message
+      labels {
+        id
+        text
+        description
+        color
+        icon
+        labelType
+      }
+      labelset {
+        id
+        title
+        description
+      }
+      labelsetCreated
+      labelCreated
+    }
+  }
+`;
+
+export interface SmartLabelListInputs {
+  corpusId: string;
+  labelType?: string;
+}
+
+export interface SmartLabelListOutputs {
+  smartLabelList: {
+    ok: boolean;
+    message: string;
+    labels: AnnotationLabelType[];
+    hasLabelset: boolean;
+    canCreateLabels: boolean;
+  };
+}
+
+export const SMART_LABEL_LIST = gql`
+  mutation ($corpusId: String!, $labelType: String) {
+    smartLabelList(corpusId: $corpusId, labelType: $labelType) {
+      ok
+      message
+      labels {
+        id
+        text
+        description
+        color
+        icon
+        labelType
+      }
+      hasLabelset
+      canCreateLabels
+    }
+  }
+`;
+
 export interface RemoveAnnotationLabelsFromLabelsetInputs {
   label_ids: string[];
   labelset_id: string;

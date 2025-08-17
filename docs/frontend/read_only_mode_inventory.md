@@ -1,7 +1,12 @@
 # Read-Only Mode Component Inventory
 
+> **Note**: This document has been reorganized. For comprehensive permission and read-only mode documentation, see:
+> - [Read-Only Mode Implementation](../permissioning/read-only-mode.md) - Complete guide to read-only mode
+> - [Component Permission Patterns](../permissioning/component-patterns.md) - Implementation patterns
+> - [Testing Permissions](../permissioning/testing-permissions.md) - Testing strategies
+
 ## Overview
-This document inventories all major components used in `DocumentKnowledgeBase` and their current read-only support status. The read-only mode has been implemented as of the latest updates, with most components now supporting the feature.
+This document provides implementation status for read-only mode across components. For the complete read-only mode guide, see [Read-Only Mode Implementation](../permissioning/read-only-mode.md).
 
 ## Current Status Summary
 - **Core Document Functionality**: ✅ Complete (PDF, TXT viewers, annotations, notes)

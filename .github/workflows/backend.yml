@@ -106,10 +106,10 @@ jobs:
           # Generate XML coverage report (configuration in setup.cfg handles temporary files)
           docker compose -f test.yml run django coverage xml
 
-      - name: Copy Coverage File from Container
+      - name: Verify Coverage File Exists
         run: |
-          # Copy coverage.xml from container to host
-          docker compose -f test.yml run --rm -v $(pwd):/host django cp coverage.xml /host/coverage.xml
+          # Verify coverage.xml exists in the working directory
+          ls -la coverage.xml
 
       - name: Upload Coverage Reports to Codecov
         uses: codecov/codecov-action@v4

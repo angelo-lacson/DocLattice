@@ -88,6 +88,9 @@ export const DocumentLandingRoute: React.FC = () => {
     }
   }, [corpus, navigate]);
 
+  // Note: We now let DocumentKnowledgeBase determine read-only status
+  // based on the actual permissions available in the component tree
+
   if (loading) {
     return <ModernLoadingDisplay type="document" size="large" />;
   }
@@ -114,7 +117,6 @@ export const DocumentLandingRoute: React.FC = () => {
         corpusId={corpus?.id}
         initialAnnotationIds={annotationIds}
         onClose={handleClose}
-        readOnly={true}
       />
     </ErrorBoundary>
   );

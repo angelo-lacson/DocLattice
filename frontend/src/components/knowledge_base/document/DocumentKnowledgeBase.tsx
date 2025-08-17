@@ -32,7 +32,7 @@ import { PDFDocumentLoadingTask } from "pdfjs-dist";
 import { useUISettings } from "../../annotator/hooks/useUISettings";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
 import { PDFPageInfo } from "../../annotator/types/pdf";
-import { Token, ViewState } from "../../types";
+import { Token, ViewState, PermissionTypes } from "../../types";
 import { toast } from "react-toastify";
 import {
   useDocText,
@@ -65,7 +65,7 @@ import {
 } from "../../annotator/context/CorpusAtom";
 import { useAtom } from "jotai";
 import { useInitialAnnotations } from "../../annotator/hooks/AnnotationHooks";
-import { UnifiedLabelSelector } from "../../annotator/labels/UnifiedLabelSelector";
+import { EnhancedLabelSelector } from "../../annotator/labels/EnhancedLabelSelector";
 import { PDF } from "../../annotator/renderers/pdf/PDF";
 import TxtAnnotatorWrapper from "../../annotator/components/wrappers/TxtAnnotatorWrapper";
 import { useAnnotationControls } from "../../annotator/context/UISettingsAtom";
@@ -279,11 +279,34 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const { setCorpus } = useCorpusState();
   const { setInitialAnnotations } = useInitialAnnotations();
   const { searchText, setSearchText } = useSearchText();
-  const { setPermissions } = useDocumentPermissions();
+  const { setPermissions, permissions } = useDocumentPermissions();
   const { setTextSearchState } = useTextSearchState();
   const { activeSpanLabel, setActiveSpanLabel } = useAnnotationControls();
   const { setChatSourceState } = useChatSourceState();
   const { setPdfDoc } = usePdfDoc();
+  const { canUpdateCorpus, myPermissions: corpusPermissions } =
+    useCorpusState();
+
+  // Determine if user can edit based on permissions and corpus context
+  const canEdit = React.useMemo(() => {
+    // If explicitly marked as readOnly, respect that
+    if (readOnly) {
+      return false;
+    }
+
+    // If no corpus context, can't edit (annotations require corpus)
+    if (!corpusId) {
+      return false;
+    }
+
+    // Check corpus permissions first (these are more readily available)
+    if (canUpdateCorpus) {
+      return true;
+    }
+
+    // Fallback to document permissions
+    return permissions.includes(PermissionTypes.CAN_UPDATE);
+  }, [readOnly, corpusId, permissions, canUpdateCorpus, corpusPermissions]);
 
   // Call the hook ONCE here
   const originalCreateAnnotationHandler = useCreateAnnotation();
@@ -1230,7 +1253,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       <PDFContainer id="pdf-container" ref={containerRefCallback}>
         {viewState === ViewState.LOADED ? (
           <PDF
-            read_only={readOnly || !corpusId}
+            read_only={!canEdit}
             containerWidth={containerWidth}
             createAnnotationHandler={createAnnotationHandler}
           />
@@ -1252,10 +1275,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     viewerContent = (
       <PDFContainer id="pdf-container" ref={containerRefCallback}>
         {viewState === ViewState.LOADED ? (
-          <TxtAnnotatorWrapper
-            readOnly={readOnly || !corpusId}
-            allowInput={!readOnly && Boolean(corpusId)}
-          />
+          <TxtAnnotatorWrapper readOnly={!canEdit} allowInput={canEdit} />
         ) : viewState === ViewState.LOADING ? (
           <Loader active inline="centered" content="Loading Text..." />
         ) : (
@@ -1591,14 +1611,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           <ContentArea id="content-area">
             <MainContentArea id="main-content-area">
               {mainLayerContent}
-              <UnifiedLabelSelector
+              <EnhancedLabelSelector
                 sidebarWidth="0px"
-                activeSpanLabel={corpusId ? activeSpanLabel ?? null : null}
-                setActiveLabel={corpusId ? setActiveSpanLabel : () => {}}
+                activeSpanLabel={canEdit ? activeSpanLabel ?? null : null}
+                setActiveLabel={canEdit ? setActiveSpanLabel : () => {}}
                 showRightPanel={showRightPanel}
                 panelOffset={floatingControlsState.offset}
-                hideControls={!floatingControlsState.visible || !corpusId}
-                readOnly={readOnly || !corpusId}
+                hideControls={!floatingControlsState.visible || !canEdit}
+                readOnly={!canEdit}
               />
 
               {/* Floating Summary Preview - only visible when corpus is available */}

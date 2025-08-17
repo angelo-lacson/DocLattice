@@ -18,7 +18,16 @@
       "Bash(sed:*)",
       "Bash(awk:*)",
       "Bash(git log:*)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(docker compose:*)",
+      "Bash(time docker compose -f test.yml run --rm django echo \"Container started successfully\")",
+      "Bash(docker exec:*)",
+      "Bash(docker volume:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker wait:*)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(npm run typecheck:*)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
