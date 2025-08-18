@@ -15,7 +15,7 @@ without needing any further configuration.
 
 After cloning this repo to a machine of your choice, create a folder for your environment
 files in the repo root. You'll need `./.envs/.local/.django` and `./.envs/.local/.postgres`
-Use the samples in `./documentation/sample_env_files/local` as guidance.
+Use the samples in `./docs/sample_env_files/local` as guidance.
 NOTE, you'll need to replace the placeholder passwords and users where noted, but, otherwise, minimal config should be
 required.
 
@@ -86,7 +86,7 @@ $ docker-compose -f production.yml build
 Then, run migrations (to setup the database):
 
 ```commandline
-$ docker-compose -f production.yml run django python manage.py migrate`
+$ docker-compose -f production.yml run django python manage.py migrate
 ```
 
 Then, create a superuser account that can log in to the admin dashboard (in a production deployment this is available at the url set in your env file as the `DJANGO_ADMIN_URL`) by typing this command and following the prompts:

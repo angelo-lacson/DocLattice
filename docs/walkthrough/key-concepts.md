@@ -7,7 +7,7 @@ Text annotation data is divided into several concepts:
 3. **Annotations**. These are either document-level annotations (the document type), text-level annotations (highlighted
    text), or relationships (which apply a label between two annotations). Relationships are currently not
    well-supported and may be buggy.
-4. **Analyses**. These groups of read-only annotations added by a Gremlin analyzer (see more on that below).
+4. **Analyses**. These groups of read-only annotations added by a document analyzer (see more on that below).
 
 ## Permissioning
 

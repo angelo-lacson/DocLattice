@@ -5,8 +5,8 @@ from __future__ import annotations
 This module centralises the construction of the timeline that is eventually
 persisted in ``ChatMessage.data['timeline']`` *and* streamed back to the
 frontend.  By deriving the timeline **solely** from the high-level
-``UnifiedStreamEvent`` objects we ensure that every framework (pydantic-ai,
-llama_index, …) produces the exact same structure without having to duplicate
+``UnifiedStreamEvent`` objects we ensure that every framework (pydantic-ai, etc.)
+produces the exact same structure without having to duplicate
 book-keeping logic in each adapter implementation.
 """
 

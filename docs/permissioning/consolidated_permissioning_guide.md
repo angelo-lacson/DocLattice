@@ -60,7 +60,7 @@ class PermissionTypes(str, enum.Enum):
 ```typescript
 export enum PermissionTypes {
   CAN_PERMISSION = "CAN_PERMISSION",
-  CAN_PUBLISH = "CAN_PUBLISH", 
+  CAN_PUBLISH = "CAN_PUBLISH",
   CAN_COMMENT = "CAN_COMMENT",
   CAN_CREATE = "CAN_CREATE",
   CAN_READ = "CAN_READ",
@@ -100,7 +100,7 @@ The GraphQL layer translates between backend Django Guardian format and frontend
 ```python
 def set_permissions_for_obj_to_user(
     user_val: int | str | type[User],
-    instance: type[django.db.models.Model], 
+    instance: type[django.db.models.Model],
     permissions: list[PermissionTypes],
 ) -> None:
     """REPLACE current permissions with specified permissions."""
@@ -128,7 +128,7 @@ def user_has_permission_for_obj(
 ```python
 class AnnotatePermissionsForReadMixin:
     my_permissions = GenericScalar()
-    
+
     def resolve_my_permissions(self, info) -> list[PermissionTypes]:
         # Returns user's permissions for this specific object instance
         # Handles anonymous users, superusers, and regular users
@@ -193,13 +193,13 @@ export const useCorpusState = () => {
 const canEdit = React.useMemo(() => {
   // Explicit readOnly prop overrides all
   if (readOnly) return false;
-  
-  // No corpus = limited editing capabilities  
+
+  // No corpus = limited editing capabilities
   if (!corpusId) return false;
-  
+
   // Corpus permissions take priority
   if (canUpdateCorpus) return true;
-  
+
   // Fallback to document permissions
   return permissions.includes(PermissionTypes.CAN_UPDATE);
 }, [readOnly, corpusId, permissions, canUpdateCorpus]);
@@ -315,7 +315,7 @@ def test_permission_setting():
         instance=document,
         permissions=[PermissionTypes.ALL]
     )
-    
+
     assert user_has_permission_for_obj(
         user_val=user,
         instance=document,
@@ -332,13 +332,13 @@ describe('Permission Flow', () => {
       createDocumentMock(['CAN_READ']),  // Document: read-only
       createCorpusMock(['CAN_UPDATE'])   // Corpus: can edit
     ];
-    
+
     render(
       <MockedProvider mocks={mocks}>
         <DocumentKnowledgeBase documentId="123" corpusId="456" />
       </MockedProvider>
     );
-    
+
     // Should be editable due to corpus permission
     await waitFor(() => {
       expect(screen.queryByText('read-only')).not.toBeInTheDocument();
@@ -409,7 +409,7 @@ export const PERMISSION_SCENARIOS = {
 ## Current Implementation Status
 
 ✅ **Backend**: Fully implemented with Django Guardian + custom utilities
-✅ **Frontend**: Complete permission flow with corpus > document priority  
+✅ **Frontend**: Complete permission flow with corpus > document priority
 ✅ **Integration**: GraphQL permission annotations working correctly
 ✅ **Testing**: Comprehensive test coverage for all scenarios
 ✅ **Documentation**: This consolidated guide

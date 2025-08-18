@@ -63,7 +63,7 @@ const DocumentKnowledgeBase = ({ documentId, corpusId }) => {
   const { data } = useQuery(
     corpusId ? GET_DOCUMENT_WITH_CORPUS : GET_DOCUMENT_ONLY,
     {
-      variables: corpusId 
+      variables: corpusId
         ? { documentId, corpusId }
         : { documentId }
     }
@@ -94,7 +94,7 @@ return (
   <>
     {/* Always show document viewer */}
     <DocumentViewer document={document} />
-    
+
     {/* Corpus-required features */}
     {corpusId && (
       <>
@@ -102,10 +102,10 @@ return (
         <AnalysesPanel corpusId={corpusId} />
       </>
     )}
-    
+
     {/* Corpus-optional features */}
     <NotesPanel documentId={documentId} corpusId={corpusId} />
-    
+
     {/* Add to corpus prompt when not in corpus */}
     {!corpusId && (
       <AddToCorpusPrompt documentId={documentId} />
@@ -163,18 +163,18 @@ const CorpusRequiredEmptyState = ({ feature, onAddToCorpus }) => (
 ```typescript
 const FloatingControls = ({ corpusId, documentId }) => {
   const { isFeatureAvailable } = useFeatureAvailability(corpusId);
-  
+
   return (
     <ControlsContainer>
       {/* Always available */}
       <Button icon="search" title="Search" />
       <Button icon="note" title="Add note" />
-      
+
       {/* Show add to corpus if needed */}
       {!corpusId && (
         <Button icon="folder plus" title="Add to corpus" primary />
       )}
-      
+
       {/* Corpus features */}
       {isFeatureAvailable('ANNOTATIONS') && (
         <Button icon="highlighter" title="Annotate" />
@@ -189,14 +189,14 @@ const FloatingControls = ({ corpusId, documentId }) => {
 ```typescript
 const DocumentPanel = ({ corpusId }) => {
   const [showCorpusFeatures, setShowCorpusFeatures] = useState(false);
-  
+
   useEffect(() => {
     // Reveal corpus features with animation
     if (corpusId) {
       setShowCorpusFeatures(true);
     }
   }, [corpusId]);
-  
+
   return (
     <Panel>
       <BasicFeatures />
@@ -218,23 +218,23 @@ const DocumentPanel = ({ corpusId }) => {
 const AddToCorpusModal = ({ documentId, open, onClose, onSuccess }) => {
   const { data } = useQuery(GET_MY_CORPUSES);
   const [addDocument] = useMutation(ADD_DOCUMENT_TO_CORPUS);
-  
+
   const handleAdd = async (corpusId) => {
     const result = await addDocument({
       variables: { documentId, corpusId }
     });
-    
+
     if (result.data.success) {
       onSuccess(corpusId);
       toast.success('Document added to corpus');
     }
   };
-  
+
   return (
     <Modal open={open} onClose={onClose}>
       <Modal.Header>Add Document to Corpus</Modal.Header>
       <Modal.Content>
-        <CorpusList 
+        <CorpusList
           corpuses={data?.corpuses}
           onSelect={handleAdd}
         />
@@ -250,11 +250,11 @@ const AddToCorpusModal = ({ documentId, open, onClose, onSuccess }) => {
 const handleAddToCorpusSuccess = (newCorpusId) => {
   // Option 1: Reload with corpus context
   window.location.href = `/corpus/${newCorpusId}/document/${documentId}`;
-  
+
   // Option 2: Update state and refetch
   setCorpusId(newCorpusId);
   refetch({ documentId, corpusId: newCorpusId });
-  
+
   // Option 3: Show success message and update UI
   setShowSuccessMessage(true);
   setCorpusFeatures(true);
@@ -295,7 +295,7 @@ const { data: cachedCorpuses } = useQuery(GET_MY_CORPUSES, {
 ```typescript
 it('should show document without corpus features', () => {
   render(<DocumentKnowledgeBase documentId="123" />);
-  
+
   expect(screen.getByTestId('document-viewer')).toBeInTheDocument();
   expect(screen.queryByTestId('annotation-panel')).not.toBeInTheDocument();
   expect(screen.getByText('Add to Corpus')).toBeInTheDocument();
@@ -308,16 +308,16 @@ it('should enable features after adding to corpus', async () => {
   const { rerender } = render(
     <DocumentKnowledgeBase documentId="123" />
   );
-  
+
   // Add to corpus
   fireEvent.click(screen.getByText('Add to Corpus'));
   fireEvent.click(screen.getByText('My Research Corpus'));
-  
+
   // Rerender with corpus
   rerender(
     <DocumentKnowledgeBase documentId="123" corpusId="456" />
   );
-  
+
   // Features now available
   await waitFor(() => {
     expect(screen.getByTestId('annotation-panel')).toBeInTheDocument();
