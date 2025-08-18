@@ -11,7 +11,6 @@ import { Provider } from "jotai";
 import { MemoryRouter } from "react-router-dom";
 import DocumentKnowledgeBase from "../src/components/knowledge_base/document/DocumentKnowledgeBase";
 import { authStatusVar, authToken, userObj } from "../src/graphql/cache";
-import "../src/assets/styles/semantic.css";
 
 // Create test cache
 const createTestCache = () =>

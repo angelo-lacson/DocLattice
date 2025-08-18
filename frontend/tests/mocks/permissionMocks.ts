@@ -25,15 +25,15 @@ export const LEGACY_PERMISSIONS = {
   REMOVE_CORPUS: "remove_corpus",
 } as const;
 
-// Corpus permission strings (with CAN_ prefix)
+// Corpus permission strings (backend format)
 export const CORPUS_PERMISSIONS = {
-  CAN_READ: "CAN_READ",
-  CAN_CREATE: "CAN_CREATE",
-  CAN_UPDATE: "CAN_UPDATE",
-  CAN_REMOVE: "CAN_REMOVE",
-  CAN_PUBLISH: "CAN_PUBLISH",
-  CAN_PERMISSION: "CAN_PERMISSION",
-  CAN_COMMENT: "CAN_COMMENT",
+  CAN_READ: "read_corpus",
+  CAN_CREATE: "create_corpus",
+  CAN_UPDATE: "update_corpus",
+  CAN_REMOVE: "remove_corpus",
+  CAN_PUBLISH: "publish_corpus",
+  CAN_PERMISSION: "permission_corpus",
+  CAN_COMMENT: "comment_corpus",
 } as const;
 
 /**

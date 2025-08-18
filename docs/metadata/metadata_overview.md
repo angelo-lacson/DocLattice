@@ -23,9 +23,9 @@ The metadata system uses three core models:
 
 ### Core Documentation
 
-- **[Metadata Fields](./metadata-fields.md)** - Technical reference for the metadata system architecture, models, and validation
-- **[Metadata API Examples](./metadata-api-examples.md)** - Comprehensive GraphQL API examples and integration patterns
-- **[Frontend Requirements](./metadata-frontend-requirements.md)** - Frontend implementation guide with component specifications
+- **[Metadata Fields](./metadata_fields.md)** - Technical reference for the metadata system architecture, models, and validation
+- **[Metadata API Examples](./metadata_api_examples.md)** - Comprehensive GraphQL API examples and integration patterns
+- **[Frontend Requirements](./metadata_frontend_requirements.md)** - Frontend implementation guide with component specifications
 
 ### Related Documentation
 

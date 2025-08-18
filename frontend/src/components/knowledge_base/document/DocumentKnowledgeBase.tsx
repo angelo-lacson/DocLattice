@@ -504,7 +504,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         // Don't transform permissions - openedCorpus expects raw string[] permissions
         openedCorpus(data.corpus as CorpusType);
       }
-      setPermissions(data.document.myPermissions ?? []);
+      setPermissions(getPermissions(data.document.myPermissions));
     }
   };
 
@@ -663,7 +663,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         myPermissions: data.document.myPermissions ?? [],
       };
       setDocument(processedDocData as any);
-      setPermissions(data.document.myPermissions ?? []);
+      setPermissions(getPermissions(data.document.myPermissions));
       processAnnotationsData(data);
 
       if (
@@ -837,7 +837,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         myPermissions: data.document.myPermissions ?? [],
       };
       setDocument(processedDocData as any);
-      setPermissions(data.document.myPermissions ?? []);
+      setPermissions(getPermissions(data.document.myPermissions));
 
       // Load PDF/TXT content
       if (

@@ -100,7 +100,7 @@ Note: This hook is one-way (URL → state) to avoid feedback loops. Components p
 
 ## Quick reference
 
-- Selected corpus (today): URL param `:corpusId` ↔ `openedCorpus` with lazy hydration; dependent metadata/stats refreshed and polled.
-- Selected document (today): `openedDocument` and `selectedDocumentIds` reactive vars only; deep-linking not yet supported.
+- Selected corpus: URL param `:corpusId` ↔ `openedCorpus` with lazy hydration; dependent metadata/stats refreshed and polled.
+- Selected document: Full deep-linking support via routes `/corpus/:corpusId/document/:documentId` and `/documents/:documentId` with optional `?ann=id1,id2` annotation selection.
 - Document filters: `filterToCorpus`, `filterToLabelId`, `filterToLabelsetId`, and `documentSearchTerm` feed `GET_DOCUMENTS` variables.
 

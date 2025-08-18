@@ -13,7 +13,6 @@ import { corpusStateAtom } from "../src/components/annotator/context/CorpusAtom"
 import { PermissionTypes } from "../src/components/types";
 import { LabelType } from "../src/components/annotator/types/enums";
 import { OperationDefinitionNode } from "graphql";
-import "../src/assets/styles/semantic.css"; // ADDED: Global Semantic UI styles
 
 import DocumentKnowledgeBase from "../src/components/knowledge_base/document/DocumentKnowledgeBase";
 import { authStatusVar, authToken, userObj } from "../src/graphql/cache";
