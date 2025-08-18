@@ -1047,26 +1047,10 @@ The framework follows a layered architecture that separates concerns and enables
 
 #### LlamaIndex Integration
 
-```python
-# LlamaIndex agents:
-# Note: The LlamaIndex framework adapter has been removed from the codebase.
-# For LlamaIndex integration, you would need to implement your own adapter
-# following the CoreAgent protocol defined in agents/core_agents.py.
-# 
-# Key components that were previously available:
-# - ChatEngine for conversation management
-# - FunctionTool for tool integration
-# - BasePydanticVectorStore for vector search
-# - Custom embedding models via OpenContractsPipelineEmbedding
-# - Traditional 3-phase streaming (START, CONTENT chunks, FINISH)
+> **⚠️ Warning: LlamaIndex Support Removed**
+> 
+> LlamaIndex integration has been removed from the OpenContracts LLM framework. All agents now use PydanticAI as the underlying framework. If you need LlamaIndex support, you can implement a custom adapter by following the `CoreAgent` protocol in `agents/core_agents.py`.
 
-# LlamaIndex streaming produces UnifiedStreamResponse objects
-async for chunk in llamaindex_agent.stream("Analyze contract"):
-    chunk.content              # Text delta
-    chunk.accumulated_content  # Full content so far
-    chunk.is_complete          # True for final chunk
-    chunk.sources              # Sources (available in final chunk)
-```
 
 #### PydanticAI Integration
 

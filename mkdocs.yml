@@ -45,55 +45,95 @@ nav:
   - Home:
     - About: index.md
     - Philosophy: philosophy.md
-    - Quick-Start: quick-start.md
+    - Quick Start: quick_start.md
     - System Requirements: requirements.md
     - How It Works:
-        - Architecture: architecture/components/Data-flow-diagram.md
+        - System Architecture: architecture/components/Data-flow-diagram.md
+        - PDF Data Layer: architecture/PDF-data-layer.md
         - Asynchronous Processing: architecture/asynchronous-processing.md
-        - LlamaIndex & Django Integration: extract_and_retrieval/intro_to_django_annotation_vector_store.md
-        - Datagrid Extract: extract_and_retrieval/document_data_extract.md
-        - Automated Tests: architecture/opencontract-corpus-actions.md
-        - Backend- Question Answering: extract_and_retrieval/querying_corpus.md
-        - Backend - Datagrid Extract: extract_and_retrieval/document_data_extract.md
-        - Annotator Component: architecture/components/annotator/overview.md
-        - Annotator Logic: architecture/components/annotator/how-annotations-are-created.md
-        - PDF Data Format: walkthrough/advanced/pawls-token-format.md
+        - Document Analyzers: architecture/analyzers.md
         - Automatic Corpus Actions: architecture/opencontract-corpus-actions.md
+        - Annotator Component: architecture/components/annotator/current-state/overview.md
+        - Annotation Creation Logic: architecture/components/annotator/current-state/how-annotations-are-created.md
+        - State Management: architecture/components/annotator/current-state/state-management.md
+        - Virtualized Rendering: architecture/components/annotator/current-state/virtualized-rendering.md
     - Acknowledgements: acknowledgements.md
   - Walkthrough:
-      - Key-Concepts: walkthrough/key-concepts.md
+      - Key Concepts: walkthrough/key-concepts.md
       - Step 1 - Add Documents: walkthrough/step-1-add-documents.md
       - Step 2 - Create Labelset: walkthrough/step-2-create-labelset.md
       - Step 3 - Create Corpus: walkthrough/step-3-create-a-corpus.md
-      - Step 4 - Create Some Annotations: walkthrough/step-4-create-text-annotations.md
-      - Step 5 - Create Some Document Annotations: walkthrough/step-5-create-doc-type-annotations.md
+      - Step 4 - Create Text Annotations: walkthrough/step-4-create-text-annotations.md
+      - Step 5 - Create Document Annotations: walkthrough/step-5-create-doc-type-annotations.md
       - Step 6 - Search and Filter By Annotations: walkthrough/step-6-search-and-filter-by-annotations.md
       - Step 7 - Query a Corpus: walkthrough/step-7-query-corpus.md
       - Step 8 - Data Extract: walkthrough/step-8-data-extract.md
       - Step 9 - Automatic Corpus Actions: walkthrough/step-9-corpus-actions.md
       - Advanced:
           - Data Extract Models: walkthrough/advanced/data-extract-models.md
-          - Write Automated Corpus Actions: walkthrough/advanced/register-doc-analyzer.md
-          - Write Your Own Llama Index Extractor: walkthrough/advanced/write-your-own-extractors.md
-          - Configure How Annotations Are Displayed: walkthrough/advanced/configure-annotation-view.md
-          - Run a Gremlin Analyzer: walkthrough/advanced/run-gremlin-analyzer.md
+          - Write Document Analyzers: walkthrough/advanced/register-doc-analyzer.md
+          - Write Custom Extractors: walkthrough/advanced/write-your-own-extractors.md
+          - Configure Annotation Display: walkthrough/advanced/configure-annotation-view.md
           - Fork a Corpus: walkthrough/advanced/fork-a-corpus.md
           - Import and Export Corpuses: walkthrough/advanced/export-import-corpuses.md
           - Generate GraphQL Schema Files: walkthrough/advanced/generate-graphql-schema-files.md
-          - Testing LLM Calls: walkthrough/advanced/testing-llama-index-calls.md
+          - PAWLS Token Format: walkthrough/advanced/pawls-token-format.md
+  - Extract & Retrieval:
+      - Overview: extract_and_retrieval/README.md
+      - API Reference: extract_and_retrieval/api_reference.md
+      - Vector Stores: extract_and_retrieval/vector_stores.md
+      - Corpus Queries: extract_and_retrieval/corpus_queries.md
+      - Data Extraction: extract_and_retrieval/data_extraction.md
+      - Document Data Extract: extract_and_retrieval/document_data_extract.md
+      - Django Vector Store Integration: extract_and_retrieval/intro_to_django_annotation_vector_store.md
+      - Querying Corpus: extract_and_retrieval/querying_corpus.md
+  - Metadata System:
+      - Overview: metadata/metadata_overview.md
+      - Metadata Fields: metadata/metadata_fields.md
+      - API Examples: metadata/metadata_api_examples.md
+      - Frontend Requirements: metadata/metadata_frontend_requirements.md
   - Configuration:
-      - Choose and Configure Docker Compose Stack: configuration/choose-and-configure-docker-stack.md
+      - Choose Docker Stack: configuration/choose-and-configure-docker-stack.md
       - Configure Admin Users: configuration/configure-admin-users.md
-      - Configure Authentication Backend: configuration/choose-an-authentication-backend.md
-      - Configure Frontend: configuration/frontend-configuration.md
+      - Authentication Backend: configuration/choose-an-authentication-backend.md
+      - Frontend Configuration: configuration/frontend-configuration.md
       - Add Users: configuration/add-users.md
-      - Configure Storage Backend: configuration/choose-storage-backend.md
-      - Configure Gremlin Analyzer: configuration/configure-gremlin.md
+      - Storage Backend: configuration/choose-storage-backend.md
+  - Pipelines:
+      - Pipeline Overview: pipelines/pipeline_overview.md
+      - Docling Parser: pipelines/docling_parser.md
+  - Embedders:
+      - ModernBERT Embedder: embedders/modernbert_embedder.md
+      - MiniLM ModernBERT Embedder: embedders/minn_modernbert_embedder.md
+  - Frontend:
+      - Routing System: frontend/routing_system.md
+      - Document Rendering: frontend/document_rendering_and_annotation.md
+      - Search Rendering: frontend/search_rendering.md
+      - Corpus Dependencies: frontend/corpus-dependencies-inventory.md
+      - Document Viewer Strategy: frontend/document-viewer-without-corpus-strategy.md
+      - Read Only Mode: frontend/read_only_mode_inventory.md
+      - Make Corpus Optional: frontend/make-corpus-optional-developer-tasks.md
+      - Corpus Selection: frontend/corpus-and-document-selection.md
+      - DataGrid:
+          - Custom Cell Rendering: frontend/datagrid/rendering_custom_cells.md
+  - Permissions:
+      - Overview: permissioning/README.md
+      - Consolidated Guide: permissioning/consolidated_permissioning_guide.md
+      - Read Only Mode: permissioning/read_only_mode.md
+      - Corpus Optional Features: permissioning/corpus_optional_features.md
+      - Testing Permissions: permissioning/testing_permissions.md
+  - Corpus Actions:
+      - Introduction: corpus_actions/intro_to_corpus_actions.md
+  - API Documentation:
+      - Smart Label Mutations: api/smart-label-mutations.md
   - Development:
       - Dev Environment: development/environment.md
       - Test Suite: development/test-suite.md
       - Frontend Notes: development/frontend-notes.md
       - Documentation: development/documentation.md
+      - Generating GraphQL Schema: development/generating-new-graphql-schema.md
+  - Deployment:
+      - Docker GPU Setup: deployment/docker-gpu-setup.md
 
 plugins:
   # Built-in
@@ -163,6 +203,10 @@ markdown_extensions:
   - pymdownx.saneheaders:
   - pymdownx.smartsymbols:
   - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.tasklist:

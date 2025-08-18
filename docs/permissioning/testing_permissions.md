@@ -89,13 +89,13 @@ describe('Permission Priority', () => {
       createDocumentMock(["READ"]), // Document: read-only
       createCorpusMock(["CAN_READ", "CAN_UPDATE"]) // Corpus: can edit
     ];
-    
+
     render(
       <MockedProvider mocks={mocks}>
         <DocumentKnowledgeBase documentId="123" corpusId="456" />
       </MockedProvider>
     );
-    
+
     // Should be editable due to corpus permission
     await waitFor(() => {
       expect(screen.queryByText('Document is read-only')).not.toBeInTheDocument();
@@ -110,18 +110,18 @@ describe('Permission Priority', () => {
 describe('Read-Only Mode', () => {
   it('should prevent editing with read-only permissions', async () => {
     const mocks = createPermissionMocks('READ_ONLY');
-    
+
     render(
       <MockedProvider mocks={[mocks]}>
         <DocumentKnowledgeBase documentId="123" corpusId="456" />
       </MockedProvider>
     );
-    
+
     // Try to create annotation
     const text = screen.getByText('Sample text');
     fireEvent.mouseDown(text);
     fireEvent.mouseUp(text);
-    
+
     // Should show read-only message
     await waitFor(() => {
       expect(screen.getByText('Document is read-only')).toBeInTheDocument();
@@ -140,11 +140,11 @@ describe('Feature Availability', () => {
         <DocumentKnowledgeBase documentId="123" />
       </MockedProvider>
     );
-    
+
     // Corpus features should be hidden
     expect(screen.queryByTestId('annotation-panel')).not.toBeInTheDocument();
     expect(screen.queryByTestId('analyses-panel')).not.toBeInTheDocument();
-    
+
     // Document features should be visible
     expect(screen.getByTestId('document-viewer')).toBeInTheDocument();
     expect(screen.getByTestId('notes-panel')).toBeInTheDocument();
@@ -162,17 +162,17 @@ describe('Permission Updates', () => {
         <DocumentKnowledgeBase documentId="123" corpusId="456" />
       </MockedProvider>
     );
-    
+
     // Initially read-only
     expect(screen.queryByText('Edit')).not.toBeInTheDocument();
-    
+
     // Update with edit permissions
     rerender(
       <MockedProvider mocks={[editableMocks]}>
         <DocumentKnowledgeBase documentId="123" corpusId="456" />
       </MockedProvider>
     );
-    
+
     // Now editable
     await waitFor(() => {
       expect(screen.getByText('Edit')).toBeInTheDocument();
@@ -193,17 +193,17 @@ describe('DocumentKnowledgeBase Permissions', () => {
     { name: 'corpus update', scenario: 'CORPUS_UPDATE_ONLY', canEdit: true },
     { name: 'document update', scenario: 'DOCUMENT_UPDATE_ONLY', canEdit: false }
   ];
-  
+
   scenarios.forEach(({ name, scenario, canEdit }) => {
     it(`should handle ${name} permissions`, async () => {
       const mocks = createPermissionMocks(scenario);
-      
+
       render(
         <MockedProvider mocks={[mocks]}>
           <DocumentKnowledgeBase documentId="123" corpusId="456" />
         </MockedProvider>
       );
-      
+
       if (canEdit) {
         expect(screen.queryByText('read-only')).not.toBeInTheDocument();
       } else {
@@ -220,17 +220,17 @@ describe('DocumentKnowledgeBase Permissions', () => {
 describe('DocumentLandingRoute', () => {
   it('should not hardcode readOnly prop', async () => {
     const MockDocumentKnowledgeBase = vi.fn(() => <div>Mock</div>);
-    
+
     vi.mock('../DocumentKnowledgeBase', () => ({
       default: MockDocumentKnowledgeBase
     }));
-    
+
     render(
       <MemoryRouter initialEntries={['/d/user/corpus/doc']}>
         <DocumentLandingRoute />
       </MemoryRouter>
     );
-    
+
     await waitFor(() => {
       const props = MockDocumentKnowledgeBase.mock.calls[0][0];
       expect(props.readOnly).not.toBe(true);
@@ -258,7 +258,7 @@ describe('Permission Flow Integration', () => {
         }
       }
     };
-    
+
     render(
       <MockedProvider mocks={[slugResolutionMock]}>
         <MemoryRouter initialEntries={['/d/user/corpus/doc']}>
@@ -266,7 +266,7 @@ describe('Permission Flow Integration', () => {
         </MemoryRouter>
       </MockedProvider>
     );
-    
+
     // Should be editable due to corpus UPDATE permission
     await waitFor(() => {
       const pdfComponent = screen.getByTestId('pdf-viewer');
@@ -290,35 +290,35 @@ test.describe('Permission Enforcement', () => {
     await page.fill('#email', 'readonly@test.com');
     await page.fill('#password', 'password');
     await page.click('button[type="submit"]');
-    
+
     // Navigate to document
     await page.goto('/corpus/test-corpus/document/test-doc');
-    
+
     // Try to create annotation
     await page.mouse.down();
     await page.mouse.move(100, 100);
     await page.mouse.up();
-    
+
     // Should see read-only message
     await expect(page.locator('text=Document is read-only')).toBeVisible();
   });
-  
+
   test('editor can modify document', async ({ page }) => {
     // Login as editor
     await loginAsEditor(page);
-    
+
     // Navigate to document
     await page.goto('/corpus/test-corpus/document/test-doc');
-    
+
     // Create annotation
     await page.selectText('sample text');
-    
+
     // Annotation menu should appear
     await expect(page.locator('.annotation-menu')).toBeVisible();
-    
+
     // Select label
     await page.click('.label-option');
-    
+
     // Annotation should be created
     await expect(page.locator('.annotation-highlight')).toBeVisible();
   });
@@ -336,7 +336,7 @@ expect.extend({
     const pass = received.includes(permission);
     return {
       pass,
-      message: () => 
+      message: () =>
         `Expected permissions ${received} to ${pass ? 'not ' : ''}include ${permission}`
     };
   }
@@ -355,7 +355,7 @@ export const withPermissions = (permissions: string[], children: React.ReactNode
     permissions,
     setPermissions: jest.fn()
   };
-  
+
   return (
     <PermissionContext.Provider value={mockValue}>
       {children}
@@ -375,7 +375,7 @@ it('should only show new feature with proper permissions', () => {
   // Test with permission
   render(<Feature permissions={['CAN_CREATE']} />);
   expect(screen.getByText('Create New')).toBeInTheDocument();
-  
+
   // Test without permission
   render(<Feature permissions={['CAN_READ']} />);
   expect(screen.queryByText('Create New')).not.toBeInTheDocument();
@@ -386,13 +386,13 @@ it('should only show new feature with proper permissions', () => {
 ```typescript
 it('should handle permission upgrade', async () => {
   const { rerender } = render(<Component permissions={['READ']} />);
-  
+
   // Initially read-only
   expect(screen.getByText('View Only')).toBeInTheDocument();
-  
+
   // Upgrade permissions
   rerender(<Component permissions={['READ', 'UPDATE']} />);
-  
+
   // Now editable
   expect(screen.getByText('Edit')).toBeInTheDocument();
 });
@@ -402,12 +402,12 @@ it('should handle permission upgrade', async () => {
 ```typescript
 it('should prefer corpus permissions', () => {
   render(
-    <Component 
+    <Component
       documentPermissions={['READ']}
       corpusPermissions={['CAN_UPDATE']}
     />
   );
-  
+
   // Should be editable due to corpus permission
   expect(screen.getByText('Edit')).toBeInTheDocument();
 });

@@ -2,12 +2,12 @@
 
 This guide is for people who want to quickly get started using the application and aren't interested in hosting
 it online for others to use. You'll get a default, local user with admin access. We recommend you change
-the user password after completing this tutorial. We assume you're using Linux or Max OS, but you could
+the user password after completing this tutorial. We assume you're using Linux or macOS, but you could
 do this on Windows too, assuming you have docker compose and docker installed. The commands to create
 directories will be different on Windows, but the git, docker and docker-compose commands should all be the
 same.
 
-Read the [System Requirements](./requirements.md) for addtional information.
+Read the [System Requirements](requirements.md) for additional information.
 
 ## **Step 1**: Clone this Repo
 

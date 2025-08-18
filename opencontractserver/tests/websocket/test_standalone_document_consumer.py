@@ -234,23 +234,35 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
             )
             await communicator.connect()
 
+    @override_settings(
+        LLM_CLIENT_PROVIDER="openai",
+        LLM_CLIENT_MODEL="gpt-4o-mini",
+        OPENAI_API_KEY="test-key",
+    )
     async def test_conversation_title_generation(self) -> None:
         """Title generation should succeed; on failure returns a fallback title."""
-        # Patch the class used by the consumer via its library path (imported inside the function)
-        with patch("llama_index.llms.openai.OpenAI") as mock_openai:
-            mock_llm = MagicMock()
+        # Patch the client factory used by the consumer
+        with patch(
+            "opencontractserver.llms.client.create_client"
+        ) as mock_create_client:
+            mock_client = MagicMock()
             mock_response = MagicMock()
-            mock_response.message.content = "Doc Chat"
-            mock_llm.chat.return_value = mock_response
-            mock_openai.return_value = mock_llm
+            mock_response.content = "Doc Chat"
+            mock_client.chat.return_value = mock_response
+            mock_create_client.return_value = mock_client
 
             consumer = StandaloneDocumentQueryConsumer()
             consumer.session_id = "test-session"
             title = await consumer.generate_conversation_title("What is this?")
             self.assertEqual(title, "Doc Chat")
 
-        with patch("llama_index.llms.openai.OpenAI") as mock_openai:
-            mock_openai.side_effect = Exception("boom")
+            # Verify that create_client was called without arguments (uses settings)
+            mock_create_client.assert_called_once_with()
+
+        with patch(
+            "opencontractserver.llms.client.create_client"
+        ) as mock_create_client:
+            mock_create_client.side_effect = Exception("boom")
             consumer = StandaloneDocumentQueryConsumer()
             consumer.session_id = "test-session"
             title = await consumer.generate_conversation_title("What is this?")

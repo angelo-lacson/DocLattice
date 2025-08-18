@@ -85,7 +85,7 @@ Read-only mode prevents users from modifying documents and annotations while sti
 // Change cursor and hover states
 const PostItNote = styled.div<{ $readOnly?: boolean }>`
   cursor: ${props => props.$readOnly ? 'default' : 'pointer'};
-  
+
   &:hover .edit-indicator {
     display: ${props => props.$readOnly ? 'none' : 'block'};
   }
@@ -131,7 +131,7 @@ describe('Read-Only Mode', () => {
     // Verify no annotation menu appears
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
-  
+
   it('should hide edit buttons', () => {
     render(<UnifiedKnowledgeLayer readOnly={true} />);
     expect(screen.queryByText('Edit Summary')).not.toBeInTheDocument();
@@ -157,13 +157,13 @@ it('should enforce read-only when user lacks permissions', () => {
 test('read-only mode prevents modifications', async ({ page }) => {
   // Login as read-only user
   await loginAsReadOnlyUser(page);
-  
+
   // Navigate to document
   await page.goto('/documents/123');
-  
+
   // Try to select text for annotation
   await page.selectText('sample text');
-  
+
   // Verify no annotation menu
   await expect(page.locator('.annotation-menu')).not.toBeVisible();
 });

@@ -24,7 +24,7 @@ from opencontractserver.utils.embeddings import generate_embeddings_from_text
 logger = logging.getLogger(__name__)
 
 # Type aliases for cleaner API
-FrameworkType = Union[AgentFramework, Literal["llama_index", "pydantic_ai"]]
+FrameworkType = Union[AgentFramework, Literal["pydantic_ai"]]
 DocumentType = Union[str, int, Document]
 CorpusType = Union[str, int, Corpus]
 ToolType = Union[str, CoreTool, callable]
@@ -62,7 +62,7 @@ class AgentAPI:
 
         Args:
             document: Document ID, instance, or path
-            framework: "llama_index" or "pydantic_ai"
+            framework: "pydantic_ai"
             user_id: User ID for message attribution (None = anonymous/ephemeral session)
             model: LLM model name (e.g., "gpt-4", "claude-3-sonnet")
             system_prompt: Custom system prompt (auto-generated if None)
@@ -174,7 +174,7 @@ class AgentAPI:
 
         Args:
             corpus_id: Corpus ID
-            framework: "llama_index" or "pydantic_ai"
+            framework: "pydantic_ai"
             user_id: User ID for message attribution (None = anonymous/ephemeral session)
             model: LLM model name (e.g., "gpt-4", "claude-3-sonnet")
             system_prompt: Custom system prompt (auto-generated if None)
@@ -289,7 +289,7 @@ class AgentAPI:
             corpus: Corpus ID, instance, or path (optional - None for documents not in a corpus)
             prompt: Natural language prompt for data extraction
             target_type: Python type for the desired output (e.g., int, str, list[str], MyPydanticModel)
-            framework: "llama_index" or "pydantic_ai" (defaults to pydantic_ai for structured extraction)
+            framework: "pydantic_ai" (defaults to pydantic_ai for structured extraction)
             user_id: User ID (not used for persistence in this method)
             model: LLM model name (e.g., "gpt-4", "claude-3-sonnet")
             system_prompt: Custom system prompt for extraction
@@ -398,7 +398,7 @@ class AgentAPI:
             corpus: Corpus ID, instance, or path
             prompt: Natural language prompt for data extraction
             target_type: Python type for the desired output (e.g., int, str, list[str], MyPydanticModel)
-            framework: "llama_index" or "pydantic_ai" (defaults to pydantic_ai for structured extraction)
+            framework: "pydantic_ai" (defaults to pydantic_ai for structured extraction)
             user_id: User ID (not used for persistence in this method)
             model: LLM model name (e.g., "gpt-4", "claude-3-sonnet")
             system_prompt: Custom system prompt for extraction
@@ -571,7 +571,7 @@ class VectorStoreAPI:
         Create a vector store using the specified framework.
 
         Args:
-            framework: "llama_index" or "pydantic_ai"
+            framework: "pydantic_ai"
             user_id: Filter by user ID
             corpus_id: Filter by corpus ID
             document_id: Filter by document ID
@@ -584,8 +584,8 @@ class VectorStoreAPI:
             Framework-specific vector store instance
 
         Examples:
-            # LlamaIndex vector store
-            store = vector_stores.create("llama_index", corpus_id=123)
+            # Pydantic AI vector store
+            store = vector_stores.create("pydantic_ai", corpus_id=123)
 
             # Pydantic AI vector store
             store = vector_stores.create("pydantic_ai", document_id=456)

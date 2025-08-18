@@ -704,3 +704,10 @@ PIPELINE_SETTINGS = {
 }
 
 LLMS_DEFAULT_AGENT_FRAMEWORK = "pydantic_ai"
+
+# LLM Client Provider Settings
+# ------------------------------------------------------------------------------
+LLM_CLIENT_PROVIDER = env.str("LLM_CLIENT_PROVIDER", default="openai")
+LLM_CLIENT_MODEL = env.str("LLM_CLIENT_MODEL", default="gpt-4o-mini")
+LLM_CLIENT_TEMPERATURE = env.float("LLM_CLIENT_TEMPERATURE", default=0.7)
+LLM_CLIENT_MAX_TOKENS = env.int("LLM_CLIENT_MAX_TOKENS", default=None)

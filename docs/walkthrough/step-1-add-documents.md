@@ -1,4 +1,4 @@
-In order to do anything, you need to add some documents to Gremlin.
+In order to do anything, you need to add some documents to OpenContracts.
 
 ### Go to the Documents tab
 

@@ -1,9 +1,7 @@
-# Comprehensive Guide to Analyzers
+# Comprehensive Guide to Document Analyzers
 
 ## Overview
-OpenContracts supports two types of analyzers:
-1. Task-based analyzers (running as Celery tasks within the main application)
-2. Gremlin-based analyzers (running as external services via [Gremlin Engine](docs/configuration/configure-gremlin.md))
+OpenContracts supports document analyzers that run as Celery tasks within the main application. These analyzers can automatically process documents and create annotations.
 
 ## 1. Database Structure
 The `Analyzer` model has these key fields:
@@ -13,41 +11,25 @@ The `Analyzer` model has these key fields:
 - `disabled`: Boolean flag
 - `is_public`: Boolean for visibility
 - `icon`: File field
-- `host_gremlin`: ForeignKey to GremlinEngine (optional)
-- `task_name`: CharField for task-based analyzers (optional)
+- `task_name`: CharField pointing to the Celery task (required)
 
-> Note: An analyzer must have either `host_gremlin` OR `task_name` (not both, not neither)
-
-## 2. Types of Analyzers
+## 2. How Analyzers Work
 
 ### Task-based Analyzers
 - Run within the main application as Celery tasks
-- Defined by `task_name` field
-- Best for integrated analysis within the main environment
-- Full documentation on implementation available in [register-doc-analyzer.md](docs/walkthrough/advanced/register-doc-analyzer.md)
-
-### Gremlin-based Analyzers
-- Connected to external [Gremlin Engine](docs/configuration/configure-gremlin.md)
-- Run as separate services
-- Communicate via HTTP/REST
-- Ideal for:
-  - Complex analysis requiring specific environments
-  - Non-Python components
-  - Heavy computational resources
+- Defined by `task_name` field pointing to a Python callable
+- Integrated with the main application environment
+- Have access to all application models and utilities
+- Full documentation on implementation available in [register-doc-analyzer.md](../walkthrough/advanced/register-doc-analyzer.md)
 
 ## 3. Analysis Process
 
-### Task-based Analysis Flow:
+### Analysis Flow:
 1. System creates Analysis record
-2. Celery task is dispatched
-3. Analysis runs in-process
-4. Results stored directly
-
-### Gremlin-based Analysis Flow:
-1. System creates Analysis record
-2. Documents packaged with URLs
-3. Sent to Gremlin service
-4. Results received via callback
+2. Celery task is dispatched using the `task_name`
+3. Analysis runs in-process within the application
+4. Results stored directly in the database
+5. Annotations and metadata are created
 
 ## 4. Permissions & Security
 Granular permissions available:
@@ -61,32 +43,24 @@ Granular permissions available:
 Each analysis tracks:
 - Creator
 - Public/private status
-- Callback tokens for secure results
 - Document access permissions
 
 ## 5. Implementation Requirements
 
 ### Task-based Analyzer Requirements:
-- Valid Python import path
+- Valid Python import path in `task_name`
 - Task must exist in codebase
 - Must use `@doc_analyzer_task` decorator
 - Must return valid analysis results
-- See [register-doc-analyzer.md](docs/walkthrough/advanced/register-doc-analyzer.md) for detailed implementation guide
+- See [register-doc-analyzer.md](../walkthrough/advanced/register-doc-analyzer.md) for detailed implementation guide
 
-### Gremlin Analyzer Requirements:
-- Valid manifest following AnalyzerManifest type
-- Accessible Gremlin engine URL
-- Proper callback configuration
-- Valid icon and metadata
-- See [configure-gremlin.md](docs/configuration/configure-gremlin.md) for setup guide
-
-## 6. Task-Based Analyzer Registration
+## 6. Analyzer Registration
 
 ### Database Creation
 ```python
 analyzer = Analyzer.objects.create(
     id="task.analyzer.unique.id",  # Required unique identifier
-    description="Task Analyzer Description",
+    description="Document Analyzer Description",
     task_name="opencontractserver.tasks.module.task_name",  # Python import path
     creator=user,
     manifest={},  # Optional configuration
@@ -122,7 +96,6 @@ def my_analyzer_task(doc_id, analysis_id, corpus_id=None, **kwargs):
 
 ### Validation Rules
 - Task name must be unique
-- Cannot have both `task_name` and `host_gremlin`
 - Task must exist at specified path
 - Must use `@doc_analyzer_task` decorator
 - Return values must match schema

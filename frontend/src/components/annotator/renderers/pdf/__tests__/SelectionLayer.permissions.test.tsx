@@ -53,7 +53,7 @@ describe("SelectionLayer Permission Logic", () => {
     description: "Test label for annotations",
     labelType: "SPAN_LABEL" as any,
     icon: "tag" as any,
-    readOnly: false,
+    readonly: false,
   };
 
   const mockCreateAnnotation = vi.fn();

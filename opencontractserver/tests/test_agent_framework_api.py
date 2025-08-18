@@ -231,7 +231,7 @@ class TestAgentAPIHypermodern(TestAPISetup):
 
     async def test_agent_creation_with_nonexistent_document(self):
         # This will call the actual factory, which should raise Document.DoesNotExist
-        # We need to specify pydantic_ai since llama_index has been removed
+        # We need to specify pydantic_ai as the framework
         with self.assertRaises(Document.DoesNotExist):
             await agents.for_document(99999, self.corpus1.id, framework="pydantic_ai")
 

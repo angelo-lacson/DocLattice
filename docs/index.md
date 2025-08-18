@@ -21,11 +21,9 @@ OpenContracts is an **Apache-2 Licensed** enterprise document analytics tool. It
 4. **Automatic Vector Embeddings** - generated for uploaded PDFs and extracted layout blocks
 5. **Pluggable microservice analyzer architecture** - to let you analyze documents and automatically annotate them
 6. **Human Annotation Interface** - to manually annotated documents, including multi-page annotations.
-7. **LlamaIndex Integration** - Use our vector stores (powered by pgvector) and any manual or automatically annotated features
-   to let an LLM intelligently answer questions.
-8. **Data Extract** - ask multiple questions across hundreds of documents using complex LLM-powered querying behavior.
+7. **Data Extract** - ask multiple questions across hundreds of documents using complex LLM-powered querying behavior.
    Our sample implementation uses our battle-tested agent framework for precise data extraction and natural language querying.
-9. **Custom Data Extract** - Custom data extract pipelines can be used on the frontend to query documents in bulk.
+8. **Custom Data Extract** - Custom data extract pipelines can be used on the frontend to query documents in bulk.
 
 ![Grid Review And Sources.gif](assets/images/gifs/Grid_Review_And_Sources.gif)
 
@@ -44,12 +42,8 @@ OpenContracts is an **Apache-2 Licensed** enterprise document analytics tool. It
 5. [Django + Pgvector Powered Hybrid Vector Database](extract_and_retrieval/intro_to_django_annotation_vector_store.md)
    We've used the latest open source tooling for vector storage in postgres to make it almost trivially easy to
    combine structured metadata and vector embeddings with an API-powered application.
-6. [LlamaIndex Integration Walkthrough](extract_and_retrieval/intro_to_django_annotation_vector_store.md) - We wrote a
-   wrapper for our backend database and vector store to make it simple to load our parsed annotations, embeddings and
-   text into LlamaIndex. Even better, if you have additional annotations in the document, the LLM can access those too.
-7. [Write Custom Data Extractors](walkthrough/advanced/write-your-own-extractors.md) - Custom data extract tasks (which
-   can use LlamaIndex or can be totally bespoke) are automatically loaded and displayed on the frontend to let user's
-   select how to ask questions and extract data from documents.
+6. [Write Custom Data Extractors](walkthrough/advanced/write-your-own-extractors.md) - Custom data extract tasks are
+   automatically loaded and displayed on the frontend to let users select how to ask questions and extract data from documents.
 
 ## Architecture and Data Flows at a Glance
 

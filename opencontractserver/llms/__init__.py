@@ -34,7 +34,7 @@ Examples:
     )
 
     # Vector stores
-    store = vector_stores.create("llama_index", corpus_id=456)
+    store = vector_stores.create("pydantic_ai", corpus_id=456)
     results = store.query("search query")
 
     # Embeddings

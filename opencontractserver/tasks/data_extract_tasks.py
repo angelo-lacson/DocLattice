@@ -4,22 +4,8 @@ import logging
 import os
 
 from asgiref.sync import sync_to_async
-from celery import shared_task
-from django.conf import settings
-from django.utils import timezone
-from llama_index.core import Settings, VectorStoreIndex
-from llama_index.core.agent import ReActAgent
-from llama_index.core.tools import QueryEngineTool, ToolMetadata
-from llama_index.llms.openai import OpenAI
 
 from opencontractserver.extracts.models import Datacell
-from opencontractserver.llms.embedders.custom_pipeline_embedding import (
-    OpenContractsPipelineEmbedding,
-)
-from opencontractserver.llms.types import AgentFramework
-from opencontractserver.llms.vector_stores.vector_store_factory import (
-    UnifiedVectorStoreFactory,
-)
 from opencontractserver.shared.decorators import celery_task_with_async_to_sync
 
 logger = logging.getLogger(__name__)
@@ -286,91 +272,6 @@ async def doc_extract_query_task(
         else:
             logger.error(f"Failed to get datacell for cell_id {cell_id}: {e}\n{tb}")
         raise
-
-
-@shared_task
-def llama_index_react_agent_query(cell_id):
-    """
-    Use our modern vector store factory with LlamaIndex REACT Agent to retrieve text. This is from our tutorial and does
-    NOT structure data. It simply returns the response to your query as text.
-    """
-
-    datacell = Datacell.objects.get(id=cell_id)
-
-    try:
-
-        datacell.started = timezone.now()
-        datacell.save()
-
-        document = datacell.document
-
-        # Get corpus_id if the document is in a corpus
-        corpus_id = None
-        # Default embedder path, can be overridden by corpus preferred_embedder
-        embedder_path = settings.PREFERRED_PARSERS.get(
-            "text/plain", "/models/sentence-transformers/multi-qa-MiniLM-L6-cos-v1"
-        )  # Fallback just in case
-        corpus_set = document.corpus_set.all()
-        if corpus_set.exists():
-            corpus = corpus_set.first()
-            corpus_id = corpus.id
-            if corpus.preferred_embedder:  # Check if preferred_embedder is set
-                embedder_path = corpus.preferred_embedder
-
-        embed_model = OpenContractsPipelineEmbedding(
-            corpus_id=corpus_id,
-            mimetype=document.file_type,
-            embedder_path=embedder_path,
-        )
-        Settings.embed_model = embed_model
-
-        llm = OpenAI(
-            model=settings.OPENAI_MODEL,
-            api_key=settings.OPENAI_API_KEY,
-            streaming=False,
-        )
-        Settings.llm = llm
-
-        vector_store = UnifiedVectorStoreFactory.create_vector_store(
-            framework=AgentFramework.PYDANTIC_AI,
-            user_id=document.creator.id,
-            document_id=document.id,
-            must_have_text=datacell.column.must_contain_text,
-        )
-        index = VectorStoreIndex.from_vector_store(
-            vector_store=vector_store, use_async=True
-        )
-
-        doc_engine = index.as_query_engine(similarity_top_k=10, streaming=False)
-
-        query_engine_tools = [
-            QueryEngineTool(
-                query_engine=doc_engine,
-                metadata=ToolMetadata(
-                    name="doc_engine",
-                    description=(
-                        f"Provides detailed annotations and text from within the {document.title}"
-                    ),
-                ),
-            )
-        ]
-
-        agent = ReActAgent.from_tools(
-            query_engine_tools,
-            llm=llm,
-            verbose=True,
-        )
-
-        response = agent.chat(datacell.column.query)
-        datacell.data = {"data": str(response)}
-        datacell.completed = timezone.now()
-        datacell.save()
-
-    except Exception as e:
-        logger.error(f"run_extract() - Ran into error: {e}")
-        datacell.stacktrace = f"Error processing: {e}"
-        datacell.failed = timezone.now()
-        datacell.save()
 
 
 def text_search(document_id: int, query_str: str) -> str:
