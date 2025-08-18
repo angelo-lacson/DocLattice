@@ -14,6 +14,7 @@ import {
   Tags,
   Search,
   AlertCircle,
+  Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation } from "@apollo/client";
@@ -348,23 +349,31 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
       <StyledEnhancedSelector
         {...calculatePosition()}
         isExpanded={isExpanded}
+        isReadOnly={isReadOnlyMode}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleSelectorClick}
         ref={componentRef}
         data-testid="annotation-tools"
+        title={
+          isReadOnlyMode
+            ? "Annotation tools are disabled in read-only mode"
+            : undefined
+        }
       >
         <motion.div
           className="selector-button"
           data-testid="label-selector-toggle-button"
           animate={{
-            scale: activeSpanLabel ? 1.05 : 1,
-            boxShadow: activeSpanLabel
-              ? "0 8px 32px rgba(26, 117, 188, 0.15)"
-              : "0 4px 24px rgba(0, 0, 0, 0.08)",
+            scale: activeSpanLabel && !isReadOnlyMode ? 1.05 : 1,
+            boxShadow:
+              activeSpanLabel && !isReadOnlyMode
+                ? "0 8px 32px rgba(26, 117, 188, 0.15)"
+                : "0 4px 24px rgba(0, 0, 0, 0.08)",
           }}
         >
           <Tag className="tag-icon" size={24} />
+          {isReadOnlyMode && <Lock className="lock-icon" size={14} />}
           {activeSpanLabel && (
             <motion.div
               className="active-label-display"
@@ -383,6 +392,7 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
                   setActiveLabel(undefined);
                   if (isMobile) setIsExpanded(false);
                 }}
+                disabled={isReadOnlyMode}
               >
                 ×
               </button>
@@ -727,6 +737,7 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
 
 interface StyledEnhancedSelectorProps {
   isExpanded: boolean;
+  isReadOnly: boolean;
   bottom: string;
   right: string;
 }
@@ -737,6 +748,8 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
   right: ${(props) => props.right};
   z-index: 1000;
   transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+  opacity: ${(props) => (props.isReadOnly ? 0.6 : 1)};
+  filter: ${(props) => (props.isReadOnly ? "grayscale(0.3)" : "none")};
 
   @media (max-width: 768px) {
     bottom: 1rem;
@@ -755,18 +768,28 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
     padding: 0 16px;
     gap: 12px;
     flex-shrink: 0;
-    cursor: pointer;
+    cursor: ${(props) => (props.isReadOnly ? "not-allowed" : "pointer")};
     position: relative;
     transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
 
     .tag-icon {
-      color: #1a75bc;
+      color: ${(props) => (props.isReadOnly ? "#94a3b8" : "#1a75bc")};
       stroke-width: 2.2;
       transition: all 0.3s;
     }
 
+    .lock-icon {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      color: #6b7280;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 50%;
+      padding: 2px;
+    }
+
     &:hover {
-      transform: translateY(-2px);
+      transform: ${(props) => (props.isReadOnly ? "none" : "translateY(-2px)")};
     }
   }
 
@@ -801,9 +824,14 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
       cursor: pointer;
       transition: all 0.2s;
 
-      &:hover {
+      &:hover:not(:disabled) {
         background: rgba(0, 0, 0, 0.05);
         color: #ef4444;
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
       }
     }
   }

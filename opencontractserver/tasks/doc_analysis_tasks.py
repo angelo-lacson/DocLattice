@@ -7,32 +7,6 @@ from opencontractserver.types.dicts import TextSpan
 logger = logging.getLogger(__name__)
 
 
-# @doc_analyzer_task()
-# def contract_not_contract(*args, pdf_text_extract, **kawrgs):
-#     """
-#     # Contract Classification
-
-#     Uses Marvin and GPT-4 to triage documents into contract vs non-contract categories.
-
-#     ## Process
-#     - Analyzes first and last 1000 characters of document text
-#     - Classifies into one of:
-#       - CONTRACT
-#       - CONTRACT TEMPLATE
-#       - PRESENTATION
-#       - OTHER
-#     """
-#     print("Contract not contract")
-#     category = marvin.classify(
-#         f"INTRODUCTION:\n`{pdf_text_extract[:1000]}`\nCONCLUSION:\n\n`{pdf_text_extract[-1000:]}`",
-#         instructions="You determine what type of document we're likely looking at based on the introduction and "
-#         "conclusion - a contract template, a contract, presentation, other",
-#         labels=["CONTRACT", "CONTRACT TEMPLATE", "PRESENTATION", "OTHER"],
-#     )
-
-#     return [category], [], [], True
-
-
 # @doc_analyzer_task(
 #     input_schema={
 #         "$schema": "http://json-schema.org/draft-07/schema#",
