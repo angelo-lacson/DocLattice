@@ -101,7 +101,7 @@ Finally, bring up the stack:
 $ docker-compose -f production.yml up
 ```
 
-You should now be able to access the OpenContracts frontend by visiting `http://localhost:3000`.
+You should now be able to access the OpenContracts frontend by visiting your configured domain (served through Traefik on port 80/443).
 
 ## ENV File Configurations
 
@@ -111,7 +111,3 @@ use `.envs/.production`. Sample .envs for each deployment environment are provid
 The local configuration should let you deploy the application on your PC without requiring any specific configuration.
 The production configuration is meant to provide a web application and requires quite a bit more configuration and
 knowledge of web apps.
-
-## Include Gremlin
-If you want to include a Gremlin analyzer, use `local_deploy_with_gremlin.yml` or `production_deploy_with_gremlin.yml`
-instead of `local.yml` or `production.yml`, respectively. All other parts of the tutorial are the same.

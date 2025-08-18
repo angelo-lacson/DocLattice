@@ -352,6 +352,7 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
         onMouseLeave={handleMouseLeave}
         onClick={handleSelectorClick}
         ref={componentRef}
+        data-testid="annotation-tools"
       >
         <motion.div
           className="selector-button"

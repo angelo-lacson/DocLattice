@@ -1,9 +1,6 @@
 # Document Rendering and Annotation
 
-> **Note**: For permission-related aspects of document rendering and annotations, see:
-> - [Permission Flow](../permissioning/permission-flow.md) - How permissions affect rendering
-> - [Document Permissions](../permissioning/document-permissions.md) - Document-level access control
-> - [Corpus Permissions](../permissioning/corpus-permissions.md) - Corpus-level annotation permissions
+> **Note**: For permission-related aspects of document rendering and annotations, see the [Consolidated Permissioning Guide](../permissioning/consolidated_permissioning_guide.md) - comprehensive documentation covering permission flows, document-level access control, corpus-level permissions, and component integration patterns.
 
 ## Overview
 

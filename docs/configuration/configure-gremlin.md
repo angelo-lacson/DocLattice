@@ -1,3 +1,7 @@
+# Configure Gremlin
+
+> **⚠️ DEPRECATION NOTICE**: Gremlin integration is deprecated and will be removed or significantly reworked in future versions. New projects should use the standard analyzer framework instead.
+
 [Gremlin](https://github.com/JSv4/GremlinEngine) is a separate project by OpenSource Legal to provide a standard API to
 access NLP capabilities. This lets us wrap multiple NLP engines / techniques in the same API which lets us build tools
 that can readily consume the outputs of very different NLP libraries (etc. a Transformers-based

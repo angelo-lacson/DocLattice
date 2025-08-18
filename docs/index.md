@@ -33,11 +33,11 @@ OpenContracts is an **Apache-2 Licensed** enterprise document analytics tool. It
 
 ## Key Docs
 
-1. [Quickstart Guide](quick-start.md) - You'll probably want to get started quickly. Setting up locally should be
+1. [Quickstart Guide](quick_start.md) - You'll probably want to get started quickly. Setting up locally should be
    pretty painless if you're already running Docker.
 2. [Basic Walkthrough](walkthrough/key-concepts.md) - Check out the walkthrough to step through basic usage of the
    application for document and annotation management.
-3. [Metadata System](features/metadata-overview.md) - Learn how to define custom metadata schemas for your documents
+3. [Metadata System](metadata/metadata_overview.md) - Learn how to define custom metadata schemas for your documents
    with comprehensive validation and type safety.
 4. [PDF Annotation Data Format Overview](architecture/PDF-data-layer.md) - You may be interested how we map text to
    PDFs visually and the underlying data format we're using.

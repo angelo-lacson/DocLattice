@@ -8,7 +8,7 @@ OpenContracts implements a hierarchical permission system where corpus-level per
 
 ### 📚 Complete Reference
 
-**[Consolidated Permissioning Guide](./consolidated-permissioning-guide.md)** - **START HERE**  
+**[Consolidated Permissioning Guide](./consolidated_permissioning_guide.md)** - **START HERE**  
 Comprehensive end-to-end documentation covering:
 - Complete architecture overview
 - Permission types and hierarchy  
@@ -21,14 +21,14 @@ Comprehensive end-to-end documentation covering:
 
 ### 🎯 Specialized Guides
 
-**[Corpus-Optional Features](./corpus-optional-features.md)**  
+**[Corpus-Optional Features](./corpus_optional_features.md)**  
 Detailed guide for implementing features that work both with and without corpus context:
 - Feature classification (always available vs corpus-required)
 - Progressive enhancement patterns
 - Add-to-corpus workflows
 - Performance considerations
 
-**[Read-Only Mode Implementation](./read-only-mode.md)**  
+**[Read-Only Mode Implementation](./read_only_mode.md)**  
 Comprehensive guide to read-only mode:
 - Component support status
 - Implementation patterns
@@ -36,7 +36,7 @@ Comprehensive guide to read-only mode:
 - Testing strategies
 - Migration guide for existing components
 
-**[Testing Permissions](./testing-permissions.md)**  
+**[Testing Permissions](./testing_permissions.md)**  
 Complete testing strategy and utilities:
 - Test utilities and mock factories
 - Testing patterns for different scenarios
@@ -57,10 +57,10 @@ Complete testing strategy and utilities:
 
 ## Getting Started
 
-1. **New to the permission system?** Start with the [Consolidated Permissioning Guide](./consolidated-permissioning-guide.md)
-2. **Implementing corpus-optional features?** See [Corpus-Optional Features](./corpus-optional-features.md)
-3. **Adding read-only support to components?** Check [Read-Only Mode Implementation](./read-only-mode.md)
-4. **Writing tests?** Use [Testing Permissions](./testing-permissions.md)
+1. **New to the permission system?** Start with the [Consolidated Permissioning Guide](./consolidated_permissioning_guide.md)
+2. **Implementing corpus-optional features?** See [Corpus-Optional Features](./corpus_optional_features.md)
+3. **Adding read-only support to components?** Check [Read-Only Mode Implementation](./read_only_mode.md)
+4. **Writing tests?** Use [Testing Permissions](./testing_permissions.md)
 
 ## Key Principles
 
@@ -71,6 +71,4 @@ Complete testing strategy and utilities:
 
 ## Current Status
 
-✅ **Complete Implementation**: All permission flows are fully implemented and tested  
-✅ **Production Ready**: System handles all documented scenarios correctly  
-✅ **Comprehensive Documentation**: End-to-end coverage from backend to frontend
+See the [Current Implementation Status](./consolidated_permissioning_guide.md#current-implementation-status) section in the Consolidated Permissioning Guide for detailed implementation status and production readiness information.

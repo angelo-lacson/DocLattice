@@ -93,15 +93,16 @@ Congrats! You have OpenContracts running.
 
 ## **Step 5**: Login and Start Annotating
 
-If you go to `http://localhost:3000` in your browser, you'll see the login page. You can login with the default username
-and password. These are set in the environment variable file you can find in the `./.envs/.local/` directory. In that
-directory, you'll see a file called `.django`. Backend specific configuration variables go in there. See our
-[guide](./configuration/add-users.md) for how to create new users.
+Access the frontend based on your deployment method:
 
-**NOTE: The frontend is at port 3000, not 8000, so don't forget to use http://localhost:3000 for frontend access. We
-have an open issue to add a redirect from the backend root page - http://localhost:8000/ - to http://localhost:3000**.
+- **Option 1 (Docker fullstack)**: `http://localhost:3000`
+- **Option 2 (Local development)**: `http://localhost:5173`
+
+You can login with the default username and password. These are set in the environment variable file you can find in the `./.envs/.local/` directory. In that directory, you'll see a file called `.django`. Backend specific configuration variables go in there. See our [guide](./configuration/add-users.md) for how to create new users.
+
+**NOTE: The frontend runs on different ports depending on deployment method (3000 for Docker, 5173 for local dev). The backend API is always on port 8000**.
 
 **Caveats**
 
 The quick start local config is designed for use on a local machine, not for access over the Internet or a network.
-It uses the local disk for storage (not AWS), and Django's built-i
+It uses the local disk for storage (not AWS), and Django's built-in authentication system (not Auth0 or other external providers). For production deployments with external access, additional security configuration is required.

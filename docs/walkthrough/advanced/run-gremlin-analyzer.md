@@ -1,5 +1,7 @@
 ## Introduction to Gremlin Integration
 
+> **⚠️ DEPRECATION NOTICE**: Gremlin integration is deprecated and will be removed or significantly reworked in future versions. New projects should use the standard analyzer framework instead.
+
 OpenContracts integrates with a powerful NLP engine called Gremlin Engine ("Gremlin"). If you run a Gremlin analyzer
 on a Corpus, it will create annotations of its own that you can view and export (e.g. automatically
 applying document labels or labeling parties, dates, and places, etc.). It's meant to provide a consistent API to deliver
