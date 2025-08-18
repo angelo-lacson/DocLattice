@@ -568,7 +568,7 @@ The framework automatically converts tools to the appropriate format:
 llama_agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=None,  # Or pass a corpus ID/object when available
-    framework=AgentFramework.LLAMA_INDEX,
+    framework=AgentFramework.LLAMA_INDEX,  # LLAMA_INDEX OOTB wrapper removed but example retained to show how you could switch
     tools=["load_md_summary"]
 )
 
@@ -960,7 +960,7 @@ from opencontractserver.llms.vector_stores.core_vector_stores import VectorSearc
 
 # Create vector store (framework-specific store will be chosen based on config or default)
 store = vector_stores.create(
-    framework="llama_index", # Or "pydantic_ai", or omit for default
+    framework="pydantic_ai", # Or custom-defined framework, or omit for default
     user_id=123, # Optional, for user-specific data if applicable
     corpus_id=456 # Or document_id for document-specific vector store context
 )
@@ -1605,7 +1605,6 @@ To add support for a new LLM framework (e.g., LangChain, Haystack):
    ```python
    # In types.py
    class AgentFramework(Enum):
-       LLAMA_INDEX = "llama_index"
        PYDANTIC_AI = "pydantic_ai"
        LANGCHAIN = "langchain"  # New framework
    ```

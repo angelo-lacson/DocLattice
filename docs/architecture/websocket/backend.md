@@ -326,7 +326,7 @@ async def disconnect(self, close_code: int) -> None:
 
 ```python
 # Agent framework selection
-LLMS_DEFAULT_AGENT_FRAMEWORK = "llama_index"  # or "pydantic_ai"
+LLMS_DEFAULT_AGENT_FRAMEWORK = "pydantic_ai"  # or another defined framework enum
 
 # OpenAI API configuration
 OPENAI_API_KEY = "sk-..."

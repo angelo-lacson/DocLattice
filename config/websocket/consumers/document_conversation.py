@@ -4,9 +4,6 @@ DocumentQueryConsumer
 Provides a Channels WebSocket consumer for querying documents and streaming
 results back to the frontend. The consumer maintains a Conversation record,
 storing human and LLM messages for each session.
-
-We define a custom DocumentAgent class that wraps the llama_index OpenAIAgent
-and encapsulates database operations for reading/writing conversation messages.
 """
 
 from __future__ import annotations
