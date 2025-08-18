@@ -448,9 +448,14 @@ test.describe("DocumentKnowledgeBase - Corpus-less Mode", () => {
       timeout: LONG_TIMEOUT,
     });
 
-    // Annotation tools should not be visible
+    // Annotation tools should be visible but disabled (readonly mode)
+    const annotationTools = page.locator("[data-testid='annotation-tools']");
+    await expect(annotationTools).toBeVisible();
+
+    // Try clicking the annotation tools - they should not expand in readonly mode
+    await annotationTools.click();
     await expect(
-      page.locator("[data-testid='annotation-tools']")
+      page.locator("[data-testid='label-selector-dropdown']")
     ).not.toBeVisible();
 
     // Extract features should not be visible
