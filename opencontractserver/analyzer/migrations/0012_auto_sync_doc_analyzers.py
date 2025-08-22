@@ -9,18 +9,19 @@ def sync_doc_analyzers(apps, schema_editor):
     This ensures all decorated tasks are available in the database.
     """
     try:
-        from django.contrib.auth import get_user_model
         from opencontractserver.analyzer.utils import auto_create_doc_analyzers
         
         Analyzer = apps.get_model("analyzer", "Analyzer")
-        UserModel = get_user_model()
+        # Use the historical model from migrations instead of get_user_model()
+        UserModel = apps.get_model("users", "User")
         
         auto_create_doc_analyzers(
             AnalyzerModel=Analyzer,
             UserModel=UserModel
         )
-    except ImportError:
+    except (ImportError, LookupError):
         # Skip if running in a context where celery tasks aren't available
+        # or if models aren't ready yet
         pass
 
 
@@ -36,6 +37,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("analyzer", "0011_analysis_error_message_analysis_error_traceback_and_more"),
+        ("users", "0015_user_slug"),  # Ensure user slug field exists
     ]
 
     operations = [
