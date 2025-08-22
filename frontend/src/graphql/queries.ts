@@ -1998,6 +1998,7 @@ export const GET_DOCUMENT_ANNOTATIONS_AND_RELATIONSHIPS = gql`
         rawText
         json
         myPermissions
+        structural
       }
       allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2404,6 +2405,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
         rawText
         json
         myPermissions
+        structural
       }
       allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2443,6 +2445,109 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
           icon
           description
           labelType
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Lightweight query to get only annotations and relationships
+ * Used when switching between analyses to avoid refetching entire document
+ */
+export interface GetDocumentAnnotationsOnlyInput {
+  documentId: string;
+  corpusId: string;
+  analysisId?: string | null;
+}
+
+export interface GetDocumentAnnotationsOnlyOutput {
+  document: {
+    id: string;
+    allStructuralAnnotations: ServerAnnotationType[];
+    allAnnotations: ServerAnnotationType[];
+    allRelationships: RelationshipType[];
+  };
+}
+
+export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
+  query GetDocumentAnnotationsOnly(
+    $documentId: String!
+    $corpusId: ID!
+    $analysisId: ID
+  ) {
+    document(id: $documentId) {
+      id
+      allStructuralAnnotations {
+        id
+        page
+        parent {
+          id
+        }
+        annotationLabel {
+          id
+          text
+          color
+          icon
+          description
+          labelType
+        }
+        annotationType
+        rawText
+        json
+        myPermissions
+        structural
+      }
+      allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
+        id
+        page
+        annotationLabel {
+          id
+          text
+          color
+          icon
+          description
+          labelType
+        }
+        userFeedback {
+          edges {
+            node {
+              id
+              approved
+              rejected
+            }
+          }
+          totalCount
+        }
+        annotationType
+        rawText
+        json
+        myPermissions
+        structural
+      }
+      allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
+        id
+        structural
+        relationshipLabel {
+          id
+          text
+          color
+          icon
+          description
+        }
+        sourceAnnotations {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        targetAnnotations {
+          edges {
+            node {
+              id
+            }
+          }
         }
       }
     }

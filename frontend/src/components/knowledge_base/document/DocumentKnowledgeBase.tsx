@@ -18,6 +18,9 @@ import {
   GET_DOCUMENT_ONLY,
   GetDocumentOnlyInput,
   GetDocumentOnlyOutput,
+  GET_DOCUMENT_ANNOTATIONS_ONLY,
+  GetDocumentAnnotationsOnlyInput,
+  GetDocumentAnnotationsOnlyOutput,
 } from "../../../graphql/queries";
 import { useFeatureAvailability } from "../../../hooks/useFeatureAvailability";
 import { getDocumentRawText, getPawlsLayer } from "../../annotator/api/rest";
@@ -403,11 +406,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         ) ?? []
       );
 
-      // Update pdfAnnotations atom
+      // Update pdfAnnotations atom with ONLY non-structural annotations
+      // Structural annotations are handled separately via structuralAnnotationsAtom
       setPdfAnnotations(
         (prev) =>
           new PdfAnnotations(
-            [...processedAnnotations, ...structuralAnnotations],
+            processedAnnotations, // Don't include structural here
             prev.relations,
             processedDocTypeAnnotations,
             true
@@ -969,31 +973,113 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     nextFetchPolicy: "no-cache",
   });
 
+  // Lightweight query for fetching just annotations when switching analyses
+  const { refetch: refetchAnnotationsOnly } = useQuery<
+    GetDocumentAnnotationsOnlyOutput,
+    GetDocumentAnnotationsOnlyInput
+  >(GET_DOCUMENT_ANNOTATIONS_ONLY, {
+    skip: true, // We'll manually trigger this
+    fetchPolicy: "network-only",
+  });
+
   // Combine query results
   const loading = corpusLoading || documentLoading;
   const queryError = corpusError || documentError;
   const combinedData = corpusId ? corpusData : documentOnlyData;
   const refetch = corpusId ? refetchWithCorpus : refetchDocumentOnly;
 
-  useEffect(() => {
-    if (!loading && corpusId) {
-      refetchWithCorpus({
-        documentId,
-        corpusId,
-        analysisId: selectedAnalysis?.id,
-      });
+  // Process lightweight annotations data (used when switching analyses)
+  const processAnnotationsOnlyData = (
+    data: GetDocumentAnnotationsOnlyOutput
+  ) => {
+    if (data?.document) {
+      const processedAnnotations =
+        data.document.allAnnotations?.map((annotation) =>
+          convertToServerAnnotation(annotation)
+        ) ?? [];
+
+      const structuralAnnotations =
+        data.document.allStructuralAnnotations?.map((annotation) =>
+          convertToServerAnnotation(annotation)
+        ) ?? [];
+
+      // Update pdfAnnotations atom with ONLY non-structural annotations
+      // Structural annotations are handled separately via structuralAnnotationsAtom
+      setPdfAnnotations(
+        (prev) =>
+          new PdfAnnotations(
+            processedAnnotations, // Don't include structural here
+            prev.relations, // Keep existing relations initially
+            prev.docTypes, // Keep existing doc types
+            true
+          )
+      );
+
+      // Process structural annotations
+      if (data.document.allStructuralAnnotations) {
+        const structuralAnns = data.document.allStructuralAnnotations.map(
+          (ann) => convertToServerAnnotation(ann)
+        );
+        setStructuralAnnotations(structuralAnns);
+      }
+
+      // Process relationships
+      const processedRelationships = data.document.allRelationships?.map(
+        (rel) =>
+          new RelationGroup(
+            rel.sourceAnnotations.edges
+              .map((edge) => edge?.node?.id)
+              .filter((id): id is string => id !== undefined),
+            rel.targetAnnotations.edges
+              .map((edge) => edge?.node?.id)
+              .filter((id): id is string => id !== undefined),
+            rel.relationshipLabel,
+            rel.id,
+            rel.structural
+          )
+      );
+
+      setPdfAnnotations(
+        (prev) =>
+          new PdfAnnotations(
+            prev.annotations,
+            processedRelationships || [],
+            prev.docTypes,
+            true
+          )
+      );
     }
-  }, [selectedAnalysis, corpusId, refetchWithCorpus, loading, documentId]);
+  };
 
   useEffect(() => {
     if (!loading && corpusId) {
-      refetchWithCorpus({
+      // Use lightweight query for annotation updates only
+      refetchAnnotationsOnly({
         documentId,
         corpusId,
-        analysisId: selectedExtract?.id,
+        analysisId: selectedAnalysis?.id || null,
+      }).then(({ data }) => {
+        if (data) {
+          processAnnotationsOnlyData(data);
+        }
       });
     }
-  }, [selectedExtract, corpusId, refetchWithCorpus, loading, documentId]);
+  }, [selectedAnalysis, corpusId, loading, documentId]);
+
+  useEffect(() => {
+    if (!loading && corpusId) {
+      // Use lightweight query for annotation updates only
+      refetchAnnotationsOnly({
+        documentId,
+        corpusId,
+        analysisId: selectedExtract?.id || null,
+      }).then(({ data }) => {
+        if (data) {
+          processAnnotationsOnlyData(data);
+        }
+      });
+    }
+  }, [selectedExtract, corpusId, loading, documentId]);
 
   const metadata = combinedData?.document ?? {
     title: "Loading...",
@@ -1696,9 +1782,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
               {/* Floating Document Controls - only in document layer */}
               <FloatingDocumentControls
-                visible={
-                  activeLayer === "document" && floatingControlsState.visible
-                }
+                visible={activeLayer === "document"}
+                showRightPanel={showRightPanel}
                 onAnalysesClick={() => {
                   if (!corpusId) {
                     toast.info("Add document to corpus to run analyses");
@@ -1724,11 +1809,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               {/* Floating Analyses Panel - only show with corpus */}
               {corpusId && (
                 <FloatingAnalysesPanel
-                  visible={
-                    showAnalysesPanel &&
-                    activeLayer === "document" &&
-                    floatingControlsState.visible
-                  }
+                  visible={showAnalysesPanel && activeLayer === "document"}
                   analyses={analyses}
                   onClose={() => setShowAnalysesPanel(false)}
                   panelOffset={floatingControlsState.offset}
@@ -1739,11 +1820,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               {/* Floating Extracts Panel - only show with corpus */}
               {corpusId && (
                 <FloatingExtractsPanel
-                  visible={
-                    showExtractsPanel &&
-                    activeLayer === "document" &&
-                    floatingControlsState.visible
-                  }
+                  visible={showExtractsPanel && activeLayer === "document"}
                   extracts={extracts}
                   onClose={() => setShowExtractsPanel(false)}
                   panelOffset={floatingControlsState.offset}

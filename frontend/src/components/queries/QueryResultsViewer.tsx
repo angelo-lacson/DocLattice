@@ -19,8 +19,11 @@ import {
   selectedAnnotation,
 } from "../../graphql/cache";
 import wait_icon from "../../assets/icons/waiting for robo.webp";
-import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
+import { Prism as SyntaxHighlighterBase } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/esm/styles/prism";
+
+// Type assertion to fix TypeScript issue with react-syntax-highlighter
+const SyntaxHighlighter = SyntaxHighlighterBase as any;
 import { useNavigate } from "react-router-dom";
 import { getDocumentUrl } from "../../utils/navigationUtils";
 
