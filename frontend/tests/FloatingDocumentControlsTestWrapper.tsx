@@ -9,6 +9,11 @@ import {
   showSelectedAnnotationOnlyAtom,
 } from "../src/components/annotator/context/UISettingsAtom";
 import { corpusStateAtom } from "../src/components/annotator/context/CorpusAtom";
+import {
+  selectedDocumentAtom,
+  rawPermissionsAtom,
+} from "../src/components/annotator/context/DocumentAtom";
+
 interface FloatingDocumentControlsTestWrapperProps {
   visible?: boolean;
   onAnalysesClick?: () => void;
@@ -42,6 +47,8 @@ const TestSetup: React.FC<{
   const setShowStructural = useSetAtom(showStructuralAnnotationsAtom);
   const setShowSelectedOnly = useSetAtom(showSelectedAnnotationOnlyAtom);
   const setCorpusState = useSetAtom(corpusStateAtom);
+  const setSelectedDocument = useSetAtom(selectedDocumentAtom);
+  const setRawPermissions = useSetAtom(rawPermissionsAtom);
 
   useEffect(() => {
     // Set UI settings
@@ -49,16 +56,20 @@ const TestSetup: React.FC<{
     setShowStructural(showStructural);
     setShowSelectedOnly(showSelectedOnly);
 
-    // Set corpus state with permissions
+    // Set corpus state with permissions - this is what the component uses for selectedCorpus check
+    const corpus = {
+      id: "corpus-1",
+      title: "Test Corpus",
+      description: "Test corpus description",
+      myPermissions: corpusPermissions,
+      allowComments: true,
+      labelSet: null,
+      icon: null,
+      // Add any other required fields for CorpusType
+    };
+
     setCorpusState({
-      selectedCorpus: {
-        id: "test-corpus",
-        title: "Test Corpus",
-        description: "Test corpus description",
-        myPermissions: corpusPermissions,
-        allowComments: true,
-        // Add any other required fields for CorpusType
-      } as any,
+      selectedCorpus: corpus as any,
       myPermissions: corpusPermissions,
       spanLabels: [],
       humanSpanLabels: [],
@@ -67,6 +78,47 @@ const TestSetup: React.FC<{
       humanTokenLabels: [],
       allowComments: true,
       isLoading: false,
+    });
+
+    // Set document state with permissions (FloatingDocumentControls now uses document permissions)
+    setSelectedDocument({
+      id: "test-doc",
+      title: "Test Document",
+      myPermissions: corpusPermissions,
+      pdfFile: null,
+      backendLock: false,
+      isPublic: false,
+      // Add any other required fields for DocumentType
+    } as any);
+
+    // Also set raw permissions which get processed into the permissions atom
+    // Convert PermissionTypes to raw strings
+    const rawPerms = corpusPermissions
+      .map((perm) => {
+        switch (perm) {
+          case PermissionTypes.CAN_READ:
+            return "READ";
+          case PermissionTypes.CAN_UPDATE:
+            return "UPDATE";
+          case PermissionTypes.CAN_CREATE:
+            return "CREATE";
+          case PermissionTypes.CAN_REMOVE:
+            return "DELETE";
+          case PermissionTypes.CAN_PUBLISH:
+            return "PUBLISH";
+          default:
+            return "";
+        }
+      })
+      .filter((p) => p);
+
+    setRawPermissions(rawPerms);
+
+    // Log the setup for debugging
+    console.log("Test wrapper set up with:", {
+      corpusPermissions,
+      rawPerms,
+      corpus: corpus.id,
     });
   }, [showBoundingBoxes, showStructural, showSelectedOnly, corpusPermissions]);
 

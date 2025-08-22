@@ -2371,11 +2371,18 @@ class StartDocumentAnalysisMutation(graphene.Mutation):
         Accepts optional analysis_input_data for analyzers that need
         user-provided parameters.
         """
+
         user = info.context.user
+        logger.info(f"StartDocumentAnalysisMutation called by user {user.id}")
 
         document_pk = from_global_id(document_id)[1] if document_id else None
         analyzer_pk = from_global_id(analyzer_id)[1]
         corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+
+        logger.info(
+            f"Parsed IDs - document_pk: {document_pk}, analyzer_pk: {analyzer_pk}, corpus_pk: {corpus_pk}"
+        )
+        logger.info(f"Analysis input data: {analysis_input_data}")
 
         if document_pk is None and corpus_pk is None:
             raise ValueError("One of document_pk and corpus_pk must be provided")
@@ -2398,6 +2405,9 @@ class StartDocumentAnalysisMutation(graphene.Mutation):
                     )
 
             analyzer = Analyzer.objects.get(pk=analyzer_pk)
+            logger.info(
+                f"Found analyzer: {analyzer.id} with task_name: {analyzer.task_name}"
+            )
 
             analysis = process_analyzer(
                 user_id=user.id,
@@ -2408,10 +2418,15 @@ class StartDocumentAnalysisMutation(graphene.Mutation):
                 analysis_input_data=analysis_input_data,
             )
 
+            logger.info(
+                f"Analysis created with ID: {analysis.id if analysis else 'None'}"
+            )
+
             return StartDocumentAnalysisMutation(
                 ok=True, message="SUCCESS", obj=analysis
             )
         except Exception as e:
+            logger.error(f"StartDocumentAnalysisMutation error: {e}", exc_info=True)
             return StartDocumentAnalysisMutation(ok=False, message=f"Error: {str(e)}")
 
 

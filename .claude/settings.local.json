@@ -27,7 +27,11 @@
       "Bash(docker wait:*)",
       "Bash(echo \"Exit code: $?\")",
       "Bash(npm run typecheck:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(cat:*)",
+      "Bash(docker:*)",
+      "Bash(curl:*)",
+      "Bash(npx vitest run:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

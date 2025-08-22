@@ -23,16 +23,19 @@
 - Annotations are loaded via the `GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS` GraphQL query in `DocumentKnowledgeBase`
 - The query fetches:
   - Document metadata and file paths
-  - All annotations (text and structural)
+  - All annotations - returned as two separate arrays:
+    - `allAnnotations` - regular user/system annotations
+    - `allStructuralAnnotations` - structural markup annotations (sections, paragraphs, etc.)
   - Document type annotations
-  - Annotation relationships
+  - Annotation relationships (with `structural` boolean property)
   - Corpus label information
   - Document notes and relationships
   - Summary version history
-- Annotations are transformed and stored in Jotai atoms:
-  - `pdfAnnotationsAtom` - main annotation state
-  - `structuralAnnotationsAtom` - structural annotations
-  - Computed atoms like `allAnnotationsAtom` provide derived state
+- Annotations are processed and stored in separate Jotai atoms:
+  - `pdfAnnotationsAtom` - regular annotations only
+  - `structuralAnnotationsAtom` - structural annotations only (kept separate to prevent duplication)
+  - `allAnnotationsAtom` - computed atom that merges and deduplicates both arrays
+  - Each annotation has a `structural: boolean` property for filtering
 
 ### 3. Where is the PAWLS layer loaded?
 - PAWLS data is loaded alongside the PDF in `DocumentKnowledgeBase`
@@ -198,6 +201,22 @@ Modern floating UI elements:
 - Quick chat/search input
 - Document action buttons
 - Context-aware visibility
+- **Annotation Controls**: Shows when right panel is closed
+  - Provides same filtering options as sidebar
+  - Label display settings (Always/On Hover/Hide)
+  - Label filters for selective viewing
+  - Structural annotation toggle
+
+### 9. Structural Annotation System
+
+**Atoms**: `structuralAnnotationsAtom`, `showStructuralAnnotationsAtom`
+
+Sophisticated handling of structural annotations:
+- **Separate Storage**: Structural annotations stored separately from regular annotations
+- **Performance Optimization**: Hidden by default to reduce visual noise
+- **Smart Toggle**: When enabling structural view, automatically enables "Show Selected Only"
+- **Unified Filtering**: Single `useVisibleAnnotations` hook handles all visibility logic
+- **Backend Consistency**: Mirrors backend's separation of annotation types
 
 ## Virtualized Rendering System
 
@@ -230,22 +249,29 @@ The PDF component implements a sophisticated virtualization system to handle lar
 The system uses Jotai atoms for reactive state management:
 
 ### Core Atoms
-- `pdfAnnotationsAtom` - Main annotation state
-- `structuralAnnotationsAtom` - Structural annotations
-- `allAnnotationsAtom` - Computed, de-duplicated list
-- `perPageAnnotationsAtom` - Page-indexed annotation map
-- `selectedAnnotationIdsAtom` - Currently selected annotations
+- `pdfAnnotationsAtom` - Regular annotations only
+- `structuralAnnotationsAtom` - Structural annotations only (kept separate)
+- `allAnnotationsAtom` - Computed atom that merges and deduplicates both
+- `perPageAnnotationsAtom` - Page-indexed annotation map for O(1) lookups
+- `selectedAnnotationsAtom` - Currently selected annotation IDs
 - `chatSourceStateAtom` - Chat message source tracking
 
-### UI State
-- `activeLayer` - Current layer (knowledge/document)
-- `activeTab` - Currently selected tab
-- `showRightPanel` - Right panel visibility
-- `zoomLevel` - PDF zoom level
-- `sidebarViewMode` - Chat vs feed mode
+### UI State Atoms
+- `showStructuralAnnotationsAtom` - Toggle for structural annotations (default: false)
+- `showSelectedAnnotationOnlyAtom` - Show only selected (auto-enabled with structural)
+- `showAnnotationBoundingBoxesAtom` - Toggle bounding box visibility
+- `showAnnotationLabelsAtom` - Label display mode (ALWAYS/ON_HOVER/HIDE)
+- `spanLabelsToViewAtom` - Active label filters
+- `zoomLevelAtom` - PDF zoom level
+- `chatPanelWidthModeAtom` - Panel width mode (quarter/half/full/custom)
+
+### Local Component State
+- `activeLayer` - Current layer (knowledge/document) in DocumentKnowledgeBase
+- `showRightPanel` - Right panel visibility in DocumentKnowledgeBase
+- `sidebarViewMode` - Chat vs feed mode in right panel
 
 ### Computed State
-- Annotations automatically filter based on user preferences
+- Annotations automatically filter based on user preferences via `useVisibleAnnotations`
 - Visible pages calculate based on scroll position
 - Summary versions update when changes are saved
 
