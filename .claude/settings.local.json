@@ -31,7 +31,9 @@
       "Bash(cat:*)",
       "Bash(docker:*)",
       "Bash(curl:*)",
-      "Bash(npx vitest run:*)"
+      "Bash(npx vitest run:*)",
+      "Bash(pip show:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

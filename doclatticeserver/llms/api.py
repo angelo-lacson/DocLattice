@@ -270,12 +270,10 @@ class AgentAPI:
         framework: Optional[FrameworkType] = None,
         user_id: Optional[int] = None,
         model: str = "gpt-4o-mini",
-        system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         tools: Optional[list[ToolType]] = None,
         embedder: Optional[str] = None,
-        extra_context: Optional[str] = None,
         **kwargs,
     ) -> Optional[T]:
         """
@@ -292,12 +290,10 @@ class AgentAPI:
             framework: "pydantic_ai" (defaults to pydantic_ai for structured extraction)
             user_id: User ID (not used for persistence in this method)
             model: LLM model name (e.g., "gpt-4", "claude-3-sonnet")
-            system_prompt: Custom system prompt for extraction
             temperature: Temperature for response generation (0.0-2.0)
             max_tokens: Maximum tokens in response
             tools: List of tools to use during extraction
             embedder: Custom embedder path
-            extra_context: Additional context for extraction
             **kwargs: Additional framework-specific options
 
         Returns:
@@ -349,7 +345,6 @@ class AgentAPI:
             framework=framework,
             user_id=user_id,
             model=model,
-            system_prompt=system_prompt,
             temperature=temperature,
             max_tokens=max_tokens,
             streaming=False,  # No streaming for structured responses
@@ -363,12 +358,10 @@ class AgentAPI:
         return await agent.structured_response(
             prompt=prompt,
             target_type=target_type,
-            system_prompt=system_prompt,
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
-            extra_context=extra_context,
-            **kwargs,  # Pass through any additional kwargs like extra_context
+            **kwargs,
         )
 
     @staticmethod
@@ -380,12 +373,10 @@ class AgentAPI:
         framework: Optional[FrameworkType] = None,
         user_id: Optional[int] = None,
         model: str = "gpt-4o-mini",
-        system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         tools: Optional[list[ToolType]] = None,
         embedder: Optional[str] = None,
-        extra_context: Optional[str] = None,
         **kwargs,
     ) -> Optional[T]:
         """
@@ -401,12 +392,10 @@ class AgentAPI:
             framework: "pydantic_ai" (defaults to pydantic_ai for structured extraction)
             user_id: User ID (not used for persistence in this method)
             model: LLM model name (e.g., "gpt-4", "claude-3-sonnet")
-            system_prompt: Custom system prompt for extraction
             temperature: Temperature for response generation (0.0-2.0)
             max_tokens: Maximum tokens in response
             tools: List of tools to use during extraction
             embedder: Custom embedder path
-            extra_context: Additional context for extraction
             **kwargs: Additional framework-specific options
 
         Returns:
@@ -447,7 +436,6 @@ class AgentAPI:
             framework=framework,
             user_id=user_id,
             model=model,
-            system_prompt=system_prompt,
             temperature=temperature,
             max_tokens=max_tokens,
             streaming=False,  # No streaming for structured responses
@@ -461,11 +449,9 @@ class AgentAPI:
         return await agent.structured_response(
             prompt=prompt,
             target_type=target_type,
-            system_prompt=system_prompt,
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
-            extra_context=extra_context,
             **kwargs,  # Pass through any additional kwargs like extra_context
         )
 

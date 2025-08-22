@@ -270,6 +270,13 @@ class Datacell(BaseOCModel):
     )
     corrected_data = NullableJSONField(default=None, null=True, blank=True)
 
+    # LLM call logging for debugging/visibility
+    llm_call_log = django.db.models.TextField(
+        null=True,
+        blank=True,
+        help_text="Captured LLM message history for debugging extraction issues",
+    )
+
     def clean(self):
         """Validate data against column configuration."""
         super().clean()

@@ -2468,7 +2468,9 @@ class StartDocumentExtract(graphene.Mutation):
         # Start celery task to process extract
         extract.started = timezone.now()
         extract.save()
-        run_extract.s(extract.id, info.context.user.id).apply_async()
+        transaction.on_commit(
+            lambda: run_extract.s(extract.id, info.context.user.id).apply_async()
+        )
 
         return StartDocumentExtract(ok=True, message="STARTED!", obj=extract)
 
@@ -2716,7 +2718,9 @@ class StartExtract(graphene.Mutation):
         extract = Extract.objects.get(pk=pk, creator=info.context.user)
         extract.started = timezone.now()
         extract.save()
-        run_extract.s(pk, info.context.user.id).apply_async()
+        transaction.on_commit(
+            lambda: run_extract.s(pk, info.context.user.id).apply_async()
+        )
 
         return StartExtract(ok=True, message="STARTED!", obj=extract)
 

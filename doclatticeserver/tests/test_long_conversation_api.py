@@ -70,7 +70,7 @@ class TestLongConversationAPI(TestCase):
             mock_run_result = MagicMock()
             mock_run_result.messages = []
             mock_run_result.new_messages = []
-            mock_run_result.data = "Test response"
+            mock_run_result.output = "Test response"
             mock_run_result.all_messages = MagicMock(return_value=[])
             mock_llm_agent.run.return_value = mock_run_result
 
@@ -128,7 +128,7 @@ class TestLongConversationAPI(TestCase):
             mock_run_result = MagicMock()
             mock_run_result.messages = []
             mock_run_result.new_messages = []
-            mock_run_result.data = "Test response"
+            mock_run_result.output = "Test response"
             mock_run_result.all_messages = MagicMock(return_value=[])
             mock_llm_agent.run.return_value = mock_run_result
 
@@ -422,7 +422,7 @@ class TestLongConversationAPI(TestCase):
             mock_run_result = MagicMock()
             mock_run_result.messages = []
             mock_run_result.new_messages = []
-            mock_run_result.data = "Test response"
+            mock_run_result.output = "Test response"
             mock_run_result.all_messages = MagicMock(return_value=[])
             mock_llm_agent.run.return_value = mock_run_result
 
@@ -514,7 +514,7 @@ class TestLongConversationAPI(TestCase):
             mock_run_result = MagicMock()
             mock_run_result.messages = []
             mock_run_result.new_messages = []
-            mock_run_result.data = "Test response"
+            mock_run_result.output = "Test response"
             mock_run_result.all_messages = MagicMock(return_value=[])
             mock_llm_agent.run.return_value = mock_run_result
 
