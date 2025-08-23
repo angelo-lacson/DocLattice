@@ -9,6 +9,7 @@ OpenContract's API for creating document and corpus agents.
 - **Conversation Management**: Persistent conversations with automatic message storage and retrieval
 - **Tool Integration**: Extensible tool system for document analysis and data retrieval
 - **Type Safety**: Full type hints and structured responses throughout
+- **Optimized Extraction**: Leverages pydantic_ai's native capabilities for reliable structured data extraction
 
 ## Quick Start
 
@@ -320,7 +321,10 @@ if result:
    ```
 
 **Framework Support:**
-- ✅ **PydanticAI**: Fully implemented with native `output_type` support
+- ✅ **PydanticAI**: Fully implemented with automatic output strategy selection
+  - Uses pydantic_ai's native capabilities to choose the best extraction method
+  - Automatically selects between tool calling, JSON mode, or prompted extraction based on the model
+  - Simplified system prompts for better reliability and efficiency
 - ⚠️ **LlamaIndex**: Returns `None` (not yet implemented)
 
 **Best Practices:**
@@ -1061,7 +1065,8 @@ The framework follows a layered architecture that separates concerns and enables
 # - Rich event-based streaming (ThoughtEvent, ContentEvent, SourceEvent, FinalEvent)
 # - Structured tool definitions with Pydantic models
 # - Real-time tool call observation with arguments and results
-# - Vector search can be integrated as a tool using PydanticAIAnnotationVectorStore.create_vector_search_tool()
+# - Automatic output strategy selection (tool calling, JSON mode, or prompting)
+# - Optimized structured extraction using pydantic_ai's native capabilities
 
 from opencontractserver.llms.agents.pydantic_ai_agents import PydanticAIDocumentAgent
 from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import PydanticAIAnnotationVectorStore
@@ -1086,6 +1091,16 @@ async for event in pydantic_agent.stream("Analyze contract"):
         event.accumulated_content  # Complete final answer
         event.sources              # All sources found
         event.metadata['usage']    # Token usage statistics
+
+# Structured extraction leverages pydantic_ai's automatic strategy selection
+# The framework automatically chooses the best method based on the model:
+# - Tool calling for models like GPT-4
+# - Native JSON mode where available
+# - Prompted extraction as fallback
+result = await agent.structured_response(
+    "Extract contract dates",
+    ContractDates  # pydantic_ai handles the output strategy
+)
 ```
 
 #### Framework Selection
@@ -1095,7 +1110,7 @@ Choose your framework based on your needs:
 | Framework | Best For | Streaming Type | Structured Response | Visibility |
 |-----------|----------|----------------|---------------------|------------|
 | **LlamaIndex** | *Removed - implement custom adapter* | Traditional (START/CONTENT/FINISH) | ❌ Not implemented | Basic content streaming |
-| **PydanticAI** | Rich observability, debugging UIs | Event-based (thought/content/sources/final) | ✅ Full support | Full execution graph visibility |
+| **PydanticAI** | Production use, all features | Event-based (thought/content/sources/final) | ✅ Optimized with automatic strategy selection | Full execution graph visibility |
 
 ```python
 # Specify framework explicitly
@@ -1797,6 +1812,31 @@ async for event in agent.stream("Complex legal analysis"):
         debug_panel.add_summary(timestamp, event.metadata)
         performance_monitor.log_usage(event.metadata.get("usage", {}))
 ```
+
+---
+
+## Recent Improvements (v0.10+)
+
+### Critical API Fixes
+- **Fixed pydantic_ai Integration**: Corrected API usage to match pydantic_ai's actual interface
+  - Changed `result_type` → `output_type` in Agent initialization
+  - Changed `run_result.data` → `run_result.output` for accessing results
+  - Framework now properly uses pydantic_ai's documented API
+
+### Performance Optimizations
+- **Simplified Structured Extraction**: Removed 200+ lines of complex prompt engineering
+  - Leverages pydantic_ai's automatic output strategy selection
+  - Framework automatically chooses between tool calling, JSON mode, or prompted extraction
+  - Reduced token usage by eliminating repetitive instruction blocks
+  - More reliable extraction with model-specific optimizations
+
+### Code Quality Improvements
+- **Cleaner Architecture**: Removed unnecessary complexity from structured extraction
+- **Better Maintainability**: Aligned with pydantic_ai best practices
+- **Future-proof Design**: Will automatically benefit from pydantic_ai improvements
+
+### Migration Notes
+If you were using the framework before these fixes, no changes are needed to your code. The improvements are internal optimizations that maintain the same public API while providing better reliability and performance.
 
 ---
 
