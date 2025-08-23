@@ -13,10 +13,12 @@ def create_doc_analyzers(apps, schema_editor) -> None:
     HistoricalUser = apps.get_model("users", "User")  # or your custom user app, e.g. ("myapp", "MyUser")
 
     # Then simply call the utility
+    # Note: update_existing=False to maintain original behavior for this migration
     auto_create_doc_analyzers(
         AnalyzerModel=Analyzer,
         UserModel=HistoricalUser,
         fallback_superuser=True,
+        update_existing=False,
     )
 
 class Migration(migrations.Migration):

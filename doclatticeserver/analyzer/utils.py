@@ -61,18 +61,17 @@ def auto_create_doc_analyzers(
     UserModel: type[Any],
     fallback_superuser: bool = True,
     max_docstring_length: int = 2000,
+    update_existing: bool = True,
 ):
     """
-    Detects functions decorated with @doc_analyzer_task,
-    creates or updates corresponding Analyzer entries.
-
-    If a task name already exists, it's skipped.
-    Populates the Analyzer.description from the task's docstring if available.
+    Syncs functions decorated with @doc_analyzer_task with Analyzer database entries.
+    Creates new analyzers or updates existing ones to match task decorations.
 
     :param AnalyzerModel: The Analyzer model class (historical or real).
     :param UserModel: The User model class (historical or real).
     :param fallback_superuser: If True, tries a superuser first, else any user.
     :param max_docstring_length: Truncate docstring to this length in the description.
+    :param update_existing: If True, update existing analyzers with missing/outdated fields.
     """
 
     if not celery_app or not get_doc_analyzer_task_by_name:
@@ -94,6 +93,10 @@ def auto_create_doc_analyzers(
         logger.warning("No user found. Aborting analyzer creation.")
         return
 
+    # Check which fields the model supports
+    model_fields = [f.name for f in AnalyzerModel._meta.get_fields()]
+    has_input_schema = "input_schema" in model_fields
+
     # Iterate over tasks in Celery registry
     for task_name in celery_app.tasks.keys():
         analyzer_task = get_doc_analyzer_task_by_name(task_name)
@@ -101,35 +104,82 @@ def auto_create_doc_analyzers(
             continue
 
         analyzer_id = task_name
-        # Check for existing
-        if (
-            AnalyzerModel.objects.filter(id=analyzer_id).exists()
-            or AnalyzerModel.objects.filter(task_name=task_name).exists()
-        ):
-            continue
 
-        # Pull docstring
+        # Pull task metadata
         docstring = (analyzer_task.__doc__ or "").strip()
         trimmed_desc = Truncator(docstring).chars(max_docstring_length)
         default_desc = "Auto-created from @doc_analyzer_task-decorated Celery task."
         description = trimmed_desc if trimmed_desc else default_desc
-
         schema = getattr(analyzer_task, "_oc_doc_analyzer_input_schema", None)
 
+        # Check for existing analyzer
+        existing_analyzer = None
         try:
-            AnalyzerModel.objects.create(
-                id=analyzer_id,
-                creator=creator_user,
-                is_public=True,
-                disabled=False,
-                task_name=task_name,
-                host_gremlin=None,
-                manifest={},
-                description=description,
-                input_schema=schema,
-            )
-        except IntegrityError:
-            logger.warning(f"IntegrityError creating Analyzer {analyzer_id}. Skipped.")
-            continue
+            existing_analyzer = AnalyzerModel.objects.get(id=analyzer_id)
+        except AnalyzerModel.DoesNotExist:
+            try:
+                existing_analyzer = AnalyzerModel.objects.get(task_name=task_name)
+            except AnalyzerModel.DoesNotExist:
+                pass
+
+        if existing_analyzer:
+            if not update_existing:
+                continue
+
+            # Update existing analyzer if needed
+            updated = False
+
+            # Update input_schema if the field exists and needs updating
+            if has_input_schema and hasattr(existing_analyzer, "input_schema"):
+                if existing_analyzer.input_schema != schema:
+                    existing_analyzer.input_schema = schema
+                    updated = True
+                    logger.info(f"Updated input_schema for Analyzer {analyzer_id}")
+
+            # Update description if it's the default and we have a better one
+            if (
+                existing_analyzer.description == default_desc
+                and description != default_desc
+            ):
+                existing_analyzer.description = description
+                updated = True
+                logger.info(f"Updated description for Analyzer {analyzer_id}")
+
+            # Update task_name if it's null/empty
+            if not existing_analyzer.task_name:
+                existing_analyzer.task_name = task_name
+                updated = True
+                logger.info(f"Updated task_name for Analyzer {analyzer_id}")
+
+            if updated:
+                try:
+                    existing_analyzer.save()
+                except Exception as e:
+                    logger.warning(f"Error updating Analyzer {analyzer_id}: {e}")
+        else:
+            # Create new analyzer
+            analyzer_fields = {
+                "id": analyzer_id,
+                "creator": creator_user,
+                "is_public": True,
+                "disabled": False,
+                "task_name": task_name,
+                "host_gremlin": None,
+                "manifest": {},
+                "description": description,
+            }
+
+            # Only add input_schema if the model has this field
+            if has_input_schema:
+                analyzer_fields["input_schema"] = schema
+
+            try:
+                AnalyzerModel.objects.create(**analyzer_fields)
+                logger.info(f"Created new Analyzer {analyzer_id}")
+            except IntegrityError:
+                logger.warning(
+                    f"IntegrityError creating Analyzer {analyzer_id}. Skipped."
+                )
+                continue
 
     logger.info("auto_create_doc_analyzers completed successfully.")
