@@ -41,8 +41,48 @@ class TestAgenticHighlighterClaude(BaseFixtureTestCase):
     """Test suite for agentic_highlighter_claude task."""
 
     def setUp(self):
-        """Set up test environment with documents, corpus, and analyzer."""
+        """Set up test environment with documents and corpus for each test."""
         super().setUp()
+
+        # The analyzer is auto-created by migrations/startup, so just get or create it
+        task_name = (
+            "opencontractserver.tasks.doc_analysis_tasks.agentic_highlighter_claude"
+        )
+
+        try:
+            # Try to get the existing analyzer
+            self.analyzer = Analyzer.objects.get(task_name=task_name)
+            # Update the creator if needed
+            if self.analyzer.creator != self.user:
+                self.analyzer.creator = self.user
+                self.analyzer.save()
+        except Analyzer.DoesNotExist:
+            # Create it if it doesn't exist (shouldn't happen in normal test runs)
+            with transaction.atomic():
+                self.analyzer = Analyzer.objects.create(
+                    id="agentic-highlighter-claude",
+                    description="Agentic Document Highlighter using Claude",
+                    task_name=task_name,
+                    creator=self.user,
+                    manifest={
+                        "input_schema": {
+                            "$schema": "http://json-schema.org/draft-07/schema#",
+                            "type": "object",
+                            "properties": {
+                                "instructions": {
+                                    "type": "string",
+                                    "description": "User's highlighting instructions",
+                                }
+                            },
+                            "required": ["instructions"],
+                        }
+                    },
+                )
+
+        # Ensure permissions are set
+        set_permissions_for_obj_to_user(
+            self.user, self.analyzer, [PermissionTypes.CRUD]
+        )
 
         # Create GraphQL client with authenticated user
         self.graphene_client = Client(schema, context_value=TestContext(self.user))
@@ -62,31 +102,6 @@ class TestAgenticHighlighterClaude(BaseFixtureTestCase):
         # Add documents to corpus
         if self.docs:
             self.corpus.documents.add(*self.docs)
-
-        # Create an analyzer for the agentic_highlighter_claude task
-        with transaction.atomic():
-            self.analyzer = Analyzer.objects.create(
-                id="agentic-highlighter-claude",
-                description="Agentic Document Highlighter using Claude",
-                task_name="opencontractserver.tasks.doc_analysis_tasks.agentic_highlighter_claude",
-                creator=self.user,
-                manifest={
-                    "input_schema": {
-                        "$schema": "http://json-schema.org/draft-07/schema#",
-                        "type": "object",
-                        "properties": {
-                            "instructions": {
-                                "type": "string",
-                                "description": "User's highlighting instructions",
-                            }
-                        },
-                        "required": ["instructions"],
-                    }
-                },
-            )
-            set_permissions_for_obj_to_user(
-                self.user, self.analyzer, [PermissionTypes.CRUD]
-            )
 
         # GraphQL IDs for our test objects
         self.corpus_gid = to_global_id("CorpusType", self.corpus.id)
