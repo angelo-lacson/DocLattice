@@ -39,6 +39,7 @@ def _import_corpus_zip(user: User):
                 icon
                 description
                 title
+                slug
                 backendLock
               }
             }
