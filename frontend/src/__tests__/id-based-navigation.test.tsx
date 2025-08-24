@@ -11,6 +11,7 @@ import {
   RESOLVE_CORPUS_BY_SLUGS_FULL,
   RESOLVE_DOCUMENT_BY_SLUGS_FULL,
   RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL,
+  GET_DOCUMENT_ANNOTATIONS_ONLY,
 } from "../graphql/queries";
 import { openedCorpus, openedDocument } from "../graphql/cache";
 import { isValidGraphQLId, getIdentifierType } from "../utils/idValidation";
@@ -396,6 +397,26 @@ describe("Component Close Navigation", () => {
           },
         },
       },
+      {
+        request: {
+          query: GET_DOCUMENT_ANNOTATIONS_ONLY,
+          variables: {
+            documentId: "7890",
+            corpusId: "1234",
+            analysisId: null,
+          },
+        },
+        result: {
+          data: {
+            document: {
+              id: "7890",
+              allStructuralAnnotations: [],
+              allAnnotations: [],
+              allRelationships: [],
+            },
+          },
+        },
+      },
     ];
 
     const originalLocation = window.location.href;
@@ -449,6 +470,26 @@ describe("Component Close Navigation", () => {
           data: {
             corpusBySlugs: mockCorpus,
             documentInCorpusBySlugs: mockDocument,
+          },
+        },
+      },
+      {
+        request: {
+          query: GET_DOCUMENT_ANNOTATIONS_ONLY,
+          variables: {
+            documentId: "7890",
+            corpusId: "1234",
+            analysisId: null,
+          },
+        },
+        result: {
+          data: {
+            document: {
+              id: "7890",
+              allStructuralAnnotations: [],
+              allAnnotations: [],
+              allRelationships: [],
+            },
           },
         },
       },
