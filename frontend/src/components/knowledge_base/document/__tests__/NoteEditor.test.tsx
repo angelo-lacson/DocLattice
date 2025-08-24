@@ -428,7 +428,42 @@ describe("NoteEditor", () => {
         },
       };
 
-      renderComponent([reapplyMock]);
+      // Add refetch mock for after the reapply
+      const refetchAfterReapplyMock = {
+        request: {
+          query: GET_NOTE_WITH_HISTORY,
+          variables: { id: mockNoteId },
+        },
+        result: {
+          data: {
+            note: {
+              ...mockNote,
+              currentVersion: 3,
+              content: "Original content",
+              modified: "2024-01-03T00:00:00Z",
+              revisions: [
+                {
+                  id: "rev-3",
+                  version: 3,
+                  author: {
+                    id: "user-1",
+                    email: "test@example.com",
+                    username: "testuser",
+                  },
+                  created: "2024-01-03T00:00:00Z",
+                  diff: undefined,
+                  snapshot: "Original content",
+                  checksumBase: undefined,
+                  checksumFull: undefined,
+                },
+                ...(mockNote.revisions || []),
+              ],
+            },
+          },
+        },
+      };
+
+      renderComponent([reapplyMock, refetchAfterReapplyMock]);
 
       await waitFor(() => {
         expect(screen.getByText("Show History")).toBeInTheDocument();
