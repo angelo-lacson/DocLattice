@@ -2,12 +2,21 @@
 
 This guide is for people who want to quickly get started using the application and aren't interested in hosting
 it online for others to use. You'll get a default, local user with admin access. We recommend you change
-the user password after completing this tutorial. We assume you're using Linux or macOS, but you could
-do this on Windows too, assuming you have docker compose and docker installed. The commands to create
-directories will be different on Windows, but the git, docker and docker-compose commands should all be the
-same.
+the user password after completing this tutorial.
 
-Read the [System Requirements](requirements.md) for additional information.
+## Prerequisites
+
+Before starting, ensure you have:
+- **Docker** (version 20.10 or higher recommended)
+- **Docker Compose** (version 1.29 or higher recommended)
+- **Git** (for cloning the repository)
+- **At least 4GB of free RAM** (8GB+ recommended for better performance)
+- **At least 10GB of free disk space** (for Docker images and data)
+- **Operating System**: Linux or macOS (Windows users should use WSL2)
+
+For detailed system requirements and installation guides, see the [System Requirements](requirements.md).
+
+**Estimated Setup Time**: 15-30 minutes (depending on internet speed and system performance)
 
 ## **Step 1**: Clone this Repo
 
@@ -75,6 +84,14 @@ importantly, you are NOT PLANNING TO HOST THE APPLICATION online, the default lo
     $ docker-compose -f local.yml build
 ```
 
+This command will:
+- Download base Docker images (Python, PostgreSQL, Redis, etc.)
+- Install Python dependencies
+- Build the custom Django application image
+- Set up the development environment
+
+**First-time build may take 10-20 minutes depending on your internet connection.**
+
 ## **Step 4** Choose Frontend Deployment Method
 
 __Option 1__ Use "Fullstack" Profile in Docker Compose
@@ -111,7 +128,26 @@ This will bring up the frontend with hot reload enabled. You can then edit the f
 
 Congrats! You have OpenContracts running.
 
-## **Step 5**: Login and Start Annotating
+## **Step 5**: Verify Installation
+
+Before logging in, let's verify everything is running correctly:
+
+1. **Check that all containers are running:**
+   ```
+   $ docker-compose -f local.yml ps
+   ```
+   You should see containers for: django, postgres, redis, celeryworker, celerybeat, and (if using Option 1) frontend.
+
+2. **Check the logs for any errors:**
+   ```
+   $ docker-compose -f local.yml logs django
+   ```
+
+3. **Verify the backend is accessible:**
+   - Open `http://localhost:8000/admin/` in your browser
+   - You should see the Django admin login page
+
+## **Step 6**: Login and Start Annotating
 
 Access the frontend based on your deployment method:
 
@@ -164,3 +200,46 @@ See our [guide](./configuration/add-users.md) for how to create new users throug
 5. **Login issues**: Verify the username and password match what's in your `.envs/.local/.django` file
 
 For more detailed configuration options, see our [configuration guides](./configuration/choose-and-configure-docker-stack.md).
+
+## **Useful Docker Commands**
+
+Here are some helpful commands for managing your OpenContracts installation:
+
+### Container Management
+```bash
+# View running containers
+$ docker-compose -f local.yml ps
+
+# Stop all containers
+$ docker-compose -f local.yml down
+
+# Stop and remove all containers and volumes (WARNING: deletes data)
+$ docker-compose -f local.yml down -v
+
+# Restart a specific service
+$ docker-compose -f local.yml restart django
+
+# View logs for a specific service
+$ docker-compose -f local.yml logs -f django
+```
+
+### Database Management
+```bash
+# Create a database backup
+$ docker-compose -f local.yml exec postgres backup
+
+# Run Django shell
+$ docker-compose -f local.yml run django python manage.py shell
+
+# Run database migrations manually
+$ docker-compose -f local.yml run django python manage.py migrate
+```
+
+### Troubleshooting
+```bash
+# Rebuild containers after code changes
+$ docker-compose -f local.yml build
+
+# Remove unused Docker resources
+$ docker system prune -a
+```

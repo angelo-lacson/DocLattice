@@ -61,9 +61,20 @@ $ docker-compose -f local.yml run django python manage.py createsuperuser
 
 The production environment is designed to be public-facing and exposed to the Internet, so there are quite a number more configurations required than a local deployment, particularly if you use an AWS S3 storage backend or the Auth0 authentication system.
 
-After cloning this repo to a machine of your choice, configure the production .env files as described above.
+#### Production Prerequisites
 
-You'll also need to configure your website url. This needs to be done in a few places.
+- **Domain name** with DNS configured
+- **SSL certificates** (Let's Encrypt recommended via Traefik)
+- **Minimum 2 CPU cores and 4GB RAM** (8GB+ recommended)
+- **Firewall configured** to allow ports 80 and 443
+- **Backup strategy** for database and uploaded files
+
+#### Configuration Steps
+
+After cloning this repo to your production server, you'll need to:
+
+1. **Create production env files** in `.envs/.production/` (using samples from `docs/sample_env_files/production/`)
+2. **Configure your domain** - This needs to be done in a few places:
 
 First, in `opencontractserver/contrib/migrations`, you'll fine a file called `0003_set_site_domain_and_name.py`. BEFORE  running any of your migrations, you should modify the `domain` and `name` defaults you'll fine in `update_site_forward`:
 
