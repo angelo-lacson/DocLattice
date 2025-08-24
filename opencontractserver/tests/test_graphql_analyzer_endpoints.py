@@ -147,7 +147,11 @@ class GraphQLAnalyzerTestCase(TestCase):
         logger.info(f"Installed {Analyzer.objects.all().count()} analyzers")
 
         # Import a faux analysis
-        self.analyzer = Analyzer.objects.all()[0]
+        # Select a Gremlin-based analyzer (not a task-based one)
+        self.analyzer = Analyzer.objects.filter(host_gremlin=self.gremlin).first()
+        if not self.analyzer:
+            # Fallback if no Gremlin analyzers found
+            self.fail("No Gremlin-based analyzers found. Check test setup.")
         self.analyzer_global_id = to_global_id("AnalyzerType", self.analyzer.id)
         logger.info(f"Selected analyzer for faux analysis: {self.analyzer}")
 
