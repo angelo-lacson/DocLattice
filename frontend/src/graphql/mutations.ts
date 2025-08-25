@@ -93,6 +93,8 @@ export interface UpdateCorpusInputs {
   filename?: string;
   preferredEmbedder?: string;
   labelSet?: string;
+  slug?: string;
+  isPublic?: boolean;
 }
 
 export interface UpdateCorpusOutputs {
@@ -117,6 +119,8 @@ export const UPDATE_CORPUS = gql`
     $labelSet: String
     $title: String
     $preferredEmbedder: String
+    $slug: String
+    $isPublic: Boolean
   ) {
     updateCorpus(
       id: $id
@@ -125,6 +129,8 @@ export const UPDATE_CORPUS = gql`
       labelSet: $labelSet
       title: $title
       preferredEmbedder: $preferredEmbedder
+      slug: $slug
+      isPublic: $isPublic
     ) {
       ok
       message
@@ -212,6 +218,7 @@ export const CREATE_CORPUS = gql`
     $labelSet: String
     $title: String
     $preferredEmbedder: String
+    $slug: String
   ) {
     createCorpus(
       description: $description
@@ -219,6 +226,7 @@ export const CREATE_CORPUS = gql`
       labelSet: $labelSet
       title: $title
       preferredEmbedder: $preferredEmbedder
+      slug: $slug
     ) {
       ok
       message
@@ -516,6 +524,108 @@ export const CREATE_ANNOTATION_LABEL_FOR_LABELSET = gql`
   }
 `;
 
+// Smart Label Mutations
+export interface SmartLabelSearchOrCreateInputs {
+  corpusId: string;
+  searchTerm: string;
+  labelType: string;
+  color?: string;
+  description?: string;
+  icon?: string;
+  createIfNotFound?: boolean;
+  labelsetTitle?: string;
+  labelsetDescription?: string;
+}
+
+export interface SmartLabelSearchOrCreateOutputs {
+  smartLabelSearchOrCreate: {
+    ok: boolean;
+    message: string;
+    labels: AnnotationLabelType[];
+    labelset?: LabelSetType;
+    labelsetCreated: boolean;
+    labelCreated: boolean;
+  };
+}
+
+export const SMART_LABEL_SEARCH_OR_CREATE = gql`
+  mutation (
+    $corpusId: String!
+    $searchTerm: String!
+    $labelType: String!
+    $color: String
+    $description: String
+    $icon: String
+    $createIfNotFound: Boolean
+    $labelsetTitle: String
+    $labelsetDescription: String
+  ) {
+    smartLabelSearchOrCreate(
+      corpusId: $corpusId
+      searchTerm: $searchTerm
+      labelType: $labelType
+      color: $color
+      description: $description
+      icon: $icon
+      createIfNotFound: $createIfNotFound
+      labelsetTitle: $labelsetTitle
+      labelsetDescription: $labelsetDescription
+    ) {
+      ok
+      message
+      labels {
+        id
+        text
+        description
+        color
+        icon
+        labelType
+      }
+      labelset {
+        id
+        title
+        description
+      }
+      labelsetCreated
+      labelCreated
+    }
+  }
+`;
+
+export interface SmartLabelListInputs {
+  corpusId: string;
+  labelType?: string;
+}
+
+export interface SmartLabelListOutputs {
+  smartLabelList: {
+    ok: boolean;
+    message: string;
+    labels: AnnotationLabelType[];
+    hasLabelset: boolean;
+    canCreateLabels: boolean;
+  };
+}
+
+export const SMART_LABEL_LIST = gql`
+  mutation ($corpusId: String!, $labelType: String) {
+    smartLabelList(corpusId: $corpusId, labelType: $labelType) {
+      ok
+      message
+      labels {
+        id
+        text
+        description
+        color
+        icon
+        labelType
+      }
+      hasLabelset
+      canCreateLabels
+    }
+  }
+`;
+
 export interface RemoveAnnotationLabelsFromLabelsetInputs {
   label_ids: string[];
   labelset_id: string;
@@ -627,6 +737,7 @@ export interface UploadDocumentInputProps {
   description?: string;
   title?: string;
   addToCorpusId?: string;
+  slug?: string;
 }
 
 export interface UploadDocumentOutputProps {
@@ -659,6 +770,7 @@ export const UPLOAD_DOCUMENT = gql`
     $makePublic: Boolean!
     $addToCorpusId: ID
     $addToExtractId: ID
+    $slug: String
   ) {
     uploadDocument(
       base64FileString: $base64FileString
@@ -669,6 +781,7 @@ export const UPLOAD_DOCUMENT = gql`
       makePublic: $makePublic
       addToCorpusId: $addToCorpusId
       addToExtractId: $addToExtractId
+      slug: $slug
     ) {
       document {
         id
@@ -696,6 +809,7 @@ export interface UpdateDocumentInputs {
   description?: string;
   pdfFile?: string;
   customMeta?: Record<string, any>;
+  slug?: string;
 }
 
 export interface UpdateDocumentOutputs {
@@ -710,6 +824,7 @@ export const UPDATE_DOCUMENT = gql`
     $customMeta: GenericScalar
     $description: String
     $title: String
+    $slug: String
   ) {
     updateDocument(
       id: $id
@@ -717,9 +832,65 @@ export const UPDATE_DOCUMENT = gql`
       customMeta: $customMeta
       description: $description
       title: $title
+      slug: $slug
     ) {
       ok
       message
+    }
+  }
+`;
+
+// ---------------- User profile updates ----------------
+export interface UpdateMeInputs {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  slug?: string;
+}
+
+export interface UpdateMeOutputs {
+  updateMe: {
+    ok: boolean;
+    message?: string;
+    user?: {
+      id: string;
+      username: string;
+      slug?: string;
+      name?: string;
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+    };
+  };
+}
+
+export const UPDATE_ME = gql`
+  mutation (
+    $name: String
+    $firstName: String
+    $lastName: String
+    $phone: String
+    $slug: String
+  ) {
+    updateMe(
+      name: $name
+      firstName: $firstName
+      lastName: $lastName
+      phone: $phone
+      slug: $slug
+    ) {
+      ok
+      message
+      user {
+        id
+        username
+        slug
+        name
+        firstName
+        lastName
+        phone
+      }
     }
   }
 `;
@@ -1209,7 +1380,6 @@ export interface RequestCreateColumnInputType {
   limitToLabel?: string;
   instructions?: string;
   taskName: string;
-  agentic: boolean;
   name: string;
 }
 
@@ -1231,7 +1401,6 @@ export const REQUEST_CREATE_COLUMN = gql`
     $limitToLabel: String
     $instructions: String
     $taskName: String
-    $agentic: Boolean
   ) {
     createColumn(
       fieldsetId: $fieldsetId
@@ -1241,7 +1410,6 @@ export const REQUEST_CREATE_COLUMN = gql`
       limitToLabel: $limitToLabel
       instructions: $instructions
       taskName: $taskName
-      agentic: $agentic
       name: $name
     ) {
       message
@@ -1255,7 +1423,6 @@ export const REQUEST_CREATE_COLUMN = gql`
         limitToLabel
         instructions
         taskName
-        agentic
       }
     }
   }
@@ -1347,7 +1514,6 @@ export interface RequestUpdateColumnInputType {
   limitToLabel?: string;
   instructions?: string;
   taskName?: string;
-  agentic?: boolean;
 }
 
 export interface RequestUpdateColumnOutputType {
@@ -1368,7 +1534,6 @@ export const REQUEST_UPDATE_COLUMN = gql`
     $limitToLabel: String
     $instructions: String
     $taskName: String
-    $agentic: Boolean
   ) {
     updateColumn(
       id: $id
@@ -1379,7 +1544,6 @@ export const REQUEST_UPDATE_COLUMN = gql`
       limitToLabel: $limitToLabel
       instructions: $instructions
       taskName: $taskName
-      agentic: $agentic
     ) {
       message
       ok
@@ -1392,7 +1556,6 @@ export const REQUEST_UPDATE_COLUMN = gql`
         limitToLabel
         instructions
         taskName
-        agentic
       }
     }
   }
@@ -1475,6 +1638,12 @@ export const REQUEST_APPROVE_DATACELL = gql`
         completed
         stacktrace
         correctedData
+        column {
+          id
+        }
+        document {
+          id
+        }
         approvedBy {
           id
           username
@@ -1512,6 +1681,12 @@ export const REQUEST_REJECT_DATACELL = gql`
         completed
         stacktrace
         correctedData
+        column {
+          id
+        }
+        document {
+          id
+        }
         approvedBy {
           id
           username
@@ -1663,7 +1838,7 @@ export interface StartDocumentExtractInput {
 }
 
 export interface StartDocumentExtractOutput {
-  startDocumentExtract: {
+  startExtractForDoc: {
     ok: boolean;
     message: string;
     obj: ExtractType;
@@ -1676,7 +1851,7 @@ export const START_DOCUMENT_EXTRACT = gql`
     $fieldsetId: ID!
     $corpusId: ID
   ) {
-    startDocumentExtract(
+    startExtractForDoc(
       documentId: $documentId
       fieldsetId: $fieldsetId
       corpusId: $corpusId

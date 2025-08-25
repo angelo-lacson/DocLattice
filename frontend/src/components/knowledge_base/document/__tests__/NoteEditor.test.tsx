@@ -1,11 +1,4 @@
-import React from "react";
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MockedProvider } from "@apollo/client/testing";
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -15,10 +8,7 @@ import {
   UPDATE_NOTE,
   GET_NOTE_WITH_HISTORY,
 } from "../../../../graphql/mutations/noteMutations";
-import {
-  GetNoteWithHistoryQuery,
-  NoteRevision,
-} from "../../../../graphql/types/NoteTypes";
+import { GetNoteWithHistoryQuery } from "../../../../graphql/types/NoteTypes";
 
 // Mock toast notifications
 vi.mock("react-toastify", () => ({
@@ -438,7 +428,42 @@ describe("NoteEditor", () => {
         },
       };
 
-      renderComponent([reapplyMock]);
+      // Add refetch mock for after the reapply
+      const refetchAfterReapplyMock = {
+        request: {
+          query: GET_NOTE_WITH_HISTORY,
+          variables: { id: mockNoteId },
+        },
+        result: {
+          data: {
+            note: {
+              ...mockNote,
+              currentVersion: 3,
+              content: "Original content",
+              modified: "2024-01-03T00:00:00Z",
+              revisions: [
+                {
+                  id: "rev-3",
+                  version: 3,
+                  author: {
+                    id: "user-1",
+                    email: "test@example.com",
+                    username: "testuser",
+                  },
+                  created: "2024-01-03T00:00:00Z",
+                  diff: undefined,
+                  snapshot: "Original content",
+                  checksumBase: undefined,
+                  checksumFull: undefined,
+                },
+                ...(mockNote.revisions || []),
+              ],
+            },
+          },
+        },
+      };
+
+      renderComponent([reapplyMock, refetchAfterReapplyMock]);
 
       await waitFor(() => {
         expect(screen.getByText("Show History")).toBeInTheDocument();

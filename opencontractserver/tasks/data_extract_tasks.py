@@ -4,22 +4,8 @@ import logging
 import os
 
 from asgiref.sync import sync_to_async
-from celery import shared_task
-from django.conf import settings
-from django.utils import timezone
-from llama_index.core import Settings, VectorStoreIndex
-from llama_index.core.agent import ReActAgent
-from llama_index.core.tools import QueryEngineTool, ToolMetadata
-from llama_index.llms.openai import OpenAI
 
 from opencontractserver.extracts.models import Datacell
-from opencontractserver.llms.embedders.custom_pipeline_embedding import (
-    OpenContractsPipelineEmbedding,
-)
-from opencontractserver.llms.types import AgentFramework
-from opencontractserver.llms.vector_stores.vector_store_factory import (
-    UnifiedVectorStoreFactory,
-)
 from opencontractserver.shared.decorators import celery_task_with_async_to_sync
 
 logger = logging.getLogger(__name__)
@@ -105,6 +91,8 @@ async def doc_extract_query_task(
 
     from django.utils import timezone
     from pydantic import BaseModel
+    from pydantic_ai import capture_run_messages
+    from pydantic_ai.messages import ModelMessagesTypeAdapter
 
     from opencontractserver.llms import agents
     from opencontractserver.llms.types import AgentFramework
@@ -129,17 +117,21 @@ async def doc_extract_query_task(
         dc.save()
 
     @sync_to_async
-    def sync_mark_completed(dc, data_dict):
-        """Mark datacell as completed with data."""
+    def sync_mark_completed(dc, data_dict, llm_log=None):
+        """Mark datacell as completed with data and optional LLM log."""
         dc.data = data_dict
         dc.completed = timezone.now()
+        if llm_log:
+            dc.llm_call_log = llm_log
         dc.save()
 
     @sync_to_async
-    def sync_mark_failed(dc, exc, tb):
-        """Mark datacell as failed with error."""
+    def sync_mark_failed(dc, exc, tb, llm_log=None):
+        """Mark datacell as failed with error and optional LLM log."""
         dc.stacktrace = f"Error: {exc}\n\nTraceback:\n{tb}"
         dc.failed = timezone.now()
+        if llm_log:
+            dc.llm_call_log = llm_log
         dc.save()
 
     @sync_to_async
@@ -162,16 +154,25 @@ async def doc_extract_query_task(
     # Initialize datacell to None to avoid UnboundLocalError
     datacell = None
 
+    logger.info("=" * 60)
+    logger.info(f"doc_extract_query_task STARTED for cell_id: {cell_id}")
+    logger.info(f"  similarity_top_k: {similarity_top_k}")
+    logger.info(f"  max_token_length: {max_token_length}")
+
     try:
         # 1. Setup
         datacell = await sync_get_datacell(cell_id)
+        logger.info(f"Retrieved datacell {cell_id}")
         await sync_mark_started(datacell)
+        logger.info(f"Marked datacell {cell_id} as started")
 
         document = datacell.document
         column = datacell.column
+        logger.info(f"Document: {document.id}, Column: {column.name}")
 
         # Get corpus ID (None if document isn't in a corpus - that's OK now!)
         corpus_id = await sync_get_corpus_id(document)
+        logger.info(f"Corpus ID: {corpus_id}")
 
         # 2. Parse the output type
         output_type = parse_model_or_primitive(column.output_type)
@@ -188,33 +189,37 @@ async def doc_extract_query_task(
             raise ValueError("Column must have either query or match_text!")
 
         # 4. Build system prompt with constraints
-        system_prompt_parts = [
-            "You are a precise data extraction agent.",
-            "Extract ONLY the requested information from the document.",
-            "If the information is not present, return None rather than guessing.",
-        ]
+        # system_prompt_parts = [
+        #     "You are a precise data extraction agent.",
+        #     "Extract ONLY the requested information from the document.",
+        #     "If the information is not present, return None rather than guessing.",
+        # ]
 
         # Add must_contain_text constraint
-        if column.must_contain_text:
-            system_prompt_parts.append(
-                f"\nIMPORTANT: Only extract data from sections that contain the text: '{column.must_contain_text}'"
-            )
+        # if column.must_contain_text:
+        #     system_prompt_parts.append(
+        #         f"\nIMPORTANT: Only extract data from sections that contain the text: '{column.must_contain_text}'"
+        #     )
+        #     logger.info(f"Added must_contain_text constraint: {column.must_contain_text}")
 
         # Add limit_to_label constraint
-        if column.limit_to_label:
-            system_prompt_parts.append(
-                f"\nIMPORTANT: Only extract data from annotations labeled as: '{column.limit_to_label}'"
-            )
+        # if column.limit_to_label:
+        #     system_prompt_parts.append(
+        #         f"\nIMPORTANT: Only extract data from annotations labeled as: '{column.limit_to_label}'"
+        #     )
+        #     logger.info(f"Added limit_to_label constraint: {column.limit_to_label}")
 
-        system_prompt = "\n".join(system_prompt_parts)
+        # system_prompt = "\n".join(system_prompt_parts)
+        # logger.info(f"System prompt: {system_prompt[:200]}...")
 
         # 5. Build extra context from instructions and match_text
-        extra_context_parts = []
+        # extra_context_parts = []
 
-        if column.instructions:
-            extra_context_parts.append(
-                f"Additional instructions: {column.instructions}"
-            )
+        # if column.instructions:
+        #     extra_context_parts.append(
+        #         f"Additional instructions: {column.instructions}"
+        #     )
+        #     logger.info(f"Added instructions: {column.instructions[:100]}...")
 
         # Handle special match_text with ||| separator (few-shot examples)
         if column.match_text and "|||" in column.match_text:
@@ -222,59 +227,103 @@ async def doc_extract_query_task(
                 ex.strip() for ex in column.match_text.split("|||") if ex.strip()
             ]
             if examples:
-                extra_context_parts.append(
+                prompt += (
                     "Here are example values to guide your extraction:\n"
                     + "\n".join(f"- {ex}" for ex in examples)
                 )
+                logger.info(f"Added {len(examples)} few-shot examples from match_text")
 
-        extra_context = (
-            "\n\n".join(extra_context_parts) if extra_context_parts else None
-        )
+        # extra_context = (
+        #     "\n\n".join(extra_context_parts) if extra_context_parts else None
+        # )
+
+        # if extra_context:
+        #     logger.info(f"Extra context: {extra_context[:200]}...")
 
         # 6. EXTRACT! 🚀
+        logger.info(f"Starting extraction for datacell {cell_id}:")
+        logger.info(f"  - Document ID: {document.id}")
         logger.info(
-            f"Extracting {output_type} from document {document.id} for column {column.name}"
+            f"  - Document title: {document.title if hasattr(document, 'title') else 'N/A'}"
         )
+        logger.info(f"  - Column: {column.name}")
+        logger.info(f"  - Query/Prompt: {prompt}")
+        logger.info(f"  - Output type: {output_type}")
+        logger.info(f"  - Is list: {column.extract_is_list}")
+        logger.info(f"  - Corpus ID: {corpus_id}")
 
-        # Create a temporary agent and extract
-        result = await agents.get_structured_response_from_document(
-            document=document.id,
-            corpus=corpus_id,
-            prompt=prompt,
-            target_type=output_type,
-            framework=AgentFramework.PYDANTIC_AI,
-            system_prompt=system_prompt,
-            extra_context=extra_context,
-            temperature=0.3,  # Low temperature for consistent extraction
-            similarity_top_k=similarity_top_k,
-            model="gpt-4o-mini",  # Fast and reliable
-            user_id=datacell.creator.id,
-        )
+        # Capture LLM messages for debugging
+        llm_log = None
+
+        try:
+            # Wrap the agent call in the context manager to capture messages
+            with capture_run_messages() as messages:
+                # Create a temporary agent and extract
+                result = await agents.get_structured_response_from_document(
+                    document=document.id,
+                    corpus=corpus_id,
+                    prompt=prompt,
+                    target_type=output_type,
+                    framework=AgentFramework.PYDANTIC_AI,
+                    temperature=0.3,  # Low temperature for consistent extraction
+                    similarity_top_k=similarity_top_k,
+                    model="gpt-4o-mini",  # Fast and reliable
+                    user_id=datacell.creator.id,
+                )
+
+            # Capture the message history regardless of success/failure
+            llm_log = ModelMessagesTypeAdapter.dump_json(messages, indent=2).decode()
+            logger.info(f"LLM message history captured for cell {cell_id}")
+            logger.debug(f"Full LLM conversation:\n{llm_log}")
+
+        except Exception as e:
+            # If we have messages, capture them before re-raising
+            if "messages" in locals():
+                llm_log = ModelMessagesTypeAdapter.dump_json(
+                    messages, indent=2
+                ).decode()
+                logger.error(
+                    f"Failed extraction with error {e} - LLM messages:\n{llm_log}"
+                )
+            raise
 
         # 7. Process and save results
+        logger.info(f"Raw extraction result type: {type(result)}")
+        logger.info(f"Raw extraction result: {result}")
+
         if result is not None:
             # Convert result to saveable format
             if isinstance(result, BaseModel):
                 data = {"data": result.model_dump()}
+                logger.info(f"Converted BaseModel to dict: {data}")
             elif (
                 isinstance(result, list) and result and isinstance(result[0], BaseModel)
             ):
                 data = {"data": [item.model_dump() for item in result]}
+                logger.info(f"Converted list of BaseModels to dict: {data}")
             else:
                 data = {"data": result}
+                logger.info(f"Using raw result as data: {data}")
 
-            await sync_mark_completed(datacell, data)
-            logger.info(f"Successfully extracted data for cell {cell_id}")
+            await sync_mark_completed(datacell, data, llm_log)
+            logger.info(f"✓ Successfully extracted and saved data for cell {cell_id}")
+            logger.info(f"  Final saved data: {data}")
+            logger.info(f"  LLM log saved: {len(llm_log) if llm_log else 0} characters")
 
             # Note: The new API doesn't expose sources directly in structured_response
             # This is actually better - sources are for chat, not extraction!
 
         else:
             # Extraction returned None
+            logger.warning(f"✗ Extraction returned None for cell {cell_id}")
+            logger.warning(
+                "  This likely means the requested information is not present in the document"
+            )
             await sync_mark_failed(
                 datacell,
                 "Failed to extract requested data from document",
                 "The extraction returned None - the requested information may not be present in the document.",
+                llm_log,
             )
 
     except Exception as e:
@@ -282,95 +331,13 @@ async def doc_extract_query_task(
         tb = traceback.format_exc()
         # Only try to mark failed if we have a datacell
         if datacell:
-            await sync_mark_failed(datacell, e, tb)
+            # Pass llm_log if we have it
+            await sync_mark_failed(
+                datacell, e, tb, llm_log if "llm_log" in locals() else None
+            )
         else:
             logger.error(f"Failed to get datacell for cell_id {cell_id}: {e}\n{tb}")
         raise
-
-
-@shared_task
-def llama_index_react_agent_query(cell_id):
-    """
-    Use our modern vector store factory with LlamaIndex REACT Agent to retrieve text. This is from our tutorial and does
-    NOT structure data. It simply returns the response to your query as text.
-    """
-
-    datacell = Datacell.objects.get(id=cell_id)
-
-    try:
-
-        datacell.started = timezone.now()
-        datacell.save()
-
-        document = datacell.document
-
-        # Get corpus_id if the document is in a corpus
-        corpus_id = None
-        # Default embedder path, can be overridden by corpus preferred_embedder
-        embedder_path = settings.PREFERRED_PARSERS.get(
-            "text/plain", "/models/sentence-transformers/multi-qa-MiniLM-L6-cos-v1"
-        )  # Fallback just in case
-        corpus_set = document.corpus_set.all()
-        if corpus_set.exists():
-            corpus = corpus_set.first()
-            corpus_id = corpus.id
-            if corpus.preferred_embedder:  # Check if preferred_embedder is set
-                embedder_path = corpus.preferred_embedder
-
-        embed_model = OpenContractsPipelineEmbedding(
-            corpus_id=corpus_id,
-            mimetype=document.file_type,
-            embedder_path=embedder_path,
-        )
-        Settings.embed_model = embed_model
-
-        llm = OpenAI(
-            model=settings.OPENAI_MODEL,
-            api_key=settings.OPENAI_API_KEY,
-            streaming=False,
-        )
-        Settings.llm = llm
-
-        vector_store = UnifiedVectorStoreFactory.create_vector_store(
-            framework=AgentFramework.PYDANTIC_AI,
-            user_id=document.creator.id,
-            document_id=document.id,
-            must_have_text=datacell.column.must_contain_text,
-        )
-        index = VectorStoreIndex.from_vector_store(
-            vector_store=vector_store, use_async=True
-        )
-
-        doc_engine = index.as_query_engine(similarity_top_k=10, streaming=False)
-
-        query_engine_tools = [
-            QueryEngineTool(
-                query_engine=doc_engine,
-                metadata=ToolMetadata(
-                    name="doc_engine",
-                    description=(
-                        f"Provides detailed annotations and text from within the {document.title}"
-                    ),
-                ),
-            )
-        ]
-
-        agent = ReActAgent.from_tools(
-            query_engine_tools,
-            llm=llm,
-            verbose=True,
-        )
-
-        response = agent.chat(datacell.column.query)
-        datacell.data = {"data": str(response)}
-        datacell.completed = timezone.now()
-        datacell.save()
-
-    except Exception as e:
-        logger.error(f"run_extract() - Ran into error: {e}")
-        datacell.stacktrace = f"Error processing: {e}"
-        datacell.failed = timezone.now()
-        datacell.save()
 
 
 def text_search(document_id: int, query_str: str) -> str:

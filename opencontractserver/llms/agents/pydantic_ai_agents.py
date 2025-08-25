@@ -91,197 +91,6 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-def _get_structured_extraction_prompt(
-    prompt: str,
-    target_type: type[T],
-    agent_system_prompt: Optional[str] = None,
-    extra_context: Optional[str] = None,
-) -> str:
-    """
-    Generates a system prompt specifically for one-shot structured data extraction,
-    with robust support for primitives, Pydantic models, and collections.
-
-    Args:
-        prompt: The extraction request from the user
-        target_type: The target type to extract data into
-        agent_system_prompt: Optional base system prompt to incorporate
-        extra_context: Optional additional context to include in the prompt
-    """
-    # To make the prompt more human-readable and guide the LLM better,
-    # we can provide a simplified text description of the target type.
-    type_description = _get_type_description(target_type)
-
-    # Build extra context section if provided
-    extra_context_section = ""
-    if extra_context:
-        extra_context_section = f"""
-<ADDITIONAL_CONTEXT>
-{extra_context}
-</ADDITIONAL_CONTEXT>
-"""
-
-    extraction_instructions = f"""You are a highly-intelligent data extraction system with NO PRIOR KNOWLEDGE about any documents. You must ONLY use information obtained through the provided tools.
-
-AVAILABLE TOOLS FOR DOCUMENT ANALYSIS:
-- similarity_search: Semantic vector search to find relevant passages based on meaning
-- load_document_md_summary: Access markdown summary of the document (if available)
-- load_document_txt_extract: Load plain text extract of document (full or partial)
-- get_document_notes: Retrieve human-created notes attached to this document
-- search_document_notes: Search through notes for specific keywords
-- get_document_summary: Get the latest human-prepared summary content
-- add_exact_string_annotations: Find exact string matches in the document
-- Other document-specific tools may be available
-
-CRITICAL OPERATING PRINCIPLES:
-1. You have ZERO knowledge about this document except what you discover through tools
-2. NEVER assume, infer, or use any information not explicitly found via tool calls
-3. If you cannot find requested information after thorough search, return null
-4. Your answers must be 100% traceable to specific tool results
-
-EXTRACTION METHODOLOGY:
-
-PHASE 1 - COMPREHENSIVE SEARCH:
-1. Analyze the extraction request: "{prompt}"
-2. Plan multiple search strategies using different tools and query variations
-3. Execute searches systematically:
-   - Try semantic search with various phrasings
-   - Load document summary if relevant
-   - Search notes if they might contain the information
-   - Access document text for detailed inspection
-4. Collect ALL potentially relevant information
-
-PHASE 2 - INITIAL EXTRACTION:
-1. Review all gathered information
-2. Extract ONLY data that directly answers the request
-3. For each piece of extracted data, note its source (which tool, what result)
-4. If information is ambiguous or conflicting, prefer the most authoritative source
-5. If required information is not found, prepare to return null for those fields
-
-PHASE 3 - BACKWARD VERIFICATION (CRITICAL):
-1. Take your proposed answer and work backwards
-2. For EACH data point in your answer:
-   - Can you cite the EXACT tool call and result that provided this information?
-   - Does the source material actually say what you claim it says?
-   - Is this a direct quote/fact or are you interpreting/inferring?
-3. If ANY data point fails verification:
-   - Remove unverifiable data
-   - Search again with more targeted queries
-   - If still not found, that field should be null
-
-PHASE 4 - ITERATION IF NEEDED:
-If backward verification revealed gaps or errors:
-1. Identify what specific information is missing or wrong
-2. Formulate new, more targeted search queries
-3. Return to PHASE 1 with these specific queries
-4. Repeat until either:
-   - All data is verified with clear sources, OR
-   - You've exhausted search options and must return null
-
-VERIFICATION RULES:
-- Dates must be explicitly stated in the source material (not inferred from context)
-- Numbers must be exact matches from the document (not calculated or estimated)
-- Names/entities must appear verbatim (not paraphrased or corrected)
-- Boolean values require explicit supporting statements
-- Lists must be complete based on the source (not "including but not limited to")
-- For relationships, both entities and the relationship must be explicitly stated
-
-OUTPUT RULES:
-- Return ONLY the extracted data in this exact format:
-
-{type_description}
-
-- No explanations, confidence scores, or meta-commentary
-- Use null/empty for missing data rather than placeholders
-- The entire response must be valid string representation of desired answer convertible to the target type
-
-User has provided the following additional context (if blank, nothing provided):
-{extra_context_section}
-"""  # noqa: E501
-
-    if agent_system_prompt:
-        return f"""<BACKGROUND_CONTEXT>
-{agent_system_prompt}
-</BACKGROUND_CONTEXT>
-
-{extraction_instructions}"""
-    else:
-        return extraction_instructions
-
-
-def _get_type_description(target_type: type[Any]) -> str:
-    """Create a simple, human-readable description of a type."""
-    import json
-    from typing import get_args, get_origin
-
-    from pydantic import BaseModel, TypeAdapter
-
-    origin = get_origin(target_type)
-
-    # Handle iterables with recursive descriptions
-    if origin is list or target_type is list:
-        args = get_args(target_type)
-        if args:
-            inner_desc = _get_type_description(args[0])
-            return f"a JSON array where each element is {inner_desc}"
-        return "a JSON array"
-
-    elif origin is tuple or target_type is tuple:
-        args = get_args(target_type)
-        if args:
-            if len(args) == 2 and args[1] is ...:  # Tuple[T, ...]
-                inner_desc = _get_type_description(args[0])
-                return f"a JSON array of variable length where each element is {inner_desc}"
-            else:
-                element_descriptions = [_get_type_description(t) for t in args]
-                return f"a JSON array with exactly {len(args)} elements: [{', '.join(element_descriptions)}]"
-        return "a JSON array (tuple)"
-
-    elif origin is set or target_type is set:
-        args = get_args(target_type)
-        if args:
-            inner_desc = _get_type_description(args[0])
-            return f"a JSON array of unique values where each element is {inner_desc}"
-        return "a JSON array of unique values"
-
-    # For dicts and complex objects, use JSON schema
-    elif (
-        origin is dict
-        or target_type is dict
-        or (hasattr(target_type, "__mro__") and BaseModel in target_type.__mro__)
-    ):
-        type_adapter = TypeAdapter(target_type)
-        json_schema = type_adapter.json_schema()
-        # Format the schema nicely
-        schema_str = json.dumps(json_schema, indent=2)
-        if origin is dict or target_type is dict:
-            return f"a JSON object matching this schema:\n{schema_str}"
-        else:
-            return f"a JSON object matching the '{target_type.__name__}' model with this schema:\n{schema_str}"
-
-    # Handle primitives with plain descriptions
-    else:
-        type_name = getattr(target_type, "__name__", str(target_type))
-        if type_name == "str":
-            return "a plain string value"
-        elif type_name == "int":
-            return "an integer value"
-        elif type_name == "float":
-            return "a numeric value"
-        elif type_name == "bool":
-            return "a boolean value (true or false)"
-        elif type_name == "NoneType" or target_type is type(None):
-            return "null"
-        else:
-            # For any other complex type, use JSON schema
-            try:
-                type_adapter = TypeAdapter(target_type)
-                json_schema = type_adapter.json_schema()
-                schema_str = json.dumps(json_schema, indent=2)
-                return f"a value matching this JSON schema:\n{schema_str}"
-            except Exception:
-                return f"a JSON value of type '{type_name}'"
-
-
 def _to_source_node(raw: Any) -> SourceNode:
     """
     Convert an item coming from pydantic-ai (dict or BaseModel) to
@@ -394,6 +203,23 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
         return history or None
 
+    def _build_structured_system_prompt(
+        self, target_type: type[T], user_prompt: str
+    ) -> str:
+        """Build the system prompt for structured extraction runs.
+
+        Subclasses may override this to include document or corpus context.
+        The base implementation intentionally avoids any citation or
+        conversational guidance to minimize iterations and enforce raw output.
+        """
+        return (
+            "You are in data extraction mode.\n"
+            "Use available tools to locate the requested information.\n"
+            "Return ONLY the raw value matching the target type. "
+            "No explanations, no citations, no extra words.\n"
+            "If the information cannot be found using the tools, return null/None."
+        )
+
     async def _chat_raw(
         self, message: str, **kwargs
     ) -> tuple[str, list[SourceNode], dict]:
@@ -410,7 +236,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
         run_result = await self.pydantic_ai_agent.run(message, **run_kwargs)
 
-        llm_response_content = str(run_result.data)
+        llm_response_content = str(run_result.output)
         sources = [
             self._normalise_source(s) for s in getattr(run_result, "sources", [])
         ]
@@ -907,17 +733,16 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         prompt: str,
         target_type: type[T],
         *,
-        system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         tools: Optional[list[Union["CoreTool", Callable, str]]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-        extra_context: Optional[str] = None,
         **kwargs,
     ) -> Optional[T]:
         """PydanticAI implementation of structured response extraction.
 
         Creates a temporary agent with the target type as output schema.
+        Leverages pydantic_ai's built-in output strategies for reliable extraction.
         """
         logger.info(
             f"Generating structured response for target_type='{getattr(target_type, '__name__', str(target_type))}'"
@@ -931,53 +756,53 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             if max_tokens is not None:
                 model_settings["max_tokens"] = max_tokens
 
-            # Resolve tools
-            effective_tools = list(self.config.tools or [])
+            # Seed tools from the main agent so the structured run has the same capabilities
+            seeded_tools_dict = (
+                getattr(self.pydantic_ai_agent, "_function_tools", {}) or {}
+            )
+            seeded_tools = list(seeded_tools_dict.values())
+
+            # Merge per-call tool overrides
+            extra_tools: list[Callable] = []
             if tools:
-                # Convert string/CoreTool to PydanticAI tools
                 from opencontractserver.llms.api import _resolve_tools
 
                 resolved_core_tools = _resolve_tools(tools)
-                pydantic_tools = PydanticAIToolFactory.create_tools(resolved_core_tools)
-                effective_tools.extend(pydantic_tools)
+                extra_tools = PydanticAIToolFactory.create_tools(resolved_core_tools)
+            elif self.config.tools:
+                # If caller did not pass tools but config has additional wrappers, include them
+                extra_tools = list(self.config.tools)
 
-            # Generate the specialized system prompt for extraction
-            # Only use custom system_prompt if explicitly provided
-            if system_prompt:
-                final_system_prompt = system_prompt
-            else:
-                # Use the explicit extra_context parameter (may be None)
-                final_system_prompt = _get_structured_extraction_prompt(
-                    prompt, target_type, self.config.system_prompt, extra_context
-                )
+            # Build a dedicated system prompt for structured extraction via hook
+            structured_system_prompt = self._build_structured_system_prompt(
+                target_type, prompt
+            )
 
-            # Create a temporary agent with structured output
+            logger.info(f"Structured system prompt: {structured_system_prompt}")
+
             structured_agent = PydanticAIAgent(
                 model=model or self.config.model_name,
-                result_type=target_type,
-                system_prompt=final_system_prompt,
+                system_prompt=structured_system_prompt,
+                output_type=target_type,
+                deps_type=PydanticAIDependencies,
+                tools=[*seeded_tools, *extra_tools],
                 model_settings=model_settings,
             )
 
-            # Add tools to the agent
-            if effective_tools:
-                for tool in effective_tools:
-                    if hasattr(tool, "__name__"):
-                        tool_name = tool.__name__
-                    else:
-                        tool_name = str(tool)
-                    structured_agent._function_tools[tool_name] = tool
+            # Include prior conversation context if available
+            message_history = await self._get_message_history()
+            run_kwargs = {"deps": self.agent_deps, **kwargs}
+            if message_history:
+                run_kwargs["message_history"] = message_history
 
-            # Run the agent with the user's prompt
-            # The system prompt already contains all the context and instructions
+            # Run the agent with the user's prompt and full dependencies
             run_result = await structured_agent.run(
-                prompt,  # Pass the actual prompt, not empty string
-                deps=self.agent_deps,
-                **kwargs,
+                prompt,
+                **run_kwargs,
             )
 
             # Extract the structured result
-            return run_result.data
+            return run_result.output
 
         except Exception as e:
             logger.warning(
@@ -1390,11 +1215,27 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         )
         self.context = context
 
+    def _build_structured_system_prompt(
+        self, target_type: type[T], user_prompt: str
+    ) -> str:
+        """Strict extraction prompt with document context and raw-only output."""
+        document_title = self.context.document.title
+        document_id = self.context.document.id
+        return (
+            f"You are a data extraction specialist for document '{document_title}' (ID: {document_id}).\n\n"
+            "EXTRACTION PROTOCOL:\n"
+            "1. You have access to tools to analyze this document. Use them to find the requested information.\n"
+            "2. Use vector search, summary loaders, and note access as needed to locate data.\n"
+            "3. Return ONLY the raw extracted value matching the target type.\n"
+            "4. No explanations, no citations, no commentary – just the data.\n\n"
+            "If the information cannot be found using the tools, return null/None."
+        )
+
     @classmethod
     async def create(
         cls,
         document: Union[str, int, Document],
-        corpus: Union[str, int, Corpus],
+        corpus: Union[str, int, Corpus, None],
         config: Optional[AgentConfig] = None,
         tools: Optional[list[Callable]] = None,
         *,
@@ -1409,16 +1250,14 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             f"Creating Pydantic-AI document agent for document {document} and corpus {corpus}"
         )
         logger.debug(f"Config (type {type(config)}): {config}")
-        # Provide explicit corpus so the factory can pick the proper embedder
+        # Provide explicit corpus (may be None for standalone) so the factory can pick the proper embedder
         context = await CoreDocumentAgentFactory.create_context(
-            document,
-            corpus,
-            config,
+            document, corpus, config
         )
 
         # Use the CoreConversationManager factory method
         conversation_manager = await CoreConversationManager.create_for_document(
-            context.corpus,
+            context.corpus,  # Optional[Corpus]
             context.document,
             user_id=config.user_id,
             config=config,
@@ -1434,7 +1273,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         # ------------------------------------------------------------------
         vector_store = PydanticAIAnnotationVectorStore(
             user_id=config.user_id,
-            corpus_id=context.corpus.id,
+            corpus_id=context.corpus.id if context.corpus is not None else None,
             document_id=context.document.id,
             embedder_path=config.embedder_path,
         )
@@ -1466,12 +1305,40 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 context.document.id, context.corpus.id
             )
 
+        async def get_document_text_length_tool() -> int:
+            """Get the total character length of the document's plain-text extract."""
+            # Load just the first character to get the full text length from cache
+            full_text = await aload_document_txt_extract(context.document.id, 0, 1)
+            # The function caches the full text, so we can get the length efficiently
+            from opencontractserver.llms.tools.core_tools import _DOC_TXT_CACHE
+
+            if context.document.id in _DOC_TXT_CACHE:
+                _, cached_content = _DOC_TXT_CACHE[context.document.id]
+                return len(cached_content)
+            # Fallback: load the full text if not cached
+            full_text = await aload_document_txt_extract(context.document.id)
+            return len(full_text)
+
         async def load_document_text_tool(
             start: int | None = None,
             end: int | None = None,
             refresh: bool = False,
         ) -> str:
-            """Return a slice of the document's plain-text extract."""
+            """Return a slice of the document's plain-text extract.
+
+            IMPORTANT USAGE GUIDELINES:
+            - First use get_document_text_length to check the total document size
+            - Recommended chunk size: 5,000 to 50,000 characters per request
+            - DO NOT load chunks smaller than 1,000 characters (inefficient, wastes tool calls)
+            - DO NOT load chunks larger than 100,000 characters (may overflow context)
+            - Tool call limit is 50, so plan your chunking strategy accordingly
+            - For a 500K char document, use ~10-20 chunks of 25-50K chars each
+
+            Example: For a 200,000 character document:
+            - Good: Load in 4-8 chunks of 25,000-50,000 chars each
+            - Bad: Load 100 chars at a time (would need 2000 tool calls!)
+            - Bad: Load all 200,000 chars at once (might overflow context)
+            """
             return await aload_document_txt_extract(
                 context.document.id, start, end, refresh=refresh
             )
@@ -1500,10 +1367,16 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             requires_corpus=True,
         )
 
+        get_text_length_tool = PydanticAIToolFactory.from_function(
+            get_document_text_length_tool,
+            name="get_document_text_length",
+            description="Get the total character length of the document's plain-text extract. Use this BEFORE loading text to plan your chunking strategy.",  # noqa: E501
+        )
+
         load_text_tool = PydanticAIToolFactory.from_function(
             load_document_text_tool,
             name="load_document_text",
-            description="Load the document's plain-text extract (full or partial).",
+            description="Load the document's plain-text extract. ALWAYS use get_document_text_length first! Load in chunks of 5K-50K chars to avoid context overflow or tool call limits.",  # noqa: E501
             parameter_descriptions={
                 "start": "Inclusive start character index (default 0)",
                 "end": "Exclusive end character index (defaults to end of file)",
@@ -1518,7 +1391,12 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             truncate_length: int | None = None,
             from_start: bool = True,
         ) -> str:
-            """Return the latest summary content for this document."""
+            """Return the latest summary content for this document (corpus-aware)."""
+            if context.corpus is None:
+                # Standalone mode: fall back to document-level markdown summary
+                return await aload_document_md_summary(
+                    context.document.id, truncate_length, from_start
+                )
             return await aget_document_summary(
                 document_id=context.document.id,
                 corpus_id=context.corpus.id,
@@ -1767,23 +1645,32 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
 
         # Merge caller-supplied tools (if any) after the default one so callers
         # can override behaviour/order if desired.
+        # Build the list conditionally to avoid corpus-required tools in standalone mode.
         effective_tools: list[Callable] = [
             default_vs_tool,
-            load_summary_tool,
-            get_summary_length_tool,
-            get_notes_tool,
-            load_text_tool,
-            search_notes_tool_wrapped,
-            # Write operations below – all require approval
-            add_note_tool_wrapped,
-            update_note_tool_wrapped,
-            duplicate_ann_tool_wrapped,
-            add_exact_ann_tool_wrapped,
-            get_summary_content_wrapped,
-            get_summary_versions_wrapped,
-            get_summary_diff_wrapped,
-            update_summary_wrapped,
+            load_summary_tool,  # corpus-agnostic
+            get_summary_length_tool,  # corpus-agnostic
+            get_text_length_tool,  # corpus-agnostic
+            load_text_tool,  # corpus-agnostic
         ]
+
+        if context.corpus is not None:
+            # Only add corpus-dependent tools when corpus is available
+            effective_tools.extend(
+                [
+                    get_notes_tool,
+                    search_notes_tool_wrapped,
+                    # Write operations below – all require approval
+                    add_note_tool_wrapped,
+                    update_note_tool_wrapped,
+                    duplicate_ann_tool_wrapped,
+                    add_exact_ann_tool_wrapped,
+                    get_summary_content_wrapped,
+                    get_summary_versions_wrapped,
+                    get_summary_diff_wrapped,
+                    update_summary_wrapped,
+                ]
+            )
         if tools:
             effective_tools.extend(tools)
 
@@ -1798,7 +1685,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
 
         agent_deps_instance = PydanticAIDependencies(
             user_id=config.user_id,
-            corpus_id=context.corpus.id,
+            corpus_id=(context.corpus.id if context.corpus is not None else None),
             document_id=context.document.id,
             **kwargs,
         )
@@ -1827,6 +1714,22 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             context.config, conversation_manager, pydantic_ai_agent, agent_deps
         )
         self.context = context
+
+    def _build_structured_system_prompt(
+        self, target_type: type[T], user_prompt: str
+    ) -> str:
+        """Strict extraction prompt with corpus context and raw-only output."""
+        corpus_id = self.context.corpus.id
+        corpus_title = getattr(self.context.corpus, "title", "corpus")
+        return (
+            f"You are a data extraction specialist for corpus '{corpus_title}' (ID: {corpus_id}).\n\n"
+            "EXTRACTION PROTOCOL:\n"
+            "1. You have access to tools to analyze this corpus. Use them to find the requested information.\n"
+            "2. Leverage vector search and document coordination tools as needed.\n"
+            "3. Return ONLY the raw extracted value matching the target type.\n"
+            "4. No explanations, no citations, no commentary – just the data.\n\n"
+            "If the information cannot be found using the tools, return null/None."
+        )
 
     @classmethod
     async def create(

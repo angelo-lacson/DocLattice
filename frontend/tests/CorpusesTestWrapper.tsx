@@ -35,11 +35,16 @@ const createTestCache = () =>
 
 // Create wildcard link to respond to any GET_CORPUSES variables
 const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
+  // Ordinary single-shot behaviour for most mocks
   const mockLink = new MockLink(mocks);
-  // Find canonical corpuses result once
+
+  // Capture a canonical corpuses result so we can answer the query regardless
+  // of its variables (textSearch etc.) and *without* consuming the mock – we
+  // only need this special-case because the UI issues the query many times.
   const corpusesResult = mocks.find(
     (m) => m.request.query === GET_CORPUSES
   )?.result;
+
   return new ApolloLink((operation) => {
     const isCorpusesQuery =
       operation.operationName === "GetCorpuses" ||
@@ -50,6 +55,7 @@ const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
       return Observable.of(corpusesResult as any);
     }
 
+    // Delegate everything else to MockLink (single-shot semantics)
     return mockLink.request(operation) as any;
   });
 };

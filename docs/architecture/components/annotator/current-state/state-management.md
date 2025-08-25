@@ -79,10 +79,29 @@ export const perPageAnnotationsAtom = atom((get) => {
 
 ### UI State Atoms (UISettingsAtom.tsx)
 
+#### View Control Atoms
 - `zoomLevelAtom` - Current PDF zoom level
-- `selectedAnnotationIdsAtom` - Currently selected annotations
-- `showStructuralAtom` - Whether to show structural annotations
-- `spanLabelsToViewAtom` - Which labels to display
+- `isSidebarVisibleAtom` - Left sidebar visibility (not the right panel)
+- `showAnnotationBoundingBoxesAtom` - Whether to show bounding boxes
+- `showAnnotationLabelsAtom` - Label display behavior (ALWAYS, ON_HOVER, HIDE)
+- `showStructuralAnnotationsAtom` - Whether to show structural annotations (default: false)
+- `showStructuralRelationshipsAtom` - Whether to show structural relationships
+- `showSelectedAnnotationOnlyAtom` - Show only selected annotations
+- `hideLabelsAtom` - Hide all labels
+
+#### Selection Atoms
+- `selectedAnnotationsAtom` - Currently selected annotation IDs
+- `selectedRelationsAtom` - Currently selected relationships
+- `hoveredAnnotationIdAtom` - Currently hovered annotation
+
+#### Control Atoms
+- `activeSpanLabelAtom` - Currently active label for new annotations
+- `spanLabelsToViewAtom` - Which labels to filter/display
+- `activeRelationLabelAtom` - Active relationship label
+
+#### Chat Panel Management
+- `chatPanelWidthModeAtom` - Width mode ("quarter", "half", "full", "custom")
+- `chatPanelCustomWidthAtom` - Custom width percentage when in custom mode
 
 ### Document State Atoms (DocumentAtom.tsx)
 
@@ -97,16 +116,27 @@ export const perPageAnnotationsAtom = atom((get) => {
 ```mermaid
 graph TD
     A[DocumentKnowledgeBase] -->|GraphQL Query| B[GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS]
-    B --> C[Process Annotations]
-    C --> D[Update Jotai Atoms]
-    D --> E[pdfAnnotationsAtom]
-    D --> F[structuralAnnotationsAtom]
-    E --> G[allAnnotationsAtom<br/>(computed)]
-    F --> G
-    G --> H[perPageAnnotationsAtom<br/>(computed)]
-    G --> I[useVisibleAnnotations<br/>(filtered)]
-    I --> J[PDFPage Components]
+    B --> C[Backend returns separate arrays]
+    C --> D[allAnnotations]
+    C --> E[allStructuralAnnotations]
+    D --> F[processAnnotationsData]
+    E --> F
+    F --> G[convertToServerAnnotation]
+    G --> H[Filter by type]
+    H --> I[Regular annotations → pdfAnnotationsAtom]
+    H --> J[Structural annotations → structuralAnnotationsAtom]
+    I --> K[allAnnotationsAtom<br/>(computed, deduplicated)]
+    J --> K
+    K --> L[perPageAnnotationsAtom<br/>(computed, indexed by page)]
+    K --> M[useVisibleAnnotations<br/>(filtered by UI settings)]
+    M --> N[PDFPage Components]
 ```
+
+### Key Points:
+- **Separation at Source**: Backend sends `allAnnotations` and `allStructuralAnnotations` as separate arrays
+- **Maintained Separation**: Frontend keeps them in separate atoms to prevent duplication
+- **Each annotation has `structural` boolean property**: Used for filtering logic
+- **Deduplication**: `allAnnotationsAtom` combines both arrays and removes duplicates by ID
 
 ### 2. User Interactions
 
@@ -119,10 +149,29 @@ When a user selects an annotation:
 ### 3. Filtering Updates
 
 When filter settings change:
-1. UI atoms (showStructural, spanLabelsToView) are updated
-2. `useVisibleAnnotations` recomputes based on new filters
+1. UI atoms are updated (e.g., `showStructuralAnnotationsAtom`, `spanLabelsToViewAtom`)
+2. `useVisibleAnnotations` hook recomputes based on new filters
 3. Only affected PDFPage components re-render
 4. No network requests needed - all filtering is local
+
+#### Special Behavior: Show Structural Toggle
+When enabling "Show Structural":
+- Automatically enables "Show Selected Only" mode
+- This prevents overwhelming the UI with all structural annotations
+- Users see only selected items when structural mode is active
+
+```typescript
+// In AnnotationControls.tsx
+const handleShowStructuralChange = useCallback(() => {
+  const newStructuralValue = !showStructural;
+  setShowStructural(newStructuralValue);
+
+  // Force "show selected only" when enabling structural view
+  if (newStructuralValue) {
+    setShowSelectedOnly(true);
+  }
+}, [showStructural, setShowStructural, setShowSelectedOnly]);
+```
 
 ## Key Components
 
@@ -155,28 +204,62 @@ When filter settings change:
 
 ### useVisibleAnnotations Hook
 
+This is the **single source of truth** for annotation visibility:
+
 ```typescript
 export function useVisibleAnnotations() {
   const allAnnotations = useAllAnnotations();
-  const { showStructural } = useAnnotationDisplay();
+  const { showStructural, showStructuralRelationships } = useAnnotationDisplay();
   const { spanLabelsToView } = useAnnotationControls();
   const { selectedAnnotations, selectedRelations } = useAnnotationSelection();
+  const { pdfAnnotations } = usePdfAnnotations();
 
   return useMemo(() => {
-    // Force visibility for selected items
-    const forcedIds = new Set([
-      ...selectedAnnotations,
-      ...selectedRelations.flatMap(r => [...r.sourceIds, ...r.targetIds])
-    ]);
+    // Step 1: Determine forced visibility
+    const forcedBySelectedRelationIds = new Set<string>(
+      selectedRelations.flatMap((rel) => [...rel.sourceIds, ...rel.targetIds])
+    );
 
-    // Apply filters
-    return allAnnotations.filter(annot => {
+    const forcedBySelection = new Set<string>(selectedAnnotations);
+
+    const forcedByRelationships = new Set<string>();
+    if (showStructuralRelationships) {
+      (pdfAnnotations?.relations ?? []).forEach((rel) => {
+        rel.sourceIds.forEach((id) => forcedByRelationships.add(id));
+        rel.targetIds.forEach((id) => forcedByRelationships.add(id));
+      });
+    }
+
+    // Combine forced IDs based on structural setting
+    const forcedIds = new Set(forcedBySelection);
+    if (showStructural) {
+      forcedBySelectedRelationIds.forEach((id) => forcedIds.add(id));
+      forcedByRelationships.forEach((id) => forcedIds.add(id));
+    }
+
+    // Step 2: Label filter setup
+    const labelFilterActive = spanLabelsToView && spanLabelsToView.length > 0
+      ? new Set(spanLabelsToView.map((l) => l.id))
+      : null;
+
+    // Step 3: Apply filtering logic
+    return allAnnotations.filter((annot) => {
+      // Always show forced annotations
       if (forcedIds.has(annot.id)) return true;
-      if (annot.structural && !showStructural) return false;
-      if (labelFilter && !labelFilter.has(annot.label.id)) return false;
-      return true;
+
+      // Structural filter - key logic!
+      if (annot.structural) {
+        return showStructural; // Only show if toggle is ON
+      }
+
+      // Label filter (only for non-forced, non-structural)
+      if (labelFilterActive && !labelFilterActive.has(annot.annotationLabel.id)) {
+        return false;
+      }
+
+      return true; // Show all other annotations
     });
-  }, [/* dependencies */]);
+  }, [/* all dependencies */]);
 }
 ```
 
@@ -184,23 +267,50 @@ export function useVisibleAnnotations() {
 
 The system provides centralized, consistent filtering through `useVisibleAnnotations`:
 
-1. **Forced Visibility**
-   - Selected annotations always visible
-   - Annotations in selected relationships always visible
-   - Overrides all other filters
+### 1. Forced Visibility
+- Selected annotations always visible
+- Annotations in selected relationships always visible (when structural view is ON)
+- Overrides all other filters
+- Ensures important context is never hidden
 
-2. **Structural Filter**
-   - Toggle visibility of structural annotations
-   - When enabled, shows annotations in relationships
+### 2. Structural Annotation Handling
 
-3. **Label Filter**
-   - Filter by specific annotation labels
-   - Multi-select capability
-   - Only applies to non-forced annotations
+#### Data Structure
+- **Regular annotations**: Stored in `pdfAnnotationsAtom`
+- **Structural annotations**: Stored in `structuralAnnotationsAtom`
+- **Combined view**: `allAnnotationsAtom` merges and deduplicates
 
-4. **Page-Level Filtering**
-   - PDFPage components further filter to show only annotations on their page
-   - Efficient - no unnecessary rendering of off-page annotations
+#### Visibility Logic
+- Each annotation has a `structural: boolean` property
+- When `showStructuralAnnotationsAtom` is `false` (default):
+  - Structural annotations are hidden
+  - Regular annotations are shown
+- When `showStructuralAnnotationsAtom` is `true`:
+  - Structural annotations become visible
+  - "Show Selected Only" is auto-enabled to prevent UI overload
+  - Relationships involving structural annotations become visible
+
+#### Why Separate Storage?
+- **Performance**: Structural annotations can be numerous (e.g., every paragraph marker)
+- **Clean data management**: Prevents accidental mixing of annotation types
+- **Flexible filtering**: Easy to toggle entire category on/off
+- **Backend consistency**: Mirrors backend's separation of annotation types
+
+### 3. Label Filter
+- Filter by specific annotation labels
+- Multi-select capability via `ViewLabelSelector` component
+- Only applies to non-forced, non-structural annotations
+- Stored in `spanLabelsToViewAtom`
+
+### 4. Page-Level Filtering
+- PDFPage components further filter to show only annotations on their page
+- Efficient - no unnecessary rendering of off-page annotations
+- Uses `perPageAnnotationsAtom` for O(1) page lookups
+
+### 5. Show Selected Only Mode
+- When enabled, only selected annotations are visible
+- Auto-enabled when showing structural annotations
+- Useful for focusing on specific annotations
 
 ## Performance Optimizations
 
@@ -229,6 +339,44 @@ The system provides centralized, consistent filtering through `useVisibleAnnotat
 - Throttled scroll event handling
 - Smart scroll-to-annotation with precedence system
 
+## Control Components Architecture
+
+### AnnotationControls Component
+
+The `AnnotationControls` component provides unified controls for annotation visibility settings. It has two key features:
+
+1. **Variant Support**:
+   - `variant="sidebar"` - Used in the right panel's `SidebarControlBar`
+   - `variant="floating"` - Used in `FloatingDocumentControls` when right panel is closed
+   - Both variants now show identical features (label display and filters)
+
+2. **Coordinated Visibility**:
+   - Controls appear in `FloatingDocumentControls` when right panel is closed
+   - Controls appear in `SidebarControlBar` when right panel is open and in feed mode
+   - Controlled by `showRightPanel` state passed from `DocumentKnowledgeBase`
+
+### Control State Synchronization
+
+```typescript
+// In DocumentKnowledgeBase.tsx
+const [showRightPanel, setShowRightPanel] = useState(false);
+
+// Passed to FloatingDocumentControls
+<FloatingDocumentControls
+  showRightPanel={showRightPanel}  // Controls visibility of settings button
+  // ... other props
+/>
+
+// In FloatingDocumentControls.tsx
+{!showRightPanel && (
+  <ActionButton>  // Settings button only shows when panel is closed
+    <Settings />
+  </ActionButton>
+)}
+```
+
+This ensures annotation controls are always accessible but never duplicated on screen.
+
 ## Best Practices
 
 1. **Always use hooks** for accessing annotation state
@@ -247,3 +395,8 @@ The system provides centralized, consistent filtering through `useVisibleAnnotat
 4. **Use proper atom updates** to maintain immutability
    - Always create new objects/arrays when updating
    - Jotai relies on referential equality for updates
+
+5. **Separate structural from regular annotations**
+   - Keep them in separate atoms as provided by backend
+   - Let `allAnnotationsAtom` handle the merging
+   - Use the `structural` property for filtering decisions

@@ -5,7 +5,7 @@ CorpusQueryConsumer
 
 Channels WebSocket consumer that lets the frontend query a corpus via an
 LLM-backed agent.  Uses the new unified LLM agent API (`opencontractserver.llms.agents`)
-so the consumer is framework-agnostic (Llama-Index, Pydantic-AI, …).
+so the consumer is framework-agnostic (Pydantic-AI, …).
 
 The consumer keeps the websocket protocol identical to the old version, emitting
 four message-types expected by the UI:
@@ -279,7 +279,7 @@ class CorpusQueryConsumer(AsyncWebsocketConsumer):
 
                 else:
                     # ------------------------------------------------------------------
-                    # Legacy path: some adapters (e.g. llama-index) still yield the
+                    # Legacy path: some adapters still yield the
                     # unified *response objects* directly instead of the granular
                     # ThoughtEvent / ContentEvent / FinalEvent hierarchy.  To maintain
                     # backward-compatibility we treat those objects similarly to the

@@ -69,6 +69,7 @@ class _DummyRunResult:
 
     def __init__(self, data: str):
         self.data = data
+        self.output = data  # Add output attribute for compatibility
         self.sources = []
 
     def usage(self):

@@ -1,15 +1,15 @@
-## Gremlin Admin Dashboard
+## OpenContracts Admin Dashboard
 
-Gremlin's backend is built on Django, which has its own powerful admin dashboard. This dashboard is not meant for end-users
-and should only be used by admins. You can access the admin dashboard by going to the `/admin` page - e,g,
+OpenContracts' backend is built on Django, which has its own powerful admin dashboard. This dashboard is not meant for end-users
+and should only be used by admins. You can access the admin dashboard by going to the `/admin` page - e.g.,
 `opencontracts.opensource.legal/admin` or `http://localhost:8000/admin`. For the most part, you shouldn't need to use
-the admin dashboard and should only go in here if you're experience errors or unexpected behavior and
-want to look at the detailed contents of the database to see if it sheds any light on what's happening with a give
+the admin dashboard and should only go in here if you're experiencing errors or unexpected behavior and
+want to look at the detailed contents of the database to see if it sheds any light on what's happening with a given
 corpus, document, etc.
 
-By default, Gremlin creates an admin user for you. If you don't specify the username and password
+By default, OpenContracts creates an admin user for you. If you don't specify the username and password
 in your environment on first boot, it'll use system defaults. You can customize the default
-username and password via environment variables or after the system boots using the admin dash.
+username and password via environment variables or after the system boots using the admin dashboard.
 
 ## Configure Username and Password Prior to First Deployment
 

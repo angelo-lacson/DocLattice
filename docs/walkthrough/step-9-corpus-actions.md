@@ -16,15 +16,12 @@ corpus.
 if you're using our local deployment), We'd like to expose this functionality using our React frontend, but the required
 GUI elements and GraphQL mutations need to be built out. A good starter PR for someone ;-).
 
-Currently, a CorpusAction can be configured to run one of three types of analyzers automatically:
+Currently, a CorpusAction can be configured to run one of two types of actions automatically:
 
 1. A **data extract** fieldset - in which case, a data extract will be created and run on new documents added to the
    configured corpus (see our guide on setting up a [data extract job](step-8-data-extract.md))
-2. An Analyzer
-    1. Configured as a "Gremlin Microservice". See more information on configuring a microservice-based analyzer
-       [here](advanced/run-gremlin-analyzer.md)
-    2. Configured to run a task decorated using the `@doc_analyzer_task` decorator. See more about configuring these
-       kinds of tasks [here](advanced/register-doc-analyzer.md).
+2. An **Analyzer** configured to run a task decorated using the `@doc_analyzer_task` decorator. See more about configuring these
+   kinds of tasks [here](advanced/register-doc-analyzer.md).
 
 ### Creating Corpus Action
 
@@ -47,7 +44,7 @@ more about the underlying architecture, check out our [deep dive on `CorpusActio
 **Analyzer** *or* **Fieldset** properties control whether an analysis or data extract runs when the
 applicable trigger is run (more on this below). If you want to run a data extract when document is added to the corpus,
 select the fieldset defining the data you want to extract. If you want to run an analyzer, select the pre-configured
-analyzer. Remember, an analyzer can point to a microservice _or_ a task decorated with @doc_analyzer_task.
+analyzer with a task decorated with @doc_analyzer_task.
 
 **Trigger** refers to the specific action type that should kick off the desired analysis. Currently, we "provide" add
 and edit actions - i.e., run specified analytics when a document is added or edited, respectively - _but_ we have not

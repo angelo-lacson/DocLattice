@@ -5,8 +5,36 @@ to display a usable layout at other resolutions. A more thorough redesign / refa
 there's sufficient interest. What's available now should handle a lot of situations ok. If you find
 performance / layout is not looking great at your given resolution, try to use a desktop browser at a 1080p resolution.
 
-## No Test Suite
+## Frontend Testing
 
-As of our initial release, the test suite only tests the backend (and coverage is admittedly not as robust as we'd like).
-We'd like to add tests for the frontend, though this is a fairly large undertaking. We welcome any contributions on this
-front!
+The frontend includes a comprehensive test suite using modern testing frameworks:
+
+### Testing Frameworks
+- **Vitest**: Unit testing framework for components and utilities
+- **Playwright**: End-to-end (E2E) and component testing
+- **React Testing Library**: Component testing utilities
+
+### Available Test Commands
+```bash
+# Run unit tests
+npm run test:unit
+
+# Run E2E tests
+npm run test:e2e
+
+# Run component tests
+npm run test:ct
+
+# Generate coverage report
+npm run test:coverage
+```
+
+### Test Coverage
+The test suite includes:
+- Unit tests for utilities and type guards (`src/utils/__tests__/`)
+- Component tests for critical UI components (`src/components/*/__tests__/`)
+- Integration tests for navigation and routing (`src/__tests__/`)
+- Permission flow tests (`tests/DocumentPermissionFlow.spec.tsx`)
+- Metadata validation tests (`src/types/metadata.test.ts`)
+
+While test coverage continues to expand, contributions to improve testing are always welcome!

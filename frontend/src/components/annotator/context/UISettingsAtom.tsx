@@ -80,7 +80,7 @@ export const hideLabelsAtom = atom<boolean>(false);
 /**
  * Relationship Display Atoms
  */
-export const showStructuralRelationshipsAtom = atom<boolean>(true);
+export const showStructuralRelationshipsAtom = atom<boolean>(false);
 
 /**
  * Atom for onSidebarToggle callback.

@@ -123,14 +123,27 @@ class ExtractsMutationTestCase(TestCase):
             to_global_id("ExtractType", self.extract.id)
         )
 
-        with patch(
-            "opencontractserver.tasks.extract_orchestrator_tasks.run_extract.s"
-        ) as mock_task:
-            result = self.client.execute(mutation)
-            self.assertIsNone(result.get("errors"))
-            self.assertTrue(result["data"]["startExtract"]["ok"])
-            self.assertEqual("STARTED!", result["data"]["startExtract"]["message"])
-            mock_task.assert_called_once()
+        with patch("config.graphql.mutations.run_extract") as mock_task:
+            # Setup the mock to handle .s().apply_async() chain
+            from unittest.mock import MagicMock
+
+            mock_signature = MagicMock()
+            mock_task.s.return_value = mock_signature
+            mock_signature.apply_async = MagicMock()
+
+            # Also need to handle transaction.on_commit in TestCase
+            with patch("django.db.transaction.on_commit") as mock_on_commit:
+                # Execute on_commit callbacks immediately in tests
+                mock_on_commit.side_effect = lambda f: f()
+
+                result = self.client.execute(mutation)
+                self.assertIsNone(result.get("errors"))
+                self.assertTrue(result["data"]["startExtract"]["ok"])
+                self.assertEqual("STARTED!", result["data"]["startExtract"]["message"])
+
+                # Verify the task was called with correct arguments
+                # Note: from_global_id returns a string, not an int
+                mock_task.s.assert_called_once_with(str(self.extract.id), self.user.id)
 
     def test_add_documents_to_extract_mutation(self):
         mutation = """

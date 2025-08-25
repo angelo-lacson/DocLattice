@@ -13,7 +13,9 @@
 
 ## TLDR: What Does it Do?
 
-OpenContracts is an **GPL-3** enterprise document analytics tool. It supports multiple formats - including PDF and txt-based formats (with more on the way). It also supports multiple document ingestion pipelines with a [pluggable architecture](docs/pipelines/pipeline_overview.md) designed to make supporting new formats and ingestion engines easy - see our [Docling Integration](docs/pipelines/docling_parser.md) for an example. Writing your own custom document analytics tools where the results get displayed beautifully over the original document [is easy](docs/walkthrough/advanced/register-doc-analyzer.md). We also support mass document [data extraction](docs/extract_and_retrieval/intro_to_django_annotation_vector_store.md) with a [LlamaIndex](https://www.llamaindex.ai/) wrapper.
+**Knowledge is power. Software is a tool.** OpenContracts is **FREE and OPEN SOURCE** software designed to put knowledge owners and subject matter experts in charge of their knowledge. Store it in an accessible and exportable format, and make it work with emerging agentic workflows and techniques.
+
+OpenContracts is a **GPL-3.0** enterprise document analytics tool. It supports multiple formats - including PDF and txt-based formats (with more on the way). It also supports multiple document ingestion pipelines with a [pluggable architecture](docs/pipelines/pipeline_overview.md) designed to make supporting new formats and ingestion engines easy - see our [Docling Integration](docs/pipelines/docling_parser.md) for an example. Writing your own custom document analytics tools where the results get displayed beautifully over the original document [is easy](docs/walkthrough/advanced/register-doc-analyzer.md). We also support mass document [data extraction](docs/extract_and_retrieval/data_extraction.md) with our custom [LLM framework](docs/architecture/llms/README.md) built on PydanticAI.
 
 ### PDF-Annotation and Analysis:
 
@@ -39,38 +41,37 @@ OpenContracts is an **GPL-3** enterprise document analytics tool. It supports mu
 
 OpenContracts provides several key features:
 
-1. **Manage Documents** - Manage document collections (`Corpuses`)
-2. **Layout Parser** - Automatically extracts layout features from PDFs
-3. **Automatic Vector Embeddings** - generated for uploaded PDFs and extracted layout blocks
-4. **Pluggable microservice analyzer architecture** - to let you analyze documents and automatically annotate them
-5. **Pluggable Parsing Pipelines** - to let you support new document formats and ingestion engines. 
-6. **Human Annotation Interface** - to manually annotated documents, including multi-page annotations.
-7. **LlamaIndex Integration** - Use our vector stores (powered by pgvector) and any manual or automatically annotated features
-   to let an LLM intelligently answer questions.
-8. **Data Extract** - ask multiple questions across hundreds of documents using complex LLM-powered querying behavior.
-   Our sample implementation uses LlamaIndex + Marvin.
-9. **Custom Data Extract** - Custom data extract pipelines can be used on the frontend to query documents in bulk.
+1. **Document Management** - Organize documents into collections (`Corpuses`) with fine-grained permissions
+2. **Custom Metadata Schemas** - Define structured metadata fields with validation for consistent data collection
+3. **Layout Parser** - Automatically extracts layout features from PDFs using modern parsing pipelines
+4. **Automatic Vector Embeddings** - Generated for uploaded documents and extracted layout blocks (powered by pgvector)
+5. **Pluggable Analyzer Architecture** - Deploy custom microservices to analyze documents and automatically annotate them
+6. **Pluggable Parsing Pipelines** - Support new document formats with modular parsers (Docling, NLM-Ingest, etc.)
+7. **Human Annotation Interface** - Manually annotate documents with multi-page annotations and collaborative features
+8. **Custom LLM Framework** - Built on PydanticAI with conversation management, structured responses, and real-time streaming
+9. **Bulk Data Extract** - Ask multiple questions across hundreds of documents using our agent-powered querying system
+10. **Custom Extract Pipelines** - Create bespoke data extraction workflows displayed directly in the frontend
 
 ## Key Docs
 
 We recommend you [browse our docs](https://jsv4.github.io/OpenContracts/) via our Mkdocs Site. You can also view the 
 docs in the repo:
 
-1. [Quickstart Guide](docs/quick-start.md) - You'll probably want to get started quickly. Setting up locally should be
+1. [Quickstart Guide](docs/quick_start.md) - You'll probably want to get started quickly. Setting up locally should be
    pretty painless if you're already running Docker.
 2. [Basic Walkthrough](docs/walkthrough/key-concepts.md) - Check out the walkthrough to step through basic usage of the
    application for document and annotation management.
-2. [PDF Annotation Data Format Overview](docs/architecture/PDF-data-layer.md) - You may be interested how we map text to
+3. [Metadata System](docs/metadata/metadata_overview.md) - Learn how to define custom metadata schemas for your documents
+   with comprehensive validation and type safety.
+4. [PDF Annotation Data Format Overview](docs/architecture/PDF-data-layer.md) - You may be interested how we map text to
    PDFs visually and the underlying data format we're using.
-3. [Django + Pgvector Powered Hybrid Vector Database](docs/extract_and_retrieval/intro_to_django_annotation_vector_store.md)
+5. [Custom LLM Framework](docs/architecture/llms/README.md) - Our PydanticAI-based framework provides 
+   document and corpus agents with conversation management, structured responses, and real-time event streaming.
+6. [Vector Store Architecture](docs/extract_and_retrieval/vector_stores.md) -
    We've used the latest open source tooling for vector storage in postgres to make it almost trivially easy to
-   combine structured metadata and vector embeddings with an API-powered application.
-4. [LlamaIndex Integration Walkthrough](docs/extract_and_retrieval/intro_to_django_annotation_vector_store.md) - We wrote a
-   wrapper for our backend database and vector store to make it simple to load our parsed annotations, embeddings and
-   text into LlamaIndex. Even better, if you have additional annotations in the document, the LLM can access those too.
-5. [Write Custom Data Extractors](docs/walkthrough/advanced/write-your-own-extractors.md) - Custom data extract tasks (which
-   can use LlamaIndex or can be totally bespoke) are automatically loaded and displayed on the frontend to let user's
-   select how to ask questions and extract data from documents.
+   combine structured metadata and vector embeddings with our LLM agents.
+7. [Write Custom Data Extractors](docs/walkthrough/advanced/write-your-own-extractors.md) - Custom data extract tasks are
+   automatically loaded and displayed on the frontend to let users select how to ask questions and extract data from documents.
 
 ## Architecture and Data Flows at a Glance
 

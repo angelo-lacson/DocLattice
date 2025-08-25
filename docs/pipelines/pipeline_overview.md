@@ -17,21 +17,29 @@ graph TD
     A[Document Upload] --> B[Parser]
     B --> C[Thumbnailer]
     B --> D[Embedder]
+    B --> PP[Post-Processor]
 
     subgraph "Pipeline Components"
-        B --> B1[DoclingParser]
-        B --> B2[NlmIngestParser]
+        B --> B1[DoclingParser REST]
+        B --> B2[NLMIngestParser]
         B --> B3[TxtParser]
 
-        C --> C1[PdfThumbnailer]
-        C --> C2[TextThumbnailer]
+        C --> C1[PdfThumbnailGenerator]
+        C --> C2[TextThumbnailGenerator]
 
         D --> D1[MicroserviceEmbedder]
+        D --> D2[ModernBERTEmbedder]
+        D --> D3[MinnModernBERTEmbedder]
+
+        PP --> PP1[PDFRedactor]
     end
 
     C1 --> E[Document Preview]
     C2 --> E
     D1 --> F[Vector Database]
+    D2 --> F
+    D3 --> F
+    PP1 --> G[Processed Document]
 ```
 
 ### Component Registration
@@ -40,7 +48,7 @@ Components are registered in `settings/base.py` through configuration dictionari
 
 ```python
 PREFERRED_PARSERS = {
-    "application/pdf": "opencontractserver.pipeline.parsers.docling_parser.DoclingParser",
+    "application/pdf": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",
     "text/plain": "opencontractserver.pipeline.parsers.oc_text_parser.TxtParser",
     # ... other mime types
 }
@@ -79,8 +87,8 @@ class BaseParser(ABC):
 ```
 
 Current implementations:
-- **DoclingParser**: Advanced PDF parser using machine learning
-- **NlmIngestParser**: Alternative PDF parser using NLM ingestor
+- **DoclingParser**: Advanced PDF parser using machine learning (REST microservice)
+- **NLMIngestParser**: Alternative PDF parser using NLM Ingest library
 - **TxtParser**: Simple text file parser
 
 ### Thumbnailers
@@ -107,8 +115,8 @@ class BaseThumbnailGenerator(ABC):
 ```
 
 Current implementations:
-- **PdfThumbnailer**: Generates thumbnails from PDF first pages
-- **TextThumbnailer**: Creates text-based preview images
+- **PdfThumbnailGenerator**: Generates thumbnails from PDF first pages
+- **TextThumbnailGenerator**: Creates text-based preview images
 
 ### Embedders
 
@@ -130,6 +138,9 @@ class BaseEmbedder(ABC):
 
 Current implementations:
 - **MicroserviceEmbedder**: Generates embeddings using a remote service
+- **ModernBERTEmbedder**: Local ModernBERT embeddings generation
+- **MinnModernBERTEmbedder**: Minnesota Case Law specialized ModernBERT embedder
+- **CloudMinnModernBERTEmbedder**: Cloud-based Minnesota ModernBERT embedder
 
 ## Creating New Components
 

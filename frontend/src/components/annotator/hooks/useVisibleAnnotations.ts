@@ -71,12 +71,12 @@ export function useVisibleAnnotations(): (
         return true;
       }
 
-      /* structural filter - KEEP structural annotations if showStructural is true */
-      if (annot.structural) {
-        return showStructural;
+      /* structural filter - hide structural annotations if showStructural is false */
+      if (annot.structural && !showStructural) {
+        return false;
       }
 
-      /* label filter                                                    */
+      /* label filter - applies to both structural and non-structural    */
       if (
         labelFilterActive &&
         !labelFilterActive.has(annot.annotationLabel.id)

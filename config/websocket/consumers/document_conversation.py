@@ -4,9 +4,6 @@ DocumentQueryConsumer
 Provides a Channels WebSocket consumer for querying documents and streaming
 results back to the frontend. The consumer maintains a Conversation record,
 storing human and LLM messages for each session.
-
-We define a custom DocumentAgent class that wraps the llama_index OpenAIAgent
-and encapsulates database operations for reading/writing conversation messages.
 """
 
 from __future__ import annotations
@@ -200,8 +197,7 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
             A short descriptive title for the conversation
         """
 
-        from llama_index.core.llms import ChatMessage as LlamaChatMessage
-        from llama_index.llms.openai import OpenAI
+        from opencontractserver.llms.client import ChatMessage, create_client
 
         system_prompt = (
             "You are a helpful assistant that creates very concise chat titles. "
@@ -211,20 +207,17 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
 
         user_prompt = f"Create a brief title for a conversation starting with this query: {user_query}"
 
-        llm = OpenAI(
-            model="gpt-4o-mini",
-            api_key=settings.OPENAI_API_KEY,
-        )
+        client = create_client()  # Uses settings defaults
 
         messages = [
-            LlamaChatMessage(role="system", content=system_prompt),
-            LlamaChatMessage(role="user", content=user_prompt),
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=user_prompt),
         ]
 
         # Just in case the LLM fails, generate a random title
         try:
-            response = llm.chat(messages)
-            return response.message.content.strip()
+            response = client.chat(messages)
+            return response.content.strip()
         except Exception as e:
             logger.error(
                 f"[Session {self.session_id}] Error generating conversation title: {e}"
@@ -487,7 +480,7 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
 
                     else:
                         # ------------------------------------------------------------------
-                        # Legacy path: llama-index still yields UnifiedStreamResponse.
+                        # Legacy path: For frameworks that yield UnifiedStreamResponse.
                         # Treat it as a content event / final event analogue.
                         # ------------------------------------------------------------------
                         if hasattr(event, "content") and event.content:

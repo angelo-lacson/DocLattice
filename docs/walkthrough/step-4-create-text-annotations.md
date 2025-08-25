@@ -3,8 +3,14 @@ To view or edit annotations, you need to open a corpus and then open a document 
 1. Go to your Corpuses page and click on the corpus you just created:
 2. This will open up the document view again. Click on one of the documents to bring up the annotator:
    ![](../assets/images/screenshots/Annotator_View.png)
-3. To select the label to apply, Click the vertical ellipses in the "Text Label to Apply Widget". This
-   will bring up an interface that lets you search your labelset and select a label:
+3. To select or create a label to apply, click the label selector button (tag icon) in the bottom-right corner. This
+   will bring up an enhanced interface that lets you:
+   - Search existing labels by typing
+   - Create new labels on-the-fly
+   - Automatically create a labelset if none exists
+
+   > **Tip**: If your corpus doesn't have a labelset yet, the system will guide you through creating one without leaving the document view.
+
    ![](../assets/images/screenshots/Annotator_Label_Selector.png)
 4. Select the "Effective Date" label, for example, to label the Effective Date:
    ![](../assets/images/screenshots/Select_Effective_Date_Label.png)

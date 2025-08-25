@@ -1,58 +1,54 @@
 # NLM Ingest Parser
 
-The NLM Ingest Parser is a lightweight alternative to the Docling Parser that uses an NLM-Ingest REST parser for PDF document processing. Like Docling, it provides structural labels and relationships. Unlike Docling, it uses heuristics and a rules-based approach to determine the structure of the document. *Note*: The relationships _between_ annotations are not yet implemented in our conversion.
-
 ## Overview
+
+The NLM Ingest Parser is an alternative PDF document parser that leverages the [NLM Ingest](https://github.com/nlmatics/nlm-ingestor) library for document processing. It provides robust PDF parsing capabilities with a focus on layout analysis and text extraction.
+
+## Architecture
 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant N as NLMIngestParser
+    participant NP as NLMIngestParser
+    participant NI as NLM Ingest Library
+    participant PB as Poppler/PDFBox
     participant DB as Database
-    participant NLM as NLM Service
-    participant OCR as OCR Service
 
-    U->>N: parse_document(user_id, doc_id)
-    N->>DB: Load document
-    N->>N: Check OCR needs
-
-    alt PDF needs OCR
-        N->>NLM: Request with OCR
-        NLM->>OCR: Process PDF
-        OCR-->>NLM: OCR results
-    else PDF has text
-        N->>NLM: Request without OCR
-    end
-
-    NLM-->>N: OpenContracts data
-    N->>N: Process annotations
-    N-->>U: OpenContractDocExport
+    U->>NP: parse_document(user_id, doc_id)
+    NP->>DB: Load document
+    NP->>NI: Process PDF
+    NI->>PB: Extract layout/text
+    PB-->>NI: Layout blocks
+    NI-->>NP: Parsed document
+    NP->>NP: Generate PAWLS tokens
+    NP->>DB: Store parsed data
+    NP-->>U: OpenContractDocExport
 ```
 
 ## Features
 
-- **Automatic OCR Detection**: Intelligently determines OCR needs
-- **Token-based Annotations**: Provides token-level annotations
-- **Rules-Based Relationships**: Provides relationships between annotations especially well-suited to contract layouts.
-- **Simple Integration**: Easy to set up and use
-- **Configurable API**: Supports custom API endpoints and keys
+- **Layout Analysis**: Extracts document structure including headers, paragraphs, and tables
+- **Text Extraction**: Reliable text extraction from PDF documents
+- **PAWLS Compatibility**: Generates PAWLS-format token data for annotation
+- **Metadata Extraction**: Extracts document metadata and properties
+- **Page-level Processing**: Processes documents page by page for memory efficiency
 
 ## Configuration
 
-Configure the NLM Ingest Parser in your settings:
+The NLM Ingest Parser is configured through Django settings:
 
 ```python
-# Enable/disable NLM ingest
-NLM_INGESTOR_ACTIVE = env.bool("NLM_INGESTOR_ACTIVE", False)
+# Configure the parser in settings
+INSTALLED_PARSERS = [
+    "opencontractserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser",
+]
 
-# OCR configuration
-NLM_INGEST_USE_OCR = True
-
-# Service endpoint
-NLM_INGEST_HOSTNAME = "http://nlm-ingestor:5001"
-
-# Optional API key
-NLM_INGEST_API_KEY = None  # or your API key
+# Optional: Configure NLM Ingest settings
+NLM_INGEST_CONFIG = {
+    "parse_method": "auto",  # "auto", "pdfplumber", or "pypdf2"
+    "extract_tables": True,
+    "extract_images": False,
+}
 ```
 
 ## Usage
@@ -66,187 +62,196 @@ parser = NLMIngestParser()
 result = parser.parse_document(user_id=1, doc_id=123)
 ```
 
+With options:
+
+```python
+result = parser.parse_document(
+    user_id=1,
+    doc_id=123,
+    extract_tables=True,  # Extract table structures
+    parse_method="pdfplumber",  # Specify parsing backend
+)
+```
+
 ## Input
 
-The parser requires:
-- A PDF document in Django's storage
+The parser expects:
+- A PDF document stored in Django's storage system
 - A valid user ID and document ID
-- Proper NLM service configuration
+- Optional configuration parameters
 
 ## Output
 
-Returns an `OpenContractDocExport` dictionary:
+The parser returns an `OpenContractDocExport` dictionary containing:
 
 ```python
 {
+    "title": str,  # Document title if available
+    "description": str,  # Generated description
     "content": str,  # Full text content
     "page_count": int,  # Number of pages
     "pawls_file_content": List[dict],  # PAWLS token data
     "labelled_text": List[dict],  # Structural annotations
+    "doc_labels": List[dict],  # Document-level labels
+}
+```
+
+### PAWLS Token Format
+
+Each page in `pawls_file_content` contains:
+
+```json
+{
+  "page": {
+    "width": 612,
+    "height": 792,
+    "index": 0
+  },
+  "tokens": [
+    {
+      "text": "Example",
+      "bbox": {
+        "x": 100,
+        "y": 100,
+        "width": 50,
+        "height": 12
+      }
+    }
+  ]
 }
 ```
 
 ## Processing Steps
 
 1. **Document Loading**
-   - Retrieves PDF from storage
-   - Checks if OCR is needed
+   - Loads PDF from Django storage
+   - Creates temporary file for processing
 
-2. **Service Request**
-   - Prepares API headers and parameters
-   - Sends document to NLM service
-   - Handles OCR configuration
+2. **NLM Ingest Processing**
+   - Parses PDF using NLM Ingest library
+   - Extracts text blocks and layout information
+   - Identifies document structure
 
-3. **Response Processing**
-   - Validates service response
-   - Extracts OpenContracts data
-   - Processes annotations
+3. **Token Generation**
+   - Converts text blocks to PAWLS tokens
+   - Calculates bounding boxes
+   - Preserves layout information
 
-4. **Annotation Enhancement**
-   - Sets structural flags
-   - Assigns token label types
-   - Prepares final output
+4. **Annotation Creation**
+   - Creates structural annotations
+   - Labels sections, headers, paragraphs
+   - Preserves reading order
 
-## API Integration
+5. **Cleanup**
+   - Removes temporary files
+   - Returns parsed data
 
-### Request Format
+## Implementation Details
 
-```python
-# Headers
-headers = {"API_KEY": settings.NLM_INGEST_API_KEY} if settings.NLM_INGEST_API_KEY else {}
-
-# Parameters
-params = {
-    "calculate_opencontracts_data": "yes",
-    "applyOcr": "yes" if needs_ocr else "no"
-}
-
-# Files
-files = {"file": pdf_file}
-```
-
-### Endpoint
-
-```
-POST {NLM_INGEST_HOSTNAME}/api/parseDocument
-```
-
-## Error Handling
-
-The parser includes error handling for:
-- Service connection issues
-- Invalid responses
-- Missing data
-- OCR failures
-
-Example error handling:
+The parser extends the `BaseParser` class:
 
 ```python
-if response.status_code != 200:
-    logger.error(f"NLM ingest service returned status code {response.status_code}")
-    response.raise_for_status()
+class NLMIngestParser(BaseParser):
+    title = "NLM Ingest Parser"
+    description = "Parses PDF documents using NLM Ingest library"
+    supported_file_types = [FileTypeEnum.PDF]
 
-if open_contracts_data is None:
-    logger.error("No 'opencontracts_data' found in NLM ingest service response")
-    return None
+    def _parse_document_impl(
+        self, user_id: int, doc_id: int, **kwargs
+    ) -> Optional[OpenContractDocExport]:
+        # Implementation using NLM Ingest
+        pass
 ```
-
-## Dependencies
-
-Required configurations:
-- Working NLM ingest service
-- Network access to service
-- Optional API key
-- Optional OCR service
 
 ## Performance Considerations
 
-- Network latency affects processing time
-- OCR processing adds significant time
-- Service availability is critical
-- Consider rate limiting
-- Monitor service response times
-
-## Best Practices
-
-1. **Service Configuration**
-   - Use HTTPS for security
-   - Configure timeouts
-   - Handle service outages
-
-2. **OCR Usage**
-   - Enable OCR only when needed
-   - Monitor OCR processing time
-   - Consider OCR quality settings
-
-3. **Error Handling**
-   - Implement retries for failures
-   - Log service responses
-   - Monitor error rates
-
-4. **Security**
-   - Use API keys when available
-   - Validate service certificates
-   - Protect sensitive documents
-
-## Troubleshooting
-
-Common issues and solutions:
-
-1. **Service Connection**
-   ```
-   ConnectionError: Failed to connect to NLM service
-   ```
-   - Check service URL
-   - Verify network connectivity
-   - Check firewall settings
-
-2. **Authentication**
-   ```
-   401 Unauthorized
-   ```
-   - Verify API key
-   - Check key configuration
-   - Ensure key is active
-
-3. **OCR Issues**
-   ```
-   OCR processing failed
-   ```
-   - Check OCR service status
-   - Verify PDF quality
-   - Monitor OCR logs
-
-4. **Response Format**
-   ```
-   KeyError: 'opencontracts_data'
-   ```
-   - Check service version
-   - Verify response format
-   - Update parser if needed
+- **Memory Usage**: Processes pages sequentially to minimize memory
+- **Processing Time**: Typically 2-5 seconds per page
+- **File Size**: Can handle large PDF files efficiently
+- **Concurrent Processing**: Thread-safe for parallel processing
 
 ## Comparison with Docling Parser
 
-| Feature | NLM Ingest Parser | Docling Parser |
-|---------|------------------|----------------|
-| Processing | Remote | Local |
-| Setup | Simple | Complex |
-| Dependencies | Minimal | Many |
-| Control | Limited | Full |
-| Scalability | Service-dependent | Resource-dependent |
-| Customization | Limited | Extensive |
+| Feature | NLM Ingest | Docling |
+|---------|------------|---------|
+| Speed | Faster | Slower |
+| Accuracy | Good | Excellent |
+| OCR Support | Limited | Full |
+| Table Extraction | Good | Excellent |
+| Memory Usage | Lower | Higher |
+| Dependencies | Simpler | Complex |
 
-## When to Use
+## Best Practices
 
-Choose the NLM Ingest Parser when:
-- You want to offload processing
-- You need simple setup
-- You have reliable network access
-- You prefer managed services
-- You don't need extensive customization
+1. **Parser Selection**
+   - Use NLM Ingest for standard PDFs without OCR needs
+   - Use Docling for complex layouts or scanned documents
 
-Consider alternatives when:
-- You need offline processing
-- You require custom processing logic
-- You have network restrictions
-- You need full control over the pipeline
+2. **Configuration**
+   - Start with default settings
+   - Enable table extraction only when needed
+
+3. **Error Handling**
+   - Always check return values
+   - Monitor logs for parsing errors
+
+4. **Performance**
+   - Process large batches asynchronously
+   - Monitor memory usage
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Import Errors**
+   ```
+   ImportError: Cannot import nlm_ingestor
+   ```
+   - Install NLM Ingest: `pip install nlm-ingestor`
+   - Check Python version compatibility
+
+2. **Memory Issues**
+   ```
+   MemoryError during parsing
+   ```
+   - Reduce batch size
+   - Increase available memory
+   - Use page-by-page processing
+
+3. **Layout Detection Failures**
+   ```
+   Warning: Could not detect layout
+   ```
+   - Try different parse_method settings
+   - Check PDF structure/format
+   - Consider using Docling parser
+
+4. **Text Extraction Issues**
+   ```
+   Error: No text extracted
+   ```
+   - Check if PDF is scanned (needs OCR)
+   - Verify PDF is not corrupted
+   - Try force text extraction mode
+
+## Dependencies
+
+Required Python packages:
+- `nlm-ingestor`: Core parsing library
+- `pdfplumber`: PDF processing backend
+- `pypdf2`: Alternative PDF backend
+- `pillow`: Image processing support
+
+## Limitations
+
+- Limited OCR support (use Docling for OCR)
+- May struggle with complex layouts
+- Table extraction less sophisticated than Docling
+- No support for non-PDF formats
+
+## See Also
+
+- [Pipeline Overview](pipeline_overview.md)
+- [Docling Parser](docling_parser.md)
+- [Parser Base Class Documentation](../architecture/parsers.md)
+- [NLM Ingest Library](https://github.com/nlmatics/nlm-ingestor)

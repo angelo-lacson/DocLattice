@@ -14,6 +14,7 @@ import {
 import _ from "lodash";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
+import { navigateToDocument } from "../../utils/navigationUtils";
 
 import {
   editingDocument,
@@ -43,6 +44,10 @@ const StyledCard = styled(Card)`
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
     overflow: hidden;
+    width: 100% !important;
+    margin: 0 !important;
+    display: flex;
+    flex-direction: column;
 
     &:hover {
       box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -51,12 +56,17 @@ const StyledCard = styled(Card)`
 
     .content {
       padding: 1.2em;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
     }
 
     .header {
       font-size: 1.2em;
       font-weight: 600;
       margin-bottom: 0.5em;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
 
     .meta {
@@ -68,6 +78,9 @@ const StyledCard = styled(Card)`
       margin-top: 1em;
       font-size: 0.95em;
       line-height: 1.4;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .extra {
@@ -321,10 +334,14 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
           icon: "book",
           onClick: () => {
             const currentCorpus = openedCorpus();
-            if (currentCorpus) {
-              navigate(`/corpus/${currentCorpus.id}/document/${item.id}`);
-              if (onClick) onClick(item);
-            }
+            // Use smart navigation to prefer slugs and prevent redirects
+            navigateToDocument(
+              item as any,
+              currentCorpus as any,
+              navigate,
+              window.location.pathname
+            );
+            if (onClick) onClick(item);
           },
         },
         {
@@ -444,14 +461,6 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             <Label.Group size="mini">{doc_labels}</Label.Group>
           </Card.Content>
         ) : null}
-        <Card.Content extra>
-          <Statistic.Group size="mini" widths={3}>
-            <MyPermissionsIndicator
-              myPermissions={myPermissions}
-              isPublic={isPublic}
-            />
-          </Statistic.Group>
-        </Card.Content>
       </StyledCard>
 
       {contextMenuState.open && contextMenuState.id === id && (

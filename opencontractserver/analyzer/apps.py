@@ -20,3 +20,6 @@ class AnnotationsConfig(AppConfig):
 
         except ImportError:
             pass
+
+        # Register system checks
+        from opencontractserver.analyzer import checks  # noqa F401

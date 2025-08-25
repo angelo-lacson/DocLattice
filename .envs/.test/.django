@@ -40,6 +40,7 @@ USE_AUTH0=false
 # ------------------------------------------------------------------------------
 OPENAI_API_KEY=fake
 OPENAI_MODEL=gpt-4o
+ANTHROPIC_API_KEY=fake
 
 # Set Proper Settings Module
 # ------------------------------------------------------------------------------

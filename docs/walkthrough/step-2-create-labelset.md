@@ -4,8 +4,9 @@ Before you can add labels, you need to decide what you want to label. A labelset
 you want to associate with text in your document. This can be solely for the purpose of human review and retrieval,
 but we imagine many of you want to use it to train machine learning models.
 
-At the moment, there's no way to create a label in a corpus without creating a labelset and creating a label for the labelset
-(though we'd like to add that and welcome contributions).
+> **Smart Label System**: OpenContracts now includes a Smart Label System that automatically handles labelset creation. When annotating documents, if no labelset exists, the system will prompt you to create one directly from the annotation view. You can also create labels on-the-fly while annotating. See [Smart Label Management](../frontend/document_rendering_and_annotation.md#smart-label-management) for details.
+
+You can still manually create labelsets and labels using the process below, or let the system handle it automatically during annotation.
 
 ## Create Text Labels
 Let's say we want to add some labels for "Parties", "Termination Clause", and "Effective Date". To do that, let's

@@ -19,9 +19,13 @@ import {
   selectedAnnotation,
 } from "../../graphql/cache";
 import wait_icon from "../../assets/icons/waiting for robo.webp";
-import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
+import { Prism as SyntaxHighlighterBase } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/esm/styles/prism";
+
+// Type assertion to fix TypeScript issue with react-syntax-highlighter
+const SyntaxHighlighter = SyntaxHighlighterBase as any;
 import { useNavigate } from "react-router-dom";
+import { getDocumentUrl } from "../../utils/navigationUtils";
 
 interface QueryResultsViewerProps {
   query_obj: CorpusQueryType;
@@ -43,11 +47,18 @@ const QueryResultsViewer: React.FC<QueryResultsViewerProps> = ({
       displayAnnotationOnAnnotatorLoad(viewSourceAnnotation);
       selectedAnnotation(viewSourceAnnotation);
       if (viewSourceAnnotation.corpus && viewSourceAnnotation.document) {
-        const corpusId = viewSourceAnnotation.corpus.id;
-        const docId = viewSourceAnnotation.document!.id;
-        navigate(
-          `/corpus/${corpusId}/document/${docId}?ann=${viewSourceAnnotation.id}`
+        const url = getDocumentUrl(
+          viewSourceAnnotation.document,
+          viewSourceAnnotation.corpus
         );
+        if (url !== "#") {
+          navigate(`${url}?ann=${viewSourceAnnotation.id}`);
+        } else {
+          console.warn(
+            "Cannot navigate - missing slugs:",
+            viewSourceAnnotation
+          );
+        }
       }
       onlyDisplayTheseAnnotations([viewSourceAnnotation]);
       setViewSourceAnnotation(null);

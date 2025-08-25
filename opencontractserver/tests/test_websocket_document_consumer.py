@@ -152,10 +152,10 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
                 f"[_assert_streaming_flow] Detected new event types for pydantic-ai: {sorted(other_types)}"
             )
         else:
-            # For llama-index we assert the legacy contract remains unchanged
+            # For legacy frameworks we assert the legacy contract remains unchanged
             self.assertTrue(
                 all_message_types.issubset(expected_canonical_msg_types),
-                "Llama-Index should *not* emit the new granular event types.",
+                "Legacy frameworks should *not* emit the new granular event types.",
             )
 
         # The expected_response_key ("query1_response" or "query2_response") is used directly

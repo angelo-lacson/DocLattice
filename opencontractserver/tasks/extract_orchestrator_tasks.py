@@ -77,8 +77,41 @@ def run_extract(extract_id: Optional[str | int], user_id: str | int):
                     )
                     continue
 
+                logger.info(
+                    f"  Created datacell {cell.pk} for column '{column.name}' with task '{column.task_name}'"
+                )
+
                 # Add the task to the group
                 tasks.append(task_func.si(cell.pk))
 
-    chord(group(*tasks))(mark_extract_complete.si(extract_id))
+    # Execute the tasks
+    if tasks:
+        # Check if we're in eager mode (test/synchronous execution)
+        from celery import current_app
+
+        if current_app.conf.task_always_eager:
+            # In eager mode, chord doesn't work properly, so execute tasks manually
+            logger.info(
+                f"EAGER MODE: Running {len(tasks)} extraction tasks synchronously"
+            )
+            for i, task in enumerate(tasks, 1):
+                logger.info(f"  Executing task {i}/{len(tasks)}...")
+                try:
+                    result = task.apply()
+                    logger.info(f"    Task {i} completed successfully: {result}")
+                except Exception as e:
+                    logger.error(f"    Task {i} failed with error: {e}", exc_info=True)
+            # Then mark complete
+            logger.info("All tasks executed, marking extract as complete")
+            mark_extract_complete(extract_id)
+        else:
+            # Normal async execution with chord
+            chord(group(*tasks))(mark_extract_complete.si(extract_id))
+            logger.info(
+                f"ASYNC MODE: Queued {len(tasks)} extraction tasks for background execution"
+            )
+    else:
+        logger.warning(f"No extraction tasks to run for extract {extract.id}")
+        mark_extract_complete(extract_id)
+
     logger.info(f"Extract processing initiated for extract {extract.id}")
