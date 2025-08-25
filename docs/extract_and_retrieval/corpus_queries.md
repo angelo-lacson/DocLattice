@@ -349,7 +349,7 @@ Prevent abuse with rate limits:
 
 ## Further Reading
 
-- [Agent Factory Implementation](../implementation/agent_factory.md)
-- [Event Classes Reference](../api/events.md)
-- [Frontend WebSocket Utils](../frontend/websocket.md)
+- [LLM Agent Architecture](../architecture/llms/README.md)
+- [WebSocket Backend Implementation](../architecture/websocket/backend.md)
+- [WebSocket Frontend Implementation](../architecture/websocket/frontend.md)
 - [Vector Store Architecture](./vector_stores.md)

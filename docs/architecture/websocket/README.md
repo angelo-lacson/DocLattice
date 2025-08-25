@@ -259,10 +259,10 @@ When contributing to the WebSocket system:
 
 ## 📄 Related Documentation
 
-- [Main Architecture Documentation](../README.md)
-- [LLM Agent Architecture](../llm-agents.md)
-- [Database Schema](../database.md)
-- [API Documentation](../api.md)
+- [LLM Agent Architecture](../llms/README.md)
+- [API Documentation](../../extract_and_retrieval/api_reference.md)
+- [Data Model Overview](../data_model/annotation_json.md)
+- [PDF Data Layer](../PDF-data-layer.md)
 
 ---
 
