@@ -1,12 +1,12 @@
 # Read-Only Mode Component Inventory
 
 > **Note**: This document has been reorganized. For comprehensive permission and read-only mode documentation, see:
-> - [Read-Only Mode Implementation](../permissioning/read-only-mode.md) - Complete guide to read-only mode
-> - [Component Permission Patterns](../permissioning/component-patterns.md) - Implementation patterns
-> - [Testing Permissions](../permissioning/testing-permissions.md) - Testing strategies
+> - [Read-Only Mode Implementation](../permissioning/read_only_mode.md) - Complete guide to read-only mode
+> - [Consolidated Permissioning Guide](../permissioning/consolidated_permissioning_guide.md) - Implementation patterns
+> - [Testing Permissions](../permissioning/testing_permissions.md) - Testing strategies
 
 ## Overview
-This document provides implementation status for read-only mode across components. For the complete read-only mode guide, see [Read-Only Mode Implementation](../permissioning/read-only-mode.md).
+This document provides implementation status for read-only mode across components. For the complete read-only mode guide, see [Read-Only Mode Implementation](../permissioning/read_only_mode.md).
 
 ## Current Status Summary
 - **Core Document Functionality**: ✅ Complete (PDF, TXT viewers, annotations, notes)

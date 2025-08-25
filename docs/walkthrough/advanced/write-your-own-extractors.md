@@ -154,7 +154,7 @@ if datacell.column.limit_to_label:
 
 ## Testing Your Custom Extractor
 
-Follow the async testing patterns described in the [Data Extraction guide](../../extract_and_retrieval/data_extraction.md#async-task-decorators):
+Follow the async testing patterns described in the [Data Extraction guide](../../extract_and_retrieval/data_extraction.md#async-task-decorator-pattern):
 
 ```python
 from django.test import TransactionTestCase

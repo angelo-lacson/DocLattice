@@ -170,6 +170,6 @@ If migrating from the legacy annotation-based system:
 
 ## Next Steps
 
-- Review the [technical documentation](./metadata-fields.md) for detailed architecture information
-- Explore [API examples](./metadata-api-examples.md) for integration patterns
-- Check [frontend requirements](./metadata-frontend-requirements.md) for UI implementation details
+- Review the [technical documentation](./metadata_fields.md) for detailed architecture information
+- Explore [API examples](./metadata_api_examples.md) for integration patterns
+- Check [frontend requirements](./metadata_frontend_requirements.md) for UI implementation details
