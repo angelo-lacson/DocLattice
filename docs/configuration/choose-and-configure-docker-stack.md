@@ -90,12 +90,12 @@ def update_site_backward(apps, schema_editor):
  """Revert site domain and name to default.""" Site = apps.get_model("sites", "Site") Site.objects.update_or_create( id=settings.SITE_ID, defaults={"domain": "example.com", "name": "example.com"} )
 ```
 
-Finally, don't forget to configure Treafik, the router in the docker-compose stack that exposes different containers to
-end-users depending on the route (url) received you need to update the Treafik file [here](/compose/production/traefik/traefik.yml).
+Finally, don't forget to configure Traefik, the router in the docker-compose stack that exposes different containers to
+end-users depending on the route (url) received. You need to update the Traefik file at `compose/production/traefik/traefik.yml` in your repository.
 
-If you're using Auth0, see the [Auth0 configuration section](#### Auth0 Configuration).
+If you're using Auth0, see the [Auth0 configuration section](choose-an-authentication-backend.md#auth0-auth-setup).
 
-If you're using AWS S3 for file storage, see the [AWS configuration](#### AWS Configuration) section. NOTE, the underlying django library that provides cloud storage, django-storages, can also work with other cloud providers such as Azure and GCP. See the django storages library docs for more info.
+If you're using AWS S3 for file storage, see the [AWS configuration](choose-storage-backend.md#aws-storage-backend) section. NOTE, the underlying django library that provides cloud storage, django-storages, can also work with other cloud providers such as Azure and GCP. See the django storages library docs for more info.
 
 ```commandline
 $ docker-compose -f production.yml build

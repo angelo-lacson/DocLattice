@@ -316,6 +316,6 @@ Common issues and solutions:
 ## See Also
 
 - [Pipeline Overview](pipeline_overview.md)
-- [Parser Base Class Documentation](../architecture/parsers.md)
+- [PDF Data Layer Architecture](../architecture/PDF-data-layer.md)
 - [Document Processing Flow](../architecture/asynchronous-processing.md)
 - [Docling Library](https://github.com/DS4SD/docling)

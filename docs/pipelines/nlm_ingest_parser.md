@@ -253,5 +253,5 @@ Required Python packages:
 
 - [Pipeline Overview](pipeline_overview.md)
 - [Docling Parser](docling_parser.md)
-- [Parser Base Class Documentation](../architecture/parsers.md)
+- [PDF Data Layer Architecture](../architecture/PDF-data-layer.md)
 - [NLM Ingest Library](https://github.com/nlmatics/nlm-ingestor)
