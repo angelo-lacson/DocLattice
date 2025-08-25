@@ -73,7 +73,9 @@ class NLMIngestParser(BaseParser):
             # Prepare request headers
             logger.info(f"Using NLM API key: {'*' * 8 if api_key else 'None'}")
             headers = {"API_KEY": api_key} if api_key else {}
-            logger.info(f"Using NLM headers with API key: {'present' if headers.get('API_KEY') else 'absent'}")
+            logger.info(
+                f"Using NLM headers with API key: {'present' if headers.get('API_KEY') else 'absent'}"
+            )
 
             # Reset file pointer
             doc_file.seek(0)

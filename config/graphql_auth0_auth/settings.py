@@ -20,12 +20,10 @@ DEFAULTS = {
 }
 
 logger.debug(
-    f"Auth0 settings initialized with domain: [REDACTED], client ID: [REDACTED]"
+    "Auth0 settings initialized with domain: [REDACTED], client ID: [REDACTED]"
 )
 logger.debug(f"AUTH0_CREATE_NEW_USERS set to: {DEFAULTS['AUTH0_CREATE_NEW_USERS']}")
-logger.debug(
-    "AUTH0_GET_USER_FROM_TOKEN_HANDLER configured"
-)
+logger.debug("AUTH0_GET_USER_FROM_TOKEN_HANDLER configured")
 
 IMPORT_STRINGS = (
     "AUTH0_DECODE_HANDLER",
