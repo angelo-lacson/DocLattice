@@ -29,7 +29,7 @@ The metadata system uses three core models:
 
 ### Related Documentation
 
-- **[Data Extract Models](../walkthrough/advanced/data-extract-models.md)** - Understanding the extraction system that shares the same infrastructure
+- **[Extraction Tutorial](../walkthrough/advanced/extraction_tutorial.md)** - Understanding the extraction system that shares the same infrastructure
 - **[Corpus Management](../walkthrough/step-3-create-a-corpus.md)** - How to create and manage corpuses with metadata
 
 ## Quick Start

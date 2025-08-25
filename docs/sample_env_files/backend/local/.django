@@ -9,7 +9,9 @@ DJANGO_SUPERUSER_USERNAME=admin
 # ------------------------------------------------------------------------------
 USE_DOCKER=yes
 IPYTHONDIR=/app/.ipython
-DJANGO_SECRET_KEY=
+# IMPORTANT: Generate a unique secret key for production!
+# You can generate one with: python -c "import secrets; print(secrets.token_urlsafe(50))"
+DJANGO_SECRET_KEY=your-secret-key-change-this-in-production
 DJANGO_ADMIN_URL=admin/ItChL90Tnz71PZARMPtmZifuQczgho6l/
 DJANGO_ALLOWED_HOSTS=django,127.0.0.1,localhost,0.0.0.0
 
@@ -30,8 +32,8 @@ REDIS_URL=redis://redis:6379/0
 # ------------------------------------------------------------------------------
 
 # Flower
-CELERY_FLOWER_USER=
-CELERY_FLOWER_PASSWORD=
+CELERY_FLOWER_USER=admin
+CELERY_FLOWER_PASSWORD=changeme123
 
 # AUTH0
 # ------------------------------------------------------------------------------

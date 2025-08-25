@@ -6,9 +6,9 @@ This guide shows you how to create custom data extraction pipelines for OpenCont
 
 Before writing custom extractors, familiarize yourself with:
 
-- **[Document Data Extract Overview](../../extract_and_retrieval/document_data_extract.md)** - Understanding the extraction pipeline and orchestration
-- **[Django Annotation Vector Store](../../extract_and_retrieval/intro_to_django_annotation_vector_store.md)** - How OpenContracts integrates with vector search
-- **[Querying Corpus](../../extract_and_retrieval/querying_corpus.md)** - Understanding the async query patterns
+- **[Data Extraction Overview](../../extract_and_retrieval/data_extraction.md)** - Understanding the extraction pipeline and orchestration
+- **[Vector Store Architecture](../../extract_and_retrieval/vector_stores.md)** - How OpenContracts integrates with vector search
+- **[Corpus Queries](../../extract_and_retrieval/corpus_queries.md)** - Understanding the async query patterns
 
 ## Column Model
 
@@ -154,7 +154,7 @@ if datacell.column.limit_to_label:
 
 ## Testing Your Custom Extractor
 
-Follow the async testing patterns described in the [Document Data Extract guide](../../extract_and_retrieval/document_data_extract.md#async-task-decorators):
+Follow the async testing patterns described in the [Data Extraction guide](../../extract_and_retrieval/data_extraction.md#async-task-decorators):
 
 ```python
 from django.test import TransactionTestCase
@@ -176,6 +176,6 @@ The task description comes from your function's docstring, so make it descriptiv
 
 ## Next Steps
 
-- **Read the [extraction pipeline overview](../../extract_and_retrieval/document_data_extract.md)** for orchestration details
-- **Explore [vector store integration](../../extract_and_retrieval/intro_to_django_annotation_vector_store.md)** for advanced retrieval
-- **Check [async patterns](../../extract_and_retrieval/querying_corpus.md)** for WebSocket integration examples
+- **Read the [extraction pipeline overview](../../extract_and_retrieval/data_extraction.md)** for orchestration details
+- **Explore [vector store integration](../../extract_and_retrieval/vector_stores.md)** for advanced retrieval
+- **Check [async patterns](../../extract_and_retrieval/corpus_queries.md)** for WebSocket integration examples

@@ -15,7 +15,7 @@
 
 **Knowledge is power. Software is a tool.** OpenContracts is **FREE and OPEN SOURCE** software designed to put knowledge owners and subject matter experts in charge of their knowledge. Store it in an accessible and exportable format, and make it work with emerging agentic workflows and techniques.
 
-OpenContracts is a **GPL-3.0** enterprise document analytics tool. It supports multiple formats - including PDF and txt-based formats (with more on the way). It also supports multiple document ingestion pipelines with a [pluggable architecture](docs/pipelines/pipeline_overview.md) designed to make supporting new formats and ingestion engines easy - see our [Docling Integration](docs/pipelines/docling_parser.md) for an example. Writing your own custom document analytics tools where the results get displayed beautifully over the original document [is easy](docs/walkthrough/advanced/register-doc-analyzer.md). We also support mass document [data extraction](docs/extract_and_retrieval/intro_to_django_annotation_vector_store.md) with our custom [LLM framework](docs/architecture/llms/README.md) built on PydanticAI.
+OpenContracts is a **GPL-3.0** enterprise document analytics tool. It supports multiple formats - including PDF and txt-based formats (with more on the way). It also supports multiple document ingestion pipelines with a [pluggable architecture](docs/pipelines/pipeline_overview.md) designed to make supporting new formats and ingestion engines easy - see our [Docling Integration](docs/pipelines/docling_parser.md) for an example. Writing your own custom document analytics tools where the results get displayed beautifully over the original document [is easy](docs/walkthrough/advanced/register-doc-analyzer.md). We also support mass document [data extraction](docs/extract_and_retrieval/data_extraction.md) with our custom [LLM framework](docs/architecture/llms/README.md) built on PydanticAI.
 
 ### PDF-Annotation and Analysis:
 
@@ -67,7 +67,7 @@ docs in the repo:
    PDFs visually and the underlying data format we're using.
 5. [Custom LLM Framework](docs/architecture/llms/README.md) - Our PydanticAI-based framework provides 
    document and corpus agents with conversation management, structured responses, and real-time event streaming.
-6. [Django + Pgvector Powered Hybrid Vector Database](docs/extract_and_retrieval/intro_to_django_annotation_vector_store.md) -
+6. [Vector Store Architecture](docs/extract_and_retrieval/vector_stores.md) -
    We've used the latest open source tooling for vector storage in postgres to make it almost trivially easy to
    combine structured metadata and vector embeddings with our LLM agents.
 7. [Write Custom Data Extractors](docs/walkthrough/advanced/write-your-own-extractors.md) - Custom data extract tasks are

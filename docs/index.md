@@ -39,7 +39,7 @@ OpenContracts is an **Apache-2 Licensed** enterprise document analytics tool. It
    with comprehensive validation and type safety.
 4. [PDF Annotation Data Format Overview](architecture/PDF-data-layer.md) - You may be interested how we map text to
    PDFs visually and the underlying data format we're using.
-5. [Django + Pgvector Powered Hybrid Vector Database](extract_and_retrieval/intro_to_django_annotation_vector_store.md)
+5. [Vector Store Architecture](extract_and_retrieval/vector_stores.md)
    We've used the latest open source tooling for vector storage in postgres to make it almost trivially easy to
    combine structured metadata and vector embeddings with an API-powered application.
 6. [Write Custom Data Extractors](walkthrough/advanced/write-your-own-extractors.md) - Custom data extract tasks are
