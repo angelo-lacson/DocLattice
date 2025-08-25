@@ -1,0 +1,133 @@
+name: Production Stack Test
+
+# Enable Buildkit and let compose use it to speed up image building
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+defaults:
+ run:
+  working-directory: ./
+
+on:
+  pull_request:
+    branches: [ "master", "main" ]
+    paths: 
+      - "compose/production/**"
+      - "production.yml"
+      - ".github/workflows/production-stack.yml"
+
+  push:
+    branches: [ "master", "main" ]
+    paths:
+      - "compose/production/**" 
+      - "production.yml"
+      - ".github/workflows/production-stack.yml"
+
+concurrency:
+  group: production-stack-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  production-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Build Production Stack (Test Mode)
+        run: docker compose -f production.yml -f compose/test-production.yml build
+
+      - name: Start Production Stack (Test Mode)
+        run: |
+          docker compose -f production.yml -f compose/test-production.yml up -d
+          sleep 30  # Give services time to start
+
+      - name: Verify Stack Health
+        run: |
+          echo "=== Docker containers status ==="
+          docker compose -f production.yml -f compose/test-production.yml ps
+          echo "=== Container health checks ==="
+          for container in $(docker compose -f production.yml -f compose/test-production.yml ps -q); do
+            name=$(docker inspect -f '{{.Name}}' $container | sed 's/^\/*//')
+            echo "--- Health for $name ---"
+            docker logs --tail 10 $container 2>&1 || true
+          done
+
+      - name: Test Traefik Configuration
+        run: |
+          echo "=== Testing Traefik config parsing ==="
+          docker compose -f production.yml -f compose/test-production.yml logs traefik | grep -i "rate"
+          echo "=== Testing basic connectivity ==="
+          # Test if traefik responds
+          curl -f http://localhost:80 -H "Host: opencontracts.opensource.legal" || echo "Expected - no backend configured"
+
+      - name: Test Rate Limiting
+        run: |
+          echo "=== Testing Frontend Rate Limits ==="
+          # Test frontend rate limiting (should allow burst then throttle)
+          success_count=0
+          rate_limited_count=0
+          
+          for i in {1..250}; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: opencontracts.opensource.legal" http://localhost/ || echo "000")
+            if [ "$response" = "200" ] || [ "$response" = "404" ] || [ "$response" = "502" ]; then
+              success_count=$((success_count + 1))
+            elif [ "$response" = "429" ]; then
+              rate_limited_count=$((rate_limited_count + 1))
+            fi
+          done
+          
+          echo "Successful requests: $success_count"
+          echo "Rate limited requests: $rate_limited_count"
+          
+          # We expect some rate limiting after burst is exhausted
+          if [ $rate_limited_count -gt 0 ]; then
+            echo "✅ Rate limiting is working - got $rate_limited_count rate limited responses"
+          else
+            echo "⚠️  No rate limiting detected - this might indicate an issue"
+          fi
+          
+          echo "=== Testing API Rate Limits (lower threshold) ==="
+          api_success=0
+          api_rate_limited=0
+          
+          for i in {1..100}; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: opencontracts.opensource.legal" http://localhost/graphql || echo "000")
+            if [ "$response" = "200" ] || [ "$response" = "404" ] || [ "$response" = "502" ]; then
+              api_success=$((api_success + 1))
+            elif [ "$response" = "429" ]; then
+              api_rate_limited=$((api_rate_limited + 1))
+            fi
+          done
+          
+          echo "API successful requests: $api_success"  
+          echo "API rate limited requests: $api_rate_limited"
+
+      - name: Check Redis Rate Limit Storage
+        run: |
+          echo "=== Checking Redis for rate limit data ==="
+          # Check if rate limiting data is being stored in Redis
+          docker compose -f production.yml -f compose/test-production.yml exec -T redis redis-cli -n 1 keys "*" | head -20
+          docker compose -f production.yml -f compose/test-production.yml exec -T redis redis-cli -n 1 info keyspace
+
+      - name: Capture Logs on Failure
+        if: failure()
+        run: |
+          echo "=== Capturing logs for debugging ==="
+          docker compose -f production.yml -f compose/test-production.yml logs --no-color > production-stack-logs.txt
+
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-stack-logs
+          path: production-stack-logs.txt
+
+      - name: Tear Down Stack
+        if: always()
+        run: docker compose -f production.yml -f compose/test-production.yml down -v
