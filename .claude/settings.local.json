@@ -60,7 +60,8 @@
       "Read(//home/jman/test-opencontracts/OpenContracts/**)",
       "Read(//home/jman/test-opencontracts/OpenContracts/**)",
       "Read(//home/jman/test-opencontracts/OpenContracts/**)",
-      "Read(//home/jman/test-opencontracts/OpenContracts/**)"
+      "Read(//home/jman/test-opencontracts/OpenContracts/**)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
