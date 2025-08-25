@@ -90,6 +90,12 @@ def process_analyzer(
     analysis_input_data: dict | None = None,
 ) -> Analysis:
 
+    logger.info(
+        f"process_analyzer called - user_id: {user_id}, analyzer: {analyzer.id if analyzer else None}"
+    )
+    logger.info(f"corpus_id: {corpus_id}, document_ids: {document_ids}")
+    logger.info(f"analysis_input_data: {analysis_input_data}")
+
     analysis = create_and_setup_analysis(
         analyzer,
         user_id,
@@ -98,9 +104,12 @@ def process_analyzer(
         corpus_action=corpus_action,
     )
 
-    print(f"process_analyzer(...) - created analysis: {analysis}")
+    logger.info(
+        f"Analysis object created: {analysis.id}, analyzer: {analysis.analyzer.id if analysis.analyzer else None}"
+    )
 
     if analyzer.task_name:
+        logger.info(f"Using task_name analyzer: {analyzer.task_name}")
 
         transaction.on_commit(
             lambda: run_task_name_analyzer.si(
@@ -111,7 +120,7 @@ def process_analyzer(
         )
 
     else:
-        logger.info(f" - retrieved analysis: {analysis}")
+        logger.info(f"Using standard analyzer - retrieved analysis: {analysis}")
         transaction.on_commit(
             lambda: start_analysis.s(
                 analysis_id=analysis.id, doc_ids=document_ids

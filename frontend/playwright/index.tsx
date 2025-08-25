@@ -1,5 +1,8 @@
 // Import styles, initialize component theme here.
 // import '../src/common.css';
+import "../src/assets/styles/semantic.css";
+import "../src/App.css";
+import "react-toastify/dist/ReactToastify.css";
 
 import React from "react";
 import {

@@ -19,19 +19,67 @@ const initialMocks = [
     result: {
       data: {
         corpuses: {
+          pageInfo: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: null,
+            endCursor: null,
+          },
           edges: [
             {
               node: {
                 id: "1",
+                slug: "corpus-1",
+                icon: null,
                 title: "Corpus 1",
+                creator: {
+                  email: "test@example.com",
+                  slug: "test-user",
+                },
                 description: "Description 1",
+                preferredEmbedder: null,
+                appliedAnalyzerIds: [],
+                isPublic: false,
+                is_selected: false,
+                is_open: false,
+                myPermissions: [],
+                parent: null,
+                annotations: {
+                  totalCount: 0,
+                },
+                documents: {
+                  totalCount: 0,
+                  edges: [],
+                },
+                labelSet: null,
               },
             },
             {
               node: {
                 id: "2",
+                slug: "corpus-2",
+                icon: null,
                 title: "Corpus 2",
+                creator: {
+                  email: "test@example.com",
+                  slug: "test-user",
+                },
                 description: "Description 2",
+                preferredEmbedder: null,
+                appliedAnalyzerIds: [],
+                isPublic: false,
+                is_selected: false,
+                is_open: false,
+                myPermissions: [],
+                parent: null,
+                annotations: {
+                  totalCount: 0,
+                },
+                documents: {
+                  totalCount: 0,
+                  edges: [],
+                },
+                labelSet: null,
               },
             },
           ],
@@ -46,7 +94,19 @@ const initialMocks = [
 const searchMocks = [
   {
     request: { query: GET_CORPUSES, variables: {} },
-    result: { data: { corpuses: { edges: [] } } },
+    result: {
+      data: {
+        corpuses: {
+          pageInfo: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: null,
+            endCursor: null,
+          },
+          edges: [],
+        },
+      },
+    },
     delay: 10, // initial in search case
   },
   {
@@ -54,12 +114,86 @@ const searchMocks = [
     result: {
       data: {
         corpuses: {
+          pageInfo: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: null,
+            endCursor: null,
+          },
           edges: [
             {
               node: {
                 id: "1",
+                slug: "corpus-1",
+                icon: null,
                 title: "Corpus 1",
+                creator: {
+                  email: "test@example.com",
+                  slug: "test-user",
+                },
                 description: "Description 1",
+                preferredEmbedder: null,
+                appliedAnalyzerIds: [],
+                isPublic: false,
+                is_selected: false,
+                is_open: false,
+                myPermissions: [],
+                parent: null,
+                annotations: {
+                  totalCount: 0,
+                },
+                documents: {
+                  totalCount: 0,
+                  edges: [],
+                },
+                labelSet: null,
+              },
+            },
+          ],
+        },
+      },
+    },
+    delay: 10,
+  },
+  // Duplicate mock for potential second query with same search term
+  {
+    request: { query: GET_CORPUSES, variables: { textSearch: "Corpus 1" } },
+    result: {
+      data: {
+        corpuses: {
+          pageInfo: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: null,
+            endCursor: null,
+          },
+          edges: [
+            {
+              node: {
+                id: "1",
+                slug: "corpus-1",
+                icon: null,
+                title: "Corpus 1",
+                creator: {
+                  email: "test@example.com",
+                  slug: "test-user",
+                },
+                description: "Description 1",
+                preferredEmbedder: null,
+                appliedAnalyzerIds: [],
+                isPublic: false,
+                is_selected: false,
+                is_open: false,
+                myPermissions: [],
+                parent: null,
+                annotations: {
+                  totalCount: 0,
+                },
+                documents: {
+                  totalCount: 0,
+                  edges: [],
+                },
+                labelSet: null,
               },
             },
           ],
@@ -96,11 +230,11 @@ describe("CorpusDropdown", () => {
     fireEvent.click(within(listbox).getByText("Corpus 1"));
 
     await waitFor(() => {
-      expect(selectedCorpus()).toEqual({
-        id: "1",
-        title: "Corpus 1",
-        description: "Description 1",
-      });
+      const selected = selectedCorpus();
+      expect(selected).toBeTruthy();
+      expect(selected?.id).toBe("1");
+      expect(selected?.title).toBe("Corpus 1");
+      expect(selected?.description).toBe("Description 1");
       expect(dropdownElement).toHaveTextContent("Corpus 1");
     });
   });

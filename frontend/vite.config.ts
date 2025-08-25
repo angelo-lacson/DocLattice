@@ -19,6 +19,26 @@ const assetPlugin = () => {
 export default defineConfig({
   base: "/",
   plugins: [react(), assetPlugin()],
+  server: {
+    proxy: {
+      // Proxy WebSocket connections to Django backend
+      "/ws": {
+        target: "ws://localhost:8000",
+        ws: true,
+        changeOrigin: true,
+      },
+      // Also proxy GraphQL API calls to Django backend
+      "/graphql": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      // Proxy other API endpoints if needed
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+    },
+  },
   // Add asset handling for Playwright tests
   assetsInclude: [
     "**/*.png",

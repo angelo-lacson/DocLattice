@@ -1,18 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, memo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
+import { Settings, Eye, BarChart3, Database, Plus } from "lucide-react";
+import { useCorpusState } from "../../annotator/context/CorpusAtom";
 import {
-  Settings,
-  Square,
-  Layers,
-  User,
-  Eye,
-  EyeOff,
-  BarChart3,
-  Database,
-} from "lucide-react";
-import { Checkbox, CheckboxProps } from "semantic-ui-react";
-import { useAnnotationDisplay } from "../../annotator/context/UISettingsAtom";
+  useDocumentPermissions,
+  useDocumentState,
+} from "../../annotator/context/DocumentAtom";
+import {
+  showSelectCorpusAnalyzerOrFieldsetModal,
+  openedCorpus,
+} from "../../../graphql/cache";
+import { PermissionTypes } from "../../types";
+import { AnnotationControls } from "../../annotator/controls/AnnotationControls";
 
 const ControlsContainer = styled(motion.div)<{ $panelOffset?: number }>`
   position: fixed;
@@ -106,21 +106,6 @@ const ControlItem = styled.div`
   }
 `;
 
-const ControlLabel = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #1e293b;
-
-  svg {
-    width: 18px;
-    height: 18px;
-    color: #64748b;
-  }
-`;
-
 const PanelHeader = styled.div`
   display: flex;
   align-items: center;
@@ -139,33 +124,11 @@ const PanelHeader = styled.div`
   }
 `;
 
-const StyledCheckbox = styled(Checkbox)`
-  &&& {
-    transform: scale(1.1);
-
-    label {
-      padding-left: 1.75rem !important;
-
-      &:before {
-        border-color: #e2e8f0 !important;
-        border-radius: 4px !important;
-      }
-
-      &:after {
-        border-radius: 2px !important;
-      }
-    }
-
-    &.checked label:before {
-      border-color: #3b82f6 !important;
-      background: #3b82f6 !important;
-    }
-  }
-`;
-
 interface FloatingDocumentControlsProps {
   /** Whether to show the controls (e.g., only in document layer) */
   visible?: boolean;
+  /** Whether the right panel is currently shown */
+  showRightPanel?: boolean;
   /** Callback when analyses button is clicked */
   onAnalysesClick?: () => void;
   /** Callback when extracts button is clicked */
@@ -176,162 +139,327 @@ interface FloatingDocumentControlsProps {
   extractsOpen?: boolean;
   /** Offset to apply when sliding panel is open */
   panelOffset?: number;
+  /** When true, hide create/edit functionality */
+  readOnly?: boolean;
 }
 
-export const FloatingDocumentControls: React.FC<
-  FloatingDocumentControlsProps
-> = ({
-  visible = true,
-  onAnalysesClick,
-  onExtractsClick,
-  analysesOpen = false,
-  extractsOpen = false,
-  panelOffset = 0,
-}) => {
-  const [expandedSettings, setExpandedSettings] = useState(false);
+export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
+  memo(
+    ({
+      visible = true,
+      showRightPanel = false,
+      onAnalysesClick,
+      onExtractsClick,
+      analysesOpen = false,
+      extractsOpen = false,
+      panelOffset = 0,
+      readOnly = false,
+    }) => {
+      const [expandedSettings, setExpandedSettings] = useState(false);
 
-  const {
-    showStructural,
-    setShowStructural,
-    showSelectedOnly,
-    setShowSelectedOnly,
-    showBoundingBoxes,
-    setShowBoundingBoxes,
-  } = useAnnotationDisplay();
+      // Get document permissions to check if user can create analyses (not corpus permissions!)
+      const { permissions: documentPermissions, setPermissions } =
+        useDocumentPermissions();
+      const { activeDocument } = useDocumentState();
+      const { selectedCorpus } = useCorpusState(); // Still need corpus for context/logging
 
-  if (!visible) return null;
+      // Sync permissions from document state when it loads/changes
+      useEffect(() => {
+        console.log("FloatingDocumentControls: Document state changed", {
+          activeDocument: activeDocument
+            ? {
+                id: activeDocument.id,
+                title: activeDocument.title,
+                myPermissions: activeDocument.myPermissions,
+              }
+            : null,
+        });
 
-  const handleShowSelectedChange = (checked: boolean) => {
-    setShowSelectedOnly(checked);
-  };
+        if (activeDocument?.myPermissions) {
+          console.log(
+            "FloatingDocumentControls: Setting permissions from document state",
+            {
+              rawPermissions: activeDocument.myPermissions,
+            }
+          );
+          setPermissions(activeDocument.myPermissions);
+        }
+      }, [activeDocument, setPermissions]);
 
-  const handleShowStructuralChange = () => {
-    const newStructuralValue = !showStructural;
-    setShowStructural(newStructuralValue);
+      // Log component lifecycle and key dependency changes
+      useEffect(() => {
+        console.log(
+          "FloatingDocumentControls: Component mounted or key dependencies changed"
+        );
+      }, []);
 
-    // If enabling structural view, force "show selected only" to be true
-    if (newStructuralValue) {
-      setShowSelectedOnly(true);
-    }
-  };
+      useEffect(() => {
+        console.log("FloatingDocumentControls: selectedCorpus changed", {
+          previousCorpus: "logged above",
+          newCorpus: selectedCorpus
+            ? {
+                id: selectedCorpus.id,
+                title: selectedCorpus.title,
+                myPermissions: selectedCorpus.myPermissions,
+              }
+            : null,
+        });
+      }, [selectedCorpus]);
 
-  const handleShowBoundingBoxesChange = (checked: boolean) => {
-    setShowBoundingBoxes(checked);
-  };
+      useEffect(() => {
+        console.log("FloatingDocumentControls: documentPermissions changed", {
+          documentPermissions: documentPermissions
+            ? [...documentPermissions]
+            : null,
+        });
+      }, [documentPermissions]);
 
-  return (
-    <ControlsContainer $panelOffset={panelOffset}>
-      <AnimatePresence>
-        {expandedSettings && (
-          <ControlPanel
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.2 }}
+      useEffect(() => {
+        console.log("FloatingDocumentControls: visible prop changed", {
+          visible,
+        });
+      }, [visible]);
+
+      useEffect(() => {
+        console.log("FloatingDocumentControls: readOnly prop changed", {
+          readOnly,
+        });
+      }, [readOnly]);
+
+      useEffect(() => {
+        console.log("FloatingDocumentControls: showRightPanel prop changed", {
+          showRightPanel,
+        });
+      }, [showRightPanel]);
+
+      console.log("FloatingDocumentControls: Props and State", {
+        visible,
+        showRightPanel,
+        readOnly,
+        selectedCorpus: selectedCorpus
+          ? {
+              id: selectedCorpus.id,
+              title: selectedCorpus.title,
+              myPermissions: selectedCorpus.myPermissions,
+            }
+          : null,
+        documentPermissions: documentPermissions
+          ? [...documentPermissions]
+          : null,
+        panelOffset,
+        analysesOpen,
+        extractsOpen,
+      });
+
+      const hasReadPermission = documentPermissions?.includes(
+        PermissionTypes.CAN_READ
+      );
+      const hasUpdatePermission = documentPermissions?.includes(
+        PermissionTypes.CAN_UPDATE
+      );
+      const canCreateAnalysis = hasReadPermission && hasUpdatePermission;
+
+      console.log("FloatingDocumentControls: Permission Analysis", {
+        hasReadPermission,
+        hasUpdatePermission,
+        canCreateAnalysis,
+        readOnly,
+        willShowAnalysisButton: canCreateAnalysis && !readOnly,
+        CAN_READ_VALUE: PermissionTypes.CAN_READ,
+        CAN_UPDATE_VALUE: PermissionTypes.CAN_UPDATE,
+        documentPermissionsArray: documentPermissions
+          ? [...documentPermissions]
+          : null,
+        corpusPermissionsArray: selectedCorpus?.myPermissions || null,
+      });
+
+      // Close settings panel when right panel opens
+      useEffect(() => {
+        if (showRightPanel && expandedSettings) {
+          setExpandedSettings(false);
+        }
+      }, [showRightPanel]); // Remove expandedSettings from deps to avoid closure issues
+
+      // Add logging for early return
+      if (!visible) {
+        console.log(
+          "FloatingDocumentControls: Not rendering - visible prop is false"
+        );
+        return null;
+      }
+
+      console.log(
+        "FloatingDocumentControls: Rendering component with final state",
+        {
+          visible,
+          showRightPanel,
+          readOnly,
+          canCreateAnalysis,
+          willRenderAnalysisButton: canCreateAnalysis && !readOnly,
+          willShowSettingsButton: !showRightPanel,
+          documentPermissionsState: documentPermissions
+            ? {
+                hasPermissions: !!documentPermissions,
+                permissionCount: documentPermissions.length || 0,
+                permissions: [...documentPermissions],
+              }
+            : "No document permissions",
+          corpusState: selectedCorpus
+            ? {
+                id: selectedCorpus.id,
+                title: selectedCorpus.title,
+                hasPermissions: !!selectedCorpus.myPermissions,
+                permissionCount: selectedCorpus.myPermissions?.length || 0,
+                permissions: selectedCorpus.myPermissions,
+              }
+            : "No corpus selected",
+        }
+      );
+
+      return (
+        <ControlsContainer $panelOffset={panelOffset}>
+          <AnimatePresence>
+            {expandedSettings && (
+              <ControlPanel
+                data-testid="settings-panel"
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <PanelHeader>
+                  <Eye />
+                  Annotation Filters
+                </PanelHeader>
+                <AnnotationControls
+                  variant="floating"
+                  showLabelFilters
+                  compact
+                />
+              </ControlPanel>
+            )}
+          </AnimatePresence>
+
+          {/* Only show Settings button when right panel is closed */}
+          {!showRightPanel && (
+            <ActionButton
+              data-expanded={expandedSettings}
+              data-testid="settings-button"
+              onClick={() => setExpandedSettings(!expandedSettings)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title="Annotation Filters"
+            >
+              <Settings />
+            </ActionButton>
+          )}
+
+          <ActionButton
+            $color="#8b5cf6"
+            data-testid="extracts-button"
+            onClick={() => {
+              /*
+               * Ensure exclusivity: if the analyses panel is open we close it before
+               * toggling the extracts panel open, and vice-versa. This guarantees
+               * that both panels are never visible at the same time.
+               */
+              if (!extractsOpen) {
+                // Opening extracts – make sure analyses panel is closed first
+                if (analysesOpen && onAnalysesClick) {
+                  onAnalysesClick();
+                }
+              }
+              if (onExtractsClick) onExtractsClick();
+            }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            title="View Extracts"
           >
-            <PanelHeader>
-              <Eye />
-              Visualization Settings
-            </PanelHeader>
+            <Database />
+          </ActionButton>
 
-            <ControlItem>
-              <ControlLabel>
-                <User />
-                Show Only Selected
-              </ControlLabel>
-              <StyledCheckbox
-                toggle
-                onChange={(
-                  _e: React.FormEvent<HTMLInputElement>,
-                  data: CheckboxProps
-                ) => handleShowSelectedChange(data?.checked ?? false)}
-                checked={showSelectedOnly}
-                disabled={showStructural}
-              />
-            </ControlItem>
+          <ActionButton
+            $color="#f59e0b"
+            data-testid="analyses-button"
+            onClick={() => {
+              /*
+               * Mirror logic for analyses button.
+               */
+              if (!analysesOpen) {
+                // Opening analyses – close extracts first if open
+                if (extractsOpen && onExtractsClick) {
+                  onExtractsClick();
+                }
+              }
+              if (onAnalysesClick) onAnalysesClick();
+            }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            title="View Analyses"
+          >
+            <BarChart3 />
+          </ActionButton>
 
-            <ControlItem>
-              <ControlLabel>
-                <Square />
-                Show Bounding Boxes
-              </ControlLabel>
-              <StyledCheckbox
-                toggle
-                onChange={(
-                  _e: React.FormEvent<HTMLInputElement>,
-                  data: CheckboxProps
-                ) => handleShowBoundingBoxesChange(data?.checked ?? false)}
-                checked={showBoundingBoxes}
-              />
-            </ControlItem>
+          {/* New button: Start Analysis - only show if user has permissions and not in readOnly mode */}
+          {(() => {
+            const shouldShowAnalysisButton =
+              canCreateAnalysis && !readOnly && selectedCorpus;
+            console.log(
+              "FloatingDocumentControls: Analysis button render decision",
+              {
+                canCreateAnalysis,
+                readOnly,
+                shouldShowAnalysisButton,
+                documentPermissions: documentPermissions
+                  ? [...documentPermissions]
+                  : null,
+                selectedCorpusId: selectedCorpus?.id,
+                selectedCorpusPermissions: selectedCorpus?.myPermissions,
+              }
+            );
 
-            <ControlItem>
-              <ControlLabel>
-                <Layers />
-                Show Structural
-              </ControlLabel>
-              <StyledCheckbox
-                toggle
-                onChange={handleShowStructuralChange}
-                checked={showStructural}
-              />
-            </ControlItem>
-          </ControlPanel>
-        )}
-      </AnimatePresence>
+            return shouldShowAnalysisButton ? (
+              <ActionButton
+                $color="#10b981"
+                data-testid="create-analysis-button"
+                onClick={() => {
+                  console.log(
+                    "FloatingDocumentControls: Analysis button clicked",
+                    {
+                      selectedCorpus: selectedCorpus
+                        ? {
+                            id: selectedCorpus.id,
+                            title: selectedCorpus.title,
+                          }
+                        : null,
+                      currentOpenedCorpus: openedCorpus(),
+                    }
+                  );
 
-      <ActionButton
-        data-expanded={expandedSettings}
-        onClick={() => setExpandedSettings(!expandedSettings)}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-      >
-        <Settings />
-      </ActionButton>
-
-      <ActionButton
-        $color="#8b5cf6"
-        onClick={() => {
-          /*
-           * Ensure exclusivity: if the analyses panel is open we close it before
-           * toggling the extracts panel open, and vice-versa. This guarantees
-           * that both panels are never visible at the same time.
-           */
-          if (!extractsOpen) {
-            // Opening extracts – make sure analyses panel is closed first
-            if (analysesOpen && onAnalysesClick) {
-              onAnalysesClick();
-            }
-          }
-          if (onExtractsClick) onExtractsClick();
-        }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        title="View Extracts"
-      >
-        <Database />
-      </ActionButton>
-
-      <ActionButton
-        $color="#f59e0b"
-        onClick={() => {
-          /*
-           * Mirror logic for analyses button.
-           */
-          if (!analysesOpen) {
-            // Opening analyses – close extracts first if open
-            if (extractsOpen && onExtractsClick) {
-              onExtractsClick();
-            }
-          }
-          if (onAnalysesClick) onAnalysesClick();
-        }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        title="View Analyses"
-      >
-        <BarChart3 />
-      </ActionButton>
-    </ControlsContainer>
+                  // Ensure corpus context is set before opening modal
+                  if (selectedCorpus) {
+                    console.log(
+                      "FloatingDocumentControls: Setting openedCorpus and showing modal"
+                    );
+                    openedCorpus(selectedCorpus);
+                    showSelectCorpusAnalyzerOrFieldsetModal(true);
+                  } else {
+                    console.warn(
+                      "FloatingDocumentControls: No corpus context available for analysis"
+                    );
+                  }
+                }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Start New Analysis"
+              >
+                <Plus />
+              </ActionButton>
+            ) : null;
+          })()}
+        </ControlsContainer>
+      );
+    }
   );
-};
+
+FloatingDocumentControls.displayName = "FloatingDocumentControls";

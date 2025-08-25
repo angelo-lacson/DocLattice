@@ -262,9 +262,9 @@ class AgentConfig:
 
 @dataclass
 class DocumentAgentContext:
-    """Context for document-specific agents."""
+    """Context for document-specific agents (corpus may be absent for standalone mode)."""
 
-    corpus: Corpus
+    corpus: Optional[Corpus]
     document: Document
     config: AgentConfig
     vector_store: Optional[CoreAnnotationVectorStore] = None
@@ -275,7 +275,7 @@ class DocumentAgentContext:
             self.vector_store = CoreAnnotationVectorStore(
                 user_id=self.config.user_id,
                 document_id=self.document.id,
-                corpus_id=self.corpus.id,
+                corpus_id=self.corpus.id if self.corpus is not None else None,
                 embedder_path=self.config.embedder_path,
             )
 
@@ -373,12 +373,10 @@ class CoreAgent(Protocol):
         prompt: str,
         target_type: type[T],
         *,
-        system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         tools: Optional[list[Union["CoreTool", Callable, str]]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-        extra_context: Optional[str] = None,
         **kwargs,
     ) -> Optional[T]:
         """Performs a one-shot query to extract structured data matching the target_type.
@@ -388,12 +386,10 @@ class CoreAgent(Protocol):
         Args:
             prompt: The natural language prompt for data extraction.
             target_type: The Python type for the desired output (e.g., int, str, list[str], MyPydanticModel).
-            system_prompt: An optional, single-use system prompt to guide the LLM.
             model: An optional, single-use LLM model override.
             tools: An optional, single-use list of tools for this call.
             temperature: An optional, single-use temperature setting.
             max_tokens: An optional, single-use max_tokens setting.
-            extra_context: An optional, single-use extra_context setting.
             **kwargs: Additional framework-specific options.
 
         Returns:
@@ -558,12 +554,10 @@ class CoreAgentBase(ABC):
         prompt: str,
         target_type: type[T],
         *,
-        system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         tools: Optional[list[Union["CoreTool", Callable, str]]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-        extra_context: Optional[str] = None,
         **kwargs,
     ) -> Optional[T]:
         """Framework-agnostic wrapper for structured response extraction.
@@ -574,12 +568,10 @@ class CoreAgentBase(ABC):
         Args:
             prompt: The natural language prompt for data extraction.
             target_type: The Python type for the desired output.
-            system_prompt: Optional system prompt override.
             model: Optional model override.
             tools: Optional tools override.
             temperature: Optional temperature override.
             max_tokens: Optional max_tokens override.
-            extra_context: Optional extra_context override.
             **kwargs: Additional framework-specific options.
 
         Returns:
@@ -590,12 +582,10 @@ class CoreAgentBase(ABC):
             result = await self._structured_response_raw(
                 prompt=prompt,
                 target_type=target_type,
-                system_prompt=system_prompt,
                 model=model,
                 tools=tools,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                extra_context=extra_context,
                 **kwargs,
             )
             return result
@@ -632,12 +622,10 @@ class CoreAgentBase(ABC):
         prompt: str,
         target_type: type[T],
         *,
-        system_prompt: Optional[str] = None,
         model: Optional[str] = None,
         tools: Optional[list[Union["CoreTool", Callable, str]]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-        extra_context: Optional[str] = None,
         **kwargs,
     ) -> Optional[T]:  # pragma: no cover – abstract
         """Framework-specific structured response extraction.
@@ -648,12 +636,10 @@ class CoreAgentBase(ABC):
         Args:
             prompt: The natural language prompt for data extraction.
             target_type: The Python type for the desired output.
-            system_prompt: Optional system prompt override.
             model: Optional model override.
             tools: Optional tools override.
             temperature: Optional temperature override.
             max_tokens: Optional max_tokens override.
-            extra_context: Optional extra_context override.
             **kwargs: Additional framework-specific options.
 
         Returns:
@@ -933,57 +919,56 @@ class CoreDocumentAgentFactory:
     def get_default_system_prompt(document: Document) -> str:
         """Generate default system prompt for document agent."""
         return (
-            f"You are an expert assistant for document analysis and interpretation. "
-            f"Your primary goal is to answer questions accurately based on document '{document.title}' (ID: {document.id}).\n\n"  # noqa: E501
-            f"This document is described as:\n`{document.description}`\n\n"
-            f"**Available Tools:**\n"
-            f"You have access to a comprehensive set of tools for document analysis:\n\n"
-            f"1. **Vector Search**: A sophisticated semantic search engine that finds text passages similar to your queries.\n"  # noqa: E501
-            f"2. **Document Summary Access**: Tools to load and analyze the document's markdown summary, including:\n"
-            f"   - Loading full or truncated summary content\n"
-            f"   - Calculating token lengths for context management\n"
-            f"3. **Notes Analysis**: Tools to retrieve and examine notes attached to this document:\n"
-            f"   - Listing all notes with metadata\n"
-            f"   - Accessing specific note content\n"
-            f"   - Calculating note token lengths\n\n"
-            f"**Important**: Always check what tools are available to you, as additional specialized tools may be provided dynamically "  # noqa: E501
-            f"beyond the core set described above. Use the appropriate tools to gather information before answering.\n\n"  # noqa: E501
-            f"**Guidelines:**\n"
-            f"- Prioritize information retrieved directly from the document using these tools\n"
-            f"- We intentionally did not give you the entire document initially. \n"
-            "  Try doing some vector search to get more information initially and then iteratively \n"
-            "  identifying which parts of the document to review.  \n"
-            f"- Do not rely solely on the summary or your general knowledge\n"
-            f"- Use multiple tools when necessary for comprehensive answers\n"
-            f"- Present your findings in clear, helpful markdown format\n"
-            f"- Avoid repeating instructions or disclaimers in your responses"
+            f"You are an expert document analysis assistant.\n"
+            f"Your sole purpose is to answer questions about the document titled '{document.title}' (ID: {document.id}).\n\n"  # noqa: E501
+            f"CRITICAL INSTRUCTIONS:\n"
+            f"1. You have access to tools to analyze this document. You do not have prior knowledge of its contents.\n"
+            f"2. To answer the user's question, you MUST first use the available tools (e.g., vector search, summary loaders, note access) to find relevant information.\n"  # noqa: E501
+            f"3. Your final answer must be based ONLY on information retrieved via tools and citations.\n"
+            f"4. If the information cannot be found using the tools, state that it could not be found in the document.\n\n"  # noqa: E501
+            f"Guidance:\n"
+            f"- Start by selecting which tool will best help answer the question.\n"
+            f"- Prefer multiple tools and cross-check where helpful.\n"
+            f"- Present findings clearly with citations when sources are available.\n"
         )
 
     @staticmethod
     async def create_context(
         document: Union[str, int, Document],
-        corpus: Union[str, int, Corpus],
+        corpus: Union[str, int, Corpus, None],
         config: AgentConfig,
     ) -> DocumentAgentContext:
-        """Create document agent context with all necessary components."""
+        """Create document agent context with all necessary components. Supports corpus-less mode."""
         if not isinstance(document, Document):
             document = await Document.objects.aget(id=document)
 
-        if not isinstance(corpus, Corpus):
-            corpus = await Corpus.objects.aget(id=corpus)
+        corpus_obj: Optional[Corpus]
+        if corpus is None:
+            corpus_obj = None
+        else:
+            corpus_obj = (
+                corpus
+                if isinstance(corpus, Corpus)
+                else await Corpus.objects.aget(id=corpus)
+            )
 
         # ------------------------------------------------------------------
         # Basic permission check – anonymous sessions cannot access private docs
         # ------------------------------------------------------------------
-        _assert_access(corpus, config.user_id)
+        if corpus_obj is not None:
+            _assert_access(corpus_obj, config.user_id)
         _assert_access(document, config.user_id)
 
         # ------------------------------------------------------------------
-        # Ensure an embedder is configured (async!).
+        # Ensure an embedder is configured
         # ------------------------------------------------------------------
         if config.embedder_path is None:
-            _, name = await aget_embedder(corpus.id)
-            config.embedder_path = name
+            if corpus_obj is not None:
+                _, name = await aget_embedder(corpus_obj.id)
+                config.embedder_path = name
+            else:
+                # Fall back to default embedder when no corpus available
+                config.embedder_path = getattr(settings, "DEFAULT_EMBEDDER", None)
 
         # Set default system prompt if not provided
         if config.system_prompt is None:
@@ -991,7 +976,7 @@ class CoreDocumentAgentFactory:
                 document
             )
 
-        return DocumentAgentContext(corpus=corpus, document=document, config=config)
+        return DocumentAgentContext(corpus=corpus_obj, document=document, config=config)
 
 
 class CoreCorpusAgentFactory:
@@ -1074,7 +1059,7 @@ class CoreConversationManager:
     @classmethod
     async def create_for_document(
         cls,
-        corpus: Corpus,
+        corpus: Optional[Corpus],
         document: Document,
         user_id: Optional[int],
         config: AgentConfig,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card, Dimmer, Loader } from "semantic-ui-react";
 import { useDropzone } from "react-dropzone";
+import styled from "styled-components";
 
 import _ from "lodash";
 
@@ -11,6 +12,28 @@ import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisibl
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { determineCardColCount } from "../../utils/layout";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+
+const ResponsiveCardGrid = styled.div<{ columns: number }>`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  width: 100%;
+  padding: 1rem;
+  align-content: start;
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    padding: 0.5rem;
+  }
+
+  @media (min-width: 481px) and (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  @media (min-width: 1920px) {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+`;
 
 interface DocumentCardProps {
   style?: Record<string, any>;
@@ -92,13 +115,6 @@ export const DocumentCards = ({
     });
   }
 
-  let comp_style = {
-    width: "100%",
-    paddingTop: "1rem",
-    paddingRight: "0px",
-    paddingLeft: use_mobile_layout ? "5px" : "1rem",
-    ...(use_mobile_layout ? { margin: "0px !important" } : {}),
-  };
   // This is causing oddness may need separate things
   // if (style) {
   //   comp_style = { ...comp_style, ...style };
@@ -116,7 +132,13 @@ export const DocumentCards = ({
   return (
     <div
       {...getRootProps()}
-      style={{ position: "relative", ...containerStyle }}
+      style={{
+        position: "relative",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        ...containerStyle,
+      }}
     >
       <input {...getInputProps()} />
       {isDragActive && (
@@ -152,13 +174,14 @@ export const DocumentCards = ({
         className="DocumentCards"
         style={{
           width: "100%",
+          flex: 1,
           overflowY: "auto",
+          overflowX: "hidden",
+          minHeight: 0,
           ...style,
         }}
       >
-        <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
-          {cards}
-        </Card.Group>
+        <ResponsiveCardGrid columns={card_cols}>{cards}</ResponsiveCardGrid>
         <FetchMoreOnVisible fetchNextPage={handleUpdate} />
       </div>
     </div>

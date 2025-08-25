@@ -16,7 +16,7 @@ import { useAnnotationSelection } from "../../hooks/useAnnotationSelection";
 import { useAtom } from "jotai";
 import { isCreatingAnnotationAtom } from "../../context/UISettingsAtom";
 import styled from "styled-components";
-import { Copy, Tag, X } from "lucide-react";
+import { Copy, Tag, X, AlertCircle, Settings } from "lucide-react";
 
 interface SelectionLayerProps {
   pageInfo: PDFPageInfo;
@@ -34,7 +34,20 @@ const SelectionLayer = ({
   pageNumber,
 }: SelectionLayerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { canUpdateCorpus, myPermissions } = useCorpusState();
+  const {
+    canUpdateCorpus,
+    myPermissions,
+    selectedCorpus,
+    humanSpanLabels,
+    humanTokenLabels,
+  } = useCorpusState();
+
+  // Debug logging
+  console.log("[SelectionLayer] Component state:");
+  console.log("  - read_only prop:", read_only);
+  console.log("  - canUpdateCorpus:", canUpdateCorpus);
+  console.log("  - myPermissions from corpus:", myPermissions);
+  console.log("  - selectedCorpus:", selectedCorpus?.id);
   const { setSelectedAnnotations } = useAnnotationSelection();
   const [, setIsCreatingAnnotation] = useAtom(isCreatingAnnotationAtom);
   const [localPageSelection, setLocalPageSelection] = useState<
@@ -50,6 +63,10 @@ const SelectionLayer = ({
   const [pendingSelections, setPendingSelections] = useState<{
     [key: number]: BoundingBox[];
   }>({});
+
+  // Check if corpus has labelset
+  const hasLabelset = Boolean(selectedCorpus?.labelSet);
+  const hasLabels = humanTokenLabels.length > 0 || humanSpanLabels.length > 0;
 
   /**
    * Handles the creation of a multi-page annotation.
@@ -210,32 +227,30 @@ const SelectionLayer = ({
       console.log("[MouseDown] canUpdateCorpus:", canUpdateCorpus);
       console.log("[MouseDown] read_only:", read_only);
 
-      if (!read_only && canUpdateCorpus) {
-        if (!localPageSelection && event.buttons === 1) {
-          setSelectedAnnotations([]); // Clear any selected annotations
-          setIsCreatingAnnotation(true); // Set creating annotation state
-          const canvasElement = containerRef.current
-            .previousSibling as HTMLCanvasElement;
-          if (!canvasElement) return;
-
-          const canvasBounds = canvasElement.getBoundingClientRect();
-          const left = event.clientX - canvasBounds.left;
-          const top = event.clientY - canvasBounds.top;
-
-          setLocalPageSelection({
-            pageNumber: pageNumber,
-            bounds: {
-              left,
-              top,
-              right: left,
-              bottom: top,
-            },
-          });
+      // Allow selection for copying even in read-only mode
+      if (!localPageSelection && event.buttons === 1) {
+        setSelectedAnnotations([]); // Clear any selected annotations
+        // Only set creating annotation state if we can actually create annotations
+        if (!read_only && canUpdateCorpus) {
+          setIsCreatingAnnotation(true);
         }
-      } else {
-        console.log("[MouseDown] Not allowed to update");
-        console.log("[MouseDown] read_only:", read_only);
-        console.log("[MouseDown] canUpdateCorpus:", canUpdateCorpus);
+        const canvasElement = containerRef.current
+          .previousSibling as HTMLCanvasElement;
+        if (!canvasElement) return;
+
+        const canvasBounds = canvasElement.getBoundingClientRect();
+        const left = event.clientX - canvasBounds.left;
+        const top = event.clientY - canvasBounds.top;
+
+        setLocalPageSelection({
+          pageNumber: pageNumber,
+          bounds: {
+            left,
+            top,
+            right: left,
+            bottom: top,
+          },
+        });
       }
     },
     [
@@ -443,19 +458,70 @@ const SelectionLayer = ({
             <span>Copy Text</span>
             <ShortcutHint>C</ShortcutHint>
           </ActionMenuItem>
-          {activeSpanLabel && (
+
+          {/* Show annotation option or helpful message */}
+          {!read_only && canUpdateCorpus && (
             <>
               <MenuDivider />
-              <ActionMenuItem
-                onClick={handleApplyLabel}
-                data-testid="apply-label-button"
-              >
-                <Tag size={16} />
-                <span>Apply Label: {activeSpanLabel.text}</span>
-                <ShortcutHint>A</ShortcutHint>
-              </ActionMenuItem>
+              {activeSpanLabel ? (
+                <ActionMenuItem
+                  onClick={handleApplyLabel}
+                  data-testid="apply-label-button"
+                >
+                  <Tag size={16} />
+                  <span>Apply Label: {activeSpanLabel.text}</span>
+                  <ShortcutHint>A</ShortcutHint>
+                </ActionMenuItem>
+              ) : !hasLabelset ? (
+                <HelpMessage>
+                  <AlertCircle size={16} />
+                  <div>
+                    <span>No labelset configured</span>
+                    <HelpText>
+                      Click the label selector (bottom right) to create one
+                    </HelpText>
+                  </div>
+                </HelpMessage>
+              ) : !hasLabels ? (
+                <HelpMessage>
+                  <AlertCircle size={16} />
+                  <div>
+                    <span>No labels available</span>
+                    <HelpText>
+                      Click the label selector to create labels
+                    </HelpText>
+                  </div>
+                </HelpMessage>
+              ) : (
+                <HelpMessage>
+                  <Settings size={16} />
+                  <div>
+                    <span>Select a label to annotate</span>
+                    <HelpText>Click the label selector (bottom right)</HelpText>
+                  </div>
+                </HelpMessage>
+              )}
             </>
           )}
+
+          {/* Show message for read-only mode */}
+          {(read_only || !canUpdateCorpus) && (
+            <>
+              <MenuDivider />
+              <HelpMessage>
+                <AlertCircle size={16} />
+                <div>
+                  <span>Annotation unavailable</span>
+                  <HelpText>
+                    {read_only
+                      ? "Document is read-only"
+                      : "No corpus permissions"}
+                  </HelpText>
+                </div>
+              </HelpMessage>
+            </>
+          )}
+
           <MenuDivider />
           <ActionMenuItem onClick={handleCancel} data-testid="cancel-button">
             <X size={16} />
@@ -515,6 +581,38 @@ const ShortcutHint = styled.span`
   padding: 2px 6px;
   border-radius: 3px;
   font-weight: 500;
+`;
+
+const HelpMessage = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  color: #666;
+  font-size: 14px;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #f59e0b;
+  }
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  span {
+    font-weight: 500;
+    color: #333;
+  }
+`;
+
+const HelpText = styled.div`
+  font-size: 12px;
+  color: #666;
+  line-height: 1.3;
 `;
 
 export default React.memo(SelectionLayer);

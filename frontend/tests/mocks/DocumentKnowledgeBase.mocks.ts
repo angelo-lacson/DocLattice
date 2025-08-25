@@ -6,6 +6,7 @@ import {
   GET_CHAT_MESSAGES,
   GET_CORPUSES,
 } from "../../src/graphql/queries";
+import { SMART_LABEL_SEARCH_OR_CREATE } from "../../src/graphql/mutations";
 
 import path from "path";
 
@@ -69,7 +70,7 @@ export const mockPdfDocument: RawDocumentType = {
   allStructuralAnnotations: [],
   allRelationships: [],
   allDocRelationships: [],
-  allNotes: [],
+  allNotes: [], // Will be overridden in specific document mocks
 };
 
 // Mock Annotations for Structural Test based on provided examples
@@ -186,6 +187,87 @@ export const mockPdfDocumentForStructuralTest: RawDocumentType = {
   allNotes: [],
 };
 
+// Mock label for text annotations
+const mockTextLabel = {
+  __typename: "AnnotationLabelType" as const,
+  id: "text-label-1",
+  text: "Important Text",
+  color: "#3B82F6",
+  icon: "tag" as any,
+  description: "Label for important text sections",
+  labelType: LabelType.SpanLabel,
+};
+
+// Mock annotations for TXT document
+export const mockTxtAnnotation1: RawServerAnnotationType = {
+  id: "txt-annot-1",
+  page: 0,
+  parent: null,
+  annotationLabel: mockTextLabel,
+  annotationType: LabelType.SpanLabel,
+  rawText: "Lorem ipsum",
+  json: {
+    start: 0,
+    end: 11,
+  },
+  structural: false,
+  myPermissions: ["read", "write", "delete", "update"],
+  __typename: "AnnotationType",
+};
+
+export const mockTxtAnnotation2: RawServerAnnotationType = {
+  id: "txt-annot-2",
+  page: 0,
+  parent: null,
+  annotationLabel: mockTextLabel,
+  annotationType: LabelType.SpanLabel,
+  rawText: "consectetur adipiscing",
+  json: {
+    start: 28,
+    end: 50,
+  },
+  structural: false,
+  myPermissions: ["read", "write", "delete", "update"],
+  __typename: "AnnotationType",
+};
+
+// Mock notes
+const mockNote1 = {
+  id: "note-1",
+  __typename: "NoteType" as const,
+  title: "Test Note 1",
+  content: "This is a test note for the document.",
+  created: new Date("2023-10-26T10:00:00.000Z").toISOString(),
+  modified: new Date("2023-10-26T10:00:00.000Z").toISOString(),
+  creator: {
+    __typename: "UserType" as const,
+    id: "user-1",
+    email: "test@test.com",
+  },
+  corpus: null,
+  document: { __typename: "DocumentType" as const, id: PDF_DOC_ID },
+  page: 1,
+  myPermissions: ["read", "write", "delete", "update"],
+};
+
+const mockNote2 = {
+  id: "note-2",
+  __typename: "NoteType" as const,
+  title: "Another Note",
+  content: "This is another test note.",
+  created: new Date("2023-10-26T11:00:00.000Z").toISOString(),
+  modified: new Date("2023-10-26T11:00:00.000Z").toISOString(),
+  creator: {
+    __typename: "UserType" as const,
+    id: "user-1",
+    email: "test@test.com",
+  },
+  corpus: null,
+  document: { __typename: "DocumentType" as const, id: PDF_DOC_ID },
+  page: 2,
+  myPermissions: ["read", "write", "delete", "update"],
+};
+
 export const mockTxtDocument: RawDocumentType = {
   ...mockPdfDocument,
   id: TXT_DOC_ID,
@@ -195,6 +277,7 @@ export const mockTxtDocument: RawDocumentType = {
   pawlsParseFile: undefined,
   txtExtractFile: "dummy-txt.txt",
   mdSummaryFile: undefined,
+  allAnnotations: [mockTxtAnnotation1, mockTxtAnnotation2],
 };
 
 export const mockCorpusData = {
@@ -222,6 +305,15 @@ export const mockCorpusData = {
       },
       {
         __typename: "AnnotationLabelType",
+        id: "text-label-1",
+        text: "Important Text",
+        labelType: LabelType.SpanLabel,
+        color: "#3B82F6",
+        icon: undefined,
+        description: "Label for important text sections",
+      },
+      {
+        __typename: "AnnotationLabelType",
         id: "lbl-rel-1",
         text: "Connects",
         labelType: LabelType.RelationshipLabel,
@@ -241,6 +333,24 @@ export const mockCorpusData = {
     ],
   },
 };
+
+// Mock summary versions for document summary testing
+const mockSummaryVersions = [
+  {
+    id: "rev-1",
+    version: 1,
+    created: "2025-01-24T14:00:00Z",
+    snapshot: "# Mock Summary Title\n\nMock summary details.",
+    diff: "",
+    author: {
+      id: "user-1",
+      username: "testuser",
+      email: "test@example.com",
+      __typename: "UserType",
+    },
+    __typename: "DocumentSummaryRevision",
+  },
+];
 
 // Define mocks needed by the tests
 export const graphqlMocks: ReadonlyArray<MockedResponse> = [
@@ -284,7 +394,15 @@ export const graphqlMocks: ReadonlyArray<MockedResponse> = [
         analysisId: undefined,
       },
     },
-    result: { data: { document: mockPdfDocument, corpus: mockCorpusData } },
+    result: {
+      data: {
+        document: {
+          ...mockPdfDocument,
+          allNotes: [mockNote1, mockNote2],
+        },
+        corpus: mockCorpusData,
+      },
+    },
   },
   // --- Add the PDF knowledge+annotations query AGAIN for the refetch ---
   {
@@ -296,7 +414,15 @@ export const graphqlMocks: ReadonlyArray<MockedResponse> = [
         analysisId: undefined, // Assuming refetch doesn't add analysisId initially
       },
     },
-    result: { data: { document: mockPdfDocument, corpus: mockCorpusData } }, // Same result
+    result: {
+      data: {
+        document: {
+          ...mockPdfDocument,
+          allNotes: [mockNote1, mockNote2],
+        },
+        corpus: mockCorpusData,
+      },
+    }, // Same result
   },
   // 2) Original knowledge+annotations query for TXT
   {
@@ -308,7 +434,53 @@ export const graphqlMocks: ReadonlyArray<MockedResponse> = [
         analysisId: undefined,
       },
     },
-    result: { data: { document: mockTxtDocument, corpus: mockCorpusData } },
+    result: {
+      data: {
+        document: {
+          ...mockTxtDocument,
+          allNotes: [mockNote1, mockNote2],
+        },
+        corpus: mockCorpusData,
+      },
+    },
+  },
+  // 2b) TXT knowledge+annotations query without analysisId (Apollo strips undefined)
+  {
+    request: {
+      query: GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
+      variables: {
+        documentId: TXT_DOC_ID,
+        corpusId: CORPUS_ID,
+      },
+    },
+    result: {
+      data: {
+        document: {
+          ...mockTxtDocument,
+          allNotes: [mockNote1, mockNote2],
+        },
+        corpus: mockCorpusData,
+      },
+    },
+  },
+  // 2c) TXT knowledge+annotations query AGAIN for refetch
+  {
+    request: {
+      query: GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
+      variables: {
+        documentId: TXT_DOC_ID,
+        corpusId: CORPUS_ID,
+      },
+    },
+    result: {
+      data: {
+        document: {
+          ...mockTxtDocument,
+          allNotes: [mockNote1, mockNote2],
+        },
+        corpus: mockCorpusData,
+      },
+    },
   },
   // 3) CORRECTED: Stub for Analyses/Extracts (documentCorpusActions) - PDF
   {
@@ -534,6 +706,93 @@ export const graphqlMocks: ReadonlyArray<MockedResponse> = [
             },
           ],
           pageInfo: createPageInfo(),
+        },
+      },
+    },
+  },
+  // Mock for smart label search or create mutation
+  {
+    request: {
+      query: SMART_LABEL_SEARCH_OR_CREATE,
+      variables: {
+        corpusId: CORPUS_ID,
+        searchTerm: "Test Label",
+        labelType: LabelType.TokenLabel,
+        color: "#1a75bc",
+        description: "",
+        createIfNotFound: true,
+        labelsetTitle: undefined,
+        labelsetDescription: undefined,
+      },
+    },
+    result: {
+      data: {
+        smartLabelSearchOrCreate: {
+          ok: true,
+          message: "Created label 'Test Label'",
+          labels: [
+            {
+              __typename: "AnnotationLabelType",
+              id: "new-label-1",
+              text: "Test Label",
+              description: "",
+              color: "#1a75bc",
+              icon: "tag",
+              labelType: LabelType.TokenLabel,
+            },
+          ],
+          labelset: {
+            __typename: "LabelSetType",
+            id: "ls-1",
+            title: "Test Corpus Labels",
+            description: "Labels for Test Corpus",
+          },
+          labelsetCreated: false,
+          labelCreated: true,
+        },
+      },
+    },
+  },
+  // Mock for smart label mutation with labelset creation
+  {
+    request: {
+      query: SMART_LABEL_SEARCH_OR_CREATE,
+      variables: {
+        corpusId: CORPUS_ID,
+        searchTerm: "New Label With Labelset",
+        labelType: LabelType.SpanLabel,
+        color: "#1a75bc",
+        description: "",
+        createIfNotFound: true,
+        labelsetTitle: "Test Corpus Labels",
+        labelsetDescription: "",
+      },
+    },
+    result: {
+      data: {
+        smartLabelSearchOrCreate: {
+          ok: true,
+          message:
+            "Created labelset 'Test Corpus Labels' and label 'New Label With Labelset'",
+          labels: [
+            {
+              __typename: "AnnotationLabelType",
+              id: "new-label-2",
+              text: "New Label With Labelset",
+              description: "",
+              color: "#1a75bc",
+              icon: "tag",
+              labelType: LabelType.SpanLabel,
+            },
+          ],
+          labelset: {
+            __typename: "LabelSetType",
+            id: "new-ls-1",
+            title: "Test Corpus Labels",
+            description: "",
+          },
+          labelsetCreated: true,
+          labelCreated: true,
         },
       },
     },

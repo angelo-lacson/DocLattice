@@ -49,7 +49,7 @@ import {
 } from "../../../graphql/queries";
 
 // For JSON schema forms:
-import { SemanticUIForm } from "@rjsf/semantic-ui";
+import Form from "@rjsf/semantic-ui";
 import { RJSFSchema } from "@rjsf/utils";
 import validator from "@rjsf/validator-ajv8";
 
@@ -327,7 +327,7 @@ export function SelectExportTypeModal({ visible }: { visible: boolean }) {
               <u>{procObj.title || procName} Inputs</u>:
             </Header>
           </div>
-          <SemanticUIForm
+          <Form
             schema={{
               type: "object",
               properties: procObj.inputSchema as RJSFSchema,
@@ -342,7 +342,7 @@ export function SelectExportTypeModal({ visible }: { visible: boolean }) {
             }}
           >
             <></>
-          </SemanticUIForm>
+          </Form>
         </div>
       );
     });

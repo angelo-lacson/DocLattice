@@ -48,7 +48,7 @@ function resolveWsBaseUrl(): string {
  */
 export function getDocumentQueryWebSocket(
   documentId: string,
-  token: string,
+  token?: string,
   conversationId?: string,
   corpusId?: string
 ): string {
@@ -59,12 +59,11 @@ export function getDocumentQueryWebSocket(
     .replace(/^http/, "ws")
     .replace(/^https/, "wss");
 
-  let url = `${normalizedBaseUrl}/ws/document/${encodeURIComponent(
-    documentId
-  )}/query/`;
-
+  let url: string;
   if (corpusId) {
-    url += `corpus/${encodeURIComponent(corpusId)}/`;
+    url = `${normalizedBaseUrl}/ws/document/${documentId}/query/corpus/${corpusId}/`;
+  } else {
+    url = `${normalizedBaseUrl}/ws/standalone/document/${documentId}/query/`;
   }
 
   const params: string[] = [];
@@ -105,9 +104,7 @@ export function getCorpusQueryWebSocket(
     .replace(/^http/, "ws")
     .replace(/^https/, "wss");
 
-  let url = `${normalizedBaseUrl}/ws/corpus/${encodeURIComponent(
-    corpusId
-  )}/query/`;
+  let url = `${normalizedBaseUrl}/ws/corpus/${corpusId}/query/`;
 
   const params: string[] = [];
 

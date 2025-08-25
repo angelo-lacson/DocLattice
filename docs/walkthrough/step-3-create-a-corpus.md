@@ -1,6 +1,6 @@
 ## Purpose of the Corpus
 
-A "Corpus" is a collection of documents that can be annotated by hand or automatically by a "Gremlin" analyzer. In order
+A "Corpus" is a collection of documents that can be annotated by hand or automatically by a document analyzer. In order
 to create a Corpus, you first need to create a Corpus and then add documents to it.
 
 ## Go to the Corpus Page

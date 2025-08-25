@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, memo, useCallback } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,20 +12,16 @@ import {
   Layers,
   ChartNetwork,
   Notebook,
-  X,
   Eye,
-  Tags,
 } from "lucide-react";
-import { Form, Dropdown } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
 import {
   ContentFilters,
   SortOption,
   ContentItemType,
   SidebarViewMode,
 } from "./types";
-import { LabelDisplayBehavior } from "../../../../types/graphql-api";
-import { ViewLabelSelector } from "../../../annotator/labels/view_labels_selector/ViewLabelSelector";
-import { useAnnotationDisplay } from "../../../annotator/context/UISettingsAtom";
+import { CollapsibleAnnotationControls } from "./CollapsibleAnnotationControls";
 
 interface SidebarControlBarProps {
   /** Current view mode */
@@ -371,366 +367,261 @@ const contentTypeColors: Record<ContentItemType, string> = {
   search: "#10b981",
 };
 
-const AnnotationFilters = styled(motion.div)`
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
+const AnnotationFiltersWrapper = styled(motion.div)`
   margin-top: 0.75rem;
-`;
-
-const FilterHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #64748b;
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-`;
-
-const LabelDisplayDropdown = styled(Dropdown)`
-  &&& {
-    font-size: 0.875rem;
-    min-width: 100%;
-
-    &.ui.dropdown {
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 0.625rem 0.875rem;
-      background: white;
-      font-weight: 500;
-      color: #1e293b;
-
-      &:hover {
-        border-color: #cbd5e1;
-      }
-    }
-
-    .menu {
-      border-radius: 6px;
-      border: 1px solid #e2e8f0;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    }
-
-    .item {
-      font-size: 0.875rem;
-      padding: 0.625rem 0.875rem !important;
-    }
-  }
-`;
-
-const LabelSelectorWrapper = styled.div`
-  margin-top: 0.75rem;
-
-  /* Override ViewLabelSelector styles for better integration */
-  .ui.multiple.dropdown {
-    font-size: 0.875rem !important;
-    min-height: 40px !important;
-
-    > .label {
-      font-size: 0.75rem !important;
-      padding: 0.375rem 0.5rem !important;
-    }
-  }
 `;
 
 /**
  * SidebarControlBar provides controls for switching between chat/feed views
- * and filtering content in the unified feed.
+ * and filtering content in the unified feed. Memoized to prevent unnecessary rerenders.
  */
-export const SidebarControlBar: React.FC<SidebarControlBarProps> = ({
-  viewMode,
-  onViewModeChange,
-  filters,
-  onFiltersChange,
-  sortBy,
-  onSortChange,
-  hasActiveSearch = false,
-}) => {
-  const [searchQuery, setSearchQuery] = useState(filters.searchQuery || "");
-  const [showContentDropdown, setShowContentDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+export const SidebarControlBar: React.FC<SidebarControlBarProps> = memo(
+  ({
+    viewMode,
+    onViewModeChange,
+    filters,
+    onFiltersChange,
+    sortBy,
+    onSortChange,
+    hasActiveSearch = false,
+  }) => {
+    const [searchQuery, setSearchQuery] = useState(filters.searchQuery || "");
+    const [showContentDropdown, setShowContentDropdown] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Annotation display settings
-  const { showLabels, setShowLabels } = useAnnotationDisplay();
-  const [localLabelBehavior, setLocalLabelBehavior] = useState(showLabels);
+    // Close dropdown when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (
+          dropdownRef.current &&
+          !dropdownRef.current.contains(event.target as Node)
+        ) {
+          setShowContentDropdown(false);
+        }
+      };
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setShowContentDropdown(false);
+      if (showContentDropdown) {
+        document.addEventListener("mousedown", handleClickOutside);
+        return () =>
+          document.removeEventListener("mousedown", handleClickOutside);
       }
-    };
+    }, [showContentDropdown]);
 
-    if (showContentDropdown) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [showContentDropdown]);
+    // Memoize callbacks to prevent child component rerenders
+    const handleContentTypeToggle = useCallback(
+      (type: ContentItemType) => {
+        const newTypes = new Set(filters.contentTypes);
+        if (newTypes.has(type)) {
+          newTypes.delete(type);
+        } else {
+          newTypes.add(type);
+        }
+        onFiltersChange({ ...filters, contentTypes: newTypes });
+      },
+      [filters, onFiltersChange]
+    );
 
-  const handleContentTypeToggle = (type: ContentItemType) => {
-    const newTypes = new Set(filters.contentTypes);
-    if (newTypes.has(type)) {
-      newTypes.delete(type);
-    } else {
-      newTypes.add(type);
-    }
-    onFiltersChange({ ...filters, contentTypes: newTypes });
-  };
+    const handleSelectAll = useCallback(() => {
+      const allTypes: ContentItemType[] = [
+        "note",
+        "annotation",
+        "relationship",
+      ];
+      if (hasActiveSearch) allTypes.push("search");
+      onFiltersChange({ ...filters, contentTypes: new Set(allTypes) });
+    }, [filters, onFiltersChange, hasActiveSearch]);
 
-  const handleSelectAll = () => {
-    const allTypes: ContentItemType[] = ["note", "annotation", "relationship"];
-    if (hasActiveSearch) allTypes.push("search");
-    onFiltersChange({ ...filters, contentTypes: new Set(allTypes) });
-  };
+    const handleClearAll = useCallback(() => {
+      onFiltersChange({ ...filters, contentTypes: new Set() });
+    }, [filters, onFiltersChange]);
 
-  const handleClearAll = () => {
-    onFiltersChange({ ...filters, contentTypes: new Set() });
-  };
+    const handleSearchChange = useCallback(
+      (value: string) => {
+        setSearchQuery(value);
+        // Debounced update to filters
+        const timeoutId = setTimeout(() => {
+          onFiltersChange({ ...filters, searchQuery: value || undefined });
+        }, 300);
+        return () => clearTimeout(timeoutId);
+      },
+      [filters, onFiltersChange]
+    );
 
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-    // Debounced update to filters
-    const timeoutId = setTimeout(() => {
-      onFiltersChange({ ...filters, searchQuery: value || undefined });
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  };
+    const sortOptions = [
+      {
+        key: "page",
+        text: "Page Number",
+        value: "page",
+        icon: "sort numeric down",
+      },
+      { key: "type", text: "Content Type", value: "type", icon: "layer group" },
+      { key: "date", text: "Date Created", value: "date", icon: "calendar" },
+    ];
 
-  const sortOptions = [
-    {
-      key: "page",
-      text: "Page Number",
-      value: "page",
-      icon: "sort numeric down",
-    },
-    { key: "type", text: "Content Type", value: "type", icon: "layer group" },
-    { key: "date", text: "Date Created", value: "date", icon: "calendar" },
-  ];
+    const availableContentTypes: ContentItemType[] = [
+      "note",
+      "annotation",
+      "relationship",
+    ];
+    if (hasActiveSearch) availableContentTypes.push("search");
 
-  const availableContentTypes: ContentItemType[] = [
-    "note",
-    "annotation",
-    "relationship",
-  ];
-  if (hasActiveSearch) availableContentTypes.push("search");
+    const selectedCount = filters.contentTypes.size;
 
-  const selectedCount = filters.contentTypes.size;
+    // Check if annotations are selected
+    const showAnnotationFilters =
+      viewMode === "feed" && filters.contentTypes.has("annotation");
 
-  const handleLabelBehaviorChange = (value: LabelDisplayBehavior) => {
-    setLocalLabelBehavior(value);
-    setShowLabels(value);
-  };
-
-  const labelDisplayOptions = [
-    {
-      key: LabelDisplayBehavior.ALWAYS,
-      text: "Always Show Labels",
-      value: LabelDisplayBehavior.ALWAYS,
-      icon: "eye",
-    },
-    {
-      key: LabelDisplayBehavior.ON_HOVER,
-      text: "Show on Hover",
-      value: LabelDisplayBehavior.ON_HOVER,
-      icon: "eye slash",
-    },
-    {
-      key: LabelDisplayBehavior.HIDE,
-      text: "Hide Labels",
-      value: LabelDisplayBehavior.HIDE,
-      icon: "eye slash outline",
-    },
-  ];
-
-  // Check if annotations are selected
-  const showAnnotationFilters =
-    viewMode === "feed" && filters.contentTypes.has("annotation");
-
-  return (
-    <ControlBarContainer>
-      {/* View Mode Toggle */}
-      <ViewToggle>
-        <ToggleButton
-          data-testid="view-mode-chat"
-          $isActive={viewMode === "chat"}
-          onClick={() => onViewModeChange("chat")}
-          whileTap={{ scale: 0.98 }}
-        >
-          <MessageSquare />
-          Chat
-        </ToggleButton>
-        <ToggleButton
-          data-testid="view-mode-feed"
-          $isActive={viewMode === "feed"}
-          onClick={() => onViewModeChange("feed")}
-          whileTap={{ scale: 0.98 }}
-        >
-          <Layers />
-          Content Feed
-        </ToggleButton>
-      </ViewToggle>
-
-      {/* Feed Filters (only shown in feed mode) */}
-      <AnimatePresence>
-        {viewMode === "feed" && (
-          <FilterSection
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
+    return (
+      <ControlBarContainer>
+        {/* View Mode Toggle */}
+        <ViewToggle>
+          <ToggleButton
+            data-testid="view-mode-chat"
+            $isActive={viewMode === "chat"}
+            onClick={() => onViewModeChange("chat")}
+            whileTap={{ scale: 0.98 }}
           >
-            {/* Search Input */}
-            <SearchInputWrapper>
-              <SearchIconWrapper>
-                <Search />
-              </SearchIconWrapper>
-              <StyledSearchInput
-                placeholder="Search in content..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-              />
-            </SearchInputWrapper>
+            <MessageSquare />
+            Chat
+          </ToggleButton>
+          <ToggleButton
+            data-testid="view-mode-feed"
+            $isActive={viewMode === "feed"}
+            onClick={() => onViewModeChange("feed")}
+            whileTap={{ scale: 0.98 }}
+          >
+            <Layers />
+            Content Feed
+          </ToggleButton>
+        </ViewToggle>
 
-            {/* Content Types and Sort Row */}
-            <FilterRow>
-              {/* Content Type Multi-Select */}
-              <DropdownContainer ref={dropdownRef}>
-                <MultiSelectDropdown
-                  $isOpen={showContentDropdown}
-                  onClick={() => setShowContentDropdown(!showContentDropdown)}
-                >
-                  <DropdownHeader>
-                    <DropdownLabel>
-                      <Filter />
-                      Content Types
-                      {selectedCount > 0 && (
-                        <SelectedCount>{selectedCount}</SelectedCount>
-                      )}
-                    </DropdownLabel>
-                    <ChevronIcon $isOpen={showContentDropdown} />
-                  </DropdownHeader>
-                </MultiSelectDropdown>
+        {/* Feed Filters (only shown in feed mode) */}
+        <AnimatePresence>
+          {viewMode === "feed" && (
+            <FilterSection
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Search Input */}
+              <SearchInputWrapper>
+                <SearchIconWrapper>
+                  <Search />
+                </SearchIconWrapper>
+                <StyledSearchInput
+                  placeholder="Search in content..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                />
+              </SearchInputWrapper>
 
-                <AnimatePresence>
-                  {showContentDropdown && (
-                    <DropdownMenu
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.15 }}
-                    >
-                      {availableContentTypes.map((type) => (
-                        <DropdownMenuItem
-                          key={type}
-                          $isSelected={filters.contentTypes.has(type)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleContentTypeToggle(type);
-                          }}
-                        >
-                          <MenuItemLabel
-                            style={{ color: contentTypeColors[type] }}
+              {/* Content Types and Sort Row */}
+              <FilterRow>
+                {/* Content Type Multi-Select */}
+                <DropdownContainer ref={dropdownRef}>
+                  <MultiSelectDropdown
+                    $isOpen={showContentDropdown}
+                    onClick={() => setShowContentDropdown(!showContentDropdown)}
+                  >
+                    <DropdownHeader>
+                      <DropdownLabel>
+                        <Filter />
+                        Content Types
+                        {selectedCount > 0 && (
+                          <SelectedCount>{selectedCount}</SelectedCount>
+                        )}
+                      </DropdownLabel>
+                      <ChevronIcon $isOpen={showContentDropdown} />
+                    </DropdownHeader>
+                  </MultiSelectDropdown>
+
+                  <AnimatePresence>
+                    {showContentDropdown && (
+                      <DropdownMenu
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        {availableContentTypes.map((type) => (
+                          <DropdownMenuItem
+                            key={type}
+                            $isSelected={filters.contentTypes.has(type)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleContentTypeToggle(type);
+                            }}
                           >
-                            {contentTypeIcons[type]}
-                            {contentTypeLabels[type]}
-                          </MenuItemLabel>
-                          {filters.contentTypes.has(type) && <CheckIcon />}
-                        </DropdownMenuItem>
-                      ))}
-                      <QuickActions>
-                        <QuickActionButton
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectAll();
-                          }}
-                        >
-                          Select All
-                        </QuickActionButton>
-                        <QuickActionButton
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleClearAll();
-                          }}
-                        >
-                          Clear All
-                        </QuickActionButton>
-                      </QuickActions>
-                    </DropdownMenu>
-                  )}
-                </AnimatePresence>
-              </DropdownContainer>
+                            <MenuItemLabel
+                              style={{ color: contentTypeColors[type] }}
+                            >
+                              {contentTypeIcons[type]}
+                              {contentTypeLabels[type]}
+                            </MenuItemLabel>
+                            {filters.contentTypes.has(type) && <CheckIcon />}
+                          </DropdownMenuItem>
+                        ))}
+                        <QuickActions>
+                          <QuickActionButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectAll();
+                            }}
+                          >
+                            Select All
+                          </QuickActionButton>
+                          <QuickActionButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleClearAll();
+                            }}
+                          >
+                            Clear All
+                          </QuickActionButton>
+                        </QuickActions>
+                      </DropdownMenu>
+                    )}
+                  </AnimatePresence>
+                </DropdownContainer>
 
-              {/* Sort Dropdown */}
-              <SortDropdownStyled
-                fluid
-                selection
-                icon={<SortDesc size={18} style={{ color: "#64748b" }} />}
-                options={sortOptions}
-                value={sortBy}
-                onChange={(_: any, data: any) =>
-                  onSortChange(data.value as SortOption)
-                }
-                placeholder="Sort by..."
-              />
-            </FilterRow>
+                {/* Sort Dropdown */}
+                <SortDropdownStyled
+                  fluid
+                  selection
+                  icon={<SortDesc size={18} style={{ color: "#64748b" }} />}
+                  options={sortOptions}
+                  value={sortBy}
+                  onChange={(_: any, data: any) =>
+                    onSortChange(data.value as SortOption)
+                  }
+                  placeholder="Sort by..."
+                />
+              </FilterRow>
 
-            {/* Annotation-specific Filters */}
-            <AnimatePresence>
-              {showAnnotationFilters && (
-                <AnnotationFilters
-                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: "auto", marginTop: "0.75rem" }}
-                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <FilterHeader>
-                    <FileText />
-                    Annotation Filters
-                  </FilterHeader>
+              {/* Annotation-specific Filters - Collapsible */}
+              <AnimatePresence>
+                {showAnnotationFilters && (
+                  <AnnotationFiltersWrapper
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{
+                      opacity: 1,
+                      height: "auto",
+                      marginTop: "0.75rem",
+                    }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <CollapsibleAnnotationControls showLabelFilters />
+                  </AnnotationFiltersWrapper>
+                )}
+              </AnimatePresence>
+            </FilterSection>
+          )}
+        </AnimatePresence>
+      </ControlBarContainer>
+    );
+  }
+);
 
-                  {/* Label Display Behavior */}
-                  <LabelDisplayDropdown
-                    fluid
-                    selection
-                    icon={<Eye size={16} style={{ color: "#64748b" }} />}
-                    options={labelDisplayOptions}
-                    value={localLabelBehavior}
-                    onChange={(_: any, data: any) =>
-                      handleLabelBehaviorChange(
-                        data.value as LabelDisplayBehavior
-                      )
-                    }
-                    placeholder="Label display..."
-                  />
-
-                  {/* Label Filter */}
-                  <LabelSelectorWrapper>
-                    <FilterHeader
-                      style={{ marginBottom: "0.5rem", marginTop: "0.75rem" }}
-                    >
-                      <Tags />
-                      Filter by Labels
-                    </FilterHeader>
-                    <ViewLabelSelector />
-                  </LabelSelectorWrapper>
-                </AnnotationFilters>
-              )}
-            </AnimatePresence>
-          </FilterSection>
-        )}
-      </AnimatePresence>
-    </ControlBarContainer>
-  );
-};
+SidebarControlBar.displayName = "SidebarControlBar";

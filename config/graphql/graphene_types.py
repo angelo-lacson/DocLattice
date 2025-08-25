@@ -303,7 +303,6 @@ class LabelTypeEnum(graphene.Enum):
     RELATIONSHIP_LABEL = "RELATIONSHIP_LABEL"
     DOC_TYPE_LABEL = "DOC_TYPE_LABEL"
     TOKEN_LABEL = "TOKEN_LABEL"
-    METADATA_LABEL = "METADATA_LABEL"
     SPAN_LABEL = "SPAN_LABEL"
 
 
@@ -355,7 +354,6 @@ class LabelSetType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     doc_label_count = graphene.Int(description="Count of document-level type labels")
     span_label_count = graphene.Int(description="Count of span-based labels")
     token_label_count = graphene.Int(description="Count of token-level labels")
-    metadata_label_count = graphene.Int(description="Count of metadata labels")
 
     def resolve_doc_label_count(self, info):
         return self.annotation_labels.filter(label_type="DOC_TYPE_LABEL").count()
@@ -365,9 +363,6 @@ class LabelSetType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_token_label_count(self, info):
         return self.annotation_labels.filter(label_type="TOKEN_LABEL").count()
-
-    def resolve_metadata_label_count(self, info):
-        return self.annotation_labels.filter(label_type="METADATA_LABEL").count()
 
     # To get ALL labels for a given labelset
     all_annotation_labels = graphene.Field(graphene.List(AnnotationLabelType))
@@ -613,17 +608,35 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 annotations = self.doc_annotations.filter(structural=True)
             else:
                 corpus_pk = from_global_id(corpus_id)[1]
-                annotations = self.doc_annotations.filter(corpus_id=corpus_pk)
-
+                # Get structural annotations + corpus annotations
+                # We'll filter corpus annotations based on analysis_id below
                 if is_structural is not None:
-                    annotations = annotations.filter(structural=is_structural)
-
-            if analysis_id is not None:
-                if analysis_id == "__none__":
-                    annotations = annotations.filter(analysis__isnull=True)
+                    annotations = self.doc_annotations.filter(
+                        corpus_id=corpus_pk, structural=is_structural
+                    )
                 else:
+                    # Get both structural and corpus annotations
+                    annotations = self.doc_annotations.filter(
+                        Q(structural=True) | Q(corpus_id=corpus_pk)
+                    )
+
+            # Filter based on analysis_id
+            # IMPORTANT: When analysis_id is None (not provided), we should only show
+            # user-created annotations (analysis__isnull=True) plus structural ones
+            if (
+                corpus_id is not None
+            ):  # Only apply analysis filtering for corpus queries
+                if analysis_id is None or analysis_id == "__none__":
+                    # No analysis selected: show only user annotations (no analysis) + structural
+                    annotations = annotations.filter(
+                        Q(analysis__isnull=True) | Q(structural=True)
+                    )
+                else:
+                    # Specific analysis selected: show that analysis's annotations + structural
                     analysis_pk = from_global_id(analysis_id)[1]
-                    annotations = annotations.filter(analysis_id=analysis_pk)
+                    annotations = annotations.filter(
+                        Q(analysis_id=analysis_pk) | Q(structural=True)
+                    )
 
             return annotations.distinct()
         except Exception as e:
@@ -642,7 +655,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_all_relationships(self, info, corpus_id=None, analysis_id=None):
         try:
-            # Want to limit to strucutural relationships or corpus relationships
+            # Want to limit to structural relationships or corpus relationships
             if corpus_id is None:
                 relationships = self.relationships.filter(structural=True)
             else:
@@ -651,11 +664,20 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                     Q(corpus_id=corpus_pk) | Q(structural=True)
                 )
 
-            if analysis_id == "__none__":
-                relationships = relationships.filter(analysis__isnull=True)
-            elif analysis_id is not None:
-                analysis_pk = from_global_id(analysis_id)[1]
-                relationships = relationships.filter(analysis_id=analysis_pk)
+                # Filter based on analysis_id
+                # IMPORTANT: When analysis_id is None (not provided), we should only show
+                # user-created relationships (analysis__isnull=True) plus structural ones
+                if analysis_id is None or analysis_id == "__none__":
+                    # No analysis selected: show only user relationships (no analysis) + structural
+                    relationships = relationships.filter(
+                        Q(analysis__isnull=True) | Q(structural=True)
+                    )
+                else:
+                    # Specific analysis selected: show that analysis's relationships + structural
+                    analysis_pk = from_global_id(analysis_id)[1]
+                    relationships = relationships.filter(
+                        Q(analysis_id=analysis_pk) | Q(structural=True)
+                    )
 
             return relationships.distinct()
         except Exception as e:
@@ -985,6 +1007,9 @@ class AnalysisType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
 
 class ColumnType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    validation_config = GenericScalar()
+    default_value = GenericScalar()
+
     class Meta:
         model = Column
         interfaces = [relay.Node]
