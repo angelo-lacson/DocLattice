@@ -53,8 +53,19 @@ to `./.envs/.local/.postgres`:
     $ cp ./docs/sample_env_files/backend/local/.postgres ./.envs/.local/.postgres
 ```
 
-You can use the default configurations, but we recommend you set your own admin account
-password in `.django` and your own postgres credentials in `.postgres`.
+**IMPORTANT**: The sample files now include default values for all required fields. However, for security reasons, you should:
+1. **Generate a unique Django secret key** (required for production):
+   ```
+   $ python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+   ```
+   Then update `DJANGO_SECRET_KEY` in `./.envs/.local/.django` with the generated value.
+
+2. **Review and update credentials** in the `.env` files:
+   - Django admin password: `DJANGO_SUPERUSER_PASSWORD` in `.django`
+   - PostgreSQL credentials: `POSTGRES_USER` and `POSTGRES_PASSWORD` in `.postgres`
+   - Celery Flower credentials: `CELERY_FLOWER_USER` and `CELERY_FLOWER_PASSWORD` in `.django`
+
+**Note**: The application will not start if `DJANGO_SECRET_KEY` is empty.
 
 ### Frontend .Env File
 
@@ -195,9 +206,20 @@ See our [guide](./configuration/add-users.md) for how to create new users throug
    $ docker-compose -f local.yml up
    ```
 
+   If you're reusing an existing PostgreSQL volume with different credentials, clean the volumes:
+   ```
+   $ docker-compose -f local.yml down -v
+   $ docker-compose -f local.yml up
+   ```
+
 4. **Missing .envs directory**: Make sure you created the `.envs/.local/` directory and copied all three required env files (.django, .postgres, and .frontend)
 
 5. **Login issues**: Verify the username and password match what's in your `.envs/.local/.django` file
+
+6. **Django won't start - SECRET_KEY error**: If you see "The SECRET_KEY setting must not be empty", ensure you've set a value for `DJANGO_SECRET_KEY` in `./.envs/.local/.django`. Generate one with:
+   ```
+   $ python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+   ```
 
 For more detailed configuration options, see our [configuration guides](./configuration/choose-and-configure-docker-stack.md).
 
