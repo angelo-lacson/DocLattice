@@ -216,4 +216,3 @@ The frontend manages:
 ## Related Documentation
 - [Backend Implementation](./backend.md)
 - [Frontend Implementation](./frontend.md)
-- [Message Flow Examples](./examples.md)

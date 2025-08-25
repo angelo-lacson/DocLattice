@@ -226,7 +226,7 @@ ValidationError: "Status must be a boolean value"
 
 ## GraphQL API Integration
 
-The metadata system exposes a complete GraphQL API for managing schemas and values. See [Metadata API Examples](metadata-api-examples.md) for detailed usage examples.
+The metadata system exposes a complete GraphQL API for managing schemas and values. See [Metadata API Examples](metadata_api_examples.md) for detailed usage examples.
 
 ### Key Mutations
 - `createMetadataColumn`: Define new metadata fields

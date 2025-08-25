@@ -26,6 +26,8 @@ concurrency:
 jobs:
   linter:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v5
@@ -48,6 +50,9 @@ jobs:
   pytest:
     runs-on: larger
     timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: read
 
     steps:
       - name: Checkout Code Repository
