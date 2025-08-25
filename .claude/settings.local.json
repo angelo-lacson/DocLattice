@@ -60,7 +60,8 @@
       "Read(//home/jman/test-doclattice/DocLattice/**)",
       "Read(//home/jman/test-doclattice/DocLattice/**)",
       "Read(//home/jman/test-doclattice/DocLattice/**)",
-      "Read(//home/jman/test-doclattice/DocLattice/**)"
+      "Read(//home/jman/test-doclattice/DocLattice/**)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
