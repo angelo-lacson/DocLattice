@@ -51,7 +51,7 @@ http:
       # https://docs.djangoproject.com/en/dev/ref/csrf/#ajax
       headers:
         hostsProxyHeaders: [ "X-CSRFToken" ]
-    
+
     # Rate limiting for frontend (static content) - higher limits
     frontend-ratelimit:
       rateLimit:
@@ -63,7 +63,7 @@ http:
             depth: 1  # Look at X-Forwarded-For header, 1 hop back
             ipv6Subnet: 64  # Group IPv6 addresses by /64 subnet
         redis:
-          endpoints: 
+          endpoints:
             - "redis:6379"
           db: 1  # Use database 1 for rate limiting
           poolSize: 10
@@ -72,7 +72,7 @@ http:
           readTimeout: 3s
           writeTimeout: 3s
           dialTimeout: 5s
-    
+
     # Rate limiting for API/GraphQL/Admin - medium limits
     api-ratelimit:
       rateLimit:
@@ -93,7 +93,7 @@ http:
           readTimeout: 3s
           writeTimeout: 3s
           dialTimeout: 5s
-    
+
     # Rate limiting for Flower (monitoring) - lower limits
     flower-ratelimit:
       rateLimit:
