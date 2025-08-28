@@ -132,7 +132,22 @@ jobs:
       - name: Start Production Stack (Test Mode)
         run: |
           docker compose -f production.yml -f compose/test-production.yml up -d
-          sleep 30  # Give services time to start
+          echo "Waiting for services to start..."
+          sleep 45  # Give services more time to start
+
+          echo "Checking if required services are running..."
+          docker compose -f production.yml -f compose/test-production.yml ps --services --filter status=running
+
+          # Wait for Django to be ready
+          echo "Waiting for Django to be ready..."
+          for i in {1..30}; do
+            if docker compose -f production.yml -f compose/test-production.yml exec -T django python manage.py check --deploy 2>/dev/null; then
+              echo "Django is ready!"
+              break
+            fi
+            echo "Django not ready yet, waiting..."
+            sleep 2
+          done
 
       - name: Verify Stack Health
         run: |
@@ -145,68 +160,9 @@ jobs:
             docker logs --tail 10 $container 2>&1 || true
           done
 
-      - name: Test Traefik Configuration
-        run: |
-          echo "=== Testing Traefik config parsing ==="
-          docker compose -f production.yml -f compose/test-production.yml logs traefik | grep -i "rate" || echo "No rate limiting logs yet"
-          echo "=== Testing basic connectivity ==="
-          # Test if traefik responds - through its exposed port 80
-          docker compose -f production.yml -f compose/test-production.yml exec -T django wget -qO- --header="Host: opencontracts.opensource.legal" http://traefik:80/ || echo "Expected - backend may not be ready"
-
       - name: Test Rate Limiting
         run: |
-          echo "=== Testing Frontend Rate Limits ==="
-          # Test frontend rate limiting through Traefik (port 80) from django container
-          success_count=0
-          rate_limited_count=0
-
-          for i in {1..250}; do
-            response=$(docker compose -f production.yml -f compose/test-production.yml exec -T django wget -qS --header="Host: opencontracts.opensource.legal" http://traefik:80/ -O /dev/null 2>&1 | grep -o "HTTP/1.1 [0-9]*" | cut -d' ' -f2 | head -1 || echo "000")
-            if [ "$response" = "200" ] || [ "$response" = "404" ] || [ "$response" = "502" ] || [ "$response" = "503" ]; then
-              success_count=$((success_count + 1))
-            elif [ "$response" = "429" ]; then
-              rate_limited_count=$((rate_limited_count + 1))
-            fi
-            # Small delay to avoid overwhelming
-            sleep 0.01
-          done
-
-          echo "Successful requests: $success_count"
-          echo "Rate limited requests: $rate_limited_count"
-
-          # We expect some rate limiting after burst is exhausted
-          if [ $rate_limited_count -gt 0 ]; then
-            echo "✅ Rate limiting is working - got $rate_limited_count rate limited responses"
-          else
-            echo "⚠️  No rate limiting detected - this might indicate an issue"
-          fi
-
-          echo "=== Testing API Rate Limits (lower threshold) ==="
-          api_success=0
-          api_rate_limited=0
-
-          # Wait a moment for rate limits to reset
-          sleep 5
-
-          for i in {1..100}; do
-            response=$(docker compose -f production.yml -f compose/test-production.yml exec -T django wget -qS --header="Host: opencontracts.opensource.legal" http://traefik:80/graphql -O /dev/null 2>&1 | grep -o "HTTP/1.1 [0-9]*" | cut -d' ' -f2 | head -1 || echo "000")
-            if [ "$response" = "200" ] || [ "$response" = "404" ] || [ "$response" = "502" ] || [ "$response" = "503" ]; then
-              api_success=$((api_success + 1))
-            elif [ "$response" = "429" ]; then
-              api_rate_limited=$((api_rate_limited + 1))
-            fi
-            sleep 0.01
-          done
-
-          echo "API successful requests: $api_success"
-          echo "API rate limited requests: $api_rate_limited"
-
-      - name: Check Redis Rate Limit Storage
-        run: |
-          echo "=== Checking Redis for rate limit data ==="
-          # Check if rate limiting data is being stored in Redis
-          docker compose -f production.yml -f compose/test-production.yml exec -T redis redis-cli -n 1 keys "*" | head -20
-          docker compose -f production.yml -f compose/test-production.yml exec -T redis redis-cli -n 1 info keyspace
+          ./scripts/test-rate-limiting.sh --compose-files "production.yml compose/test-production.yml"
 
       - name: Capture Logs on Failure
         if: failure()
