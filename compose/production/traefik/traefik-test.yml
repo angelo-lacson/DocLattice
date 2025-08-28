@@ -3,20 +3,17 @@ log:
 
 entryPoints:
   web:
-    # http
     address: ":80"
-
-  web-secure:
-    # https - but no TLS in test mode
-    address: ":443"
 
   flower:
     address: ":5555"
 
+# NO certificatesResolvers - completely disable ACME/TLS
+
 http:
   routers:
 
-    flower-secure-router:
+    flower-router:
       rule: "Host(`opencontracts.opensource.legal`) && PathPrefix(`/flower`)"
       entryPoints:
         - flower
@@ -24,8 +21,9 @@ http:
         - "flower-ratelimit"
       service: flower
       priority: 0
+      # NO TLS section
 
-    frontend-secure-router:
+    frontend-router:
       rule: "Host(`opencontracts.opensource.legal`) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
       entryPoints:
         - "web"
@@ -34,8 +32,9 @@ http:
         - "csrf"
       service: frontend
       priority: 1
+      # NO TLS section
 
-    web-secure-router:
+    api-router:
       rule: "Host(`opencontracts.opensource.legal`) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
       entryPoints:
         - "web"
@@ -44,6 +43,7 @@ http:
         - "csrf"
       service: django
       priority: 2
+      # NO TLS section
 
   middlewares:
     csrf:
