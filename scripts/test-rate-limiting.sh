@@ -57,11 +57,18 @@ make_request() {
   local url="$1"
   local host_header="$2"
   
-  $COMPOSE_CMD exec -T $CLIENT_CONTAINER wget -qS \
-    --header="Host: $host_header" \
-    "$url" -O /dev/null 2>&1 | \
-    grep -o "HTTP/1.1 [0-9]*" | \
-    cut -d' ' -f2 | head -1 || echo "000"
+  # Use Python instead of wget since wget may not be available
+  $COMPOSE_CMD exec -T $CLIENT_CONTAINER python -c "
+import urllib.request, urllib.error, sys
+try:
+    req = urllib.request.Request('$url', headers={'Host': '$host_header'})
+    with urllib.request.urlopen(req, timeout=5) as response:
+        print(response.status)
+except urllib.error.HTTPError as e:
+    print(e.code)
+except:
+    print('000')
+" 2>/dev/null || echo "000"
 }
 
 echo "=== 1. Testing Traefik Configuration ==="
@@ -101,7 +108,7 @@ for i in {1..250}; do
   response=$(make_request "http://traefik:80/" "opencontracts.opensource.legal")
   
   case $response in
-    200|404|502|503)
+    200|301|302|404|502|503)
       success_count=$((success_count + 1))
       ;;
     429)
@@ -151,7 +158,7 @@ for i in {1..100}; do
   response=$(make_request "http://traefik:80/graphql" "opencontracts.opensource.legal")
   
   case $response in
-    200|404|502|503)
+    200|301|302|404|502|503)
       api_success=$((api_success + 1))
       ;;
     429)

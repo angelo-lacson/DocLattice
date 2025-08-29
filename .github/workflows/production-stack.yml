@@ -160,9 +160,14 @@ jobs:
             docker logs --tail 10 $container 2>&1 || true
           done
 
+      - name: Generate Test Certificates
+        run: |
+          echo "Generating self-signed certificates for testing..."
+          ./contrib/generate-certs.sh
+
       - name: Test Rate Limiting
         run: |
-          ./scripts/test-rate-limiting.sh --compose-files "production.yml compose/test-production.yml"
+          ./scripts/test-production-rate-limiting.sh --compose-files "production.yml compose/test-production.yml"
 
       - name: Capture Logs on Failure
         if: failure()

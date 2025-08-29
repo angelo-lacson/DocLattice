@@ -61,7 +61,17 @@
       "Read(//home/jman/test-opencontracts/OpenContracts/**)",
       "Read(//home/jman/test-opencontracts/OpenContracts/**)",
       "Read(//home/jman/test-opencontracts/OpenContracts/**)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(/tmp/simple-rate-test.sh:*)",
+      "Bash(/tmp/test-our-fixes.sh:*)",
+      "Bash(./scripts/test-rate-limiting.sh:*)",
+      "Read(/tmp/**)",
+      "Bash(/tmp/test-rate-limit.sh:*)",
+      "Bash(/tmp/aggressive-test.sh:*)",
+      "Bash(/tmp/production-rate-test.sh:*)",
+      "Bash(./contrib/generate-certs.sh:*)",
+      "Bash(/tmp/final-rate-test.sh:*)",
+      "Bash(/tmp/burst-limit-test.sh:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

@@ -1,20 +1,24 @@
 services:
   traefik:
-    # Override the production traefik config for testing
-    volumes:
-      - ./compose/production/traefik/traefik-test.yml:/etc/traefik/traefik-test.yml:ro
+    # Override the production traefik config for testing with file-based config and local TLS
     command:
       - --log.level=DEBUG
       - --api.dashboard=true
       - --api.insecure=true
-      - --providers.file.filename=/etc/traefik/traefik-test.yml
+      - --providers.file.filename=/etc/traefik/working-rate-test.yml
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.web-secure.address=:443
       - --entrypoints.flower.address=:5555
+      # Redirect HTTP to HTTPS
+      - --entrypoints.web.http.redirections.entryPoint.to=web-secure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+    volumes:
+      - ./compose/production/traefik/working-rate-test.yml:/etc/traefik/working-rate-test.yml:ro
+      - ./contrib/certs:/etc/certs:ro
     ports:
       - "80:80"
-      - "443:443"
+      - "443:443" 
       - "5555:5555"
       - "8080:8080"  # Traefik dashboard for debugging
 
