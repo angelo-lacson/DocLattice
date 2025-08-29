@@ -2,7 +2,7 @@
 
 # Rate Limiting Test Script
 # Can be run locally or in CI to test Traefik rate limiting configuration
-# 
+#
 # Usage:
 #   Local:  ./scripts/test-rate-limiting.sh
 #   CI:     ./scripts/test-rate-limiting.sh --compose-files "production.yml compose/test-production.yml"
@@ -56,12 +56,19 @@ echo ""
 make_request() {
   local url="$1"
   local host_header="$2"
-  
-  $COMPOSE_CMD exec -T $CLIENT_CONTAINER wget -qS \
-    --header="Host: $host_header" \
-    "$url" -O /dev/null 2>&1 | \
-    grep -o "HTTP/1.1 [0-9]*" | \
-    cut -d' ' -f2 | head -1 || echo "000"
+
+  # Use Python instead of wget since wget may not be available
+  $COMPOSE_CMD exec -T $CLIENT_CONTAINER python -c "
+import urllib.request, urllib.error, sys
+try:
+    req = urllib.request.Request('$url', headers={'Host': '$host_header'})
+    with urllib.request.urlopen(req, timeout=5) as response:
+        print(response.status)
+except urllib.error.HTTPError as e:
+    print(e.code)
+except:
+    print('000')
+" 2>/dev/null || echo "000"
 }
 
 echo "=== 1. Testing Traefik Configuration ==="
@@ -97,11 +104,11 @@ for i in {1..250}; do
   if [ $((i % 50)) -eq 0 ]; then
     echo "  Progress: $i/250 requests"
   fi
-  
+
   response=$(make_request "http://traefik:80/" "doclattice.opensource.legal")
-  
+
   case $response in
-    200|404|502|503)
+    200|301|302|404|502|503)
       success_count=$((success_count + 1))
       ;;
     429)
@@ -111,7 +118,7 @@ for i in {1..250}; do
       error_count=$((error_count + 1))
       ;;
   esac
-  
+
   # Small delay to avoid overwhelming
   sleep 0.01
 done
@@ -147,11 +154,11 @@ for i in {1..100}; do
   if [ $((i % 25)) -eq 0 ]; then
     echo "  Progress: $i/100 requests"
   fi
-  
+
   response=$(make_request "http://traefik:80/graphql" "doclattice.opensource.legal")
-  
+
   case $response in
-    200|404|502|503)
+    200|301|302|404|502|503)
       api_success=$((api_success + 1))
       ;;
     429)
@@ -161,7 +168,7 @@ for i in {1..100}; do
       api_error=$((api_error + 1))
       ;;
   esac
-  
+
   sleep 0.01
 done
 
@@ -186,7 +193,7 @@ echo "Checking if rate limiting data is stored in Redis..."
 
 if $COMPOSE_CMD exec -T redis redis-cli -n 1 keys "*" 2>/dev/null | head -5; then
   echo "✅ Rate limiting data found in Redis database 1"
-  
+
   # Show some stats
   echo ""
   echo "Redis keyspace info:"

@@ -1,0 +1,40 @@
+# Minimal Working Rate Limiting Configuration
+# Based on proven working Docker labels approach
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/certs/localhost.crt.pem
+        keyFile: /etc/certs/localhost.key.pem
+
+http:
+  routers:
+    # Single catch-all router with rate limiting
+    test-all:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - "web"
+        - "web-secure"
+      middlewares:
+        - "test-ratelimit"
+      service: hello-service
+      tls: {}
+
+  middlewares:
+    # Aggressive rate limiting to ensure 429s
+    test-ratelimit:
+      rateLimit:
+        average: 3    # Very low - 3 requests per second
+        burst: 8      # Small burst - 8 requests
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+  services:
+    # Simple service that responds
+    hello-service:
+      loadBalancer:
+        servers:
+          - url: http://frontend:5173
