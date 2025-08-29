@@ -63,10 +63,35 @@ make_external_request() {
 echo "=== 1. Environment Check ==="
 echo "Checking if services are accessible..."
 
+# Check if containers are running
+echo ""
+echo "--- Container Status ---"
+$COMPOSE_CMD ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+
+echo ""
+echo "--- Service Health Checks ---"
+echo "Testing Traefik dashboard access..."
+traefik_dashboard=$(make_external_request "http://localhost:8080/api/rawdata")
+if [ "$traefik_dashboard" != "000" ]; then
+  echo "✅ Traefik dashboard accessible (HTTP $traefik_dashboard)"
+else
+  echo "❌ Traefik dashboard not accessible"
+fi
+
+echo ""
+echo "Testing individual backend services..."
+echo "Frontend service (docker network): $($COMPOSE_CMD exec -T traefik wget -qO- --timeout=2 http://frontend:5173 2>/dev/null | wc -c) bytes"
+echo "Django service (docker network): $($COMPOSE_CMD exec -T traefik wget -qO- --timeout=2 http://django:5000/admin/ 2>/dev/null | wc -c) bytes"
+
+echo ""
+echo "--- External HTTPS Access ---"
 # Test external HTTPS access
 response=$(make_external_request "https://localhost/")
 if [ "$response" != "000" ]; then
   echo "✅ HTTPS endpoint accessible (HTTP $response)"
+  if [ "$response" == "502" ]; then
+    echo "⚠️  WARNING: 502 Bad Gateway - Traefik can't reach backend services"
+  fi
 else
   echo "❌ HTTPS endpoint not accessible"
   echo "Checking HTTP redirect..."
@@ -79,6 +104,10 @@ else
     exit 1
   fi
 fi
+
+echo ""
+echo "--- Traefik Logs (last 10 lines) ---"
+$COMPOSE_CMD logs --tail 10 traefik | head -10
 
 echo ""
 echo "=== 2. Frontend Rate Limiting Test ==="
@@ -95,7 +124,7 @@ for i in {1..30}; do
   response=$(make_external_request "https://localhost/")
 
   case $response in
-    200|302|404|503)
+    200|302)
       frontend_success=$((frontend_success + 1))
       echo "✅ Request $i: $response (Success)"
       ;;
@@ -103,9 +132,21 @@ for i in {1..30}; do
       frontend_rate_limited=$((frontend_rate_limited + 1))
       echo "🚫 Request $i: $response (RATE LIMITED)"
       ;;
+    502)
+      frontend_errors=$((frontend_errors + 1))
+      echo "❌ Request $i: $response (Bad Gateway - backend service down)"
+      ;;
+    503)
+      frontend_errors=$((frontend_errors + 1))
+      echo "❌ Request $i: $response (Service Unavailable)"
+      ;;
+    404)
+      frontend_errors=$((frontend_errors + 1))
+      echo "❌ Request $i: $response (Not Found - routing issue)"
+      ;;
     *)
       frontend_errors=$((frontend_errors + 1))
-      echo "❌ Request $i: $response (Error)"
+      echo "❌ Request $i: $response (Unexpected error)"
       ;;
   esac
 
@@ -146,7 +187,7 @@ for i in {1..20}; do
   response=$(make_external_request "https://localhost/graphql")
 
   case $response in
-    200|302|404|503)
+    200|302)
       api_success=$((api_success + 1))
       echo "✅ Request $i: $response (Success)"
       ;;
@@ -154,9 +195,21 @@ for i in {1..20}; do
       api_rate_limited=$((api_rate_limited + 1))
       echo "🚫 Request $i: $response (RATE LIMITED)"
       ;;
+    502)
+      api_errors=$((api_errors + 1))
+      echo "❌ Request $i: $response (Bad Gateway - backend service down)"
+      ;;
+    503)
+      api_errors=$((api_errors + 1))
+      echo "❌ Request $i: $response (Service Unavailable)"
+      ;;
+    404)
+      api_errors=$((api_errors + 1))
+      echo "❌ Request $i: $response (Not Found - routing issue)"
+      ;;
     *)
       api_errors=$((api_errors + 1))
-      echo "❌ Request $i: $response (Error)"
+      echo "❌ Request $i: $response (Unexpected error)"
       ;;
   esac
 
