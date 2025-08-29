@@ -44,7 +44,7 @@ http:
         certResolver: letsencrypt
 
     frontend-secure-router:
-      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
+      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`) || Host(`localhost`)) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
       entryPoints:
         - "web-secure"
       middlewares:
@@ -57,7 +57,7 @@ http:
         certResolver: letsencrypt
 
     web-secure-router:
-      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
+      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`) || Host(`localhost`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
       entryPoints:
         - "web-secure"
       middlewares:
@@ -79,8 +79,8 @@ http:
     # Rate limiting for frontend (static content) - higher limits
     frontend-ratelimit:
       rateLimit:
-        average: 100  # 100 requests per second on average
-        burst: 200    # Allow bursts up to 200 requests
+        average: 10   # 10 requests per second on average
+        burst: 20     # Allow bursts up to 20 requests
         period: 1s    # Per second rate limiting
         sourceCriterion:
           ipStrategy:
@@ -100,8 +100,8 @@ http:
     # Rate limiting for API/GraphQL/Admin - medium limits
     api-ratelimit:
       rateLimit:
-        average: 30   # 30 requests per second on average
-        burst: 60     # Allow bursts up to 60 requests
+        average: 5    # 5 requests per second on average
+        burst: 10     # Allow bursts up to 10 requests
         period: 1s    # Per second rate limiting
         sourceCriterion:
           ipStrategy:

@@ -5,7 +5,7 @@ services:
       - --log.level=DEBUG
       - --api.dashboard=true
       - --api.insecure=true
-      - --providers.file.filename=/etc/traefik/working-rate-test.yml
+      - --providers.file.filename=/etc/traefik/traefik.yml
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.web-secure.address=:443
@@ -14,7 +14,7 @@ services:
       - --entrypoints.web.http.redirections.entryPoint.to=web-secure
       - --entrypoints.web.http.redirections.entryPoint.scheme=https
     volumes:
-      - ./compose/production/traefik/working-rate-test.yml:/etc/traefik/working-rate-test.yml:ro
+      - ./compose/production/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./contrib/certs:/etc/certs:ro
     ports:
       - "80:80"
