@@ -93,7 +93,7 @@ frontend_errors=0
 echo "Sending requests to frontend (https://localhost/):"
 for i in {1..30}; do
   response=$(make_external_request "https://localhost/")
-  
+
   case $response in
     200|302|404|503)
       frontend_success=$((frontend_success + 1))
@@ -108,7 +108,7 @@ for i in {1..30}; do
       echo "❌ Request $i: $response (Error)"
       ;;
   esac
-  
+
   # Small delay to show progression in logs
   sleep 0.05
 done
@@ -144,7 +144,7 @@ api_errors=0
 echo "Sending requests to API (https://localhost/graphql):"
 for i in {1..20}; do
   response=$(make_external_request "https://localhost/graphql")
-  
+
   case $response in
     200|302|404|503)
       api_success=$((api_success + 1))
@@ -159,7 +159,7 @@ for i in {1..20}; do
       echo "❌ Request $i: $response (Error)"
       ;;
   esac
-  
+
   sleep 0.05
 done
 

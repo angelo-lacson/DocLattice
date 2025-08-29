@@ -71,7 +71,10 @@
       "Bash(/tmp/production-rate-test.sh:*)",
       "Bash(./contrib/generate-certs.sh:*)",
       "Bash(/tmp/final-rate-test.sh:*)",
-      "Bash(/tmp/burst-limit-test.sh:*)"
+      "Bash(/tmp/burst-limit-test.sh:*)",
+      "Bash(./scripts/test-production-rate-limiting.sh:*)",
+      "Bash(git restore:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

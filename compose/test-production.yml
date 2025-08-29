@@ -18,7 +18,7 @@ services:
       - ./contrib/certs:/etc/certs:ro
     ports:
       - "80:80"
-      - "443:443" 
+      - "443:443"
       - "5555:5555"
       - "8080:8080"  # Traefik dashboard for debugging
 

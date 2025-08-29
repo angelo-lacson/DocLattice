@@ -2,7 +2,7 @@
 
 # Rate Limiting Test Script
 # Can be run locally or in CI to test Traefik rate limiting configuration
-# 
+#
 # Usage:
 #   Local:  ./scripts/test-rate-limiting.sh
 #   CI:     ./scripts/test-rate-limiting.sh --compose-files "production.yml compose/test-production.yml"
@@ -56,7 +56,7 @@ echo ""
 make_request() {
   local url="$1"
   local host_header="$2"
-  
+
   # Use Python instead of wget since wget may not be available
   $COMPOSE_CMD exec -T $CLIENT_CONTAINER python -c "
 import urllib.request, urllib.error, sys
@@ -104,9 +104,9 @@ for i in {1..250}; do
   if [ $((i % 50)) -eq 0 ]; then
     echo "  Progress: $i/250 requests"
   fi
-  
+
   response=$(make_request "http://traefik:80/" "opencontracts.opensource.legal")
-  
+
   case $response in
     200|301|302|404|502|503)
       success_count=$((success_count + 1))
@@ -118,7 +118,7 @@ for i in {1..250}; do
       error_count=$((error_count + 1))
       ;;
   esac
-  
+
   # Small delay to avoid overwhelming
   sleep 0.01
 done
@@ -154,9 +154,9 @@ for i in {1..100}; do
   if [ $((i % 25)) -eq 0 ]; then
     echo "  Progress: $i/100 requests"
   fi
-  
+
   response=$(make_request "http://traefik:80/graphql" "opencontracts.opensource.legal")
-  
+
   case $response in
     200|301|302|404|502|503)
       api_success=$((api_success + 1))
@@ -168,7 +168,7 @@ for i in {1..100}; do
       api_error=$((api_error + 1))
       ;;
   esac
-  
+
   sleep 0.01
 done
 
@@ -193,7 +193,7 @@ echo "Checking if rate limiting data is stored in Redis..."
 
 if $COMPOSE_CMD exec -T redis redis-cli -n 1 keys "*" 2>/dev/null | head -5; then
   echo "✅ Rate limiting data found in Redis database 1"
-  
+
   # Show some stats
   echo ""
   echo "Redis keyspace info:"

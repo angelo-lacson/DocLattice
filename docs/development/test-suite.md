@@ -43,7 +43,7 @@ To test the production stack with rate limiting:
    ```bash
    # Start all services (nlm-ingestor has been removed for faster startup)
    docker compose -f production.yml -f compose/test-production.yml up -d
-   
+
    # Wait for services to be ready (Django takes 1-2 minutes)
    docker compose -f production.yml -f compose/test-production.yml ps
    ```
@@ -68,10 +68,10 @@ To test the production stack with rate limiting:
    🧪 Production Rate Limiting Test
    =============================================
    Environment: Production stack with local TLS
-   
+
    === 1. Environment Check ===
    ✅ HTTPS endpoint accessible (HTTP 404)
-   
+
    === 2. Frontend Rate Limiting Test ===
    Sending requests to frontend (https://localhost/):
    ✅ Request 1: 200 (Success)
@@ -79,7 +79,7 @@ To test the production stack with rate limiting:
    ...
    🚫 Request 9: 429 (RATE LIMITED)
    🚫 Request 10: 429 (RATE LIMITED)
-   
+
    🎉 SUCCESS: Rate limiting is functional!
    ✅ Production environment successfully returns 429 responses
    ```
@@ -88,13 +88,13 @@ To test the production stack with rate limiting:
    ```bash
    # Check container status
    docker compose -f production.yml -f compose/test-production.yml ps
-   
+
    # View Traefik configuration logs
    docker compose -f production.yml -f compose/test-production.yml logs traefik | grep -i rate
-   
+
    # Access Traefik dashboard (if available)
    curl -s http://localhost:8080/api/rawdata | jq '.middlewares'
-   
+
    # Check certificate generation
    ls -la contrib/certs/
    ```
@@ -118,7 +118,7 @@ The production test environment uses:
 
 **Rate Limiting Configuration:**
 - **Frontend**: 10 requests/second average, 20 request burst limit
-- **API**: 5 requests/second average, 10 request burst limit  
+- **API**: 5 requests/second average, 10 request burst limit
 - **IP-based limiting**: Per-client source IP with depth=1 strategy
 - **Period**: 1-second rate limiting windows
 - **Response**: HTTP 429 "Too Many Requests" when exceeded
