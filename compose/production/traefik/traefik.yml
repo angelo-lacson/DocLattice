@@ -18,6 +18,15 @@ entryPoints:
   flower:
     address: ":5555"
 
+# TLS Configuration - supports both Let's Encrypt and self-signed certificates
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        # Use self-signed certificates when available (GitHub Actions)
+        certFile: /etc/certs/localhost.crt.pem
+        keyFile: /etc/certs/localhost.key.pem
+
 certificatesResolvers:
   letsencrypt:
     # https://docs.traefik.io/master/https/acme/#lets-encrypt
@@ -39,9 +48,7 @@ http:
         - "flower-ratelimit"
       service: flower
       priority: 0
-      tls:
-        # https://docs.traefik.io/master/routing/routers/#certresolver
-        certResolver: letsencrypt
+      tls: {}
 
     frontend-secure-router:
       rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`) || Host(`localhost`)) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
@@ -52,9 +59,7 @@ http:
         - "csrf"
       service: frontend
       priority: 1
-      tls:
-        # https://docs.traefik.io/master/routing/routers/#certresolver
-        certResolver: letsencrypt
+      tls: {}
 
     web-secure-router:
       rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`) || Host(`localhost`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
@@ -65,9 +70,7 @@ http:
         - "csrf"
       service: django
       priority: 2
-      tls:
-        # https://docs.traefik.io/master/routing/routers/#certresolver
-        certResolver: letsencrypt
+      tls: {}
 
   middlewares:
     csrf:
