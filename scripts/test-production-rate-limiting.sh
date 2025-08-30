@@ -122,15 +122,26 @@ echo "Checking if certificates exist on host:"
 ls -la contrib/certs/ || echo "cert directory not found"
 echo ""
 echo "Checking certificates inside traefik container:"
-$COMPOSE_CMD exec -T traefik ls -la /etc/certs/ || echo "certs not mounted in container"
+$COMPOSE_CMD exec -T traefik ls -la /etc/certs/ || echo "❌ certs not mounted in container"
 echo ""
 echo "Checking certificate content (first few lines):"
-$COMPOSE_CMD exec -T traefik head -5 /etc/certs/localhost.crt.pem 2>/dev/null || echo "cert file not readable"
-$COMPOSE_CMD exec -T traefik head -5 /etc/certs/localhost.key.pem 2>/dev/null || echo "key file not readable"
+$COMPOSE_CMD exec -T traefik head -2 /etc/certs/localhost.crt.pem 2>/dev/null || echo "❌ cert file not readable"
+$COMPOSE_CMD exec -T traefik head -2 /etc/certs/localhost.key.pem 2>/dev/null || echo "❌ key file not readable"
 
 echo ""
-echo "--- Traefik Logs (last 15 lines) ---"
-$COMPOSE_CMD logs --tail 15 traefik
+echo "--- Traefik Container Health ---"
+echo "Traefik container status:"
+$COMPOSE_CMD ps traefik
+echo ""
+echo "Traefik processes:"
+$COMPOSE_CMD exec -T traefik ps aux 2>/dev/null || echo "❌ Can't check traefik processes"
+echo ""
+echo "Traefik listening ports:"
+$COMPOSE_CMD exec -T traefik netstat -tlnp 2>/dev/null || echo "❌ Can't check listening ports"
+
+echo ""
+echo "--- Complete Traefik Logs ---"
+$COMPOSE_CMD logs traefik
 
 echo ""
 echo "=== 2. Frontend Rate Limiting Test ==="
