@@ -4,6 +4,20 @@ volumes:
   production_traefik: {}
 
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: ./compose/production/django/Dockerfile
+    image: opencontractserver_production_django
+    depends_on:
+      - postgres
+    env_file:
+      - ./.envs/.production/.django
+      - ./.envs/.production/.postgres
+    command: python manage.py migrate --noinput
+    profiles:
+      - migrate
+
   django: &django
     build:
       context: .
@@ -16,7 +30,7 @@ services:
     env_file:
       - ./.envs/.production/.django
       - ./.envs/.production/.postgres
-    command: /start
+    command: /bin/bash -c "echo 'Skipping collectstatic' && daphne -b 0.0.0.0 -p 5000 --websocket_timeout $$DJANGO_WORKER_TIMEOUT config.asgi:application"
 
   postgres:
     build:

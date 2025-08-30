@@ -111,6 +111,7 @@ jobs:
           POSTGRES_DB=opencontracts
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
+          DATABASE_SSL_MODE=disable
           EOF
 
           # Create minimal Frontend env file based on sample
@@ -128,6 +129,12 @@ jobs:
 
       - name: Build Production Stack (Test Mode)
         run: docker compose -f production.yml -f compose/test-production.yml build
+
+      - name: Run Database Migrations
+        run: |
+          echo "Running database migrations before starting services..."
+          docker compose -f production.yml -f compose/test-production.yml --profile migrate up migrate
+          echo "Migrations completed successfully"
 
       - name: Start Production Stack (Test Mode)
         run: |

@@ -105,6 +105,30 @@ The modular design makes it easy to add custom processors - just inherit from th
 
 At the moment, we only support PDF and text-based formats (like plaintext and MD). With our new parsing pipeline, we can easily support other ooxml office formats like docx and xlsx, HOWEVER, open source viewers and editors are a rarity. One possible route is to leverage the many ooxml --> MD tools that now exist. This will be a reasonably good solution for the majority of documents once we add a markdown viewer and annotator (see our roadmap). 
 
+## Production Deployment
+
+For production deployments, OpenContracts includes a dedicated migration service to ensure database schema updates are applied correctly and efficiently:
+
+### Database Migrations
+
+Before starting production services, run database migrations using the dedicated migration service:
+
+```bash
+# Run migrations first
+docker compose -f production.yml --profile migrate up migrate
+
+# Then start main services  
+docker compose -f production.yml up
+```
+
+The migration service:
+- Runs exactly once to avoid race conditions
+- Uses Docker Compose profiles for isolation
+- Only depends on PostgreSQL, not other services
+- Ensures django_celery_beat and other app tables are created before dependent services start
+
+This prevents issues like celerybeat failing due to missing database tables.
+
 ## Acknowledgements
 
 Special thanks to AllenAI's [PAWLS project](https://github.com/allenai/pawls) and Nlmatics

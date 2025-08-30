@@ -223,6 +223,36 @@ See our [guide](./configuration/add-users.md) for how to create new users throug
 
 For more detailed configuration options, see our [configuration guides](./configuration/choose-and-configure-docker-stack.md).
 
+## **Production Deployment Notes**
+
+The quick start guide above is for **local development**. For **production deployments** using `production.yml`, there are key differences:
+
+### Database Migrations in Production
+
+Production deployments include a dedicated migration service to prevent race conditions and ensure database consistency:
+
+```bash
+# IMPORTANT: Run migrations BEFORE starting production services
+$ docker compose -f production.yml --profile migrate up migrate
+
+# Then start the main services
+$ docker compose -f production.yml up
+```
+
+**Why this matters:**
+- Services like `celerybeat` require specific database tables (e.g., `django_celery_beat_periodictask`)
+- Without proper migrations, celerybeat will fail with "relation does not exist" errors
+- The migration service runs exactly once, avoiding performance issues from multiple services running migrations simultaneously
+
+### Production vs Local Commands
+
+| Operation | Local Development | Production |
+|-----------|-------------------|------------|
+| Build | `docker-compose -f local.yml build` | `docker compose -f production.yml build` |
+| Start | `docker-compose -f local.yml up` | `docker compose -f production.yml up` |
+| Migrations | `docker-compose -f local.yml run django python manage.py migrate` | `docker compose -f production.yml --profile migrate up migrate` |
+| Logs | `docker-compose -f local.yml logs django` | `docker compose -f production.yml logs django` |
+
 ## **Useful Docker Commands**
 
 Here are some helpful commands for managing your OpenContracts installation:
@@ -255,6 +285,9 @@ $ docker-compose -f local.yml run django python manage.py shell
 
 # Run database migrations manually
 $ docker-compose -f local.yml run django python manage.py migrate
+
+# For production deployments - run migrations using the dedicated service
+$ docker compose -f production.yml --profile migrate up migrate
 ```
 
 ### Troubleshooting
