@@ -57,7 +57,18 @@ echo ""
 # Function to make external request (bypass internal networking issues)
 make_external_request() {
   local url="$1"
-  curl -k -s -w "%{http_code}" "$url" -o /dev/null --connect-timeout 2 --max-time 3 2>/dev/null || echo "000"
+  local result
+  result=$(curl -k -s -w "%{http_code}" "$url" -o /dev/null --connect-timeout 5 --max-time 10 2>&1)
+  local exit_code=$?
+
+  # If curl failed completely, return connection error
+  if [ $exit_code -ne 0 ]; then
+    echo "000"
+    return
+  fi
+
+  # Extract just the HTTP code (last 3 digits)
+  echo "${result: -3}"
 }
 
 echo "=== 1. Environment Check ==="
@@ -106,8 +117,20 @@ else
 fi
 
 echo ""
-echo "--- Traefik Logs (last 10 lines) ---"
-$COMPOSE_CMD logs --tail 10 traefik | head -10
+echo "--- Certificate Debug ---"
+echo "Checking if certificates exist on host:"
+ls -la contrib/certs/ || echo "cert directory not found"
+echo ""
+echo "Checking certificates inside traefik container:"
+$COMPOSE_CMD exec -T traefik ls -la /etc/certs/ || echo "certs not mounted in container"
+echo ""
+echo "Checking certificate content (first few lines):"
+$COMPOSE_CMD exec -T traefik head -5 /etc/certs/localhost.crt.pem 2>/dev/null || echo "cert file not readable"
+$COMPOSE_CMD exec -T traefik head -5 /etc/certs/localhost.key.pem 2>/dev/null || echo "key file not readable"
+
+echo ""
+echo "--- Traefik Logs (last 15 lines) ---"
+$COMPOSE_CMD logs --tail 15 traefik
 
 echo ""
 echo "=== 2. Frontend Rate Limiting Test ==="
