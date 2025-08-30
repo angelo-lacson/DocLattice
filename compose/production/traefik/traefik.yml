@@ -48,7 +48,9 @@ http:
         - "flower-ratelimit"
       service: flower
       priority: 0
-      tls: {}
+      tls:
+        # Try Let's Encrypt first, fallback to default store (self-signed)
+        certResolver: letsencrypt
 
     frontend-secure-router:
       rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`) || Host(`localhost`)) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
@@ -59,7 +61,9 @@ http:
         - "csrf"
       service: frontend
       priority: 1
-      tls: {}
+      tls:
+        # Try Let's Encrypt first, fallback to default store (self-signed)
+        certResolver: letsencrypt
 
     web-secure-router:
       rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`) || Host(`localhost`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
@@ -70,7 +74,9 @@ http:
         - "csrf"
       service: django
       priority: 2
-      tls: {}
+      tls:
+        # Try Let's Encrypt first, fallback to default store (self-signed)
+        certResolver: letsencrypt
 
   middlewares:
     csrf:
