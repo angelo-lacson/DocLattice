@@ -74,7 +74,8 @@
       "Bash(/tmp/burst-limit-test.sh:*)",
       "Bash(./scripts/test-production-rate-limiting.sh:*)",
       "Bash(git restore:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(openssl rand:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
