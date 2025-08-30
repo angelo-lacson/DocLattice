@@ -130,6 +130,11 @@ jobs:
       - name: Build Production Stack (Test Mode)
         run: docker compose -f production.yml -f compose/test-production.yml build
 
+      - name: Generate Test Certificates (before starting services)
+        run: |
+          echo "Generating self-signed certificates for testing..."
+          ./contrib/generate-certs.sh
+
       - name: Run Database Migrations
         run: |
           echo "Running database migrations before starting services..."
@@ -167,10 +172,16 @@ jobs:
             docker logs --tail 10 $container 2>&1 || true
           done
 
-      - name: Generate Test Certificates
+      - name: Validate Certificates and Mounts
         run: |
-          echo "Generating self-signed certificates for testing..."
-          ./contrib/generate-certs.sh
+          echo "Validating generated certificates..."
+          ls -la contrib/certs/
+          head -2 contrib/certs/localhost.crt.pem || true
+          head -2 contrib/certs/localhost.key.pem || true
+          echo "Checking certs mounted in traefik container..."
+          docker compose -f production.yml -f compose/test-production.yml exec -T traefik ls -la /etc/certs/ || true
+          docker compose -f production.yml -f compose/test-production.yml exec -T traefik head -2 /etc/certs/localhost.crt.pem || true
+          docker compose -f production.yml -f compose/test-production.yml exec -T traefik head -2 /etc/certs/localhost.key.pem || true
 
       - name: Test Rate Limiting
         run: |
