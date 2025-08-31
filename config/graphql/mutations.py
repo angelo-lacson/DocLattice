@@ -40,6 +40,12 @@ from config.graphql.graphene_types import (
     UserFeedbackType,
     UserType,
 )
+from config.graphql.ratelimits import (
+    RateLimits,
+    get_user_tier_rate,
+    graphql_ratelimit,
+    graphql_ratelimit_dynamic,
+)
 from config.graphql.serializers import (
     AnnotationSerializer,
     CorpusSerializer,
@@ -119,6 +125,7 @@ class MakeAnalysisPublic(graphene.Mutation):
     obj = graphene.Field(AnalysisType)
 
     @user_passes_test(lambda user: user.is_superuser)
+    @graphql_ratelimit(rate=RateLimits.ADMIN_OPERATION)
     def mutate(root, info, analysis_id):
 
         try:
@@ -150,6 +157,7 @@ class MakeCorpusPublic(graphene.Mutation):
     message = graphene.String()
 
     @user_passes_test(lambda user: user.is_superuser)
+    @graphql_ratelimit(rate=RateLimits.ADMIN_OPERATION)
     def mutate(root, info, corpus_id):
 
         try:
@@ -614,6 +622,7 @@ class CreateLabelset(graphene.Mutation):
     obj = graphene.Field(LabelSetType)
 
     @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
     def mutate(root, info, title, description, filename=None, base64_icon_string=None):
 
         if base64_icon_string is None:
@@ -977,6 +986,7 @@ class StartQueryForCorpus(graphene.Mutation):
     obj = graphene.Field(CorpusQueryType)
 
     @login_required
+    @graphql_ratelimit(rate=RateLimits.AI_QUERY)
     def mutate(root, info, corpus_id, query):
 
         obj = None
@@ -1050,6 +1060,7 @@ class StartCorpusExport(graphene.Mutation):
     export = graphene.Field(UserExportType)
 
     @login_required
+    @graphql_ratelimit(rate=RateLimits.EXPORT)
     def mutate(
         root,
         info,
@@ -1243,6 +1254,7 @@ class UploadCorpusImportZip(graphene.Mutation):
     corpus = graphene.Field(CorpusType)
 
     @login_required
+    @graphql_ratelimit(rate=RateLimits.IMPORT)
     def mutate(root, info, base_64_file_string):
 
         if (
@@ -1341,6 +1353,7 @@ class UploadDocument(graphene.Mutation):
     document = graphene.Field(DocumentType)
 
     @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("WRITE_HEAVY"))
     def mutate(
         root,
         info,
@@ -1501,6 +1514,7 @@ class UploadDocumentsZip(graphene.Mutation):
     job_id = graphene.String(description="ID to track the processing job")
 
     @login_required
+    @graphql_ratelimit(rate=RateLimits.IMPORT)
     def mutate(
         root,
         info,
@@ -1778,6 +1792,7 @@ class AddAnnotation(graphene.Mutation):
     annotation = graphene.Field(AnnotationType)
 
     @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("WRITE_LIGHT"))
     def mutate(
         root,
         info,

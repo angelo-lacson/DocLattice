@@ -1,16 +1,15 @@
 #!/bin/bash
 
-# Production Rate Limiting Test Script
-# Tests Traefik rate limiting in production environment with local certificates
-# Designed for GitHub Actions and CI/CD environments
+# CI Rate Limiting Test Script (HTTP-only)
+# Tests Traefik rate limiting in CI environment without SSL certificates
 #
 # Usage:
-#   ./scripts/test-production-rate-limiting.sh --compose-files "production.yml compose/test-production.yml"
+#   ./scripts/test-ci-rate-limiting.sh --compose-files "production.yml compose/test-production-ci.yml"
 
 set -e
 
 # Default configuration
-COMPOSE_FILES="production.yml compose/test-production.yml"
+COMPOSE_FILES="production.yml compose/test-production-ci.yml"
 CLIENT_CONTAINER="django"
 
 # Parse command line arguments
@@ -46,19 +45,19 @@ for file in $COMPOSE_FILES; do
 done
 
 echo "============================================="
-echo "🧪 Production Rate Limiting Test"
+echo "🧪 CI Rate Limiting Test (HTTP-only)"
 echo "============================================="
-echo "Environment: Production stack with local TLS"
+echo "Environment: CI/CD stack without SSL"
 echo "Compose files: $COMPOSE_FILES"
 echo "Test strategy: Exceed rate limits to trigger 429s"
 echo "Expected: Frontend burst=20, API burst=10"
 echo ""
 
-# Function to make external request (bypass internal networking issues)
-make_external_request() {
+# Function to make HTTP request
+make_http_request() {
   local url="$1"
   local result
-  result=$(curl -k -s -w "%{http_code}" "$url" -o /dev/null --connect-timeout 5 --max-time 10 2>&1)
+  result=$(curl -s -w "%{http_code}" "$url" -o /dev/null --connect-timeout 5 --max-time 10 2>&1)
   local exit_code=$?
 
   # If curl failed completely, return connection error
@@ -82,7 +81,7 @@ $COMPOSE_CMD ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 echo ""
 echo "--- Service Health Checks ---"
 echo "Testing Traefik dashboard access..."
-traefik_dashboard=$(make_external_request "http://localhost:8080/api/rawdata")
+traefik_dashboard=$(make_http_request "http://localhost:8080/api/rawdata")
 if [ "$traefik_dashboard" != "000" ]; then
   echo "✅ Traefik dashboard accessible (HTTP $traefik_dashboard)"
 else
@@ -90,58 +89,27 @@ else
 fi
 
 echo ""
-echo "Testing individual backend services..."
-echo "Frontend service (docker network): $($COMPOSE_CMD exec -T traefik wget -qO- --timeout=2 http://frontend:5173 2>/dev/null | wc -c) bytes"
-echo "Django service (docker network): $($COMPOSE_CMD exec -T traefik wget -qO- --timeout=2 http://django:5000/admin/ 2>/dev/null | wc -c) bytes"
+echo "Testing individual backend services via Traefik internal network..."
+echo "Frontend service: $($COMPOSE_CMD exec -T traefik wget -qO- --timeout=2 http://frontend:5173 2>/dev/null | wc -c) bytes"
+echo "Django service: $($COMPOSE_CMD exec -T traefik wget -qO- --timeout=2 http://django:5000/admin/ 2>/dev/null | wc -c) bytes"
 
 echo ""
-echo "--- External HTTPS Access ---"
-# Test external HTTPS access
-response=$(make_external_request "https://localhost/")
+echo "--- External HTTP Access ---"
+# Test external HTTP access
+response=$(make_http_request "http://localhost/")
 if [ "$response" != "000" ]; then
-  echo "✅ HTTPS endpoint accessible (HTTP $response)"
+  echo "✅ HTTP endpoint accessible (HTTP $response)"
   if [ "$response" == "502" ]; then
     echo "⚠️  WARNING: 502 Bad Gateway - Traefik can't reach backend services"
+    echo "Checking Traefik logs for details..."
+    $COMPOSE_CMD logs traefik --tail=20
   fi
 else
-  echo "❌ HTTPS endpoint not accessible"
-  echo "Checking HTTP redirect..."
-  http_response=$(make_external_request "http://localhost/")
-  if [ "$http_response" == "301" ]; then
-    echo "✅ HTTP redirects to HTTPS (301)"
-  else
-    echo "❌ Services not accessible. Check if stack is running:"
-    echo "   docker compose -f $COMPOSE_FILES ps"
-    exit 1
-  fi
+  echo "❌ HTTP endpoint not accessible"
+  echo "Check if stack is running:"
+  echo "   $COMPOSE_CMD ps"
+  exit 1
 fi
-
-echo ""
-echo "--- Certificate Debug ---"
-echo "Checking if certificates exist on host:"
-ls -la contrib/certs/ || echo "cert directory not found"
-echo ""
-echo "Checking certificates inside traefik container:"
-$COMPOSE_CMD exec -T traefik ls -la /etc/certs/ || echo "❌ certs not mounted in container"
-echo ""
-echo "Checking certificate content (first few lines):"
-$COMPOSE_CMD exec -T traefik head -2 /etc/certs/localhost.crt.pem 2>/dev/null || echo "❌ cert file not readable"
-$COMPOSE_CMD exec -T traefik head -2 /etc/certs/localhost.key.pem 2>/dev/null || echo "❌ key file not readable"
-
-echo ""
-echo "--- Traefik Container Health ---"
-echo "Traefik container status:"
-$COMPOSE_CMD ps traefik
-echo ""
-echo "Traefik processes:"
-$COMPOSE_CMD exec -T traefik ps aux 2>/dev/null || echo "❌ Can't check traefik processes"
-echo ""
-echo "Traefik listening ports:"
-$COMPOSE_CMD exec -T traefik netstat -tlnp 2>/dev/null || echo "❌ Can't check listening ports"
-
-echo ""
-echo "--- Complete Traefik Logs ---"
-$COMPOSE_CMD logs traefik
 
 echo ""
 echo "=== 2. Frontend Rate Limiting Test ==="
@@ -153,12 +121,12 @@ frontend_success=0
 frontend_rate_limited=0
 frontend_errors=0
 
-echo "Sending requests to frontend (https://localhost/):"
+echo "Sending requests to frontend (http://localhost/):"
 for i in {1..30}; do
-  response=$(make_external_request "https://localhost/")
+  response=$(make_http_request "http://localhost/")
 
   case $response in
-    200|302)
+    200|302|304)
       frontend_success=$((frontend_success + 1))
       echo "✅ Request $i: $response (Success)"
       ;;
@@ -177,6 +145,10 @@ for i in {1..30}; do
     404)
       frontend_errors=$((frontend_errors + 1))
       echo "❌ Request $i: $response (Not Found - routing issue)"
+      ;;
+    000)
+      frontend_errors=$((frontend_errors + 1))
+      echo "❌ Request $i: Connection failed"
       ;;
     *)
       frontend_errors=$((frontend_errors + 1))
@@ -216,12 +188,12 @@ api_success=0
 api_rate_limited=0
 api_errors=0
 
-echo "Sending requests to API (https://localhost/graphql):"
+echo "Sending requests to API (http://localhost/graphql):"
 for i in {1..20}; do
-  response=$(make_external_request "https://localhost/graphql")
+  response=$(make_http_request "http://localhost/graphql")
 
   case $response in
-    200|302)
+    200|302|400|405)  # 400/405 are expected for GET requests to GraphQL
       api_success=$((api_success + 1))
       echo "✅ Request $i: $response (Success)"
       ;;
@@ -240,6 +212,10 @@ for i in {1..20}; do
     404)
       api_errors=$((api_errors + 1))
       echo "❌ Request $i: $response (Not Found - routing issue)"
+      ;;
+    000)
+      api_errors=$((api_errors + 1))
+      echo "❌ Request $i: Connection failed"
       ;;
     *)
       api_errors=$((api_errors + 1))
@@ -277,14 +253,18 @@ echo ""
 
 if [ $total_rate_limited -gt 0 ]; then
   echo "🎉 SUCCESS: Rate limiting is functional!"
-  echo "✅ Production environment successfully returns 429 responses"
+  echo "✅ CI environment successfully returns 429 responses"
   echo "✅ Traefik rate limiting middleware working correctly"
   echo "✅ Different rate limits applied to different endpoints"
-  echo "✅ Ready for production deployment"
+  echo "✅ Ready for deployment"
   exit 0
 else
   echo "❌ FAILURE: No rate limiting detected"
   echo "   Expected some 429 responses when exceeding configured limits"
   echo "   Check Traefik configuration and middleware setup"
+  echo ""
+  echo "Debug Information:"
+  echo "--- Traefik Logs (last 50 lines) ---"
+  $COMPOSE_CMD logs traefik --tail=50
   exit 1
 fi

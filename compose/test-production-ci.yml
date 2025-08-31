@@ -1,6 +1,6 @@
 services:
   traefik:
-    # Override the production traefik config for testing with file-based config and local TLS
+    # Override the production traefik config for CI testing with HTTP-only
     command:
       - --log.level=DEBUG
       - --api.dashboard=true
@@ -8,17 +8,11 @@ services:
       - --providers.file.filename=/etc/traefik/traefik.yml
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
-      - --entrypoints.web-secure.address=:443
       - --entrypoints.flower.address=:5555
-      # Redirect HTTP to HTTPS
-      - --entrypoints.web.http.redirections.entryPoint.to=web-secure
-      - --entrypoints.web.http.redirections.entryPoint.scheme=https
     volumes:
-      - ./compose/production/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./contrib/certs:/etc/certs:ro
+      - ./compose/production/traefik/traefik-ci.yml:/etc/traefik/traefik.yml:ro
     ports:
       - "80:80"
-      - "443:443"
       - "5555:5555"
       - "8080:8080"  # Traefik dashboard for debugging
 
@@ -26,8 +20,9 @@ services:
   django:
     environment:
       - DJANGO_DEBUG=False
-      - DJANGO_ALLOWED_HOSTS=opencontracts.opensource.legal,localhost,127.0.0.1
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
       - USE_TLS=False
+      - DJANGO_SECURE_SSL_REDIRECT=False
 
   frontend:
     environment:

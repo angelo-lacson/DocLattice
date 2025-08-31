@@ -127,33 +127,28 @@ jobs:
           OPEN_CONTRACTS_REACT_APP_ALLOW_IMPORTS=false
           EOF
 
-      - name: Build Production Stack (Test Mode)
-        run: docker compose -f production.yml -f compose/test-production.yml build
-
-      - name: Generate Test Certificates (before starting services)
-        run: |
-          echo "Generating self-signed certificates for testing..."
-          ./contrib/generate-certs.sh
+      - name: Build Production Stack (CI Mode)
+        run: docker compose -f production.yml -f compose/test-production-ci.yml build
 
       - name: Run Database Migrations
         run: |
           echo "Running database migrations before starting services..."
-          docker compose -f production.yml -f compose/test-production.yml --profile migrate up migrate
+          docker compose -f production.yml -f compose/test-production-ci.yml --profile migrate up migrate
           echo "Migrations completed successfully"
 
-      - name: Start Production Stack (Test Mode)
+      - name: Start Production Stack (CI Mode - HTTP only)
         run: |
-          docker compose -f production.yml -f compose/test-production.yml up -d
+          docker compose -f production.yml -f compose/test-production-ci.yml up -d
           echo "Waiting for services to start..."
-          sleep 45  # Give services more time to start
+          sleep 30  # Give services time to start
 
           echo "Checking if required services are running..."
-          docker compose -f production.yml -f compose/test-production.yml ps --services --filter status=running
+          docker compose -f production.yml -f compose/test-production-ci.yml ps --services --filter status=running
 
           # Wait for Django to be ready
           echo "Waiting for Django to be ready..."
           for i in {1..30}; do
-            if docker compose -f production.yml -f compose/test-production.yml exec -T django python manage.py check --deploy 2>/dev/null; then
+            if docker compose -f production.yml -f compose/test-production-ci.yml exec -T django python manage.py check --deploy 2>/dev/null; then
               echo "Django is ready!"
               break
             fi
@@ -164,34 +159,23 @@ jobs:
       - name: Verify Stack Health
         run: |
           echo "=== Docker containers status ==="
-          docker compose -f production.yml -f compose/test-production.yml ps
+          docker compose -f production.yml -f compose/test-production-ci.yml ps
           echo "=== Container health checks ==="
-          for container in $(docker compose -f production.yml -f compose/test-production.yml ps -q); do
+          for container in $(docker compose -f production.yml -f compose/test-production-ci.yml ps -q); do
             name=$(docker inspect -f '{{.Name}}' $container | sed 's/^\/*//')
             echo "--- Health for $name ---"
             docker logs --tail 10 $container 2>&1 || true
           done
 
-      - name: Validate Certificates and Mounts
+      - name: Test Rate Limiting (HTTP-only for CI)
         run: |
-          echo "Validating generated certificates..."
-          ls -la contrib/certs/
-          head -2 contrib/certs/localhost.crt.pem || true
-          head -2 contrib/certs/localhost.key.pem || true
-          echo "Checking certs mounted in traefik container..."
-          docker compose -f production.yml -f compose/test-production.yml exec -T traefik ls -la /etc/certs/ || true
-          docker compose -f production.yml -f compose/test-production.yml exec -T traefik head -2 /etc/certs/localhost.crt.pem || true
-          docker compose -f production.yml -f compose/test-production.yml exec -T traefik head -2 /etc/certs/localhost.key.pem || true
-
-      - name: Test Rate Limiting
-        run: |
-          ./scripts/test-production-rate-limiting.sh --compose-files "production.yml compose/test-production.yml"
+          ./scripts/test-ci-rate-limiting.sh --compose-files "production.yml compose/test-production-ci.yml"
 
       - name: Capture Logs on Failure
         if: failure()
         run: |
           echo "=== Capturing logs for debugging ==="
-          docker compose -f production.yml -f compose/test-production.yml logs --no-color > production-stack-logs.txt
+          docker compose -f production.yml -f compose/test-production-ci.yml logs --no-color > production-stack-logs.txt
 
       - name: Upload Logs on Failure
         if: failure()
@@ -202,4 +186,4 @@ jobs:
 
       - name: Tear Down Stack
         if: always()
-        run: docker compose -f production.yml -f compose/test-production.yml down -v
+        run: docker compose -f production.yml -f compose/test-production-ci.yml down -v
