@@ -112,7 +112,7 @@ http:
     frontend:
       loadBalancer:
         servers:
-          - url: http://frontend:5173
+          - url: http://frontend:3000
 
     django:
       loadBalancer:

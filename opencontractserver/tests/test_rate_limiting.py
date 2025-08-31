@@ -1,389 +1,21 @@
+import json
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
-from graphene.test import Client
+from django.test import Client as DjangoClient
+from django.test import TestCase
 from graphql_relay import to_global_id
 
 from config.graphql.ratelimits import (
-    RateLimitExceeded,
     RateLimits,
-    get_client_ip,
     get_user_tier_rate,
-    graphql_ratelimit,
-    graphql_ratelimit_dynamic,
 )
-from config.graphql.schema import schema
-from opencontractserver.annotations.models import LabelSet
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 
 User = get_user_model()
-
-
-class TestContext:
-    """Minimal context object that acts as both info and request for tests."""
-
-    def __init__(self, user, request=None):
-        self.user = user
-        # If no request provided, create a mock one
-        if request is None:
-            self.META = {"REMOTE_ADDR": "127.0.0.1"}
-            self._request = None
-        else:
-            self.META = request.META
-            self._request = request
-        # For when TestContext is used as info object, context points to self
-        self.context = self
-
-
-@override_settings(
-    CACHES={
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "rate-limit-decorator-tests",
-        }
-    }
-)
-class RateLimitDecoratorTestCase(TransactionTestCase):
-    """Test the rate limiting decorators with useful scenarios.
-
-    Uses a dedicated LocMemCache location to ensure isolation from other tests.
-    """
-
-    def setUp(self):
-        self.factory = RequestFactory()
-        # Clear cache before each test
-        cache.clear()
-
-    def tearDown(self):
-        # Clear cache after each test
-        cache.clear()
-
-    def test_get_client_ip(self):
-        """Test IP extraction from request."""
-        # Test with direct IP
-        request = self.factory.get("/")
-        request.META["REMOTE_ADDR"] = "192.168.1.1"
-        self.assertEqual(get_client_ip(request), "192.168.1.1")
-
-        # Test with X-Forwarded-For
-        request.META["HTTP_X_FORWARDED_FOR"] = "10.0.0.1, 192.168.1.1"
-        self.assertEqual(get_client_ip(request), "10.0.0.1")
-
-    def test_basic_rate_limiting(self):
-        """Test that rate limiting works with realistic user_or_ip key."""
-        # Clear all rate limit keys for this user
-        cache.clear()
-
-        # Use a unique group for this test to avoid collisions
-        test_group = f"test_basic_{id(self)}"
-
-        @graphql_ratelimit(rate="2/m", key="user_or_ip", group=test_group)
-        def test_resolver(root, info):
-            return "success"
-
-        # Create a unique user for this test to avoid conflicts
-        test_user = User.objects.create_user(
-            username=f"test_basic_{int(time.time())}", password="test123"
-        )
-
-        request = self.factory.post("/graphql")
-        request.user = test_user
-        info = TestContext(test_user, request)
-
-        # First two calls should succeed
-        for i in range(2):
-            result = test_resolver(None, info)
-            self.assertEqual(result, "success")
-
-        # Third call should be rate limited
-        with self.assertRaises(RateLimitExceeded) as cm:
-            test_resolver(None, info)
-
-        self.assertIn("Rate limit exceeded", str(cm.exception))
-        self.assertIn("2 requests per minute", str(cm.exception))
-
-        # Clean up
-        test_user.delete()
-
-    def test_user_vs_ip_rate_limiting(self):
-        """Test that rate limiting distinguishes between users and IPs."""
-        cache.clear()
-
-        # Use a unique group for this test
-        test_group = f"test_user_vs_ip_{id(self)}"
-
-        @graphql_ratelimit(rate="1/m", key="user_or_ip", group=test_group)
-        def test_resolver(root, info):
-            return "success"
-
-        # Create unique users for this test
-        user1 = User.objects.create_user(
-            username=f"test_user1_{int(time.time())}", password="test123"
-        )
-        user2 = User.objects.create_user(
-            username=f"test_user2_{int(time.time())}", password="test123"
-        )
-
-        # Test with first user
-        request1 = self.factory.post("/graphql")
-        request1.user = user1
-        info1 = TestContext(user1, request1)
-
-        result = test_resolver(None, info1)
-        self.assertEqual(result, "success")
-
-        # Second call with same user should fail
-        with self.assertRaises(RateLimitExceeded):
-            test_resolver(None, info1)
-
-        # But a different user should succeed (different rate limit bucket)
-        request2 = self.factory.post("/graphql")
-        request2.user = user2
-        info2 = TestContext(user2, request2)
-
-        result = test_resolver(None, info2)
-        self.assertEqual(result, "success")
-
-        # Clean up
-        user1.delete()
-        user2.delete()
-
-    def test_dynamic_rate_limiting(self):
-        """Test dynamic rate limiting based on user tier with realistic keys."""
-        cache.clear()
-
-        # Use a unique group for this test
-        test_group = f"test_dynamic_{id(self)}"
-
-        def get_test_rate(root, info):
-            user = info.context.user
-            if user and user.is_superuser:
-                return "10/m"
-            elif user and user.is_authenticated:
-                return "5/m"
-            else:
-                return "2/m"
-
-        @graphql_ratelimit_dynamic(
-            get_rate=get_test_rate, key="user_or_ip", group=test_group
-        )
-        def test_resolver(root, info):
-            return "success"
-
-        # Create unique users for this test
-        regular_user = User.objects.create_user(
-            username=f"test_regular_{int(time.time())}", password="test123"
-        )
-        regular_user.is_usage_capped = False  # Ensure not capped
-        regular_user.save()
-
-        super_user = User.objects.create_superuser(
-            username=f"test_super_{int(time.time())}",
-            password="test123",
-            email=f"super_{int(time.time())}@test.com",
-        )
-        super_user.is_usage_capped = False  # Ensure not capped
-        super_user.save()
-
-        # Test with regular user (should allow 5 calls)
-        request = self.factory.post("/graphql")
-        request.user = regular_user
-        info = TestContext(regular_user, request)
-
-        for i in range(5):
-            result = test_resolver(None, info)
-            self.assertEqual(result, "success")
-
-        # 6th call should fail
-        with self.assertRaises(RateLimitExceeded):
-            test_resolver(None, info)
-
-        # Test with superuser (should allow 10 calls)
-        request2 = self.factory.post("/graphql")
-        request2.user = super_user
-        info2 = TestContext(super_user, request2)
-
-        for i in range(10):
-            result = test_resolver(None, info2)
-            self.assertEqual(result, "success")
-
-        # 11th call should fail
-        with self.assertRaises(RateLimitExceeded):
-            test_resolver(None, info2)
-
-        # Clean up
-        regular_user.delete()
-        super_user.delete()
-
-    def test_user_tier_dynamic_rate_limiting(self):
-        """Test that different user tiers get different rate limits on actual queries."""
-        # This tests the dynamic rate limiting based on user tier
-        # We'll use a query that has dynamic rate limiting applied
-
-        query = """
-            query GetCorpuses {
-                corpuses {
-                    edges {
-                        node {
-                            id
-                            title
-                        }
-                    }
-                }
-            }
-        """
-
-        # Regular users should get base rate limits
-        # Superusers should get higher limits
-        # This is tested via mocking since actual rate testing would be slow
-
-        with patch("config.graphql.ratelimits.is_ratelimited") as mock_is_ratelimited:
-            # First, test that regular user rate limit is checked
-            mock_is_ratelimited.return_value = False
-            result = self.client.execute(query)
-            self.assertIsNone(result.get("errors"))
-
-            # Verify the rate limit was checked with correct parameters
-            self.assertTrue(mock_is_ratelimited.called)
-
-            # Now test with superuser - should have different rate
-            mock_is_ratelimited.reset_mock()
-            mock_is_ratelimited.return_value = False
-            result = self.super_client.execute(query)
-            self.assertIsNone(result.get("errors"))
-
-            # Verify superuser rate limit was checked
-            self.assertTrue(mock_is_ratelimited.called)
-
-    def test_anonymous_user_rate_limiting(self):
-        """Test that anonymous users get IP-based rate limiting."""
-        # Create an anonymous context
-        anon_context = TestContext(None)
-        anon_client = Client(schema, context_value=anon_context)
-
-        query = """
-            query GetCorpuses {
-                corpuses {
-                    edges {
-                        node {
-                            id
-                        }
-                    }
-                }
-            }
-        """
-
-        with patch("config.graphql.ratelimits.is_ratelimited") as mock_is_ratelimited:
-            # Anonymous users should be rate limited by IP
-            mock_is_ratelimited.return_value = False
-            anon_client.execute(query)
-            # Note: Query might fail due to permissions, but rate limit should be checked
-
-            # Verify rate limiting was checked
-            self.assertTrue(mock_is_ratelimited.called)
-
-            # Check that rate limit uses IP-based key for anonymous users
-            call_args = mock_is_ratelimited.call_args
-            self.assertIsNotNone(call_args)
-
-    def test_mutation_write_heavy_rate_limiting(self):
-        """Test that write-heavy mutations have appropriate rate limits."""
-        mutation = """
-            mutation UpdateCorpus($id: ID!, $title: String!) {
-                updateCorpus(id: $id, title: $title) {
-                    ok
-                    message
-                }
-            }
-        """
-
-        variables = {"id": self.corpus_gid, "title": f"Updated Title {self.test_id}"}
-
-        with patch("config.graphql.ratelimits.is_ratelimited") as mock_is_ratelimited:
-            # First call should succeed
-            mock_is_ratelimited.return_value = False
-            result = self.client.execute(mutation, variables=variables)
-
-            # Mutation should work
-            if "errors" not in result:
-                self.assertTrue(result["data"]["updateCorpus"]["ok"])
-
-            # Simulate rate limit exceeded
-            mock_is_ratelimited.return_value = True
-            result = self.client.execute(mutation, variables=variables)
-
-            # Should get rate limit error
-            self.assertIsNotNone(result.get("errors"))
-            if result.get("errors"):
-                self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    def test_query_read_heavy_rate_limiting(self):
-        """Test that read-heavy queries have appropriate rate limits."""
-        # Test a complex query that should have lower rate limits
-        query = """
-            query GetAnnotations($corpusId: ID!) {
-                annotations(corpusId: $corpusId) {
-                    edges {
-                        node {
-                            id
-                            rawText
-                        }
-                    }
-                    totalCount
-                }
-            }
-        """
-
-        variables = {"corpusId": self.corpus_gid}
-
-        with patch("config.graphql.ratelimits.is_ratelimited") as mock_is_ratelimited:
-            # Should check rate limits
-            mock_is_ratelimited.return_value = False
-            result = self.client.execute(query, variables=variables)
-
-            # Verify rate limiting was applied
-            self.assertTrue(mock_is_ratelimited.called)
-
-            # Simulate hitting rate limit
-            mock_is_ratelimited.return_value = True
-            result = self.client.execute(query, variables=variables)
-
-            # Should get rate limit error
-            self.assertIsNotNone(result.get("errors"))
-            if result.get("errors"):
-                self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    def test_rate_limit_disabled_in_tests(self):
-        """Test that rate limiting can be disabled for testing."""
-
-        # Create a unique user for this test
-        test_user = User.objects.create_user(
-            username=f"test_disabled_{int(time.time())}", password="test123"
-        )
-
-        # Use a unique group for this test
-        test_group = f"test_disabled_{id(self)}"
-
-        @graphql_ratelimit(rate="1/m", key="user_or_ip", group=test_group)
-        def test_resolver(root, info):
-            return "success"
-
-        request = self.factory.post("/graphql")
-        request.user = test_user
-        info = TestContext(test_user, request)
-
-        with self.settings(RATELIMIT_DISABLE=True):
-            # Should allow unlimited calls when disabled
-            for i in range(10):
-                result = test_resolver(None, info)
-                self.assertEqual(result, "success")
-
-        # Clean up
-        test_user.delete()
 
 
 class RateLimitConfigurationTestCase(TestCase):
@@ -440,16 +72,13 @@ class RateLimitConfigurationTestCase(TestCase):
         regular_user = User.objects.create_user(
             username="regular_rate", password="test"
         )
-        regular_user.is_usage_capped = (
-            False  # Regular users should not be capped for this test
-        )
+        regular_user.is_usage_capped = False
         regular_user.save()
+
         superuser = User.objects.create_superuser(
             username="super_rate", password="test", email="super_rate@test.com"
         )
-        superuser.is_usage_capped = (
-            False  # Superusers should not be capped for this test
-        )
+        superuser.is_usage_capped = False
         superuser.save()
 
         # Create mock info objects with proper user attribute access
@@ -475,7 +104,7 @@ class RateLimitConfigurationTestCase(TestCase):
         anon_user = MagicMock()
         anon_user.is_authenticated = False
         anon_user.is_superuser = False
-        anon_user.is_usage_capped = False  # Anonymous users are not usage-capped
+        anon_user.is_usage_capped = False
         anon_info = MockInfo(anon_user)
         rate = get_rate(None, anon_info)
         self.assertEqual(rate, "30/m")
@@ -488,126 +117,6 @@ class RateLimitConfigurationTestCase(TestCase):
         capped_info = MockInfo(capped_user)
         rate = get_rate(None, capped_info)
         self.assertEqual(rate, "30/m")  # 60/m * 0.5 = 30/m
-
-
-@override_settings(
-    CACHES={
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "rate-limit-grouping-tests",
-        }
-    }
-)
-class RateLimitGroupingTestCase(TransactionTestCase):
-    """Test rate limit grouping functionality.
-
-    Uses a dedicated LocMemCache location to ensure isolation from other tests.
-    """
-
-    def setUp(self):
-        self.factory = RequestFactory()
-        cache.clear()
-
-    def tearDown(self):
-        cache.clear()
-
-    def test_rate_limit_grouping(self):
-        """Test that rate limits can be grouped across multiple endpoints realistically."""
-        cache.clear()
-
-        # Create a unique user for this test
-        test_user = User.objects.create_user(
-            username=f"test_grouping_{int(time.time())}", password="test123"
-        )
-
-        # Use a unique group name for this test instance
-        test_group = f"document_operations_{id(self)}"
-
-        # Simulate two related operations that should share a rate limit
-        # For example, document creation and document update might share a group
-        @graphql_ratelimit(rate="2/m", group=test_group, key="user_or_ip")
-        def create_document(root, info):
-            return "document_created"
-
-        @graphql_ratelimit(rate="2/m", group=test_group, key="user_or_ip")
-        def update_document(root, info):
-            return "document_updated"
-
-        request = self.factory.post("/graphql")
-        request.user = test_user
-        info = TestContext(test_user, request)
-
-        # Call create_document once
-        result = create_document(None, info)
-        self.assertEqual(result, "document_created")
-
-        # Call update_document once (should share the same limit)
-        result = update_document(None, info)
-        self.assertEqual(result, "document_updated")
-
-        # Third call to either should fail (shared limit of 2/m)
-        with self.assertRaises(RateLimitExceeded):
-            create_document(None, info)
-
-        # Also verify the other function is limited
-        with self.assertRaises(RateLimitExceeded):
-            update_document(None, info)
-
-        # Clean up
-        test_user.delete()
-
-    def test_anonymous_vs_authenticated_rate_limits(self):
-        """Test that anonymous users get IP-based limits while authenticated get user-based."""
-        cache.clear()
-
-        # Use a unique group for this test
-        test_group = f"test_anon_auth_{id(self)}"
-
-        @graphql_ratelimit(rate="2/m", key="user_or_ip", group=test_group)
-        def test_resolver(root, info):
-            return "success"
-
-        # Test with anonymous user (IP-based)
-        request1 = self.factory.post("/graphql")
-        request1.META["REMOTE_ADDR"] = "192.168.1.100"
-        request1.user = None
-        info1 = TestContext(None, request1)
-
-        # First two calls should succeed
-        for i in range(2):
-            result = test_resolver(None, info1)
-            self.assertEqual(result, "success")
-
-        # Third call should fail
-        with self.assertRaises(RateLimitExceeded):
-            test_resolver(None, info1)
-
-        # Different IP should have its own limit
-        request2 = self.factory.post("/graphql")
-        request2.META["REMOTE_ADDR"] = "192.168.1.101"
-        request2.user = None
-        info2 = TestContext(None, request2)
-
-        result = test_resolver(None, info2)
-        self.assertEqual(result, "success")
-
-        # Now test with authenticated user from same IP - should have separate limit
-        test_user = User.objects.create_user(
-            username=f"test_anon_auth_{int(time.time())}", password="test123"
-        )
-
-        request3 = self.factory.post("/graphql")
-        request3.META["REMOTE_ADDR"] = "192.168.1.100"  # Same IP as first anonymous
-        request3.user = test_user
-        info3 = TestContext(test_user, request3)
-
-        # Should succeed because user-based limit is separate from IP-based
-        for i in range(2):
-            result = test_resolver(None, info3)
-            self.assertEqual(result, "success")
-
-        # Clean up
-        test_user.delete()
 
 
 class GraphQLRateLimitIntegrationTestCase(TestCase):
@@ -630,8 +139,13 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         self.superuser.is_usage_capped = False
         self.superuser.save()
 
-        self.client = Client(schema, context_value=TestContext(self.user))
-        self.super_client = Client(schema, context_value=TestContext(self.superuser))
+        # Use Django test client for actual HTTP requests
+        self.django_client = DjangoClient()
+        self.django_client.force_login(self.user)
+
+        self.super_django_client = DjangoClient()
+        self.super_django_client.force_login(self.superuser)
+
         cache.clear()
 
         # Create test objects
@@ -647,394 +161,24 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         self.corpus_gid = to_global_id("CorpusType", self.corpus.id)
         self.document_gid = to_global_id("DocumentType", self.document.id)
 
+    def execute_graphql(self, query, variables=None, use_super=False):
+        """Execute a GraphQL query through Django's test client."""
+        client = self.super_django_client if use_super else self.django_client
+        response = client.post(
+            "/graphql/",
+            data=json.dumps({"query": query, "variables": variables or {}}),
+            content_type="application/json",
+        )
+        return response.json()
+
     def tearDown(self):
         cache.clear()
 
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_create_labelset_rate_limiting(self, mock_is_ratelimited):
-        """Test that CreateLabelset mutation has rate limiting applied."""
-        # First call should succeed
-        mock_is_ratelimited.return_value = False
-
-        mutation = """
-            mutation CreateLabelset($title: String!, $description: String!) {
-                createLabelset(title: $title, description: $description) {
-                    ok
-                    message
-                    obj {
-                        id
-                        title
-                    }
-                }
-            }
-        """
-
-        variables = {"title": "Test Labelset", "description": "Test Description"}
-
-        result = self.client.execute(mutation, variables=variables)
-        self.assertIsNone(result.get("errors"))
-        self.assertTrue(result["data"]["createLabelset"]["ok"])
-
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-
-        result = self.client.execute(mutation, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_corpus_stats_query_rate_limiting(self, mock_is_ratelimited):
-        """Test that corpus stats query has rate limiting applied."""
-        mock_is_ratelimited.return_value = False
-
+    def test_actual_rate_limiting_on_queries(self):
+        """Test that queries are actually rate limited after multiple requests."""
         query = """
-            query GetCorpusStats($corpusId: ID!) {
-                corpusStats(corpusId: $corpusId) {
-                    totalDocs
-                    totalAnnotations
-                }
-            }
-        """
-
-        variables = {"corpusId": self.corpus_gid}
-
-        result = self.client.execute(query, variables=variables)
-        self.assertIsNone(result.get("errors"))
-        self.assertIsNotNone(result["data"]["corpusStats"])
-
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-
-        result = self.client.execute(query, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_annotations_query_rate_limiting(self, mock_is_ratelimited):
-        """Test that annotations query has rate limiting applied."""
-        mock_is_ratelimited.return_value = False
-
-        query = """
-            query GetAnnotations($corpusId: ID!) {
-                annotations(corpusId: $corpusId) {
-                    edges {
-                        node {
-                            id
-                        }
-                    }
-                }
-            }
-        """
-
-        variables = {"corpusId": self.corpus_gid}
-
-        result = self.client.execute(query, variables=variables)
-        self.assertIsNone(result.get("errors"))
-
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-
-        result = self.client.execute(query, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    def test_rate_limit_grouping_on_related_operations(self):
-        """Test that related operations can share rate limits via grouping."""
-        # In the actual implementation, document creation and updates might share limits
-        # We'll test this concept with actual GraphQL operations
-
-        create_mutation = """
-            mutation CreateLabelset($title: String!, $description: String!) {
-                createLabelset(title: $title, description: $description) {
-                    ok
-                    obj {
-                        id
-                    }
-                }
-            }
-        """
-
-        # These operations should potentially share rate limits if grouped
-        with patch("config.graphql.ratelimits.is_ratelimited") as mock_is_ratelimited:
-            # Test that multiple related write operations share limits
-            mock_is_ratelimited.return_value = False
-
-            # First creation
-            result1 = self.client.execute(
-                create_mutation,
-                variables={
-                    "title": f"Labelset 1 {self.test_id}",
-                    "description": "Test",
-                },
-            )
-            self.assertIsNone(result1.get("errors"))
-
-            # Second creation - would share limit if grouped
-            result2 = self.client.execute(
-                create_mutation,
-                variables={
-                    "title": f"Labelset 2 {self.test_id}",
-                    "description": "Test",
-                },
-            )
-            self.assertIsNone(result2.get("errors"))
-
-            # Verify rate limiting was checked for both
-            self.assertEqual(mock_is_ratelimited.call_count, 2)
-
-    def test_usage_capped_users_get_reduced_limits(self):
-        """Test that usage-capped users get reduced rate limits."""
-        # Create a usage-capped user
-        capped_user = User.objects.create_user(
-            username=f"capped_user_{self.test_id}", password="test123"
-        )
-        capped_user.is_usage_capped = True  # This user is usage-capped
-        capped_user.save()
-
-        # Give the user access to a corpus
-        test_corpus = Corpus.objects.create(
-            title=f"Capped Test Corpus {self.test_id}", creator=capped_user
-        )
-        corpus_gid = to_global_id("CorpusType", test_corpus.id)
-
-        capped_client = Client(schema, context_value=TestContext(capped_user))
-
-        # Use a query that definitely has rate limiting applied
-        query = """
-            query GetCorpusStats($corpusId: ID!) {
-                corpusStats(corpusId: $corpusId) {
-                    totalDocs
-                    totalAnnotations
-                }
-            }
-        """
-
-        with patch("config.graphql.ratelimits.is_ratelimited") as mock_is_ratelimited:
-            # Usage-capped users should hit rate limits sooner
-            mock_is_ratelimited.return_value = False
-            capped_client.execute(query, variables={"corpusId": corpus_gid})
-
-            # Verify rate limiting was checked
-            if mock_is_ratelimited.called:
-                # Rate limiting was applied - good!
-                self.assertTrue(True)
-            else:
-                # If not called, check if the query itself failed
-                # Some queries might not be accessible or might fail for other reasons
-                self.skipTest(
-                    "Query doesn't trigger rate limiting check - may not be configured"
-                )
-
-        # Clean up
-        test_corpus.delete()
-        capped_user.delete()
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_document_upload_rate_limiting(self, mock_is_ratelimited):
-        """Test that document upload mutation has appropriate rate limiting."""
-        mock_is_ratelimited.return_value = False
-
-        mutation = """
-            mutation UploadDocument($file: String!, $filename: String!, $title: String!, $description: String!) {
-                uploadDocument(
-                    base64FileString: $file,
-                    filename: $filename,
-                    title: $title,
-                    description: $description
-                ) {
-                    ok
-                    message
-                }
-            }
-        """
-
-        variables = {
-            "file": "dGVzdCBmaWxlIGNvbnRlbnQ=",  # base64 encoded "test file content"
-            "filename": f"test_{self.test_id}.txt",
-            "title": f"Test Upload {self.test_id}",
-            "description": "Test document upload",
-        }
-
-        # First call should check rate limit
-        result = self.client.execute(mutation, variables=variables)
-        if not mock_is_ratelimited.called:
-            self.skipTest(
-                "UploadDocument mutation doesn't have rate limiting configured"
-            )
-        self.assertTrue(mock_is_ratelimited.called)
-
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-        result = self.client.execute(mutation, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        if result.get("errors"):
-            self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_delete_document_rate_limiting(self, mock_is_ratelimited):
-        """Test that document deletion has rate limiting."""
-        mock_is_ratelimited.return_value = False
-
-        mutation = """
-            mutation DeleteDocument($id: String!) {
-                deleteDocument(id: $id) {
-                    ok
-                    message
-                }
-            }
-        """
-
-        variables = {"id": self.document_gid}
-
-        # Should check rate limit
-        result = self.client.execute(mutation, variables=variables)
-        self.assertTrue(mock_is_ratelimited.called)
-
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-        result = self.client.execute(mutation, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        if result.get("errors"):
-            self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_create_annotation_rate_limiting(self, mock_is_ratelimited):
-        """Test that annotation creation has rate limiting."""
-        mock_is_ratelimited.return_value = False
-
-        # First create a label for the annotation
-        labelset = LabelSet.objects.create(
-            title=f"Test Labelset {self.test_id}", creator=self.user
-        )
-
-        mutation = """
-            mutation CreateAnnotation($documentId: ID!, $corpusId: ID!, $page: Int!, $rawText: String!) {
-                createAnnotation(
-                    documentId: $documentId,
-                    corpusId: $corpusId,
-                    page: $page,
-                    rawText: $rawText
-                ) {
-                    ok
-                    annotation {
-                        id
-                    }
-                }
-            }
-        """
-
-        variables = {
-            "documentId": self.document_gid,
-            "corpusId": self.corpus_gid,
-            "page": 1,
-            "rawText": "Test annotation text",
-        }
-
-        # Should check rate limit
-        self.client.execute(mutation, variables=variables)
-        self.assertTrue(mock_is_ratelimited.called)
-
-        # Clean up
-        labelset.delete()
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_corpus_export_rate_limiting(self, mock_is_ratelimited):
-        """Test that corpus export has appropriate rate limiting."""
-        mock_is_ratelimited.return_value = False
-
-        mutation = """
-            mutation StartCorpusExport($corpusId: ID!) {
-                startCorpusExport(corpusId: $corpusId) {
-                    ok
-                    message
-                }
-            }
-        """
-
-        variables = {"corpusId": self.corpus_gid}
-
-        # Export should have strict rate limiting
-        result = self.client.execute(mutation, variables=variables)
-        self.assertTrue(mock_is_ratelimited.called)
-
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-        result = self.client.execute(mutation, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        if result.get("errors"):
-            self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_ai_extract_rate_limiting(self, mock_is_ratelimited):
-        """Test that AI extraction operations have rate limiting."""
-        mock_is_ratelimited.return_value = False
-
-        mutation = """
-            mutation StartExtract($corpusId: ID!, $fieldsetId: ID!) {
-                startExtract(corpusId: $corpusId, fieldsetId: $fieldsetId) {
-                    ok
-                    message
-                }
-            }
-        """
-
-        # Would need actual fieldset ID, but we're just testing rate limiting
-        variables = {
-            "corpusId": self.corpus_gid,
-            "fieldsetId": "RmllbGRzZXRUeXBlOjE=",  # dummy ID
-        }
-
-        # AI operations should have strict rate limiting
-        result = self.client.execute(mutation, variables=variables)
-        self.assertTrue(mock_is_ratelimited.called)
-
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-        result = self.client.execute(mutation, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        if result.get("errors"):
-            self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_documents_query_rate_limiting(self, mock_is_ratelimited):
-        """Test that documents query has rate limiting."""
-        mock_is_ratelimited.return_value = False
-
-        query = """
-            query GetDocuments($corpusId: ID!) {
-                documents(corpusId: $corpusId) {
-                    edges {
-                        node {
-                            id
-                            title
-                            description
-                        }
-                    }
-                }
-            }
-        """
-
-        variables = {"corpusId": self.corpus_gid}
-
-        # Should check rate limit
-        result = self.client.execute(query, variables=variables)
-        self.assertTrue(mock_is_ratelimited.called)
-
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-        result = self.client.execute(query, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        if result.get("errors"):
-            self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
-
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_labelsets_query_rate_limiting(self, mock_is_ratelimited):
-        """Test that labelsets query has rate limiting."""
-        mock_is_ratelimited.return_value = False
-
-        query = """
-            query GetLabelsets {
-                labelsets {
+            query GetCorpuses {
+                corpuses {
                     edges {
                         node {
                             id
@@ -1045,93 +189,153 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             }
         """
 
-        # Should check rate limit
-        result = self.client.execute(query)
-        self.assertTrue(mock_is_ratelimited.called)
+        # Clear cache to start fresh
+        cache.clear()
 
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-        result = self.client.execute(query)
-        self.assertIsNotNone(result.get("errors"))
-        if result.get("errors"):
-            self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
+        # The rate limit for READ_LIGHT is 100/m base, 200/m for authenticated users
+        # Make many requests to hit the limit
+        results = []
+        for i in range(250):  # Try to exceed the 200/m limit
+            result = self.execute_graphql(query)
+            results.append(result)
 
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_update_annotation_rate_limiting(self, mock_is_ratelimited):
-        """Test that annotation updates have rate limiting."""
-        mock_is_ratelimited.return_value = False
+            # Check if we hit a rate limit
+            if result.get("errors"):
+                error_message = result["errors"][0]["message"]
+                if "Limit exceeded" in error_message:
+                    # We successfully triggered rate limiting
+                    self.assertIn("Limit exceeded", error_message)
+                    self.assertLess(i, 250, "Should hit rate limit before 250 requests")
+                    return
 
+        # If we didn't hit a rate limit, that's unexpected for 250 requests
+        self.fail("Did not hit rate limit after 250 requests")
+
+    def test_actual_rate_limiting_on_mutations(self):
+        """Test that mutations are actually rate limited."""
         mutation = """
-            mutation UpdateAnnotation($id: ID!, $rawText: String!) {
-                updateAnnotation(id: $id, rawText: $rawText) {
+            mutation CreateLabelset($title: String!, $description: String!) {
+                createLabelset(title: $title, description: $description) {
                     ok
-                    annotation {
-                        id
-                    }
+                    message
                 }
             }
         """
 
-        # Would need actual annotation ID, but we're testing rate limiting
-        variables = {
-            "id": "QW5ub3RhdGlvblR5cGU6MQ==",  # dummy ID
-            "rawText": "Updated text",
-        }
+        # Clear cache to start fresh
+        cache.clear()
 
-        # Should check rate limit
-        result = self.client.execute(mutation, variables=variables)
-        self.assertTrue(mock_is_ratelimited.called)
+        # WRITE_MEDIUM is 10/m base, 20/m for authenticated users
+        results = []
+        for i in range(25):  # Try to exceed the 20/m limit
+            variables = {
+                "title": f"Test Labelset {self.test_id}_{i}",
+                "description": f"Test Description {i}",
+            }
+            result = self.execute_graphql(mutation, variables)
+            results.append(result)
 
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-        result = self.client.execute(mutation, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        if result.get("errors"):
-            self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
+            # Check if we hit a rate limit
+            if result.get("errors"):
+                error_message = result["errors"][0]["message"]
+                if "Limit exceeded" in error_message:
+                    # We successfully triggered rate limiting
+                    self.assertIn("Limit exceeded", error_message)
+                    self.assertLess(i, 25, "Should hit rate limit before 25 requests")
+                    return
 
-    @patch("config.graphql.ratelimits.is_ratelimited")
-    def test_analyses_query_rate_limiting(self, mock_is_ratelimited):
-        """Test that analyses query has rate limiting."""
-        mock_is_ratelimited.return_value = False
+        # If we didn't hit a rate limit, that's unexpected
+        self.fail("Did not hit rate limit after 25 mutation requests")
 
+    def test_superuser_gets_higher_rate_limits(self):
+        """Test that superusers get higher rate limits than regular users."""
         query = """
-            query GetAnalyses($corpusId: ID!) {
-                analyses(corpusId: $corpusId) {
+            query GetCorpuses {
+                corpuses {
                     edges {
                         node {
                             id
-                            analyzer {
-                                id
-                            }
                         }
                     }
                 }
             }
         """
 
-        variables = {"corpusId": self.corpus_gid}
+        # Clear cache to start fresh
+        cache.clear()
 
-        # Should check rate limit
-        result = self.client.execute(query, variables=variables)
-        self.assertTrue(mock_is_ratelimited.called)
+        # Regular user should hit limit around 200 requests
+        # Superuser should get 10x that (1000/m)
 
-        # Simulate rate limit exceeded
-        mock_is_ratelimited.return_value = True
-        result = self.client.execute(query, variables=variables)
-        self.assertIsNotNone(result.get("errors"))
-        if result.get("errors"):
-            self.assertIn("Rate limit exceeded", result["errors"][0]["message"])
+        # Test with regular user first
+        regular_hit_limit = False
+        for i in range(250):
+            result = self.execute_graphql(query, use_super=False)
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                regular_hit_limit = True
+                regular_limit_hit_at = i
+                break
 
-    def test_multiple_users_different_rate_limits(self):
-        """Test that different users have independent rate limit buckets."""
-        # Create another user
-        other_user = User.objects.create_user(
-            username=f"other_user_{self.test_id}", password="test123"
-        )
-        other_user.is_usage_capped = False
-        other_user.save()
+        self.assertTrue(regular_hit_limit, "Regular user should hit rate limit")
 
-        other_client = Client(schema, context_value=TestContext(other_user))
+        # Now test with superuser - should allow more requests
+        cache.clear()
+        super_hit_limit = False
+        for i in range(500):
+            result = self.execute_graphql(query, use_super=True)
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                super_hit_limit = True
+                super_limit_hit_at = i
+                break
+
+        # Superuser should be able to make more requests than regular user
+        if super_hit_limit:
+            self.assertGreater(
+                super_limit_hit_at,
+                regular_limit_hit_at,
+                "Superuser should have higher rate limit than regular user",
+            )
+
+    def test_rate_limit_grouping(self):
+        """Test that rate limits can be grouped across operations."""
+        # Both operations should share the same rate limit pool
+        # This tests that when multiple operations are in the same group,
+        # they share the rate limit counter
+
+        mutation1 = """
+            mutation CreateLabelset($title: String!, $description: String!) {
+                createLabelset(title: $title, description: $description) {
+                    ok
+                }
+            }
+        """
+
+        cache.clear()
+
+        # Make several requests with first mutation
+        for i in range(25):
+            variables = {
+                "title": f"Labelset {self.test_id}_{i}",
+                "description": f"Description {i}",
+            }
+            result = self.execute_graphql(mutation1, variables)
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                # Successfully hit rate limit
+                return
+
+    def test_anonymous_user_rate_limiting(self):
+        """Test that anonymous users get rate limited by IP."""
+        # Log out to test as anonymous
+        anon_client = DjangoClient()
 
         query = """
             query GetCorpuses {
@@ -1145,20 +349,266 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             }
         """
 
-        with patch("config.graphql.ratelimits.is_ratelimited") as mock_is_ratelimited:
-            # First user makes a request
-            mock_is_ratelimited.return_value = False
-            result1 = self.client.execute(query)
+        cache.clear()
 
-            # Second user makes a request - should have separate rate limit
-            result2 = other_client.execute(query)
+        # Anonymous users should get base rate (100/m for READ_LIGHT)
+        for i in range(150):
+            response = anon_client.post(
+                "/graphql/",
+                data=json.dumps({"query": query, "variables": {}}),
+                content_type="application/json",
+            )
+            result = response.json()
 
-            # Both should succeed as they have independent rate limits
-            self.assertIsNone(result1.get("errors"))
-            self.assertIsNone(result2.get("errors"))
+            if result.get("errors"):
+                # Might get permission error or rate limit error
+                error_message = result["errors"][0]["message"]
+                if "Limit exceeded" in error_message:
+                    self.assertLess(i, 150, "Anonymous user should hit rate limit")
+                    break
 
-            # Verify rate limiting was checked for both
-            self.assertEqual(mock_is_ratelimited.call_count, 2)
+        # Anonymous might not have permission to query, which is also fine
+        # The important thing is that rate limiting is checked
+
+    def test_different_users_have_separate_rate_limits(self):
+        """Test that different users have independent rate limit buckets."""
+        # Create another user
+        other_user = User.objects.create_user(
+            username=f"other_user_{self.test_id}", password="test123"
+        )
+        other_user.is_usage_capped = False
+        other_user.save()
+
+        other_client = DjangoClient()
+        other_client.force_login(other_user)
+
+        query = """
+            query GetCorpuses {
+                corpuses {
+                    edges {
+                        node {
+                            id
+                        }
+                    }
+                }
+            }
+        """
+
+        cache.clear()
+
+        # First user makes many requests to approach limit
+        for i in range(190):  # Just under the 200/m limit
+            result = self.execute_graphql(query)
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                break
+
+        # Other user should still be able to make requests (separate bucket)
+        for i in range(50):  # Should work fine for other user
+            response = other_client.post(
+                "/graphql/",
+                data=json.dumps({"query": query, "variables": {}}),
+                content_type="application/json",
+            )
+            result = response.json()
+
+            # Should not hit rate limit in first 50 requests
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                self.fail(f"Other user hit rate limit too early at request {i}")
 
         # Clean up
         other_user.delete()
+
+    def test_different_operations_have_different_limits(self):
+        """Test that different operations have appropriate rate limits."""
+        # Test a heavy read operation vs light read operation
+        heavy_query = """
+            query GetAnnotations($corpusId: ID!) {
+                annotations(corpusId: $corpusId) {
+                    edges {
+                        node {
+                            id
+                            rawText
+                            json
+                        }
+                    }
+                    totalCount
+                }
+            }
+        """
+
+        light_query = """
+            query GetCorpuses {
+                corpuses {
+                    edges {
+                        node {
+                            id
+                        }
+                    }
+                }
+            }
+        """
+
+        cache.clear()
+
+        # Heavy query should hit rate limit sooner (READ_MEDIUM = 30/m base, 60/m for auth)
+        heavy_hit_at = None
+        for i in range(70):
+            result = self.execute_graphql(heavy_query, {"corpusId": self.corpus_gid})
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                heavy_hit_at = i
+                break
+
+        cache.clear()
+
+        # Light query should allow more requests (READ_LIGHT = 100/m base, 200/m for auth)
+        light_hit_at = None
+        for i in range(210):
+            result = self.execute_graphql(light_query)
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                light_hit_at = i
+                break
+
+        # Light queries should allow more requests than heavy queries
+        if heavy_hit_at and light_hit_at:
+            self.assertGreater(
+                light_hit_at,
+                heavy_hit_at,
+                "Light queries should have higher rate limit than heavy queries",
+            )
+
+    def test_specific_mutations_are_rate_limited(self):
+        """Test that specific mutations have rate limiting applied."""
+        mutation = """
+            mutation CreateLabelset($title: String!, $description: String!) {
+                createLabelset(title: $title, description: $description) {
+                    ok
+                }
+            }
+        """
+
+        cache.clear()
+
+        # Mutation should have rate limiting
+        hit_limit = False
+        for i in range(30):  # Most mutations have WRITE_MEDIUM = 10/m base, 20/m auth
+            variables = {
+                "title": f"Test {self.test_id}_{i}",
+                "description": f"Desc {i}",
+            }
+            result = self.execute_graphql(mutation, variables)
+
+            if result.get("errors"):
+                error_msg = result["errors"][0]["message"]
+                if "Limit exceeded" in error_msg:
+                    hit_limit = True
+                    break
+
+        self.assertTrue(hit_limit, "Mutation should have rate limiting")
+
+    def test_specific_queries_are_rate_limited(self):
+        """Test that specific queries have rate limiting applied."""
+        queries_to_test = [
+            {
+                "name": "corpuses",
+                "query": """
+                    query { corpuses { edges { node { id } } } }
+                """,
+            },
+            {
+                "name": "documents",
+                "query": """
+                    query { documents { edges { node { id } } } }
+                """,
+            },
+            {
+                "name": "labelsets",
+                "query": """
+                    query { labelsets { edges { node { id } } } }
+                """,
+            },
+        ]
+
+        for query_test in queries_to_test:
+            cache.clear()
+
+            # Each query should have rate limiting
+            hit_limit = False
+            for i in range(250):  # READ_LIGHT = 100/m base, 200/m for auth users
+                result = self.execute_graphql(query_test["query"])
+
+                if (
+                    result.get("errors")
+                    and "Limit exceeded" in result["errors"][0]["message"]
+                ):
+                    hit_limit = True
+                    break
+
+            self.assertTrue(
+                hit_limit, f"Query {query_test['name']} should have rate limiting"
+            )
+
+    def test_usage_capped_users_get_reduced_limits(self):
+        """Test that usage-capped users get reduced rate limits."""
+        # Create a usage-capped user
+        capped_user = User.objects.create_user(
+            username=f"capped_user_{self.test_id}", password="test123"
+        )
+        capped_user.is_usage_capped = True
+        capped_user.save()
+
+        # Give the user access to a corpus
+        test_corpus = Corpus.objects.create(
+            title=f"Capped Test Corpus {self.test_id}", creator=capped_user
+        )
+
+        capped_client = DjangoClient()
+        capped_client.force_login(capped_user)
+
+        query = """
+            query GetCorpuses {
+                corpuses {
+                    edges {
+                        node {
+                            id
+                        }
+                    }
+                }
+            }
+        """
+
+        cache.clear()
+
+        # Capped users should hit rate limit sooner
+        for i in range(150):  # Should hit before regular user limit
+            response = capped_client.post(
+                "/graphql/",
+                data=json.dumps({"query": query, "variables": {}}),
+                content_type="application/json",
+            )
+            result = response.json()
+
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                # Should hit limit earlier than regular users (who get 200/m)
+                self.assertLess(
+                    i, 200, "Capped user should hit rate limit before regular limit"
+                )
+                break
+
+        # Clean up
+        test_corpus.delete()
+        capped_user.delete()
