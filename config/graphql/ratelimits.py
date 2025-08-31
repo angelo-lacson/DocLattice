@@ -74,7 +74,15 @@ def graphql_ratelimit(
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(root, info, *args, **kwargs):
+            # Handle cases where info might be None or not have context
+            if not info or not hasattr(info, "context"):
+                return func(root, info, *args, **kwargs)
+
             request = info.context
+
+            # Handle test contexts where context might not be a request
+            if not request or not hasattr(request, "META"):
+                return func(root, info, *args, **kwargs)
 
             # Skip rate limiting in tests if configured
             if getattr(settings, "RATELIMIT_DISABLE", False):
