@@ -86,3 +86,14 @@ aws_s3_domain = AWS_S3_CUSTOM_DOMAIN or f"{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws
 
 # Test redis setup
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+
+# Cache configuration for tests
+# Use LocMemCache for tests to ensure proper isolation between test methods
+# Note: This means rate limiting tests won't test Redis integration, but they will
+# test the rate limiting logic correctly
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-test-cache",
+    }
+}
