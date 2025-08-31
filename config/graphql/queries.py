@@ -792,6 +792,7 @@ class Query(graphene.ObjectType):
         LabelSetType, filterset_class=LabelsetFilter
     )
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_labelsets(self, info, **kwargs):
         if info.context.user.is_superuser:
             return LabelSet.objects.all()
@@ -818,6 +819,7 @@ class Query(graphene.ObjectType):
     # CORPUS RESOLVERS #####################################
     corpuses = DjangoFilterConnectionField(CorpusType, filterset_class=CorpusFilter)
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpuses(self, info, **kwargs):
         return resolve_oc_model_queryset(
             django_obj_model_type=Corpus, user=info.context.user
@@ -831,6 +833,7 @@ class Query(graphene.ObjectType):
         DocumentType, filterset_class=DocumentFilter
     )
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_documents(self, info, **kwargs):
         return resolve_oc_model_queryset(Document, info.context.user)
 
@@ -982,6 +985,7 @@ class Query(graphene.ObjectType):
             AnalysisType, filterset_class=AnalysisFilter
         )
 
+        @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
         def resolve_analyses(self, info, **kwargs):
             return resolve_oc_model_queryset(Analysis, info.context.user)
 
