@@ -4,7 +4,7 @@
 
 OpenContracts implements multi-layer rate limiting to protect the application from abuse and ensure fair resource usage:
 
-1. **Edge Rate Limiting** - Via Traefik reverse proxy
+1. **Edge Rate Limiting** - Via Traefik reverse proxy (or, if you are using a different router, use its rate limiting)
 2. **Application Rate Limiting** - Via django-ratelimit in GraphQL resolvers
 
 ## Architecture
