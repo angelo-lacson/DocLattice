@@ -74,8 +74,7 @@ test_rate_limit() {
         ;;
     esac
 
-    # Tiny delay to avoid overwhelming
-    sleep 0.02
+    # No delay - send as fast as possible to trigger rate limits
   done
 
   echo ""
@@ -88,7 +87,13 @@ test_rate_limit() {
   fi
 
   echo ""
-  return $rate_limited
+
+  # Store result in global variable instead of return code
+  if [ "$endpoint_name" == "Frontend" ]; then
+    FRONTEND_LIMITED=$rate_limited
+  else
+    API_LIMITED=$rate_limited
+  fi
 }
 
 # Quick health check
@@ -108,9 +113,12 @@ fi
 echo "✅ Services accessible"
 echo ""
 
+# Initialize global variables
+FRONTEND_LIMITED=0
+API_LIMITED=0
+
 # Test Frontend Rate Limiting
 test_rate_limit "http://localhost/" "Frontend" 20 30
-frontend_limited=$?
 
 # Reset period
 echo "Waiting 3s for rate limit reset..."
@@ -119,19 +127,18 @@ echo ""
 
 # Test API Rate Limiting
 test_rate_limit "http://localhost/graphql" "API Endpoint" 10 20
-api_limited=$?
 
 # Summary
 echo "============================================="
 echo "📊 Summary"
 echo "============================================="
 
-total_limited=$((frontend_limited + api_limited))
+total_limited=$((FRONTEND_LIMITED + API_LIMITED))
 
 if [ $total_limited -gt 0 ]; then
   echo "✅ Rate limiting is working correctly!"
-  echo "   - Frontend: ${frontend_limited} requests blocked"
-  echo "   - API: ${api_limited} requests blocked"
+  echo "   - Frontend: ${FRONTEND_LIMITED} requests blocked"
+  echo "   - API: ${API_LIMITED} requests blocked"
   exit 0
 else
   echo "❌ Rate limiting not detected"
