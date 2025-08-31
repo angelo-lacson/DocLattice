@@ -76,12 +76,27 @@ def graphql_ratelimit(
         def wrapper(root, info, *args, **kwargs):
             # Handle cases where info might be None or not have context
             if not info or not hasattr(info, "context"):
+                # In production, this should never happen
+                # Log warning in non-test environments
+                if not getattr(settings, "TESTING", False):
+                    logger.warning(
+                        f"Rate limiting skipped for {func.__name__}: info object is None or missing context. "
+                        "This may indicate a security issue if happening in production."
+                    )
                 return func(root, info, *args, **kwargs)
 
             request = info.context
 
             # Handle test contexts where context might not be a request
             if not request or not hasattr(request, "META"):
+                # This is expected in unit tests using mock contexts
+                # but should not happen in production
+                if not getattr(settings, "TESTING", False):
+                    logger.warning(
+                        f"Rate limiting skipped for {func.__name__}: context is not a Django request object. "
+                        f"Context type: {type(request).__name__}. "
+                        "This may indicate a security issue if happening in production."
+                    )
                 return func(root, info, *args, **kwargs)
 
             # Skip rate limiting in tests if configured
@@ -193,6 +208,25 @@ def graphql_ratelimit_dynamic(
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(root, info, *args, **kwargs):
+            # Same safety checks as graphql_ratelimit
+            if not info or not hasattr(info, "context"):
+                if not getattr(settings, "TESTING", False):
+                    logger.warning(
+                        f"Dynamic rate limiting skipped for {func.__name__}: info object is None or missing context. "
+                        "This may indicate a security issue if happening in production."
+                    )
+                return func(root, info, *args, **kwargs)
+
+            request = info.context
+            if not request or not hasattr(request, "META"):
+                if not getattr(settings, "TESTING", False):
+                    logger.warning(
+                        f"Dynamic rate limiting skipped for {func.__name__}: context is not a Django request object. "
+                        f"Context type: {type(request).__name__}. "
+                        "This may indicate a security issue if happening in production."
+                    )
+                return func(root, info, *args, **kwargs)
+
             rate = get_rate(root, info)
 
             # Apply the rate limit with the dynamic rate
