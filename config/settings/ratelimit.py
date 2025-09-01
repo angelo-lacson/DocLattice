@@ -6,7 +6,9 @@ This module contains settings for django-ratelimit integration.
 
 import os
 
-from django.conf import settings
+import environ
+
+env = environ.Env()
 
 # Django-ratelimit settings
 RATELIMIT_ENABLE = True  # Enable rate limiting globally
@@ -15,8 +17,9 @@ RATELIMIT_VIEW = (
     "config.graphql.ratelimits.RateLimitExceeded"  # Custom rate limit exceeded view
 )
 
-# Whether to disable rate limiting in tests
-RATELIMIT_DISABLE = getattr(settings, "TESTING", False)
+# Whether to disable rate limiting
+# By default, disable in test environments unless explicitly enabled
+RATELIMIT_DISABLE = env.bool("RATELIMIT_DISABLE", default=False)
 
 # Rate limit key prefix (useful for multi-tenant setups)
 RATELIMIT_KEY_PREFIX = "rl"
