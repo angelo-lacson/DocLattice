@@ -33,7 +33,7 @@ def get_django_file_field_url(
     context: type[WSGIRequest] | None = None,
 ):
 
-    if settings.USE_AWS:
+    if settings.STORAGE_BACKEND in ["AWS", "GCP"]:
         return getattr(obj, field_name).url
     else:
         if context is None:

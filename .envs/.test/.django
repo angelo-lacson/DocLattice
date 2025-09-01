@@ -17,9 +17,10 @@ DJANGO_ALLOWED_HOSTS=django,127.0.0.1,localhost,0.0.0.0
 USE_ANALYZER=true
 CALLBACK_ROOT_URL_FOR_ANALYZER=http://localhost:8000
 
-# AWS
+# Storage Configuration - Choose ONE: LOCAL, AWS, or GCP
 # ------------------------------------------------------------------------------
-USE_AWS=false
+# Set STORAGE_BACKEND to one of: LOCAL, AWS, or GCP
+STORAGE_BACKEND=LOCAL
 
 # Redis
 # ------------------------------------------------------------------------------

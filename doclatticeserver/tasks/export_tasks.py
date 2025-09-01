@@ -212,12 +212,17 @@ def package_funsd_exports(
     output_bytes = io.BytesIO()
     zip_file = zipfile.ZipFile(output_bytes, mode="w", compression=zipfile.ZIP_DEFLATED)
 
-    if settings.USE_AWS:
-
+    if settings.STORAGE_BACKEND == "AWS":
         import boto3
 
-        logger.info("process_pdf_page() - Load obj from s3")
+        logger.info("process_pdf_page() - Load obj from S3")
         s3 = boto3.client("s3")
+    elif settings.STORAGE_BACKEND == "GCP":
+        from google.cloud import storage as gcs
+
+        logger.info("process_pdf_page() - Load obj from GCS")
+        gcs_client = gcs.Client(project=settings.GS_PROJECT_ID)
+        gcs_bucket = gcs_client.bucket(settings.GS_BUCKET_NAME)
 
     for doc_data in funsd_data:
 
@@ -228,11 +233,14 @@ def package_funsd_exports(
             doc_id, page_path, file_type = page_data
 
             # Load page image
-            if settings.USE_AWS:
+            if settings.STORAGE_BACKEND == "AWS":
                 page_obj = s3.get_object(
                     Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=page_path
                 )
                 page_data = page_obj["Body"].read()
+            elif settings.STORAGE_BACKEND == "GCP":
+                blob = gcs_bucket.blob(page_path)
+                page_data = blob.download_as_bytes()
             else:
                 with open(page_path, "rb") as page_file:
                     page_data = page_file.read()

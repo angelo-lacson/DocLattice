@@ -77,6 +77,10 @@ services:
     environment:
       PORT: 8000
 
+  docling-parser:
+    image: jscrudato/docsling-local
+    container_name: docling-parser
+
   celeryworker:
     <<: *django
     image: doclatticeserver_production_celeryworker
@@ -86,8 +90,3 @@ services:
     <<: *django
     image: doclatticeserver_production_celerybeat
     command: /start-celerybeat
-
-  flower:
-    <<: *django
-    image: doclatticeserver_production_flower
-    command: /start-flower
