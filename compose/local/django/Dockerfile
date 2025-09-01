@@ -86,13 +86,14 @@ COPY --from=python-build-stage /usr/src/app/wheels  /wheels/
 
 RUN pip install --upgrade pip
 
-# PyTorch is already installed in the base image, so we skip torch installation
-# Just install sentence-transformers which will use the existing PyTorch
-RUN pip install sentence-transformers
-
-# use wheels to install python dependencies
+# use wheels to install python dependencies first
 RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
 	&& rm -rf /wheels/
+
+# PyTorch is already installed in the base image, so we skip torch installation
+# Install sentence-transformers AFTER other requirements to avoid conflicts
+# Pin tokenizers version to avoid compatibility issues with transformers
+RUN pip install 'tokenizers>=0.21,<0.22' sentence-transformers
 
 # Create the /models directory and set permissions
 RUN mkdir -p /models && chmod -R 755 /models

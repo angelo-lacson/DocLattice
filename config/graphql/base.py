@@ -10,6 +10,7 @@ from graphene_django import DjangoObjectType
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id, to_global_id
 
+from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 from opencontractserver.shared.resolvers import resolve_single_oc_model_from_id
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import (
@@ -89,6 +90,7 @@ class DRFDeletion(graphene.Mutation):
 
     @classmethod
     @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
     def mutate(cls, root, info, *args, **kwargs):
 
         ok = False
@@ -143,6 +145,7 @@ class DRFMutation(graphene.Mutation):
 
     @classmethod
     @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
     def mutate(cls, root, info, *args, **kwargs):
 
         ok = False

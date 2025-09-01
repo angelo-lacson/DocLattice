@@ -3,73 +3,45 @@ log:
 
 entryPoints:
   web:
-    # http
+    # http only for CI testing
     address: ":80"
-    http:
-      # https://docs.traefik.io/routing/entrypoints/#entrypoint
-      redirections:
-        entryPoint:
-          to: web-secure
-
-  web-secure:
-    # https
-    address: ":443"
 
   flower:
     address: ":5555"
 
-certificatesResolvers:
-  letsencrypt:
-    # https://docs.traefik.io/master/https/acme/#lets-encrypt
-    acme:
-      email: "support@opensource.legal"
-      storage: /etc/traefik/acme/acme.json
-      # https://docs.traefik.io/master/https/acme/#httpchallenge
-      httpChallenge:
-        entryPoint: web
-
 http:
   routers:
-
-    flower-secure-router:
-      rule: "Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`) && PathPrefix(`/flower`)"
+    flower-router:
+      rule: "Host(`localhost`) && PathPrefix(`/flower`)"
       entryPoints:
         - flower
       middlewares:
         - "flower-ratelimit"
       service: flower
       priority: 0
-      tls:
-        certResolver: letsencrypt
 
-    frontend-secure-router:
-      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
+    frontend-router:
+      rule: "Host(`localhost`) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
       entryPoints:
-        - "web-secure"
+        - "web"
       middlewares:
         - "frontend-ratelimit"
         - "csrf"
       service: frontend
       priority: 1
-      tls:
-        certResolver: letsencrypt
 
-    web-secure-router:
-      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
+    web-router:
+      rule: "Host(`localhost`) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
       entryPoints:
-        - "web-secure"
+        - "web"
       middlewares:
         - "api-ratelimit"
         - "csrf"
       service: django
       priority: 2
-      tls:
-        certResolver: letsencrypt
 
   middlewares:
     csrf:
-      # https://docs.traefik.io/master/middlewares/headers/#hostsproxyheaders
-      # https://docs.djangoproject.com/en/dev/ref/csrf/#ajax
       headers:
         hostsProxyHeaders: [ "X-CSRFToken" ]
 
@@ -137,11 +109,10 @@ http:
           dialTimeout: 5s
 
   services:
-
     frontend:
       loadBalancer:
         servers:
-          - url: http://frontend:5173
+          - url: http://frontend:3000
 
     django:
       loadBalancer:
@@ -154,7 +125,6 @@ http:
           - url: http://flower:5555
 
 providers:
-  # https://docs.traefik.io/master/providers/file/
   file:
     filename: /etc/traefik/traefik.yml
     watch: true

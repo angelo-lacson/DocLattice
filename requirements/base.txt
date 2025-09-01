@@ -12,6 +12,7 @@ cryptography==45.0.6  # https://github.com/pyca/cryptography
 pydantic==2.*
 typing-extensions==4.*  # https://github.com/python/typing_extensions
 requests==2.*  # https://requests.readthedocs.io/en/latest/
+tokenizers>=0.21,<0.22  # Pin to prevent conflicts with transformers
 
 
 # Django
@@ -65,6 +66,7 @@ django-guardian
 # ------------------------------------------------------------------------------
 graphene-django==3.2.2  # TODO - upgrade at some point. Will require some refactoring.
 django-graphql-jwt==0.4.0
+django-ratelimit==4.1.0  # https://github.com/jsocol/django-ratelimit
 
 # JSON Schema
 # ------------------------------------------------------------------------------

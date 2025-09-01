@@ -67,6 +67,10 @@ from config.graphql.graphene_types import (
     UserImportType,
     UserType,
 )
+from config.graphql.ratelimits import (
+    get_user_tier_rate,
+    graphql_ratelimit_dynamic,
+)
 from opencontractserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from opencontractserver.annotations.models import (
     Annotation,
@@ -213,6 +217,7 @@ class Query(graphene.ObjectType):
         order_by=graphene.String(),
     )
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
     def resolve_annotations(
         self, info, analysis_isnull=None, structural=None, **kwargs
     ):
@@ -509,6 +514,7 @@ class Query(graphene.ObjectType):
         label_type=graphene.Argument(label_type_enum),
     )
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
     def resolve_page_annotations(self, info, document_id, corpus_id=None, **kwargs):
 
         doc_django_pk = from_global_id(document_id)[1]
@@ -786,6 +792,7 @@ class Query(graphene.ObjectType):
         LabelSetType, filterset_class=LabelsetFilter
     )
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_labelsets(self, info, **kwargs):
         if info.context.user.is_superuser:
             return LabelSet.objects.all()
@@ -812,6 +819,7 @@ class Query(graphene.ObjectType):
     # CORPUS RESOLVERS #####################################
     corpuses = DjangoFilterConnectionField(CorpusType, filterset_class=CorpusFilter)
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpuses(self, info, **kwargs):
         return resolve_oc_model_queryset(
             django_obj_model_type=Corpus, user=info.context.user
@@ -825,6 +833,7 @@ class Query(graphene.ObjectType):
         DocumentType, filterset_class=DocumentFilter
     )
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_documents(self, info, **kwargs):
         return resolve_oc_model_queryset(Document, info.context.user)
 
@@ -976,6 +985,7 @@ class Query(graphene.ObjectType):
             AnalysisType, filterset_class=AnalysisFilter
         )
 
+        @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
         def resolve_analyses(self, info, **kwargs):
             return resolve_oc_model_queryset(Analysis, info.context.user)
 
@@ -1125,6 +1135,7 @@ class Query(graphene.ObjectType):
 
     corpus_stats = graphene.Field(CorpusStatsType, corpus_id=graphene.ID(required=True))
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
     def resolve_corpus_stats(self, info, corpus_id):
 
         total_docs = 0

@@ -82,13 +82,14 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 COPY --from=python-build-stage /usr/src/app/wheels /wheels/
 RUN pip install --upgrade pip
 
-# PyTorch is already installed in the base image with CUDA support
-# Just install sentence-transformers which will use the existing PyTorch
-RUN pip install sentence-transformers
-
-# Install the remaining Python dependencies from wheels
+# Install the Python dependencies from wheels first
 RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
     && rm -rf /wheels/
+
+# PyTorch is already installed in the base image with CUDA support
+# Install sentence-transformers AFTER other requirements to avoid conflicts
+# Pin tokenizers version to avoid compatibility issues with transformers
+RUN pip install 'tokenizers>=0.21,<0.22' sentence-transformers
 
 # Create /models, copy model preloaders from the build context, and run them
 RUN mkdir -p /models
