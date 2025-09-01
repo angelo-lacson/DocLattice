@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import Client as DjangoClient
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from graphql_relay import to_global_id
 
 from config.graphql.ratelimits import (
@@ -119,6 +119,7 @@ class RateLimitConfigurationTestCase(TestCase):
         self.assertEqual(rate, "30/m")  # 60/m * 0.5 = 30/m
 
 
+@override_settings(RATELIMIT_DISABLE=False)
 class GraphQLRateLimitIntegrationTestCase(TestCase):
     """Test rate limiting integration with actual GraphQL mutations and queries."""
 
