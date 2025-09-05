@@ -1,6 +1,22 @@
 ![OpenContracts](docs/assets/images/logos/OS_Legal_Logo.png)
 
 # Open Contracts ([Demo](https://opencontracts.opensource.legal))
+## Frontend environment conventions
+
+Development (Vite): place a file at `/.envs/.local/.frontend` using `VITE_*` keys, for example:
+
+```
+VITE_APPLICATION_DOMAIN=dev-your.auth0.com
+VITE_APPLICATION_CLIENT_ID=your-client-id
+VITE_AUDIENCE=https://yourdomain.com/contracts
+VITE_API_ROOT_URL=http://localhost:8000
+VITE_USE_AUTH0=true
+VITE_USE_ANALYZERS=true
+VITE_ALLOW_IMPORTS=true
+```
+
+Production (Kubernetes/Docker): set `OPEN_CONTRACTS_*` variables which are converted at runtime into the `REACT_APP_*` payload consumed by the app. See `k8s/production/02-configmaps.yaml` for examples and `k8s/production/README.md` for details.
+
 ## The Free and Open Source Document Analytics Platform [![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/JSv4)
 
 

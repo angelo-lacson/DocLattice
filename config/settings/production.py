@@ -172,6 +172,16 @@ LOGGING = {
 
 # CORS
 # ------------------------------------------------------------------------------
-CORS_ORIGIN_WHITELIST = ["https://opencontracts.opensource.legal"]
-CORS_ALLOWED_ORIGINS = ["https://opencontracts.opensource.legal"]
+# Allow CORS origins to be overridden by environment variable
+# Format: comma-separated list of origins
+CORS_ALLOWED_ORIGINS_STR = env(
+    "CORS_ALLOWED_ORIGINS",
+    default="https://contracts.opensource.legal,https://www.contracts.opensource.legal",
+)
+CORS_ORIGIN_WHITELIST = [
+    origin.strip() for origin in CORS_ALLOWED_ORIGINS_STR.split(",")
+]
+CORS_ALLOWED_ORIGINS = [
+    origin.strip() for origin in CORS_ALLOWED_ORIGINS_STR.split(",")
+]
 CORS_ALLOW_CREDENTIALS = True

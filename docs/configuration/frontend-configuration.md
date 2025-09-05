@@ -28,6 +28,22 @@ OPEN_CONTRACTS_REACT_APP_API_ROOT_URL=https://opencontracts.opensource.legal
 # OPEN_CONTRACTS_REACT_APP_ALLOW_IMPORTS=true
 ```
 
+### Local development (Vite)
+
+Use a file at `/.envs/.local/.frontend` with `VITE_*` keys, for example:
+
+```
+VITE_APPLICATION_DOMAIN=dev-your.auth0.com
+VITE_APPLICATION_CLIENT_ID=your-client-id
+VITE_AUDIENCE=https://yourdomain.com/contracts
+VITE_API_ROOT_URL=http://localhost:8000
+VITE_USE_AUTH0=true
+VITE_USE_ANALYZERS=true
+VITE_ALLOW_IMPORTS=true
+```
+
+In production (Kubernetes/Docker), prefer `OPEN_CONTRACTS_*` keys in the environment which the container entrypoint converts to the runtime `REACT_APP_*` config. See k8s production README and `02-configmaps.yaml` for examples.
+
 ATM, there are three key configurations:
 1. **OPEN_CONTRACTS_REACT_APP_USE_AUTH0** - uncomment this / set it to true to switch the frontend login components and
    auth flow from django password auth to Auth0 oauth2. IF this is true, you also need to provide valid configurations

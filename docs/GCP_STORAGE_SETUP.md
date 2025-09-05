@@ -6,7 +6,7 @@ This document provides instructions for configuring Google Cloud Storage (GCS) a
 
 OpenContracts supports three storage backends, configurable via the `STORAGE_BACKEND` environment variable:
 1. **LOCAL** (default) - Files stored on local disk
-2. **AWS** - Amazon S3 cloud storage  
+2. **AWS** - Amazon S3 cloud storage
 3. **GCP** - Google Cloud Storage
 
 ## Prerequisites
