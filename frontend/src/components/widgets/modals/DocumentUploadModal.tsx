@@ -12,6 +12,7 @@ import {
 import _ from "lodash";
 
 import Form from "@rjsf/semantic-ui";
+import validator from "@rjsf/validator-ajv8";
 import { DocumentUploadList } from "../../documents/DocumentUploadList";
 import { HorizontallyCenteredDiv } from "../../layout/Wrappers";
 import { newDocForm_Schema, newDocForm_Ui_Schema } from "../../forms/schemas";
@@ -67,6 +68,7 @@ function RightCol({ files, selected_file_num, handleChange }: RightColProps) {
         <Form
           schema={newDocForm_Schema}
           uiSchema={newDocForm_Ui_Schema}
+          validator={validator}
           onChange={handleChange}
           formData={files[selected_file_num].formData}
         >

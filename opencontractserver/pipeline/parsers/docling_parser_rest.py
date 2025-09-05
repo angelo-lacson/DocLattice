@@ -31,14 +31,31 @@ class DoclingParser(BaseParser):
     def __init__(self):
         """Initialize the Docling REST parser with service URL from settings."""
         super().__init__()  # Call to superclass __init__
-        # Default to http://docling-parser:8000/parse/ if not specified in settings
-        self.service_url = getattr(
-            settings, "DOCLING_PARSER_SERVICE_URL", "http://docling-parser:8000/parse/"
+
+        # Priority order for service URL:
+        # 1. Environment variable (for K8s deployments)
+        # 2. PIPELINE_SETTINGS configuration
+        # 3. Django settings attribute
+        # 4. Default fallback
+        import os
+
+        # Get settings from PIPELINE_SETTINGS (loaded by BaseParser)
+        component_settings = self.get_component_settings()
+
+        self.service_url = (
+            os.environ.get("DOCLING_PARSER_SERVICE_URL")
+            or component_settings.get("DOCLING_PARSER_SERVICE_URL")
+            or getattr(settings, "DOCLING_PARSER_SERVICE_URL", None)
+            or "http://docling-parser:8000/parse/"
         )
-        # Allow configuring the timeout
-        self.request_timeout = getattr(
-            settings, "DOCLING_PARSER_TIMEOUT", 300
-        )  # 5 minutes default
+
+        # Allow configuring the timeout with same priority order
+        self.request_timeout = (
+            component_settings.get("DOCLING_PARSER_TIMEOUT")
+            or getattr(settings, "DOCLING_PARSER_TIMEOUT", None)
+            or 300  # 5 minutes default
+        )
+
         logger.info(f"DoclingParser initialized with service URL: {self.service_url}")
 
     def _parse_document_impl(

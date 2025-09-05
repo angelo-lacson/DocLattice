@@ -804,7 +804,7 @@ PIPELINE_SETTINGS = {
         "vector_embedder_api_key": "abc123",
     },
     "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser": {
-        "DOCLING_PARSER_SERVICE_URL": "http://docling-parser:8000",
+        "DOCLING_PARSER_SERVICE_URL": "http://docling-parser:8000/parse/",
         "DOCLING_PARSER_TIMEOUT": None,
     },
 }
