@@ -1,6 +1,7 @@
 import { useQuery, useReactiveVar } from "@apollo/client";
 
-import { Dropdown, Menu, Label, DropdownItemProps } from "semantic-ui-react";
+import { Label, DropdownItemProps } from "semantic-ui-react";
+import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
 
 import _ from "lodash";
 
@@ -70,33 +71,45 @@ export const FilterToCorpusSelector = ({
   }
 
   return (
-    <Menu
+    <div
       style={{
-        padding: "0px",
-        margin: use_mobile_layout ? ".25rem" : "0px",
-        marginRight: ".25rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.375rem",
+        width: "100%",
+        position: "relative",
+        ...style,
       }}
     >
       <Label
         style={{
-          marginRight: "0px",
-          borderRadius: "5px 0px 0px 5px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
+          margin: "0",
+          background: "linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)",
+          color: "white",
+          fontWeight: "600",
+          fontSize: "0.75rem",
+          padding: "0.375rem 0.625rem",
+          borderRadius: "8px",
+          border: "none",
+          letterSpacing: "0.025em",
+          textTransform: "uppercase",
+          boxShadow: "0 2px 4px rgba(102, 166, 255, 0.2)",
         }}
       >
-        <div>Filter by Corpus:</div>
+        Filter by Corpus
       </Label>
-      <Menu.Menu position="right">
-        <Dropdown
+      <div style={{ position: "relative", zIndex: 10 }}>
+        <DropdownNoStrictMode
           fluid
           selection
           clearable
           search
+          upward={false}
+          selectOnBlur={false}
+          selectOnNavigation={true}
           loading={loading}
           options={label_options}
-          onChange={(e, { value }) => {
+          onChange={(e: any, { value }: { value: any }) => {
             if (value === "") {
               filterToCorpus(null);
             } else {
@@ -108,15 +121,19 @@ export const FilterToCorpusSelector = ({
               }
             }
           }}
-          placeholder="Filter by corpus..."
+          placeholder="Select a corpus to filter..."
           value={filtered_to_corpus ? filtered_to_corpus.id : ""}
           style={{
-            margin: "0px",
-            width: "15rem",
-            ...style,
+            margin: "0",
+            minWidth: "260px",
+            fontSize: "0.875rem",
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
           }}
         />
-      </Menu.Menu>
-    </Menu>
+      </div>
+    </div>
   );
 };

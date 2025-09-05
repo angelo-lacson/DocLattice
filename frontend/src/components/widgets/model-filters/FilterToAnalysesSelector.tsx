@@ -1,13 +1,8 @@
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useEffect } from "react";
 import { toast } from "react-toastify";
-import {
-  Dropdown,
-  DropdownItemProps,
-  DropdownProps,
-  Label,
-  Menu,
-} from "semantic-ui-react";
+import { DropdownItemProps, DropdownProps, Label } from "semantic-ui-react";
+import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
 import {
   authToken,
   selectedAnalyses,
@@ -106,39 +101,57 @@ export const FilterToAnalysesSelector = ({
   }
 
   return (
-    <Menu
+    <div
       style={{
-        padding: "0px",
-        margin: use_mobile_layout ? ".25rem" : "0px",
-        marginRight: ".25rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.375rem",
+        width: "100%",
+        position: "relative",
+        ...style,
       }}
     >
       <Label
         style={{
-          marginRight: "0px",
-          borderRadius: "5px 0px 0px 5px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
+          margin: "0",
+          background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+          color: "white",
+          fontWeight: "600",
+          fontSize: "0.75rem",
+          padding: "0.375rem 0.625rem",
+          borderRadius: "8px",
+          border: "none",
+          letterSpacing: "0.025em",
+          textTransform: "uppercase",
+          boxShadow: "0 2px 4px rgba(245, 87, 108, 0.2)",
         }}
       >
-        <div>Created by Analysis:</div>
+        Created by Analysis
       </Label>
-      <Dropdown
-        placeholder="Created by Analysis"
-        fluid
-        multiple
-        selection
-        clearable
-        options={analysis_options}
-        onChange={handleChange}
-        value={analysis_ids_to_display}
-        style={{
-          margin: "0px",
-          minWidth: "15rem",
-          ...style,
-        }}
-      />
-    </Menu>
+      <div style={{ position: "relative", zIndex: 10 }}>
+        <DropdownNoStrictMode
+          placeholder="Select analyses..."
+          fluid
+          multiple
+          selection
+          clearable
+          upward={false}
+          selectOnBlur={false}
+          selectOnNavigation={true}
+          options={analysis_options}
+          onChange={handleChange}
+          value={analysis_ids_to_display}
+          style={{
+            margin: "0",
+            minWidth: "260px",
+            fontSize: "0.875rem",
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+          }}
+        />
+      </div>
+    </div>
   );
 };
