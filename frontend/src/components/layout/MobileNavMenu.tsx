@@ -1,7 +1,8 @@
-import { Menu, Image, Dropdown, Icon } from "semantic-ui-react";
+import { Menu, Image, Icon } from "semantic-ui-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Link } from "react-router-dom";
+import Dropdown from "../common/DropdownNoStrictMode";
 
 import logo from "../../assets/images/os_legal_128.png";
 import user_logo from "../../assets/icons/noun-person-113116-FFFFFF.png";

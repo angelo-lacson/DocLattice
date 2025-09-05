@@ -114,7 +114,7 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
     >
       {Modals}
       <SearchBarWrapper>{SearchBar}</SearchBarWrapper>
-      {BreadCrumbs && (
+      {BreadCrumbs && (!use_mobile || width > 768) && (
         <StyledSegment attached secondary>
           {BreadCrumbs}
         </StyledSegment>
@@ -122,8 +122,14 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
       <ScrollableSegment
         id="ScrollableSegment"
         style={{
-          padding: use_mobile ? "5px" : use_responsive ? "0px" : "1rem",
-          ...(use_mobile ? { paddingLeft: "0px", paddingRight: "0px" } : {}),
+          padding: use_mobile
+            ? "0.75rem 0.5rem"
+            : use_responsive
+            ? "1rem 0.5rem"
+            : "1rem",
+          ...(use_mobile
+            ? { paddingLeft: "0.5rem", paddingRight: "0.5rem" }
+            : {}),
         }}
         attached="bottom"
         raised

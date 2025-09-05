@@ -139,7 +139,8 @@ export const CorpusCards = ({
 
   let comp_style = {
     width: "100%",
-    padding: "1rem",
+    padding: "0",
+    margin: "0",
   };
   if (style) {
     comp_style = { ...comp_style, ...style };

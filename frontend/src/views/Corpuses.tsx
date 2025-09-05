@@ -578,15 +578,18 @@ const CorpusQueryView = ({
             <div
               style={{
                 position: "absolute",
-                bottom: "2rem",
+                bottom: width <= 768 ? "1rem" : "2rem",
                 left: "50%",
                 transform: "translateX(-50%)",
                 display: "flex",
                 flexDirection: "row",
                 justifyContent: "center",
                 alignItems: "center",
-                padding: "0.5rem",
-                width: "85%" /* give more room for expansion */,
+                padding: width <= 768 ? "0.25rem" : "0.5rem",
+                width:
+                  width <= 768
+                    ? "95%"
+                    : "85%" /* give more room for expansion on mobile */,
                 maxWidth: "760px" /* match the search container max */,
               }}
             >
@@ -851,30 +854,202 @@ const MobileMenuBackdrop = styled(motion.div)`
   }
 `;
 
-const MobileMenuToggle = styled(motion.button)`
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: #4a90e2;
-  color: white;
-  border: none;
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
-  display: none;
+// Search bar wrapper with mobile navigation buttons
+const SearchBarWithNav = styled.div`
+  display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 101;
+  gap: 0.75rem;
+  width: 100%;
+`;
 
-  svg {
-    width: 24px;
-    height: 24px;
+const MobileNavGroup = styled.div`
+  display: none;
+  gap: 0;
+  align-items: center;
+  background: linear-gradient(
+    135deg,
+    rgba(74, 144, 226, 0.03) 0%,
+    rgba(74, 144, 226, 0.08) 50%,
+    rgba(99, 102, 241, 0.05) 100%
+  );
+  padding: 0.5rem;
+  border-radius: 14px;
+  box-shadow: 0 4px 6px rgba(74, 144, 226, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(74, 144, 226, 0.25);
+  position: relative;
+  overflow: hidden;
+  min-height: 58px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Animated gradient shimmer */
+  &::before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    left: -100%;
+    right: -100%;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(74, 144, 226, 0.6) 25%,
+      rgba(99, 102, 241, 0.8) 50%,
+      rgba(74, 144, 226, 0.6) 75%,
+      transparent 100%
+    );
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  /* Glow effect on hover */
+  &:hover {
+    box-shadow: 0 6px 12px rgba(74, 144, 226, 0.18),
+      0 2px 4px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    border-color: rgba(74, 144, 226, 0.35);
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(200%);
+    }
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: flex;
+  }
+`;
+
+const MobileNavButton = styled(Button)`
+  &&& {
+    padding: 0.625rem 0.875rem;
+    min-width: auto;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(255, 255, 255, 0.6) 100%
+    );
+    border: none;
+    border-radius: 10px;
+    color: #4a90e2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    height: 42px;
+    font-weight: 500;
+    overflow: hidden;
+
+    /* Subtle inner shadow for depth */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.05), 0 2px 4px rgba(74, 144, 226, 0.1);
+
+    /* Divider between buttons with glow */
+    &:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: 15%;
+      height: 70%;
+      width: 1px;
+      background: linear-gradient(
+        to bottom,
+        transparent,
+        rgba(74, 144, 226, 0.2) 30%,
+        rgba(99, 102, 241, 0.3) 50%,
+        rgba(74, 144, 226, 0.2) 70%,
+        transparent
+      );
+    }
+
+    /* Ripple effect base */
+    &::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: radial-gradient(
+        circle,
+        rgba(74, 144, 226, 0.4) 0%,
+        transparent 70%
+      );
+      transform: translate(-50%, -50%);
+      transition: width 0.4s, height 0.4s;
+    }
+
+    &:hover {
+      background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 1) 0%,
+        rgba(237, 245, 255, 1) 100%
+      );
+      color: #3a7bc8;
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.03), 0 4px 8px rgba(74, 144, 226, 0.2);
+
+      /* Ripple on hover */
+      &::before {
+        width: 100px;
+        height: 100px;
+      }
+
+      svg {
+        transform: rotate(-5deg) scale(1.15);
+        filter: drop-shadow(0 2px 4px rgba(74, 144, 226, 0.3));
+      }
+    }
+
+    &:active {
+      background: linear-gradient(
+        135deg,
+        rgba(237, 245, 255, 1) 0%,
+        rgba(225, 239, 255, 1) 100%
+      );
+      transform: translateY(0) scale(0.98);
+      box-shadow: inset 0 2px 4px rgba(74, 144, 226, 0.2),
+        0 1px 2px rgba(74, 144, 226, 0.1);
+
+      svg {
+        transform: rotate(0) scale(0.95);
+      }
+    }
+
+    svg {
+      width: 20px;
+      height: 20px;
+      margin: 0 !important;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1;
+      position: relative;
+    }
+  }
+`;
+
+const SearchBarContainer = styled.div`
+  flex: 1;
+  display: flex;
+  min-width: 0; /* Allows flex item to shrink below its content size */
+  width: 100%; /* Force full width */
+
+  /* Override CreateAndSearchBar's internal styles */
+  > div {
+    width: 100%;
+
+    /* Override the SearchInputWrapper max-width on mobile */
+    > div:first-child {
+      @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+        max-width: none;
+        flex: 1;
+      }
+    }
   }
 `;
 
@@ -1722,17 +1897,6 @@ export const Corpuses = () => {
           </NavigationItems>
         </NavigationSidebar>
 
-        {/* Mobile menu toggle button */}
-        {use_mobile_layout && (
-          <MobileMenuToggle
-            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <LucideMenu />
-          </MobileMenuToggle>
-        )}
-
         {/* Main content area */}
         <MainContentArea
           id="main-corpus-content-area"
@@ -1925,31 +2089,54 @@ export const Corpuses = () => {
             value={corpusSearchCache}
           />
         ) : currentView?.id === "home" || currentView?.id === "documents" ? (
-          <CreateAndSearchBar
-            onChange={handleDocumentSearchChange}
-            actions={contract_actions}
-            placeholder="Search for document in corpus..."
-            value={documentSearchCache}
-            filters={
-              opened_corpus ? (
-                <>
-                  {/* <FilterToMetadataSelector
-                    selected_corpus_id={opened_corpus.id}
-                  /> Temporarily disabled - not working and not really in-use*/}
-                  <FilterToLabelSelector
-                    only_labels_for_labelset_id={
-                      opened_corpus.labelSet?.id
-                        ? opened_corpus.labelSet.id
-                        : ""
-                    }
-                    label_type={LabelType.DocTypeLabel}
-                  />
-                </>
-              ) : (
-                <></>
-              )
-            }
-          />
+          <SearchBarWithNav>
+            <MobileNavGroup>
+              <MobileNavButton
+                onClick={() => {
+                  openedCorpus(null);
+                  navigate("/corpuses");
+                }}
+                title="Back to Corpuses"
+                icon
+              >
+                <ArrowLeft />
+              </MobileNavButton>
+              <MobileNavButton
+                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                title="Open Menu"
+                icon
+              >
+                <LucideMenu />
+              </MobileNavButton>
+            </MobileNavGroup>
+            <SearchBarContainer>
+              <CreateAndSearchBar
+                onChange={handleDocumentSearchChange}
+                actions={contract_actions}
+                placeholder="Search for document in corpus..."
+                value={documentSearchCache}
+                filters={
+                  opened_corpus ? (
+                    <>
+                      {/* <FilterToMetadataSelector
+                        selected_corpus_id={opened_corpus.id}
+                      /> Temporarily disabled - not working and not really in-use*/}
+                      <FilterToLabelSelector
+                        only_labels_for_labelset_id={
+                          opened_corpus.labelSet?.id
+                            ? opened_corpus.labelSet.id
+                            : ""
+                        }
+                        label_type={LabelType.DocTypeLabel}
+                      />
+                    </>
+                  ) : (
+                    <></>
+                  )
+                }
+              />
+            </SearchBarContainer>
+          </SearchBarWithNav>
         ) : currentView?.id === "annotations" ? (
           <CreateAndSearchBar
             onChange={handleAnnotationSearchChange}
@@ -1976,18 +2163,41 @@ export const Corpuses = () => {
             }
           />
         ) : currentView?.id === "analyses" || currentView?.id === "extracts" ? (
-          <CreateAndSearchBar
-            onChange={handleAnalysisSearchChange}
-            actions={corpus_actions}
-            placeholder="Search for analyses..."
-            value={analysesSearchCache}
-            filters={
-              <>
-                <FilterToCorpusActionOutputs />
-                <FilterToAnalysesSelector corpus={opened_corpus} />
-              </>
-            }
-          />
+          <SearchBarWithNav>
+            <MobileNavGroup>
+              <MobileNavButton
+                onClick={() => {
+                  openedCorpus(null);
+                  navigate("/corpuses");
+                }}
+                title="Back to Corpuses"
+                icon
+              >
+                <ArrowLeft />
+              </MobileNavButton>
+              <MobileNavButton
+                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                title="Open Menu"
+                icon
+              >
+                <LucideMenu />
+              </MobileNavButton>
+            </MobileNavGroup>
+            <SearchBarContainer>
+              <CreateAndSearchBar
+                onChange={handleAnalysisSearchChange}
+                actions={corpus_actions}
+                placeholder="Search for analyses..."
+                value={analysesSearchCache}
+                filters={
+                  <>
+                    <FilterToCorpusActionOutputs />
+                    <FilterToAnalysesSelector corpus={opened_corpus} />
+                  </>
+                }
+              />
+            </SearchBarContainer>
+          </SearchBarWithNav>
         ) : (
           // Default search bar for any other views (like settings)
           <CreateAndSearchBar
