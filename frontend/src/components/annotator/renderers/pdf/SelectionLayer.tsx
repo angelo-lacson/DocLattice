@@ -69,6 +69,43 @@ const SelectionLayer = ({
   const hasLabels = humanTokenLabels.length > 0 || humanSpanLabels.length > 0;
 
   /**
+   * Calculate menu position to ensure it stays within viewport
+   */
+  const calculateMenuPosition = (mouseX: number, mouseY: number) => {
+    // Menu dimensions (approximate based on styled component)
+    const menuWidth = 200; // min-width: 160px + padding + border
+    const menuHeight = 200; // Approximate height for menu with items
+
+    // Get viewport dimensions
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Calculate initial position (slightly offset from cursor)
+    let x = mouseX + 10;
+    let y = mouseY + 10;
+
+    // Check right edge
+    if (x + menuWidth > viewportWidth) {
+      // Position menu to the left of cursor if it would go off-screen
+      x = Math.max(10, mouseX - menuWidth - 10);
+    }
+
+    // Check bottom edge
+    if (y + menuHeight > viewportHeight) {
+      // Position menu above cursor if it would go off-screen
+      y = Math.max(10, mouseY - menuHeight - 10);
+    }
+
+    // Ensure menu doesn't go off left edge
+    x = Math.max(10, x);
+
+    // Ensure menu doesn't go off top edge
+    y = Math.max(10, y);
+
+    return { x, y };
+  };
+
+  /**
    * Handles the creation of a multi-page annotation.
    *
    * @param selections - The current multi-selections.
@@ -201,7 +238,8 @@ const SelectionLayer = ({
           if (!event.shiftKey) {
             // Instead of immediately creating annotation, show action menu
             setPendingSelections(updatedSelections);
-            setActionMenuPosition({ x: event.clientX, y: event.clientY });
+            const menuPos = calculateMenuPosition(event.clientX, event.clientY);
+            setActionMenuPosition(menuPos);
             setShowActionMenu(true);
           }
 
