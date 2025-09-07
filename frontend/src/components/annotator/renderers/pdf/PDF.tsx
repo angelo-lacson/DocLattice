@@ -148,7 +148,11 @@ export const PDF: React.FC<PDFProps> = ({
       const h: number[] = [];
       for (let i = 1; i <= pdfDoc.numPages; i++) {
         const page = await pdfDoc.getPage(i);
-        h.push(page.getViewport({ scale: zoomLevel }).height + 32);
+        // Round page heights to avoid floating-point precision issues
+        const height = Math.round(
+          page.getViewport({ scale: zoomLevel }).height + 32
+        );
+        h.push(height);
       }
       setPageHeights(h); // updates state → re-render
     })();
@@ -157,8 +161,13 @@ export const PDF: React.FC<PDFProps> = ({
   /* prefix sums for quick offset lookup */
   const cumulative = useMemo(() => {
     const out: number[] = [0];
+    let runningSum = 0;
+
     for (let i = 0; i < pageHeights.length; i++) {
-      out.push(out[i] + pageHeights[i]);
+      // Round each page height to avoid accumulating floating-point errors
+      const roundedHeight = Math.round(pageHeights[i]);
+      runningSum += roundedHeight;
+      out.push(runningSum);
     }
     return out; // length = pageCount + 1
   }, [pageHeights]);
