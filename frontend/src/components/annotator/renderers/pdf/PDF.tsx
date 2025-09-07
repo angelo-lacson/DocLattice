@@ -124,6 +124,38 @@ export const PDF: React.FC<PDFProps> = ({
     return annot?.page; // undefined if not found
   }, [selectedAnnotations, allAnnotations]);
 
+  /**
+   * Returns ALL page indices that contain parts of the selected annotation(s).
+   * For multi-page annotations, this includes all pages the annotation spans.
+   */
+  const selectedAnnotationPageIndices = useMemo(() => {
+    if (selectedAnnotations.length === 0) return [];
+    const pageIndices: number[] = [];
+
+    for (const annotId of selectedAnnotations) {
+      const annot = allAnnotations.find((a) => a.id === annotId);
+      if (!annot) continue;
+
+      // For ServerTokenAnnotation, check all pages in the json property
+      if ("json" in annot && annot.json) {
+        // The json property is indexed by page number
+        for (const pageStr in annot.json) {
+          const pageIdx = parseInt(pageStr);
+          if (!isNaN(pageIdx) && !pageIndices.includes(pageIdx)) {
+            pageIndices.push(pageIdx);
+          }
+        }
+      } else if (annot.page !== undefined) {
+        // Fallback for single-page annotations
+        if (!pageIndices.includes(annot.page)) {
+          pageIndices.push(annot.page);
+        }
+      }
+    }
+
+    return pageIndices;
+  }, [selectedAnnotations, allAnnotations]);
+
   /* page index that owns the selected match */
   const selectedSearchPageIdx = useMemo(() => {
     const hit = textSearchMatches.find(
@@ -223,6 +255,12 @@ export const PDF: React.FC<PDFProps> = ({
       end = Math.max(end, selectedPageIdx);
     }
 
+    /* ensure ALL pages of multi-page annotations are mounted */
+    for (const pageIdx of selectedAnnotationPageIndices) {
+      start = Math.min(start, pageIdx);
+      end = Math.max(end, pageIdx);
+    }
+
     /* 1. virtual-window must keep that page mounted */
     if (selectedSearchPageIdx !== undefined) {
       start = Math.min(start, selectedSearchPageIdx);
@@ -241,6 +279,7 @@ export const PDF: React.FC<PDFProps> = ({
     cumulative,
     pageInfos.length,
     selectedPageIdx,
+    selectedAnnotationPageIndices,
     selectedSearchPageIdx,
     selectedChatSourcePageIdx,
   ]);
