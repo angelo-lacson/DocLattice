@@ -66,7 +66,7 @@ export const mockPdfDocument: RawDocumentType = {
     "update_document",
     "remove_document",
   ],
-  allAnnotations: [],
+  allAnnotations: [], // Will be populated with mock annotations
   allStructuralAnnotations: [],
   allRelationships: [],
   allDocRelationships: [],
@@ -163,6 +163,81 @@ export const mockAnnotationNonStructural1: RawServerAnnotationType = {
   __typename: "AnnotationType",
 };
 
+// Multi-page annotation that spans pages 1-3 (0-indexed: pages 0, 1, 2)
+export const mockMultiPageAnnotation: RawServerAnnotationType = {
+  id: "multi-page-annotation-1",
+  page: 0, // First page as anchor
+  parent: null,
+  annotationLabel: {
+    __typename: "AnnotationLabelType",
+    id: "multi-page-label-1",
+    text: "Multi-Page Section",
+    color: "#FF6B6B",
+    icon: "file" as any,
+    description: "Annotation spanning multiple pages",
+    labelType: LabelType.TokenLabel,
+  },
+  annotationType: LabelType.TokenLabel,
+  rawText: "This is text that spans across multiple pages in the document",
+  json: {
+    // Page 1 (index 0)
+    "0": {
+      bounds: {
+        top: 100,
+        left: 50,
+        right: 550,
+        bottom: 150,
+      },
+      rawText: "This is text that",
+      tokensJsons: [
+        { pageIndex: 0, tokenIndex: 10 },
+        { pageIndex: 0, tokenIndex: 11 },
+        { pageIndex: 0, tokenIndex: 12 },
+      ],
+    },
+    // Page 2 (index 1)
+    "1": {
+      bounds: {
+        top: 50,
+        left: 50,
+        right: 550,
+        bottom: 100,
+      },
+      rawText: "spans across multiple",
+      tokensJsons: [
+        { pageIndex: 1, tokenIndex: 0 },
+        { pageIndex: 1, tokenIndex: 1 },
+        { pageIndex: 1, tokenIndex: 2 },
+      ],
+    },
+    // Page 3 (index 2)
+    "2": {
+      bounds: {
+        top: 75,
+        left: 50,
+        right: 550,
+        bottom: 125,
+      },
+      rawText: "pages in the document",
+      tokensJsons: [
+        { pageIndex: 2, tokenIndex: 5 },
+        { pageIndex: 2, tokenIndex: 6 },
+        { pageIndex: 2, tokenIndex: 7 },
+        { pageIndex: 2, tokenIndex: 8 },
+      ],
+    },
+  },
+  structural: false,
+  myPermissions: [
+    "update_annotation",
+    "create_annotation",
+    "remove_annotation",
+    "publish_annotation",
+    "read_annotation",
+  ],
+  __typename: "AnnotationType",
+};
+
 export const mockPdfDocumentForStructuralTest: RawDocumentType = {
   id: PDF_DOC_ID_FOR_STRUCTURAL_TEST,
   __typename: "DocumentType",
@@ -180,7 +255,11 @@ export const mockPdfDocumentForStructuralTest: RawDocumentType = {
     "update_document",
     "remove_document",
   ],
-  allAnnotations: [mockAnnotationNonStructural1, mockAnnotationStructural1],
+  allAnnotations: [
+    mockAnnotationNonStructural1,
+    mockAnnotationStructural1,
+    mockMultiPageAnnotation,
+  ],
   allStructuralAnnotations: [mockAnnotationStructural1],
   allRelationships: [],
   allDocRelationships: [],

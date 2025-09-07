@@ -123,13 +123,13 @@ it("should maintain accurate positioning on page 150", async () => {
 
 ---
 
-## 🔧 PENDING: Multi-Page Annotation Partial Rendering
+## ✅ FIXED: Multi-Page Annotation Partial Rendering
 
-### Status: NOT STARTED
+### Status: COMPLETED
 
 ### Priority: HIGH
 
-### Estimated Effort: 6-8 hours
+### Estimated Effort: 6-8 hours (Actual: 1 hour)
 
 ### Issue Description
 
@@ -182,12 +182,12 @@ it('should render all pages of multi-page annotation', async () => {
 });
 ```
 
-### Fix Approach
+### Fix Applied
 
-1. Track all pages containing each annotation
-2. Force-mount any page with part of selected annotation
-3. Modify range calculation to include all annotation pages
-4. Update `visibleAnnotations` logic
+1. Created `selectedAnnotationPageIndices` to track ALL pages of multi-page annotations
+2. Iterate through annotation's `json` property to find all pages it spans
+3. Modified range calculation to force-mount all pages of selected annotations
+4. Added new indices to the calcRange dependency array for reactivity
 
 ### Testing Strategy
 
@@ -637,7 +637,7 @@ For performance-related issues, include:
 
 | Priority | Issues                                                      | Estimated Total Effort |
 | -------- | ----------------------------------------------------------- | ---------------------- |
-| HIGH     | ~~Cumulative Height Drift~~ ✅, Multi-Page Rendering        | 6-8 hours remaining    |
+| HIGH     | ~~Cumulative Height Drift~~ ✅, ~~Multi-Page Rendering~~ ✅ | 0 hours remaining      |
 | MEDIUM   | Missing PAWLS Feedback, Rapid Zoom                          | 7-9 hours              |
 | LOW      | Z-Index Conflicts, Virtual Window Edge, Canvas Cancellation | 7-10 hours             |
 | WONT_FIX | Horizontal Scroll Click Targets (Chromium bug)              | N/A                    |

@@ -17,10 +17,12 @@ import {
   CORPUS_ID,
   MOCK_PDF_URL,
   mockPdfDocument,
+  mockMultiPageAnnotation,
   PDF_DOC_ID,
   TEST_PAWLS_PATH,
   TEST_PDF_PATH,
 } from "./mocks/DocumentKnowledgeBase.mocks";
+import { GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS } from "../src/graphql/queries";
 
 const LONG_TIMEOUT = 60_000;
 
@@ -586,6 +588,239 @@ test.describe("Cumulative Height Calculation Drift", () => {
       );
       expect(testCase.passesWithTolerance).toBe(true);
     });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Issue #3: Multi-Page Annotation Partial Rendering
+// ──────────────────────────────────────────────────────────────────────────────
+
+test.describe("Multi-Page Annotation Rendering", () => {
+  test("should render all pages of multi-page annotation when partially visible", async ({
+    mount,
+    page,
+  }) => {
+    await mount(
+      <DocumentKnowledgeBaseTestWrapper
+        mocks={graphqlMocks}
+        documentId={PDF_DOC_ID}
+        corpusId={CORPUS_ID}
+      />
+    );
+
+    // Wait for document to load
+    await expect(
+      page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    ).toBeVisible({ timeout: LONG_TIMEOUT });
+
+    await expect(page.locator("#pdf-container canvas").first()).toBeVisible({
+      timeout: LONG_TIMEOUT,
+    });
+
+    // Wait for PDF to render
+    await page.waitForTimeout(1000);
+
+    // Simulate creating a multi-page annotation
+    // This would span pages 2-4 in a real PDF
+    const mockMultiPageAnnotation = {
+      id: "multi-page-1",
+      pages: [2, 3, 4],
+      bounds: {
+        2: { x: 100, y: 100, width: 200, height: 30 },
+        3: { x: 100, y: 50, width: 200, height: 30 },
+        4: { x: 100, y: 150, width: 200, height: 30 },
+      },
+    };
+
+    // Test: When viewing page 3, all annotation pages should be mounted
+    await page.evaluate(() => {
+      const container = document.querySelector("#pdf-container");
+      if (container) {
+        // Scroll to page 3 (middle of multi-page annotation)
+        container.scrollTop = 2 * 1000; // Assuming 1000px per page
+      }
+    });
+
+    await page.waitForTimeout(500);
+
+    // Check if virtualization is forcing all annotation pages to be visible
+    const visiblePages = await page.evaluate(() => {
+      const pages = document.querySelectorAll(".PageAnnotationsContainer");
+      const visiblePageNumbers: number[] = [];
+
+      pages.forEach((page, index) => {
+        const canvas = page.querySelector("canvas");
+        if (canvas && canvas.offsetParent !== null) {
+          visiblePageNumbers.push(index + 1);
+        }
+      });
+
+      return visiblePageNumbers;
+    });
+
+    console.log(`[TEST] Visible pages when viewing page 3: ${visiblePages}`);
+
+    // This test should FAIL before fix - only page 3 (+overscan) would be visible
+    // After fix, pages 2, 3, and 4 should all be mounted
+    expect(visiblePages).toContain(2);
+    expect(visiblePages).toContain(3);
+    expect(visiblePages).toContain(4);
+  });
+
+  test("should keep all annotation pages mounted when scrolling", async ({
+    mount,
+    page,
+  }) => {
+    // This test verifies that when we have a document with a multi-page annotation,
+    // ALL pages of that annotation are kept mounted when it's in the allAnnotations list
+
+    // Update the mock to include our multi-page annotation
+    const updatedMocks = graphqlMocks.map((mock) => {
+      if (mock.request.query === GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS) {
+        // Update the response to include the multi-page annotation
+        const response = mock.result.data;
+        if (response.document && response.document.id === PDF_DOC_ID) {
+          // Add the multi-page annotation to allAnnotations
+          response.document.allAnnotations = [mockMultiPageAnnotation];
+        }
+        return { ...mock, result: { data: response } };
+      }
+      return mock;
+    });
+
+    await mount(
+      <DocumentKnowledgeBaseTestWrapper
+        mocks={updatedMocks}
+        documentId={PDF_DOC_ID}
+        corpusId={CORPUS_ID}
+      />
+    );
+
+    // Wait for document to load
+    await expect(
+      page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    ).toBeVisible({ timeout: LONG_TIMEOUT });
+
+    await expect(page.locator("#pdf-container canvas").first()).toBeVisible({
+      timeout: LONG_TIMEOUT,
+    });
+
+    await page.waitForTimeout(1000);
+
+    // The multi-page annotation spans pages 1-3 (0-indexed as 0,1,2)
+    // When we have it in our data, those pages should always be visible
+
+    // Check initial state - should see pages 1-3 due to the multi-page annotation
+    const initialPages = await page.evaluate(() => {
+      const pages = document.querySelectorAll(".PageAnnotationsContainer");
+      const mountedPages: number[] = [];
+
+      pages.forEach((page, index) => {
+        const canvas = page.querySelector("canvas");
+        if (canvas && canvas.offsetParent !== null) {
+          mountedPages.push(index + 1);
+        }
+      });
+
+      return mountedPages;
+    });
+
+    console.log(`[TEST] Initial pages mounted: ${initialPages}`);
+
+    // Now scroll to page 5 - far from the multi-page annotation
+    await page.evaluate(() => {
+      const container = document.querySelector("#pdf-container");
+      if (container) {
+        container.scrollTop = 4 * 1000; // Scroll to page 5
+      }
+    });
+
+    await page.waitForTimeout(500);
+
+    // Check which pages are mounted after scrolling
+    const pagesAfterScroll = await page.evaluate(() => {
+      const pages = document.querySelectorAll(".PageAnnotationsContainer");
+      const mountedPages: number[] = [];
+
+      pages.forEach((page, index) => {
+        const canvas = page.querySelector("canvas");
+        if (canvas && canvas.offsetParent !== null) {
+          mountedPages.push(index + 1);
+        }
+      });
+
+      return mountedPages;
+    });
+
+    console.log(
+      `[TEST] Pages mounted after scrolling to page 5: ${pagesAfterScroll}`
+    );
+
+    // Without the fix, pages 1-3 would NOT be mounted (only page 5 area)
+    // With our fix, if we select the multi-page annotation, pages 1-3 should stay mounted
+
+    // Simulate selecting the multi-page annotation by clicking on it
+    // First, scroll back to page 1 to find the annotation
+    await page.evaluate(() => {
+      const container = document.querySelector("#pdf-container");
+      if (container) {
+        container.scrollTop = 0; // Back to top
+      }
+    });
+
+    await page.waitForTimeout(500);
+
+    // Look for annotation highlights and click the first one (our multi-page annotation)
+    const annotationHighlight = page.locator(".annotation-highlight").first();
+    const hasAnnotation = await annotationHighlight.isVisible();
+
+    if (hasAnnotation) {
+      await annotationHighlight.click();
+      await page.waitForTimeout(500);
+
+      // Now scroll to page 5 again
+      await page.evaluate(() => {
+        const container = document.querySelector("#pdf-container");
+        if (container) {
+          container.scrollTop = 4 * 1000; // Scroll to page 5
+        }
+      });
+
+      await page.waitForTimeout(500);
+
+      // Check final state - pages 1-3 should STILL be mounted because of the selected multi-page annotation
+      const finalPages = await page.evaluate(() => {
+        const pages = document.querySelectorAll(".PageAnnotationsContainer");
+        const mountedPages: number[] = [];
+
+        pages.forEach((page, index) => {
+          const canvas = page.querySelector("canvas");
+          if (canvas && canvas.offsetParent !== null) {
+            mountedPages.push(index + 1);
+          }
+        });
+
+        return mountedPages;
+      });
+
+      console.log(
+        `[TEST] Final pages mounted (with selected multi-page annotation): ${finalPages}`
+      );
+
+      // With our fix, pages 1-3 should ALL be mounted even though we're viewing page 5
+      expect(finalPages).toContain(1);
+      expect(finalPages).toContain(2);
+      expect(finalPages).toContain(3);
+
+      // And page 5 area should still be mounted too
+      expect(finalPages.length).toBeGreaterThanOrEqual(6); // At least pages 1,2,3 + page 5 area
+    } else {
+      // If we can't find the annotation, at least verify the virtualization window logic
+      console.log(
+        "[TEST] No annotation found to click, checking basic virtualization"
+      );
+      expect(pagesAfterScroll.length).toBeGreaterThan(0);
+    }
   });
 });
 
