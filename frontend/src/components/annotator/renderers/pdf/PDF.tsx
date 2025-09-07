@@ -1,6 +1,6 @@
 import styled from "styled-components";
 import { PDFPageProxy } from "pdfjs-dist/types/src/display/api";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { PDFPage } from "./PDFPage";
 import {
   usePages,
@@ -24,6 +24,8 @@ import { chatSourcesAtom } from "../../context/ChatSourceAtom";
 
 export class PDFPageRenderer {
   private currentRenderTask?: ReturnType<PDFPageProxy["render"]>;
+  private isCancelled: boolean = false;
+
   constructor(
     readonly page: PDFPageProxy,
     readonly canvas: HTMLCanvasElement,
@@ -31,30 +33,37 @@ export class PDFPageRenderer {
   ) {}
 
   cancelCurrentRender() {
+    this.isCancelled = true;
+
+    if (this.currentRenderTask === undefined) {
+      return;
+    }
+
     try {
-      if (this.currentRenderTask === undefined) {
-        return;
-      }
-      this.currentRenderTask.promise.then(
-        () => {},
-        (err: any) => {
-          if (
-            err instanceof Error &&
-            err.message.indexOf("Rendering cancelled") !== -1
-          ) {
-            // Swallow the error that's thrown when the render is canceled.
-            return;
-          }
-          const e = err instanceof Error ? err : new Error(err);
-          // this.onError(e);
-          console.warn("Issue cancelling render", e);
-        }
-      );
+      // Cancel immediately without waiting for promise
       this.currentRenderTask.cancel();
-    } catch {}
+      this.currentRenderTask = undefined;
+
+      // Clear the canvas to provide immediate visual feedback
+      const ctx = this.canvas.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      }
+    } catch (err) {
+      // Silently ignore cancellation errors
+      if (
+        err instanceof Error &&
+        !err.message.includes("Rendering cancelled")
+      ) {
+        console.warn("Issue cancelling render", err);
+      }
+    }
   }
 
   render(scale: number) {
+    // Reset cancellation flag for new render
+    this.isCancelled = false;
+
     const viewport = this.page.getViewport({ scale });
 
     this.canvas.height = viewport.height;
@@ -64,8 +73,27 @@ export class PDFPageRenderer {
     if (canvasContext === null) {
       throw new Error("No canvas context");
     }
+
+    // Don't start new render if already cancelled
+    if (this.isCancelled) {
+      return Promise.reject(new Error("Rendering cancelled"));
+    }
+
     this.currentRenderTask = this.page.render({ canvasContext, viewport });
-    return this.currentRenderTask;
+
+    // Wrap the promise to handle cancellation
+    return this.currentRenderTask.promise.then(
+      () => {
+        this.currentRenderTask = undefined;
+        if (this.isCancelled) {
+          throw new Error("Rendering cancelled");
+        }
+      },
+      (err) => {
+        this.currentRenderTask = undefined;
+        throw err;
+      }
+    );
   }
 
   rescaleAndRender(scale: number) {
@@ -78,6 +106,15 @@ interface PDFProps {
   read_only: boolean;
   containerWidth?: number | null;
   createAnnotationHandler: (annotation: ServerTokenAnnotation) => Promise<void>;
+}
+
+// Shared render coordination state
+interface PageRenderRequest {
+  pageNumber: number;
+  zoomLevel: number;
+  renderer: PDFPageRenderer | null;
+  canvas: HTMLCanvasElement | null;
+  onComplete?: (zoomLevel: number) => void;
 }
 
 export const PDF: React.FC<PDFProps> = ({
@@ -99,6 +136,12 @@ export const PDF: React.FC<PDFProps> = ({
     pendingScrollChatSourceKeyAtom
   );
   const { messages, selectedMessageId, selectedSourceIndex } = chatState;
+
+  // Shared debounce state for coordinated rendering
+  const renderQueueRef = useRef<Map<number, PageRenderRequest>>(new Map());
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastProcessedZoomRef = useRef<number>(zoomLevel);
+
   /* ------------------------------------------------------------------ */
   /* reference to the scrolling element                                 */
   const scrollContainerRef = useAtomValue(scrollContainerRefAtom);
@@ -303,6 +346,98 @@ export const PDF: React.FC<PDFProps> = ({
   useEffect(calcRange, [zoomLevel, calcRange]);
 
   /**
+   * Coordinated render callback - collects render requests from all pages
+   * and processes them together after debouncing
+   */
+  const requestPageRender = useCallback(
+    (
+      pageNumber: number,
+      renderer: PDFPageRenderer | null,
+      canvas: HTMLCanvasElement | null,
+      onComplete?: (zoomLevel: number) => void
+    ) => {
+      // Skip if we already have this page in queue - just update zoom level if needed
+      if (renderQueueRef.current.has(pageNumber)) {
+        const existingRequest = renderQueueRef.current.get(pageNumber);
+        if (existingRequest && existingRequest.zoomLevel !== zoomLevel) {
+          // Update to latest zoom level and callback
+          existingRequest.zoomLevel = zoomLevel;
+          existingRequest.onComplete = onComplete;
+        }
+        // Reset debounce timer to wait for more changes
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+      } else {
+        // New request - add to queue
+        renderQueueRef.current.set(pageNumber, {
+          pageNumber,
+          zoomLevel,
+          renderer,
+          canvas,
+          onComplete,
+        });
+      }
+
+      // Clear existing timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
+      // Set new debounced execution
+      debounceTimerRef.current = setTimeout(() => {
+        // Process all queued renders at once
+        const renderRequests = Array.from(renderQueueRef.current.values());
+
+        // Only render if zoom actually changed
+        if (lastProcessedZoomRef.current === zoomLevel) {
+          renderQueueRef.current.clear();
+          return;
+        }
+
+        // Cancel all in-progress renders first
+        renderRequests.forEach((request) => {
+          if (request.renderer) {
+            request.renderer.cancelCurrentRender();
+          }
+        });
+
+        // Then start new renders
+        renderRequests.forEach(async (request) => {
+          if (!request.renderer || !request.canvas) return;
+
+          try {
+            const viewport = pageInfos[
+              request.pageNumber - 1
+            ]?.page.getViewport({ scale: zoomLevel });
+            if (viewport) {
+              request.canvas.width = viewport.width;
+              request.canvas.height = viewport.height;
+              await request.renderer.rescaleAndRender(zoomLevel);
+              // Call the completion callback if provided
+              if (request.onComplete) {
+                request.onComplete(zoomLevel);
+              }
+            }
+          } catch (err) {
+            // Ignore cancellation errors
+            if (
+              err instanceof Error &&
+              !err.message.includes("Rendering cancelled")
+            ) {
+              console.error(`Page ${request.pageNumber} render error:`, err);
+            }
+          }
+        });
+
+        lastProcessedZoomRef.current = zoomLevel;
+        renderQueueRef.current.clear();
+      }, 100); // Single shared debounce delay
+    },
+    [zoomLevel, pageInfos]
+  );
+
+  /**
    * Scroll to the selected annotation's page whenever:
    * 1. A new annotation is selected, OR
    * 2. The page heights become available, OR
@@ -380,6 +515,15 @@ export const PDF: React.FC<PDFProps> = ({
     setPendingScrollChatSourceId,
   ]);
 
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
   /* ---------- render -------------------------------------------------- */
   if (pageInfos.length === 0) return null;
 
@@ -407,6 +551,7 @@ export const PDF: React.FC<PDFProps> = ({
                 onError={setViewStateError}
                 containerWidth={containerWidth}
                 createAnnotationHandler={createAnnotationHandler}
+                onZoomRenderRequest={requestPageRender}
               />
             )}
           </div>
