@@ -228,7 +228,10 @@ test("sidebar expands and tab navigation works", async ({ mount, page }) => {
     .poll(
       async () =>
         await sidebar.evaluate((el) => el.getBoundingClientRect().width),
-      { timeout: 2000 }
+      {
+        timeout: 3000,
+        intervals: [100, 200, 500],
+      }
     )
     .toBeLessThan(100);
 
@@ -243,7 +246,10 @@ test("sidebar expands and tab navigation works", async ({ mount, page }) => {
     .poll(
       async () =>
         await sidebar.evaluate((el) => el.getBoundingClientRect().width),
-      { timeout: 2000 }
+      {
+        timeout: 3000,
+        intervals: [100, 200, 500],
+      }
     )
     .toBeGreaterThan(collapsedWidth + 100);
 

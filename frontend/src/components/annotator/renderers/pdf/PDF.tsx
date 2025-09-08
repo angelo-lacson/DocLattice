@@ -566,7 +566,7 @@ export const PDF: React.FC<PDFProps> = ({
 export const PageAnnotationsContainer = styled.div`
   position: relative;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: flex-start;
   width: 100%;
   margin: 1rem 0;

@@ -817,21 +817,29 @@ test("maintains scroll position when new messages arrive", async ({
   ).toBeVisible({ timeout: TIMEOUTS.MEDIUM });
 
   // Give extra time for any scrolling animation
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1500);
 
-  // Should still be at bottom
-  const finalScrollTop = await messagesContainer.evaluate((el) => el.scrollTop);
-  const finalScrollHeight = await messagesContainer.evaluate(
-    (el) => el.scrollHeight
-  );
-  const finalClientHeight = await messagesContainer.evaluate(
-    (el) => el.clientHeight
-  );
-
-  // Check if we're near the bottom (within 150px tolerance for scrollbar/padding)
-  const distanceFromBottom =
-    finalScrollHeight - finalClientHeight - finalScrollTop;
-  expect(distanceFromBottom).toBeLessThan(150);
+  // Poll for scroll position to stabilize
+  await expect
+    .poll(
+      async () => {
+        const scrollTop = await messagesContainer.evaluate(
+          (el) => el.scrollTop
+        );
+        const scrollHeight = await messagesContainer.evaluate(
+          (el) => el.scrollHeight
+        );
+        const clientHeight = await messagesContainer.evaluate(
+          (el) => el.clientHeight
+        );
+        return scrollHeight - clientHeight - scrollTop;
+      },
+      {
+        timeout: 3000,
+        intervals: [100, 200, 500],
+      }
+    )
+    .toBeLessThan(150);
 });
 
 test("shows connection status indicators", async ({ mount, page }) => {

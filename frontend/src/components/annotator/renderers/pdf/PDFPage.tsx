@@ -335,7 +335,7 @@ export const PDFPage = ({
         <Selection
           key={annotation.id}
           selected={selectedAnnotations.includes(annotation.id)}
-          pageInfo={pageInfo}
+          pageInfo={updatedPageInfo}
           annotation={annotation}
         />
       ));
@@ -346,6 +346,7 @@ export const PDFPage = ({
     hasPdfPageRendered,
     zoomLevel,
     pageBounds,
+    updatedPageInfo,
   ]);
 
   /**
