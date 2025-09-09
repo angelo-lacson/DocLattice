@@ -64,6 +64,18 @@ const SelectionLayer = ({
     [key: number]: BoundingBox[];
   }>({});
 
+  // Long press detection for mobile
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(
+    null
+  );
+  const [isLongPressActive, setIsLongPressActive] = useState(false);
+  const [touchStartPos, setTouchStartPos] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const LONG_PRESS_DURATION = 500; // 500ms for long press
+  const TOUCH_MOVE_THRESHOLD = 10; // pixels of movement to cancel long press
+
   // Check if corpus has labelset
   const hasLabelset = Boolean(selectedCorpus?.labelSet);
   const hasLabels = humanTokenLabels.length > 0 || humanSpanLabels.length > 0;
@@ -304,6 +316,176 @@ const SelectionLayer = ({
   );
 
   /**
+   * Handles touch start for mobile long press detection
+   */
+  const handleTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      if (containerRef.current === null) {
+        throw new Error("No Container");
+      }
+
+      // Only proceed if we're not already selecting
+      if (!localPageSelection && event.touches.length === 1) {
+        const touch = event.touches[0];
+
+        // Store touch start position
+        setTouchStartPos({ x: touch.clientX, y: touch.clientY });
+
+        // Start long press timer
+        const timer = setTimeout(() => {
+          // Vibrate if supported (haptic feedback)
+          if (navigator.vibrate) {
+            navigator.vibrate(50);
+          }
+
+          setIsLongPressActive(true);
+          setSelectedAnnotations([]); // Clear any selected annotations
+
+          // Only set creating annotation state if we can actually create annotations
+          if (!read_only && canUpdateCorpus) {
+            setIsCreatingAnnotation(true);
+          }
+
+          const canvasElement = containerRef.current!
+            .previousSibling as HTMLCanvasElement;
+          if (!canvasElement) return;
+
+          const canvasBounds = canvasElement.getBoundingClientRect();
+          const left = touch.clientX - canvasBounds.left;
+          const top = touch.clientY - canvasBounds.top;
+
+          setLocalPageSelection({
+            pageNumber: pageNumber,
+            bounds: {
+              left,
+              top,
+              right: left,
+              bottom: top,
+            },
+          });
+        }, LONG_PRESS_DURATION);
+
+        setLongPressTimer(timer);
+      }
+    },
+    [
+      containerRef,
+      read_only,
+      canUpdateCorpus,
+      localPageSelection,
+      pageNumber,
+      setSelectedAnnotations,
+      setIsCreatingAnnotation,
+    ]
+  );
+
+  /**
+   * Handles touch move - cancels long press if moved too much, or updates selection if active
+   */
+  const handleTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      if (event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+
+      // If long press hasn't activated yet, check for movement threshold
+      if (longPressTimer && touchStartPos && !isLongPressActive) {
+        const dx = touch.clientX - touchStartPos.x;
+        const dy = touch.clientY - touchStartPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > TOUCH_MOVE_THRESHOLD) {
+          // Cancel long press if moved too much
+          clearTimeout(longPressTimer);
+          setLongPressTimer(null);
+          setTouchStartPos(null);
+        }
+      }
+
+      // If long press is active and we have a selection, update it
+      if (isLongPressActive && localPageSelection && containerRef.current) {
+        const canvasElement = containerRef.current
+          .previousSibling as HTMLCanvasElement;
+        if (!canvasElement) return;
+
+        const canvasBounds = canvasElement.getBoundingClientRect();
+        const right = touch.clientX - canvasBounds.left;
+        const bottom = touch.clientY - canvasBounds.top;
+
+        if (localPageSelection.pageNumber === pageNumber) {
+          setLocalPageSelection({
+            pageNumber: pageNumber,
+            bounds: {
+              ...localPageSelection.bounds,
+              right,
+              bottom,
+            },
+          });
+        }
+      }
+    },
+    [
+      longPressTimer,
+      touchStartPos,
+      isLongPressActive,
+      localPageSelection,
+      containerRef,
+      pageNumber,
+    ]
+  );
+
+  /**
+   * Handles touch end - finalize selection if active
+   */
+  const handleTouchEnd = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      // Clear long press timer if still running
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        setLongPressTimer(null);
+      }
+
+      // Reset touch start position
+      setTouchStartPos(null);
+
+      // If long press was active and we have a selection, finalize it
+      if (isLongPressActive && localPageSelection) {
+        const pageNum = pageNumber;
+
+        setMultiSelections((prev) => {
+          const updatedSelections = {
+            ...prev,
+            [pageNum]: [...(prev[pageNum] || []), localPageSelection.bounds],
+          };
+          setLocalPageSelection(undefined);
+          setIsCreatingAnnotation(false);
+          setIsLongPressActive(false);
+
+          // Show action menu
+          setPendingSelections(updatedSelections);
+          // Use last touch position for menu
+          const touch = event.changedTouches[0];
+          const menuPos = calculateMenuPosition(touch.clientX, touch.clientY);
+          setActionMenuPosition(menuPos);
+          setShowActionMenu(true);
+
+          return updatedSelections;
+        });
+      } else {
+        setIsLongPressActive(false);
+      }
+    },
+    [
+      longPressTimer,
+      isLongPressActive,
+      localPageSelection,
+      pageNumber,
+      setIsCreatingAnnotation,
+      calculateMenuPosition,
+    ]
+  );
+
+  /**
    * Handles the mouse move event to update the selection.
    */
   const handleMouseMove = useCallback(
@@ -381,6 +563,11 @@ const SelectionLayer = ({
         setLocalPageSelection(undefined);
         setIsCreatingAnnotation(false);
         setMultiSelections({});
+        setIsLongPressActive(false);
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          setLongPressTimer(null);
+        }
         console.log("[SelectionLayer] Selection cancelled with ESC");
       }
     };
@@ -391,7 +578,16 @@ const SelectionLayer = ({
         document.removeEventListener("keydown", handleEscapeDuringSelection);
       };
     }
-  }, [localPageSelection, setIsCreatingAnnotation]);
+  }, [localPageSelection, setIsCreatingAnnotation, longPressTimer]);
+
+  // Cleanup long press timer on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+      }
+    };
+  }, [longPressTimer]);
 
   // Handle clicks outside the action menu and keyboard shortcuts
   useEffect(() => {
@@ -444,6 +640,9 @@ const SelectionLayer = ({
       onMouseDown={handleMouseDown}
       onMouseMove={localPageSelection ? handleMouseMove : undefined}
       onMouseUp={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       style={{
         position: "absolute",
         top: 0,
