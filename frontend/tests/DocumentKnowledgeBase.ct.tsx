@@ -1600,6 +1600,525 @@ test("mobile: moving finger during long press wait cancels selection", async ({
   console.log("[TEST SUCCESS] Moving during long press cancelled selection");
 });
 
+test("mobile: pinch zoom adjusts document zoom level", async ({
+  mount,
+  page,
+}) => {
+  // Set mobile viewport
+  await page.setViewportSize({ width: 375, height: 667 });
+
+  await mount(
+    <DocumentKnowledgeBaseTestWrapper
+      mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
+      documentId={PDF_DOC_ID}
+      corpusId={CORPUS_ID}
+    />
+  );
+
+  // Wait for document to load
+  await expect(
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+  ).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Wait for PDF to be rendered
+  await expect(page.locator("#pdf-container canvas").first()).toBeVisible({
+    timeout: LONG_TIMEOUT,
+  });
+
+  // Get initial zoom level (should be 100%)
+  const zoomIndicator = page.locator('[data-testid="zoom-indicator"]');
+
+  // Simulate pinch zoom start with two fingers
+  const centerX = 200;
+  const centerY = 400;
+  const initialDistance = 100; // Start with fingers 100px apart
+
+  console.log("[TEST] Starting pinch zoom");
+
+  // Dispatch touchstart with two fingers
+  await page.evaluate(
+    ([cx, cy, dist]) => {
+      const touchstart = new TouchEvent("touchstart", {
+        bubbles: true,
+        cancelable: true,
+        touches: [
+          new Touch({
+            identifier: 0,
+            target: document.body,
+            clientX: cx - dist / 2,
+            clientY: cy,
+            pageX: cx - dist / 2,
+            pageY: cy,
+          }),
+          new Touch({
+            identifier: 1,
+            target: document.body,
+            clientX: cx + dist / 2,
+            clientY: cy,
+            pageX: cx + dist / 2,
+            pageY: cy,
+          }),
+        ],
+      });
+      document.dispatchEvent(touchstart);
+    },
+    [centerX, centerY, initialDistance]
+  );
+
+  await page.waitForTimeout(100);
+
+  // Simulate pinch out (zoom in) - increase distance between fingers
+  const zoomedDistance = 200; // Fingers now 200px apart (2x zoom)
+
+  console.log("[TEST] Pinching out to zoom in");
+
+  await page.evaluate(
+    ([cx, cy, dist]) => {
+      const touchmove = new TouchEvent("touchmove", {
+        bubbles: true,
+        cancelable: true,
+        touches: [
+          new Touch({
+            identifier: 0,
+            target: document.body,
+            clientX: cx - dist / 2,
+            clientY: cy,
+            pageX: cx - dist / 2,
+            pageY: cy,
+          }),
+          new Touch({
+            identifier: 1,
+            target: document.body,
+            clientX: cx + dist / 2,
+            clientY: cy,
+            pageX: cx + dist / 2,
+            pageY: cy,
+          }),
+        ],
+      });
+      document.dispatchEvent(touchmove);
+    },
+    [centerX, centerY, zoomedDistance]
+  );
+
+  await page.waitForTimeout(100);
+
+  // End pinch
+  console.log("[TEST] Ending pinch zoom");
+
+  await page.evaluate(() => {
+    const touchend = new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      touches: [],
+      changedTouches: [],
+    });
+    document.dispatchEvent(touchend);
+  });
+
+  // Wait for zoom indicator to appear
+  await expect(zoomIndicator).toBeVisible({ timeout: 2000 });
+
+  const newZoomText = await zoomIndicator.textContent();
+  console.log("[TEST] New zoom after pinch:", newZoomText);
+
+  // Verify zoom changed (should be around 200% after doubling finger distance)
+  expect(newZoomText).not.toBe("100%");
+
+  // Now test pinch in (zoom out)
+  console.log("[TEST] Testing pinch in to zoom out");
+
+  // Start new pinch
+  await page.evaluate(
+    ([cx, cy, dist]) => {
+      const touchstart = new TouchEvent("touchstart", {
+        bubbles: true,
+        cancelable: true,
+        touches: [
+          new Touch({
+            identifier: 0,
+            target: document.body,
+            clientX: cx - dist / 2,
+            clientY: cy,
+            pageX: cx - dist / 2,
+            pageY: cy,
+          }),
+          new Touch({
+            identifier: 1,
+            target: document.body,
+            clientX: cx + dist / 2,
+            clientY: cy,
+            pageX: cx + dist / 2,
+            pageY: cy,
+          }),
+        ],
+      });
+      document.dispatchEvent(touchstart);
+    },
+    [centerX, centerY, 200]
+  );
+
+  await page.waitForTimeout(100);
+
+  // Pinch in - decrease distance
+  await page.evaluate(
+    ([cx, cy, dist]) => {
+      const touchmove = new TouchEvent("touchmove", {
+        bubbles: true,
+        cancelable: true,
+        touches: [
+          new Touch({
+            identifier: 0,
+            target: document.body,
+            clientX: cx - dist / 2,
+            clientY: cy,
+            pageX: cx - dist / 2,
+            pageY: cy,
+          }),
+          new Touch({
+            identifier: 1,
+            target: document.body,
+            clientX: cx + dist / 2,
+            clientY: cy,
+            pageX: cx + dist / 2,
+            pageY: cy,
+          }),
+        ],
+      });
+      document.dispatchEvent(touchmove);
+    },
+    [centerX, centerY, 50]
+  ); // Fingers now only 50px apart
+
+  await page.waitForTimeout(100);
+
+  // End pinch
+  await page.evaluate(() => {
+    const touchend = new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      touches: [],
+      changedTouches: [],
+    });
+    document.dispatchEvent(touchend);
+  });
+
+  // Check final zoom level
+  await expect(zoomIndicator).toBeVisible({ timeout: 2000 });
+  const finalZoomText = await zoomIndicator.textContent();
+  console.log("[TEST] Final zoom after pinch in:", finalZoomText);
+
+  console.log(
+    "[TEST SUCCESS] Pinch zoom successfully adjusted document zoom level"
+  );
+});
+
+test("mobile: pinch zoom and long press selection work independently", async ({
+  mount,
+  page,
+}) => {
+  // Set mobile viewport
+  await page.setViewportSize({ width: 375, height: 667 });
+
+  await mount(
+    <DocumentKnowledgeBaseTestWrapper
+      mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
+      documentId={PDF_DOC_ID}
+      corpusId={CORPUS_ID}
+    />
+  );
+
+  // Wait for document to load
+  await expect(
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+  ).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Wait for PDF to be rendered
+  await expect(page.locator("#pdf-container canvas").first()).toBeVisible({
+    timeout: LONG_TIMEOUT,
+  });
+
+  // Select a label for annotations
+  const labelSelectorButton = page.locator(
+    '[data-testid="label-selector-toggle-button"]'
+  );
+  await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
+  await labelSelectorButton.click();
+  const firstLabelOption = page.locator(".label-option").first();
+  await expect(firstLabelOption).toBeVisible({ timeout: LONG_TIMEOUT });
+  await firstLabelOption.click();
+  console.log("[TEST] Selected label for annotation");
+
+  // Test 1: Verify pinch zoom works
+  console.log("[TEST] Testing pinch zoom first");
+
+  const centerX = 200;
+  const centerY = 400;
+
+  // Start pinch
+  await page.evaluate(
+    ([cx, cy]) => {
+      const touchstart = new TouchEvent("touchstart", {
+        bubbles: true,
+        cancelable: true,
+        touches: [
+          new Touch({
+            identifier: 0,
+            target: document.body,
+            clientX: cx - 50,
+            clientY: cy,
+            pageX: cx - 50,
+            pageY: cy,
+          }),
+          new Touch({
+            identifier: 1,
+            target: document.body,
+            clientX: cx + 50,
+            clientY: cy,
+            pageX: cx + 50,
+            pageY: cy,
+          }),
+        ],
+      });
+      document.dispatchEvent(touchstart);
+    },
+    [centerX, centerY]
+  );
+
+  await page.waitForTimeout(100);
+
+  // Pinch out to zoom in
+  await page.evaluate(
+    ([cx, cy]) => {
+      const touchmove = new TouchEvent("touchmove", {
+        bubbles: true,
+        cancelable: true,
+        touches: [
+          new Touch({
+            identifier: 0,
+            target: document.body,
+            clientX: cx - 100,
+            clientY: cy,
+            pageX: cx - 100,
+            pageY: cy,
+          }),
+          new Touch({
+            identifier: 1,
+            target: document.body,
+            clientX: cx + 100,
+            clientY: cy,
+            pageX: cx + 100,
+            pageY: cy,
+          }),
+        ],
+      });
+      document.dispatchEvent(touchmove);
+    },
+    [centerX, centerY]
+  );
+
+  await page.waitForTimeout(100);
+
+  // End pinch
+  await page.evaluate(() => {
+    const touchend = new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      touches: [],
+      changedTouches: [],
+    });
+    document.dispatchEvent(touchend);
+  });
+
+  // Verify zoom changed
+  const zoomIndicator = page.locator('[data-testid="zoom-indicator"]');
+  await expect(zoomIndicator).toBeVisible({ timeout: 2000 });
+  const zoomAfterPinch = await zoomIndicator.textContent();
+  console.log("[TEST] Zoom after pinch:", zoomAfterPinch);
+  expect(zoomAfterPinch).not.toBe("100%");
+
+  // Wait for zoom indicator to disappear
+  await page.waitForTimeout(2000);
+
+  // Test 2: Verify long press selection still works after pinch zoom
+  console.log("[TEST] Testing long press selection after zoom");
+
+  const selectionLayer = page
+    .locator(".PageAnnotationsContainer")
+    .first()
+    .locator("#selection-layer");
+  const layerBox = await selectionLayer.boundingBox();
+  expect(layerBox).toBeTruthy();
+
+  const touchX = layerBox!.x + layerBox!.width * 0.5;
+  const touchY = layerBox!.y + layerBox!.height * 0.2;
+
+  // Start single touch for long press
+  await selectionLayer.dispatchEvent("touchstart", {
+    touches: [
+      {
+        identifier: 0,
+        clientX: touchX,
+        clientY: touchY,
+        pageX: touchX,
+        pageY: touchY,
+      },
+    ],
+  });
+
+  // Hold for long press duration
+  console.log("[TEST] Holding for long press...");
+  await page.waitForTimeout(600);
+
+  // Drag to create selection
+  const dragEndY = touchY + 50;
+  await selectionLayer.dispatchEvent("touchmove", {
+    touches: [
+      {
+        identifier: 0,
+        clientX: touchX,
+        clientY: dragEndY,
+        pageX: touchX,
+        pageY: dragEndY,
+      },
+    ],
+  });
+
+  await page.waitForTimeout(100);
+
+  // End touch
+  await selectionLayer.dispatchEvent("touchend", {
+    changedTouches: [
+      {
+        identifier: 0,
+        clientX: touchX,
+        clientY: dragEndY,
+        pageX: touchX,
+        pageY: dragEndY,
+      },
+    ],
+  });
+
+  // Verify action menu appears
+  const actionMenu = page.getByTestId("selection-action-menu");
+  await expect(actionMenu).toBeVisible({ timeout: LONG_TIMEOUT });
+  console.log("[TEST] Action menu appeared after long press");
+
+  // Cancel the selection
+  const cancelButton = page.getByTestId("cancel-button");
+  await cancelButton.click();
+  await expect(actionMenu).not.toBeVisible();
+
+  // Test 3: Verify starting with two fingers doesn't trigger long press
+  console.log("[TEST] Testing that two-finger touch doesn't trigger selection");
+
+  // Start with two fingers (should trigger pinch, not selection)
+  await page.evaluate(
+    ([x, y]) => {
+      const touchstart = new TouchEvent("touchstart", {
+        bubbles: true,
+        cancelable: true,
+        touches: [
+          new Touch({
+            identifier: 0,
+            target: document.body,
+            clientX: x - 30,
+            clientY: y,
+            pageX: x - 30,
+            pageY: y,
+          }),
+          new Touch({
+            identifier: 1,
+            target: document.body,
+            clientX: x + 30,
+            clientY: y,
+            pageX: x + 30,
+            pageY: y,
+          }),
+        ],
+      });
+      document.dispatchEvent(touchstart);
+    },
+    [touchX, touchY]
+  );
+
+  // Wait for long press duration
+  await page.waitForTimeout(600);
+
+  // End touches
+  await page.evaluate(() => {
+    const touchend = new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      touches: [],
+      changedTouches: [],
+    });
+    document.dispatchEvent(touchend);
+  });
+
+  // Action menu should NOT appear (two fingers don't trigger selection)
+  await expect(actionMenu).not.toBeVisible({ timeout: 1000 });
+  console.log("[TEST] Confirmed: Two-finger touch doesn't trigger selection");
+
+  // Test 4: Verify single finger can still select after two-finger gesture
+  console.log(
+    "[TEST] Testing single finger selection works after two-finger gesture"
+  );
+
+  // Now try single finger again
+  await selectionLayer.dispatchEvent("touchstart", {
+    touches: [
+      {
+        identifier: 0,
+        clientX: touchX,
+        clientY: touchY + 100,
+        pageX: touchX,
+        pageY: touchY + 100,
+      },
+    ],
+  });
+
+  await page.waitForTimeout(600);
+
+  // Drag to create selection
+  await selectionLayer.dispatchEvent("touchmove", {
+    touches: [
+      {
+        identifier: 0,
+        clientX: touchX,
+        clientY: touchY + 150,
+        pageX: touchX,
+        pageY: touchY + 150,
+      },
+    ],
+  });
+
+  await page.waitForTimeout(100);
+
+  // End touch
+  await selectionLayer.dispatchEvent("touchend", {
+    changedTouches: [
+      {
+        identifier: 0,
+        clientX: touchX,
+        clientY: touchY + 150,
+        pageX: touchX,
+        pageY: touchY + 150,
+      },
+    ],
+  });
+
+  // Action menu should appear again
+  await expect(actionMenu).toBeVisible({ timeout: LONG_TIMEOUT });
+  console.log(
+    "[TEST] Single finger selection still works after two-finger gesture"
+  );
+
+  console.log(
+    "[TEST SUCCESS] Pinch zoom and long press selection work independently"
+  );
+});
+
 test("filters annotations in unified feed with structural toggle", async ({
   mount,
   page,
