@@ -1,20 +1,20 @@
 import Axios from "axios";
 
-export const downloadFile = (url: string) => {
+export const downloadFile = async (url: string): Promise<void> => {
   try {
-    Axios.get(url, {
+    const res = await Axios.get(url, {
       responseType: "blob",
-    }).then((res) => {
-      var blob = new Blob([res.data], { type: res.headers["content-type"] });
-      var link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = url.substring(url.lastIndexOf("/") + 1);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     });
+    const blob = new Blob([res.data], { type: res.headers["content-type"] });
+    const link = document.createElement("a");
+    link.href = window.URL.createObjectURL(blob);
+    link.download = url.substring(url.lastIndexOf("/") + 1);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   } catch (e) {
     console.log("ERROR - Downloading file failed: ", e);
+    throw e;
   }
 };
 

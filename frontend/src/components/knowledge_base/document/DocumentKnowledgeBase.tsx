@@ -1486,14 +1486,19 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     display: flex;
     justify-content: center;
     pointer-events: none; /* allow clicks only on children */
-    z-index: 1500;
+    z-index: 850;
 
     @media (max-width: 768px) {
-      /* On mobile, let the child component handle its own positioning */
-      position: static;
-      left: auto;
-      right: auto;
+      /* On mobile, position below zoom controls */
+      position: absolute;
+      top: 80px; /* Below zoom controls */
+      left: 1rem;
+      right: auto; /* Don't constrain right side for collapsed state */
       bottom: auto;
+      width: auto; /* Let child determine width */
+      display: block;
+      pointer-events: none;
+      box-sizing: border-box;
     }
   `;
 
@@ -1695,6 +1700,39 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           )}
 
           <ContentArea id="content-area">
+            {/* Zoom Controls - positioned relative to ContentArea */}
+            {activeLayer === "document" && (
+              <ZoomControls
+                zoomLevel={zoomLevel}
+                onZoomIn={() => {
+                  setZoomLevel(Math.min(zoomLevel + 0.1, 4));
+                  showZoomFeedback();
+                }}
+                onZoomOut={() => {
+                  setZoomLevel(Math.max(zoomLevel - 0.1, 0.5));
+                  showZoomFeedback();
+                }}
+              />
+            )}
+
+            {/* Unified Search/Chat Input - positioned relative to ContentArea */}
+            <FloatingInputWrapper $panelOffset={floatingControlsState.offset}>
+              <FloatingDocumentInput
+                fixed={false}
+                visible={activeLayer === "document"}
+                readOnly={readOnly}
+                onChatSubmit={(message) => {
+                  setPendingChatMessage(message);
+                  setSidebarViewMode("chat");
+                  setShowRightPanel(true);
+                }}
+                onToggleChat={() => {
+                  setSidebarViewMode("chat");
+                  setShowRightPanel(true);
+                }}
+              />
+            </FloatingInputWrapper>
+
             <MainContentArea id="main-content-area">
               {mainLayerContent}
               <EnhancedLabelSelector
@@ -1740,45 +1778,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 />
               )}
 
-              {/* Zoom Controls - only in document layer */}
-              {activeLayer === "document" && (
-                <ZoomControls
-                  zoomLevel={zoomLevel}
-                  onZoomIn={() => {
-                    setZoomLevel(Math.min(zoomLevel + 0.1, 4));
-                    showZoomFeedback();
-                  }}
-                  onZoomOut={() => {
-                    setZoomLevel(Math.max(zoomLevel - 0.1, 0.5));
-                    showZoomFeedback();
-                  }}
-                />
-              )}
-
               {/* Zoom Indicator - shows current zoom level when zooming */}
               {showZoomIndicator && activeLayer === "document" && (
                 <ZoomIndicator data-testid="zoom-indicator">
                   {Math.round(zoomLevel * 100)}%
                 </ZoomIndicator>
               )}
-
-              {/* Unified Search/Chat Input - only in document layer */}
-              <FloatingInputWrapper $panelOffset={floatingControlsState.offset}>
-                <FloatingDocumentInput
-                  fixed={false}
-                  visible={activeLayer === "document"}
-                  readOnly={readOnly}
-                  onChatSubmit={(message) => {
-                    setPendingChatMessage(message);
-                    setSidebarViewMode("chat");
-                    setShowRightPanel(true);
-                  }}
-                  onToggleChat={() => {
-                    setSidebarViewMode("chat");
-                    setShowRightPanel(true);
-                  }}
-                />
-              </FloatingInputWrapper>
 
               {/* Floating Document Controls - only in document layer */}
               <FloatingDocumentControls

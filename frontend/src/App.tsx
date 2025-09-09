@@ -27,6 +27,8 @@ import {
   uploadModalPreloadedFiles,
   showKnowledgeBaseModal,
   backendUserObj,
+  editingDocument,
+  viewingDocument,
 } from "./graphql/cache";
 import { GET_ME, GetMeOutputs } from "./graphql/queries";
 
@@ -63,6 +65,11 @@ import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
 import { useRouteStateSync } from "./hooks/RouteStateSync";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
+import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
+import {
+  editDocForm_Schema,
+  editDocForm_Ui_Schema,
+} from "./components/forms/schemas";
 
 export const App = () => {
   const { REACT_APP_USE_AUTH0, REACT_APP_AUDIENCE } = useEnv();
@@ -73,6 +80,8 @@ export const App = () => {
   const opened_corpus = useReactiveVar(openedCorpus);
   const opened_extract = useReactiveVar(openedExtract);
   const opened_document = useReactiveVar(openedDocument);
+  const document_to_edit = useReactiveVar(editingDocument);
+  const document_to_view = useReactiveVar(viewingDocument);
   const show_corpus_analyzer_fieldset_modal = useReactiveVar(
     showSelectCorpusAnalyzerOrFieldsetModal
   );
@@ -245,6 +254,37 @@ export const App = () => {
                 uploadModalPreloadedFiles([]);
               }}
               corpusId={opened_corpus?.id || null}
+            />
+            <CRUDModal
+              open={document_to_edit !== null}
+              mode="EDIT"
+              oldInstance={document_to_edit ? document_to_edit : {}}
+              modelName="document"
+              uiSchema={editDocForm_Ui_Schema}
+              dataSchema={editDocForm_Schema}
+              onSubmit={() => {
+                editingDocument(null);
+              }}
+              onClose={() => editingDocument(null)}
+              acceptedFileTypes="pdf"
+              hasFile={true}
+              fileField="pdfFile"
+              fileLabel="PDF File"
+              fileIsImage={false}
+            />
+            <CRUDModal
+              open={document_to_view !== null}
+              mode="VIEW"
+              oldInstance={document_to_view ? document_to_view : {}}
+              modelName="document"
+              uiSchema={editDocForm_Ui_Schema}
+              dataSchema={editDocForm_Schema}
+              onClose={() => viewingDocument(null)}
+              acceptedFileTypes="pdf"
+              hasFile={true}
+              fileField="pdfFile"
+              fileLabel="PDF File"
+              fileIsImage={false}
             />
             <AuthGate
               useAuth0={REACT_APP_USE_AUTH0}
