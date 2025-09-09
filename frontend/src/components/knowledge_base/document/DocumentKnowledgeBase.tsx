@@ -634,6 +634,87 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     [activeLayer, zoomLevel, setZoomLevel, showZoomFeedback]
   );
 
+  // Pinch zoom state for mobile
+  const [isPinching, setIsPinching] = useState(false);
+  const [initialPinchDistance, setInitialPinchDistance] = useState<
+    number | null
+  >(null);
+  const [lastPinchZoom, setLastPinchZoom] = useState<number | null>(null);
+
+  // Helper function to calculate distance between two touch points
+  const getTouchDistance = (touches: TouchList): number => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Handle touch start for pinch zoom
+  const handleTouchStart = useCallback(
+    (event: TouchEvent) => {
+      // Only handle if in document layer and using two fingers
+      if (activeLayer !== "document" || event.touches.length !== 2) {
+        return;
+      }
+
+      // Initialize pinch zoom
+      const distance = getTouchDistance(event.touches);
+      setIsPinching(true);
+      setInitialPinchDistance(distance);
+      setLastPinchZoom(zoomLevel);
+
+      // Prevent default to avoid scrolling
+      event.preventDefault();
+    },
+    [activeLayer, zoomLevel]
+  );
+
+  // Handle touch move for pinch zoom
+  const handleTouchMove = useCallback(
+    (event: TouchEvent) => {
+      // Only handle if we're pinching with two fingers
+      if (
+        !isPinching ||
+        event.touches.length !== 2 ||
+        !initialPinchDistance ||
+        lastPinchZoom === null
+      ) {
+        return;
+      }
+
+      // Calculate new zoom based on pinch distance
+      const currentDistance = getTouchDistance(event.touches);
+      const scale = currentDistance / initialPinchDistance;
+
+      // Apply zoom with limits
+      const newZoom = Math.max(0.5, Math.min(4, lastPinchZoom * scale));
+      setZoomLevel(newZoom);
+
+      // Show zoom feedback
+      showZoomFeedback();
+
+      // Prevent default to avoid scrolling
+      event.preventDefault();
+    },
+    [
+      isPinching,
+      initialPinchDistance,
+      lastPinchZoom,
+      setZoomLevel,
+      showZoomFeedback,
+    ]
+  );
+
+  // Handle touch end for pinch zoom
+  const handleTouchEnd = useCallback((event: TouchEvent) => {
+    // Reset pinch state when touches end
+    if (event.touches.length < 2) {
+      setIsPinching(false);
+      setInitialPinchDistance(null);
+      setLastPinchZoom(null);
+    }
+  }, []);
+
   // Fetch document data - either with corpus context or without
   const authReady = useAuthReady();
 
@@ -1226,11 +1307,28 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     document.addEventListener("wheel", handleWheelZoom, { passive: false });
     document.addEventListener("keydown", handleKeyboardZoom);
 
+    // Add touch listeners for pinch zoom with passive: false
+    document.addEventListener("touchstart", handleTouchStart, {
+      passive: false,
+    });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd, { passive: false });
+
     return () => {
       document.removeEventListener("wheel", handleWheelZoom);
       document.removeEventListener("keydown", handleKeyboardZoom);
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [activeLayer, handleWheelZoom, handleKeyboardZoom]);
+  }, [
+    activeLayer,
+    handleWheelZoom,
+    handleKeyboardZoom,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  ]);
 
   const [selectedNote, setSelectedNote] = useState<(typeof notes)[0] | null>(
     null
