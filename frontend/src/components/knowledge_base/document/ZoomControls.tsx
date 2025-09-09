@@ -16,8 +16,9 @@ const StyledZoomControls = styled.div`
   z-index: 900;
 
   @media (max-width: 768px) {
-    position: fixed;
-    top: 180px;
+    position: absolute; /* Stay within document container */
+    top: 1rem;
+    left: 1rem;
   }
 
   .zoom-group {
