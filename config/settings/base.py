@@ -631,8 +631,18 @@ RESERVED_USER_SLUGS = {
 DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 
 # Embeddings / Semantic Search - TODO move to EMBEDDER_KWARGS and use like PARSER_KWARGS
-EMBEDDINGS_MICROSERVICE_URL = "http://vector-embedder:8000"
-VECTOR_EMBEDDER_API_KEY = "abc123"
+# Microservice URLs - read from environment with defaults
+EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
+VECTOR_EMBEDDER_API_KEY = env(
+    "VECTOR_EMBEDDER_API_KEY",
+    default="abc123"
+)
+DOCLING_PARSER_SERVICE_URL = env("DOCLING_PARSER_SERVICE_URL")
+DOCLING_PARSER_TIMEOUT = env.int(
+    "DOCLING_PARSER_TIMEOUT",
+    default=300  # 5 minutes default
+)
+use_cloud_run_iam_auth = True
 
 # LLM SETTING
 OPENAI_API_KEY = env.str("OPENAI_API_KEY", default="")
@@ -798,15 +808,16 @@ MINN_MODERNBERT_EMBEDDERS = {
 }
 
 
+# Pipeline-specific settings that override global settings
+# These are only set if you want to override the global settings for specific components
+# Otherwise, components will fall back to the global settings (which read from env vars)
 PIPELINE_SETTINGS = {
-    "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder": {
-        "embeddings_microservice_url": "http://vector-embedder:8000",
-        "vector_embedder_api_key": "abc123",
-    },
-    "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser": {
-        "DOCLING_PARSER_SERVICE_URL": "http://docling-parser:8000/parse/",
-        "DOCLING_PARSER_TIMEOUT": None,
-    },
+    # Example: To override settings for a specific component:
+    # "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder": {
+    #     "embeddings_microservice_url": "https://custom-url-for-this-component",
+    #     "vector_embedder_api_key": "custom-key",
+    # },
+    # Currently no overrides - all components use global settings which read from env vars
 }
 
 LLMS_DEFAULT_AGENT_FRAMEWORK = "pydantic_ai"

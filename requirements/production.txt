@@ -10,6 +10,10 @@ Collectfast==2.2.0  # https://github.com/antonagestam/collectfast
 # ------------------------------------------------------------------------------
 django-anymail[mailgun]==8.6  # https://github.com/anymail/django-anymail
 
+# GCP Stuff
+# ------------------------------------------------------------------------------
+google-auth==2.40.3
+
 
 # Not directly required, pinned by Snyk to avoid a vulnerability
 # Duplicated accross requirements files due to Snyk not understanding requirements inheritance
