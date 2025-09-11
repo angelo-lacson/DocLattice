@@ -33,30 +33,59 @@ class DoclingParser(BaseParser):
         super().__init__()  # Call to superclass __init__
 
         # Priority order for service URL:
-        # 1. Environment variable (for K8s deployments)
-        # 2. PIPELINE_SETTINGS configuration
-        # 3. Django settings attribute
-        # 4. Default fallback
-        import os
+        # 1. PIPELINE_SETTINGS configuration (if specified)
+        # 2. Django settings attribute (which reads from env vars)
+        # Note: Environment variables are ONLY read in Django settings, not here
 
-        # Get settings from PIPELINE_SETTINGS (loaded by BaseParser)
-        component_settings = self.get_component_settings()
+        self.service_url = getattr(settings, "DOCLING_PARSER_SERVICE_URL")
 
-        self.service_url = (
-            os.environ.get("DOCLING_PARSER_SERVICE_URL")
-            or component_settings.get("DOCLING_PARSER_SERVICE_URL")
-            or getattr(settings, "DOCLING_PARSER_SERVICE_URL", None)
-            or "http://docling-parser:8000/parse/"
-        )
+        # Allow configuring the timeout
+        self.request_timeout = getattr(settings, "DOCLING_PARSER_TIMEOUT")
 
-        # Allow configuring the timeout with same priority order
-        self.request_timeout = (
-            component_settings.get("DOCLING_PARSER_TIMEOUT")
-            or getattr(settings, "DOCLING_PARSER_TIMEOUT", None)
-            or 300  # 5 minutes default
+        # Optional explicit flag to force Cloud Run IAM auth (useful for custom domains)
+        self.use_cloud_run_iam_auth = bool(
+            getattr(settings, "use_cloud_run_iam_auth", False)
         )
 
         logger.info(f"DoclingParser initialized with service URL: {self.service_url}")
+
+    @staticmethod
+    def _maybe_add_cloud_run_auth(url: str, headers: dict[str, str], force: bool = False) -> dict[str, str]:
+        """
+        Attach an Authorization bearer with a Google Cloud Run identity token when applicable.
+
+        Args:
+            url: The service URL we are calling (used to derive target audience).
+            headers: Existing headers to be augmented.
+            force: If True, force adding IAM auth regardless of the domain.
+
+        Returns:
+            A possibly augmented headers dict. If token acquisition fails, returns original headers.
+        """
+        try:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(url)
+            is_cloud_run = parsed.scheme == "https" and parsed.netloc.endswith(".run.app")
+            if not (is_cloud_run or force):
+                return headers
+
+            audience = f"{parsed.scheme}://{parsed.netloc}"
+
+            # Lazy import to avoid hard dependency in non-GCP environments
+            import google.auth.transport.requests
+            import google.oauth2.id_token
+
+            request = google.auth.transport.requests.Request()
+            id_token = google.oauth2.id_token.fetch_id_token(request, audience)
+            if id_token:
+                headers["Authorization"] = f"Bearer {id_token}"
+                logger.debug("Attached Google Cloud Run IAM id_token to Docling request headers.")
+            else:
+                logger.warning("Failed to obtain Google Cloud Run IAM id_token for Docling.")
+        except Exception as e:
+            logger.warning(f"Docling Cloud Run IAM auth header not added: {e}")
+        return headers
 
     def _parse_document_impl(
         self, user_id: int, doc_id: int, **all_kwargs
@@ -120,10 +149,14 @@ class DoclingParser(BaseParser):
             # Send request to the microservice
             logger.info(f"Sending PDF to Docling parser service: {self.service_url}")
             try:
+                headers: dict[str, str] = {"Content-Type": "application/json"}
+                # Attach Cloud Run IAM id_token if applicable/forced
+                headers = self._maybe_add_cloud_run_auth(self.service_url, headers, force=self.use_cloud_run_iam_auth)
+
                 response = requests.post(
                     self.service_url,
                     json=payload,
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                     timeout=self.request_timeout,
                 )
                 response.raise_for_status()  # Raise exception for 4XX/5XX responses
