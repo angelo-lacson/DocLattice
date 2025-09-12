@@ -1713,6 +1713,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               $variant="primary"
               onClick={() => setShowAddToCorpusModal(true)}
               title="Add this document to a corpus to unlock collaborative features"
+              data-testid="add-to-corpus-button"
             >
               <Plus />
               Add to Corpus
