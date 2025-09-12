@@ -633,14 +633,10 @@ DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 # Embeddings / Semantic Search - TODO move to EMBEDDER_KWARGS and use like PARSER_KWARGS
 # Microservice URLs - read from environment with defaults
 EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
-VECTOR_EMBEDDER_API_KEY = env(
-    "VECTOR_EMBEDDER_API_KEY",
-    default="abc123"
-)
+VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
 DOCLING_PARSER_SERVICE_URL = env("DOCLING_PARSER_SERVICE_URL")
 DOCLING_PARSER_TIMEOUT = env.int(
-    "DOCLING_PARSER_TIMEOUT",
-    default=300  # 5 minutes default
+    "DOCLING_PARSER_TIMEOUT", default=300  # 5 minutes default
 )
 use_cloud_run_iam_auth = True
 

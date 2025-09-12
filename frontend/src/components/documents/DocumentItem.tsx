@@ -58,57 +58,32 @@ const slideIn = keyframes`
   }
 `;
 
-// Main card - this is where the magic happens
+// Corporate styled card container
 const StyledCard = styled.div`
   position: relative;
-  background: linear-gradient(to bottom, #ffffff, #fafbfc);
-  border: 1px solid transparent;
-  background-clip: padding-box;
-  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   overflow: visible;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   cursor: pointer;
-  min-height: 200px;
+  min-height: 280px;
+  max-height: 360px;
   display: flex;
   flex-direction: column;
   width: 100%;
-  animation: ${slideIn} 0.4s ease-out;
-
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 16px;
-    padding: 1px;
-    background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.1) 0%,
-      rgba(139, 92, 246, 0.1) 50%,
-      rgba(236, 72, 153, 0.1) 100%
-    );
-    -webkit-mask: linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    opacity: 0.5;
-    transition: opacity 0.3s ease;
-  }
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 
   &:hover {
-    transform: translateY(-8px) scale(1.02);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12),
-      0 0 0 1px rgba(99, 102, 241, 0.1), inset 0 0 80px rgba(99, 102, 241, 0.03);
-
-    &::before {
-      opacity: 1;
-    }
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+      0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border-color: #cbd5e1;
 
     .card-header {
-      background: linear-gradient(
-        135deg,
-        rgba(99, 102, 241, 0.15) 0%,
-        rgba(139, 92, 246, 0.15) 100%
-      );
+      &::after {
+        opacity: 1;
+      }
     }
 
     .action-bar {
@@ -116,328 +91,234 @@ const StyledCard = styled.div`
       transform: translateY(0);
     }
 
-    .preview-thumbnail {
-      transform: scale(1.05) rotate(2deg);
+    img:not(.fallback-icon) {
+      transform: translateY(5%);
     }
   }
 
   &.is-selected {
-    &::before {
-      background: linear-gradient(
-        135deg,
-        rgba(34, 197, 94, 0.3) 0%,
-        rgba(16, 185, 129, 0.3) 100%
-      );
-      opacity: 1;
-    }
-
-    box-shadow: 0 10px 30px rgba(34, 197, 94, 0.15),
-      0 0 0 2px rgba(34, 197, 94, 0.2);
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1),
+      0 10px 15px -3px rgba(0, 0, 0, 0.1);
   }
 
   &.is-open {
-    &::before {
-      background: linear-gradient(
-        135deg,
-        rgba(251, 146, 60, 0.3) 0%,
-        rgba(250, 204, 21, 0.3) 100%
-      );
-      opacity: 1;
-    }
+    border-color: #f59e0b;
+    background: #fffbeb;
   }
 
   &.backend-locked {
     pointer-events: none;
-    filter: grayscale(0.5);
-    opacity: 0.7;
+    opacity: 0.6;
+    background: #f9fafb;
   }
 `;
 
-// Beautiful card header with gradient
+// Clean card header
 const CardHeader = styled.div`
   position: relative;
   height: 140px;
-  background: linear-gradient(
-    135deg,
-    rgba(99, 102, 241, 0.08) 0%,
-    rgba(139, 92, 246, 0.08) 50%,
-    rgba(236, 72, 153, 0.08) 100%
-  );
-  border-radius: 16px 16px 0 0;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #f8fafc;
+  border-radius: 12px 12px 0 0;
   overflow: hidden;
-  transition: all 0.3s ease;
+  border-bottom: 1px solid #e2e8f0;
+  transition: background 0.2s ease;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    transition: transform 0.3s ease;
+  }
+
+  .fallback-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    opacity: 0.2;
+    object-fit: contain;
+  }
 
   &::after {
     content: "";
     position: absolute;
     inset: 0;
     background: linear-gradient(
-      90deg,
+      180deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.3) 50%,
-      transparent 100%
+      rgba(0, 0, 0, 0.1) 100%
     );
-    animation: ${shimmer} 3s infinite linear;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  &:hover::after {
-    opacity: 1;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
   }
 `;
 
-// Gorgeous preview thumbnail
-const PreviewThumbnail = styled.div`
-  width: 100px;
-  height: 120px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 8px;
-  }
-
-  .fallback-icon {
-    width: 50px;
-    height: 50px;
-    opacity: 0.2;
-  }
-
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      45deg,
-      transparent 30%,
-      rgba(255, 255, 255, 0.5) 50%,
-      transparent 70%
-    );
-    transform: translateX(-100%);
-    transition: transform 0.6s;
-  }
-
-  &:hover::before {
-    transform: translateX(100%);
-  }
-`;
-
-// Modern content section
+// Content section
 const ContentSection = styled.div`
   flex: 1;
-  padding: 24px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   position: relative;
+  min-height: 0;
+  overflow: hidden;
 `;
 
-// Beautiful typography
+// Typography
 const Title = styled.h3`
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: #0f172a;
   line-height: 1.4;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-
-  background: linear-gradient(135deg, #0f172a 0%, #475569 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  text-overflow: ellipsis;
 `;
 
 const Description = styled.p`
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: #64748b;
-  line-height: 1.6;
+  line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
-// Stunning metadata pills
+// Metadata section
 const MetadataSection = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   margin-top: auto;
+  padding-top: 8px;
 `;
 
 const MetaPill = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: linear-gradient(
-    135deg,
-    rgba(99, 102, 241, 0.08) 0%,
-    rgba(139, 92, 246, 0.08) 100%
-  );
-  border: 1px solid rgba(99, 102, 241, 0.1);
-  border-radius: 20px;
-  font-size: 0.75rem;
+  gap: 3px;
+  padding: 3px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-size: 0.6875rem;
   font-weight: 500;
-  color: #6366f1;
-  transition: all 0.2s ease;
+  color: #475569;
+  transition: background 0.15s ease;
 
   .icon {
-    opacity: 0.7;
-    font-size: 0.75rem;
+    opacity: 0.8;
+    font-size: 0.7rem;
   }
 
   &:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.15) 0%,
-      rgba(139, 92, 246, 0.15) 100%
-    );
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+    background: #e2e8f0;
   }
 
   &.success {
-    background: linear-gradient(
-      135deg,
-      rgba(34, 197, 94, 0.08) 0%,
-      rgba(16, 185, 129, 0.08) 100%
-    );
-    border-color: rgba(34, 197, 94, 0.2);
-    color: #10b981;
+    background: #dcfce7;
+    color: #15803d;
   }
 
   &.warning {
-    background: linear-gradient(
-      135deg,
-      rgba(251, 146, 60, 0.08) 0%,
-      rgba(250, 204, 21, 0.08) 100%
-    );
-    border-color: rgba(251, 146, 60, 0.2);
-    color: #f59e0b;
+    background: #fed7aa;
+    color: #c2410c;
   }
 `;
 
-// Gorgeous floating action bar
+// Action bar
 const ActionBar = styled.div`
   position: absolute;
-  bottom: 20px;
-  right: 20px;
+  bottom: 12px;
+  right: 12px;
   display: flex;
-  gap: 8px;
+  gap: 4px;
   opacity: 0;
-  transform: translateY(10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(8px);
+  transition: all 0.2s ease;
 `;
 
 const ActionButton = styled.button`
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: none;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   color: #64748b;
   position: relative;
-  overflow: hidden;
-
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.2) 0%,
-      rgba(139, 92, 246, 0.2) 100%
-    );
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  }
 
   &:hover {
-    transform: translateY(-4px) scale(1.1);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12),
-      inset 0 0 0 1px rgba(99, 102, 241, 0.2);
-    color: #6366f1;
-
-    &::before {
-      opacity: 1;
-    }
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border-color: #cbd5e1;
+    color: #475569;
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.98);
   }
 
   &.primary {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: #3b82f6;
+    border-color: #3b82f6;
     color: white;
 
     &:hover {
-      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+      background: #2563eb;
+      border-color: #2563eb;
     }
   }
 
   &.danger:hover {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    background: #ef4444;
+    border-color: #ef4444;
     color: white;
   }
 
   &.success:hover {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: #10b981;
+    border-color: #10b981;
     color: white;
   }
 
   &.downloading {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    background: #3b82f6;
+    border-color: #3b82f6;
     color: white;
     animation: pulse 1.5s ease-in-out infinite;
 
     @keyframes pulse {
-      0% {
+      0%,
+      100% {
         opacity: 1;
       }
       50% {
-        opacity: 0.7;
-      }
-      100% {
-        opacity: 1;
+        opacity: 0.8;
       }
     }
   }
 
   .icon {
     margin: 0 !important;
-    font-size: 16px;
-    z-index: 1;
+    font-size: 13px;
 
     &.loading {
       animation: ${spin} 1s linear infinite;
@@ -445,86 +326,75 @@ const ActionButton = styled.button`
   }
 `;
 
-// Premium selection checkbox
+// Selection checkbox
 const SelectionControl = styled.div`
   position: absolute;
-  top: 16px;
-  left: 16px;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(99, 102, 241, 0.2);
+  top: 12px;
+  left: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: white;
+  border: 2px solid #cbd5e1;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   z-index: 10;
 
   &:hover {
-    transform: scale(1.1);
-    border-color: #6366f1;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   &.selected {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    border-color: transparent;
+    background: #3b82f6;
+    border-color: #3b82f6;
 
     .icon {
       color: white;
-      font-size: 0.875rem;
+      font-size: 0.75rem;
     }
   }
 `;
 
-// Sleek file type badge
+// File type badge
 const FileTypeBadge = styled.div`
   position: absolute;
   top: 12px;
   right: 12px;
-  padding: 4px 10px;
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(10px);
+  padding: 3px 8px;
+  background: #0f172a;
   color: white;
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 0.625rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 `;
 
-// Beautiful tags
+// Tags container
 const TagsContainer = styled.div`
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
 `;
 
 const Tag = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 6px;
+  gap: 3px;
+  padding: 3px 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
   font-size: 0.7rem;
   font-weight: 500;
   color: #475569;
-  transition: all 0.2s ease;
 
   .icon {
     font-size: 0.65rem;
-  }
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
   }
 `;
 
@@ -665,7 +535,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       {backendLock && (
-        <Dimmer active inverted style={{ borderRadius: "16px" }}>
+        <Dimmer active inverted style={{ borderRadius: "12px" }}>
           <Loader size="small">Processing...</Loader>
         </Dimmer>
       )}
@@ -678,17 +548,20 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
       </SelectionControl>
 
       <CardHeader className="card-header">
-        <PreviewThumbnail className="preview-thumbnail">
-          {icon ? (
-            <img src={icon} alt={title || "Document"} />
-          ) : (
+        {icon ? (
+          <img src={icon} alt={title || "Document"} />
+        ) : (
+          <>
+            <div
+              style={{ width: "100%", height: "100%", background: "#f8fafc" }}
+            />
             <img
               src={fallback_doc_icon}
               alt="Document"
               className="fallback-icon"
             />
-          )}
-        </PreviewThumbnail>
+          </>
+        )}
         {fileType && <FileTypeBadge>{fileType}</FileTypeBadge>}
       </CardHeader>
 

@@ -1,53 +1,48 @@
 import { useState } from "react";
-import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { Dimmer, Loader } from "semantic-ui-react";
 import { useDropzone } from "react-dropzone";
 import styled from "styled-components";
-
-import _ from "lodash";
 
 import { DocumentItem } from "./DocumentItem";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { DocumentType, PageInfo } from "../../types/graphql-api";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
-import useWindowDimensions from "../hooks/WindowDimensionHook";
-import { determineCardColCount } from "../../utils/layout";
-import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
 
 const ResponsiveCardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
   width: 100%;
-  padding: 24px;
+  min-height: 100%;
+  padding: 16px;
   align-content: start;
-  background: linear-gradient(
-    180deg,
-    rgba(249, 250, 251, 0.5) 0%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  background: transparent;
 
-  @media (max-width: 480px) {
+  @media (max-width: 640px) {
     grid-template-columns: 1fr;
-    padding: 16px;
-    gap: 16px;
+    padding: 12px;
+    gap: 12px;
   }
 
-  @media (min-width: 481px) and (max-width: 768px) {
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  @media (min-width: 641px) and (max-width: 900px) {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    padding: 14px;
+    gap: 14px;
+  }
+
+  @media (min-width: 901px) and (max-width: 1200px) {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  @media (min-width: 1201px) and (max-width: 1600px) {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+
+  @media (min-width: 1601px) {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 20px;
-  }
-
-  @media (min-width: 769px) and (max-width: 1024px) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  @media (min-width: 1025px) and (max-width: 1440px) {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  @media (min-width: 1441px) {
-    grid-template-columns: repeat(4, 1fr);
-    max-width: 1800px;
+    max-width: 2000px;
     margin: 0 auto;
   }
 `;
@@ -58,17 +53,13 @@ const DropZoneOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(99, 102, 241, 0.95) 0%,
-    rgba(139, 92, 246, 0.95) 100%
-  );
-  backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.2s ease;
 
   @keyframes fadeIn {
     from {
@@ -81,31 +72,32 @@ const DropZoneOverlay = styled.div`
 `;
 
 const DropZoneContent = styled.div`
-  padding: 40px;
+  padding: 48px;
   background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   text-align: center;
-  animation: slideUp 0.3s ease;
+  animation: slideUp 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 
   h3 {
-    margin: 0 0 8px 0;
-    font-size: 1.5rem;
+    margin: 0 0 12px 0;
+    font-size: 1.75rem;
     font-weight: 600;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #0f172a;
+    letter-spacing: -0.02em;
   }
 
   p {
     margin: 0;
     color: #64748b;
-    font-size: 0.95rem;
+    font-size: 1rem;
+    font-weight: 400;
   }
 
   @keyframes slideUp {
     from {
-      transform: translateY(20px);
+      transform: translateY(16px);
       opacity: 0;
     }
     to {
@@ -127,7 +119,6 @@ interface DocumentCardProps {
   removeFromCorpus?: (doc_ids: string[]) => void | any;
   fetchMore: (args?: any) => void | any;
   onDrop: (acceptedFiles: File[]) => void;
-  corpusId: string | null;
 }
 
 export const DocumentCards = ({
@@ -142,12 +133,7 @@ export const DocumentCards = ({
   removeFromCorpus,
   fetchMore,
   onDrop,
-  corpusId,
 }: DocumentCardProps) => {
-  const { width } = useWindowDimensions();
-  const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
-  const card_cols = determineCardColCount(width);
-
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
 
   const handleUpdate = () => {
@@ -165,13 +151,12 @@ export const DocumentCards = ({
   let cards = [
     <PlaceholderCard
       key="PlaceholderCard"
-      title="No Matching Documents..."
+      title="No Matching Documents"
       style={{
-        minHeight: "200px",
-        background:
-          "linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)",
-        border: "2px dashed rgba(99, 102, 241, 0.2)",
-        borderRadius: "16px",
+        minHeight: "240px",
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
       }}
     />,
   ];
@@ -201,12 +186,13 @@ export const DocumentCards = ({
   return (
     <div
       {...getRootProps()}
+      id="document-cards-container"
       style={{
+        flex: 1,
         position: "relative",
-        height: "100%",
         display: "flex",
         flexDirection: "column",
-        background: "linear-gradient(180deg, #fafbfc 0%, #ffffff 100%)",
+        background: "#f8fafc",
         ...containerStyle,
       }}
     >

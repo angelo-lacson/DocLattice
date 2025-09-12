@@ -193,7 +193,9 @@ class Corpus(TreeNode):
         with transaction.atomic():
             # Save new markdown file
             filename = f"{uuid.uuid4()}.md"
-            self.md_description.save(filename, ContentFile(new_content), save=False)
+            self.md_description.save(
+                filename, ContentFile(new_content.encode("utf-8")), save=False
+            )
             self.modified = timezone.now()
             self.save()
 

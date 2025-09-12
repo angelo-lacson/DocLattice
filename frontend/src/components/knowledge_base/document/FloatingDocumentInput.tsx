@@ -45,8 +45,8 @@ const FloatingContainer = styled(motion.div)<{
       ? css`
           position: fixed;
           bottom: 2rem;
-          left: calc(50% - ${props.$panelOffset / 2}px);
-          transform: translateX(-50%);
+          left: 50%;
+          transform: translateX(calc(-50% - ${props.$panelOffset / 2}px));
           /* Prevent overflow under the sliding panel */
           max-width: calc(100vw - ${props.$panelOffset}px - 2rem);
         `
