@@ -28,6 +28,9 @@ const StyledCard = styled(Card)`
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
     position: relative;
+    height: 100%;
+    width: 100%;
+    margin: 0 !important;
 
     &:hover {
       box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -42,17 +45,30 @@ const StyledCard = styled(Card)`
       font-size: 1.2em;
       font-weight: 600;
       margin-bottom: 0.5em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .meta {
       font-size: 0.9em;
       color: rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .description {
       margin-top: 1em;
       font-size: 0.95em;
       line-height: 1.4;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      text-overflow: ellipsis;
+      min-height: 3.6em;
+      max-height: 3.6em;
     }
 
     .extra {
@@ -79,8 +95,8 @@ const StyledLabel = styled(Label)`
 
 const StyledImage = styled(Image)`
   &.ui.image {
-    flex: none !important;
-    height: 200px !important;
+    flex: 0 0 auto !important;
+    height: 160px !important;
     width: 100% !important;
     background: linear-gradient(to bottom, #f8f9fa, #f8f9fa 50%, #e9ecef 100%);
     display: flex !important;
@@ -99,11 +115,12 @@ const StyledImage = styled(Image)`
 
 const StyledCardContent = styled(Card.Content)`
   &.content {
-    flex: 1 0 auto !important;
+    flex: 1 1 auto !important;
     display: flex !important;
     flex-direction: column !important;
-    overflow: visible !important;
+    overflow: hidden !important;
     position: relative;
+    min-height: 120px !important;
   }
 `;
 
@@ -112,6 +129,7 @@ const StyledCardExtra = styled(Card.Content)`
     flex: 0 0 auto !important;
     min-height: 80px !important;
     padding: 0.8em 1.2em;
+    margin-top: auto !important;
   }
 `;
 
@@ -452,11 +470,9 @@ export const CorpusItem: React.FC<CorpusItemProps> = ({
         />
         <StyledCardContent>
           <Card.Header>{title}</Card.Header>
-          <Card.Meta>{`Created by: `}</Card.Meta>
+          <Card.Meta>{item.creator?.email || "Unknown"}</Card.Meta>
           <Card.Description>
-            <span>
-              <b>Description:</b> {description}
-            </span>
+            {description || "No description provided"}
           </Card.Description>
         </StyledCardContent>
         <StyledCardExtra>

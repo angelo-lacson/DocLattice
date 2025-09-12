@@ -178,7 +178,7 @@ export const App = () => {
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        minHeight: "122vh",
+        minHeight: "100vh",
       }}
     >
       <ToastContainer />
@@ -206,138 +206,158 @@ export const App = () => {
       <ThemeProvider>
         <div
           style={{
-            flex: 1,
             display: "flex",
             flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
+            position: "relative",
+            minHeight: "100vh",
+            overflow: "hidden",
           }}
         >
-          {show_mobile_menu ? <MobileNavMenu /> : <NavMenu />}
-          <Container
-            id="AppContainer"
+          <div
             style={{
-              flex: 1,
+              minHeight: "100vh",
               display: "flex",
               flexDirection: "column",
-              justifyContent: "flex-start",
-              minHeight: "75vh",
-              width: "100% !important",
-              margin: "0px !important",
-              padding: "0px !important",
-              minWidth: "100vw",
             }}
           >
-            {opened_corpus && (
-              <SelectAnalyzerOrFieldsetModal
-                open={show_corpus_analyzer_fieldset_modal}
-                corpus={opened_corpus}
-                document={opened_document ? opened_document : undefined}
-                onClose={() => showSelectCorpusAnalyzerOrFieldsetModal(false)}
-              />
-            )}
-            {opened_extract && (
-              <EditExtractModal
-                ext={opened_extract}
-                open={opened_extract !== null}
-                toggleModal={() => openedExtract(null)}
-              />
-            )}
-            <DocumentUploadModal
-              refetch={() => {
-                showUploadNewDocumentsModal(false);
-                uploadModalPreloadedFiles([]);
+            {show_mobile_menu ? <MobileNavMenu /> : <NavMenu />}
+            <Container
+              id="AppContainer"
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-start",
+                width: "100% !important",
+                margin: "0px !important",
+                padding: "0px !important",
+                minWidth: "100vw",
+                minHeight: 0,
+                overflow: "hidden",
               }}
-              open={Boolean(show_upload_new_documents_modal)}
-              onClose={() => {
-                showUploadNewDocumentsModal(false);
-                uploadModalPreloadedFiles([]);
-              }}
-              corpusId={opened_corpus?.id || null}
-            />
-            <CRUDModal
-              open={document_to_edit !== null}
-              mode="EDIT"
-              oldInstance={document_to_edit ? document_to_edit : {}}
-              modelName="document"
-              uiSchema={editDocForm_Ui_Schema}
-              dataSchema={editDocForm_Schema}
-              onSubmit={() => {
-                editingDocument(null);
-              }}
-              onClose={() => editingDocument(null)}
-              acceptedFileTypes="pdf"
-              hasFile={true}
-              fileField="pdfFile"
-              fileLabel="PDF File"
-              fileIsImage={false}
-            />
-            <CRUDModal
-              open={document_to_view !== null}
-              mode="VIEW"
-              oldInstance={document_to_view ? document_to_view : {}}
-              modelName="document"
-              uiSchema={editDocForm_Ui_Schema}
-              dataSchema={editDocForm_Schema}
-              onClose={() => viewingDocument(null)}
-              acceptedFileTypes="pdf"
-              hasFile={true}
-              fileField="pdfFile"
-              fileLabel="PDF File"
-              fileIsImage={false}
-            />
-            <AuthGate
-              useAuth0={REACT_APP_USE_AUTH0}
-              audience={REACT_APP_AUDIENCE}
             >
-              <Routes>
-                <Route
-                  path="/"
-                  element={
-                    isLoading ? <div /> : <Navigate to="/corpuses" replace />
-                  }
+              {opened_corpus && (
+                <SelectAnalyzerOrFieldsetModal
+                  open={show_corpus_analyzer_fieldset_modal}
+                  corpus={opened_corpus}
+                  document={opened_document ? opened_document : undefined}
+                  onClose={() => showSelectCorpusAnalyzerOrFieldsetModal(false)}
                 />
-                {/* Simple declarative routes with explicit prefixes */}
-
-                {/* Document routes */}
-                <Route
-                  path="/d/:userIdent/:corpusIdent/:docIdent"
-                  element={<DocumentLandingRoute />}
+              )}
+              {opened_extract && (
+                <EditExtractModal
+                  ext={opened_extract}
+                  open={opened_extract !== null}
+                  toggleModal={() => openedExtract(null)}
                 />
-                <Route
-                  path="/d/:userIdent/:docIdent"
-                  element={<DocumentLandingRoute />}
-                />
+              )}
+              <DocumentUploadModal
+                refetch={() => {
+                  showUploadNewDocumentsModal(false);
+                  uploadModalPreloadedFiles([]);
+                }}
+                open={Boolean(show_upload_new_documents_modal)}
+                onClose={() => {
+                  showUploadNewDocumentsModal(false);
+                  uploadModalPreloadedFiles([]);
+                }}
+                corpusId={opened_corpus?.id || null}
+              />
+              <CRUDModal
+                open={document_to_edit !== null}
+                mode="EDIT"
+                oldInstance={document_to_edit ? document_to_edit : {}}
+                modelName="document"
+                uiSchema={editDocForm_Ui_Schema}
+                dataSchema={editDocForm_Schema}
+                onSubmit={() => {
+                  editingDocument(null);
+                }}
+                onClose={() => editingDocument(null)}
+                acceptedFileTypes="pdf"
+                hasFile={true}
+                fileField="pdfFile"
+                fileLabel="PDF File"
+                fileIsImage={false}
+              />
+              <CRUDModal
+                open={document_to_view !== null}
+                mode="VIEW"
+                oldInstance={document_to_view ? document_to_view : {}}
+                modelName="document"
+                uiSchema={editDocForm_Ui_Schema}
+                dataSchema={editDocForm_Schema}
+                onClose={() => viewingDocument(null)}
+                acceptedFileTypes="pdf"
+                hasFile={true}
+                fileField="pdfFile"
+                fileLabel="PDF File"
+                fileIsImage={false}
+              />
+              <AuthGate
+                useAuth0={REACT_APP_USE_AUTH0}
+                audience={REACT_APP_AUDIENCE}
+              >
+                <Routes>
+                  <Route
+                    path="/"
+                    element={
+                      isLoading ? <div /> : <Navigate to="/corpuses" replace />
+                    }
+                  />
+                  {/* Simple declarative routes with explicit prefixes */}
 
-                {/* Corpus routes */}
-                <Route
-                  path="/c/:userIdent/:corpusIdent"
-                  element={<CorpusLandingRoute />}
-                />
+                  {/* Document routes */}
+                  <Route
+                    path="/d/:userIdent/:corpusIdent/:docIdent"
+                    element={<DocumentLandingRoute />}
+                  />
+                  <Route
+                    path="/d/:userIdent/:docIdent"
+                    element={<DocumentLandingRoute />}
+                  />
 
-                {/* List views */}
-                <Route path="/corpuses" element={<Corpuses />} />
-                <Route path="/documents" element={<Documents />} />
+                  {/* Corpus routes */}
+                  <Route
+                    path="/c/:userIdent/:corpusIdent"
+                    element={<CorpusLandingRoute />}
+                  />
 
-                {/* Auth */}
-                {!REACT_APP_USE_AUTH0 ? (
-                  <Route path="/login" element={<Login />} />
-                ) : (
-                  <></>
-                )}
-                <Route path="/label_sets" element={<Labelsets />} />
-                <Route path="/annotations" element={<Annotations />} />
-                <Route path="/privacy" element={<PrivacyPolicy />} />
-                <Route path="/terms_of_service" element={<TermsOfService />} />
-                <Route path="/extracts" element={<Extracts />} />
+                  {/* List views */}
+                  <Route path="/corpuses" element={<Corpuses />} />
+                  <Route path="/documents" element={<Documents />} />
 
-                {/* 404 explicit route and catch-all */}
-                <Route path="/404" element={<NotFound />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </AuthGate>
-          </Container>
-          <Footer />
+                  {/* Auth */}
+                  {!REACT_APP_USE_AUTH0 ? (
+                    <Route path="/login" element={<Login />} />
+                  ) : (
+                    <></>
+                  )}
+                  <Route path="/label_sets" element={<Labelsets />} />
+                  <Route path="/annotations" element={<Annotations />} />
+                  <Route path="/privacy" element={<PrivacyPolicy />} />
+                  <Route
+                    path="/terms_of_service"
+                    element={<TermsOfService />}
+                  />
+                  <Route path="/extracts" element={<Extracts />} />
+
+                  {/* 404 explicit route and catch-all */}
+                  <Route path="/404" element={<NotFound />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </AuthGate>
+            </Container>
+          </div>
+          <div
+            style={{
+              flexShrink: 0,
+              position: "relative",
+              marginTop: "-1.5rem",
+            }}
+          >
+            <Footer />
+          </div>
         </div>
       </ThemeProvider>
     </div>

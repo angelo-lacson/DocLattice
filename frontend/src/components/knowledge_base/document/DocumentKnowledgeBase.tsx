@@ -10,6 +10,7 @@ import {
   FileType,
   ArrowLeft,
   Settings,
+  Plus,
 } from "lucide-react";
 import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
@@ -137,6 +138,112 @@ import { FeatureUnavailable } from "../../common/FeatureUnavailable";
 
 // Setting worker path to worker bundle.
 GlobalWorkerOptions.workerSrc = workerSrc;
+
+/* ------------------------------------------------------------- */
+/* Styled components - defined outside component to avoid warnings */
+/* ------------------------------------------------------------- */
+
+const HeaderButtonGroup = styled.div`
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+`;
+
+const HeaderButton = styled.button<{ $variant?: "primary" | "secondary" }>`
+  height: 36px;
+  padding: 0 ${(props) => (props.$variant === "primary" ? "20px" : "14px")};
+  background: ${(props) =>
+    props.$variant === "primary"
+      ? "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
+      : "rgba(255, 255, 255, 0.95)"};
+  color: ${(props) => (props.$variant === "primary" ? "white" : "#475569")};
+  border: 1px solid
+    ${(props) =>
+      props.$variant === "primary"
+        ? "rgba(37, 99, 235, 0.3)"
+        : "rgba(0, 0, 0, 0.08)"};
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(10px);
+  box-shadow: ${(props) =>
+    props.$variant === "primary"
+      ? "0 2px 8px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)"
+      : "0 1px 3px rgba(0, 0, 0, 0.06)"};
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: ${(props) =>
+      props.$variant === "primary"
+        ? "0 4px 12px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
+        : "0 2px 6px rgba(0, 0, 0, 0.1)"};
+    background: ${(props) =>
+      props.$variant === "primary"
+        ? "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
+        : "white"};
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: ${(props) =>
+      props.$variant === "primary"
+        ? "inset 0 2px 4px rgba(0, 0, 0, 0.1)"
+        : "inset 0 1px 2px rgba(0, 0, 0, 0.05)"};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+const FloatingInputWrapper = styled.div<{ $panelOffset: number }>`
+  position: absolute;
+  bottom: 4rem; /* Increased from 2rem to give more space from bottom */
+  left: 0;
+  right: ${(props) => props.$panelOffset}px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none; /* allow clicks only on children */
+  z-index: 850;
+
+  @media (max-width: 768px) {
+    /* On mobile, position below zoom controls */
+    position: absolute;
+    top: 80px; /* Below zoom controls */
+    left: 1rem;
+    right: auto; /* Don't constrain right side for collapsed state */
+    bottom: auto;
+    width: auto; /* Let child determine width */
+    display: block;
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+`;
+
+const ZoomIndicator = styled.div`
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  z-index: 2000;
+  pointer-events: none;
+  transition: opacity 0.2s ease-in-out;
+`;
 
 interface DocumentKnowledgeBaseProps {
   documentId: string;
@@ -1572,155 +1679,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     };
   }, [setSelectedAnnotations]);
 
-  /* ------------------------------------------------------------- */
-  /* Floating input wrapper (centres input within remaining space) */
-  /* ------------------------------------------------------------- */
-
-  const FloatingInputWrapper = styled.div<{ $panelOffset: number }>`
-    position: absolute;
-    bottom: 2rem;
-    left: 0;
-    right: ${(props) => props.$panelOffset}px;
-    display: flex;
-    justify-content: center;
-    pointer-events: none; /* allow clicks only on children */
-    z-index: 850;
-
-    @media (max-width: 768px) {
-      /* On mobile, position below zoom controls */
-      position: absolute;
-      top: 80px; /* Below zoom controls */
-      left: 1rem;
-      right: auto; /* Don't constrain right side for collapsed state */
-      bottom: auto;
-      width: auto; /* Let child determine width */
-      display: block;
-      pointer-events: none;
-      box-sizing: border-box;
-    }
-  `;
-
-  const ZoomIndicator = styled.div`
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 18px;
-    font-weight: 600;
-    z-index: 2000;
-    pointer-events: none;
-    transition: opacity 0.2s ease-in-out;
-  `;
-
-  const FloatingCorpusRibbon = styled.div`
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    min-width: 160px;
-    height: 44px;
-    background: linear-gradient(135deg, #5b8fff 0%, #4274e4 100%);
-    border-radius: 22px;
-    box-shadow: 0 4px 16px rgba(66, 116, 228, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
-    z-index: 1005;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 20px;
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    overflow: visible;
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(66, 116, 228, 0.4),
-        0 3px 6px rgba(0, 0, 0, 0.15);
-      background: linear-gradient(135deg, #6b95ff 0%, #5284f4 100%);
-    }
-
-    &:active {
-      transform: translateY(0);
-      box-shadow: 0 2px 8px rgba(66, 116, 228, 0.3),
-        0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-
-    &::before {
-      content: "";
-      position: absolute;
-      top: -2px;
-      left: -2px;
-      right: -2px;
-      bottom: -2px;
-      background: linear-gradient(
-        135deg,
-        #7ba7ff 0%,
-        #5b8fff 50%,
-        #4274e4 100%
-      );
-      border-radius: 24px;
-      opacity: 0;
-      z-index: -1;
-      transition: opacity 0.3s ease;
-    }
-
-    &:hover::before {
-      opacity: 0.3;
-    }
-
-    @media (max-width: 768px) {
-      top: auto;
-      bottom: 80px;
-      right: 20px;
-      min-width: 140px;
-      height: 40px;
-      font-size: 13px;
-    }
-  `;
-
-  const RibbonContent = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 600;
-    font-size: 14px;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    letter-spacing: 0.3px;
-    white-space: nowrap;
-
-    svg {
-      margin-right: 8px;
-      font-size: 18px;
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
-    }
-
-    span {
-      position: relative;
-
-      &::after {
-        content: "";
-        position: absolute;
-        bottom: -2px;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: rgba(255, 255, 255, 0.8);
-        transform: scaleX(0);
-        transition: transform 0.3s ease;
-        border-radius: 1px;
-      }
-    }
-
-    ${FloatingCorpusRibbon}:hover & span::after {
-      transform: scaleX(1);
-    }
-  `;
-
   const [selectedSummaryContent, setSelectedSummaryContent] = useState<
     string | null
   >(null);
@@ -1728,12 +1686,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const [showAddToCorpusModal, setShowAddToCorpusModal] = useState(false);
 
   return (
-    <FullScreenModal
-      id="knowledge-base-modal"
-      open={true}
-      onClose={onClose}
-      closeIcon
-    >
+    <FullScreenModal id="knowledge-base-modal" open={true} onClose={onClose}>
       <HeaderContainer>
         <div>
           <Header as="h2" style={{ margin: 0 }}>
@@ -1752,6 +1705,23 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             </span>
           </MetadataRow>
         </div>
+
+        {/* Custom button group in header */}
+        <HeaderButtonGroup>
+          {!hasCorpus && !readOnly && (
+            <HeaderButton
+              $variant="primary"
+              onClick={() => setShowAddToCorpusModal(true)}
+              title="Add this document to a corpus to unlock collaborative features"
+            >
+              <Plus />
+              Add to Corpus
+            </HeaderButton>
+          )}
+          <HeaderButton onClick={onClose}>
+            <X />
+          </HeaderButton>
+        </HeaderButtonGroup>
       </HeaderContainer>
 
       {/* Error message for GraphQL failures - show prominently and prevent other content */}
@@ -1781,20 +1751,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             <Message success onDismiss={() => {}}>
               <Message.Header>{showSuccessMessage}</Message.Header>
             </Message>
-          )}
-
-          {/* Floating ribbon for corpus-less mode */}
-          {!hasCorpus && !readOnly && (
-            <FloatingCorpusRibbon
-              data-testid="add-to-corpus-ribbon"
-              onClick={() => setShowAddToCorpusModal(true)}
-              title="Add this document to a corpus to unlock collaborative features"
-            >
-              <RibbonContent>
-                <Icon name="plus circle" />
-                <span>Add to Corpus</span>
-              </RibbonContent>
-            </FloatingCorpusRibbon>
           )}
 
           <ContentArea id="content-area">

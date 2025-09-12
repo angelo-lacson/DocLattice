@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CorpusItem } from "./CorpusItem";
+import styled from "styled-components";
 
 import { useMutation, useReactiveVar } from "@apollo/client";
 import {
@@ -12,7 +13,7 @@ import {
   exportingCorpus,
 } from "../../graphql/cache";
 
-import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { Dimmer, Loader } from "semantic-ui-react";
 import { useNavigate } from "react-router-dom";
 import { navigateToCorpus } from "../../utils/navigationUtils";
 
@@ -25,8 +26,45 @@ import {
 } from "../../graphql/mutations";
 import { toast } from "react-toastify";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
-import useWindowDimensions from "../hooks/WindowDimensionHook";
-import { determineCardColCount } from "../../utils/layout";
+
+const ResponsiveCardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  width: 100%;
+  min-height: 100%;
+  padding: 16px;
+  align-content: start;
+  background: transparent;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  @media (min-width: 641px) and (max-width: 900px) {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    padding: 14px;
+    gap: 14px;
+  }
+
+  @media (min-width: 901px) and (max-width: 1200px) {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  @media (min-width: 1201px) and (max-width: 1600px) {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+
+  @media (min-width: 1601px) {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    max-width: 2000px;
+    margin: 0 auto;
+  }
+`;
 
 interface CorpusCardsProps {
   fetchMore: (args?: any) => void | any;
@@ -45,9 +83,7 @@ export const CorpusCards = ({
   pageInfo,
   style,
 }: CorpusCardsProps) => {
-  const { width } = useWindowDimensions();
   const navigate = useNavigate();
-  const card_cols = determineCardColCount(width);
 
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
   const selected_corpus_ids = useReactiveVar(selectedCorpusIds);
@@ -103,13 +139,13 @@ export const CorpusCards = ({
 
   let cards: JSX.Element[] = [
     <PlaceholderCard
-      key="Placeholder"
-      title="No Matching Corpuses..."
-      compact
+      key="PlaceholderCard"
+      title="No Matching Corpuses"
       style={{
-        width: "100%",
-        margin: "2rem auto",
-        maxWidth: "600px",
+        minHeight: "240px",
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
       }}
     />,
   ];
@@ -137,32 +173,36 @@ export const CorpusCards = ({
     });
   }
 
-  let comp_style = {
-    width: "100%",
-    padding: "0",
-    margin: "0",
-  };
-  if (style) {
-    comp_style = { ...comp_style, ...style };
-  }
-
   return (
-    <>
-      <Dimmer active={loading}>
-        <Loader content={loading_message} />
+    <div
+      id="corpus-cards-container"
+      style={{
+        flex: 1,
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        background: "#f8fafc",
+        width: "100%",
+        minHeight: 0,
+        ...style,
+      }}
+    >
+      <Dimmer active={loading} inverted>
+        <Loader size="large" content={loading_message} />
       </Dimmer>
       <div
+        className="CorpusCards"
         style={{
-          flex: 1,
           width: "100%",
-          overflowY: "scroll",
+          flex: 1,
+          overflowY: "auto",
+          overflowX: "hidden",
+          minHeight: 0,
         }}
       >
-        <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
-          {cards}
-        </Card.Group>
+        <ResponsiveCardGrid>{cards}</ResponsiveCardGrid>
         <FetchMoreOnVisible fetchNextPage={handleUpdate} />
       </div>
-    </>
+    </div>
   );
 };

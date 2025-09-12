@@ -42,7 +42,9 @@ class MicroserviceEmbedder(BaseEmbedder):
         # Note: Environment variables are ONLY read in Django settings, not in this component.
 
     @staticmethod
-    def _maybe_add_cloud_run_auth(url: str, headers: dict[str, str], force: bool = False) -> dict[str, str]:
+    def _maybe_add_cloud_run_auth(
+        url: str, headers: dict[str, str], force: bool = False
+    ) -> dict[str, str]:
         """
         Attach an Authorization bearer with a Google Cloud Run identity token when applicable.
 
@@ -58,7 +60,9 @@ class MicroserviceEmbedder(BaseEmbedder):
             from urllib.parse import urlparse
 
             parsed = urlparse(url)
-            is_cloud_run = parsed.scheme == "https" and parsed.netloc.endswith(".run.app")
+            is_cloud_run = parsed.scheme == "https" and parsed.netloc.endswith(
+                ".run.app"
+            )
             if not (is_cloud_run or force):
                 return headers
 
@@ -72,7 +76,9 @@ class MicroserviceEmbedder(BaseEmbedder):
             id_token = google.oauth2.id_token.fetch_id_token(request, audience)
             if id_token:
                 headers["Authorization"] = f"Bearer {id_token}"
-                logger.debug("Attached Google Cloud Run IAM id_token to request headers.")
+                logger.debug(
+                    "Attached Google Cloud Run IAM id_token to request headers."
+                )
             else:
                 logger.warning("Failed to obtain Google Cloud Run IAM id_token.")
         except Exception as e:
@@ -132,7 +138,9 @@ class MicroserviceEmbedder(BaseEmbedder):
                 headers["X-API-Key"] = api_key
 
             # Attach Cloud Run IAM id_token if applicable/forced
-            headers = self._maybe_add_cloud_run_auth(service_url, headers, force=use_cloud_run_iam_auth)
+            headers = self._maybe_add_cloud_run_auth(
+                service_url, headers, force=use_cloud_run_iam_auth
+            )
 
             response = requests.post(
                 f"{service_url}/embeddings",
