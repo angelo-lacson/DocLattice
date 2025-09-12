@@ -1,6 +1,6 @@
 ![OpenContracts](docs/assets/images/logos/OS_Legal_Logo.png)
 
-# Open Contracts ([Demo](https://opencontracts.opensource.legal))
+# Open Contracts ([Demo](https://contracts.opensource.legal))
 ## The Free and Open Source Document Analytics Platform [![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/JSv4)
 
 
@@ -13,7 +13,7 @@
 
 ## TLDR: What Does it Do?
 
-**Knowledge is power. Software is a tool.** OpenContracts is **FREE and OPEN SOURCE** software designed to put knowledge owners and subject matter experts in charge of their knowledge. Store it in an accessible and exportable format, and make it work with emerging agentic workflows and techniques.
+OpenContracts is **FREE and OPEN SOURCE** software designed to put knowledge owners and subject matter experts in charge of their knowledge. Store it in an accessible and exportable format, and make it work with emerging agentic workflows and techniques.
 
 OpenContracts is a **GPL-3.0** enterprise document analytics tool. It supports multiple formats - including PDF and txt-based formats (with more on the way). It also supports multiple document ingestion pipelines with a [pluggable architecture](docs/pipelines/pipeline_overview.md) designed to make supporting new formats and ingestion engines easy - see our [Docling Integration](docs/pipelines/docling_parser.md) for an example. Writing your own custom document analytics tools where the results get displayed beautifully over the original document [is easy](docs/walkthrough/advanced/register-doc-analyzer.md). We also support mass document [data extraction](docs/extract_and_retrieval/data_extraction.md) with our custom [LLM framework](docs/architecture/llms/README.md) built on PydanticAI.
 
