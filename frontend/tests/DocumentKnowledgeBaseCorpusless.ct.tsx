@@ -71,20 +71,27 @@ const mockCorpuses = [
     id: "corpus-1",
     title: "Test Corpus 1",
     description: "First test corpus",
-    myPermissions: ["read", "write", "create", "delete", "UPDATE", "publish"],
+    myPermissions: [
+      "read",
+      "write",
+      "create",
+      "delete",
+      "update_corpus",
+      "publish",
+    ],
   },
   {
     id: "corpus-2",
     title: "Test Corpus 2",
     description: "Second test corpus",
-    myPermissions: ["read", "write", "UPDATE"],
+    myPermissions: ["read", "write", "update_corpus"],
   },
 ];
 
 // The GetEditableCorpuses query used by the updated AddToCorpusModal
 const GET_EDITABLE_CORPUSES = gql`
   query GetEditableCorpuses($textSearch: String) {
-    corpuses(textSearch: $textSearch, myPermissions: ["UPDATE"], first: 50) {
+    corpuses(textSearch: $textSearch, first: 10) {
       pageInfo {
         hasNextPage
         hasPreviousPage
@@ -415,9 +422,9 @@ test.describe("DocumentKnowledgeBase - Corpus-less Mode", () => {
     // Check that document title is rendered
     await expect(page.locator("text=Test Document")).toBeVisible();
 
-    // Check that "Add to Corpus" ribbon is visible
+    // Check that "Add to Corpus" button is visible
     await expect(
-      page.locator('[data-testid="add-to-corpus-ribbon"]')
+      page.locator('[data-testid="add-to-corpus-button"]')
     ).toBeVisible();
   });
 
@@ -515,10 +522,10 @@ test.describe("DocumentKnowledgeBase - Corpus-less Mode", () => {
       />
     );
 
-    // Click "Add to Corpus" ribbon – it should be visible in the top-right corner
-    const addRibbon = page.locator('[data-testid="add-to-corpus-ribbon"]');
-    await expect(addRibbon).toBeVisible({ timeout: LONG_TIMEOUT });
-    await addRibbon.click();
+    // Click "Add to Corpus" button – it should be visible in the header
+    const addButton = page.locator('[data-testid="add-to-corpus-button"]');
+    await expect(addButton).toBeVisible({ timeout: LONG_TIMEOUT });
+    await addButton.click();
 
     // Modal should appear (Semantic-UI appends modals to body)
     const modal = page.locator('[data-testid="add-to-corpus-modal"]');
@@ -555,7 +562,7 @@ test.describe("DocumentKnowledgeBase - Corpus-less Mode", () => {
     );
 
     // Open modal
-    await page.locator('[data-testid="add-to-corpus-ribbon"]').click();
+    await page.locator('[data-testid="add-to-corpus-button"]').click();
 
     // Select first corpus card
     await page.locator('[data-testid="corpus-item-corpus-1"]').click();
@@ -749,17 +756,15 @@ test.describe("DocumentKnowledgeBase - Corpus-less Mode", () => {
     );
 
     // Open modal
-    await page.locator('[data-testid="add-to-corpus-ribbon"]').click();
+    await page.locator('[data-testid="add-to-corpus-button"]').click();
 
     // Should show empty state
     await expect(
       page.locator("text=You don't have any corpuses with edit permissions")
     ).toBeVisible();
 
-    // Should show create corpus button
-    await expect(
-      page.locator("button:has-text('Create New Corpus')")
-    ).toBeVisible();
+    // Modal should have cancel button available
+    await expect(page.locator('[data-testid="cancel-button"]')).toBeVisible();
   });
 
   test("should handle GraphQL errors gracefully", async ({ mount, page }) => {
