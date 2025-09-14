@@ -1,35 +1,17 @@
 ![OpenContracts](docs/assets/images/logos/OS_Legal_Logo.png)
 
-# Open Contracts ([Demo](https://opencontracts.opensource.legal))
-## Frontend environment conventions
-
-Development (Vite): place a file at `/.envs/.local/.frontend` using `VITE_*` keys, for example:
-
-```
-VITE_APPLICATION_DOMAIN=dev-your.auth0.com
-VITE_APPLICATION_CLIENT_ID=your-client-id
-VITE_AUDIENCE=https://yourdomain.com/contracts
-VITE_API_ROOT_URL=http://localhost:8000
-VITE_USE_AUTH0=true
-VITE_USE_ANALYZERS=true
-VITE_ALLOW_IMPORTS=true
-```
-
-Production (Kubernetes/Docker): set `OPEN_CONTRACTS_*` variables which are converted at runtime into the `REACT_APP_*` payload consumed by the app. See `k8s/production/02-configmaps.yaml` for examples and `k8s/production/README.md` for details.
-
+# Open Contracts ([Demo](https://contracts.opensource.legal))
 ## The Free and Open Source Document Analytics Platform [![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/JSv4)
 
-
 ---
-
 | |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | --- |--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Backend CI/CD | [![codecov](https://codecov.io/gh/JSv4/OpenContracts/branch/main/graph/badge.svg?token=RdVsiuaTVz)](https://codecov.io/gh/JSv4/OpenContracts)                                                                                                                                                                                                                                                                                                                  |
+| Backend CI/CD | [![codecov](https://codecov.io/gh/Open-Source-Legal/OpenContracts/branch/main/graph/badge.svg?token=RdVsiuaTVz)](https://codecov.io/gh/JSv4/OpenContracts)                                                                                                                                                                                                                                                                                                                  |
 | Meta | [![code style - black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![types - Mypy](https://img.shields.io/badge/types-Mypy-blue.svg)](https://github.com/python/mypy) [![imports - isort](https://img.shields.io/badge/imports-isort-ef8336.svg)](https://github.com/pycqa/isort) [![License - GPL-3](https://img.shields.io/badge/license-GPLv3-blue)](https://spdx.org/licenses/) |
 
 ## TLDR: What Does it Do?
 
-**Knowledge is power. Software is a tool.** OpenContracts is **FREE and OPEN SOURCE** software designed to put knowledge owners and subject matter experts in charge of their knowledge. Store it in an accessible and exportable format, and make it work with emerging agentic workflows and techniques.
+OpenContracts is **FREE and OPEN SOURCE** software designed to put knowledge owners and subject matter experts in charge of their knowledge. Store it in an accessible and exportable format, and make it work with emerging agentic workflows and techniques.
 
 OpenContracts is a **GPL-3.0** enterprise document analytics tool. It supports multiple formats - including PDF and txt-based formats (with more on the way). It also supports multiple document ingestion pipelines with a [pluggable architecture](docs/pipelines/pipeline_overview.md) designed to make supporting new formats and ingestion engines easy - see our [Docling Integration](docs/pipelines/docling_parser.md) for an example. Writing your own custom document analytics tools where the results get displayed beautifully over the original document [is easy](docs/walkthrough/advanced/register-doc-analyzer.md). We also support mass document [data extraction](docs/extract_and_retrieval/data_extraction.md) with our custom [LLM framework](docs/architecture/llms/README.md) built on PydanticAI.
 
