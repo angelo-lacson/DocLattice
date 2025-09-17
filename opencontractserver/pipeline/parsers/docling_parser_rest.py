@@ -11,6 +11,7 @@ from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.types.dicts import OpenContractDocExport
+from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
 
@@ -48,52 +49,6 @@ class DoclingParser(BaseParser):
         )
 
         logger.info(f"DoclingParser initialized with service URL: {self.service_url}")
-
-    @staticmethod
-    def _maybe_add_cloud_run_auth(
-        url: str, headers: dict[str, str], force: bool = False
-    ) -> dict[str, str]:
-        """
-        Attach an Authorization bearer with a Google Cloud Run identity token when applicable.
-
-        Args:
-            url: The service URL we are calling (used to derive target audience).
-            headers: Existing headers to be augmented.
-            force: If True, force adding IAM auth regardless of the domain.
-
-        Returns:
-            A possibly augmented headers dict. If token acquisition fails, returns original headers.
-        """
-        try:
-            from urllib.parse import urlparse
-
-            parsed = urlparse(url)
-            is_cloud_run = parsed.scheme == "https" and parsed.netloc.endswith(
-                ".run.app"
-            )
-            if not (is_cloud_run or force):
-                return headers
-
-            audience = f"{parsed.scheme}://{parsed.netloc}"
-
-            # Lazy import to avoid hard dependency in non-GCP environments
-            import google.auth.transport.requests
-            import google.oauth2.id_token
-
-            request = google.auth.transport.requests.Request()
-            id_token = google.oauth2.id_token.fetch_id_token(request, audience)
-            if id_token:
-                headers["Authorization"] = f"Bearer {id_token}"
-                logger.debug(
-                    "Attached Google Cloud Run IAM id_token to Docling request headers."
-                )
-            else:
-                logger.warning(
-                    "Failed to obtain Google Cloud Run IAM id_token for Docling."
-                )
-        except Exception as e:
-            logger.warning(f"Docling Cloud Run IAM auth header not added: {e}")
-        return headers
 
     def _parse_document_impl(
         self, user_id: int, doc_id: int, **all_kwargs
@@ -159,7 +114,7 @@ class DoclingParser(BaseParser):
             try:
                 headers: dict[str, str] = {"Content-Type": "application/json"}
                 # Attach Cloud Run IAM id_token if applicable/forced
-                headers = self._maybe_add_cloud_run_auth(
+                headers = maybe_add_cloud_run_auth(
                     self.service_url, headers, force=self.use_cloud_run_iam_auth
                 )
 

@@ -7,6 +7,7 @@ from django.conf import settings
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -40,50 +41,6 @@ class MicroserviceEmbedder(BaseEmbedder):
         # 2. Settings from PIPELINE_SETTINGS for this specific component (via component_settings).
         # 3. Global Django settings (e.g., settings.EMBEDDINGS_MICROSERVICE_URL) as a final fallback.
         # Note: Environment variables are ONLY read in Django settings, not in this component.
-
-    @staticmethod
-    def _maybe_add_cloud_run_auth(
-        url: str, headers: dict[str, str], force: bool = False
-    ) -> dict[str, str]:
-        """
-        Attach an Authorization bearer with a Google Cloud Run identity token when applicable.
-
-        Args:
-            url: The service URL we are calling (used to derive target audience).
-            headers: Existing headers to be augmented.
-            force: If True, force adding IAM auth regardless of the domain.
-
-        Returns:
-            A possibly augmented headers dict. If token acquisition fails, returns original headers.
-        """
-        try:
-            from urllib.parse import urlparse
-
-            parsed = urlparse(url)
-            is_cloud_run = parsed.scheme == "https" and parsed.netloc.endswith(
-                ".run.app"
-            )
-            if not (is_cloud_run or force):
-                return headers
-
-            audience = f"{parsed.scheme}://{parsed.netloc}"
-
-            # Lazy import to avoid hard dependency in non-GCP environments
-            import google.auth.transport.requests
-            import google.oauth2.id_token
-
-            request = google.auth.transport.requests.Request()
-            id_token = google.oauth2.id_token.fetch_id_token(request, audience)
-            if id_token:
-                headers["Authorization"] = f"Bearer {id_token}"
-                logger.debug(
-                    "Attached Google Cloud Run IAM id_token to request headers."
-                )
-            else:
-                logger.warning("Failed to obtain Google Cloud Run IAM id_token.")
-        except Exception as e:
-            logger.warning(f"Cloud Run IAM auth header not added: {e}")
-        return headers
 
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
         """
@@ -138,7 +95,7 @@ class MicroserviceEmbedder(BaseEmbedder):
                 headers["X-API-Key"] = api_key
 
             # Attach Cloud Run IAM id_token if applicable/forced
-            headers = self._maybe_add_cloud_run_auth(
+            headers = maybe_add_cloud_run_auth(
                 service_url, headers, force=use_cloud_run_iam_auth
             )
 
