@@ -17,9 +17,10 @@ DJANGO_ALLOWED_HOSTS=django,127.0.0.1,localhost,0.0.0.0
 USE_ANALYZER=true
 CALLBACK_ROOT_URL_FOR_ANALYZER=http://localhost:8000
 
-# AWS
+# Storage Configuration - Choose ONE: LOCAL, AWS, or GCP
 # ------------------------------------------------------------------------------
-USE_AWS=false
+# Set STORAGE_BACKEND to one of: LOCAL, AWS, or GCP
+STORAGE_BACKEND=LOCAL
 
 # Redis
 # ------------------------------------------------------------------------------
@@ -49,3 +50,8 @@ DJANGO_SETTINGS_MODULE=config.settings.test
 # Testing Environment Flag (Specifically for rate limit safety checks)
 # ------------------------------------------------------------------------------
 TESTING=true
+
+# Pipeline Vars
+# ------------------------------
+EMBEDDINGS_MICROSERVICE_URL=http://vector-embedder:8000
+DOCLING_PARSER_SERVICE_URL=http://docling-parser:8000/parse/

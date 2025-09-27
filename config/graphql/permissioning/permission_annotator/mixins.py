@@ -105,6 +105,32 @@ class AnnotatePermissionsForReadMixin:
                 # logger.info(f"resolve_my_permissions() - user is anon user")
                 return []
 
+        # Check if permissions were pre-computed by query optimizer (ONLY for annotations/relationships)
+        # These are annotated as _can_read, _can_create, _can_update, _can_delete
+        # Only apply this optimization to Annotation and Relationship models
+        model_name = self._meta.model_name
+
+
+        if model_name in ['annotation', 'relationship'] and hasattr(self, '_can_read'):
+            # logger.info("resolve_my_permissions() - Using pre-computed permissions from query optimizer")
+            permissions = set()
+
+            # Map the boolean flags to backend permission format
+            if getattr(self, '_can_read', False):
+                permissions.add(f"read_{model_name}")
+            if getattr(self, '_can_create', False):
+                permissions.add(f"create_{model_name}")
+            if getattr(self, '_can_update', False):
+                permissions.add(f"update_{model_name}")
+            if getattr(self, '_can_delete', False):
+                permissions.add(f"remove_{model_name}")
+
+            # Check for publish permission if available
+            if getattr(self, '_can_publish', False):
+                permissions.add(f"publish_{model_name}")
+
+            return list(permissions)
+
         # Looking up permissions in each resolve call is wasteful and slow. A lot of times,
         # where we're getting the permissions on a list of the same object types, we can look up
         # these permissions types ahead of time and then just check the permissions' metadata in these
@@ -235,17 +261,23 @@ class AnnotatePermissionsForReadMixin:
                         # )
                         #####################################################################
 
-                        this_user_perms = getattr(
-                            self, f"{model_name}userobjectpermission_set"
-                        )
-                        # logger.info(
-                        #     f"resolve_my_permissions() - this_user_perms: {this_user_perms}"
-                        # )
+                        # Check if permissions were prefetched (for documents)
+                        if hasattr(self, "_prefetched_user_perms"):
+                            # Use prefetched permissions to avoid database hit
+                            this_user_perms = self._prefetched_user_perms
+                        else:
+                            # Fallback to original query
+                            this_user_perms = getattr(
+                                self, f"{model_name}userobjectpermission_set"
+                            )
+                            # logger.info(
+                            #     f"resolve_my_permissions() - this_user_perms: {this_user_perms}"
+                            # )
 
-                        this_user_perms = this_user_perms.filter(user_id=user.id)
-                        # logger.info(
-                        #     f"resolve_my_permissions() - filtered this_user_perms: {this_user_perms}"
-                        # )
+                            this_user_perms = this_user_perms.filter(user_id=user.id)
+                            # logger.info(
+                            #     f"resolve_my_permissions() - filtered this_user_perms: {this_user_perms}"
+                            # )
 
                         this_users_group_perms = getattr(
                             self, f"{model_name}groupobjectpermission_set"
@@ -299,6 +331,7 @@ class AnnotatePermissionsForReadMixin:
                 f"resolve_my_permissions() - unexpected failure in outer try/except: {e}"
             )
 
+        # Return permissions in backend format (read_annotation, update_annotation, etc.)
         return list(permissions)
 
     def resolve_is_published(self, obj):

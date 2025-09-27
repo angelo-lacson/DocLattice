@@ -5,7 +5,7 @@ import logging
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from django.db.models import Q, QuerySet
+from django.db.models import Q, QuerySet, Prefetch
 from graphql_relay import from_global_id
 
 # Import models directly for type checking (or use strings if preferred to avoid circular imports)
@@ -50,25 +50,27 @@ def resolve_oc_model_queryset(
 
     # Handle the case where user resolution failed explicitly
     if user is None:
-        queryset = django_obj_model_type.objects.filter(Q(is_public=True))
+        queryset = django_obj_model_type.objects.filter(is_public=True)
     elif user.is_superuser:
-        # Apply distinct later if needed after optimizations
+        # Superusers see everything, no filtering needed
         queryset = django_obj_model_type.objects.all().order_by("created")
     elif user.is_anonymous:
-        # This branch handles anonymous correctly
-        queryset = django_obj_model_type.objects.filter(Q(is_public=True))
+        # Anonymous users only see public items
+        queryset = django_obj_model_type.objects.filter(is_public=True)
     else:  # Authenticated, non-superuser
         permission_model_name = f"{model_name}userobjectpermission"
         try:
             permission_model_type = apps.get_model(app_label, permission_model_name)
-            must_have_permissions = permission_model_type.objects.filter(
+            # Optimize: Get IDs with permissions first, then use IN clause
+            permitted_ids = permission_model_type.objects.filter(
                 permission__codename=f"read_{model_name}", user_id=user.id
-            )
-            # Apply distinct later if needed after optimizations
+            ).values_list("content_object_id", flat=True)
+
+            # Build the optimized query using simpler conditions
             queryset = django_obj_model_type.objects.filter(
-                Q(creator=user)
-                | Q(is_public=True)
-                | Q(**{f"{permission_model_name}__in": must_have_permissions})
+                Q(creator_id=user.id) |
+                Q(is_public=True) |
+                Q(id__in=permitted_ids)
             )
         except LookupError:
             logger.warning(
@@ -77,7 +79,7 @@ def resolve_oc_model_queryset(
             )
             # Fallback if permission model doesn't exist (might happen for simpler models)
             queryset = django_obj_model_type.objects.filter(
-                Q(creator=user) | Q(is_public=True)
+                Q(creator_id=user.id) | Q(is_public=True)
             )
 
     # --- Apply Performance Optimizations Based on Model Type ---
@@ -92,22 +94,48 @@ def resolve_oc_model_queryset(
         )
     elif django_obj_model_type == Document:
         logger.debug("Applying Document specific optimizations")
-        queryset = queryset.select_related(
-            "creator", "user_lock"  # If needed
-        ).prefetch_related(
-            "doc_annotations",
-            "rows",
-            "source_relationships",
-            "target_relationships",
-            "notes",
+        from opencontractserver.annotations.models import Annotation
+
+        queryset = queryset.select_related("creator", "user_lock")
+
+        # Prefetch annotations to avoid N+1 when doc_annotations is accessed
+        # This is critical for the docAnnotations GraphQL field
+        queryset = queryset.prefetch_related(
+            Prefetch(
+                "doc_annotations",
+                queryset=Annotation.objects.select_related(
+                    "annotation_label", "corpus", "analysis", "creator"
+                ),
+                to_attr="_prefetched_doc_annotations"
+            )
         )
+
+        # Prefetch permission objects to avoid N+1 queries in myPermissions resolver
+        # Only do this for authenticated non-superuser users
+        if user and not user.is_anonymous and not user.is_superuser:
+            from opencontractserver.documents.models import DocumentUserObjectPermission
+
+            # Prefetch user permissions for this specific user
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "documentuserobjectpermission_set",
+                    queryset=DocumentUserObjectPermission.objects.filter(
+                        user_id=user.id
+                    ).select_related("permission"),
+                    to_attr="_prefetched_user_perms"
+                ),
+                # Also prefetch group permissions
+                "documentgroupobjectpermission_set__permission",
+                "documentgroupobjectpermission_set__group"
+            )
     # Add elif blocks here for other models needing specific optimizations
 
-    # Apply distinct *after* optimizations if still necessary.
-    # Note: Distinct might interact with order_by and prefetch. Test carefully.
-    # If the initial query logic already guaranteed distinctness (e.g., simple filters),
-    # this might be removable. The permission logic with __in might introduce duplicates.
-    queryset = queryset.distinct()
+    # Apply distinct *after* optimizations only when necessary.
+    # The permission logic with __in might introduce duplicates for authenticated users.
+    # Skip distinct for public/superuser queries where it's not needed.
+    if user and not user.is_anonymous and not user.is_superuser:
+        # Only apply distinct for authenticated non-superuser users where permission JOINs occur
+        queryset = queryset.distinct()
 
     return queryset
 
@@ -119,83 +147,21 @@ def resolve_single_oc_model_from_id(
     Helper method for resolvers for single objs... gets object with id and makes sure the
     user has sufficient permissions to request it too. Applies select/prefetch.
     """
-    model_name = model_type._meta.model_name
-    app_label = model_type._meta.app_label
-
     try:
         django_pk = from_global_id(graphql_id)[1]
     except Exception as e:
         logger.error(f"Could not decode global ID {graphql_id}: {e}")
         return None  # Or raise GraphQL error
 
-    # --- Apply Performance Optimizations EARLY ---
-    base_queryset = model_type.objects.all()  # Start with all for optimization
-    if model_type == Corpus:
-        logger.debug(
-            f"Applying Corpus specific optimizations for single object fetch pk={django_pk}"
-        )
-        base_queryset = base_queryset.select_related(
-            "creator", "label_set", "user_lock"
-        ).prefetch_related(
-            "documents"
-        )  # Prefetch less critical for single object but can be included
-    elif model_type == Document:
-        logger.debug(
-            f"Applying Document specific optimizations for single object fetch pk={django_pk}"
-        )
-        base_queryset = base_queryset.select_related(
-            "creator", "user_lock"
-        ).prefetch_related(
-            "doc_annotations",
-            "rows",
-            "source_relationships",
-            "target_relationships",
-            "notes",
-            "embedding_set",
-        )
-    # Add elif for other models
+    # Use the centralized queryset resolver to handle permissions and base optimizations
+    queryset = resolve_oc_model_queryset(django_obj_model_type=model_type, user=user)
 
-    # Filter by PK first
-    queryset = base_queryset.filter(id=django_pk)
-
-    # Apply Permission Filtering
-    obj = None
-    if user:
-        if user.is_superuser:
-            obj = (
-                queryset.first()
-            )  # Use first() instead of get() to handle potential empty result
-        elif user.is_anonymous:
-            obj = queryset.filter(is_public=True).first()
-        else:
-            permission_model_name = f"{model_name}userobjectpermission"
-            try:
-                permission_model_type = apps.get_model(app_label, permission_model_name)
-                must_have_permissions = permission_model_type.objects.filter(
-                    permission__codename=f"read_{model_name}", user_id=user.id
-                )
-                # Filter the already optimized queryset
-                obj = (
-                    queryset.filter(
-                        Q(creator=user)
-                        | Q(is_public=True)
-                        | Q(**{f"{permission_model_name}__in": must_have_permissions})
-                    )
-                    .distinct()
-                    .first()
-                )  # Distinct needed here due to permission join potentially
-            except LookupError:
-                logger.warning(
-                    f"Permission model {app_label}.{permission_model_name} not found."
-                    " Falling back to creator/public check for single object."
-                )
-                obj = queryset.filter(Q(creator=user) | Q(is_public=True)).first()
+    # Filter for the specific object by its primary key
+    obj = queryset.filter(id=django_pk).first()
 
     if obj is None:
         logger.warning(
             f"Object {model_type.__name__} with pk {django_pk} not found or user {user} lacks permission."
         )
-        # Optionally raise an error or return None based on desired GraphQL behavior
-        # raise PermissionDenied(f"Access denied or object not found for {model_type.__name__} ID: {graphql_id}")
 
     return obj

@@ -16,8 +16,10 @@ SECRET_KEY = env(
 # https://docs.djangoproject.com/en/dev/ref/settings/#caches
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "",
+        # Use Redis cache if available, otherwise fallback to local memory
+        "BACKEND": "django.core.cache.backends.redis.RedisCache" if env("REDIS_URL", default=None) else "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": env("REDIS_URL", default="") if env("REDIS_URL", default=None) else "",
+        "TIMEOUT": 300,  # 5 minutes default timeout
     }
 }
 
@@ -70,4 +72,6 @@ if DEBUG and USE_SILK:
     ]
     SILKY_PYTHON_PROFILER = True
 
-DEBUG = True
+# Set DEBUG based on env variable, defaulting to False for better performance
+# You can override this with DJANGO_DEBUG=True in your .env file when needed
+DEBUG = env.bool("DJANGO_DEBUG", False)

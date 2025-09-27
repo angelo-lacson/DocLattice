@@ -28,7 +28,7 @@ const FloatingContainer = styled(motion.div)`
   position: fixed;
   bottom: 2.5rem;
   left: 2.5rem;
-  z-index: 100002;
+  z-index: 800; /* Below chat sidebar (typically 1000+) but above document content */
   overflow: visible;
 
   @media (max-width: 768px) {

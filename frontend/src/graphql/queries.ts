@@ -2159,71 +2159,6 @@ export const GET_CONVERSATIONS = gql`
  * - All notes associated with this document
  */
 
-export interface GetDocumentKnowledgeBaseInputs {
-  documentId: string;
-  corpusId: string;
-}
-
-export interface GetDocumentKnowledgeBaseOutputs {
-  document: DocumentType;
-}
-
-export const GET_DOCUMENT_KNOWLEDGE_BASE = gql`
-  query GetDocumentKnowledgeBase($documentId: String, $corpusId: ID!) {
-    document(id: $documentId) {
-      id
-      title
-
-      fileType
-      creator {
-        email
-      }
-      created
-      mdSummaryFile
-      allAnnotations(corpusId: $corpusId) {
-        id
-        page
-        annotationLabel {
-          id
-          text
-          color
-          icon
-          description
-          labelType
-        }
-        annotationType
-        rawText
-        json
-        myPermissions
-      }
-      allDocRelationships(corpusId: $corpusId) {
-        id
-        relationshipType
-        sourceDocument {
-          id
-          title
-          fileType
-        }
-        targetDocument {
-          id
-          title
-          fileType
-        }
-        created
-      }
-      allNotes(corpusId: $corpusId) {
-        id
-        title
-        content
-        created
-        creator {
-          email
-        }
-      }
-    }
-  }
-`;
-
 /** Input type for the getPostprocessors query. */
 export interface GetPostprocessorsInput {}
 /** Output type for the getPostprocessors query. */
@@ -2331,6 +2266,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
       created
       mdSummaryFile
       pdfFile
+      pdfFileHash
       txtExtractFile
       pawlsParseFile
       myPermissions
@@ -2555,15 +2491,17 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
 `;
 
 /**
- * Query to get document data without corpus context
+ * Query to get document data with structural annotations but without corpus context
  * Used when viewing documents that haven't been assigned to a corpus
+ * Includes structural annotations which are inherent to the document (headers, sections, etc.)
  */
-export interface GetDocumentOnlyInput {
+export interface GetDocumentWithStructureInput {
   documentId: string;
 }
 
-export interface GetDocumentOnlyOutput {
+export interface GetDocumentWithStructureOutput {
   document: RawDocumentType & {
+    allStructuralAnnotations?: ServerAnnotationType[];
     allNotesWithoutCorpus?: Array<{
       id: string;
       title: string;
@@ -2584,8 +2522,8 @@ export interface GetDocumentOnlyOutput {
   };
 }
 
-export const GET_DOCUMENT_ONLY = gql`
-  query GetDocumentOnly($documentId: String!) {
+export const GET_DOCUMENT_WITH_STRUCTURE = gql`
+  query GetDocumentWithStructure($documentId: String!) {
     document(id: $documentId) {
       id
       title
@@ -2595,9 +2533,31 @@ export const GET_DOCUMENT_ONLY = gql`
       }
       created
       pdfFile
+      pdfFileHash
       txtExtractFile
       pawlsParseFile
       myPermissions
+      # Structural annotations (headers, sections, etc.) - no corpus required
+      allStructuralAnnotations {
+        id
+        page
+        parent {
+          id
+        }
+        annotationLabel {
+          id
+          text
+          color
+          icon
+          description
+          labelType
+        }
+        annotationType
+        rawText
+        json
+        myPermissions
+        structural
+      }
       # Document-level notes (no corpus required)
       allNotes {
         id
@@ -2620,6 +2580,11 @@ export const GET_DOCUMENT_ONLY = gql`
     }
   }
 `;
+
+// Backward compatibility aliases
+export const GET_DOCUMENT_ONLY = GET_DOCUMENT_WITH_STRUCTURE;
+export type GetDocumentOnlyInput = GetDocumentWithStructureInput;
+export type GetDocumentOnlyOutput = GetDocumentWithStructureOutput;
 
 /**
  * Mutation to add a document to a corpus

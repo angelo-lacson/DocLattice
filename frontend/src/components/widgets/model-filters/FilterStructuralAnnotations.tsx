@@ -1,5 +1,6 @@
 import { useReactiveVar } from "@apollo/client";
-import { Dropdown, Menu, Label, DropdownItemProps } from "semantic-ui-react";
+import { Label, DropdownItemProps } from "semantic-ui-react";
+import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
 import { filterToStructuralAnnotations } from "../../../graphql/cache";
 
 interface FilterToStructuralAnnotationsSelectorProps {
@@ -20,44 +21,62 @@ export const FilterToStructuralAnnotationsSelector = ({
   ];
 
   return (
-    <Menu
+    <div
       style={{
-        padding: "0px",
-        margin: "0px",
-        marginRight: ".25rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.375rem",
+        width: "100%",
+        position: "relative",
+        ...style,
       }}
     >
       <Label
         style={{
-          marginRight: "0px",
-          borderRadius: "5px 0px 0px 5px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
+          margin: "0",
+          background: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+          color: "white",
+          fontWeight: "600",
+          fontSize: "0.75rem",
+          padding: "0.375rem 0.625rem",
+          borderRadius: "8px",
+          border: "none",
+          letterSpacing: "0.025em",
+          textTransform: "uppercase",
+          boxShadow: "0 2px 4px rgba(168, 237, 234, 0.3)",
         }}
       >
-        <div>Filter Structural Annotations:</div>
+        Structural Annotations
       </Label>
-      <Dropdown
-        fluid
-        selection
-        options={structuralOptions}
-        onChange={(e, { value }) => {
-          // Update the reactive variable when a selection is made
-          if (value !== undefined) {
-            filterToStructuralAnnotations(
-              value as "ONLY" | "INCLUDE" | "EXCLUDE" | undefined
-            );
-          }
-        }}
-        placeholder="Filter by Structural Annotations..."
-        value={structural_filter}
-        style={{
-          margin: "0px",
-          width: "15rem",
-          ...style,
-        }}
-      />
-    </Menu>
+      <div style={{ position: "relative", zIndex: 10 }}>
+        <DropdownNoStrictMode
+          fluid
+          selection
+          upward={false}
+          selectOnBlur={false}
+          selectOnNavigation={true}
+          options={structuralOptions}
+          onChange={(e: any, { value }: { value: any }) => {
+            // Update the reactive variable when a selection is made
+            if (value !== undefined) {
+              filterToStructuralAnnotations(
+                value as "ONLY" | "INCLUDE" | "EXCLUDE" | undefined
+              );
+            }
+          }}
+          placeholder="Filter structural annotations..."
+          value={structural_filter}
+          style={{
+            margin: "0",
+            minWidth: "260px",
+            fontSize: "0.875rem",
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+          }}
+        />
+      </div>
+    </div>
   );
 };

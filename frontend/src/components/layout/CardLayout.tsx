@@ -59,17 +59,20 @@ const SearchBarWrapper = styled.div`
 const ScrollableSegment = styled(StyledSegment)`
   &.ui.segment {
     flex: 1;
-    min-height: 70vh;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    height: 100%;
+    width: 100%;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: #888 #f1f1f1;
-    color: red;
     border-radius: 12px !important;
     background: #ffffff !important;
+    margin: 0;
+    margin-top: 0;
+    margin-left: 0;
+    margin-right: 0;
 
     &:hover {
       background: #ffffff !important;
@@ -110,11 +113,11 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
     <CardContainer
       width={width}
       className="CardLayoutContainer"
-      style={{ maxHeight: "90vh", ...style }}
+      style={{ ...style }}
     >
       {Modals}
       <SearchBarWrapper>{SearchBar}</SearchBarWrapper>
-      {BreadCrumbs && (
+      {BreadCrumbs && (!use_mobile || width > 768) && (
         <StyledSegment attached secondary>
           {BreadCrumbs}
         </StyledSegment>
@@ -122,10 +125,11 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
       <ScrollableSegment
         id="ScrollableSegment"
         style={{
-          padding: use_mobile ? "5px" : use_responsive ? "0px" : "1rem",
-          ...(use_mobile ? { paddingLeft: "0px", paddingRight: "0px" } : {}),
+          padding: use_mobile ? "0.75rem" : use_responsive ? "1rem" : "1rem",
+          flex: 1,
+          minHeight: 0,
+          marginBottom: use_mobile ? "8px" : use_responsive ? "12px" : "20px",
         }}
-        attached="bottom"
         raised
         className="CardHolder"
       >
@@ -142,30 +146,34 @@ type CardContainerArgs = {
 const CardContainer = styled.div<CardContainerArgs>(({ width }) => {
   const baseStyling = `
     display: flex;
-    height: 100%;
     width: 100%;
     flex: 1;
     flex-direction: column;
     justify-content: flex-start;
-    align-items: center;
+    align-items: stretch;
     overflow: hidden;
     background-color: #f0f2f5;
+    min-height: 0;
+    box-sizing: border-box;
   `;
 
   if (width <= 400) {
     return `
       ${baseStyling}
       padding: 8px;
+      padding-bottom: 10px;
     `;
   } else if (width <= 1000) {
     return `
       ${baseStyling}
       padding: 12px;
+      padding-bottom: 14px;
     `;
   } else {
     return `
       ${baseStyling}
       padding: 20px;
+      padding-bottom: 22px;
     `;
   }
 });

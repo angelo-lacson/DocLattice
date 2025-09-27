@@ -45,12 +45,14 @@ test("FilterToLabelSelector renders correctly", async ({ mount }) => {
   );
 
   // Check for the basic structure - the label text should be visible
-  await expect(component.locator("text=Filter by Label:")).toBeVisible({
+  await expect(component.locator("text=Filter by Label")).toBeVisible({
     timeout: 5000,
   });
 
   // Check for the dropdown
-  await expect(component.locator("text=Filter by label...")).toBeVisible({
+  await expect(
+    component.locator("text=Select a label to filter...")
+  ).toBeVisible({
     timeout: 5000,
   });
 });

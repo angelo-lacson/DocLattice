@@ -6,9 +6,14 @@ services:
 
   vector-embedder:
     image: jscrudato/vector-embedder-microservice
+    # build:
+    #   context: .
+    #   dockerfile: ./compose/local/vector-embedder/Dockerfile
     container_name: vector-embedder
     environment:
       PORT: 8000
+      TRANSFORMERS_OFFLINE: 1
+      HF_DATASETS_OFFLINE: 1
 
   docling-parser:
     image: jscrudato/docsling-local
@@ -25,7 +30,7 @@ services:
     depends_on:
       - postgres
       - redis
-      - vector-embedder
+      # - vector-embedder  # Temporarily disabled - connection issues
       - celeryworker
       - docling-parser
     volumes:

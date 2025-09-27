@@ -10,20 +10,25 @@ import {
   FileType,
   ArrowLeft,
   Settings,
+  Plus,
 } from "lucide-react";
 import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
   GetDocumentKnowledgeAndAnnotationsInput,
   GetDocumentKnowledgeAndAnnotationsOutput,
-  GET_DOCUMENT_ONLY,
-  GetDocumentOnlyInput,
-  GetDocumentOnlyOutput,
+  GET_DOCUMENT_WITH_STRUCTURE,
+  GetDocumentWithStructureInput,
+  GetDocumentWithStructureOutput,
   GET_DOCUMENT_ANNOTATIONS_ONLY,
   GetDocumentAnnotationsOnlyInput,
   GetDocumentAnnotationsOnlyOutput,
 } from "../../../graphql/queries";
 import { useFeatureAvailability } from "../../../hooks/useFeatureAvailability";
-import { getDocumentRawText, getPawlsLayer } from "../../annotator/api/rest";
+import {
+  getDocumentRawText,
+  getPawlsLayer,
+  getCachedPDFUrl,
+} from "../../annotator/api/cachedRest";
 import {
   CorpusType,
   LabelType,
@@ -137,6 +142,112 @@ import { FeatureUnavailable } from "../../common/FeatureUnavailable";
 
 // Setting worker path to worker bundle.
 GlobalWorkerOptions.workerSrc = workerSrc;
+
+/* ------------------------------------------------------------- */
+/* Styled components - defined outside component to avoid warnings */
+/* ------------------------------------------------------------- */
+
+const HeaderButtonGroup = styled.div`
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+`;
+
+const HeaderButton = styled.button<{ $variant?: "primary" | "secondary" }>`
+  height: 36px;
+  padding: 0 ${(props) => (props.$variant === "primary" ? "20px" : "14px")};
+  background: ${(props) =>
+    props.$variant === "primary"
+      ? "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
+      : "rgba(255, 255, 255, 0.95)"};
+  color: ${(props) => (props.$variant === "primary" ? "white" : "#475569")};
+  border: 1px solid
+    ${(props) =>
+      props.$variant === "primary"
+        ? "rgba(37, 99, 235, 0.3)"
+        : "rgba(0, 0, 0, 0.08)"};
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(10px);
+  box-shadow: ${(props) =>
+    props.$variant === "primary"
+      ? "0 2px 8px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)"
+      : "0 1px 3px rgba(0, 0, 0, 0.06)"};
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: ${(props) =>
+      props.$variant === "primary"
+        ? "0 4px 12px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
+        : "0 2px 6px rgba(0, 0, 0, 0.1)"};
+    background: ${(props) =>
+      props.$variant === "primary"
+        ? "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
+        : "white"};
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: ${(props) =>
+      props.$variant === "primary"
+        ? "inset 0 2px 4px rgba(0, 0, 0, 0.1)"
+        : "inset 0 1px 2px rgba(0, 0, 0, 0.05)"};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+const FloatingInputWrapper = styled.div<{ $panelOffset: number }>`
+  position: absolute;
+  bottom: 4rem; /* Increased from 2rem to give more space from bottom */
+  left: 0;
+  right: ${(props) => props.$panelOffset}px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none; /* allow clicks only on children */
+  z-index: 850;
+
+  @media (max-width: 768px) {
+    /* On mobile, position below zoom controls */
+    position: absolute;
+    top: 80px; /* Below zoom controls */
+    left: 1rem;
+    right: auto; /* Don't constrain right side for collapsed state */
+    bottom: auto;
+    width: auto; /* Let child determine width */
+    display: block;
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+`;
+
+const ZoomIndicator = styled.div`
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  z-index: 2000;
+  pointer-events: none;
+  transition: opacity 0.2s ease-in-out;
+`;
 
 interface DocumentKnowledgeBaseProps {
   documentId: string;
@@ -634,6 +745,87 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     [activeLayer, zoomLevel, setZoomLevel, showZoomFeedback]
   );
 
+  // Pinch zoom state for mobile
+  const [isPinching, setIsPinching] = useState(false);
+  const [initialPinchDistance, setInitialPinchDistance] = useState<
+    number | null
+  >(null);
+  const [lastPinchZoom, setLastPinchZoom] = useState<number | null>(null);
+
+  // Helper function to calculate distance between two touch points
+  const getTouchDistance = (touches: TouchList): number => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Handle touch start for pinch zoom
+  const handleTouchStart = useCallback(
+    (event: TouchEvent) => {
+      // Only handle if in document layer and using two fingers
+      if (activeLayer !== "document" || event.touches.length !== 2) {
+        return;
+      }
+
+      // Initialize pinch zoom
+      const distance = getTouchDistance(event.touches);
+      setIsPinching(true);
+      setInitialPinchDistance(distance);
+      setLastPinchZoom(zoomLevel);
+
+      // Prevent default to avoid scrolling
+      event.preventDefault();
+    },
+    [activeLayer, zoomLevel]
+  );
+
+  // Handle touch move for pinch zoom
+  const handleTouchMove = useCallback(
+    (event: TouchEvent) => {
+      // Only handle if we're pinching with two fingers
+      if (
+        !isPinching ||
+        event.touches.length !== 2 ||
+        !initialPinchDistance ||
+        lastPinchZoom === null
+      ) {
+        return;
+      }
+
+      // Calculate new zoom based on pinch distance
+      const currentDistance = getTouchDistance(event.touches);
+      const scale = currentDistance / initialPinchDistance;
+
+      // Apply zoom with limits
+      const newZoom = Math.max(0.5, Math.min(4, lastPinchZoom * scale));
+      setZoomLevel(newZoom);
+
+      // Show zoom feedback
+      showZoomFeedback();
+
+      // Prevent default to avoid scrolling
+      event.preventDefault();
+    },
+    [
+      isPinching,
+      initialPinchDistance,
+      lastPinchZoom,
+      setZoomLevel,
+      showZoomFeedback,
+    ]
+  );
+
+  // Handle touch end for pinch zoom
+  const handleTouchEnd = useCallback((event: TouchEvent) => {
+    // Reset pinch state when touches end
+    if (event.touches.length < 2) {
+      setIsPinching(false);
+      setInitialPinchDistance(null);
+      setLastPinchZoom(null);
+    }
+  }, []);
+
   // Fetch document data - either with corpus context or without
   const authReady = useAuthReady();
 
@@ -674,20 +866,29 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         data.document.fileType === "application/pdf" &&
         data.document.pdfFile
       ) {
+        console.log("\n=== DOCUMENT LOAD START ===");
+        console.log("Type: PDF");
+        console.log("Document ID:", data.document.id);
+        console.log("Hash:", data.document.pdfFileHash || "no hash");
         setViewState(ViewState.LOADING); // Set loading state
-        const loadingTask: PDFDocumentLoadingTask = getDocument(
-          data.document.pdfFile
-        );
-        loadingTask.onProgress = (p: { loaded: number; total: number }) => {
-          setProgress(Math.round((p.loaded / p.total) * 100));
-        };
 
         const pawlsPath = data.document.pawlsParseFile || "";
+        const pdfHash = data.document.pdfFileHash || "";
+        const docId = data.document.id;
 
-        Promise.all([
-          loadingTask.promise,
-          getPawlsLayer(pawlsPath), // Fetches PAWLS via REST
-        ])
+        // First get the cached or fresh PDF URL
+        getCachedPDFUrl(data.document.pdfFile, docId, pdfHash)
+          .then((pdfUrl) => {
+            const loadingTask: PDFDocumentLoadingTask = getDocument(pdfUrl);
+            loadingTask.onProgress = (p: { loaded: number; total: number }) => {
+              setProgress(Math.round((p.loaded / p.total) * 100));
+            };
+
+            return Promise.all([
+              loadingTask.promise,
+              getPawlsLayer(pawlsPath, docId), // Fetches PAWLS via REST with caching
+            ]);
+          })
           .then(([pdfDocProxy, pawlsData]) => {
             // --- DETAILED LOGGING FOR PAWLS DATA ---
             if (!pawlsData) {
@@ -751,10 +952,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             });
             setDocText(doc_text);
             setViewState(ViewState.LOADED); // Set loaded state only after everything is done
+            console.log("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
             // Log the specific error causing the catch
             console.error("Error during PDF/PAWLS loading Promise.all:", err);
+            console.log("=== DOCUMENT LOAD FAILED ===");
             setViewState(ViewState.ERROR);
             toast.error(
               `Error loading PDF details: ${
@@ -767,15 +970,27 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           data.document.fileType === "text/plain") &&
         data.document.txtExtractFile
       ) {
-        console.log("onCompleted: Loading TXT", data.document.txtExtractFile);
+        console.log("\n=== DOCUMENT LOAD START ===");
+        console.log("Type: TEXT");
+        console.log("Document ID:", data.document.id);
+        console.log("Hash:", data.document.pdfFileHash || "no hash");
+        console.log("File URL:", data.document.txtExtractFile);
         setViewState(ViewState.LOADING); // Set loading state
-        getDocumentRawText(data.document.txtExtractFile)
+        const docId = data.document.id;
+        const textHash = data.document.pdfFileHash; // Can use same hash field for text files
+        getDocumentRawText(
+          data.document.txtExtractFile,
+          docId,
+          textHash ?? undefined
+        )
           .then((txt) => {
             setDocText(txt);
             setViewState(ViewState.LOADED);
+            console.log("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
             setViewState(ViewState.ERROR);
+            console.log("=== DOCUMENT LOAD FAILED ===");
             toast.error(
               `Error loading text content: ${
                 err instanceof Error ? err.message : String(err)
@@ -816,162 +1031,182 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     nextFetchPolicy: "no-cache",
   });
 
-  // Query for document without corpus
+  // Query for document with structure but without corpus
   const {
     data: documentOnlyData,
     loading: documentLoading,
     error: documentError,
     refetch: refetchDocumentOnly,
-  } = useQuery<GetDocumentOnlyOutput, GetDocumentOnlyInput>(GET_DOCUMENT_ONLY, {
-    skip: !authReady || !documentId || Boolean(corpusId),
-    variables: {
-      documentId,
-    },
-    onCompleted: (data) => {
-      if (!data?.document) {
-        console.error("onCompleted: No document data received.");
-        setViewState(ViewState.ERROR);
-        toast.error("Failed to load document details.");
-        return;
-      }
-      setDocumentType(data.document.fileType ?? "");
-      let processedDocData = {
-        ...data.document,
-        // Keep permissions as raw strings for consistency
-        myPermissions: data.document.myPermissions ?? [],
-      };
-      setDocument(processedDocData as any);
-      setPermissions(getPermissions(data.document.myPermissions));
-
-      // Load PDF/TXT content
-      if (
-        data.document.fileType === "application/pdf" &&
-        data.document.pdfFile
-      ) {
-        setViewState(ViewState.LOADING);
-        const loadingTask: PDFDocumentLoadingTask = getDocument(
-          data.document.pdfFile
-        );
-        loadingTask.onProgress = (p: { loaded: number; total: number }) => {
-          setProgress(Math.round((p.loaded / p.total) * 100));
+  } = useQuery<GetDocumentWithStructureOutput, GetDocumentWithStructureInput>(
+    GET_DOCUMENT_WITH_STRUCTURE,
+    {
+      skip: !authReady || !documentId || Boolean(corpusId),
+      variables: {
+        documentId,
+      },
+      onCompleted: (data) => {
+        if (!data?.document) {
+          console.error("onCompleted: No document data received.");
+          setViewState(ViewState.ERROR);
+          toast.error("Failed to load document details.");
+          return;
+        }
+        setDocumentType(data.document.fileType ?? "");
+        let processedDocData = {
+          ...data.document,
+          // Keep permissions as raw strings for consistency
+          myPermissions: data.document.myPermissions ?? [],
         };
+        setDocument(processedDocData as any);
+        setPermissions(getPermissions(data.document.myPermissions));
 
-        const pawlsPath = data.document.pawlsParseFile || "";
+        // Load PDF/TXT content
+        if (
+          data.document.fileType === "application/pdf" &&
+          data.document.pdfFile
+        ) {
+          setViewState(ViewState.LOADING);
+          const loadingTask: PDFDocumentLoadingTask = getDocument(
+            data.document.pdfFile
+          );
+          loadingTask.onProgress = (p: { loaded: number; total: number }) => {
+            setProgress(Math.round((p.loaded / p.total) * 100));
+          };
 
-        Promise.all([loadingTask.promise, getPawlsLayer(pawlsPath)])
-          .then(([pdfDocProxy, pawlsData]) => {
-            if (!pawlsData) {
-              console.error(
-                "onCompleted: PAWLS data received is null or undefined!"
-              );
-            }
+          const pawlsPath = data.document.pawlsParseFile || "";
 
-            if (!pdfDocProxy) {
-              throw new Error("PDF document proxy is null or undefined.");
-            }
-            setPdfDoc(pdfDocProxy);
+          Promise.all([loadingTask.promise, getPawlsLayer(pawlsPath)])
+            .then(([pdfDocProxy, pawlsData]) => {
+              if (!pawlsData) {
+                console.error(
+                  "onCompleted: PAWLS data received is null or undefined!"
+                );
+              }
 
-            const loadPagesPromises: Promise<PDFPageInfo>[] = [];
-            for (let i = 1; i <= pdfDocProxy.numPages; i++) {
-              const pageNum = i;
-              loadPagesPromises.push(
-                pdfDocProxy.getPage(pageNum).then((p) => {
-                  let pageTokens: Token[] = [];
-                  const pageIndex = p.pageNumber - 1;
+              if (!pdfDocProxy) {
+                throw new Error("PDF document proxy is null or undefined.");
+              }
+              setPdfDoc(pdfDocProxy);
 
-                  if (
-                    !pawlsData ||
-                    !Array.isArray(pawlsData) ||
-                    pageIndex >= pawlsData.length
-                  ) {
-                    console.warn(
-                      `Page ${pageNum}: PAWLS data index out of bounds. Index: ${pageIndex}, Length: ${pawlsData.length}`
-                    );
-                    pageTokens = [];
-                  } else {
-                    const pageData = pawlsData[pageIndex];
+              const loadPagesPromises: Promise<PDFPageInfo>[] = [];
+              for (let i = 1; i <= pdfDocProxy.numPages; i++) {
+                const pageNum = i;
+                loadPagesPromises.push(
+                  pdfDocProxy.getPage(pageNum).then((p) => {
+                    let pageTokens: Token[] = [];
+                    const pageIndex = p.pageNumber - 1;
 
-                    if (!pageData) {
-                      pageTokens = [];
-                    } else if (typeof pageData.tokens === "undefined") {
-                      pageTokens = [];
-                    } else if (!Array.isArray(pageData.tokens)) {
-                      console.error(
-                        `Page ${pageNum}: CRITICAL - pageData.tokens is not an array at index ${pageIndex}! Type: ${typeof pageData.tokens}`
+                    if (
+                      !pawlsData ||
+                      !Array.isArray(pawlsData) ||
+                      pageIndex >= pawlsData.length
+                    ) {
+                      console.warn(
+                        `Page ${pageNum}: PAWLS data index out of bounds. Index: ${pageIndex}, Length: ${pawlsData.length}`
                       );
                       pageTokens = [];
                     } else {
-                      pageTokens = pageData.tokens;
-                    }
-                  }
-                  return new PDFPageInfo(p, pageTokens, zoomLevel);
-                }) as unknown as Promise<PDFPageInfo>
-              );
-            }
-            return Promise.all(loadPagesPromises);
-          })
-          .then((loadedPages) => {
-            setPages(loadedPages);
-            const { doc_text, string_index_token_map } =
-              createTokenStringSearch(loadedPages);
-            setPageTextMaps({
-              ...string_index_token_map,
-              ...pageTextMaps,
-            });
-            setDocText(doc_text);
-            setViewState(ViewState.LOADED);
-          })
-          .catch((err) => {
-            console.error("Error during PDF/PAWLS loading Promise.all:", err);
-            setViewState(ViewState.ERROR);
-            toast.error(
-              `Error loading PDF details: ${
-                err instanceof Error ? err.message : String(err)
-              }`
-            );
-          });
-      } else if (
-        (data.document.fileType === "application/txt" ||
-          data.document.fileType === "text/plain") &&
-        data.document.txtExtractFile
-      ) {
-        console.log("onCompleted: Loading TXT", data.document.txtExtractFile);
-        setViewState(ViewState.LOADING);
-        getDocumentRawText(data.document.txtExtractFile)
-          .then((txt) => {
-            setDocText(txt);
-            setViewState(ViewState.LOADED);
-          })
-          .catch((err) => {
-            setViewState(ViewState.ERROR);
-            toast.error(
-              `Error loading text content: ${
-                err instanceof Error ? err.message : String(err)
-              }`
-            );
-          });
-      } else {
-        console.warn(
-          "onCompleted: Unsupported file type or missing file path.",
-          data.document.fileType
-        );
-        setViewState(ViewState.ERROR);
-      }
+                      const pageData = pawlsData[pageIndex];
 
-      // Keep global navigation vars in sync
-      openedDocument(data.document as any);
-      // Clear annotations when no corpus
-      setPdfAnnotations(new PdfAnnotations([], [], [], true));
-      setStructuralAnnotations([]);
-    },
-    onError: (error) => {
-      console.error("GraphQL Query Error fetching document data:", error);
-      toast.error(`Failed to load document details: ${error.message}`);
-      setViewState(ViewState.ERROR);
-    },
-    fetchPolicy: "network-only",
-    nextFetchPolicy: "no-cache",
-  });
+                      if (!pageData) {
+                        pageTokens = [];
+                      } else if (typeof pageData.tokens === "undefined") {
+                        pageTokens = [];
+                      } else if (!Array.isArray(pageData.tokens)) {
+                        console.error(
+                          `Page ${pageNum}: CRITICAL - pageData.tokens is not an array at index ${pageIndex}! Type: ${typeof pageData.tokens}`
+                        );
+                        pageTokens = [];
+                      } else {
+                        pageTokens = pageData.tokens;
+                      }
+                    }
+                    return new PDFPageInfo(p, pageTokens, zoomLevel);
+                  }) as unknown as Promise<PDFPageInfo>
+                );
+              }
+              return Promise.all(loadPagesPromises);
+            })
+            .then((loadedPages) => {
+              setPages(loadedPages);
+              const { doc_text, string_index_token_map } =
+                createTokenStringSearch(loadedPages);
+              setPageTextMaps({
+                ...string_index_token_map,
+                ...pageTextMaps,
+              });
+              setDocText(doc_text);
+              setViewState(ViewState.LOADED);
+            })
+            .catch((err) => {
+              console.error("Error during PDF/PAWLS loading Promise.all:", err);
+              console.log("=== DOCUMENT LOAD FAILED ===");
+              setViewState(ViewState.ERROR);
+              toast.error(
+                `Error loading PDF details: ${
+                  err instanceof Error ? err.message : String(err)
+                }`
+              );
+            });
+        } else if (
+          (data.document.fileType === "application/txt" ||
+            data.document.fileType === "text/plain") &&
+          data.document.txtExtractFile
+        ) {
+          console.log("\n=== DOCUMENT LOAD START ===");
+          console.log("Type: TEXT");
+          console.log("Document ID:", data.document.id);
+          console.log("Hash:", data.document.pdfFileHash || "no hash");
+          console.log("File URL:", data.document.txtExtractFile);
+          setViewState(ViewState.LOADING);
+          getDocumentRawText(data.document.txtExtractFile)
+            .then((txt) => {
+              setDocText(txt);
+              setViewState(ViewState.LOADED);
+              console.log("=== DOCUMENT LOAD COMPLETE ===");
+            })
+            .catch((err) => {
+              setViewState(ViewState.ERROR);
+              console.log("=== DOCUMENT LOAD FAILED ===");
+              toast.error(
+                `Error loading text content: ${
+                  err instanceof Error ? err.message : String(err)
+                }`
+              );
+            });
+        } else {
+          console.warn(
+            "onCompleted: Unsupported file type or missing file path.",
+            data.document.fileType
+          );
+          setViewState(ViewState.ERROR);
+        }
+
+        // Keep global navigation vars in sync
+        openedDocument(data.document as any);
+
+        // Process structural annotations even without corpus
+        if (data.document.allStructuralAnnotations) {
+          const structuralAnns = data.document.allStructuralAnnotations.map(
+            (ann) => convertToServerAnnotation(ann)
+          );
+          setStructuralAnnotations(structuralAnns);
+        } else {
+          setStructuralAnnotations([]);
+        }
+
+        // Clear regular annotations when no corpus
+        setPdfAnnotations(new PdfAnnotations([], [], [], true));
+      },
+      onError: (error) => {
+        console.error("GraphQL Query Error fetching document data:", error);
+        toast.error(`Failed to load document details: ${error.message}`);
+        setViewState(ViewState.ERROR);
+      },
+      fetchPolicy: "network-only",
+      nextFetchPolicy: "no-cache",
+    }
+  );
 
   // Lightweight query for fetching just annotations when switching analyses
   const { refetch: refetchAnnotationsOnly } = useQuery<
@@ -1226,11 +1461,28 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     document.addEventListener("wheel", handleWheelZoom, { passive: false });
     document.addEventListener("keydown", handleKeyboardZoom);
 
+    // Add touch listeners for pinch zoom with passive: false
+    document.addEventListener("touchstart", handleTouchStart, {
+      passive: false,
+    });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd, { passive: false });
+
     return () => {
       document.removeEventListener("wheel", handleWheelZoom);
       document.removeEventListener("keydown", handleKeyboardZoom);
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [activeLayer, handleWheelZoom, handleKeyboardZoom]);
+  }, [
+    activeLayer,
+    handleWheelZoom,
+    handleKeyboardZoom,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  ]);
 
   const [selectedNote, setSelectedNote] = useState<(typeof notes)[0] | null>(
     null
@@ -1474,150 +1726,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     };
   }, [setSelectedAnnotations]);
 
-  /* ------------------------------------------------------------- */
-  /* Floating input wrapper (centres input within remaining space) */
-  /* ------------------------------------------------------------- */
-
-  const FloatingInputWrapper = styled.div<{ $panelOffset: number }>`
-    position: absolute;
-    bottom: 2rem;
-    left: 0;
-    right: ${(props) => props.$panelOffset}px;
-    display: flex;
-    justify-content: center;
-    pointer-events: none; /* allow clicks only on children */
-    z-index: 1500;
-
-    @media (max-width: 768px) {
-      /* On mobile, let the child component handle its own positioning */
-      position: static;
-      left: auto;
-      right: auto;
-      bottom: auto;
-    }
-  `;
-
-  const ZoomIndicator = styled.div`
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 18px;
-    font-weight: 600;
-    z-index: 2000;
-    pointer-events: none;
-    transition: opacity 0.2s ease-in-out;
-  `;
-
-  const FloatingCorpusRibbon = styled.div`
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    min-width: 160px;
-    height: 44px;
-    background: linear-gradient(135deg, #5b8fff 0%, #4274e4 100%);
-    border-radius: 22px;
-    box-shadow: 0 4px 16px rgba(66, 116, 228, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
-    z-index: 1005;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 20px;
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    overflow: visible;
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(66, 116, 228, 0.4),
-        0 3px 6px rgba(0, 0, 0, 0.15);
-      background: linear-gradient(135deg, #6b95ff 0%, #5284f4 100%);
-    }
-
-    &:active {
-      transform: translateY(0);
-      box-shadow: 0 2px 8px rgba(66, 116, 228, 0.3),
-        0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-
-    &::before {
-      content: "";
-      position: absolute;
-      top: -2px;
-      left: -2px;
-      right: -2px;
-      bottom: -2px;
-      background: linear-gradient(
-        135deg,
-        #7ba7ff 0%,
-        #5b8fff 50%,
-        #4274e4 100%
-      );
-      border-radius: 24px;
-      opacity: 0;
-      z-index: -1;
-      transition: opacity 0.3s ease;
-    }
-
-    &:hover::before {
-      opacity: 0.3;
-    }
-
-    @media (max-width: 768px) {
-      top: auto;
-      bottom: 80px;
-      right: 20px;
-      min-width: 140px;
-      height: 40px;
-      font-size: 13px;
-    }
-  `;
-
-  const RibbonContent = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 600;
-    font-size: 14px;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    letter-spacing: 0.3px;
-    white-space: nowrap;
-
-    svg {
-      margin-right: 8px;
-      font-size: 18px;
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
-    }
-
-    span {
-      position: relative;
-
-      &::after {
-        content: "";
-        position: absolute;
-        bottom: -2px;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: rgba(255, 255, 255, 0.8);
-        transform: scaleX(0);
-        transition: transform 0.3s ease;
-        border-radius: 1px;
-      }
-    }
-
-    ${FloatingCorpusRibbon}:hover & span::after {
-      transform: scaleX(1);
-    }
-  `;
-
   const [selectedSummaryContent, setSelectedSummaryContent] = useState<
     string | null
   >(null);
@@ -1625,12 +1733,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const [showAddToCorpusModal, setShowAddToCorpusModal] = useState(false);
 
   return (
-    <FullScreenModal
-      id="knowledge-base-modal"
-      open={true}
-      onClose={onClose}
-      closeIcon
-    >
+    <FullScreenModal id="knowledge-base-modal" open={true} onClose={onClose}>
       <HeaderContainer>
         <div>
           <Header as="h2" style={{ margin: 0 }}>
@@ -1649,6 +1752,24 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             </span>
           </MetadataRow>
         </div>
+
+        {/* Custom button group in header */}
+        <HeaderButtonGroup>
+          {!hasCorpus && !readOnly && (
+            <HeaderButton
+              $variant="primary"
+              onClick={() => setShowAddToCorpusModal(true)}
+              title="Add this document to a corpus to unlock collaborative features"
+              data-testid="add-to-corpus-button"
+            >
+              <Plus />
+              Add to Corpus
+            </HeaderButton>
+          )}
+          <HeaderButton onClick={onClose}>
+            <X />
+          </HeaderButton>
+        </HeaderButtonGroup>
       </HeaderContainer>
 
       {/* Error message for GraphQL failures - show prominently and prevent other content */}
@@ -1680,21 +1801,40 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             </Message>
           )}
 
-          {/* Floating ribbon for corpus-less mode */}
-          {!hasCorpus && !readOnly && (
-            <FloatingCorpusRibbon
-              data-testid="add-to-corpus-ribbon"
-              onClick={() => setShowAddToCorpusModal(true)}
-              title="Add this document to a corpus to unlock collaborative features"
-            >
-              <RibbonContent>
-                <Icon name="plus circle" />
-                <span>Add to Corpus</span>
-              </RibbonContent>
-            </FloatingCorpusRibbon>
-          )}
-
           <ContentArea id="content-area">
+            {/* Zoom Controls - positioned relative to ContentArea */}
+            {activeLayer === "document" && (
+              <ZoomControls
+                zoomLevel={zoomLevel}
+                onZoomIn={() => {
+                  setZoomLevel(Math.min(zoomLevel + 0.1, 4));
+                  showZoomFeedback();
+                }}
+                onZoomOut={() => {
+                  setZoomLevel(Math.max(zoomLevel - 0.1, 0.5));
+                  showZoomFeedback();
+                }}
+              />
+            )}
+
+            {/* Unified Search/Chat Input - positioned relative to ContentArea */}
+            <FloatingInputWrapper $panelOffset={floatingControlsState.offset}>
+              <FloatingDocumentInput
+                fixed={false}
+                visible={activeLayer === "document"}
+                readOnly={readOnly}
+                onChatSubmit={(message) => {
+                  setPendingChatMessage(message);
+                  setSidebarViewMode("chat");
+                  setShowRightPanel(true);
+                }}
+                onToggleChat={() => {
+                  setSidebarViewMode("chat");
+                  setShowRightPanel(true);
+                }}
+              />
+            </FloatingInputWrapper>
+
             <MainContentArea id="main-content-area">
               {mainLayerContent}
               <EnhancedLabelSelector
@@ -1740,45 +1880,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 />
               )}
 
-              {/* Zoom Controls - only in document layer */}
-              {activeLayer === "document" && (
-                <ZoomControls
-                  zoomLevel={zoomLevel}
-                  onZoomIn={() => {
-                    setZoomLevel(Math.min(zoomLevel + 0.1, 4));
-                    showZoomFeedback();
-                  }}
-                  onZoomOut={() => {
-                    setZoomLevel(Math.max(zoomLevel - 0.1, 0.5));
-                    showZoomFeedback();
-                  }}
-                />
-              )}
-
               {/* Zoom Indicator - shows current zoom level when zooming */}
               {showZoomIndicator && activeLayer === "document" && (
                 <ZoomIndicator data-testid="zoom-indicator">
                   {Math.round(zoomLevel * 100)}%
                 </ZoomIndicator>
               )}
-
-              {/* Unified Search/Chat Input - only in document layer */}
-              <FloatingInputWrapper $panelOffset={floatingControlsState.offset}>
-                <FloatingDocumentInput
-                  fixed={false}
-                  visible={activeLayer === "document"}
-                  readOnly={readOnly}
-                  onChatSubmit={(message) => {
-                    setPendingChatMessage(message);
-                    setSidebarViewMode("chat");
-                    setShowRightPanel(true);
-                  }}
-                  onToggleChat={() => {
-                    setSidebarViewMode("chat");
-                    setShowRightPanel(true);
-                  }}
-                />
-              </FloatingInputWrapper>
 
               {/* Floating Document Controls - only in document layer */}
               <FloatingDocumentControls

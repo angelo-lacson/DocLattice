@@ -28,5 +28,11 @@ class DocumentsConfig(AppConfig):
             # Connect the m2m_changed signal for when documents are added to corpuses
             connect_corpus_document_signals()
 
+            # STORAGE WARMING ##########################################################################################
+            # Pre-warm the storage backend to avoid ~400ms cold start on first file URL access
+            # Run synchronously to ensure the main process gets warmed
+            from opencontractserver.utils.storage_warming import warm_storage_backend
+            warm_storage_backend()
+
         except ImportError:
             pass

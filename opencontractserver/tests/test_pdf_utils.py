@@ -85,8 +85,10 @@ class PDFUtilsTestCase(TestCase):
             mock_s3_client = mock.Mock()
             mock_boto_client.return_value = mock_s3_client
 
-            # Mock settings.USE_AWS to be True
-            with mock.patch("opencontractserver.utils.files.settings.USE_AWS", True):
+            # Mock settings.STORAGE_BACKEND to be AWS
+            with mock.patch(
+                "opencontractserver.utils.files.settings.STORAGE_BACKEND", "AWS"
+            ):
                 # Prepare the mock for s3.put_object
                 mock_s3_client.put_object.return_value = {
                     "ResponseMetadata": {"HTTPStatusCode": 200}

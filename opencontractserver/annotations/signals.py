@@ -9,6 +9,8 @@ from opencontractserver.tasks.embeddings_task import (
     calculate_embedding_for_note_text,
 )
 
+# Direct queries without caching
+
 logger = logging.getLogger(__name__)
 
 # Define static dispatch UIDs for signals
@@ -16,6 +18,12 @@ ANNOT_CREATE_UID = (
     "process_annot_on_create_atomic_uid_v1"  # Added _v1 for potential future changes
 )
 NOTE_CREATE_UID = "process_note_on_create_atomic_uid_v1"  # Added _v1
+
+# Relationship signal UIDs
+REL_CREATE_UPDATE_UID = "process_relationship_on_change_atomic_uid_v1"
+REL_DELETE_UID = "process_relationship_on_delete_atomic_uid_v1"
+REL_M2M_SOURCES_UID = "process_relationship_m2m_sources_changed_uid_v1"
+REL_M2M_TARGETS_UID = "process_relationship_m2m_targets_changed_uid_v1"
 
 
 def process_annot_on_create_atomic(sender, instance, created, **kwargs):
@@ -50,6 +58,8 @@ def process_annot_on_create_atomic(sender, instance, created, **kwargs):
                 f"to ensure it has embeddings for all corpuses"
             )
             process_structural_annotation_for_corpuses(instance)
+
+    # No cache invalidation needed - using direct queries
 
 
 def process_note_on_create_atomic(sender, instance, created, **kwargs):
@@ -114,3 +124,29 @@ def process_structural_annotation_for_corpuses(annotation):
                 f"Queued embedding calculation for structural annotation {annotation.id} "
                 f"using embedder {embedder_path} from corpus {corpus_id}"
             )
+
+
+def process_relationship_on_change_atomic(sender, instance, created, **kwargs):
+    """
+    Signal handler for Relationship create/update.
+    Currently a no-op as we use direct queries without caching.
+    """
+    pass
+
+
+def process_relationship_on_delete(sender, instance, **kwargs):
+    """
+    Signal handler for Relationship delete.
+    Currently a no-op as we use direct queries without caching.
+    """
+    pass
+
+
+def process_relationship_m2m_changed(
+    sender, instance, action, reverse, model, pk_set, **kwargs
+):
+    """
+    Signal handler for Relationship M2M (source/target annotations) changes.
+    Currently a no-op as we use direct queries without caching.
+    """
+    pass

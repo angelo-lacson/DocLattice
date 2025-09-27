@@ -12,6 +12,7 @@ from .import_tasks import (
     process_documents_zip,
 )
 from .lookup_tasks import build_label_lookups_task
+# Materialized view tasks removed - using direct queries instead
 from .permissioning_tasks import make_analysis_public_task, make_corpus_public_task
 
 # Great, quick guidance on how to restructure tasks into multiple modules:

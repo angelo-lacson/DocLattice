@@ -246,7 +246,6 @@ export const SelectDocumentsModal = ({
             loading_message="Loading Documents..."
             fetchMore={fetchMoreDocuments}
             onDrop={onDrop}
-            corpusId={filtered_to_corpus?.id || null}
           />
         </CardLayout>
       </ModalContent>

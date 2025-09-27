@@ -117,26 +117,16 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
 
   const selectedDocs = documents.filter((d) => documentIds.includes(d.id));
 
-  // Reset state when modal opens/closes
-  useEffect(() => {
-    if (!open) {
-      setSearchTerm("");
-      setSelectedCorpus(null);
-      setView("SELECT");
-      setAddingToCorpusId(null);
-    }
-  }, [open]);
-
   // Debounced search function
   const debouncedSetSearchTerm = useCallback(
     _.debounce(setSearchTerm, 300),
     []
   );
 
-  // Query for corpuses with search - filter for editable corpuses on backend
+  // Query for corpuses with search
   const GET_EDITABLE_CORPUSES = gql`
     query GetEditableCorpuses($textSearch: String) {
-      corpuses(textSearch: $textSearch, myPermissions: ["UPDATE"], first: 50) {
+      corpuses(textSearch: $textSearch, first: 10) {
         pageInfo {
           hasNextPage
           hasPreviousPage
@@ -176,6 +166,19 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
     skip: !open,
     notifyOnNetworkStatusChange: true,
   });
+
+  // Reset state when modal opens/closes and refetch corpuses
+  useEffect(() => {
+    if (!open) {
+      setSearchTerm("");
+      setSelectedCorpus(null);
+      setView("SELECT");
+      setAddingToCorpusId(null);
+    } else {
+      // Refetch corpuses when modal opens to ensure fresh data
+      refetch();
+    }
+  }, [open, refetch]);
 
   // Mutation to add documents to corpus
   const [linkDocuments] = useMutation<
@@ -229,7 +232,9 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
       ?.map((edge) => edge?.node)
       .filter(
         (corpus): corpus is CorpusType =>
-          corpus !== null && corpus !== undefined
+          corpus !== null &&
+          corpus !== undefined &&
+          (corpus.myPermissions?.includes("update_corpus") ?? false)
       ) || [];
 
   const renderCorpusList = () => {
@@ -259,19 +264,8 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
           <p>
             {searchTerm
               ? `No corpuses found matching "${searchTerm}". Try a different search term.`
-              : "You don't have any corpuses with edit permissions. Create a corpus first to add documents to it."}
+              : "You don't have any corpuses with edit permissions."}
           </p>
-          {!searchTerm && (
-            <Button
-              primary
-              onClick={() => {
-                // Navigate to corpus creation page
-                window.location.href = "/corpuses/create";
-              }}
-            >
-              Create New Corpus
-            </Button>
-          )}
         </Message>
       );
     }

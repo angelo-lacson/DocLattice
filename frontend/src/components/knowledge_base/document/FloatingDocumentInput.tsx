@@ -45,14 +45,14 @@ const FloatingContainer = styled(motion.div)<{
       ? css`
           position: fixed;
           bottom: 2rem;
-          left: calc(50% - ${props.$panelOffset / 2}px);
-          transform: translateX(-50%);
+          left: 50%;
+          transform: translateX(calc(-50% - ${props.$panelOffset / 2}px));
           /* Prevent overflow under the sliding panel */
           max-width: calc(100vw - ${props.$panelOffset}px - 2rem);
         `
       : css`
-          position: relative;
-          /* In wrapper-mode the parent handles centring & right offset. */
+          position: static;
+          /* In wrapper-mode the parent handles positioning completely. */
           max-width: 100%;
         `}
 
@@ -64,10 +64,12 @@ const FloatingContainer = styled(motion.div)<{
   z-index: 1000;
   pointer-events: auto;
   display: flex;
+  box-sizing: border-box;
   align-items: ${(props) =>
     props.$isExpanded && props.$mode === "chat" ? "flex-end" : "center"};
-  padding: ${(props) => (props.$isExpanded ? "0.75rem" : "0.5rem")};
-  width: ${(props) => (props.$isExpanded ? "600px" : "120px")};
+  padding: ${(props) => (props.$isExpanded ? "0.75rem" : "0.375rem")};
+  width: ${(props) =>
+    props.$isExpanded ? "min(600px, calc(100% - 2rem))" : "auto"};
 
   min-height: ${(props) =>
     props.$isExpanded ? (props.$mode === "chat" ? "auto" : "56px") : "56px"};
@@ -79,21 +81,21 @@ const FloatingContainer = styled(motion.div)<{
   }
 
   @media (max-width: 768px) {
-    /* Always use fixed positioning on mobile to place under zoom controls */
-    position: fixed;
-    top: 240px; /* 180px (zoom controls) + 60px gap */
-    left: 1rem;
+    /* Parent wrapper handles positioning, so use static */
+    position: static;
     transform: none;
 
-    /* Size - collapsed shows just the toggle buttons, expanded shows full width */
-    width: ${(props) => (props.$isExpanded ? "calc(100vw - 2rem)" : "auto")};
-    max-width: calc(100vw - 2rem);
+    /* Size - collapsed shows just buttons, expanded fills width */
+    width: ${(props) =>
+      props.$isExpanded ? "calc(100% - 2rem)" : "fit-content"};
+    max-width: ${(props) => (props.$isExpanded ? "calc(100% - 2rem)" : "none")};
+    box-sizing: border-box;
 
     /* Keep original rounded rectangle shape */
     border-radius: ${(props) => (props.$isExpanded ? "16px" : "28px")};
 
     /* Ensure proper padding */
-    padding: ${(props) => (props.$isExpanded ? "0.75rem" : "0.5rem")};
+    padding: ${(props) => (props.$isExpanded ? "0.75rem" : "0.375rem")};
 
     /* Ensure content is visible when expanded */
     ${(props) =>
@@ -108,15 +110,15 @@ const FloatingContainer = styled(motion.div)<{
     /* Smooth expansion */
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* Ensure it's above other elements */
-    z-index: 1100;
+    /* Ensure it's above other elements but below zoom controls (z-index: 900) */
+    z-index: 850;
   }
 `;
 
 const ToggleGroup = styled.div<{ $isExpanded?: boolean }>`
   display: flex;
   gap: 0.25rem;
-  margin-right: 0.75rem;
+  margin-right: ${(props) => (props.$isExpanded ? "0.75rem" : "0")};
   flex-shrink: 0;
 
   @media (max-width: 768px) {
@@ -127,8 +129,8 @@ const ToggleGroup = styled.div<{ $isExpanded?: boolean }>`
 `;
 
 const ToggleButton = styled(motion.button)<{ $isActive: boolean }>`
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 12px;
   border: none;
   background: ${(props) => (props.$isActive ? "#eff6ff" : "transparent")};
@@ -167,11 +169,12 @@ const InputWrapper = styled.div`
   align-items: flex-end;
   gap: 0.5rem;
   min-width: 0;
+  overflow: hidden; /* Prevent content overflow */
 
   @media (max-width: 768px) {
     min-width: 0; /* Allow shrinking */
-    flex: 1 1 auto;
-    max-width: calc(100% - 120px); /* Account for buttons */
+    flex: 1 1 0; /* Better flex behavior */
+    max-width: 100%; /* Let parent control total width */
   }
 `;
 
@@ -183,6 +186,8 @@ const StyledInput = styled.input`
   font-size: 0.9375rem;
   color: #1e293b;
   padding: 0.5rem 0;
+  min-width: 0; /* Allow shrinking */
+  width: 100%;
 
   &::placeholder {
     color: #94a3b8;
@@ -202,6 +207,8 @@ const StyledTextarea = styled.textarea`
   max-height: 120px;
   line-height: 1.5;
   font-family: inherit;
+  min-width: 0; /* Allow shrinking */
+  width: 100%;
 
   &::placeholder {
     color: #94a3b8;

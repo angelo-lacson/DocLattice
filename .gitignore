@@ -13,6 +13,9 @@
 # production
 /build
 
+# Kubernetes configurations
+k8s/
+
 # misc
 .DS_Store
 .env.local

@@ -1,43 +1,115 @@
 import { useState } from "react";
-import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { Dimmer, Loader } from "semantic-ui-react";
 import { useDropzone } from "react-dropzone";
 import styled from "styled-components";
-
-import _ from "lodash";
 
 import { DocumentItem } from "./DocumentItem";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { DocumentType, PageInfo } from "../../types/graphql-api";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
-import useWindowDimensions from "../hooks/WindowDimensionHook";
-import { determineCardColCount } from "../../utils/layout";
-import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
 
-const ResponsiveCardGrid = styled.div<{ columns: number }>`
+const ResponsiveCardGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
+  gap: 16px;
   width: 100%;
-  padding: 1rem;
+  min-height: 100%;
+  padding: 16px;
   align-content: start;
+  background: transparent;
 
-  @media (max-width: 480px) {
+  @media (max-width: 640px) {
     grid-template-columns: 1fr;
-    padding: 0.5rem;
+    padding: 12px;
+    gap: 12px;
   }
 
-  @media (min-width: 481px) and (max-width: 768px) {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  @media (min-width: 641px) and (max-width: 900px) {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    padding: 14px;
+    gap: 14px;
   }
 
-  @media (min-width: 1920px) {
+  @media (min-width: 901px) and (max-width: 1200px) {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  @media (min-width: 1201px) and (max-width: 1600px) {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+
+  @media (min-width: 1601px) {
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    max-width: 2000px;
+    margin: 0 auto;
+  }
+`;
+
+const DropZoneOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+`;
+
+const DropZoneContent = styled.div`
+  padding: 48px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  text-align: center;
+  animation: slideUp 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  h3 {
+    margin: 0 0 12px 0;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: 1rem;
+    font-weight: 400;
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(16px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 `;
 
 interface DocumentCardProps {
   style?: Record<string, any>;
-  containerStyle?: React.CSSProperties; // New prop for outer container
+  containerStyle?: React.CSSProperties;
   items: DocumentType[];
   pageInfo: PageInfo | undefined;
   loading: boolean;
@@ -47,7 +119,6 @@ interface DocumentCardProps {
   removeFromCorpus?: (doc_ids: string[]) => void | any;
   fetchMore: (args?: any) => void | any;
   onDrop: (acceptedFiles: File[]) => void;
-  corpusId: string | null;
 }
 
 export const DocumentCards = ({
@@ -62,20 +133,10 @@ export const DocumentCards = ({
   removeFromCorpus,
   fetchMore,
   onDrop,
-  corpusId,
 }: DocumentCardProps) => {
-  const { width } = useWindowDimensions();
-  const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
-  const card_cols = determineCardColCount(width);
-
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
 
-  /**
-   * Setup updates to request more docs if user reaches end of card scroll component.
-   */
-
   const handleUpdate = () => {
-    // console.log("Load more docs");
     if (!loading && pageInfo?.hasNextPage) {
       console.log("cursor", pageInfo.endCursor);
       fetchMore({
@@ -87,18 +148,19 @@ export const DocumentCards = ({
     }
   };
 
-  /**
-   * Build the actual DocumentItem card elements for insertion into component below
-   */
   let cards = [
     <PlaceholderCard
       key="PlaceholderCard"
-      title="No Matching Documents..."
+      title="No Matching Documents"
       style={{
-        height: "40vh",
+        minHeight: "240px",
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
       }}
     />,
   ];
+
   if (items && items.length > 0) {
     cards = items.map((node, index: number) => {
       return (
@@ -115,14 +177,6 @@ export const DocumentCards = ({
     });
   }
 
-  // This is causing oddness may need separate things
-  // if (style) {
-  //   comp_style = { ...comp_style, ...style };
-  // }
-  /**
-   * Return DocumentItems
-   */
-
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     noClick: true,
@@ -132,43 +186,27 @@ export const DocumentCards = ({
   return (
     <div
       {...getRootProps()}
+      id="document-cards-container"
       style={{
+        flex: 1,
         position: "relative",
-        height: "100%",
         display: "flex",
         flexDirection: "column",
+        background: "#f8fafc",
         ...containerStyle,
       }}
     >
       <input {...getInputProps()} />
       {isDragActive && (
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              padding: "20px",
-              backgroundColor: "white",
-              borderRadius: "5px",
-            }}
-          >
-            Drop files here to upload
-          </div>
-        </div>
+        <DropZoneOverlay>
+          <DropZoneContent>
+            <h3>Drop your files here</h3>
+            <p>Release to upload documents to this corpus</p>
+          </DropZoneContent>
+        </DropZoneOverlay>
       )}
-      <Dimmer active={loading}>
-        <Loader content={loading_message} />
+      <Dimmer active={loading} inverted>
+        <Loader size="large" content={loading_message} />
       </Dimmer>
       <div
         className="DocumentCards"
@@ -181,7 +219,7 @@ export const DocumentCards = ({
           ...style,
         }}
       >
-        <ResponsiveCardGrid columns={card_cols}>{cards}</ResponsiveCardGrid>
+        <ResponsiveCardGrid>{cards}</ResponsiveCardGrid>
         <FetchMoreOnVisible fetchNextPage={handleUpdate} />
       </div>
     </div>

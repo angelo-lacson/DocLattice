@@ -11,6 +11,7 @@ from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
 from graphene_django.fields import DjangoConnectionField
 from graphene_django.filter import DjangoFilterConnectionField
+from graphql import GraphQLError
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
@@ -221,21 +222,43 @@ class Query(graphene.ObjectType):
     def resolve_annotations(
         self, info, analysis_isnull=None, structural=None, **kwargs
     ):
-        # Base filtering for user permissions
-        if info.context.user.is_superuser:
-            logger.info("User is superuser, returning all annotations")
-            queryset = Annotation.objects.all()
-        elif info.context.user.is_anonymous:
-            logger.info("User is anonymous, returning public annotations")
-            queryset = Annotation.objects.filter(Q(is_public=True))
-            logger.info(f"{queryset.count()} public annotations...")
+        # Check if we should use the query optimizer (when document_id is provided)
+        document_id = kwargs.get("document_id")
+        corpus_id = kwargs.get("corpus_id")
+
+        if document_id:
+            # Import the query optimizer
+            from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+
+            doc_django_pk = int(from_global_id(document_id)[1])
+            corpus_django_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
+
+            # Use query optimizer which handles permissions properly
+            queryset = AnnotationQueryOptimizer.get_document_annotations(
+                document_id=doc_django_pk,
+                user=info.context.user,
+                corpus_id=corpus_django_pk,
+                analysis_id=None,  # Will be handled below if needed
+                extract_id=None,
+                use_cache=False
+            )
+
         else:
-            logger.info(
-                "User is authenticated, returning user's and public annotations"
-            )
-            queryset = Annotation.objects.filter(
-                Q(creator=info.context.user) | Q(is_public=True)
-            )
+            # Fallback to old behavior for non-document queries
+            if info.context.user.is_superuser:
+                logger.info("User is superuser, returning all annotations")
+                queryset = Annotation.objects.all()
+            elif info.context.user.is_anonymous:
+                logger.info("User is anonymous, returning public annotations")
+                queryset = Annotation.objects.filter(Q(is_public=True))
+                logger.info(f"{queryset.count()} public annotations...")
+            else:
+                logger.info(
+                    "User is authenticated, returning user's and public annotations"
+                )
+                queryset = Annotation.objects.filter(
+                    Q(creator=info.context.user) | Q(is_public=True)
+                )
 
         queryset = queryset.select_related(
             "annotation_label",
@@ -352,21 +375,23 @@ class Query(graphene.ObjectType):
             queryset = queryset.filter(analysis__isnull=analysis_isnull)
             logger.info(f"Filtered by analysis_isnull: {queryset.count()}")
 
-        # Filter by document_id
-        document_id = kwargs.get("document_id")
-        if document_id:
-            logger.info(f"Filtering by document_id: {document_id}")
-            django_pk = from_global_id(document_id)[1]
-            queryset = queryset.filter(document_id=django_pk)
+        # Skip document_id and corpus_id filtering if already handled by optimizer
+        if not document_id:
+            # Filter by document_id
+            document_id = kwargs.get("document_id")
+            if document_id:
+                logger.info(f"Filtering by document_id: {document_id}")
+                django_pk = from_global_id(document_id)[1]
+                queryset = queryset.filter(document_id=django_pk)
 
-        # Filter by corpus_id
-        logger.info(f"{queryset.count()} annotations pre corpus_id filter...")
-        corpus_id = kwargs.get("corpus_id")
-        if corpus_id:
-            django_pk = from_global_id(corpus_id)[1]
-            logger.info(f"Filtering by corpus_id: {django_pk}")
-            queryset = queryset.filter(corpus_id=django_pk)
-            logger.info(f"{queryset.count()} annotations post corpus_id filter...")
+            # Filter by corpus_id
+            logger.info(f"{queryset.count()} annotations pre corpus_id filter...")
+            corpus_id = kwargs.get("corpus_id")
+            if corpus_id:
+                django_pk = from_global_id(corpus_id)[1]
+                logger.info(f"Filtering by corpus_id: {django_pk}")
+                queryset = queryset.filter(corpus_id=django_pk)
+                logger.info(f"{queryset.count()} annotations post corpus_id filter...")
 
         # Filter by structural
         if structural is not None:
@@ -381,8 +406,6 @@ class Query(graphene.ObjectType):
         else:
             logger.info("Ordering by default: -modified")
             queryset = queryset.order_by("-modified")
-
-        logger.info(f"Final queryset: {queryset}")
 
         return queryset
 
@@ -840,26 +863,29 @@ class Query(graphene.ObjectType):
     document = graphene.Field(DocumentType, id=graphene.String())
 
     def resolve_document(self, info, **kwargs):
-        django_pk = from_global_id(kwargs.get("id", None))[1]
-        base_queryset = Document.objects.select_related(
-            "creator", "user_lock"
-        ).prefetch_related(
-            "doc_annotations",
-            "rows",
-            "source_relationships",
-            "target_relationships",
-            "notes",
-            "embedding_set",
+        document_id = kwargs.get("id")
+        if not document_id:
+            return None
+
+        cache = getattr(info.context, "_resolver_cache", None)
+        if cache is None:
+            cache = {}
+            info.context._resolver_cache = cache
+
+        doc_cache = cache.setdefault("document", {})
+        if document_id in doc_cache:
+            return doc_cache[document_id]
+
+        from opencontractserver.shared.resolvers import resolve_single_oc_model_from_id
+
+        document = resolve_single_oc_model_from_id(
+            model_type=Document,
+            graphql_id=document_id,
+            user=info.context.user,
         )
 
-        if info.context.user.is_superuser:
-            return base_queryset.get(id=django_pk)
-        elif info.context.user.is_anonymous:
-            return base_queryset.get(Q(id=django_pk) & Q(is_public=True))
-        else:
-            return base_queryset.get(
-                Q(id=django_pk) & (Q(creator=info.context.user) | Q(is_public=True))
-            )
+        doc_cache[document_id] = document
+        return document
 
     # IMPORT RESOLVERS #####################################
     userimports = DjangoConnectionField(UserImportType)
