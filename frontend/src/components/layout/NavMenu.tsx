@@ -1,7 +1,8 @@
-import { Menu, Image, Dropdown, Icon, Label } from "semantic-ui-react";
+import { Menu, Image, Icon, Label } from "semantic-ui-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Link } from "react-router-dom";
+import Dropdown from "../common/DropdownNoStrictMode";
 
 import logo from "../../assets/images/os_legal_128.png";
 import user_logo from "../../assets/icons/noun-person-113116-FFFFFF.png";
@@ -33,13 +34,6 @@ export const NavMenu = () => {
   const navigate = useNavigate();
 
   const user = REACT_APP_USE_AUTH0 ? auth0_user : cache_user;
-
-  // Debug logging for authentication state
-  console.log("[NavMenu] REACT_APP_USE_AUTH0:", REACT_APP_USE_AUTH0);
-  console.log("[NavMenu] isLoading:", isLoading);
-  console.log("[NavMenu] auth0_user:", auth0_user);
-  console.log("[NavMenu] cache_user:", cache_user);
-  console.log("[NavMenu] resolved user:", user);
 
   const show_export_modal = useReactiveVar(showExportModal);
 
@@ -105,7 +99,7 @@ export const NavMenu = () => {
 
   if (REACT_APP_USE_AUTH0) {
     const doLogin = async () => {
-      console.log("[NavMenu] doLogin clicked, attempting loginWithPopup...");
+      // console.log("[NavMenu] doLogin clicked, attempting loginWithPopup...");
       try {
         await loginWithPopup({
           authorizationParams: {
@@ -114,12 +108,12 @@ export const NavMenu = () => {
             redirect_uri: window.location.origin,
           },
         });
-        console.log("[NavMenu] loginWithPopup succeeded");
+        // console.log("[NavMenu] loginWithPopup succeeded");
       } catch (error) {
-        console.error(
-          "[NavMenu] loginWithPopup error, falling back to redirect:",
-          error
-        );
+        // console.error(
+        //   "[NavMenu] loginWithPopup error, falling back to redirect:",
+        //   error
+        // );
         await loginWithRedirect({
           appState: {
             returnTo: window.location.pathname + window.location.search,

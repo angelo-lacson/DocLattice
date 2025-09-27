@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from "react";
 import { Header, Icon, Segment, Label, Grid } from "semantic-ui-react";
 import Form from "@rjsf/semantic-ui";
+import validator from "@rjsf/validator-ajv8";
 import {
   HorizontallyCenteredDiv,
   VerticallyCenteredDiv,
@@ -153,6 +154,7 @@ export const CRUDWidget = <T extends Record<string, any>>({
                   <Form
                     schema={dataSchema}
                     uiSchema={uiSchema}
+                    validator={validator}
                     onChange={handleChange}
                     formData={formData}
                     noHtml5Validate

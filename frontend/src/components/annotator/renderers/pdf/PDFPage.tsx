@@ -42,6 +42,12 @@ const CanvasWrapper = styled.div`
 interface PDFPageProps extends PageProps {
   containerWidth?: number | null;
   createAnnotationHandler: (annotation: ServerTokenAnnotation) => Promise<void>;
+  onZoomRenderRequest?: (
+    pageNumber: number,
+    renderer: any,
+    canvas: HTMLCanvasElement | null,
+    onComplete?: (zoomLevel: number) => void
+  ) => void;
 }
 
 /**
@@ -58,6 +64,7 @@ export const PDFPage = ({
   onError,
   containerWidth,
   createAnnotationHandler,
+  onZoomRenderRequest,
 }: PDFPageProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<PDFPageRenderer | null>(null);
@@ -156,18 +163,49 @@ export const PDFPage = ({
   }, [initialZoomSet, containerWidth, pageInfo.page, setZoomLevel]);
 
   /**
-   * Handles resizing of the PDF page canvas.
+   * Handles resizing of the PDF page canvas using shared coordinated rendering.
    */
+  const pendingZoomRef = useRef<number | null>(null);
+
   const handleResize = () => {
     if (!canvasRef.current || !rendererRef.current) return;
+
+    // Skip if we already have a request pending for this zoom level
+    if (pendingZoomRef.current === zoomLevel) return;
+
+    // Skip if already rendered at this zoom level
     if (lastRenderedZoom.current === zoomLevel) return;
 
-    const viewport = pageInfo.page.getViewport({ scale: zoomLevel });
-    canvasRef.current.width = viewport.width;
-    canvasRef.current.height = viewport.height;
+    // Use shared render coordination if available
+    if (onZoomRenderRequest) {
+      // Mark this zoom level as pending
+      pendingZoomRef.current = zoomLevel;
 
-    rendererRef.current.rescaleAndRender(zoomLevel);
-    lastRenderedZoom.current = zoomLevel;
+      // Delegate to parent for coordinated rendering with callback
+      onZoomRenderRequest(
+        pageInfo.page.pageNumber,
+        rendererRef.current,
+        canvasRef.current,
+        (completedZoom: number) => {
+          // Update state when render actually completes
+          lastRenderedZoom.current = completedZoom;
+          // Clear pending if it matches what was rendered
+          if (pendingZoomRef.current === completedZoom) {
+            pendingZoomRef.current = null;
+          }
+        }
+      );
+
+      // DON'T update lastRenderedZoom here - wait for actual render
+    } else {
+      // Fallback to immediate render if no coordination
+      const viewport = pageInfo.page.getViewport({ scale: zoomLevel });
+      canvasRef.current.width = viewport.width;
+      canvasRef.current.height = viewport.height;
+
+      rendererRef.current.rescaleAndRender(zoomLevel);
+      lastRenderedZoom.current = zoomLevel;
+    }
   };
 
   useEffect(() => {
@@ -235,6 +273,11 @@ export const PDFPage = ({
       initializePage();
 
       return () => {
+        // Cancel any in-progress render
+        if (rendererRef.current) {
+          rendererRef.current.cancelCurrentRender();
+        }
+
         unregisterRef("pdfPageContainer", pageInfo.page.pageNumber - 1);
         if (scrollContainerRef && scrollContainerRef.current) {
           scrollContainerRef.current.removeEventListener(
@@ -292,7 +335,7 @@ export const PDFPage = ({
         <Selection
           key={annotation.id}
           selected={selectedAnnotations.includes(annotation.id)}
-          pageInfo={pageInfo}
+          pageInfo={updatedPageInfo}
           annotation={annotation}
         />
       ));
@@ -303,6 +346,7 @@ export const PDFPage = ({
     hasPdfPageRendered,
     zoomLevel,
     pageBounds,
+    updatedPageInfo,
   ]);
 
   /**

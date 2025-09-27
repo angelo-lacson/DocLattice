@@ -7,7 +7,7 @@ class ExtractsConfig(AppConfig):
 
     def ready(self):
         try:
-            pass
+            from . import signals
 
         except ImportError:
             pass

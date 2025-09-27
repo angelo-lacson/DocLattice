@@ -38,6 +38,7 @@ import {
   PenTool,
   X,
   MessageCircle,
+  Menu,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -60,6 +61,7 @@ const Container = styled.div`
   background: #f8fafc;
   overflow: hidden;
   position: relative;
+  height: 100%;
 `;
 
 const TopBar = styled.div`
@@ -73,10 +75,10 @@ const TopBar = styled.div`
   flex-shrink: 0;
 
   @media (max-width: 768px) {
-    padding: 1.25rem 1rem;
+    padding: 0.875rem 0.75rem;
     flex-direction: column;
     align-items: flex-start;
-    gap: 1.25rem;
+    gap: 0.75rem;
   }
 `;
 
@@ -104,7 +106,7 @@ const CorpusTitle = styled.h1`
   white-space: nowrap;
 
   @media (max-width: 768px) {
-    font-size: 1.625rem;
+    font-size: 1.25rem;
   }
 `;
 
@@ -134,6 +136,11 @@ const MetadataRow = styled.div`
   font-size: 0.8125rem;
   flex-wrap: wrap;
 
+  @media (max-width: 768px) {
+    gap: 0.75rem;
+    font-size: 0.75rem;
+  }
+
   .meta-item {
     display: flex;
     align-items: center;
@@ -144,12 +151,25 @@ const MetadataRow = styled.div`
       height: 14px;
       stroke-width: 2;
     }
+
+    @media (max-width: 768px) {
+      gap: 0.25rem;
+
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
   }
 
   .separator {
     width: 1px;
     height: 16px;
     background: #e2e8f0;
+
+    @media (max-width: 768px) {
+      height: 12px;
+    }
   }
 `;
 
@@ -180,8 +200,13 @@ const StatsRow = styled.div`
 
   @media (max-width: 768px) {
     width: 100%;
-    justify-content: space-between;
-    gap: 0.5rem;
+    justify-content: space-around;
+    gap: 0.25rem;
+    padding: 0.5rem 0;
+    background: #f8fafc;
+    margin: -0.25rem -0.75rem 0;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
 
     > *:not(:last-child)::after {
       display: none;
@@ -207,6 +232,10 @@ const StatValue = styled.div`
   color: #0f172a;
   line-height: 1;
   letter-spacing: -0.02em;
+
+  @media (max-width: 768px) {
+    font-size: 1.125rem;
+  }
 `;
 
 const StatLabel = styled.div`
@@ -215,6 +244,11 @@ const StatLabel = styled.div`
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.025em;
+
+  @media (max-width: 768px) {
+    font-size: 0.625rem;
+    letter-spacing: 0.02em;
+  }
 `;
 
 const MainContent = styled.div`
@@ -226,8 +260,8 @@ const MainContent = styled.div`
   justify-content: center;
   min-height: 0;
   @media (max-width: 768px) {
-    padding: 1.5rem 1rem;
-    padding-bottom: 180px;
+    padding: 0.75rem 0.5rem;
+    padding-bottom: 100px;
   }
 `;
 
@@ -262,6 +296,10 @@ const DescriptionHeader = styled.div`
   align-items: center;
   background: #fafbfc;
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    padding: 1rem 1rem;
+  }
 `;
 
 const DescriptionTitle = styled.h2`
@@ -277,6 +315,16 @@ const DescriptionTitle = styled.h2`
   svg {
     color: #4a90e2;
     opacity: 0.8;
+  }
+
+  @media (max-width: 768px) {
+    font-size: 1rem;
+    gap: 0.375rem;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
   }
 `;
 
@@ -336,6 +384,12 @@ const DescriptionContent = styled.div`
   min-height: 0;
   max-height: 100%;
 
+  @media (max-width: 768px) {
+    padding: 1rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
   &::-webkit-scrollbar {
     width: 8px;
   }
@@ -364,6 +418,11 @@ const DescriptionContent = styled.div`
     color: #94a3b8;
     min-height: 200px;
     overflow-y: visible;
+
+    @media (max-width: 768px) {
+      padding: 2rem 1rem;
+      min-height: 150px;
+    }
   }
 
   /* Enhanced Markdown styling */
@@ -666,13 +725,14 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
           <MetadataRow>
             <div className="meta-item">
               <Users size={14} />
-              <span>{fullCorpus.creator?.email || "Unknown creator"}</span>
+              <span>
+                {fullCorpus.creator?.email?.split("@")[0] || "Unknown"}
+              </span>
             </div>
             <div className="separator" />
             <div className="meta-item">
               <Calendar size={14} />
               <span>
-                Created{" "}
                 {fullCorpus.created
                   ? formatDistanceToNow(new Date(fullCorpus.created), {
                       addSuffix: true,

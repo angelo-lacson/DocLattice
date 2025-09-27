@@ -16,9 +16,12 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def mark_extract_complete(extract_id):
+    """Mark extract as complete."""
     extract = Extract.objects.get(pk=extract_id)
     extract.finished = timezone.now()
     extract.save()
+
+    logger.info(f"Extract {extract_id} marked complete")
 
 
 @shared_task

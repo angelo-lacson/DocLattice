@@ -89,6 +89,17 @@ export const CreateAndSearchBar: React.FC<CreateAndSearchBarProps> = ({
             on="click"
             position="bottom right"
             pinned
+            offset={[0, 10]}
+            popperDependencies={[filters]}
+            className="filter-popup"
+            style={{
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              boxShadow: "none",
+              maxWidth: "none",
+            }}
+            basic
           />
         )}
 
@@ -294,36 +305,51 @@ const StyledButtonGroup = styled.div`
 `;
 
 /**
- * Content container for the filter popup, ensuring proper anchoring and styling.
+ * Content container for the filter popup - modern, minimal design
  */
 const FilterPopoverContent = styled.div`
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 1rem;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  gap: 0.625rem;
+  min-width: 300px;
+  max-width: 400px;
 
-  /* Customize scrollbar */
-  &::-webkit-scrollbar {
-    width: 8px;
+  /* Modern glassmorphism effect */
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  /* Subtle border and shadow for depth */
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08),
+    0 2px 4px -1px rgba(0, 0, 0, 0.04), 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+
+  /* Allow dropdowns to overflow the container */
+  overflow: visible !important;
+  position: relative;
+
+  /* Smooth appearance animation */
+  animation: filterPopupAppear 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: top right;
+
+  @keyframes filterPopupAppear {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
   }
 
-  &::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background: #555;
+  /* Ensure high z-index for dropdowns */
+  & > * {
+    position: relative;
+    z-index: 1;
   }
 `;
 

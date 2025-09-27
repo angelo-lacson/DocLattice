@@ -41,6 +41,7 @@ export const PDFContainer = styled.div<{ width?: number }>(
       padding: 0.5rem;
       width: 100%;
       min-width: 100%;
+      height: 100%; /* Use full height of parent container on mobile */
       overflow-x: auto;
       overflow-y: auto;
       /* Ensure content can be scrolled fully into view */

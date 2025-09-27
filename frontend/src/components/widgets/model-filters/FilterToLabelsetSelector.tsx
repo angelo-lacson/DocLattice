@@ -1,6 +1,7 @@
 import { useQuery, useReactiveVar } from "@apollo/client";
 
-import { Dropdown, Menu, Label, DropdownItemProps } from "semantic-ui-react";
+import { Label, DropdownItemProps } from "semantic-ui-react";
+import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
 
 import _ from "lodash";
 
@@ -80,49 +81,68 @@ export const FilterToLabelsetSelector = ({
   }
 
   return (
-    <Menu
+    <div
       style={{
-        padding: "0px",
-        margin: use_mobile_layout ? ".25rem" : "0px",
-        marginRight: ".25rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.375rem",
+        width: "100%",
+        position: "relative",
+        ...style,
       }}
     >
       <Label
         style={{
-          marginRight: "0px",
-          borderRadius: "5px 0px 0px 5px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
+          margin: "0",
+          background: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+          color: "white",
+          fontWeight: "600",
+          fontSize: "0.75rem",
+          padding: "0.375rem 0.625rem",
+          borderRadius: "8px",
+          border: "none",
+          letterSpacing: "0.025em",
+          textTransform: "uppercase",
+          boxShadow: "0 2px 4px rgba(250, 112, 154, 0.2)",
         }}
       >
-        <div>Filter by Labelset:</div>
+        Filter by Labelset
       </Label>
-      <Dropdown
-        fluid
-        loading={loading}
-        selection
-        clearable
-        search
-        disabled={Boolean(fixed_labelset_id)}
-        options={label_options}
-        onChange={(e, { value }) => {
-          filterToLabelsetId(String(value));
-        }}
-        placeholder="Filter by Labelset..."
-        value={
-          fixed_labelset_id
-            ? fixed_labelset_id
-            : filtered_to_labelset_id
-            ? filtered_to_labelset_id
-            : ""
-        }
-        style={{
-          margin: "0px",
-          width: "15rem",
-          ...style,
-        }}
-      />
-    </Menu>
+      <div style={{ position: "relative", zIndex: 10 }}>
+        <DropdownNoStrictMode
+          fluid
+          loading={loading}
+          selection
+          clearable
+          search
+          upward={false}
+          selectOnBlur={false}
+          selectOnNavigation={true}
+          disabled={Boolean(fixed_labelset_id)}
+          options={label_options}
+          onChange={(e: any, { value }: { value: any }) => {
+            filterToLabelsetId(String(value));
+          }}
+          placeholder="Select a labelset to filter..."
+          value={
+            fixed_labelset_id
+              ? fixed_labelset_id
+              : filtered_to_labelset_id
+              ? filtered_to_labelset_id
+              : ""
+          }
+          style={{
+            margin: "0",
+            minWidth: "260px",
+            fontSize: "0.875rem",
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+            opacity: fixed_labelset_id ? 0.7 : 1,
+          }}
+        />
+      </div>
+    </div>
   );
 };

@@ -48,12 +48,26 @@ def set_permissions_for_obj_to_user(
     app_name = instance._meta.app_label
     # logger.info(f"grant_permissions_for_obj_to_user - App name: {app_name}")
 
-    # First, get rid of old permissions ################################################################################
-    with transaction.atomic():
-        existing_permissions = getattr(
-            instance, f"{model_name}userobjectpermission_set"
-        )
-        existing_permissions.all().delete()
+    # First, remove ALL existing permissions for this user on this object ############################################
+    from guardian.shortcuts import remove_perm
+
+    # List all possible permissions for this model type
+    all_perms = [
+        f"{app_name}.create_{model_name}",
+        f"{app_name}.read_{model_name}",
+        f"{app_name}.update_{model_name}",
+        f"{app_name}.remove_{model_name}",
+        f"{app_name}.permission_{model_name}",
+        f"{app_name}.publish_{model_name}"
+    ]
+
+    # Remove all existing permissions
+    for perm in all_perms:
+        try:
+            remove_perm(perm, user, instance)
+        except:
+            # Permission might not exist for this model type
+            pass
 
     # Now, add specified permissions ###################################################################################
     requested_permission_set = set(permissions)
