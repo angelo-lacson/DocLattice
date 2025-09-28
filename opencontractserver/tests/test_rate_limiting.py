@@ -546,15 +546,25 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
 
             # Each query should have rate limiting
             hit_limit = False
+            error_messages = []
             for i in range(250):  # READ_LIGHT = 100/m base, 200/m for auth users
                 result = self.execute_graphql(query_test["query"])
 
-                if (
-                    result.get("errors")
-                    and "Limit exceeded" in result["errors"][0]["message"]
-                ):
-                    hit_limit = True
-                    break
+                if result.get("errors"):
+                    error_msg = result["errors"][0]["message"]
+                    error_messages.append(f"Request {i}: {error_msg}")
+                    if "Limit exceeded" in error_msg:
+                        hit_limit = True
+                        break
+
+            # Print debug info if test fails
+            if not hit_limit:
+                print(f"\nQuery {query_test['name']} did not hit rate limit.")
+                print("Total requests made: 250")
+                if error_messages:
+                    print(
+                        f"Errors encountered: {error_messages[:5]}"
+                    )  # Print first 5 errors
 
             self.assertTrue(
                 hit_limit, f"Query {query_test['name']} should have rate limiting"

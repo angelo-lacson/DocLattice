@@ -227,18 +227,79 @@ def graphql_ratelimit_dynamic(
                     )
                 return func(root, info, *args, **kwargs)
 
+            # Skip rate limiting if disabled
+            if getattr(settings, "RATELIMIT_DISABLE", False):
+                return func(root, info, *args, **kwargs)
+
+            # Get the dynamic rate
             rate = get_rate(root, info)
 
-            # Apply the rate limit with the dynamic rate
-            limited_func = graphql_ratelimit(
-                key=key,
+            # Determine the rate limit key
+            if key is None or key == "user_or_ip":
+                if request.user and request.user.is_authenticated:
+                    limit_key = f"user:{request.user.id}"
+                else:
+                    limit_key = f"ip:{get_client_ip(request)}"
+            elif key == "ip":
+                limit_key = f"ip:{get_client_ip(request)}"
+            elif key == "user":
+                if not request.user or not request.user.is_authenticated:
+                    if block:
+                        raise GraphQLError("Authentication required for this operation")
+                    return func(root, info, *args, **kwargs)
+                limit_key = f"user:{request.user.id}"
+            elif callable(key):
+                limit_key = key(root, info, **kwargs)
+            else:
+                limit_key = str(key)
+
+            # Add group to key if specified
+            if group:
+                cache_key = f"rl:{group}:{limit_key}"
+            else:
+                cache_key = f"rl:{limit_key}:{func.__name__}"
+
+            # Check if rate limited
+            is_limited = is_ratelimited(
+                request=request,
+                group=group or func.__name__,
+                fn=func,
+                key=lambda g, r: cache_key,  # Takes group and request
                 rate=rate,
                 method=method,
-                block=block,
-                group=group,
-            )(func)
+                increment=True,
+            )
 
-            return limited_func(root, info, *args, **kwargs)
+            if is_limited and block:
+                # Log the rate limit hit
+                logger.warning(
+                    f"Rate limit exceeded for {func.__name__} - Key: {limit_key}, Rate: {rate}"
+                )
+
+                # Get more detailed error message
+                rate_parts = rate.split("/")
+                if len(rate_parts) == 2:
+                    limit_count = rate_parts[0]
+                    period = {
+                        "s": "second",
+                        "m": "minute",
+                        "h": "hour",
+                        "d": "day",
+                    }.get(rate_parts[1], "period")
+                    message = f"Limit exceeded: Max {limit_count} requests per {period}. Please try again later."
+                else:
+                    message = "Rate limit exceeded. Please try again later."
+
+                raise RateLimitExceeded(message)
+
+            # Set rate limit headers on response if available
+            if hasattr(request, "META"):
+                request.META["X-RateLimit-Limit"] = rate
+                request.META["X-RateLimit-Remaining"] = (
+                    "N/A"  # Would need custom implementation
+                )
+
+            return func(root, info, *args, **kwargs)
 
         return wrapper
 
