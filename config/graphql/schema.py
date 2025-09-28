@@ -9,7 +9,4 @@ schema = graphene.Schema(
     mutation=Mutation,
     query=Query,
     auto_camelcase=True,
-    # Critical performance optimization: Don't validate schema on every execution
-    # The schema is static and doesn't change at runtime
-    # This saves ~15-20ms per request
 )

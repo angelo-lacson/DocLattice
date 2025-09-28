@@ -127,9 +127,12 @@ class TestAnalyzerAdmin(TestCase):
         result = self.corpus_admin.display_icon(obj)
         self.assertEqual(result, "No icon")
 
-    @patch("opencontractserver.tasks.make_corpus_public_task.si")
+    @patch("opencontractserver.corpuses.admin.make_corpus_public_task")
     def test_make_public(self, mock_task):
-        mock_task.return_value.apply_async.return_value = None
+        # Mock the si() method to return a mock with apply_async
+        mock_signature = Mock()
+        mock_signature.apply_async.return_value = None
+        mock_task.si.return_value = mock_signature
 
         corpus1 = Corpus(
             title="Test", description="Some important stuff!", creator=self.user
@@ -144,12 +147,14 @@ class TestAnalyzerAdmin(TestCase):
         request = Mock()
         self.corpus_admin.message_user = Mock()
 
-        self.corpus_admin.make_public(request, Corpus.objects.all())
+        # Only pass the corpuses we created in this test
+        test_corpuses = Corpus.objects.filter(id__in=[corpus1.pk, corpus2.pk])
+        self.corpus_admin.make_public(request, test_corpuses)
 
-        # Verify make_corpus_public_task was called for each corpus
-        mock_task.assert_any_call(corpus_id=1)
-        mock_task.assert_any_call(corpus_id=2)
-        self.assertEqual(mock_task.call_count, 2)
+        # Verify make_corpus_public_task.si() was called for each corpus
+        mock_task.si.assert_any_call(corpus_id=corpus1.pk)
+        mock_task.si.assert_any_call(corpus_id=corpus2.pk)
+        self.assertEqual(mock_task.si.call_count, 2)
 
         # Verify the correct message was sent to the user
         self.corpus_admin.message_user.assert_called_once_with(

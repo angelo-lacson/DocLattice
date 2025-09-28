@@ -28,11 +28,14 @@ services:
     image: opencontractserver_local_django
     container_name: django
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       # - vector-embedder  # Temporarily disabled - connection issues
-      - celeryworker
-      - docling-parser
+      # Note: celeryworker removed from here to avoid circular dependency
+      docling-parser:
+        condition: service_started
     volumes:
       - .:/app:z
     env_file:
@@ -53,17 +56,31 @@ services:
       - ./compose/production/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     env_file:
       - ./.envs/.test/.postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oc_user -d opencontractserver"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:6
     container_name: redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   celeryworker:
     <<: *django
     image: opencontractserver_local_celeryworker
     container_name: celeryworker
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     ports: []
     command: /start-celeryworker

@@ -3,12 +3,9 @@ Simplified Query Optimizers for OpenContracts
 Direct database queries with smart prefetching and permission filtering.
 No caching layer - just optimized queries.
 """
-from typing import Optional, List, Dict, Any
-from django.db.models import QuerySet, Count, Q, Prefetch, Value
-from django.db import models
-from django.contrib.auth import get_user_model
+from typing import Optional, List, Dict
+from django.db.models import QuerySet, Count, Q, Value
 
-User = get_user_model()
 
 
 class AnnotationQueryOptimizer:
@@ -167,90 +164,7 @@ class AnnotationQueryOptimizer:
 
         return qs
 
-    @classmethod
-    def get_annotation_summary(
-        cls,
-        document_id: int,
-        corpus_id: int,
-        user
-    ) -> Dict:
-        """
-        Get annotation counts and page summary.
-        Uses database aggregation directly.
-        """
-        from opencontractserver.annotations.models import Annotation
-
-        # Use unified permission check
-        can_read, _, _, _ = cls._compute_effective_permissions(
-            user, document_id, corpus_id
-        )
-
-        if not can_read:
-            return {
-                'total_annotations': 0,
-                'structural_count': 0,
-                'collaborative_count': 0,
-                'my_annotations': 0,
-                'distinct_pages': 0,
-                'pages_with_annotations': []
-            }
-
-        # Single aggregation query
-        summary = Annotation.objects.filter(
-            document_id=document_id,
-            corpus_id=corpus_id
-        ).aggregate(
-            total_annotations=Count('id'),
-            structural_count=Count('id', filter=Q(structural=True)),
-            collaborative_count=Count('id', filter=Q(structural=False)),
-            my_annotations=Count('id', filter=Q(creator_id=user.id)),
-            distinct_pages=Count('page', distinct=True)
-        )
-
-        # Add page list
-        summary['pages_with_annotations'] = list(
-            Annotation.objects.filter(
-                document_id=document_id,
-                corpus_id=corpus_id
-            ).values_list('page', flat=True).distinct().order_by('page')
-        )
-
-        return summary
-    
-    @classmethod
-    def get_navigation_annotations(
-        cls,
-        document_id: int,
-        corpus_id: int,
-        user,
-        analysis_id: Optional[int] = None
-    ) -> QuerySet:
-        """
-        Get lightweight annotation data for navigation.
-        """
-        from opencontractserver.annotations.models import Annotation
-
-        # Use unified permission check
-        can_read, _, _, _ = cls._compute_effective_permissions(
-            user, document_id, corpus_id
-        )
-
-        if not can_read:
-            return []
-            
-        qs = Annotation.objects.filter(
-            document_id=document_id,
-            corpus_id=corpus_id
-        ).values('id', 'page', 'bounding_box')
-        
-        if analysis_id:
-            qs = qs.filter(analysis_id=analysis_id)
-        else:
-            # User annotations only
-            qs = qs.filter(analysis__isnull=True)
-            
-        return list(qs)
-    
+    # TODO - in-use?
     @classmethod
     def get_extract_annotation_summary(
         cls,

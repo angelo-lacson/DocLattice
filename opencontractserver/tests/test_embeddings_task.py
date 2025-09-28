@@ -360,7 +360,6 @@ class TestAnnotationSignals(unittest.TestCase):
                     annotation_id=1, embedder_path=expected_path
                 )
 
-    @patch("opencontractserver.annotations.signals.refresh_annotation_summary_mv")
     @patch(
         "opencontractserver.annotations.signals.process_structural_annotation_for_corpuses"
     )
@@ -368,7 +367,7 @@ class TestAnnotationSignals(unittest.TestCase):
         "opencontractserver.annotations.signals.calculate_embedding_for_annotation_text"
     )
     def test_process_annot_on_create_structural(
-        self, mock_calc_embedding, mock_process_structural, mock_refresh_summary
+        self, mock_calc_embedding, mock_process_structural
     ):
         """
         Test that process_annot_on_create_atomic correctly processes structural annotations.
@@ -396,8 +395,6 @@ class TestAnnotationSignals(unittest.TestCase):
         # Verify process_structural_annotation_for_corpuses was called
         mock_process_structural.assert_called_with(mock_annotation)
 
-    @patch("opencontractserver.annotations.signals.refresh_annotation_navigation_mv")
-    @patch("opencontractserver.annotations.signals.refresh_annotation_summary_mv")
     @patch(
         "opencontractserver.annotations.signals.process_structural_annotation_for_corpuses"
     )
@@ -408,8 +405,6 @@ class TestAnnotationSignals(unittest.TestCase):
         self,
         mock_calc_embedding,
         mock_process_structural,
-        mock_refresh_summary,
-        mock_refresh_nav,
     ):
         """
         Test that process_annot_on_create_atomic correctly handles non-structural annotations.
@@ -437,7 +432,6 @@ class TestAnnotationSignals(unittest.TestCase):
         # Verify process_structural_annotation_for_corpuses was NOT called
         mock_process_structural.assert_not_called()
 
-    @patch("opencontractserver.annotations.signals.refresh_annotation_summary_mv")
     @patch(
         "opencontractserver.annotations.signals.process_structural_annotation_for_corpuses"
     )
@@ -445,7 +439,7 @@ class TestAnnotationSignals(unittest.TestCase):
         "opencontractserver.annotations.signals.calculate_embedding_for_annotation_text"
     )
     def test_process_annot_on_create_existing_embedding(
-        self, mock_calc_embedding, mock_process_structural, mock_refresh_summary
+        self, mock_calc_embedding, mock_process_structural
     ):
         """
         Test that process_annot_on_create_atomic skips annotations with existing embeddings.

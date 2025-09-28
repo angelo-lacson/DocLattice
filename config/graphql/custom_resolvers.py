@@ -69,6 +69,42 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
     if extra:
         return self.doc_annotations.all()
 
+    # Check if we have any filters that require list processing
+    has_filters = any([
+        kwargs.get("annotationLabel_LabelType"),
+        kwargs.get("annotationLabelId"),
+        kwargs.get("annotationLabel_Text"),
+        kwargs.get("annotationLabel_Text_Contains"),
+        kwargs.get("annotationLabel_Description_Contains"),
+        kwargs.get("rawText_Contains"),
+        kwargs.get("analysis_Isnull") is not None,
+        kwargs.get("order"),
+        kwargs.get("offset"),
+        kwargs.get("first"),
+        kwargs.get("last"),
+    ])
+
+    # If no filters and no special arguments, just return the queryset
+    if not has_filters:
+        # Use optimizer for permission filtering
+        from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+
+        optimizer_kwargs = {
+            "document_id": self.id,
+            "user": getattr(info.context, "user", None),
+            "use_cache": True,
+        }
+
+        structural = kwargs.get("structural")
+        if structural is not None:
+            optimizer_kwargs["structural"] = structural
+
+        corpus_pk = _to_pk(kwargs.get("corpusId"))
+        if corpus_pk is not None:
+            optimizer_kwargs["corpus_id"] = corpus_pk
+
+        return AnnotationQueryOptimizer.get_document_annotations(**optimizer_kwargs)
+
     prefetched = getattr(self, "_prefetched_doc_annotations", None)
     if prefetched is None:
         prefetched = getattr(self, "_prefetched_annotations", None)
@@ -95,7 +131,7 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
         annotations = list(AnnotationQueryOptimizer.get_document_annotations(**optimizer_kwargs))
 
     if not annotations:
-        return []
+        return self.doc_annotations.none()
 
     label_type = kwargs.get("annotationLabel_LabelType")
     if label_type:

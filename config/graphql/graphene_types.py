@@ -17,7 +17,6 @@ from config.graphql.permissioning.permission_annotator.mixins import (
     AnnotatePermissionsForReadMixin,
 )
 from config.graphql.custom_resolvers import resolve_doc_annotations_optimized
-from config.graphql.progressive_types import AnnotationNavigationType, AnnotationSummaryType
 from opencontractserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from opencontractserver.annotations.models import (
     Annotation,
@@ -772,66 +771,6 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except Corpus.DoesNotExist:
             return ""
 
-    # Progressive loading fields for optimized data fetching
-    annotation_summary = graphene.Field(
-        AnnotationSummaryType,
-        corpus_id=graphene.ID(required=True),
-        description="Get annotation statistics from materialized view",
-    )
-
-    def resolve_annotation_summary(self, info, corpus_id):
-        """Resolve annotation summary using materialized view."""
-        _, corpus_pk = from_global_id(corpus_id)
-
-        # Get user from the GraphQL context
-        user = info.context.user if hasattr(info.context, "user") else None
-
-        return AnnotationSummaryType.resolve_for_document(
-            document_id=self.id, corpus_id=corpus_pk, user=user
-        )
-
-    annotation_navigation = graphene.List(
-        AnnotationNavigationType,
-        corpus_id=graphene.ID(required=True),
-        analysis_id=graphene.ID(),
-        description="Get lightweight annotation data for navigation",
-    )
-
-    def resolve_annotation_navigation(self, info, corpus_id, analysis_id=None):
-        """Resolve navigation annotations."""
-        from django.contrib.auth.models import AnonymousUser
-        from graphql import GraphQLError
-
-        _, corpus_pk = from_global_id(corpus_id)
-        analysis_pk = None
-        if analysis_id:
-            _, analysis_pk = from_global_id(analysis_id)
-
-        # Get user from the GraphQL context
-        user = info.context.user if hasattr(info.context, "user") else None
-
-        # Check if user has permission to access this document
-        if not self.is_public:
-            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
-                raise GraphQLError(
-                    "Permission denied: Authentication required to access private documents"
-                )
-            elif user != self.creator and not user.is_superuser:
-                # Check if user has explicit permission
-                from opencontractserver.types.enums import PermissionTypes
-                from opencontractserver.utils.permissioning import (
-                    user_has_permission_for_obj,
-                )
-
-                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
-                    raise GraphQLError(
-                        "Permission denied: You do not have access to this document"
-                    )
-
-        return AnnotationNavigationType.resolve_for_document(
-            document_id=self.id, corpus_id=corpus_pk, user=user, analysis_id=analysis_pk
-        )
-
     page_annotations = graphene.List(
         AnnotationType,
         corpus_id=graphene.ID(required=True),
@@ -1456,8 +1395,6 @@ def resolve_pipeline_components(self, info, mimetype=None):
 
 
 # ---------------- CorpusDescriptionRevisionType ----------------
-
-
 class CorpusDescriptionRevisionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for corpus description revisions."""
 
