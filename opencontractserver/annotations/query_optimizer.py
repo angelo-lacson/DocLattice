@@ -3,8 +3,8 @@ Simplified Query Optimizers for OpenContracts
 Direct database queries with smart prefetching and permission filtering.
 No caching layer - just optimized queries.
 """
-from typing import Optional, List, Dict
-from django.db.models import QuerySet, Count, Q, Value
+from typing import Optional, List, Dict, Tuple
+from django.db.models import QuerySet, Count, Q, Value, Exists, OuterRef
 
 
 
@@ -106,6 +106,61 @@ class AnnotationQueryOptimizer:
 
         # Build optimized query
         qs = Annotation.objects.filter(document_id=document_id)
+
+        # Apply privacy filtering for created_by_* fields
+        if not user.is_superuser:
+            # Exclude annotations created by analyses/extracts the user doesn't have access to
+            from opencontractserver.analyzer.models import Analysis
+            from opencontractserver.extracts.models import Extract
+            from django.db.models import Exists, OuterRef
+
+            # Get analyses user can access
+            from opencontractserver.analyzer.models import AnalysisUserObjectPermission
+
+            # Base query for visible analyses
+            visible_analyses = Analysis.objects.filter(
+                Q(is_public=True) |
+                Q(creator=user)
+            )
+
+            # Add analyses with explicit permissions
+            analyses_with_permission = AnalysisUserObjectPermission.objects.filter(
+                user=user
+            ).values_list('content_object_id', flat=True)
+
+            visible_analyses = visible_analyses | Analysis.objects.filter(
+                id__in=analyses_with_permission
+            )
+
+            # Get extracts user can access
+            from opencontractserver.extracts.models import ExtractUserObjectPermission
+
+            visible_extracts = Extract.objects.filter(
+                Q(creator=user)
+            )
+
+            # Add extracts with explicit permissions
+            extracts_with_permission = ExtractUserObjectPermission.objects.filter(
+                user=user
+            ).values_list('content_object_id', flat=True)
+
+            visible_extracts = visible_extracts | Extract.objects.filter(
+                id__in=extracts_with_permission
+            )
+
+            # Filter annotations: exclude private ones unless user has access
+            # BUT always include structural annotations (they're always visible)
+            qs = qs.exclude(
+                # Exclude non-structural analysis-created annotations user can't see
+                Q(created_by_analysis__isnull=False) &
+                Q(structural=False) &  # Only apply privacy to non-structural
+                ~Q(created_by_analysis__in=visible_analyses)
+            ).exclude(
+                # Exclude non-structural extract-created annotations user can't see
+                Q(created_by_extract__isnull=False) &
+                Q(structural=False) &  # Only apply privacy to non-structural
+                ~Q(created_by_extract__in=visible_extracts)
+            )
 
         # Add filters
         if corpus_id:
@@ -404,145 +459,390 @@ class RelationshipQueryOptimizer:
 
 class AnalysisQueryOptimizer:
     """
-    Optimized queries for analysis-generated annotations.
+    Optimized queries for Analysis model with hybrid permission model.
+
+    Permission model:
+    - Analysis has its own permissions (can be shared independently)
+    - BUT visibility requires corpus permissions too
+    - Annotations within are filtered by document permissions
     """
 
     @classmethod
-    def get_analysis_annotations(
+    def check_analysis_permission(
         cls,
-        analysis_id: int,
-        document_id: int,
-        user
-    ) -> QuerySet:
+        user,
+        analysis_id: int
+    ) -> Tuple[bool, Optional['Analysis']]:
         """
-        Get analysis annotations with permission check.
-        """
-        from opencontractserver.annotations.models import Annotation
-        from opencontractserver.analyzer.models import Analysis
+        Check if user can access an analysis.
+        Returns (has_permission, analysis_object)
 
-        # Check analysis visibility
+        Permission model:
+        1. User must have permission on the analysis object itself
+        2. AND user must have permission on the corpus
+        """
+        from opencontractserver.analyzer.models import Analysis
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+        from opencontractserver.types.enums import PermissionTypes
+
+        # Superuser can see everything
+        if user.is_superuser:
+            try:
+                analysis = Analysis.objects.get(id=analysis_id)
+                return True, analysis
+            except Analysis.DoesNotExist:
+                return False, None
+
         try:
             analysis = Analysis.objects.get(id=analysis_id)
-            if not (analysis.is_public or analysis.creator_id == user.id):
-                return Annotation.objects.none()
-        except Analysis.DoesNotExist:
-            return Annotation.objects.none()
 
-        # Optimized query
-        qs = Annotation.objects.filter(
-            analysis_id=analysis_id,
-            document_id=document_id
-        ).select_related(
-            'annotation_label',
-            'analysis'
-        ).annotate(
-            feedback_count=Count('user_feedback')
-        )
+            # Check analysis-level permission
+            has_analysis_perm = (
+                analysis.is_public or
+                analysis.creator_id == user.id or
+                user_has_permission_for_obj(user, analysis, PermissionTypes.READ, include_group_permissions=True)
+            )
+
+            if not has_analysis_perm:
+                return False, None
+
+            # Check corpus permission if analysis has a corpus
+            if analysis.analyzed_corpus:
+                has_corpus_perm = (
+                    analysis.analyzed_corpus.is_public or
+                    analysis.analyzed_corpus.creator_id == user.id or
+                    user_has_permission_for_obj(
+                        user, analysis.analyzed_corpus, PermissionTypes.READ, include_group_permissions=True
+                    )
+                )
+                if not has_corpus_perm:
+                    return False, None
+
+            return True, analysis
+
+        except Analysis.DoesNotExist:
+            return False, None
+
+    @classmethod
+    def get_visible_analyses(
+        cls,
+        user,
+        corpus_id: Optional[int] = None
+    ) -> QuerySet:
+        """
+        Get analyses visible to user based on:
+        1. User has permission on analysis object
+        2. User has READ permission on corpus
+        """
+        from opencontractserver.analyzer.models import Analysis
+        from opencontractserver.corpuses.models import Corpus, CorpusUserObjectPermission
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+        from opencontractserver.types.enums import PermissionTypes
+
+        if user.is_superuser:
+            qs = Analysis.objects.all()
+        else:
+            # Import permission model
+            from opencontractserver.analyzer.models import AnalysisUserObjectPermission
+
+            # Get analyses where:
+            # 1. User has permission on the analysis AND
+            # 2. User has permission on the corpus
+            qs = Analysis.objects.filter(
+                # User must have analysis permission
+                Q(is_public=True) |
+                Q(creator=user) |
+                Exists(
+                    AnalysisUserObjectPermission.objects.filter(
+                        user=user,
+                        content_object_id=OuterRef('id')
+                    )
+                )
+            ).filter(
+                # AND user must have corpus permission
+                Q(analyzed_corpus__isnull=True) |  # No corpus needed
+                Q(analyzed_corpus__creator=user) |
+                Q(analyzed_corpus__is_public=True) |
+                Exists(
+                    CorpusUserObjectPermission.objects.filter(
+                        user=user,
+                        content_object_id=OuterRef('analyzed_corpus_id'),
+                        permission__codename__contains='read'
+                    )
+                )
+            )
+
+        # Filter by corpus if specified
+        if corpus_id:
+            # Check corpus permission
+            try:
+                corpus = Corpus.objects.get(id=corpus_id)
+                if not user.is_superuser and not user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.READ, include_group_permissions=True
+                ):
+                    return Analysis.objects.none()
+            except Corpus.DoesNotExist:
+                return Analysis.objects.none()
+
+            qs = qs.filter(analyzed_corpus_id=corpus_id)
+
+        # Optimize query
+        qs = qs.select_related(
+            'analyzer',
+            'analyzed_corpus',
+            'creator'
+        ).prefetch_related(
+            'analyzed_documents'
+        ).distinct()
 
         return qs
 
     @classmethod
-    def get_analysis_relationships(
+    def get_analysis_annotations(
         cls,
-        analysis_id: int,
-        document_id: int,
-        user
+        analysis: 'Analysis',
+        user,
+        document_id: Optional[int] = None
     ) -> QuerySet:
         """
-        Get analysis relationships with permission check.
+        Get annotations from an analysis, filtered by document permissions.
         """
-        from opencontractserver.annotations.models import Relationship
-        from opencontractserver.analyzer.models import Analysis
+        from opencontractserver.annotations.models import Annotation
+        from opencontractserver.documents.models import Document
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+        from opencontractserver.types.enums import PermissionTypes
 
-        # Check analysis visibility
-        try:
-            analysis = Analysis.objects.get(id=analysis_id)
-            if not (analysis.is_public or analysis.creator_id == user.id):
-                return Relationship.objects.none()
-        except Analysis.DoesNotExist:
-            return Relationship.objects.none()
+        # Start with all annotations in the analysis
+        qs = Annotation.objects.filter(analysis=analysis)
 
-        # Optimized query
-        qs = Relationship.objects.filter(
-            analysis_id=analysis_id,
-            document_id=document_id
-        ).select_related(
-            'relationship_label'
-        ).prefetch_related(
-            'source_annotations',
-            'target_annotations'
-        )
+        if document_id:
+            # Filter to specific document if requested
+            qs = qs.filter(document_id=document_id)
+
+            # Check document permission
+            if not user.is_superuser:
+                try:
+                    doc = Document.objects.get(id=document_id)
+                    if not user_has_permission_for_obj(user, doc, PermissionTypes.READ, include_group_permissions=True):
+                        return Annotation.objects.none()
+                except Document.DoesNotExist:
+                    return Annotation.objects.none()
+        else:
+            # Filter to only documents user can read
+            if not user.is_superuser:
+                # Get IDs of documents user can read
+                readable_doc_ids = []
+                for doc in analysis.analyzed_documents.all():
+                    if user_has_permission_for_obj(user, doc, PermissionTypes.READ, include_group_permissions=True):
+                        readable_doc_ids.append(doc.id)
+
+                if not readable_doc_ids:
+                    return Annotation.objects.none()
+
+                qs = qs.filter(document_id__in=readable_doc_ids)
+
+        # Optimize query
+        qs = qs.select_related(
+            'annotation_label',
+            'document',
+            'corpus',
+            'creator'
+        ).annotate(
+            feedback_count=Count('user_feedback')
+        ).distinct()
 
         return qs
 
 
 class ExtractQueryOptimizer:
     """
-    Optimized queries for extract datacells.
+    Optimized queries for Extract model with hybrid permission model.
+
+    Permission model:
+    - Extract has its own permissions (can be shared independently)
+    - BUT visibility requires corpus permissions too
+    - Datacells within are filtered by document permissions
     """
 
     @classmethod
-    def get_extract_datacells(
+    def check_extract_permission(
         cls,
-        extract_id: int,
-        document_id: int,
         user,
-        include_sources: bool = True
-    ) -> QuerySet:
+        extract_id: int
+    ) -> Tuple[bool, Optional['Extract']]:
         """
-        Get datacells with modifications and sources.
+        Check if user can access an extract.
+        Returns (has_permission, extract_object)
         """
-        from opencontractserver.extracts.models import Datacell, Extract
+        from opencontractserver.extracts.models import Extract
         from opencontractserver.utils.permissioning import user_has_permission_for_obj
         from opencontractserver.types.enums import PermissionTypes
 
-        # Permission check
+        # Superuser can see everything
+        if user.is_superuser:
+            try:
+                extract = Extract.objects.get(id=extract_id)
+                return True, extract
+            except Extract.DoesNotExist:
+                return False, None
+
         try:
             extract = Extract.objects.get(id=extract_id)
-            if not user_has_permission_for_obj(user, extract.corpus, PermissionTypes.READ):
-                return Datacell.objects.none()
+
+            # Check extract-level permission
+            has_extract_perm = (
+                extract.creator_id == user.id or
+                user_has_permission_for_obj(user, extract, PermissionTypes.READ, include_group_permissions=True)
+            )
+
+            if not has_extract_perm:
+                return False, None
+
+            # Check corpus permission if extract has a corpus
+            if extract.corpus:
+                has_corpus_perm = (
+                    extract.corpus.is_public or
+                    extract.corpus.creator_id == user.id or
+                    user_has_permission_for_obj(
+                        user, extract.corpus, PermissionTypes.READ, include_group_permissions=True
+                    )
+                )
+                if not has_corpus_perm:
+                    return False, None
+
+            return True, extract
+
         except Extract.DoesNotExist:
-            return Datacell.objects.none()
+            return False, None
 
-        # Build query
-        qs = Datacell.objects.filter(
-            extract_id=extract_id,
-            document_id=document_id
-        ).select_related(
-            'column',
-            'approved_by',
-            'rejected_by'
-        )
+    @classmethod
+    def get_visible_extracts(
+        cls,
+        user,
+        corpus_id: Optional[int] = None
+    ) -> QuerySet:
+        """
+        Get extracts visible to user based on:
+        1. User has permission on extract object
+        2. User has READ permission on corpus
+        """
+        from opencontractserver.extracts.models import Extract
+        from opencontractserver.corpuses.models import Corpus, CorpusUserObjectPermission
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+        from opencontractserver.types.enums import PermissionTypes
 
-        if include_sources:
-            qs = qs.prefetch_related('sources')
+        if user.is_superuser:
+            qs = Extract.objects.all()
+        else:
+            # Import permission model
+            from opencontractserver.extracts.models import ExtractUserObjectPermission
+
+            # Get extracts where:
+            # 1. User has permission on the extract AND
+            # 2. User has permission on the corpus
+            qs = Extract.objects.filter(
+                # User must have extract permission
+                Q(creator=user) |
+                Exists(
+                    ExtractUserObjectPermission.objects.filter(
+                        user=user,
+                        content_object_id=OuterRef('id')
+                    )
+                )
+            ).filter(
+                # AND user must have corpus permission
+                Q(corpus__isnull=True) |  # No corpus needed
+                Q(corpus__creator=user) |
+                Q(corpus__is_public=True) |
+                Exists(
+                    CorpusUserObjectPermission.objects.filter(
+                        user=user,
+                        content_object_id=OuterRef('corpus_id'),
+                        permission__codename__contains='read'
+                    )
+                )
+            )
+
+        # Filter by corpus if specified
+        if corpus_id:
+            # Check corpus permission
+            try:
+                corpus = Corpus.objects.get(id=corpus_id)
+                if not user.is_superuser and not user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.READ, include_group_permissions=True
+                ):
+                    return Extract.objects.none()
+            except Corpus.DoesNotExist:
+                return Extract.objects.none()
+
+            qs = qs.filter(corpus_id=corpus_id)
+
+        # Optimize query
+        qs = qs.select_related(
+            'fieldset',
+            'corpus',
+            'creator',
+            'corpus_action'
+        ).prefetch_related(
+            'documents',
+            'fieldset__columns'
+        ).distinct()
 
         return qs
 
     @classmethod
-    def get_extract_summary(
+    def get_extract_datacells(
         cls,
-        extract_id: int,
+        extract: 'Extract',
+        user,
         document_id: Optional[int] = None
-    ) -> Dict:
+    ) -> QuerySet:
         """
-        Get extract completion statistics.
+        Get datacells from an extract, filtered by document permissions.
         """
         from opencontractserver.extracts.models import Datacell
+        from opencontractserver.documents.models import Document
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+        from opencontractserver.types.enums import PermissionTypes
 
-        filters = {'extract_id': extract_id}
+        # Start with all datacells in the extract
+        qs = Datacell.objects.filter(extract=extract)
+
         if document_id:
-            filters['document_id'] = document_id
+            # Filter to specific document if requested
+            qs = qs.filter(document_id=document_id)
 
-        summary = Datacell.objects.filter(**filters).aggregate(
-            total=Count('id'),
-            approved=Count('id', filter=Q(approved_by__isnull=False)),
-            rejected=Count('id', filter=Q(rejected_by__isnull=False)),
-            edited=Count('id', filter=Q(corrected_data__isnull=False)),
-            pending=Count('id', filter=Q(
-                approved_by__isnull=True,
-                rejected_by__isnull=True
-            ))
-        )
+            # Check document permission
+            if not user.is_superuser:
+                try:
+                    doc = Document.objects.get(id=document_id)
+                    if not user_has_permission_for_obj(user, doc, PermissionTypes.READ, include_group_permissions=True):
+                        return Datacell.objects.none()
+                except Document.DoesNotExist:
+                    return Datacell.objects.none()
+        else:
+            # Filter to only documents user can read
+            if not user.is_superuser:
+                # Get IDs of documents user can read
+                readable_doc_ids = []
+                for doc in extract.documents.all():
+                    if user_has_permission_for_obj(user, doc, PermissionTypes.READ, include_group_permissions=True):
+                        readable_doc_ids.append(doc.id)
 
-        return summary
+                if not readable_doc_ids:
+                    return Datacell.objects.none()
+
+                qs = qs.filter(document_id__in=readable_doc_ids)
+
+        # Optimize query
+        qs = qs.select_related(
+            'column',
+            'column__fieldset',
+            'document',
+            'approved_by',
+            'rejected_by'
+        ).prefetch_related(
+            'sources'
+        ).distinct()
+
+        return qs

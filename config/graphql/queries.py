@@ -997,15 +997,13 @@ class Query(graphene.ObjectType):
         analysis = relay.Node.Field(AnalysisType)
 
         def resolve_analysis(self, info, **kwargs):
+            from opencontractserver.annotations.query_optimizer import AnalysisQueryOptimizer
+
             django_pk = from_global_id(kwargs.get("id", None))[1]
-            if info.context.user.is_superuser:
-                return Analysis.objects.get(id=django_pk)
-            elif info.context.user.is_anonymous:
-                return Analysis.objects.get(Q(id=django_pk) & Q(is_public=True))
-            else:
-                return Analysis.objects.get(
-                    Q(id=django_pk) & (Q(creator=info.context.user) | Q(is_public=True))
-                )
+            has_perm, analysis = AnalysisQueryOptimizer.check_analysis_permission(
+                info.context.user, int(django_pk)
+            )
+            return analysis if has_perm else None
 
         analyses = DjangoFilterConnectionField(
             AnalysisType, filterset_class=AnalysisFilter
@@ -1013,7 +1011,18 @@ class Query(graphene.ObjectType):
 
         @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
         def resolve_analyses(self, info, **kwargs):
-            return resolve_oc_model_queryset(Analysis, info.context.user)
+            from opencontractserver.annotations.query_optimizer import AnalysisQueryOptimizer
+
+            corpus_id = kwargs.get("corpus_id")
+            if corpus_id:
+                corpus_django_pk = int(from_global_id(corpus_id)[1])
+            else:
+                corpus_django_pk = None
+
+            return AnalysisQueryOptimizer.get_visible_analyses(
+                info.context.user,
+                corpus_id=corpus_django_pk
+            )
 
     fieldset = relay.Node.Field(FieldsetType)
 
@@ -1057,22 +1066,31 @@ class Query(graphene.ObjectType):
     extract = relay.Node.Field(ExtractType)
 
     def resolve_extract(self, info, **kwargs):
+        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+
         django_pk = from_global_id(kwargs.get("id", None))[1]
-        if info.context.user.is_superuser:
-            return Extract.objects.get(id=django_pk)
-        elif info.context.user.is_anonymous:
-            return Extract.objects.get(Q(id=django_pk) & Q(is_public=True))
-        else:
-            return Extract.objects.get(
-                Q(id=django_pk) & (Q(creator=info.context.user) | Q(is_public=True))
-            )
+        has_perm, extract = ExtractQueryOptimizer.check_extract_permission(
+            info.context.user, int(django_pk)
+        )
+        return extract if has_perm else None
 
     extracts = DjangoFilterConnectionField(
         ExtractType, filterset_class=ExtractFilter, max_limit=15
     )
 
     def resolve_extracts(self, info, **kwargs):
-        return resolve_oc_model_queryset(Extract, info.context.user)
+        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+
+        corpus_id = kwargs.get("corpus_id")
+        if corpus_id:
+            corpus_django_pk = int(from_global_id(corpus_id)[1])
+        else:
+            corpus_django_pk = None
+
+        return ExtractQueryOptimizer.get_visible_extracts(
+            info.context.user,
+            corpus_id=corpus_django_pk
+        )
 
     corpus_query = relay.Node.Field(CorpusQueryType)
 

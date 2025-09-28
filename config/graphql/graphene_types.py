@@ -1175,16 +1175,28 @@ class AnalysisType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     def resolve_full_annotation_list(self, info, document_id=None):
+        from opencontractserver.annotations.query_optimizer import AnalysisQueryOptimizer
 
-        results = self.annotations.all()
         if document_id is not None:
-            document_pk = from_global_id(document_id)[1]
-            logger.info(
-                f"Resolve full annotations for analysis {self.id} with doc {document_pk}"
-            )
-            results = results.filter(document_id=document_pk)
+            document_pk = int(from_global_id(document_id)[1])
+        else:
+            document_pk = None
 
-        return results
+        return AnalysisQueryOptimizer.get_analysis_annotations(
+            self, info.context.user, document_id=document_pk
+        )
+
+    @classmethod
+    def get_node(cls, info, id):
+        """
+        Override the default node resolution to apply permission checks.
+        """
+        from opencontractserver.annotations.query_optimizer import AnalysisQueryOptimizer
+
+        has_perm, analysis = AnalysisQueryOptimizer.check_analysis_permission(
+            info.context.user, int(id)
+        )
+        return analysis if has_perm else None
 
     class Meta:
         model = Analysis
@@ -1241,16 +1253,43 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     full_datacell_list = graphene.List(DatacellType)
     full_document_list = graphene.List(DocumentType)
 
+    @classmethod
+    def get_node(cls, info, id):
+        """
+        Override the default node resolution to apply permission checks.
+        """
+        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+
+        has_perm, extract = ExtractQueryOptimizer.check_extract_permission(
+            info.context.user, int(id)
+        )
+        return extract if has_perm else None
+
     class Meta:
         model = Extract
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
     def resolve_full_datacell_list(self, info):
-        return self.extracted_datacells.all()
+        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+
+        return ExtractQueryOptimizer.get_extract_datacells(
+            self, info.context.user, document_id=None
+        )
 
     def resolve_full_document_list(self, info):
-        return self.documents.all()
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+        from opencontractserver.types.enums import PermissionTypes
+
+        # Filter to only documents user can read
+        if info.context.user.is_superuser:
+            return self.documents.all()
+
+        readable_docs = []
+        for doc in self.documents.all():
+            if user_has_permission_for_obj(info.context.user, doc, PermissionTypes.READ, include_group_permissions=True):
+                readable_docs.append(doc)
+        return readable_docs
 
 
 class CorpusQueryType(AnnotatePermissionsForReadMixin, DjangoObjectType):

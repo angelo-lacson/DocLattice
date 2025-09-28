@@ -2,6 +2,8 @@
 
 > **🔴 CRITICAL CHANGE**: Annotations no longer have individual permissions. All annotations in a document share the same permissions computed from document + corpus. This eliminates N+1 queries and simplifies the security model.
 
+> **🔵 NEW FEATURE**: Annotations can now be marked as "created by" an analysis or extract using `created_by_analysis` and `created_by_extract` fields. These annotations are private to the source object and only visible to users with permission to that analysis/extract.
+
 ## Key Changes in Current Implementation
 
 | Component | Old Model | New Model | Impact |
@@ -11,6 +13,8 @@
 | **Database Queries** | 1 per annotation | 2 total (doc + corpus) | Massive performance gain |
 | **Permission Storage** | `annotationuserobjectpermission` table | None - computed at runtime | Simpler database |
 | **Permission Uniformity** | Each annotation different | All annotations same in document | Predictable behavior |
+| **Analysis Privacy** | All annotations visible with doc+corpus perms | Annotations created by analysis are private | Enhanced privacy control |
+| **Extract Privacy** | All annotations visible with doc+corpus perms | Annotations created by extract are private | Enhanced privacy control |
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -43,6 +47,22 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
    - This ensures annotations are never more permissive than their parent document
    - **Performance benefit**: Eliminates N+1 permission queries
 
+3. **Analyses and Extracts - HYBRID MODEL**
+   - Have their own individual permissions (can be shared independently)
+   - **Visibility requires THREE conditions**:
+     1. Permission on the analysis/extract object itself
+     2. READ permission on the corpus containing the analysis/extract
+     3. READ permission on relevant documents for seeing content
+   - **Access Formula**:
+     - `Can See Analysis/Extract = HAS_OBJECT_PERMISSION AND CAN_READ_CORPUS`
+     - `Can See Annotations Within = CAN_SEE_ANALYSIS AND CAN_READ_DOCUMENT`
+   - **Key behaviors**:
+     - Users WITHOUT analysis/extract permission see nothing (even if they have corpus+doc access)
+     - Users WITH analysis/extract permission but missing corpus permission see nothing
+     - Users WITH analysis/extract+corpus permission see the analysis/extract
+     - Annotations/datacells within are filtered to only show those on documents user can read
+   - This allows controlled sharing of analyses while maintaining document security boundaries
+
 ### Key Principles
 
 1. **Document Security First**: For annotations, document permissions are the primary security boundary
@@ -61,16 +81,82 @@ Route → Slug Resolution → Permission Loading → Component Evaluation → UI
 Annotation Permission Flow (Optimized):
 Document Request → Query Optimizer → Permission Computation (Once) → Apply to All Annotations → UI Rendering
 
+Analysis/Extract Permission Flow:
+Request → Check Object Permission → Check Corpus Permission → Filter Document Content → UI Rendering
+
 Permission Sources:
 1. Document Permissions (myPermissions on Document type)
 2. Corpus Permissions (myPermissions on Corpus type)
-3. Analysis Visibility (for analysis-created annotations)
+3. Analysis/Extract Permissions (individual object permissions)
 
 Evaluation Priority for Annotations:
 1. Document permissions (MUST have at least READ)
 2. Corpus permissions (further restricts if present)
 3. Structural annotation override (always READ-ONLY if doc is readable)
 4. Analysis visibility filter (additional restriction)
+
+Evaluation Priority for Analyses/Extracts:
+1. Analysis/Extract object permission (MUST have at least READ)
+2. Corpus permission (MUST have at least READ)
+3. Document permissions (filters visible content within)
+```
+
+## Example Scenario: Multi-User Permission Hierarchy
+
+### Setup:
+- **Corpus X**: Contains Doc Alpha, Doc Beta
+- **Corpus Y**: Contains Doc Beta
+- **User A**: Permissions on Doc Alpha, Doc Beta, Corpus X
+- **User B**: Permissions on Doc Beta, Corpus X, Corpus Y
+- **User C**: Permissions on Doc Alpha, Corpus Y
+
+### Results:
+
+| User | Corpus View | Documents Visible | Analyses/Extracts |
+|------|------------|-------------------|-------------------|
+| **User A** | Sees Corpus X | Alpha & Beta in X | Sees analyses/extracts on X if given permission |
+| **User B** | Sees X & Y | Beta in X, Beta in Y | Sees analyses/extracts on X or Y if given permission |
+| **User C** | Sees Corpus Y | Empty (Alpha not in Y) | Cannot see any analyses in Y (no docs visible) |
+
+### Analysis Permission Example:
+
+If an Analysis is created on Corpus X analyzing both Alpha and Beta:
+- **User A with analysis permission**: Sees analysis, sees annotations on both Alpha & Beta
+- **User B with analysis permission**: Sees analysis, sees annotations on Beta only
+- **User C with analysis permission**: Cannot see analysis (no corpus X permission)
+- **User A WITHOUT analysis permission**: Cannot see analysis (even with corpus+doc permissions)
+
+### Annotation Privacy Example (NEW):
+
+If the Analysis creates annotations with `created_by_analysis` field set:
+- **User A with doc+corpus but NO analysis permission**: Cannot see these private annotations
+- **User A with analysis permission**: Sees all analysis-created annotations on Alpha & Beta
+- **User B with analysis permission**: Sees analysis-created annotations on Beta only (no Alpha access)
+- **Structural annotations**: Always visible regardless of `created_by_analysis` field
+
+## Key Behaviors Summary
+
+### Standard Annotations (no `created_by_*` fields)
+1. Visibility determined by document + corpus permissions
+2. All annotations in a document share the same permissions
+3. Most restrictive permission wins (document vs corpus)
+
+### Private Annotations (`created_by_analysis` or `created_by_extract` set)
+1. **Invisible by default**: Not shown even with document+corpus permissions
+2. **Require source permission**: Must have permission to the analysis/extract that created them
+3. **Still respect document boundaries**: Even with analysis permission, only see annotations on documents you can access
+4. **Structural exception**: Structural annotations are ALWAYS visible if document is readable
+
+### Permission Hierarchy
+```
+For Standard Annotations:
+Document Permission (PRIMARY) ∩ Corpus Permission (SECONDARY) = Effective Permission
+
+For Private Annotations:
+Source Permission (REQUIRED) ∩ Document Permission ∩ Corpus Permission = Effective Permission
+
+For Structural Annotations:
+Document READ Permission = Always Visible (READ-ONLY)
 ```
 
 ## Permission Types
@@ -109,12 +195,17 @@ export enum PermissionTypes {
 The GraphQL layer translates between backend Django Guardian format and frontend enum format:
 
 ```python
-# Backend Django Guardian format:
+# Backend Django Guardian format (what's stored in database):
 ["create_document", "read_document", "update_document", "remove_document"]
 
-# Frontend receives:
+# GraphQL myPermissions field returns (backend format):
+["create_annotation", "read_annotation", "update_annotation", "remove_annotation"]
+
+# Frontend transforms to (for UI logic):
 ["CAN_CREATE", "CAN_READ", "CAN_UPDATE", "CAN_REMOVE"]
 ```
+
+**Note**: The GraphQL `myPermissions` field returns backend format (e.g., `read_annotation`) not frontend format (`CAN_READ`). Frontend components handle the transformation.
 
 ### Permission Capabilities
 
@@ -161,7 +252,13 @@ def user_has_permission_for_obj(
     permission: PermissionTypes,
     include_group_permissions: bool = False,
 ) -> bool:
-    """Check if user has specific permission for object."""
+    """
+    Check if user has specific permission for object.
+
+    Note: include_group_permissions=True is important for checking
+    permissions that come from group membership (e.g., public access).
+    Tests typically use include_group_permissions=True to get accurate results.
+    """
 ```
 
 ### GraphQL Integration
@@ -176,7 +273,8 @@ class AnnotatePermissionsForReadMixin:
         # Check for pre-computed permissions (annotations/relationships only)
         model_name = self._meta.model_name
         if model_name in ['annotation', 'relationship'] and hasattr(self, '_can_read'):
-            # Use optimized pre-computed permissions
+            # Use optimized pre-computed permissions from AnnotationQueryOptimizer
+            # These are annotated as _can_read, _can_create, _can_update, _can_delete
             permissions = set()
             if getattr(self, '_can_read', False):
                 permissions.add(f"read_{model_name}")
@@ -186,7 +284,7 @@ class AnnotatePermissionsForReadMixin:
             return list(permissions)
 
         # Standard permission resolution for other models
-        # Uses cached permission metadata from middleware
+        # Uses cached permission metadata from middleware or direct DB query
 ```
 
 #### Middleware
@@ -279,14 +377,130 @@ class AnnotationQueryOptimizer:
    - Always READ-ONLY if document is readable
    - Cannot be edited regardless of other permissions
    - Filtered automatically when no corpus context
+   - Structural annotations are ALWAYS visible regardless of `created_by_*` fields
 
-2. **Analysis Annotations**
-   - Additional visibility check (is_public or creator match)
-   - Still respects document+corpus permission hierarchy
+2. **Analysis-Created Annotations** (NEW)
+   - Annotations with `created_by_analysis` field set are private to that analysis
+   - Only visible to users who have permission to the analysis object
+   - Even if user has document+corpus permissions, they cannot see these annotations without analysis permission
+   - Structural annotations are exempt from this privacy rule
 
-3. **Superuser Access**
+3. **Extract-Created Annotations** (NEW)
+   - Annotations with `created_by_extract` field set are private to that extract
+   - Only visible to users who have permission to the extract object
+   - Even if user has document+corpus permissions, they cannot see these annotations without extract permission
+   - Structural annotations are exempt from this privacy rule
+
+4. **Superuser Access**
    - Superusers bypass all permission checks
    - Get full permissions automatically
+   - Can see all annotations including private analysis/extract annotations
+
+## Annotation Privacy Model (NEW)
+
+### Overview
+
+The annotation privacy model allows annotations to be marked as "created by" a specific analysis or extract, making them private to that source object. This provides fine-grained privacy control for programmatically generated annotations.
+
+### Database Schema
+
+```python
+class Annotation(BaseOCModel):
+    # Standard fields...
+
+    # Privacy fields (NEW)
+    created_by_analysis = ForeignKey(
+        'analyzer.Analysis',
+        null=True, blank=True,
+        on_delete=SET_NULL,
+        related_name='created_annotations',
+        help_text='If set, this annotation is private to the analysis that created it'
+    )
+
+    created_by_extract = ForeignKey(
+        'extracts.Extract',
+        null=True, blank=True,
+        on_delete=SET_NULL,
+        related_name='created_annotations',
+        help_text='If set, this annotation is private to the extract that created it'
+    )
+
+    class Meta:
+        constraints = [
+            CheckConstraint(
+                check=Q(created_by_analysis__isnull=True) | Q(created_by_extract__isnull=True),
+                name='annotation_created_by_only_one_source',
+                violation_error_message='An annotation cannot be created by both an analysis and an extract'
+            )
+        ]
+```
+
+### Privacy Filtering in Query Optimizer
+
+```python
+# In AnnotationQueryOptimizer.get_document_annotations()
+
+# Get analyses/extracts user can access
+visible_analyses = Analysis.objects.filter(
+    Q(is_public=True) | Q(creator=user) |
+    Q(id__in=AnalysisUserObjectPermission.objects.filter(user=user).values_list('content_object_id'))
+)
+
+visible_extracts = Extract.objects.filter(
+    Q(creator=user) |
+    Q(id__in=ExtractUserObjectPermission.objects.filter(user=user).values_list('content_object_id'))
+)
+
+# Filter annotations: exclude private ones unless user has access
+# BUT always include structural annotations (they're always visible)
+qs = qs.exclude(
+    # Exclude non-structural analysis-created annotations user can't see
+    Q(created_by_analysis__isnull=False) &
+    Q(structural=False) &  # Only apply privacy to non-structural
+    ~Q(created_by_analysis__in=visible_analyses)
+).exclude(
+    # Exclude non-structural extract-created annotations user can't see
+    Q(created_by_extract__isnull=False) &
+    Q(structural=False) &  # Only apply privacy to non-structural
+    ~Q(created_by_extract__in=visible_extracts)
+)
+```
+
+### Import Process Updates
+
+When importing annotations from an analysis, the system now automatically sets the `created_by_analysis` field:
+
+```python
+# In import_annotations_from_analysis()
+annotation = Annotation.objects.create(
+    annotation_label_id=label_id,
+    document_id=doc_id,
+    analysis_id=analysis_id,
+    created_by_analysis_id=analysis_id,  # Mark as created by this analysis
+    creator_id=creator_id,
+    corpus=analysis.analyzed_corpus
+)
+```
+
+### Migration Strategy
+
+For existing systems, a data migration is provided that:
+1. Identifies existing annotations linked to analyses
+2. Sets `created_by_analysis` for non-structural analysis annotations
+3. Preserves backward compatibility with the `analysis` field
+
+```python
+def migrate_existing_analysis_annotations(apps, schema_editor):
+    Annotation = apps.get_model('annotations', 'Annotation')
+
+    # Update annotations that are linked to an analysis and are not structural
+    updated = Annotation.objects.filter(
+        analysis__isnull=False,
+        structural=False
+    ).update(
+        created_by_analysis_id=models.F('analysis_id')
+    )
+```
 
 ## Performance Optimizations
 
@@ -482,9 +696,11 @@ def test_permission_replacement():
     )
 
     # Should ONLY have READ (not ALL permissions)
-    perms = get_users_permissions_for_obj(user, document)
+    perms = get_users_permissions_for_obj(user, document, include_group_permissions=True)
     assert perms == {'read_document'}
 ```
+
+**Important Testing Note**: The test suite uses GraphQL clients with mock contexts to test permission inheritance through the full stack, ensuring that the optimization layer and GraphQL resolvers work correctly together.
 
 #### Annotation Permission Inheritance Tests
 ```python
@@ -506,6 +722,64 @@ def test_document_primary_permissions():
     for ann in annotations:
         assert ann._can_read == True
         assert ann._can_update == False  # Document restriction applies
+```
+
+#### Annotation Privacy Tests (NEW)
+```python
+def test_analysis_created_annotation_privacy():
+    # Create annotation marked as created by analysis
+    private_annotation = Annotation.objects.create(
+        annotation_label=label,
+        document=doc,
+        corpus=corpus,
+        analysis=analysis,
+        created_by_analysis=analysis,  # Mark as private to analysis
+        creator=owner
+    )
+
+    # User with doc+corpus but NO analysis permission
+    set_permissions_for_obj_to_user(viewer, doc, [PermissionTypes.READ])
+    set_permissions_for_obj_to_user(viewer, corpus, [PermissionTypes.READ])
+
+    # Should NOT see the private annotation
+    visible = AnnotationQueryOptimizer.get_document_annotations(
+        document_id=doc.id,
+        user=viewer,
+        corpus_id=corpus.id
+    )
+    assert private_annotation not in visible
+
+    # Grant analysis permission
+    set_permissions_for_obj_to_user(viewer, analysis, [PermissionTypes.READ])
+
+    # Now should see the annotation
+    visible = AnnotationQueryOptimizer.get_document_annotations(
+        document_id=doc.id,
+        user=viewer,
+        corpus_id=corpus.id
+    )
+    assert private_annotation in visible
+
+def test_structural_annotations_always_visible():
+    # Structural annotations bypass privacy rules
+    structural = Annotation.objects.create(
+        annotation_label=label,
+        document=doc,
+        corpus=corpus,
+        analysis=analysis,
+        created_by_analysis=analysis,  # Private to analysis
+        structural=True,  # BUT structural overrides privacy
+        creator=owner
+    )
+
+    # User WITHOUT analysis permission
+    visible = AnnotationQueryOptimizer.get_document_annotations(
+        document_id=doc.id,
+        user=viewer,
+        corpus_id=corpus.id,
+        structural=True
+    )
+    assert structural in visible  # Still visible because structural
 ```
 
 ### Frontend Tests
@@ -545,6 +819,12 @@ describe('Permission Flow', () => {
 - **Check**: Document permissions are being checked first in `_compute_effective_permissions`
 - **Check**: Frontend is respecting the `myPermissions` from annotations
 
+#### Private annotations appearing when they shouldn't (NEW)
+- **Check**: `created_by_analysis` or `created_by_extract` fields are properly set
+- **Check**: User does NOT have permission to the analysis/extract object
+- **Check**: Query optimizer is filtering based on visible_analyses/visible_extracts
+- **Note**: Structural annotations bypass privacy and are always visible
+
 #### Permission changes not taking effect
 - **Issue**: Old permissions weren't being removed
 - **Fix**: `set_permissions_for_obj_to_user` now removes all permissions before adding new ones
@@ -554,6 +834,12 @@ describe('Permission Flow', () => {
 - **Check**: Annotation queries use `AnnotationQueryOptimizer`
 - **Check**: `_can_*` attributes are present on annotation querysets
 - **Check**: `AnnotationType.get_queryset()` detects and preserves pre-computed permissions
+
+#### Mutual exclusivity constraint violations (NEW)
+- **Error**: "An annotation cannot be created by both an analysis and an extract"
+- **Check**: Never set both `created_by_analysis` AND `created_by_extract`
+- **Fix**: Choose one source of creation per annotation
+- **Database**: Enforced by CheckConstraint at database level
 
 ### Debug Steps
 
@@ -606,14 +892,78 @@ If migrating from the old permission model where corpus overrode documents:
 - ❌ **Cannot have different permissions for different annotations in same document** - All share same permissions
 - ❌ **Corpus permissions no longer override document permissions** - Most restrictive wins
 
+## Implementation Notes for Analyses/Extracts
+
+### Query Pattern for Analyses/Extracts
+
+```python
+def get_visible_analyses(user, corpus_id=None):
+    """
+    Get analyses visible to user based on:
+    1. User has READ permission on analysis
+    2. User has READ permission on corpus
+    3. Filter annotations to only those on readable documents
+    """
+    # Step 1: Get analyses user has permission to read
+    analyses = Analysis.objects.filter(
+        # User has explicit permission OR analysis is public
+        Q(analysisuserobjectpermission__user=user) | Q(is_public=True)
+    )
+
+    # Step 2: Filter by corpus permission
+    if corpus_id:
+        analyses = analyses.filter(
+            analyzed_corpus_id=corpus_id,
+            analyzed_corpus__in=Corpus.objects.visible_to_user(user)
+        )
+
+    # Step 3: When fetching annotations, filter by document permissions
+    # This happens in the annotation resolver using existing optimizer
+
+    return analyses
+```
+
+### GraphQL Resolver Pattern
+
+```python
+def resolve_analysis_annotations(analysis, info):
+    """
+    Resolve annotations within an analysis, filtered by document permissions.
+    """
+    # Use existing AnnotationQueryOptimizer
+    user = info.context.user
+
+    # Get all annotation IDs from this analysis
+    annotation_ids = analysis.annotations.values_list('id', flat=True)
+
+    # Filter to only those on documents user can read
+    visible_annotations = []
+    for doc_id in analysis.analyzed_documents.values_list('id', flat=True):
+        if user_has_permission_for_obj(user, doc, PermissionTypes.READ):
+            visible_annotations.extend(
+                annotation_ids.filter(document_id=doc_id)
+            )
+
+    return Annotation.objects.filter(id__in=visible_annotations)
+```
+
 ## Current Implementation Status
 
-✅ **Backend**: Full implementation with query optimizer
+✅ **Backend**: Full implementation with query optimizer for annotations
 ✅ **Frontend**: Complete integration with backend-computed permissions
 ✅ **Performance**: N+1 queries eliminated for annotations
-✅ **Security**: Document-first permission model enforced
+✅ **Security**: Document-first permission model enforced for annotations
 ✅ **Testing**: Comprehensive test coverage including inheritance scenarios
 ✅ **Bug Fixes**: Permission replacement now works correctly
-✅ **Documentation**: This guide reflects current implementation
+✅ **Annotation Privacy**: `created_by_analysis` and `created_by_extract` fields implemented
+✅ **Privacy Filtering**: Query optimizer filters private annotations based on source permissions
+✅ **Database Constraints**: Mutual exclusivity enforced at database level
+✅ **Migration**: Data migration for existing analysis annotations
+✅ **Import Process**: Analysis imports automatically set privacy fields
+✅ **Documentation**: This guide reflects current implementation including privacy model
 
-The permission system is production-ready with significant performance improvements and correct security boundaries.
+⚠️ **Extract Integration**: While the privacy model supports `created_by_extract`, the extract system may need updates to:
+- Set `created_by_extract` when creating annotations from extracts
+- Ensure proper permission checks for extract-created annotations
+
+The annotation permission system is production-ready with significant performance improvements and privacy controls. The annotation privacy model provides fine-grained control over programmatically generated annotations while maintaining backward compatibility.
