@@ -30,8 +30,8 @@ concurrency:
 
 jobs:
   production-stack:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: larger
+    timeout-minutes: 50
     permissions:
       contents: read
 
