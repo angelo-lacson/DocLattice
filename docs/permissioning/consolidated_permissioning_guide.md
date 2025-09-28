@@ -255,6 +255,12 @@ def user_has_permission_for_obj(
     """
     Check if user has specific permission for object.
 
+    ENHANCED: Now handles annotation privacy model automatically.
+    - For annotations with created_by_analysis: requires matching permission on analysis
+    - For annotations with created_by_extract: requires matching permission on extract
+    - Structural annotations bypass privacy for READ operations
+    - Then checks document+corpus permissions using AnnotationQueryOptimizer
+
     Note: include_group_permissions=True is important for checking
     permissions that come from group membership (e.g., public access).
     Tests typically use include_group_permissions=True to get accurate results.
@@ -402,6 +408,18 @@ class AnnotationQueryOptimizer:
 
 The annotation privacy model allows annotations to be marked as "created by" a specific analysis or extract, making them private to that source object. This provides fine-grained privacy control for programmatically generated annotations.
 
+### Centralized Permission Checking
+
+All permission checks for annotations now go through the enhanced `user_has_permission_for_obj` function, which automatically handles:
+
+1. **Superuser bypass** - Superusers always have full permissions
+2. **Structural annotations** - Always read-only regardless of other permissions
+3. **Privacy enforcement** - Checks source object permissions for private annotations
+4. **Permission inheritance** - Requires SAME permission level on source object as requested
+5. **Document+corpus computation** - Uses AnnotationQueryOptimizer for final permissions
+
+This means mutations don't need to understand the privacy model - they just call `user_has_permission_for_obj` and it handles everything.
+
 ### Database Schema
 
 ```python
@@ -481,6 +499,36 @@ annotation = Annotation.objects.create(
     corpus=analysis.analyzed_corpus
 )
 ```
+
+### Mutation Integration
+
+All annotation mutations now properly respect the privacy model through the centralized permission system:
+
+```python
+# Example from RemoveAnnotation mutation
+def mutate(root, info, annotation_id):
+    annotation = Annotation.objects.get(id=annotation_id)
+
+    # Single call handles all privacy logic
+    if not user_has_permission_for_obj(
+        info.context.user,
+        annotation,
+        PermissionTypes.DELETE,
+        include_group_permissions=True
+    ):
+        return RemoveAnnotation(ok=False, message="Permission denied")
+
+    annotation.delete()
+    return RemoveAnnotation(ok=True)
+```
+
+The mutations that have been updated to use this pattern include:
+- **RemoveAnnotation** - Checks DELETE permission with privacy model
+- **UpdateAnnotation** - Uses user_can_edit which internally calls user_has_permission_for_obj
+- **RejectAnnotation** - Checks visibility before rejection
+- **ApproveAnnotation** - Checks visibility before approval
+- **AddRelationship** - Checks both annotations are visible
+- **RemoveRelationship** - Checks DELETE permission on relationship
 
 ### Migration Strategy
 
@@ -960,10 +1008,14 @@ def resolve_analysis_annotations(analysis, info):
 ✅ **Database Constraints**: Mutual exclusivity enforced at database level
 ✅ **Migration**: Data migration for existing analysis annotations
 ✅ **Import Process**: Analysis imports automatically set privacy fields
+✅ **Centralized Permission System**: `user_has_permission_for_obj` enhanced to handle all privacy logic
+✅ **Mutation Updates**: All annotation mutations updated to respect privacy model
+✅ **Permission Inheritance**: Private annotations require matching permission level on source object
+✅ **Structural Annotation Handling**: Structural annotations bypass privacy for READ operations
 ✅ **Documentation**: This guide reflects current implementation including privacy model
 
 ⚠️ **Extract Integration**: While the privacy model supports `created_by_extract`, the extract system may need updates to:
 - Set `created_by_extract` when creating annotations from extracts
-- Ensure proper permission checks for extract-created annotations
+- Ensure proper permission checks for extract-created annotations (already handled by enhanced permission system)
 
-The annotation permission system is production-ready with significant performance improvements and privacy controls. The annotation privacy model provides fine-grained control over programmatically generated annotations while maintaining backward compatibility.
+The annotation permission system is production-ready with significant performance improvements and privacy controls. The centralized permission checking through `user_has_permission_for_obj` ensures consistent enforcement of the privacy model across all mutations without requiring each mutation to understand the complexity of the privacy rules.
