@@ -107,7 +107,12 @@ def resolve_oc_model_queryset(
                     "annotation_label", "corpus", "analysis", "creator"
                 ),
                 to_attr="_prefetched_doc_annotations"
-            )
+            ),
+            # Add other important relationships to avoid N+1 queries
+            "rows",
+            "source_relationships",
+            "target_relationships",
+            "notes"
         )
 
         # Prefetch permission objects to avoid N+1 queries in myPermissions resolver

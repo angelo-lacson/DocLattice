@@ -122,6 +122,11 @@ class PermissionAnnotatingMiddleware:
             if model_django_type is not None:
 
                 model_name = model_django_type._meta.model_name
+
+                if model_name in ["annotation", "relationship"]:
+                    # Don't annotate annotation and relationship
+                    pass
+
                 app_name = model_django_type._meta.app_label
                 full_name = f"{app_name}.{model_name}"
                 # logger.info(f"PermissionAnnotatingMiddleware - full model name: {full_name}")
