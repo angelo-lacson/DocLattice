@@ -99,42 +99,48 @@ def graphql_ratelimit(
                     )
                 return func(root, info, *args, **kwargs)
 
-            # Skip rate limiting in tests if configured
+            # Skip rate limiting if explicitly disabled
+            # Note: This checks at request time, not import time
             if getattr(settings, "RATELIMIT_DISABLE", False):
                 return func(root, info, *args, **kwargs)
 
-            # Determine the rate limit key
+            # Determine the key generation function for django-ratelimit
             if key is None or key == "user_or_ip":
-                if request.user and request.user.is_authenticated:
-                    limit_key = f"user:{request.user.id}"
-                else:
-                    limit_key = f"ip:{get_client_ip(request)}"
-            elif key == "ip":
-                limit_key = f"ip:{get_client_ip(request)}"
-            elif key == "user":
-                if not request.user or not request.user.is_authenticated:
-                    if block:
-                        raise GraphQLError("Authentication required for this operation")
-                    return func(root, info, *args, **kwargs)
-                limit_key = f"user:{request.user.id}"
-            elif callable(key):
-                limit_key = key(root, info, **kwargs)
-            else:
-                limit_key = str(key)
+                # Default: use user ID for authenticated, IP for anonymous
+                def get_key(group, request):
+                    if request.user and request.user.is_authenticated:
+                        return f"user:{request.user.id}"
+                    else:
+                        return f"ip:{get_client_ip(request)}"
 
-            # Add group to key if specified
-            if group:
-                # When using a group, don't include function name so all functions in the group share the limit
-                cache_key = f"rl:{group}:{limit_key}"
+                key_func = get_key
+            elif key == "ip":
+                key_func = lambda g, r: f"ip:{get_client_ip(r)}"  # noqa: E731
+            elif key == "user":
+
+                def user_key(group, request):
+                    if not request.user or not request.user.is_authenticated:
+                        if block:
+                            raise GraphQLError(
+                                "Authentication required for this operation"
+                            )
+                        return None
+                    return f"user:{request.user.id}"
+
+                key_func = user_key
+            elif callable(key):
+                # Custom key function - wrap it to match django-ratelimit signature
+                key_func = lambda g, r: key(root, info, **kwargs)  # noqa: E731
             else:
-                cache_key = f"rl:{limit_key}:{func.__name__}"
+                # Static key
+                key_func = lambda g, r: str(key)  # noqa: E731
 
             # Check if rate limited
             is_limited = is_ratelimited(
                 request=request,
                 group=group or func.__name__,
                 fn=func,
-                key=lambda g, r: cache_key,  # Takes group and request
+                key=key_func,
                 rate=rate,
                 method=method,
                 increment=True,
@@ -142,6 +148,9 @@ def graphql_ratelimit(
 
             if is_limited and block:
                 # Log the rate limit hit
+                limit_key = (
+                    key_func(group or func.__name__, request) if key_func else "unknown"
+                )
                 logger.warning(
                     f"Rate limit exceeded for {func.__name__} - Key: {limit_key}, Rate: {rate}"
                 )
@@ -227,44 +236,51 @@ def graphql_ratelimit_dynamic(
                     )
                 return func(root, info, *args, **kwargs)
 
-            # Skip rate limiting if disabled
+            # Skip rate limiting if explicitly disabled
+            # Note: This checks at request time, not import time
             if getattr(settings, "RATELIMIT_DISABLE", False):
                 return func(root, info, *args, **kwargs)
 
             # Get the dynamic rate
             rate = get_rate(root, info)
 
-            # Determine the rate limit key
+            # Determine the key generation function for django-ratelimit
             if key is None or key == "user_or_ip":
-                if request.user and request.user.is_authenticated:
-                    limit_key = f"user:{request.user.id}"
-                else:
-                    limit_key = f"ip:{get_client_ip(request)}"
-            elif key == "ip":
-                limit_key = f"ip:{get_client_ip(request)}"
-            elif key == "user":
-                if not request.user or not request.user.is_authenticated:
-                    if block:
-                        raise GraphQLError("Authentication required for this operation")
-                    return func(root, info, *args, **kwargs)
-                limit_key = f"user:{request.user.id}"
-            elif callable(key):
-                limit_key = key(root, info, **kwargs)
-            else:
-                limit_key = str(key)
+                # Default: use user ID for authenticated, IP for anonymous
+                def get_key(group, request):
+                    if request.user and request.user.is_authenticated:
+                        return f"user:{request.user.id}"
+                    else:
+                        return f"ip:{get_client_ip(request)}"
 
-            # Add group to key if specified
-            if group:
-                cache_key = f"rl:{group}:{limit_key}"
+                key_func = get_key
+            elif key == "ip":
+                key_func = lambda g, r: f"ip:{get_client_ip(r)}"  # noqa: E731
+            elif key == "user":
+
+                def user_key(group, request):
+                    if not request.user or not request.user.is_authenticated:
+                        if block:
+                            raise GraphQLError(
+                                "Authentication required for this operation"
+                            )
+                        return None
+                    return f"user:{request.user.id}"
+
+                key_func = user_key
+            elif callable(key):
+                # Custom key function - wrap it to match django-ratelimit signature
+                key_func = lambda g, r: key(root, info, **kwargs)  # noqa: E731
             else:
-                cache_key = f"rl:{limit_key}:{func.__name__}"
+                # Static key
+                key_func = lambda g, r: str(key)  # noqa: E731
 
             # Check if rate limited
             is_limited = is_ratelimited(
                 request=request,
                 group=group or func.__name__,
                 fn=func,
-                key=lambda g, r: cache_key,  # Takes group and request
+                key=key_func,
                 rate=rate,
                 method=method,
                 increment=True,
@@ -272,6 +288,9 @@ def graphql_ratelimit_dynamic(
 
             if is_limited and block:
                 # Log the rate limit hit
+                limit_key = (
+                    key_func(group or func.__name__, request) if key_func else "unknown"
+                )
                 logger.warning(
                     f"Rate limit exceeded for {func.__name__} - Key: {limit_key}, Rate: {rate}"
                 )

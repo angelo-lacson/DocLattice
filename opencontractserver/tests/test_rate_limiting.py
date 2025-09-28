@@ -190,27 +190,39 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             }
         """
 
-        # Clear cache to start fresh
-        cache.clear()
-
         # The rate limit for READ_LIGHT is 100/m base, 200/m for authenticated users
-        # Make many requests to hit the limit
+        # Make requests rapidly to ensure they fall within the same minute window
+        # Use a shorter burst to avoid timing issues
         results = []
-        for i in range(250):  # Try to exceed the 200/m limit
+        errors_found = []
+
+        # Make 210 requests rapidly (just over the 200/m limit)
+        # This ensures we're testing the rate limit, not time window boundaries
+        for i in range(210):
             result = self.execute_graphql(query)
             results.append(result)
 
             # Check if we hit a rate limit
             if result.get("errors"):
                 error_message = result["errors"][0]["message"]
+                errors_found.append(f"Request {i}: {error_message}")
                 if "Limit exceeded" in error_message:
                     # We successfully triggered rate limiting
                     self.assertIn("Limit exceeded", error_message)
-                    self.assertLess(i, 250, "Should hit rate limit before 250 requests")
+                    # Should hit limit around request 200 (allowing some buffer)
+                    self.assertGreater(i, 195, "Rate limit triggered too early")
+                    self.assertLess(i, 210, "Should hit rate limit before 210 requests")
                     return
 
-        # If we didn't hit a rate limit, that's unexpected for 250 requests
-        self.fail("Did not hit rate limit after 250 requests")
+        # If we didn't hit a rate limit, provide diagnostic information
+        if errors_found:
+            self.fail(
+                f"Did not hit rate limit after 210 requests. Errors found: {errors_found[:5]}"
+            )
+        else:
+            self.fail(
+                "Did not hit rate limit after 210 requests. No errors encountered."
+            )
 
     def test_actual_rate_limiting_on_mutations(self):
         """Test that mutations are actually rate limited."""
@@ -222,9 +234,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 }
             }
         """
-
-        # Clear cache to start fresh
-        cache.clear()
 
         # WRITE_MEDIUM is 10/m base, 20/m for authenticated users
         results = []
@@ -262,9 +271,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             }
         """
 
-        # Clear cache to start fresh
-        cache.clear()
-
         # Regular user should hit limit around 200 requests
         # Superuser should get 10x that (1000/m)
 
@@ -283,7 +289,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         self.assertTrue(regular_hit_limit, "Regular user should hit rate limit")
 
         # Now test with superuser - should allow more requests
-        cache.clear()
         super_hit_limit = False
         for i in range(500):
             result = self.execute_graphql(query, use_super=True)
@@ -317,8 +322,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             }
         """
 
-        cache.clear()
-
         # Make several requests with first mutation
         for i in range(25):
             variables = {
@@ -349,8 +352,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 }
             }
         """
-
-        cache.clear()
 
         # Anonymous users should get base rate (100/m for READ_LIGHT)
         for i in range(150):
@@ -394,8 +395,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 }
             }
         """
-
-        cache.clear()
 
         # First user makes many requests to approach limit
         for i in range(190):  # Just under the 200/m limit
@@ -455,8 +454,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             }
         """
 
-        cache.clear()
-
         # Heavy query should hit rate limit sooner (READ_MEDIUM = 30/m base, 60/m for auth)
         heavy_hit_at = None
         for i in range(70):
@@ -467,8 +464,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             ):
                 heavy_hit_at = i
                 break
-
-        cache.clear()
 
         # Light query should allow more requests (READ_LIGHT = 100/m base, 200/m for auth)
         light_hit_at = None
@@ -499,8 +494,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             }
         """
 
-        cache.clear()
-
         # Mutation should have rate limiting
         hit_limit = False
         for i in range(30):  # Most mutations have WRITE_MEDIUM = 10/m base, 20/m auth
@@ -518,57 +511,68 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
 
         self.assertTrue(hit_limit, "Mutation should have rate limiting")
 
-    def test_specific_queries_are_rate_limited(self):
-        """Test that specific queries have rate limiting applied."""
-        queries_to_test = [
-            {
-                "name": "corpuses",
-                "query": """
-                    query { corpuses { edges { node { id } } } }
-                """,
-            },
-            {
-                "name": "documents",
-                "query": """
-                    query { documents { edges { node { id } } } }
-                """,
-            },
-            {
-                "name": "labelsets",
-                "query": """
-                    query { labelsets { edges { node { id } } } }
-                """,
-            },
-        ]
+    def test_corpuses_query_rate_limited(self):
+        """Test that corpuses query is rate limited."""
+        query = """query { corpuses { edges { node { id } } } }"""
 
-        for query_test in queries_to_test:
-            cache.clear()
+        # Clear cache to ensure fresh rate limit counter
+        cache.clear()
 
-            # Each query should have rate limiting
-            hit_limit = False
-            error_messages = []
-            for i in range(250):  # READ_LIGHT = 100/m base, 200/m for auth users
-                result = self.execute_graphql(query_test["query"])
+        hit_limit = False
+        for i in range(210):
+            result = self.execute_graphql(query)
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                hit_limit = True
+                self.assertGreater(i, 195, "Hit rate limit too early")
+                self.assertLess(i, 210, "Should hit around request 200")
+                break
 
-                if result.get("errors"):
-                    error_msg = result["errors"][0]["message"]
-                    error_messages.append(f"Request {i}: {error_msg}")
-                    if "Limit exceeded" in error_msg:
-                        hit_limit = True
-                        break
+        self.assertTrue(hit_limit, "Corpuses query should be rate limited")
 
-            # Print debug info if test fails
-            if not hit_limit:
-                print(f"\nQuery {query_test['name']} did not hit rate limit.")
-                print("Total requests made: 250")
-                if error_messages:
-                    print(
-                        f"Errors encountered: {error_messages[:5]}"
-                    )  # Print first 5 errors
+    def test_documents_query_rate_limited(self):
+        """Test that documents query is rate limited."""
+        query = """query { documents { edges { node { id } } } }"""
 
-            self.assertTrue(
-                hit_limit, f"Query {query_test['name']} should have rate limiting"
-            )
+        # Clear cache to ensure fresh rate limit counter
+        cache.clear()
+
+        hit_limit = False
+        for i in range(210):
+            result = self.execute_graphql(query)
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                hit_limit = True
+                self.assertGreater(i, 195, "Hit rate limit too early")
+                self.assertLess(i, 210, "Should hit around request 200")
+                break
+
+        self.assertTrue(hit_limit, "Documents query should be rate limited")
+
+    def test_labelsets_query_rate_limited(self):
+        """Test that labelsets query is rate limited."""
+        query = """query { labelsets { edges { node { id } } } }"""
+
+        # Clear cache to ensure fresh rate limit counter
+        cache.clear()
+
+        hit_limit = False
+        for i in range(210):
+            result = self.execute_graphql(query)
+            if (
+                result.get("errors")
+                and "Limit exceeded" in result["errors"][0]["message"]
+            ):
+                hit_limit = True
+                self.assertGreater(i, 195, "Hit rate limit too early")
+                self.assertLess(i, 210, "Should hit around request 200")
+                break
+
+        self.assertTrue(hit_limit, "Labelsets query should be rate limited")
 
     def test_usage_capped_users_get_reduced_limits(self):
         """Test that usage-capped users get reduced rate limits."""
@@ -598,8 +602,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 }
             }
         """
-
-        cache.clear()
 
         # Capped users should hit rate limit sooner
         for i in range(150):  # Should hit before regular user limit
