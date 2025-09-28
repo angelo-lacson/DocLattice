@@ -86,11 +86,7 @@ COPY --from=python-build-stage /usr/src/app/wheels /wheels/
 RUN pip install --upgrade pip
 
 # Install the Python dependencies from wheels first
-RUN (find ./requirements -mindepth 2 -type f -name "*.txt" -print; \
-     printf '%s\n' ./requirements/production.txt ./requirements/model_preloaders.txt) \
-    | sort -u \
-    | sed 's/^/-r /' \
-    | xargs -r pip install --no-cache-dir --no-index --find-links=/wheels/ \
+RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
     && rm -rf /wheels/
 
 # PyTorch is already installed in the base image with CUDA support
