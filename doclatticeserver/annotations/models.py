@@ -7,6 +7,7 @@ from typing import Union, cast
 
 import django
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -460,6 +461,25 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         related_name="annotations",
     )
 
+    # Privacy fields - if set, annotation is only visible to those with permission to the source
+    created_by_analysis = django.db.models.ForeignKey(
+        "analyzer.Analysis",
+        null=True,
+        blank=True,
+        on_delete=django.db.models.SET_NULL,
+        related_name="created_annotations",
+        help_text="If set, this annotation is private to the analysis that created it",
+    )
+
+    created_by_extract = django.db.models.ForeignKey(
+        "extracts.Extract",
+        null=True,
+        blank=True,
+        on_delete=django.db.models.SET_NULL,
+        related_name="created_annotations",
+        help_text="If set, this annotation is private to the extract that created it",
+    )
+
     # Mark structural / layout annotations explicitly.
     structural = django.db.models.BooleanField(default=False)
 
@@ -553,6 +573,23 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
 
         # Other annotation types are free-form – no validation.
 
+        # Validate mutual exclusivity of created_by fields
+        if self.created_by_analysis and self.created_by_extract:
+            raise ValidationError({
+                'created_by_analysis': 'An annotation cannot be created by both an analysis and an extract.',
+                'created_by_extract': 'An annotation cannot be created by both an analysis and an extract.'
+            })
+
+        # Ensure consistency: if created_by_analysis is set, analysis should also be set
+        if self.created_by_analysis and not self.analysis:
+            self.analysis = self.created_by_analysis
+
+        # Validate that created_by_analysis matches analysis if both are set
+        if self.created_by_analysis and self.analysis and self.created_by_analysis != self.analysis:
+            raise ValidationError({
+                'created_by_analysis': 'created_by_analysis must match the analysis field if both are set.'
+            })
+
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
@@ -599,9 +636,23 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             django.db.models.Index(fields=["document", "corpus"]),
             django.db.models.Index(fields=["document", "corpus", "creator"]),
             django.db.models.Index(fields=["analysis"]),
+            django.db.models.Index(fields=["created_by_analysis"]),
+            django.db.models.Index(fields=["created_by_extract"]),
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
+        ]
+
+        constraints = [
+            # Ensure an annotation can't be created by both analysis AND extract
+            django.db.models.CheckConstraint(
+                check=(
+                    django.db.models.Q(created_by_analysis__isnull=True)
+                    | django.db.models.Q(created_by_extract__isnull=True)
+                ),
+                name="annotation_created_by_only_one_source",
+                violation_error_message="An annotation cannot be created by both an analysis and an extract",
+            ),
         ]
 
 
