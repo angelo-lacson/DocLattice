@@ -11,7 +11,6 @@ from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
 from graphene_django.fields import DjangoConnectionField
 from graphene_django.filter import DjangoFilterConnectionField
-from graphql import GraphQLError
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
@@ -72,7 +71,7 @@ from config.graphql.ratelimits import (
     get_user_tier_rate,
     graphql_ratelimit_dynamic,
 )
-from doclatticeserver.analyzer.models import Analysis, Analyzer, GremlinEngine
+from doclatticeserver.analyzer.models import Analyzer, GremlinEngine
 from doclatticeserver.annotations.models import (
     Annotation,
     AnnotationLabel,
@@ -83,7 +82,7 @@ from doclatticeserver.annotations.models import (
 from doclatticeserver.conversations.models import ChatMessage, Conversation
 from doclatticeserver.corpuses.models import Corpus, CorpusAction, CorpusQuery
 from doclatticeserver.documents.models import Document, DocumentRelationship
-from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
+from doclatticeserver.extracts.models import Column, Datacell, Fieldset
 from doclatticeserver.feedback.models import UserFeedback
 from doclatticeserver.pipeline.utils import (
     get_all_embedders,
@@ -228,7 +227,9 @@ class Query(graphene.ObjectType):
 
         if document_id:
             # Import the query optimizer
-            from doclatticeserver.annotations.query_optimizer import AnnotationQueryOptimizer
+            from doclatticeserver.annotations.query_optimizer import (
+                AnnotationQueryOptimizer,
+            )
 
             doc_django_pk = int(from_global_id(document_id)[1])
             corpus_django_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
@@ -240,7 +241,7 @@ class Query(graphene.ObjectType):
                 corpus_id=corpus_django_pk,
                 analysis_id=None,  # Will be handled below if needed
                 extract_id=None,
-                use_cache=False
+                use_cache=False,
             )
 
         else:
@@ -997,7 +998,9 @@ class Query(graphene.ObjectType):
         analysis = relay.Node.Field(AnalysisType)
 
         def resolve_analysis(self, info, **kwargs):
-            from doclatticeserver.annotations.query_optimizer import AnalysisQueryOptimizer
+            from doclatticeserver.annotations.query_optimizer import (
+                AnalysisQueryOptimizer,
+            )
 
             django_pk = from_global_id(kwargs.get("id", None))[1]
             has_perm, analysis = AnalysisQueryOptimizer.check_analysis_permission(
@@ -1011,7 +1014,9 @@ class Query(graphene.ObjectType):
 
         @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
         def resolve_analyses(self, info, **kwargs):
-            from doclatticeserver.annotations.query_optimizer import AnalysisQueryOptimizer
+            from doclatticeserver.annotations.query_optimizer import (
+                AnalysisQueryOptimizer,
+            )
 
             corpus_id = kwargs.get("corpus_id")
             if corpus_id:
@@ -1020,8 +1025,7 @@ class Query(graphene.ObjectType):
                 corpus_django_pk = None
 
             return AnalysisQueryOptimizer.get_visible_analyses(
-                info.context.user,
-                corpus_id=corpus_django_pk
+                info.context.user, corpus_id=corpus_django_pk
             )
 
     fieldset = relay.Node.Field(FieldsetType)
@@ -1088,8 +1092,7 @@ class Query(graphene.ObjectType):
             corpus_django_pk = None
 
         return ExtractQueryOptimizer.get_visible_extracts(
-            info.context.user,
-            corpus_id=corpus_django_pk
+            info.context.user, corpus_id=corpus_django_pk
         )
 
     corpus_query = relay.Node.Field(CorpusQueryType)

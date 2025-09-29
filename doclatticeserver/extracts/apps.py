@@ -6,8 +6,4 @@ class ExtractsConfig(AppConfig):
     name = "doclatticeserver.extracts"
 
     def ready(self):
-        try:
-            from . import signals
-
-        except ImportError:
-            pass
+        pass

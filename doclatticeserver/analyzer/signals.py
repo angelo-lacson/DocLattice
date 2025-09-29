@@ -1,4 +1,5 @@
 import logging
+
 from celery import chain
 from django.db import transaction
 
@@ -28,5 +29,5 @@ def install_gremlin_on_creation(sender, instance, created, **kwargs):
 
 def handle_analysis_completion(sender, instance, **kwargs):
     """Handle analysis completion."""
-    if hasattr(instance, 'status') and instance.status == 'COMPLETE':
+    if hasattr(instance, "status") and instance.status == "COMPLETE":
         logger.info(f"Analysis {instance.id} completed")

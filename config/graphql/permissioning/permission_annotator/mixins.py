@@ -110,23 +110,22 @@ class AnnotatePermissionsForReadMixin:
         # Only apply this optimization to Annotation and Relationship models
         model_name = self._meta.model_name
 
-
-        if model_name in ['annotation', 'relationship'] and hasattr(self, '_can_read'):
+        if model_name in ["annotation", "relationship"] and hasattr(self, "_can_read"):
             # logger.info("resolve_my_permissions() - Using pre-computed permissions from query optimizer")
             permissions = set()
 
             # Map the boolean flags to backend permission format
-            if getattr(self, '_can_read', False):
+            if getattr(self, "_can_read", False):
                 permissions.add(f"read_{model_name}")
-            if getattr(self, '_can_create', False):
+            if getattr(self, "_can_create", False):
                 permissions.add(f"create_{model_name}")
-            if getattr(self, '_can_update', False):
+            if getattr(self, "_can_update", False):
                 permissions.add(f"update_{model_name}")
-            if getattr(self, '_can_delete', False):
+            if getattr(self, "_can_delete", False):
                 permissions.add(f"remove_{model_name}")
 
             # Check for publish permission if available
-            if getattr(self, '_can_publish', False):
+            if getattr(self, "_can_publish", False):
                 permissions.add(f"publish_{model_name}")
 
             return list(permissions)

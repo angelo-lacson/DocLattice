@@ -295,19 +295,19 @@ class ResolveOcModelQuerysetTest(TestCase):
         # Extract field names from Prefetch objects if present
         prefetch_related_fields = set()
         for lookup in queryset._prefetch_related_lookups:
-            if hasattr(lookup, 'prefetch_through'):
+            if hasattr(lookup, "prefetch_through"):
                 # It's a Prefetch object - use the original field name
                 prefetch_related_fields.add(lookup.prefetch_through)
-            elif hasattr(lookup, 'prefetch_to'):
+            elif hasattr(lookup, "prefetch_to"):
                 # It's a Prefetch object without prefetch_through
                 # When to_attr is used, prefetch_to becomes the to_attr value
                 # We need the original field name
-                if lookup.to_attr and lookup.to_attr.startswith('_prefetched_'):
+                if lookup.to_attr and lookup.to_attr.startswith("_prefetched_"):
                     # Extract the original field name from to_attr
-                    original = lookup.to_attr.replace('_prefetched_', '')
+                    original = lookup.to_attr.replace("_prefetched_", "")
                     prefetch_related_fields.add(original)
                 else:
-                    prefetch_related_fields.add(lookup.prefetch_to.split('__')[0])
+                    prefetch_related_fields.add(lookup.prefetch_to.split("__")[0])
             else:
                 # It's a string
                 prefetch_related_fields.add(lookup)
