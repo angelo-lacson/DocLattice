@@ -163,17 +163,22 @@ def split_pdf_into_images(
         logger.debug(f"File extension set to: {file_extension}")
         logger.debug(f"Content type set to: {content_type}")
 
-        use_aws = settings.USE_AWS and not force_local
-        logger.debug(f"Using AWS S3 storage: {use_aws}")
+        storage_backend = settings.STORAGE_BACKEND if not force_local else "LOCAL"
+        logger.debug(f"Using storage backend: {storage_backend}")
 
-        if use_aws:
-            logger.debug(
-                "AWS settings detected and force_local is False, initializing S3 client"
-            )
+        if storage_backend == "AWS":
+            logger.debug("AWS storage backend detected, initializing S3 client")
             import boto3
 
             s3 = boto3.client("s3")
             logger.debug("S3 client initialized")
+        elif storage_backend == "GCP":
+            logger.debug("GCP storage backend detected, initializing GCS client")
+            from google.cloud import storage as gcs
+
+            gcs_client = gcs.Client(project=settings.GS_PROJECT_ID)
+            gcs_bucket = gcs_client.bucket(settings.GS_BUCKET_NAME)
+            logger.debug("GCS client initialized")
         else:
             logger.debug("Proceeding with local storage")
 
@@ -189,7 +194,7 @@ def split_pdf_into_images(
             img_bytes = img_bytes_stream.getvalue()
             logger.debug(f"Image {index + 1} bytes size: {len(img_bytes)} bytes")
 
-            if use_aws:
+            if storage_backend == "AWS":
                 logger.debug("Uploading image to AWS S3")
                 page_path = f"{storage_path}/{uuid.uuid4()}{file_extension}"
                 logger.debug(f"Generated S3 page path: {page_path}")
@@ -200,6 +205,13 @@ def split_pdf_into_images(
                     ContentType=content_type,
                 )
                 logger.debug(f"Image {index + 1} uploaded to S3 with key: {page_path}")
+            elif storage_backend == "GCP":
+                logger.debug("Uploading image to Google Cloud Storage")
+                page_path = f"{storage_path}/{uuid.uuid4()}{file_extension}"
+                logger.debug(f"Generated GCS page path: {page_path}")
+                blob = gcs_bucket.blob(page_path)
+                blob.upload_from_string(img_bytes, content_type=content_type)
+                logger.debug(f"Image {index + 1} uploaded to GCS with key: {page_path}")
             else:
                 logger.debug("Saving image locally")
                 pdf_fragment_folder_path = pathlib.Path(storage_path)

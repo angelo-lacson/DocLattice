@@ -33,9 +33,12 @@ COPY ./requirements ./requirements
 # Upgrade pip
 RUN pip install --upgrade pip
 
-# Recursively build wheels for all *.txt found within requirements directory
-RUN find ./requirements -type f -name "*.txt" -exec echo "-r" {} \; | \
-    xargs pip wheel --wheel-dir /usr/src/app/wheels
+# Build wheels for production requirements plus scoped extras
+RUN (find ./requirements -mindepth 2 -type f -name "*.txt" -print; \
+     printf '%s\n' ./requirements/production.txt ./requirements/model_preloaders.txt) \
+    | sort -u \
+    | sed 's/^/-r /' \
+    | xargs -r pip wheel --wheel-dir /usr/src/app/wheels
 
 # Python 'run' stage
 FROM python as python-run-stage

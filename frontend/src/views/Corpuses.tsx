@@ -127,9 +127,9 @@ const DashboardContainer = styled.div`
   overflow: hidden;
   padding: 0;
   width: 100%;
+  min-height: 0;
 `;
 
-// TODO - need to drop this padding
 const ContentWrapper = styled.div`
   display: flex;
   flex-direction: column;
@@ -137,7 +137,6 @@ const ContentWrapper = styled.div`
   justify-content: flex-start;
   flex: 1;
   padding: 0;
-  height: 100%;
   overflow: hidden;
   min-height: 0;
   position: relative;
@@ -528,7 +527,6 @@ const CorpusQueryView = ({
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            height: "100%",
             minHeight: 0,
           }}
           initial={{ opacity: 0 }}
@@ -558,8 +556,8 @@ const CorpusQueryView = ({
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          height: "100%",
           minHeight: 0,
+          width: "100%",
         }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -578,15 +576,18 @@ const CorpusQueryView = ({
             <div
               style={{
                 position: "absolute",
-                bottom: "2rem",
+                bottom: width <= 768 ? "1rem" : "2rem",
                 left: "50%",
                 transform: "translateX(-50%)",
                 display: "flex",
                 flexDirection: "row",
                 justifyContent: "center",
                 alignItems: "center",
-                padding: "0.5rem",
-                width: "85%" /* give more room for expansion */,
+                padding: width <= 768 ? "0.25rem" : "0.5rem",
+                width:
+                  width <= 768
+                    ? "95%"
+                    : "85%" /* give more room for expansion on mobile */,
                 maxWidth: "760px" /* match the search container max */,
               }}
             >
@@ -654,7 +655,7 @@ const CorpusQueryView = ({
     return (
       <motion.div
         style={{
-          height: "100%",
+          flex: 1,
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
@@ -682,67 +683,172 @@ const CorpusQueryView = ({
 // Add new styled components for the sidebar navigation
 const CorpusViewContainer = styled.div`
   display: flex;
-  flex-direction: column;
-  height: 100%;
+  flex-direction: row;
   width: 100%;
   position: relative;
   overflow: hidden;
   flex: 1;
+  align-items: stretch;
+  min-height: 0;
 `;
 
 const NavigationSidebar = styled(motion.div)<{ isExpanded: boolean }>`
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
+  position: relative;
   width: ${(props) => (props.isExpanded ? "280px" : "72px")};
-  background: white;
-  border-right: 1px solid #e2e8f0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(249, 250, 251, 0.95) 100%
+  );
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: ${(props) =>
+    props.isExpanded
+      ? "4px 0 24px rgba(0, 0, 0, 0.04), 1px 0 0 rgba(226, 232, 240, 0.5)"
+      : "2px 0 8px rgba(0, 0, 0, 0.02), 1px 0 0 rgba(226, 232, 240, 0.5)"};
   z-index: 100;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
+
+  /* Subtle gradient overlay for depth */
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: linear-gradient(
+      180deg,
+      rgba(74, 144, 226, 0.03) 0%,
+      transparent 100%
+    );
+    pointer-events: none;
+    opacity: ${(props) => (props.isExpanded ? 1 : 0.5)};
+    transition: opacity 0.4s ease;
+  }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     position: fixed;
+    left: 0;
+    top: 0;
     width: ${(props) => (props.isExpanded ? "280px" : "0")};
     box-shadow: ${(props) =>
-      props.isExpanded ? "2px 0 8px rgba(0, 0, 0, 0.1)" : "none"};
+      props.isExpanded
+        ? "8px 0 32px rgba(0, 0, 0, 0.12), 2px 0 0 rgba(226, 232, 240, 0.5)"
+        : "none"};
+    transform: translateX(${(props) => (props.isExpanded ? "0" : "-100%")});
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 200;
   }
 `;
 
 const NavigationHeader = styled.div<{ isExpanded: boolean }>`
   padding: 1.5rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(249, 250, 251, 0.3) 100%
+  );
   display: flex;
   align-items: center;
   justify-content: ${(props) =>
     props.isExpanded ? "space-between" : "center"};
   min-height: 72px;
+  position: relative;
+  z-index: 1;
+
+  /* Add subtle shine effect */
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.5) 50%,
+      transparent 100%
+    );
+  }
 `;
 
 const NavigationToggle = styled(motion.button)`
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #4a5568;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(248, 250, 252, 0.9) 100%
+  );
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  position: relative;
+  overflow: hidden;
+
+  /* Ripple effect base */
+  &::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      rgba(74, 144, 226, 0.2) 0%,
+      transparent 70%
+    );
+    transform: translate(-50%, -50%);
+    transition: width 0.4s, height 0.4s;
+  }
 
   &:hover {
-    background: #e2e8f0;
-    color: #2d3748;
+    background: linear-gradient(
+      135deg,
+      rgba(74, 144, 226, 0.1) 0%,
+      rgba(99, 102, 241, 0.08) 100%
+    );
+    border-color: rgba(74, 144, 226, 0.3);
+    color: #4a90e2;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(74, 144, 226, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+
+    &::before {
+      width: 80px;
+      height: 80px;
+    }
+
+    svg {
+      transform: scale(1.1);
+    }
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   }
 
   svg {
     width: 20px;
     height: 20px;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
   }
 `;
 
@@ -750,23 +856,88 @@ const NavigationItems = styled.div`
   flex: 1;
   padding: 1rem 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
 
+  /* Fade effect at top and bottom */
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 20px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  &::before {
+    top: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      transparent 100%
+    );
+  }
+
+  &::after {
+    bottom: 0;
+    background: linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      transparent 100%
+    );
+  }
+
+  /* Show fade when scrollable */
+  &:hover::before,
+  &:hover::after {
+    opacity: 1;
+  }
+
+  /* Custom scrollbar styling */
   &::-webkit-scrollbar {
     width: 6px;
   }
 
   &::-webkit-scrollbar-track {
-    background: #f8fafc;
+    background: transparent;
+    margin: 8px 0;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
+    background: linear-gradient(
+      180deg,
+      rgba(226, 232, 240, 0.8) 0%,
+      rgba(203, 213, 225, 0.8) 100%
+    );
     border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.2s ease;
 
     &:hover {
-      background: #cbd5e1;
+      background: linear-gradient(
+        180deg,
+        rgba(203, 213, 225, 0.9) 0%,
+        rgba(148, 163, 184, 0.9) 100%
+      );
+      box-shadow: 0 0 0 1px rgba(74, 144, 226, 0.2);
+    }
+
+    &:active {
+      background: linear-gradient(
+        180deg,
+        rgba(148, 163, 184, 1) 0%,
+        rgba(100, 116, 139, 1) 100%
+      );
     }
   }
+
+  /* Firefox scrollbar support */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(203, 213, 225, 0.8) transparent;
 `;
 
 const NavigationItem = styled(motion.button)<{
@@ -776,39 +947,121 @@ const NavigationItem = styled(motion.button)<{
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: ${(props) => (props.isExpanded ? "0.875rem 1.5rem" : "0.875rem")};
-  background: ${(props) => (props.isActive ? "#f0f7ff" : "transparent")};
-  border: none;
+  gap: ${(props) => (props.isExpanded ? "0.75rem" : "0")};
+  padding: ${(props) =>
+    props.isExpanded ? "0.875rem 1rem 0.875rem 1.5rem" : "0.875rem"};
+  margin: ${(props) => (props.isExpanded ? "0 0.5rem" : "0 0.25rem")};
+  width: ${(props) =>
+    props.isExpanded ? "calc(100% - 1rem)" : "calc(100% - 0.5rem)"};
+  border-radius: ${(props) => (props.isExpanded ? "12px" : "10px")};
+  background: ${(props) => {
+    if (props.isActive) {
+      return `linear-gradient(
+        135deg,
+        rgba(74, 144, 226, 0.12) 0%,
+        rgba(99, 102, 241, 0.08) 100%
+      )`;
+    }
+    return "transparent";
+  }};
+  border: 1px solid
+    ${(props) => (props.isActive ? "rgba(74, 144, 226, 0.2)" : "transparent")};
   color: ${(props) => (props.isActive ? "#4a90e2" : "#64748b")};
   font-weight: ${(props) => (props.isActive ? "600" : "500")};
   font-size: 0.9375rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   justify-content: ${(props) => (props.isExpanded ? "flex-start" : "center")};
+  overflow: hidden;
+  min-height: ${(props) => (props.isExpanded ? "48px" : "44px")};
 
+  /* Active indicator bar */
   &::before {
     content: "";
     position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: #4a90e2;
+    left: ${(props) => (props.isExpanded ? "-0.5rem" : "50%")};
+    top: ${(props) => (props.isExpanded ? "50%" : "0")};
+    width: ${(props) => (props.isExpanded ? "4px" : "60%")};
+    height: ${(props) => (props.isExpanded ? "60%" : "2px")};
+    background: linear-gradient(
+      ${(props) => (props.isExpanded ? "180deg" : "90deg")},
+      #4a90e2 0%,
+      #6366f1 100%
+    );
     opacity: ${(props) => (props.isActive ? "1" : "0")};
-    transition: opacity 0.2s ease;
+    transform: ${(props) =>
+      props.isExpanded ? "translateY(-50%)" : "translateX(-50%)"};
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 2px;
+    box-shadow: ${(props) =>
+      props.isActive ? "0 0 8px rgba(74, 144, 226, 0.5)" : "none"};
+  }
+
+  /* Hover background effect */
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(
+      circle at center,
+      rgba(74, 144, 226, 0.08) 0%,
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
   }
 
   &:hover {
-    background: ${(props) => (props.isActive ? "#f0f7ff" : "#f8fafc")};
-    color: ${(props) => (props.isActive ? "#4a90e2" : "#2d3748")};
+    background: ${(props) => {
+      if (props.isActive) {
+        return `linear-gradient(
+          135deg,
+          rgba(74, 144, 226, 0.16) 0%,
+          rgba(99, 102, 241, 0.12) 100%
+        )`;
+      }
+      return `linear-gradient(
+        135deg,
+        rgba(226, 232, 240, 0.3) 0%,
+        rgba(241, 245, 249, 0.2) 100%
+      )`;
+    }};
+    border-color: ${(props) =>
+      props.isActive ? "rgba(74, 144, 226, 0.3)" : "rgba(226, 232, 240, 0.5)"};
+    color: ${(props) => (props.isActive ? "#4a90e2" : "#475569")};
+    transform: ${(props) =>
+      props.isExpanded ? "translateX(2px)" : "scale(1.05)"};
+
+    &::after {
+      opacity: 1;
+    }
+
+    svg {
+      transform: ${(props) =>
+        props.isActive ? "scale(1.15) rotate(-5deg)" : "scale(1.1)"};
+      filter: ${(props) =>
+        props.isActive
+          ? "drop-shadow(0 2px 4px rgba(74, 144, 226, 0.3))"
+          : "none"};
+    }
+  }
+
+  &:active {
+    transform: ${(props) =>
+      props.isExpanded ? "translateX(0)" : "scale(0.98)"};
   }
 
   svg {
     width: 20px;
     height: 20px;
     flex-shrink: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
   }
 
   span {
@@ -816,20 +1069,39 @@ const NavigationItem = styled(motion.button)<{
     opacity: ${(props) => (props.isExpanded ? "1" : "0")};
     width: ${(props) => (props.isExpanded ? "auto" : "0")};
     overflow: hidden;
-    transition: opacity 0.2s ease, width 0.2s ease;
+    transition: opacity 0.3s ease, width 0.3s ease;
+    z-index: 1;
+  }
+
+  /* Accessibility - focus visible */
+  &:focus-visible {
+    outline: 2px solid #4a90e2;
+    outline-offset: 2px;
+  }
+
+  /* Respect reduced motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    transition: background-color 0.2s ease, color 0.2s ease;
+
+    &:hover {
+      transform: none;
+    }
+
+    svg {
+      transition: none;
+      transform: none !important;
+    }
   }
 `;
 
 const MainContentArea = styled.div<{ sidebarExpanded: boolean }>`
   flex: 1;
-  margin-left: ${(props) => (props.sidebarExpanded ? "280px" : "72px")};
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  height: 100%;
   overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     margin-left: 0;
@@ -842,8 +1114,13 @@ const MobileMenuBackdrop = styled(motion.div)`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 99;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(15, 23, 42, 0.4) 100%
+  );
+  backdrop-filter: blur(4px);
+  z-index: 190;
   display: none;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
@@ -851,26 +1128,68 @@ const MobileMenuBackdrop = styled(motion.div)`
   }
 `;
 
-const MobileMenuToggle = styled(motion.button)`
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: #4a90e2;
-  color: white;
-  border: none;
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
-  display: none;
+// Search bar wrapper with mobile navigation buttons
+const SearchBarWithNav = styled.div`
+  display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 101;
+  gap: 0.75rem;
+  width: 100%;
+`;
 
-  svg {
-    width: 24px;
-    height: 24px;
+const MobileNavGroup = styled.div`
+  display: none;
+  gap: 0;
+  align-items: center;
+  background: linear-gradient(
+    135deg,
+    rgba(74, 144, 226, 0.03) 0%,
+    rgba(74, 144, 226, 0.08) 50%,
+    rgba(99, 102, 241, 0.05) 100%
+  );
+  padding: 0.5rem;
+  border-radius: 14px;
+  box-shadow: 0 4px 6px rgba(74, 144, 226, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(74, 144, 226, 0.25);
+  position: relative;
+  overflow: hidden;
+  min-height: 58px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Animated gradient shimmer */
+  &::before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    left: -100%;
+    right: -100%;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(74, 144, 226, 0.6) 25%,
+      rgba(99, 102, 241, 0.8) 50%,
+      rgba(74, 144, 226, 0.6) 75%,
+      transparent 100%
+    );
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  /* Glow effect on hover */
+  &:hover {
+    box-shadow: 0 6px 12px rgba(74, 144, 226, 0.18),
+      0 2px 4px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    border-color: rgba(74, 144, 226, 0.35);
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(200%);
+    }
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
@@ -878,20 +1197,171 @@ const MobileMenuToggle = styled(motion.button)`
   }
 `;
 
+const MobileNavButton = styled(Button)`
+  &&& {
+    padding: 0.625rem 0.875rem;
+    min-width: auto;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(255, 255, 255, 0.6) 100%
+    );
+    border: none;
+    border-radius: 10px;
+    color: #4a90e2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    height: 42px;
+    font-weight: 500;
+    overflow: hidden;
+
+    /* Subtle inner shadow for depth */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.05), 0 2px 4px rgba(74, 144, 226, 0.1);
+
+    /* Divider between buttons with glow */
+    &:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: 15%;
+      height: 70%;
+      width: 1px;
+      background: linear-gradient(
+        to bottom,
+        transparent,
+        rgba(74, 144, 226, 0.2) 30%,
+        rgba(99, 102, 241, 0.3) 50%,
+        rgba(74, 144, 226, 0.2) 70%,
+        transparent
+      );
+    }
+
+    /* Ripple effect base */
+    &::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: radial-gradient(
+        circle,
+        rgba(74, 144, 226, 0.4) 0%,
+        transparent 70%
+      );
+      transform: translate(-50%, -50%);
+      transition: width 0.4s, height 0.4s;
+    }
+
+    &:hover {
+      background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 1) 0%,
+        rgba(237, 245, 255, 1) 100%
+      );
+      color: #3a7bc8;
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.03), 0 4px 8px rgba(74, 144, 226, 0.2);
+
+      /* Ripple on hover */
+      &::before {
+        width: 100px;
+        height: 100px;
+      }
+
+      svg {
+        transform: rotate(-5deg) scale(1.15);
+        filter: drop-shadow(0 2px 4px rgba(74, 144, 226, 0.3));
+      }
+    }
+
+    &:active {
+      background: linear-gradient(
+        135deg,
+        rgba(237, 245, 255, 1) 0%,
+        rgba(225, 239, 255, 1) 100%
+      );
+      transform: translateY(0) scale(0.98);
+      box-shadow: inset 0 2px 4px rgba(74, 144, 226, 0.2),
+        0 1px 2px rgba(74, 144, 226, 0.1);
+
+      svg {
+        transform: rotate(0) scale(0.95);
+      }
+    }
+
+    svg {
+      width: 20px;
+      height: 20px;
+      margin: 0 !important;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1;
+      position: relative;
+    }
+  }
+`;
+
+const SearchBarContainer = styled.div`
+  flex: 1;
+  display: flex;
+  min-width: 0; /* Allows flex item to shrink below its content size */
+
+  /* Override CreateAndSearchBar's internal styles */
+  > div {
+    width: 100%;
+
+    /* Override the SearchInputWrapper max-width on mobile */
+    > div:first-child {
+      @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+        max-width: none;
+        flex: 1;
+      }
+    }
+  }
+`;
+
 const NotificationBadge = styled.div`
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 20px;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
   height: 20px;
-  background: #ef4444;
+  padding: 0 6px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
-  border-radius: 50%;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.7rem;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3),
+    0 0 0 2px rgba(255, 255, 255, 0.9);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  z-index: 2;
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.9;
+      transform: scale(1.05);
+    }
+  }
+
+  /* Respect reduced motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 `;
 
 export const Corpuses = () => {
@@ -1589,18 +2059,31 @@ export const Corpuses = () => {
     (opened_document === null || opened_document === undefined)
   ) {
     content = (
-      <CorpusCards
-        items={corpus_items}
-        pageInfo={corpus_response?.corpuses?.pageInfo}
-        loading={
-          loading_corpuses ||
-          delete_corpus_loading ||
-          update_corpus_loading ||
-          create_corpus_loading
-        }
-        loading_message="Loading Corpuses..."
-        fetchMore={fetchMoreCorpuses}
-      />
+      <div
+        style={{
+          width: "100%",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          padding: 0,
+          margin: 0,
+          overflow: "hidden",
+          minHeight: 0,
+        }}
+      >
+        <CorpusCards
+          items={corpus_items}
+          pageInfo={corpus_response?.corpuses?.pageInfo}
+          loading={
+            loading_corpuses ||
+            delete_corpus_loading ||
+            update_corpus_loading ||
+            create_corpus_loading
+          }
+          loading_message="Loading Corpuses..."
+          fetchMore={fetchMoreCorpuses}
+        />
+      </div>
     );
   } else if (
     (opened_corpus !== null || opened_corpus !== undefined) &&
@@ -1643,13 +2126,20 @@ export const Corpuses = () => {
           >
             {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
               <motion.h3
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: 0.1 }}
                 style={{
                   margin: 0,
                   fontSize: "1.125rem",
                   fontWeight: 600,
-                  color: "#0f172a",
+                  background:
+                    "linear-gradient(135deg, #4a90e2 0%, #6366f1 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  letterSpacing: "-0.025em",
+                  display: "inline-block",
                 }}
               >
                 Navigation
@@ -1702,18 +2192,54 @@ export const Corpuses = () => {
                 </div>
                 {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
                   <>
-                    <span>{item.label}</span>
-                    {item.badge && item.badge > 0 && (
-                      <span
+                    <span style={{ flex: "1", textAlign: "left" }}>
+                      {item.label}
+                    </span>
+                    {item.badge !== undefined && (
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 500,
+                          damping: 15,
+                          delay: 0.1,
+                        }}
                         style={{
-                          marginLeft: "auto",
-                          fontSize: "0.875rem",
-                          opacity: 0.7,
-                          fontWeight: 600,
+                          fontSize: "0.8rem",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          background:
+                            item.badge > 0
+                              ? active_tab === index
+                                ? "linear-gradient(135deg, rgba(74, 144, 226, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%)"
+                                : "linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(203, 213, 225, 0.1) 100%)"
+                              : "transparent",
+                          border:
+                            item.badge > 0
+                              ? `1px solid ${
+                                  active_tab === index
+                                    ? "rgba(74, 144, 226, 0.2)"
+                                    : "rgba(203, 213, 225, 0.3)"
+                                }`
+                              : "1px solid transparent",
+                          color:
+                            item.badge > 0
+                              ? active_tab === index
+                                ? "#4a90e2"
+                                : "#64748b"
+                              : "#94a3b8",
+                          minWidth: "32px",
+                          textAlign: "center",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
                         }}
                       >
                         {item.badge}
-                      </span>
+                      </motion.span>
                     )}
                   </>
                 )}
@@ -1722,35 +2248,12 @@ export const Corpuses = () => {
           </NavigationItems>
         </NavigationSidebar>
 
-        {/* Mobile menu toggle button */}
-        {use_mobile_layout && (
-          <MobileMenuToggle
-            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <LucideMenu />
-          </MobileMenuToggle>
-        )}
-
         {/* Main content area */}
         <MainContentArea
           id="main-corpus-content-area"
           sidebarExpanded={!use_mobile_layout && sidebarExpanded}
         >
-          <div
-            style={{
-              flex: 1,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-              justifyContent: "flex-start",
-              height: "100%",
-            }}
-          >
-            {currentView?.component}
-          </div>
+          {currentView?.component}
         </MainContentArea>
       </CorpusViewContainer>
     );
@@ -1788,6 +2291,12 @@ export const Corpuses = () => {
 
   return (
     <CardLayout
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}
       Modals={
         <>
           {opened_corpus && showDescriptionEditor && (
@@ -1925,31 +2434,54 @@ export const Corpuses = () => {
             value={corpusSearchCache}
           />
         ) : currentView?.id === "home" || currentView?.id === "documents" ? (
-          <CreateAndSearchBar
-            onChange={handleDocumentSearchChange}
-            actions={contract_actions}
-            placeholder="Search for document in corpus..."
-            value={documentSearchCache}
-            filters={
-              opened_corpus ? (
-                <>
-                  {/* <FilterToMetadataSelector
-                    selected_corpus_id={opened_corpus.id}
-                  /> Temporarily disabled - not working and not really in-use*/}
-                  <FilterToLabelSelector
-                    only_labels_for_labelset_id={
-                      opened_corpus.labelSet?.id
-                        ? opened_corpus.labelSet.id
-                        : ""
-                    }
-                    label_type={LabelType.DocTypeLabel}
-                  />
-                </>
-              ) : (
-                <></>
-              )
-            }
-          />
+          <SearchBarWithNav>
+            <MobileNavGroup>
+              <MobileNavButton
+                onClick={() => {
+                  openedCorpus(null);
+                  navigate("/corpuses");
+                }}
+                title="Back to Corpuses"
+                icon
+              >
+                <ArrowLeft />
+              </MobileNavButton>
+              <MobileNavButton
+                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                title="Open Menu"
+                icon
+              >
+                <LucideMenu />
+              </MobileNavButton>
+            </MobileNavGroup>
+            <SearchBarContainer>
+              <CreateAndSearchBar
+                onChange={handleDocumentSearchChange}
+                actions={contract_actions}
+                placeholder="Search for document in corpus..."
+                value={documentSearchCache}
+                filters={
+                  opened_corpus ? (
+                    <>
+                      {/* <FilterToMetadataSelector
+                        selected_corpus_id={opened_corpus.id}
+                      /> Temporarily disabled - not working and not really in-use*/}
+                      <FilterToLabelSelector
+                        only_labels_for_labelset_id={
+                          opened_corpus.labelSet?.id
+                            ? opened_corpus.labelSet.id
+                            : ""
+                        }
+                        label_type={LabelType.DocTypeLabel}
+                      />
+                    </>
+                  ) : (
+                    <></>
+                  )
+                }
+              />
+            </SearchBarContainer>
+          </SearchBarWithNav>
         ) : currentView?.id === "annotations" ? (
           <CreateAndSearchBar
             onChange={handleAnnotationSearchChange}
@@ -1976,18 +2508,41 @@ export const Corpuses = () => {
             }
           />
         ) : currentView?.id === "analyses" || currentView?.id === "extracts" ? (
-          <CreateAndSearchBar
-            onChange={handleAnalysisSearchChange}
-            actions={corpus_actions}
-            placeholder="Search for analyses..."
-            value={analysesSearchCache}
-            filters={
-              <>
-                <FilterToCorpusActionOutputs />
-                <FilterToAnalysesSelector corpus={opened_corpus} />
-              </>
-            }
-          />
+          <SearchBarWithNav>
+            <MobileNavGroup>
+              <MobileNavButton
+                onClick={() => {
+                  openedCorpus(null);
+                  navigate("/corpuses");
+                }}
+                title="Back to Corpuses"
+                icon
+              >
+                <ArrowLeft />
+              </MobileNavButton>
+              <MobileNavButton
+                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                title="Open Menu"
+                icon
+              >
+                <LucideMenu />
+              </MobileNavButton>
+            </MobileNavGroup>
+            <SearchBarContainer>
+              <CreateAndSearchBar
+                onChange={handleAnalysisSearchChange}
+                actions={corpus_actions}
+                placeholder="Search for analyses..."
+                value={analysesSearchCache}
+                filters={
+                  <>
+                    <FilterToCorpusActionOutputs />
+                    <FilterToAnalysesSelector corpus={opened_corpus} />
+                  </>
+                }
+              />
+            </SearchBarContainer>
+          </SearchBarWithNav>
         ) : (
           // Default search bar for any other views (like settings)
           <CreateAndSearchBar

@@ -1,18 +1,16 @@
-import React, { useRef, useState, useEffect, FC, MouseEvent } from "react";
-import ReactDOM from "react-dom";
+import React, { useRef, useState, MouseEvent } from "react";
 import {
   Icon,
   Card,
   Popup,
   Menu,
-  Image,
   Label,
   Dimmer,
   Loader,
-  Statistic,
+  Button,
 } from "semantic-ui-react";
 import _ from "lodash";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { navigateToDocument } from "../../utils/navigationUtils";
 
@@ -29,73 +27,374 @@ import { downloadFile } from "../../utils/files";
 import fallback_doc_icon from "../../assets/images/defaults/default_doc_icon.jpg";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
-import { MyPermissionsIndicator } from "../widgets/permissions/MyPermissionsIndicator";
 
-interface ContextMenuItem {
-  key: string;
-  icon: string;
-  content: string;
-  onClick: () => void;
-}
+// Animations
+const shimmer = keyframes`
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+`;
 
-const StyledCard = styled(Card)`
-  &.ui.card {
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
-    transition: all 0.3s ease;
-    overflow: hidden;
-    width: 100% !important;
-    margin: 0 !important;
-    display: flex;
-    flex-direction: column;
+const spin = keyframes`
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+`;
+
+const slideIn = keyframes`
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+`;
+
+// Corporate styled card container
+const StyledCard = styled.div`
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: visible;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  min-height: 280px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+      0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border-color: #cbd5e1;
+
+    .card-header {
+      &::after {
+        opacity: 1;
+      }
+    }
+
+    .action-bar {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    img:not(.fallback-icon) {
+      transform: translateY(5%);
+    }
+  }
+
+  &.is-selected {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1),
+      0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+
+  &.is-open {
+    border-color: #f59e0b;
+    background: #fffbeb;
+  }
+
+  &.backend-locked {
+    pointer-events: none;
+    opacity: 0.6;
+    background: #f9fafb;
+  }
+`;
+
+// Clean card header
+const CardHeader = styled.div`
+  position: relative;
+  height: 140px;
+  background: #f8fafc;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  border-bottom: 1px solid #e2e8f0;
+  transition: background 0.2s ease;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    transition: transform 0.3s ease;
+  }
+
+  .fallback-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    opacity: 0.2;
+    object-fit: contain;
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.1) 100%
+    );
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+`;
+
+// Content section
+const ContentSection = styled.div`
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+`;
+
+// Typography
+const Title = styled.h3`
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const Description = styled.p`
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+// Metadata section
+const MetadataSection = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 8px;
+`;
+
+const MetaPill = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #475569;
+  transition: background 0.15s ease;
+
+  .icon {
+    opacity: 0.8;
+    font-size: 0.7rem;
+  }
+
+  &:hover {
+    background: #e2e8f0;
+  }
+
+  &.success {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  &.warning {
+    background: #fed7aa;
+    color: #c2410c;
+  }
+`;
+
+// Action bar
+const ActionBar = styled.div`
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all 0.2s ease;
+`;
+
+const ActionButton = styled.button`
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  color: #64748b;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border-color: #cbd5e1;
+    color: #475569;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &.primary {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
 
     &:hover {
-      box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
-      transform: translateY(-2px);
+      background: #2563eb;
+      border-color: #2563eb;
     }
+  }
 
-    .content {
-      padding: 1.2em;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
+  &.danger:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: white;
+  }
+
+  &.success:hover {
+    background: #10b981;
+    border-color: #10b981;
+    color: white;
+  }
+
+  &.downloading {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+    animation: pulse 1.5s ease-in-out infinite;
+
+    @keyframes pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.8;
+      }
     }
+  }
 
-    .header {
-      font-size: 1.2em;
-      font-weight: 600;
-      margin-bottom: 0.5em;
-      word-break: break-word;
-      overflow-wrap: break-word;
-    }
+  .icon {
+    margin: 0 !important;
+    font-size: 13px;
 
-    .meta {
-      font-size: 0.9em;
-      color: rgba(0, 0, 0, 0.6);
-    }
-
-    .description {
-      margin-top: 1em;
-      font-size: 0.95em;
-      line-height: 1.4;
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .extra {
-      border-top: 1px solid rgba(0, 0, 0, 0.05);
-      background-color: #f8f9fa;
-      padding: 0.8em 1.2em;
+    &.loading {
+      animation: ${spin} 1s linear infinite;
     }
   }
 `;
 
-const StyledLabel = styled(Label)`
-  &.ui.label {
-    margin: 0.2em;
-    padding: 0.5em 0.8em;
-    border-radius: 20px;
+// Selection checkbox
+const SelectionControl = styled.div`
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: white;
+  border: 2px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 10;
+
+  &:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  &.selected {
+    background: #3b82f6;
+    border-color: #3b82f6;
+
+    .icon {
+      color: white;
+      font-size: 0.75rem;
+    }
+  }
+`;
+
+// File type badge
+const FileTypeBadge = styled.div`
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 3px 8px;
+  background: #0f172a;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+`;
+
+// Tags container
+const TagsContainer = styled.div`
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+`;
+
+const Tag = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #475569;
+
+  .icon {
+    font-size: 0.65rem;
   }
 `;
 
@@ -112,138 +411,21 @@ interface DocumentItemProps {
   setContextMenuOpen: (args: any) => any | void;
 }
 
-/**
- * Props for the enlarged portal component
- */
-interface ImageEnlargePortalProps {
-  /** The thumbnail image URL. */
-  src: string;
-  /** Whether to show the enlarged image or not. */
-  isVisible: boolean;
-  /** Where on the screen (in viewport coords) to anchor the enlarged image. */
-  position: { top: number; left: number } | null;
-  /** Title for the alt attribute. */
-  altText?: string;
-}
-
-/**
- * A portal component that renders an enlarged version
- * of the thumbnail, on top of everything else, anchored
- * near the thumbnail center rather than screen center.
- */
-const ImageEnlargePortal: FC<ImageEnlargePortalProps> = ({
-  src,
-  isVisible,
-  position,
-  altText,
-}) => {
-  // If not visible or no position, don't render the portal at all
-  if (!isVisible || !position) return null;
-
-  const { top, left } = position;
-
-  return ReactDOM.createPortal(
-    <div
-      style={{
-        position: "fixed",
-        top,
-        left,
-        transform: "translate(-50%, -50%) scale(1.5)",
-        transition: "opacity 0.3s ease",
-        opacity: isVisible ? 1 : 0,
-        pointerEvents: "none",
-        zIndex: 9999,
-        boxShadow: "0 20px 40px rgba(0,0,0,0.3), 0 15px 15px rgba(0,0,0,0.22)",
-        borderRadius: 8,
-        background: "#fff",
-      }}
-    >
-      <img
-        src={src}
-        alt={altText}
-        style={{
-          maxWidth: 600,
-          maxHeight: 600,
-          borderRadius: 8,
-        }}
-      />
-    </div>,
-    document.body
-  );
-};
-
 export const DocumentItem: React.FC<DocumentItemProps> = ({
   item,
-  add_caption = "Add Doc To Corpus",
-  edit_caption = "Edit Doc Details",
-  delete_caption = "Delete Document",
-  download_caption = "Download PDF",
+  add_caption = "Add to Corpus",
+  edit_caption = "Edit",
+  delete_caption = "Delete",
+  download_caption = "Download",
   contextMenuOpen,
   onShiftClick,
   onClick,
   removeFromCorpus,
   setContextMenuOpen,
 }) => {
-  const contextRef = useRef<HTMLDivElement>(null);
-  const [contextMenuState, setContextMenuState] = useState<{
-    open: boolean;
-    x: number;
-    y: number;
-    id: string | number;
-  }>({ open: false, x: 0, y: 0, id: "" });
-
-  const [showEnlarge, setShowEnlarge] = useState(false);
-  /**
-   * We'll store the exact center of the thumbnail in viewport coordinates,
-   * so we can anchor the enlarged copy right above the thumbnail.
-   */
-  const [previewPosition, setPreviewPosition] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
-
-  const hoverTimer = useRef<NodeJS.Timeout | null>(null);
-
-  // React Router navigation helper
   const navigate = useNavigate();
-
-  /**
-   * Adds a mild delay so the user must hover
-   * over the thumbnail for 1 second to enlarge.
-   */
-  const handleMouseEnterThumbnail = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    // We'll anchor the enlarged image to the center of the thumbnail
-    const top = rect.top + rect.height / 2;
-    const left = rect.left + rect.width / 2;
-    setPreviewPosition({ top, left });
-
-    hoverTimer.current = setTimeout(() => {
-      setShowEnlarge(true);
-    }, 1000);
-  };
-
-  const handleMouseLeaveThumbnail = () => {
-    if (hoverTimer.current) {
-      clearTimeout(hoverTimer.current);
-    }
-    setShowEnlarge(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (hoverTimer.current) {
-        clearTimeout(hoverTimer.current);
-      }
-    };
-  }, []);
-
-  const onDownload = (file_url: string | void | null) => {
-    if (file_url) {
-      downloadFile(file_url);
-    }
-    return null;
-  };
+  const [isHovered, setIsHovered] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const {
     id,
@@ -257,14 +439,14 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
     isPublic,
     myPermissions,
     fileType,
+    pageCount,
   } = item;
 
-  const cardClickHandler = (
-    event: React.MouseEvent<HTMLAnchorElement, MouseEvent>,
-    value: any
-  ) => {
-    // Don't trigger if clicking within context menu
-    if ((event.target as HTMLElement).closest(".Corpus_Context_Menu")) {
+  const cardClickHandler = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      (event.target as HTMLElement).closest(".action-button") ||
+      (event.target as HTMLElement).closest(".selection-control")
+    ) {
       return;
     }
 
@@ -280,94 +462,60 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
     }
   };
 
-  const handleOnAdd = (document: DocumentType | void) => {
-    if (document) {
-      selectedDocumentIds([document.id]);
-      showAddDocsToCorpusModal(true);
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onShiftClick) {
+      onShiftClick(item);
     }
-    return null;
   };
 
-  const handleOnDelete = (document: DocumentType | void) => {
-    if (document) {
-      selectedDocumentIds([document.id]);
-      showDeleteDocumentsModal(true);
+  const handleOpenKnowledgeBase = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentCorpus = openedCorpus();
+    navigateToDocument(
+      item as any,
+      currentCorpus as any,
+      navigate,
+      window.location.pathname
+    );
+    if (onClick) onClick(item);
+  };
+
+  const handleView = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    viewingDocument(item);
+  };
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    editingDocument(item);
+  };
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (pdfFile && !isDownloading) {
+      setIsDownloading(true);
+      try {
+        await downloadFile(pdfFile);
+      } finally {
+        setTimeout(() => setIsDownloading(false), 1000);
+      }
     }
-    return null;
+  };
+
+  const handleRemoveFromCorpus = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (removeFromCorpus) {
+      removeFromCorpus([item.id]);
+    }
   };
 
   const my_permissions = getPermissions(
     item.myPermissions ? item.myPermissions : []
   );
 
-  let context_menus: ContextMenuItem[] = [];
-  if (my_permissions.includes(PermissionTypes.CAN_REMOVE)) {
-    context_menus.push({
-      key: "delete",
-      content: delete_caption,
-      icon: "trash",
-      onClick: () => handleOnDelete(item),
-    });
-  }
-
-  if (!backendLock) {
-    if (my_permissions.includes(PermissionTypes.CAN_UPDATE)) {
-      context_menus.push({
-        key: "code",
-        content: edit_caption,
-        icon: "edit outline",
-        onClick: () => editingDocument(item),
-      });
-    }
-    if (pdfFile) {
-      context_menus.push({
-        key: "download",
-        content: download_caption,
-        icon: "download",
-        onClick: () => onDownload(pdfFile),
-      });
-      // Add knowledge base option
-      context_menus = [
-        {
-          key: "knowledge_base",
-          content: "Open Knowledge Base",
-          icon: "book",
-          onClick: () => {
-            const currentCorpus = openedCorpus();
-            // Use smart navigation to prefer slugs and prevent redirects
-            navigateToDocument(
-              item as any,
-              currentCorpus as any,
-              navigate,
-              window.location.pathname
-            );
-            if (onClick) onClick(item);
-          },
-        },
-        {
-          key: "view",
-          content: "View Details",
-          icon: "eye",
-          onClick: () => viewingDocument(item),
-        },
-      ];
-    }
-    context_menus.push({
-      key: "add",
-      content: add_caption,
-      icon: "plus circle",
-      onClick: () => handleOnAdd(item),
-    });
-  }
-
-  if (removeFromCorpus) {
-    context_menus.push({
-      key: "remove",
-      content: "Remove from Corpus",
-      icon: "remove",
-      onClick: () => removeFromCorpus([item.id]),
-    });
-  }
+  const canEdit = my_permissions.includes(PermissionTypes.CAN_UPDATE);
+  const canDelete = my_permissions.includes(PermissionTypes.CAN_REMOVE);
 
   let doc_label_objs = item?.docLabelAnnotations
     ? item.docLabelAnnotations.edges
@@ -377,137 +525,142 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
         .filter((lbl): lbl is AnnotationLabelType => !!lbl)
     : [];
 
-  let doc_labels = doc_label_objs.map((label, index) => (
-    <StyledLabel key={`doc_${id}_label${index}`}>
-      <Icon
-        style={{ color: label.color }}
-        name={label.icon ? label.icon : "tag"}
-      />{" "}
-      {label?.text}
-    </StyledLabel>
-  ));
-
-  const onContextMenuHandler = (e: React.MouseEvent<HTMLElement>) => {
-    e.preventDefault();
-    const x = e.clientX;
-    const y = e.clientY;
-    if (contextMenuState.open && contextMenuState.id === id) {
-      setContextMenuState({ open: false, x: 0, y: 0, id: "" });
-    } else {
-      setContextMenuState({ open: true, x, y, id });
-    }
-  };
-
   return (
-    <>
-      <StyledCard
-        className={`noselect GlowCard ${is_open ? "is-open" : ""}`}
-        key={id}
-        id={id}
-        style={{
-          ...(is_open ? { backgroundColor: "#e2ffdb" } : {}),
-          userSelect: "none",
-          MsUserSelect: "none",
-          MozUserSelect: "none",
-        }}
-        onContextMenu={onContextMenuHandler}
-        onClick={backendLock ? undefined : cardClickHandler}
-      >
-        {backendLock ? (
-          <Dimmer active inverted>
-            <Loader inverted>Processing...</Loader>
-          </Dimmer>
-        ) : null}
-
-        <div
-          onMouseEnter={handleMouseEnterThumbnail}
-          onMouseLeave={handleMouseLeaveThumbnail}
-          style={{ cursor: "pointer" }}
-        >
-          <Image src={icon || fallback_doc_icon} wrapped ui={false} />
-        </div>
-
-        {/* Portal for enlarged thumbnail anchored near thumbnail center */}
-        <ImageEnlargePortal
-          src={icon || fallback_doc_icon}
-          altText={title || "Document preview"}
-          position={previewPosition}
-          isVisible={showEnlarge}
-        />
-
-        <Card.Content style={{ wordWrap: "break-word" }}>
-          <Card.Header>
-            <Popup
-              content={`Full Title: ${title}`}
-              trigger={<span>{title ? title.substring(0, 48) : ""}</span>}
-            />
-            {is_selected ? (
-              <div style={{ float: "right" }}>
-                <Icon name="check circle" color="green" />
-              </div>
-            ) : null}
-          </Card.Header>
-          <Card.Meta>
-            Document Type: <Label size="mini">{fileType}</Label>
-          </Card.Meta>
-          <Card.Description>
-            <span>
-              <b>Description:</b> {description}
-            </span>
-          </Card.Description>
-        </Card.Content>
-        {doc_labels && doc_labels.length > 0 ? (
-          <Card.Content extra>
-            <Label.Group size="mini">{doc_labels}</Label.Group>
-          </Card.Content>
-        ) : null}
-      </StyledCard>
-
-      {contextMenuState.open && contextMenuState.id === id && (
-        <>
-          <div
-            ref={contextRef}
-            style={{
-              position: "absolute",
-              top: contextMenuState.y,
-              left: contextMenuState.x,
-              height: "1px",
-              width: "1px",
-              zIndex: 1000,
-            }}
-          />
-          <Popup
-            basic
-            context={contextRef}
-            onClose={() =>
-              setContextMenuState({ ...contextMenuState, open: false })
-            }
-            open={true}
-            hideOnScroll
-          >
-            <Menu
-              className="Corpus_Context_Menu"
-              secondary
-              vertical
-              onClick={(e: { stopPropagation: () => any }) =>
-                e.stopPropagation()
-              } // Stop click propagation here
-            >
-              {context_menus.map((menuItem) => (
-                <Menu.Item
-                  key={menuItem.key}
-                  icon={menuItem.icon}
-                  content={menuItem.content}
-                  onClick={() => {
-                    menuItem.onClick();
-                    setContextMenuState({ ...contextMenuState, open: false });
-                  }}
-                />
-              ))}
-            </Menu>
-          </Popup>
-        </>
+    <StyledCard
+      className={`noselect ${is_open ? "is-open" : ""} ${
+        is_selected ? "is-selected" : ""
+      } ${backendLock ? "backend-locked" : ""}`}
+      onClick={backendLock ? undefined : cardClickHandler}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {backendLock && (
+        <Dimmer active inverted style={{ borderRadius: "12px" }}>
+          <Loader size="small">Processing...</Loader>
+        </Dimmer>
       )}
-    </>
+
+      <SelectionControl
+        className={`selection-control ${is_selected ? "selected" : ""}`}
+        onClick={handleCheckboxClick}
+      >
+        {is_selected && <Icon name="check" />}
+      </SelectionControl>
+
+      <CardHeader className="card-header">
+        {icon ? (
+          <img src={icon} alt={title || "Document"} />
+        ) : (
+          <>
+            <div
+              style={{ width: "100%", height: "100%", background: "#f8fafc" }}
+            />
+            <img
+              src={fallback_doc_icon}
+              alt="Document"
+              className="fallback-icon"
+            />
+          </>
+        )}
+        {fileType && <FileTypeBadge>{fileType}</FileTypeBadge>}
+      </CardHeader>
+
+      <ContentSection>
+        <Title>{title || "Untitled Document"}</Title>
+
+        <Description>{description || "No description available"}</Description>
+
+        <MetadataSection>
+          {pageCount && (
+            <MetaPill>
+              <Icon name="file outline" />
+              {pageCount} pages
+            </MetaPill>
+          )}
+
+          {isPublic && (
+            <MetaPill className="success">
+              <Icon name="globe" />
+              Public
+            </MetaPill>
+          )}
+
+          {!canEdit && (
+            <MetaPill className="warning">
+              <Icon name="lock" />
+              Read-only
+            </MetaPill>
+          )}
+
+          {doc_label_objs.length > 0 && (
+            <TagsContainer>
+              {doc_label_objs.slice(0, 2).map((label, index) => (
+                <Tag key={`doc_${id}_label${index}`}>
+                  <Icon
+                    name={(label.icon as any) || "tag"}
+                    style={{ color: label.color }}
+                  />
+                  {label.text}
+                </Tag>
+              ))}
+            </TagsContainer>
+          )}
+        </MetadataSection>
+
+        <ActionBar className="action-bar">
+          <ActionButton
+            className="action-button primary"
+            onClick={handleOpenKnowledgeBase}
+            disabled={backendLock}
+            title="Open Knowledge Base"
+          >
+            <Icon name="book" />
+          </ActionButton>
+
+          <ActionButton
+            className="action-button"
+            onClick={handleView}
+            disabled={backendLock}
+            title="View Details"
+          >
+            <Icon name="eye" />
+          </ActionButton>
+
+          {pdfFile && (
+            <ActionButton
+              className={`action-button ${isDownloading ? "downloading" : ""}`}
+              onClick={handleDownload}
+              disabled={backendLock || isDownloading}
+              title={isDownloading ? "Downloading..." : download_caption}
+            >
+              <Icon
+                name={isDownloading ? "spinner" : "download"}
+                className={isDownloading ? "loading" : ""}
+              />
+            </ActionButton>
+          )}
+
+          {canEdit && !backendLock && (
+            <ActionButton
+              className="action-button"
+              onClick={handleEdit}
+              title={edit_caption}
+            >
+              <Icon name="edit" />
+            </ActionButton>
+          )}
+
+          {removeFromCorpus && !backendLock && (
+            <ActionButton
+              className="action-button danger"
+              onClick={handleRemoveFromCorpus}
+              title="Remove from Corpus"
+            >
+              <Icon name="remove circle" />
+            </ActionButton>
+          )}
+        </ActionBar>
+      </ContentSection>
+    </StyledCard>
   );
 };
