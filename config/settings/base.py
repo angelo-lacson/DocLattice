@@ -29,8 +29,29 @@ ALLOWED_HOSTS = env.list(
 # https://docs.djangoproject.com/en/dev/ref/settings/#debug
 DEBUG = env.bool("DJANGO_DEBUG", False)
 
-# Use AWS - use AWS S3 storage instead of local disk
-USE_AWS = env.bool("USE_AWS", False)
+# Storage backend selection - choose between LOCAL, AWS, or GCP
+STORAGE_BACKEND = env.str("STORAGE_BACKEND", default="LOCAL").upper()
+
+# Validate storage backend choice
+VALID_STORAGE_BACKENDS = ["LOCAL", "AWS", "GCP"]
+if STORAGE_BACKEND not in VALID_STORAGE_BACKENDS:
+    raise ValueError(
+        f"Invalid STORAGE_BACKEND: {STORAGE_BACKEND}. "
+        f"Must be one of: {', '.join(VALID_STORAGE_BACKENDS)}"
+    )
+
+# Legacy support: Map old USE_AWS env var to STORAGE_BACKEND if present
+# This provides backward compatibility for existing deployments
+if env.bool("USE_AWS", default=None) is not None:
+    import warnings
+
+    warnings.warn(
+        "USE_AWS is deprecated. Please use STORAGE_BACKEND='AWS' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    if env.bool("USE_AWS", default=False):
+        STORAGE_BACKEND = "AWS"
 
 # Activate Open Contracts Analyzer Functionality
 USE_ANALYZER = env.bool("USE_ANALYZER", False)
@@ -265,7 +286,7 @@ STATICFILES_FINDERS = [
     "django.contrib.staticfiles.finders.AppDirectoriesFinder",
 ]
 
-if not USE_AWS:
+if STORAGE_BACKEND == "LOCAL":
     # STATIC
     # ------------------------
     STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
@@ -276,8 +297,8 @@ if not USE_AWS:
     MEDIA_ROOT = str(APPS_DIR / "media")
     # https://docs.djangoproject.com/en/dev/ref/settings/#media-url
     MEDIA_URL = "/media/"
-else:
-    # STORAGES
+elif STORAGE_BACKEND == "AWS":
+    # AWS S3 STORAGE CONFIGURATION
     # ------------------------------------------------------------------------------
     # https://django-storages.readthedocs.io/en/latest/#installation
     INSTALLED_APPS += ["storages"]  # noqa F405
@@ -321,6 +342,91 @@ else:
     DEFAULT_FILE_STORAGE = "opencontractserver.utils.storages.MediaRootS3Boto3Storage"
     MEDIA_URL = f"https://{aws_s3_domain}/media/"
     S3_DOCUMENT_PATH = env("S3_DOCUMENT_PATH", default="open_contracts")
+    MEDIA_ROOT = str(APPS_DIR / "media")
+
+elif STORAGE_BACKEND == "GCP":
+    # GCP CLOUD STORAGE CONFIGURATION
+    # ------------------------------------------------------------------------------
+    # https://django-storages.readthedocs.io/en/latest/#installation
+    INSTALLED_APPS += ["storages"]  # noqa F405
+
+    # GCS Settings
+    # https://django-storages.readthedocs.io/en/latest/backends/gcloud.html#settings
+    GS_BUCKET_NAME = env("GS_BUCKET_NAME")
+
+    # Optional: Your Google Cloud project ID
+    GS_PROJECT_ID = env("GS_PROJECT_ID", default=None)
+
+    # Authentication - Can use service account JSON path or default credentials
+    # For production, use workload identity/service account attached to compute
+    GS_CREDENTIALS = env("GS_CREDENTIALS", default=None)
+
+    # ACL for new files - publicRead for static files that need public access
+    # For media files, we'll override this in the storage class
+    GS_DEFAULT_ACL = env("GS_DEFAULT_ACL", default=None)
+
+    # Security: Don't serve public URLs for private files
+    GS_QUERYSTRING_AUTH = env.bool("GS_QUERYSTRING_AUTH", default=True)
+
+    GS_EXPIRATION = timedelta(seconds=env.int("GS_EXPIRATION_SECONDS", default=86400))
+
+    # File handling
+    GS_FILE_OVERWRITE = env.bool("GS_FILE_OVERWRITE", default=False)
+
+    # Maximum memory size before rolling over to disk (0 = no rollover)
+    GS_MAX_MEMORY_SIZE = env.int("GS_MAX_MEMORY_SIZE", default=0)
+
+    # Chunk size for resumable uploads (must be multiple of 256K)
+    GS_BLOB_CHUNK_SIZE = env.int("GS_BLOB_CHUNK_SIZE", default=1024 * 256 * 10)  # 2.5MB
+
+    # Optional custom endpoint
+    GS_CUSTOM_ENDPOINT = env("GS_CUSTOM_ENDPOINT", default=None)
+
+    # Location (subdirectory) for files - will be set per storage class
+    GS_LOCATION = env("GS_LOCATION", default="")
+
+    # Object parameters for cache control
+    _GS_EXPIRY = 60 * 60 * 24 * 7  # 7 days
+    GS_OBJECT_PARAMETERS = {
+        "cache_control": f"max-age={_GS_EXPIRY}, s-maxage={_GS_EXPIRY}, must-revalidate"
+    }
+
+    # GZIP settings
+    GS_IS_GZIPPED = env.bool("GS_IS_GZIPPED", default=False)
+    GZIP_CONTENT_TYPES = (
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "application/x-javascript",
+        "image/svg+xml",
+    )
+
+    # IAM Sign Blob API for signed URLs (required when not using service account key file)
+    GS_IAM_SIGN_BLOB = env.bool("GS_IAM_SIGN_BLOB", default=False)
+
+    # Optional: Override service account email for signing
+    GS_SA_EMAIL = env("GS_SA_EMAIL", default=None)
+
+    # Build domain for URLs
+    if GS_CUSTOM_ENDPOINT:
+        gcs_domain = GS_CUSTOM_ENDPOINT
+    else:
+        gcs_domain = f"storage.googleapis.com/{GS_BUCKET_NAME}"
+
+    # STATIC
+    # ------------------------
+    STATICFILES_STORAGE = (
+        "opencontractserver.utils.storages.StaticRootGoogleCloudStorage"
+    )
+    STATIC_URL = f"https://{gcs_domain}/static/"
+
+    # MEDIA
+    # ------------------------------------------------------------------------------
+    DEFAULT_FILE_STORAGE = (
+        "opencontractserver.utils.storages.MediaRootGoogleCloudStorage"
+    )
+    MEDIA_URL = f"https://{gcs_domain}/media/"
+    GCS_DOCUMENT_PATH = env("GCS_DOCUMENT_PATH", default="open_contracts")
     MEDIA_ROOT = str(APPS_DIR / "media")
 
 # TEMPLATES
@@ -525,8 +631,14 @@ RESERVED_USER_SLUGS = {
 DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 
 # Embeddings / Semantic Search - TODO move to EMBEDDER_KWARGS and use like PARSER_KWARGS
-EMBEDDINGS_MICROSERVICE_URL = "http://vector-embedder:8000"
-VECTOR_EMBEDDER_API_KEY = "abc123"
+# Microservice URLs - read from environment with defaults
+EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
+VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
+DOCLING_PARSER_SERVICE_URL = env("DOCLING_PARSER_SERVICE_URL")
+DOCLING_PARSER_TIMEOUT = env.int(
+    "DOCLING_PARSER_TIMEOUT", default=300  # 5 minutes default
+)
+use_cloud_run_iam_auth = True
 
 # LLM SETTING
 OPENAI_API_KEY = env.str("OPENAI_API_KEY", default="")
@@ -692,15 +804,16 @@ MINN_MODERNBERT_EMBEDDERS = {
 }
 
 
+# Pipeline-specific settings that override global settings
+# These are only set if you want to override the global settings for specific components
+# Otherwise, components will fall back to the global settings (which read from env vars)
 PIPELINE_SETTINGS = {
-    "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder": {
-        "embeddings_microservice_url": "http://vector-embedder:8000",
-        "vector_embedder_api_key": "abc123",
-    },
-    "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser": {
-        "DOCLING_PARSER_SERVICE_URL": "http://docling-parser:8000",
-        "DOCLING_PARSER_TIMEOUT": None,
-    },
+    # Example: To override settings for a specific component:
+    # "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder": {
+    #     "embeddings_microservice_url": "https://custom-url-for-this-component",
+    #     "vector_embedder_api_key": "custom-key",
+    # },
+    # Currently no overrides - all components use global settings which read from env vars
 }
 
 LLMS_DEFAULT_AGENT_FRAMEWORK = "pydantic_ai"

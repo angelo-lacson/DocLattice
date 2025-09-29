@@ -7,6 +7,7 @@ from django.conf import settings
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -37,8 +38,9 @@ class MicroserviceEmbedder(BaseEmbedder):
         # is determined within the _embed_text_impl method.
         # The order of precedence is:
         # 1. Direct keyword arguments passed to the embed_text() method (via all_kwargs).
-        # 2. Settings from PIPELINE_SETTINGS for this specific component (via component_settings, then all_kwargs).
+        # 2. Settings from PIPELINE_SETTINGS for this specific component (via component_settings).
         # 3. Global Django settings (e.g., settings.EMBEDDINGS_MICROSERVICE_URL) as a final fallback.
+        # Note: Environment variables are ONLY read in Django settings, not in this component.
 
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
         """
@@ -80,10 +82,27 @@ class MicroserviceEmbedder(BaseEmbedder):
             )
             api_key = all_kwargs.get("vector_embedder_api_key", api_key_fallback)
 
+            # Optional explicit flag to force Cloud Run IAM auth (useful for custom domains)
+            use_cloud_run_iam_auth = bool(
+                all_kwargs.get(
+                    "use_cloud_run_iam_auth",
+                    component_specific_settings.get("use_cloud_run_iam_auth", False),
+                )
+            )
+
+            headers: dict[str, str] = {}
+            if api_key:
+                headers["X-API-Key"] = api_key
+
+            # Attach Cloud Run IAM id_token if applicable/forced
+            headers = maybe_add_cloud_run_auth(
+                service_url, headers, force=use_cloud_run_iam_auth
+            )
+
             response = requests.post(
                 f"{service_url}/embeddings",
                 json={"text": text},
-                headers={"X-API-Key": api_key},
+                headers=headers,
             )
 
             if response.status_code == 200:

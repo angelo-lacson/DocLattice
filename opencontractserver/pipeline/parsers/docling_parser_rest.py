@@ -11,6 +11,7 @@ from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.types.dicts import OpenContractDocExport
+from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +32,22 @@ class DoclingParser(BaseParser):
     def __init__(self):
         """Initialize the Docling REST parser with service URL from settings."""
         super().__init__()  # Call to superclass __init__
-        # Default to http://docling-parser:8000/parse/ if not specified in settings
-        self.service_url = getattr(
-            settings, "DOCLING_PARSER_SERVICE_URL", "http://docling-parser:8000/parse/"
-        )
+
+        # Priority order for service URL:
+        # 1. PIPELINE_SETTINGS configuration (if specified)
+        # 2. Django settings attribute (which reads from env vars)
+        # Note: Environment variables are ONLY read in Django settings, not here
+
+        self.service_url = getattr(settings, "DOCLING_PARSER_SERVICE_URL")
+
         # Allow configuring the timeout
-        self.request_timeout = getattr(
-            settings, "DOCLING_PARSER_TIMEOUT", 300
-        )  # 5 minutes default
+        self.request_timeout = getattr(settings, "DOCLING_PARSER_TIMEOUT")
+
+        # Optional explicit flag to force Cloud Run IAM auth (useful for custom domains)
+        self.use_cloud_run_iam_auth = bool(
+            getattr(settings, "use_cloud_run_iam_auth", False)
+        )
+
         logger.info(f"DoclingParser initialized with service URL: {self.service_url}")
 
     def _parse_document_impl(
@@ -103,10 +112,16 @@ class DoclingParser(BaseParser):
             # Send request to the microservice
             logger.info(f"Sending PDF to Docling parser service: {self.service_url}")
             try:
+                headers: dict[str, str] = {"Content-Type": "application/json"}
+                # Attach Cloud Run IAM id_token if applicable/forced
+                headers = maybe_add_cloud_run_auth(
+                    self.service_url, headers, force=self.use_cloud_run_iam_auth
+                )
+
                 response = requests.post(
                     self.service_url,
                     json=payload,
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                     timeout=self.request_timeout,
                 )
                 response.raise_for_status()  # Raise exception for 4XX/5XX responses

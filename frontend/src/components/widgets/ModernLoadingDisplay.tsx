@@ -10,6 +10,7 @@ import {
   Archive,
 } from "lucide-react";
 import { color } from "../../theme/colors";
+import osLegalLogo from "../../assets/images/os_legal_FullColor.png";
 
 interface ModernLoadingDisplayProps {
   type?: "document" | "corpus" | "auth" | "default";
@@ -60,12 +61,11 @@ const Container = styled(motion.div)<{ $fullScreen?: boolean; $size?: string }>`
   align-items: center;
   justify-content: center;
   padding: ${(props) => (props.$size === "small" ? "2rem" : "3rem")};
-  min-height: ${(props) =>
-    props.$size === "small"
-      ? "200px"
-      : props.$size === "medium"
-      ? "300px"
-      : "400px"};
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
   ${(props) =>
     props.$fullScreen &&
     `
@@ -74,69 +74,55 @@ const Container = styled(motion.div)<{ $fullScreen?: boolean; $size?: string }>`
     left: 0;
     right: 0;
     bottom: 0;
+    transform: none;
     background: linear-gradient(135deg, ${color.N2} 0%, ${color.B1} 100%);
     backdrop-filter: blur(12px);
-    z-index: 9999;
   `}
 `;
 
 const IconContainer = styled(motion.div)<{ $type?: string }>`
   position: relative;
-  width: 80px;
-  height: 80px;
+  width: 100px;
+  height: 100px;
   margin-bottom: 2rem;
 
   &::before {
     content: "";
     position: absolute;
-    inset: -20px;
-    background: ${(props) => {
-      switch (props.$type) {
-        case "document":
-          return `linear-gradient(135deg, ${color.B3} 0%, ${color.B5} 100%)`;
-        case "corpus":
-          return `linear-gradient(135deg, ${color.T3} 0%, ${color.T6} 100%)`;
-        case "auth":
-          return `linear-gradient(135deg, ${color.P3} 0%, ${color.P6} 100%)`;
-        default:
-          return `linear-gradient(135deg, ${color.N4} 0%, ${color.N6} 100%)`;
-      }
-    }};
+    inset: -30px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #e74c3c 50%, #c0392b 100%);
     border-radius: 50%;
-    opacity: 0.15;
-    animation: ${pulse} 2s ease-in-out infinite;
-    filter: blur(20px);
+    opacity: 0.12;
+    animation: ${pulse} 2.5s ease-in-out infinite;
+    filter: blur(25px);
   }
 `;
 
 const IconWrapper = styled(motion.div)<{ $type?: string }>`
   position: relative;
-  width: 80px;
-  height: 80px;
+  width: 100px;
+  height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: ${color.white};
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(231, 76, 60, 0.15),
+    0 3px 12px rgba(231, 76, 60, 0.08);
   animation: ${float} 3s ease-in-out infinite;
-  border: 1px solid ${color.N3};
+  border: 1px solid rgba(231, 76, 60, 0.1);
+  overflow: hidden;
+
+  img {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+  }
 
   svg {
     width: 36px;
     height: 36px;
-    color: ${(props) => {
-      switch (props.$type) {
-        case "document":
-          return color.B5;
-        case "corpus":
-          return color.T6;
-        case "auth":
-          return color.P6;
-        default:
-          return color.N7;
-      }
-    }};
+    color: #e74c3c;
   }
 `;
 
@@ -149,7 +135,7 @@ const LoadingDots = styled.div`
 const Dot = styled(motion.div)<{ $delay: number }>`
   width: 6px;
   height: 6px;
-  background: ${color.B5};
+  background: #e74c3c;
   border-radius: 50%;
   animation: ${pulse} 1.4s ease-in-out infinite;
   animation-delay: ${(props) => props.$delay}s;
@@ -184,12 +170,16 @@ const ProgressBar = styled(motion.div)`
 
 const ProgressFill = styled(motion.div)`
   height: 100%;
-  background: linear-gradient(90deg, transparent, ${color.B5}, transparent);
+  background: linear-gradient(90deg, transparent, #e74c3c, transparent);
   background-size: 200% 100%;
   animation: ${shimmer} 1.5s ease-in-out infinite;
 `;
 
-const getIcon = (type?: string) => {
+const getIcon = (type?: string, useOsLogo: boolean = true) => {
+  if (useOsLogo) {
+    return <img src={osLegalLogo} alt="OpenContracts" />;
+  }
+
   switch (type) {
     case "document":
       return <FileText />;
@@ -213,7 +203,7 @@ const getMessage = (type?: string, customMessage?: string) => {
     case "auth":
       return "Securing Your Session";
     default:
-      return "Loading Content";
+      return "Loading OpenContracts";
   }
 };
 
@@ -226,7 +216,7 @@ const getSubMessage = (type?: string) => {
     case "auth":
       return "Verifying credentials";
     default:
-      return "Just a moment";
+      return "Preparing your workspace";
   }
 };
 

@@ -29,6 +29,9 @@ import {
   RequestDocumentsInputs,
   RequestDocumentsOutputs,
   GET_DOCUMENTS,
+  GET_CORPUS_BY_ID_FOR_REDIRECT,
+  GetCorpusByIdForRedirectInput,
+  GetCorpusByIdForRedirectOutput,
 } from "../../graphql/queries";
 import { DocumentType } from "../../types/graphql-api";
 import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
@@ -79,8 +82,26 @@ export const CorpusDocumentCards = ({
   const navigate = useNavigate();
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // Setup document resolvers and mutations
+  // Setup corpus and document resolvers and mutations
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  // Query corpus data to ensure openedCorpus is set for file uploads
+  const { data: corpusData } = useQuery<
+    GetCorpusByIdForRedirectOutput,
+    GetCorpusByIdForRedirectInput
+  >(GET_CORPUS_BY_ID_FOR_REDIRECT, {
+    variables: { id: opened_corpus_id || "" },
+    skip: !opened_corpus_id,
+    onCompleted: (data) => {
+      if (data?.corpus) {
+        // Ensure the global openedCorpus state is set
+        const currentOpenedCorpus = openedCorpus();
+        if (!currentOpenedCorpus || currentOpenedCorpus.id !== data.corpus.id) {
+          openedCorpus(data.corpus as any);
+        }
+      }
+    },
+  });
+
   const {
     refetch: refetchDocuments,
     loading: documents_loading,
@@ -224,6 +245,7 @@ export const CorpusDocumentCards = ({
   return (
     <div
       style={{
+        flex: 1,
         height: "100%",
         width: "100%",
         position: "relative",
@@ -260,6 +282,7 @@ export const CorpusDocumentCards = ({
       </ViewToggleContainer>
 
       <div
+        id="corpus-document-card-content-container"
         style={{
           flex: 1,
           position: "relative",
@@ -276,16 +299,14 @@ export const CorpusDocumentCards = ({
             loading_message="Documents Loading..."
             pageInfo={documents_response?.documents.pageInfo}
             containerStyle={{
-              flex: 1,
+              height: "100%",
               display: "flex",
               flexDirection: "column",
-              overflow: "hidden",
-              minHeight: 0,
+              paddingTop: "3.5rem", // Add padding to prevent overlap with view toggle buttons
             }}
             style={{
               flex: 1,
               minHeight: 0,
-              height: "100%",
               overflowY: "auto",
             }}
             fetchMore={fetchMoreDocuments}
@@ -295,20 +316,28 @@ export const CorpusDocumentCards = ({
               opened_corpus_id ? handleRemoveContracts : undefined
             }
             onDrop={onDrop}
-            corpusId={opened_corpus_id}
           />
         ) : (
-          <DocumentMetadataGrid
-            corpusId={opened_corpus_id || ""}
-            documents={document_items}
-            loading={documents_loading}
-            onDocumentClick={onOpen}
-            pageInfo={documents_response?.documents.pageInfo}
-            fetchMore={fetchMoreDocuments}
-            hasMore={
-              documents_response?.documents.pageInfo?.hasNextPage ?? false
-            }
-          />
+          <div
+            style={{
+              paddingTop: "3.5rem",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <DocumentMetadataGrid
+              corpusId={opened_corpus_id || ""}
+              documents={document_items}
+              loading={documents_loading}
+              onDocumentClick={onOpen}
+              pageInfo={documents_response?.documents.pageInfo}
+              fetchMore={fetchMoreDocuments}
+              hasMore={
+                documents_response?.documents.pageInfo?.hasNextPage ?? false
+              }
+            />
+          </div>
         )}
       </div>
     </div>

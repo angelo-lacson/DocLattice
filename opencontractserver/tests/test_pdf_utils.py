@@ -4,7 +4,7 @@ import tempfile
 from unittest import mock
 
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from opencontractserver.tests.fixtures import (
     NLM_INGESTOR_SAMPLE_PDF,
@@ -85,8 +85,10 @@ class PDFUtilsTestCase(TestCase):
             mock_s3_client = mock.Mock()
             mock_boto_client.return_value = mock_s3_client
 
-            # Mock settings.USE_AWS to be True
-            with mock.patch("opencontractserver.utils.files.settings.USE_AWS", True):
+            # Mock settings.STORAGE_BACKEND to be AWS
+            with mock.patch(
+                "opencontractserver.utils.files.settings.STORAGE_BACKEND", "AWS"
+            ):
                 # Prepare the mock for s3.put_object
                 mock_s3_client.put_object.return_value = {
                     "ResponseMetadata": {"HTTPStatusCode": 200}
@@ -113,3 +115,54 @@ class PDFUtilsTestCase(TestCase):
                     self.assertIn("Body", kwargs)
                     self.assertIn("ContentType", kwargs)
                     self.assertEqual(kwargs["Bucket"], settings.AWS_STORAGE_BUCKET_NAME)
+
+    @override_settings(
+        STORAGE_BACKEND="GCP",
+        GS_BUCKET_NAME="test-gcs-bucket",
+        GS_PROJECT_ID="test-gcs-project",
+    )
+    @mock.patch("google.cloud.storage.Client")
+    def test_split_pdf_into_images_gcp(self, mock_gcs_client):
+        """
+        Ensure GCP branch initializes client, uploads via blob, and returns paths.
+        """
+        mock_client = mock.Mock()
+        mock_bucket = mock.Mock()
+        mock_blob = mock.Mock()
+
+        mock_gcs_client.return_value = mock_client
+        mock_client.bucket.return_value = mock_bucket
+        mock_bucket.blob.return_value = mock_blob
+
+        result = split_pdf_into_images(self.need_ocr_pdf_content, "some/gcs/path")
+
+        self.assertEqual(len(result), 1)
+        self.assertTrue(all(path.endswith(".png") for path in result))
+        self.assertTrue(mock_bucket.blob.called)
+        self.assertTrue(mock_blob.upload_from_string.called)
+
+    def test_split_pdf_into_images_jpeg_format_local(self) -> None:
+        """
+        JPEG format is normalized and stored with .jpg extension when local.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = split_pdf_into_images(
+                self.need_ocr_pdf_content,
+                temp_dir,
+                target_format="jpeg",
+                force_local=True,
+            )
+            self.assertEqual(len(result), 1)
+            self.assertTrue(all(path.endswith(".jpg") for path in result))
+            for path in result:
+                self.assertTrue(os.path.exists(path))
+
+    def test_split_pdf_into_images_invalid_format_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(ValueError):
+                split_pdf_into_images(
+                    self.need_ocr_pdf_content,
+                    temp_dir,
+                    target_format="TIFF",
+                    force_local=True,
+                )
