@@ -706,9 +706,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_all_notes(self, info, corpus_id: Optional[str] = None):
         """
         Return the set of Note objects related to this Document instance that the user can see,
-        filtered by corpus_id. This approach uses resolve_oc_model_queryset to apply the same
-        permissioning logic applied elsewhere, ensuring consistency and potentially reducing
-        the query overhead by using a well-defined base queryset.
+        filtered by corpus_id.
         """
         from opencontractserver.annotations.models import Note
 

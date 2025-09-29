@@ -12,6 +12,7 @@ from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from opencontractserver.shared.db_utils import table_has_column
 from opencontractserver.shared.defaults import jsonfield_default_value
 from opencontractserver.shared.fields import NullableJSONField
+from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.slug_utils import (
     generate_unique_slug,
     sanitize_slug,
@@ -227,7 +228,7 @@ def calculate_export_filename(instance, filename):
     )
 
 
-class UserExport(django.db.models.Model):
+class UserExport(BaseOCModel):
 
     file = django.db.models.FileField(blank=True, upload_to=calculate_export_filename)
     name = django.db.models.CharField(max_length=1024, null=True, blank=True)
@@ -311,7 +312,7 @@ def calculate_import_filename(instance, filename):
     )
 
 
-class UserImport(django.db.models.Model):
+class UserImport(BaseOCModel):
     zip = django.db.models.FileField(blank=True, upload_to=calculate_import_filename)
     name = django.db.models.CharField(max_length=1024, null=True, blank=True)
     created = django.db.models.DateTimeField(default=timezone.now)

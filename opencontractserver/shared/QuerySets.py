@@ -1,4 +1,3 @@
-from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
@@ -6,8 +5,6 @@ from django_cte import CTEQuerySet
 from tree_queries.query import TreeQuerySet
 
 from opencontractserver.shared.mixins import VectorSearchViaEmbeddingMixin
-
-User = get_user_model()
 
 
 class PermissionedTreeQuerySet(TreeQuerySet):
@@ -35,14 +32,47 @@ class PermissionedTreeQuerySet(TreeQuerySet):
         Gets queryset with_tree_fields that is visible to user. At moment, we're JUST filtering
         on creator and is_public, BUT this will filter on per-obj permissions later.
         """
+        # Handle None user as anonymous
+        if user is None:
+            from django.contrib.auth.models import AnonymousUser
 
-        if user.is_superuser:
-            return self.all()
+            user = AnonymousUser()
 
-        if user.is_anonymous:
+        if hasattr(user, "is_superuser") and user.is_superuser:
+            return self.all().order_by("created")
+
+        if user.is_anonymous or not hasattr(user, "is_authenticated"):
             queryset = self.filter(Q(is_public=True)).distinct()
         else:
-            queryset = self.filter(Q(creator=user) | Q(is_public=True)).distinct()
+            # Try to use Guardian's permission system for authenticated users
+            from guardian.shortcuts import get_objects_for_user
+
+            try:
+                # Get objects the user has read permission for via Guardian
+                model_name = self.model._meta.model_name
+                app_label = self.model._meta.app_label
+                perm = f"{app_label}.read_{model_name}"
+
+                # Get objects user has permission for
+                permitted_objects = get_objects_for_user(
+                    user,
+                    perm,
+                    klass=self.model,
+                    accept_global_perms=False,
+                    with_superuser=False,
+                )
+
+                # Get the IDs of permitted objects
+                permitted_ids = list(permitted_objects.values_list("id", flat=True))
+
+                # Combine: creator OR public OR has explicit permission
+                queryset = self.filter(
+                    Q(creator=user) | Q(is_public=True) | Q(id__in=permitted_ids)
+                ).distinct()
+
+            except (ImportError, Exception):
+                # Fall back to creator/public check only if Guardian not available
+                queryset = self.filter(Q(creator=user) | Q(is_public=True)).distinct()
 
         return queryset.with_tree_fields()
 

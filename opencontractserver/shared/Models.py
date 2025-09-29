@@ -1,8 +1,8 @@
 import django
-from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.db import models
 
-from opencontractserver.shared.Managers import PermissionManager
+from opencontractserver.shared.Managers import BaseVisibilityManager
 
 
 class BaseOCModel(models.Model):
@@ -11,8 +11,9 @@ class BaseOCModel(models.Model):
     all models.
     """
 
-    # this makes the queryset function readable_by_user() available which will filter properly on permissioning system.
-    objects = PermissionManager()
+    # All BaseOCModel subclasses get BaseVisibilityManager by default, providing
+    # the visible_to_user() method for consistent permission filtering
+    objects = BaseVisibilityManager()
 
     class Meta:
         abstract = True
@@ -21,7 +22,7 @@ class BaseOCModel(models.Model):
     # user_lock should be set when long-running process is activated for a given model by a user
     # and unset when process is done.
     user_lock = django.db.models.ForeignKey(
-        get_user_model(),
+        settings.AUTH_USER_MODEL,
         on_delete=django.db.models.SET_NULL,
         null=True,
         blank=True,
@@ -34,7 +35,7 @@ class BaseOCModel(models.Model):
     # Sharing
     is_public = django.db.models.BooleanField(default=False)
     creator = django.db.models.ForeignKey(
-        get_user_model(),
+        settings.AUTH_USER_MODEL,
         on_delete=django.db.models.CASCADE,
         null=False,
         blank=False,
