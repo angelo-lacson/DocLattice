@@ -30,8 +30,8 @@ concurrency:
 
 jobs:
   production-stack:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: larger
+    timeout-minutes: 50
     permissions:
       contents: read
 
@@ -98,6 +98,9 @@ jobs:
           AUTH0_M2M_MANAGEMENT_API_SECRET=test-secret
           AUTH0_M2M_MANAGEMENT_API_ID=test-id
           AUTH0_M2M_MANAGEMENT_GRANT_TYPE=client_credentials
+
+          EMBEDDINGS_MICROSERVICE_URL=http://vector-embedder:8000
+          DOCLING_PARSER_SERVICE_URL=http://docling-parser:8000/parse/
 
           # Docling
           DOCLING_MODELS_PATH=/models/docling

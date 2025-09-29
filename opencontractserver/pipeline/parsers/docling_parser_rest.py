@@ -11,6 +11,7 @@ from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.types.dicts import OpenContractDocExport
+from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,7 @@ class DoclingParser(BaseParser):
             try:
                 headers: dict[str, str] = {"Content-Type": "application/json"}
                 # Attach Cloud Run IAM id_token if applicable/forced
-                headers = self._maybe_add_cloud_run_auth(
+                headers = maybe_add_cloud_run_auth(
                     self.service_url, headers, force=self.use_cloud_run_iam_auth
                 )
 

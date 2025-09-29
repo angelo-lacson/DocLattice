@@ -22,65 +22,75 @@ class StorageBackendConfigTest(TestCase):
             self.assertNotIn("S3Boto3Storage", default_storage.__class__.__name__)
             self.assertNotIn("GoogleCloudStorage", default_storage.__class__.__name__)
 
+    @override_settings(
+        STORAGE_BACKEND="AWS",
+        AWS_STORAGE_BUCKET_NAME="test-bucket",
+        AWS_S3_REGION_NAME="us-east-1",
+        DEFAULT_FILE_STORAGE="opencontractserver.utils.storages.MediaRootS3Boto3Storage",
+        STATICFILES_STORAGE="opencontractserver.utils.storages.StaticRootS3Boto3Storage",
+    )
     def test_aws_storage_configuration(self):
-        """Test that AWS storage backend configuration is correct when set."""
+        """Test that AWS storage backend configuration is correct when enabled."""
         from django.conf import settings
 
-        # Test the configuration values that would be set if STORAGE_BACKEND="AWS"
-        # Note: We can't dynamically change STORAGE_BACKEND in tests as it's evaluated at import time
-        if settings.STORAGE_BACKEND == "AWS":
-            self.assertEqual(settings.AWS_STORAGE_BUCKET_NAME, "test-bucket")
-            self.assertEqual(settings.AWS_S3_REGION_NAME, "us-east-1")
+        self.assertEqual(settings.STORAGE_BACKEND, "AWS")
+        self.assertEqual(settings.AWS_STORAGE_BUCKET_NAME, "test-bucket")
+        self.assertEqual(settings.AWS_S3_REGION_NAME, "us-east-1")
+        self.assertEqual(
+            settings.DEFAULT_FILE_STORAGE,
+            "opencontractserver.utils.storages.MediaRootS3Boto3Storage",
+        )
+        self.assertEqual(
+            settings.STATICFILES_STORAGE,
+            "opencontractserver.utils.storages.StaticRootS3Boto3Storage",
+        )
 
-            # Check that the correct storage classes are configured
-            self.assertEqual(
-                settings.DEFAULT_FILE_STORAGE,
-                "opencontractserver.utils.storages.MediaRootS3Boto3Storage",
-            )
-            self.assertEqual(
-                settings.STATICFILES_STORAGE,
-                "opencontractserver.utils.storages.StaticRootS3Boto3Storage",
-            )
-        else:
-            # Just verify the storage classes exist and can be imported
-            from opencontractserver.utils.storages import (
-                MediaRootS3Boto3Storage,
-                StaticRootS3Boto3Storage,
-            )
+    def test_aws_storage_classes_importable(self):
+        """Always ensure AWS storage classes are importable."""
+        from opencontractserver.utils.storages import (
+            MediaRootS3Boto3Storage,
+            StaticRootS3Boto3Storage,
+        )
 
-            self.assertIsNotNone(MediaRootS3Boto3Storage)
-            self.assertIsNotNone(StaticRootS3Boto3Storage)
+        self.assertIsNotNone(MediaRootS3Boto3Storage)
+        self.assertIsNotNone(StaticRootS3Boto3Storage)
 
+    @override_settings(
+        STORAGE_BACKEND="GCP",
+        GS_BUCKET_NAME="test-gcs-bucket",
+        GS_PROJECT_ID="test-project",
+        GS_QUERYSTRING_AUTH=True,
+        GS_FILE_OVERWRITE=False,
+        DEFAULT_FILE_STORAGE="opencontractserver.utils.storages.MediaRootGoogleCloudStorage",
+        STATICFILES_STORAGE="opencontractserver.utils.storages.StaticRootGoogleCloudStorage",
+    )
     def test_gcp_storage_configuration(self):
-        """Test that GCP storage backend configuration is correct when set."""
+        """Test that GCP storage backend configuration is correct when enabled."""
         from django.conf import settings
 
-        # Test the configuration values that would be set if STORAGE_BACKEND="GCP"
-        # Note: We can't dynamically change STORAGE_BACKEND in tests as it's evaluated at import time
-        if settings.STORAGE_BACKEND == "GCP":
-            self.assertEqual(settings.GS_BUCKET_NAME, "test-gcs-bucket")
-            self.assertEqual(settings.GS_PROJECT_ID, "test-project")
-            self.assertTrue(settings.GS_QUERYSTRING_AUTH)
-            self.assertFalse(settings.GS_FILE_OVERWRITE)
+        self.assertEqual(settings.STORAGE_BACKEND, "GCP")
+        self.assertEqual(settings.GS_BUCKET_NAME, "test-gcs-bucket")
+        self.assertEqual(settings.GS_PROJECT_ID, "test-project")
+        self.assertTrue(settings.GS_QUERYSTRING_AUTH)
+        self.assertFalse(settings.GS_FILE_OVERWRITE)
+        self.assertEqual(
+            settings.DEFAULT_FILE_STORAGE,
+            "opencontractserver.utils.storages.MediaRootGoogleCloudStorage",
+        )
+        self.assertEqual(
+            settings.STATICFILES_STORAGE,
+            "opencontractserver.utils.storages.StaticRootGoogleCloudStorage",
+        )
 
-            # Check that the correct storage classes are configured
-            self.assertEqual(
-                settings.DEFAULT_FILE_STORAGE,
-                "opencontractserver.utils.storages.MediaRootGoogleCloudStorage",
-            )
-            self.assertEqual(
-                settings.STATICFILES_STORAGE,
-                "opencontractserver.utils.storages.StaticRootGoogleCloudStorage",
-            )
-        else:
-            # Just verify the storage classes exist and can be imported
-            from opencontractserver.utils.storages import (
-                MediaRootGoogleCloudStorage,
-                StaticRootGoogleCloudStorage,
-            )
+    def test_gcp_storage_classes_importable(self):
+        """Always ensure GCP storage classes are importable."""
+        from opencontractserver.utils.storages import (
+            MediaRootGoogleCloudStorage,
+            StaticRootGoogleCloudStorage,
+        )
 
-            self.assertIsNotNone(MediaRootGoogleCloudStorage)
-            self.assertIsNotNone(StaticRootGoogleCloudStorage)
+        self.assertIsNotNone(MediaRootGoogleCloudStorage)
+        self.assertIsNotNone(StaticRootGoogleCloudStorage)
 
     def test_storage_backend_validation(self):
         """Test that storage backend validation works."""

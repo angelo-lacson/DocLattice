@@ -1,7 +1,7 @@
 pytz>=2024.2 # https://github.com/stub42/pytz
 python-slugify==8.0.4  # https://github.com/un33k/python-slugify
 Pillow>=10.4.0  # https://github.com/python-pillow/Pillow
-argon2-cffi==21.3.0  # https://github.com/hynek/argon2_cffi
+argon2-cffi==25.1.0  # https://github.com/hynek/argon2_cffi
 hiredis==3.2.1  # https://github.com/redis/hiredis-py
 redis==5.2.1  # https://github.com/redis/redis-py
 celery==5.5.3  # pyup: < 6.0  # https://github.com/celery/celery
@@ -22,12 +22,12 @@ django-environ==0.12.0  # https://github.com/joke2k/django-environ
 django-model-utils==4.3.1  # https://github.com/jazzband/django-model-utils
 django-crispy-forms==2.4  # https://github.com/django-crispy-forms/django-crispy-forms
 crispy-bootstrap5==2025.6  # https://github.com/django-crispy-forms/crispy-bootstrap5
-django-redis==5.4.0  # https://github.com/jazzband/django-redis
+django-redis==6.0.0  # https://github.com/jazzband/django-redis
 django-filter==24.3  # https://github.com/carltongibson/django-filter
 django-storages[boto3,google]==1.14.6  # https://github.com/jschneier/django-storages
 django-extensions==4.1  # https://github.com/django-extensions/django-extensions
 whitenoise==6.7.0
-django-tree-queries
+django-tree-queries[admin]==0.21.0  # https://pypi.org/project/django-tree-queries/0.21.0/
 django-cte==2.0.0  # https://github.com/dimagi/django-cte
 pgvector  # For vector embeddings
 channels==4.3.1  # https://github.com/django/channels
