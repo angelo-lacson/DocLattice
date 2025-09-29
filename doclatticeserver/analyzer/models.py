@@ -20,6 +20,10 @@ def calculate_analyzer_icon_path(instance, filename):
 
 
 class GremlinEngine(BaseOCModel):
+    """
+    Model for a Gremlin API endpoint that can execute Gremlin queries against.
+    """
+
     class Meta:
         permissions = (
             ("permission_gremlinengine", "permission gremlin engine"),
@@ -71,6 +75,12 @@ class GremlinEngineGroupObjectPermission(GroupObjectPermissionBase):
 
 
 class Analyzer(BaseOCModel):
+    """
+    Model representing an analyzer that can be run on a corpus. An analyzer is a
+    Python package that is installed in a Gremlin Engine and can be run on a corpus
+    to produce annotations.
+    """
+
     class Meta:
         permissions = (
             ("permission_analyzer", "permission analyzer"),
