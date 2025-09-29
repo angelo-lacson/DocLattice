@@ -25,14 +25,13 @@ from opencontractserver.tasks.permissioning_tasks import (
     make_analysis_public_task,
     make_corpus_public_task,
 )
+from opencontractserver.tests.fixtures import SAMPLE_PDF_FILE_ONE_PATH
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import (
     get_users_permissions_for_obj,
     set_permissions_for_obj_to_user,
     user_has_permission_for_obj,
 )
-
-from opencontractserver.tests.fixtures import SAMPLE_PDF_FILE_ONE_PATH
 
 User = get_user_model()
 
@@ -369,11 +368,17 @@ class PermissioningTestCase(TestCase):
         ]["edges"]:
             ann_permissions = ann["node"]["myPermissions"]
             # Annotations inherit minimum of document (READ) and corpus (ALL) = READ
-            self.assertIn("read_annotation", ann_permissions,
-                         "Annotations should have READ permission inherited from document")
+            self.assertIn(
+                "read_annotation",
+                ann_permissions,
+                "Annotations should have READ permission inherited from document",
+            )
             # Should NOT have update even though corpus has ALL, because document only has READ
-            self.assertNotIn("update_annotation", ann_permissions,
-                            "Annotations should NOT have UPDATE (limited by document READ)")
+            self.assertNotIn(
+                "update_annotation",
+                ann_permissions,
+                "Annotations should NOT have UPDATE (limited by document READ)",
+            )
 
         user_two_corpus_response = self.graphene_client_2.execute(request_corpuses)
         logger.info(f"user_two_corpus_response: {user_two_corpus_response}")

@@ -17,8 +17,14 @@ SECRET_KEY = env(
 CACHES = {
     "default": {
         # Use Redis cache if available, otherwise fallback to local memory
-        "BACKEND": "django.core.cache.backends.redis.RedisCache" if env("REDIS_URL", default=None) else "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": env("REDIS_URL", default="") if env("REDIS_URL", default=None) else "",
+        "BACKEND": (
+            "django.core.cache.backends.redis.RedisCache"
+            if env("REDIS_URL", default=None)
+            else "django.core.cache.backends.locmem.LocMemCache"
+        ),
+        "LOCATION": (
+            env("REDIS_URL", default="") if env("REDIS_URL", default=None) else ""
+        ),
         "TIMEOUT": 300,  # 5 minutes default timeout
     }
 }

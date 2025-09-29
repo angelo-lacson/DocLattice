@@ -4,8 +4,10 @@ Storage backend warming to eliminate cold start delays.
 This module pre-initializes storage backends to avoid the ~400ms
 cold start penalty on first access.
 """
+
 import logging
 import os
+
 from django.conf import settings
 from django.core.files.storage import default_storage
 
@@ -33,17 +35,19 @@ def warm_storage_backend():
             # This forces boto3 client creation AND signature generation setup
             try:
                 # First, access the connection to initialize the client
-                if hasattr(default_storage, 'connection'):
+                if hasattr(default_storage, "connection"):
                     _ = default_storage.connection
                     logger.info(f"[PID {pid}] S3 connection initialized")
 
                 # Then generate a URL for a fake file - this triggers all initialization
-                test_url = default_storage.url('__storage_warmup_test__.txt')
-                logger.info(f"[PID {pid}] S3 storage backend warmed up successfully (generated test URL)")
+                default_storage.url("__storage_warmup_test__.txt")
+                logger.info(
+                    f"[PID {pid}] S3 storage backend warmed up successfully (generated test URL)"
+                )
 
                 # Optionally, generate a few more URLs to fully warm the caches
                 for i in range(3):
-                    _ = default_storage.url(f'__warmup_{i}__.txt')
+                    _ = default_storage.url(f"__warmup_{i}__.txt")
 
             except Exception as e:
                 logger.info(f"[PID {pid}] S3 storage backend warmed up (partial: {e})")
@@ -51,11 +55,11 @@ def warm_storage_backend():
         elif settings.STORAGE_BACKEND == "GCP":
             # For GCS, similar approach
             try:
-                if hasattr(default_storage, 'client'):
+                if hasattr(default_storage, "client"):
                     _ = default_storage.client
                     logger.info(f"[PID {pid}] GCS client initialized")
 
-                test_url = default_storage.url('__storage_warmup_test__.txt')
+                default_storage.url("__storage_warmup_test__.txt")
                 logger.info(f"[PID {pid}] GCS storage backend warmed up successfully")
             except Exception as e:
                 logger.info(f"[PID {pid}] GCS storage backend warmed up (partial: {e})")
@@ -76,6 +80,7 @@ def warm_storage_in_thread():
     Warm storage backend in a background thread to not block startup.
     """
     import threading
+
     thread = threading.Thread(target=warm_storage_backend, daemon=True)
     thread.start()
     return thread

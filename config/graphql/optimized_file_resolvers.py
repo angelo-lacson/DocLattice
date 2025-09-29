@@ -7,12 +7,14 @@ Key optimizations:
 3. Minimal processing - quick returns for null/empty fields
 """
 
+
 def create_file_resolver(field_name):
     """
     Factory function to create optimized file field resolvers.
 
     This avoids repetitive code while maintaining performance.
     """
+
     def resolver(self, info):
         # Fast path for empty fields
         field_value = getattr(self, field_name, None)
@@ -21,7 +23,7 @@ def create_file_resolver(field_name):
 
         # Request-level memoization to avoid regenerating URLs
         # This is safe because URLs are valid for the request duration
-        if not hasattr(info.context, '_file_url_cache'):
+        if not hasattr(info.context, "_file_url_cache"):
             info.context._file_url_cache = {}
 
         cache_key = f"{self.id}:{field_name}"
@@ -41,8 +43,8 @@ def create_file_resolver(field_name):
 
 
 # Pre-create resolvers for all file fields to avoid function creation overhead
-resolve_pdf_file_optimized = create_file_resolver('pdf_file')
-resolve_icon_optimized = create_file_resolver('icon')
-resolve_txt_extract_file_optimized = create_file_resolver('txt_extract_file')
-resolve_md_summary_file_optimized = create_file_resolver('md_summary_file')
-resolve_pawls_parse_file_optimized = create_file_resolver('pawls_parse_file')
+resolve_pdf_file_optimized = create_file_resolver("pdf_file")
+resolve_icon_optimized = create_file_resolver("icon")
+resolve_txt_extract_file_optimized = create_file_resolver("txt_extract_file")
+resolve_md_summary_file_optimized = create_file_resolver("md_summary_file")
+resolve_pawls_parse_file_optimized = create_file_resolver("pawls_parse_file")

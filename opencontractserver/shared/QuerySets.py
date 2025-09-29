@@ -170,7 +170,85 @@ class AnnotationQuerySet(
             EMBEDDING_RELATED_NAME = "embeddings"  # or whatever your FK related_name is
     """
 
-    pass
+    def visible_to_user(self, user, perm=None):
+        """
+        Override to properly handle annotation privacy model.
+        This ensures that even when AnnotationQueryOptimizer isn't used,
+        the privacy model is still respected.
+        """
+        from opencontractserver.analyzer.models import (
+            Analysis,
+            AnalysisUserObjectPermission,
+        )
+        from opencontractserver.extracts.models import (
+            Extract,
+            ExtractUserObjectPermission,
+        )
+
+        # Superusers see everything
+        if user.is_superuser:
+            return self.all()
+
+        # Start with base queryset
+        qs = self.all()
+
+        # For anonymous users, only show public structural annotations
+        if user.is_anonymous:
+            return qs.filter(
+                Q(structural=True)
+                & Q(document__is_public=True)
+                & (Q(corpus__isnull=True) | Q(corpus__is_public=True))
+            )
+
+        # Build visibility filters for analyses
+        visible_analyses = Analysis.objects.filter(Q(is_public=True) | Q(creator=user))
+        analyses_with_permission = AnalysisUserObjectPermission.objects.filter(
+            user=user
+        ).values_list("content_object_id", flat=True)
+        visible_analyses = visible_analyses | Analysis.objects.filter(
+            id__in=analyses_with_permission
+        )
+
+        # Build visibility filters for extracts
+        visible_extracts = Extract.objects.filter(Q(creator=user))
+        extracts_with_permission = ExtractUserObjectPermission.objects.filter(
+            user=user
+        ).values_list("content_object_id", flat=True)
+        visible_extracts = visible_extracts | Extract.objects.filter(
+            id__in=extracts_with_permission
+        )
+
+        # Complex filter for annotation visibility
+        # An annotation is visible if:
+        # 1. It's structural (always visible if doc is visible)
+        # 2. User created it
+        # 3. It's not private to an analysis/extract OR user has access to that analysis/extract
+        # 4. AND user has access to the document and corpus
+        visibility_filter = (
+            # Structural annotations (always visible if doc is readable)
+            Q(structural=True)
+            |
+            # User's own annotations
+            Q(creator=user)
+            |
+            # Regular annotations (no privacy fields)
+            (Q(created_by_analysis__isnull=True) & Q(created_by_extract__isnull=True))
+            |
+            # Analysis-created annotations user can see
+            (Q(created_by_analysis__in=visible_analyses))
+            |
+            # Extract-created annotations user can see
+            (Q(created_by_extract__in=visible_extracts))
+        )
+
+        # Also need document/corpus visibility
+        doc_corpus_filter = (
+            Q(document__is_public=True) | Q(document__creator=user)
+        ) & (
+            Q(corpus__isnull=True) | Q(corpus__is_public=True) | Q(corpus__creator=user)
+        )
+
+        return qs.filter(visibility_filter & doc_corpus_filter).distinct()
 
 
 class NoteQuerySet(CTEQuerySet, PermissionQuerySet, VectorSearchViaEmbeddingMixin):

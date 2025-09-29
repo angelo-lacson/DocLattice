@@ -340,14 +340,18 @@ elif STORAGE_BACKEND == "AWS":
     # STATIC
     # ------------------------
     # Use pooled storage backends for better performance
-    STATICFILES_STORAGE = "opencontractserver.utils.enhanced_storages.PooledStaticRootS3Storage"
+    STATICFILES_STORAGE = (
+        "opencontractserver.utils.enhanced_storages.PooledStaticRootS3Storage"
+    )
     COLLECTFAST_STRATEGY = "collectfast.strategies.boto3.Boto3Strategy"
     STATIC_URL = f"https://{aws_s3_domain}/static/"
 
     # MEDIA
     # ------------------------------------------------------------------------------
     # Use pooled storage backends for better performance
-    DEFAULT_FILE_STORAGE = "opencontractserver.utils.enhanced_storages.PooledMediaRootS3Storage"
+    DEFAULT_FILE_STORAGE = (
+        "opencontractserver.utils.enhanced_storages.PooledMediaRootS3Storage"
+    )
     MEDIA_URL = f"https://{aws_s3_domain}/media/"
     S3_DOCUMENT_PATH = env("S3_DOCUMENT_PATH", default="open_contracts")
     MEDIA_ROOT = str(APPS_DIR / "media")

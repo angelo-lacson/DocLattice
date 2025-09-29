@@ -58,14 +58,14 @@ def set_permissions_for_obj_to_user(
         f"{app_name}.update_{model_name}",
         f"{app_name}.remove_{model_name}",
         f"{app_name}.permission_{model_name}",
-        f"{app_name}.publish_{model_name}"
+        f"{app_name}.publish_{model_name}",
     ]
 
     # Remove all existing permissions
     for perm in all_perms:
         try:
             remove_perm(perm, user, instance)
-        except:
+        except Exception:
             # Permission might not exist for this model type
             pass
 
@@ -271,9 +271,11 @@ def user_has_permission_for_obj(
     logger.info(f"get_users_permissions_for_obj - App name: {app_label}")
 
     # Special handling for annotations with privacy fields
-    if model_name == 'annotation' and app_label == 'annotations':
+    if model_name == "annotation" and app_label == "annotations":
         from opencontractserver.annotations.models import Annotation
-        from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
 
         if isinstance(instance, Annotation):
             # Superusers always have permission
@@ -289,7 +291,9 @@ def user_has_permission_for_obj(
                 return False
 
             # Check if this is a private annotation (but not if it's structural and we're just reading)
-            if (instance.created_by_analysis_id or instance.created_by_extract_id) and not (instance.structural and permission == PermissionTypes.READ):
+            if (
+                instance.created_by_analysis_id or instance.created_by_extract_id
+            ) and not (instance.structural and permission == PermissionTypes.READ):
                 # For private annotations, permissions are limited by BOTH the source object AND doc+corpus
                 # We need to check the source object permissions match or exceed what's being requested
                 if instance.created_by_analysis_id:
@@ -298,7 +302,7 @@ def user_has_permission_for_obj(
                         user,
                         instance.created_by_analysis,
                         permission,  # Check for the same permission level being requested
-                        include_group_permissions=include_group_permissions
+                        include_group_permissions=include_group_permissions,
                     ):
                         logger.info(
                             f"User {user.username} denied {permission} access to annotation {instance.id} - "
@@ -311,7 +315,7 @@ def user_has_permission_for_obj(
                         user,
                         instance.created_by_extract,
                         permission,  # Check for the same permission level being requested
-                        include_group_permissions=include_group_permissions
+                        include_group_permissions=include_group_permissions,
                     ):
                         logger.info(
                             f"User {user.username} denied {permission} access to annotation {instance.id} - "
@@ -320,10 +324,12 @@ def user_has_permission_for_obj(
                         return False
 
             # Now check document+corpus permissions using the query optimizer
-            can_read, can_create, can_update, can_delete = AnnotationQueryOptimizer._compute_effective_permissions(
-                user=user,
-                document_id=instance.document_id,
-                corpus_id=instance.corpus_id
+            can_read, can_create, can_update, can_delete = (
+                AnnotationQueryOptimizer._compute_effective_permissions(
+                    user=user,
+                    document_id=instance.document_id,
+                    corpus_id=instance.corpus_id,
+                )
             )
 
             # Map the requested permission to the computed permissions
@@ -331,7 +337,10 @@ def user_has_permission_for_obj(
                 return can_read
             elif permission == PermissionTypes.CREATE:
                 return can_create
-            elif permission == PermissionTypes.UPDATE or permission == PermissionTypes.EDIT:
+            elif (
+                permission == PermissionTypes.UPDATE
+                or permission == PermissionTypes.EDIT
+            ):
                 return can_update
             elif permission == PermissionTypes.DELETE:
                 return can_delete

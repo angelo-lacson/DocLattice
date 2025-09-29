@@ -4,6 +4,8 @@
 
 > **🔵 NEW FEATURE**: Annotations can now be marked as "created by" an analysis or extract using `created_by_analysis` and `created_by_extract` fields. These annotations are private to the source object and only visible to users with permission to that analysis/extract.
 
+> **⚠️ DEPRECATION WARNING**: The `resolve_oc_model_queryset` function is DEPRECATED and has critical security flaws. It MUST be replaced with `Model.objects.visible_to_user(user)` calls. See [resolve_oc_model_queryset Deprecation](#resolve_oc_model_queryset-deprecation) section for migration details.
+
 ## Key Changes in Current Implementation
 
 | Component | Old Model | New Model | Impact |
@@ -27,6 +29,7 @@
 8. [Component Integration](#component-integration)
 9. [Testing](#testing)
 10. [Troubleshooting](#troubleshooting)
+11. [resolve_oc_model_queryset Deprecation](#resolve_oc_model_queryset-deprecation)
 
 ## Overview
 
@@ -408,7 +411,9 @@ class AnnotationQueryOptimizer:
 
 The annotation privacy model allows annotations to be marked as "created by" a specific analysis or extract, making them private to that source object. This provides fine-grained privacy control for programmatically generated annotations.
 
-### Centralized Permission Checking
+### Centralized Permission Checking - THE Single Source of Truth
+
+**CRITICAL**: The function `user_has_permission_for_obj` in `opencontractserver/utils/permissioning.py` is THE single source of truth for ALL permission checks in the system. Never bypass this function or implement custom permission logic.
 
 All permission checks for annotations now go through the enhanced `user_has_permission_for_obj` function, which automatically handles:
 
@@ -419,6 +424,11 @@ All permission checks for annotations now go through the enhanced `user_has_perm
 5. **Document+corpus computation** - Uses AnnotationQueryOptimizer for final permissions
 
 This means mutations don't need to understand the privacy model - they just call `user_has_permission_for_obj` and it handles everything.
+
+**Important for Private Annotations**: Operations like DELETE require the matching permission on BOTH:
+- The analysis/extract that created the annotation (DELETE permission)
+- The document AND corpus (DELETE permission on both)
+All requirements must be met or the operation is denied.
 
 ### Database Schema
 
@@ -604,6 +614,49 @@ if document_id:
     # Queryset already has permissions annotated
 ```
 
+## GraphQL Query Patterns
+
+### Querying Annotations - CRITICAL Requirements
+
+**IMPORTANT**: When querying annotations through GraphQL, you MUST:
+1. Use the `allAnnotations` field (NOT `annotations`)
+2. Include the `corpusId` parameter for proper permission filtering
+
+```graphql
+# CORRECT - Properly filtered with permissions
+query {
+    document(id: "DocumentID") {
+        allAnnotations(corpusId: "CorpusID") {  # corpusId is REQUIRED
+            id
+            rawText
+            annotationLabel {
+                text
+            }
+        }
+    }
+}
+
+# WRONG - Will return empty or incorrect results
+query {
+    document(id: "DocumentID") {
+        annotations {  # Wrong field name!
+            ...
+        }
+    }
+}
+
+# WRONG - Missing corpusId parameter
+query {
+    document(id: "DocumentID") {
+        allAnnotations {  # Missing corpusId!
+            ...
+        }
+    }
+}
+```
+
+**Why corpusId is Required**: The permission system needs the corpus context to properly compute annotation visibility, including filtering private annotations based on analysis/extract permissions.
+
 ## Frontend Implementation
 
 ### State Management (Jotai Atoms)
@@ -723,6 +776,19 @@ Components that properly support read-only mode:
 - ✅ **Content Feed**: Passes readOnly to children
 
 ## Testing
+
+### Comprehensive Test Coverage
+
+The permission system is thoroughly tested in:
+- `opencontractserver/tests/permissioning/test_annotation_privacy_scoping.py` - Proves privacy scoping works
+- `opencontractserver/tests/permissioning/test_annotation_permission_inheritance.py` - Validates inheritance model
+- `opencontractserver/tests/permissioning/test_analysis_extract_hybrid_permissions.py` - Tests hybrid permission model
+
+These tests definitively prove that:
+1. Private annotations are properly scoped to analyses/extracts
+2. Multiple teams can work on shared corpuses without seeing each other's private annotations
+3. Permission changes take effect immediately
+4. Mutations properly respect the privacy model
 
 ### Backend Tests
 
@@ -995,6 +1061,188 @@ def resolve_analysis_annotations(analysis, info):
     return Annotation.objects.filter(id__in=visible_annotations)
 ```
 
+## Common Pitfalls and Solutions
+
+### Pitfall 1: Forgetting corpusId in GraphQL queries
+**Problem**: Querying `allAnnotations` without `corpusId` returns empty results
+**Solution**: ALWAYS include `corpusId` parameter in annotation queries
+
+### Pitfall 2: Assuming analysis permission alone is enough for mutations
+**Problem**: Trying to delete private annotations with only analysis permission fails
+**Solution**: Ensure user has matching permission level on document AND corpus too
+
+### Pitfall 3: Not using include_group_permissions=True
+**Problem**: Permission checks fail for public objects or group-based access
+**Solution**: Always use `include_group_permissions=True` in permission checks:
+```python
+user_has_permission_for_obj(
+    user,
+    annotation,
+    PermissionTypes.DELETE,
+    include_group_permissions=True  # Don't forget this!
+)
+```
+
+### Pitfall 4: Trying to modify structural annotations
+**Problem**: Structural annotations are ALWAYS read-only, updates will fail
+**Solution**: Check `annotation.structural` before attempting modifications
+
+### Pitfall 5: Using wrong field names in GraphQL
+**Problem**: Using `annotations` instead of `allAnnotations` in queries
+**Solution**: Always use `allAnnotations` field name for querying document annotations
+
+### Pitfall 6: Bypassing user_has_permission_for_obj
+**Problem**: Implementing custom permission logic that doesn't handle all cases
+**Solution**: ALWAYS use `user_has_permission_for_obj` - it's the single source of truth
+
+## resolve_oc_model_queryset Deprecation
+
+> **🔴 CRITICAL SECURITY ISSUE**: The current `resolve_oc_model_queryset` function has a fundamental security flaw that could allow unauthorized access to objects through permission bypass scenarios. The function uses complex permission logic that is difficult to maintain and has been found to have edge cases where proper filtering may be bypassed.
+
+### Security Issues with Current Implementation
+
+1. **Complex Permission Logic**: Manual construction of permission queries that may have edge cases
+2. **Permission Model Dependencies**: Hard-coded assumptions about permission model naming conventions
+3. **Fallback Vulnerabilities**: Fallback logic may be too permissive in certain error scenarios
+4. **No Centralized Security**: Permission logic scattered across multiple functions
+5. **Performance Penalties**: N+1 query patterns when used repeatedly
+
+### The Solution: Migration to visible_to_user
+
+The solution is to migrate all models to use standardized `visible_to_user` methods that provide:
+- **Centralized Security**: Single source of truth for permission filtering
+- **Model-Specific Logic**: Each model implements appropriate filtering for its use case
+- **Better Performance**: Optimized queries specific to each model type
+- **Easier Testing**: Isolated permission logic per model
+- **Security by Design**: Fail-secure defaults built into each implementation
+
+### Three-Phase Migration Strategy
+
+#### Phase 1: Immediate Security Fix (IN PROGRESS)
+**Objective**: Make `resolve_oc_model_queryset` use `visible_to_user` when available, with full logging
+
+**Changes**:
+- Update `resolve_oc_model_queryset` to check for `visible_to_user` method on model managers
+- Use `visible_to_user` when available, fall back to legacy logic when not
+- Add comprehensive logging to track which path is used for each model
+- Add security warnings when fallback logic is used
+
+**Benefits**:
+- Immediate security improvement for models that already have `visible_to_user`
+- Full visibility into which models need migration
+- No breaking changes - backwards compatible
+
+#### Phase 2: Complete Model Migration (PLANNED)
+**Objective**: Implement `visible_to_user` for all remaining BaseOCModel subclasses
+
+**Changes**:
+- Implement `visible_to_user` method for all models currently using fallback logic
+- Add comprehensive tests for each model's permission filtering
+- Deprecate but maintain fallback logic in `resolve_oc_model_queryset`
+
+**Benefits**:
+- All models use secure, optimized permission filtering
+- Consistent behavior across the entire system
+- Foundation for Phase 3 removal
+
+#### Phase 3: Legacy Removal (FUTURE)
+**Objective**: Remove `resolve_oc_model_queryset` entirely
+
+**Changes**:
+- Remove `resolve_oc_model_queryset` function
+- Update all callers to use `Model.objects.visible_to_user(user)` directly
+- Remove fallback permission logic
+- Clean up related utility functions
+
+**Benefits**:
+- Simplified codebase with no legacy permission code
+- Guaranteed secure-by-design permission filtering
+- Better performance across all model queries
+
+### Current Model Support Status
+
+Based on code analysis, here's the current status of `visible_to_user` support:
+
+| Model | Status | Manager | visible_to_user Support | Priority |
+|-------|--------|---------|-------------------------|----------|
+| **Document** | ✅ **SECURE** | DocumentManager | ✅ Via PermissionQuerySet | HIGH |
+| **Annotation** | ✅ **SECURE** | AnnotationManager | ✅ Custom implementation with privacy model | HIGH |
+| **Note** | ✅ **SECURE** | NoteManager | ✅ Via PermissionQuerySet | HIGH |
+| **Embedding** | ✅ **SECURE** | EmbeddingManager | ✅ Via PermissionQuerySet | MEDIUM |
+| **UserFeedback** | ✅ **SECURE** | UserFeedbackManager | ✅ Custom implementation | MEDIUM |
+| **Corpus** | ⚠️ **LEGACY** | PermissionedTreeQuerySet | ✅ Via PermissionedTreeQuerySet | HIGH |
+| **Analysis** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | CRITICAL |
+| **Analyzer** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | HIGH |
+| **GremlinEngine** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | MEDIUM |
+| **Extract** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | CRITICAL |
+| **Fieldset** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | HIGH |
+| **Column** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | HIGH |
+| **Datacell** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | HIGH |
+| **AnnotationLabel** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | HIGH |
+| **LabelSet** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | HIGH |
+| **Relationship** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | HIGH |
+| **DocumentAnalysisRow** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | MEDIUM |
+| **DocumentRelationship** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | MEDIUM |
+| **CorpusQuery** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | MEDIUM |
+| **CorpusAction** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | MEDIUM |
+| **Conversation** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | LOW |
+| **ChatMessage** | 🔴 **VULNERABLE** | Default Manager | ❌ **NEEDS IMPLEMENTATION** | LOW |
+
+### Security Risk Assessment
+
+**CRITICAL RISK**: Models marked as 🔴 **VULNERABLE** are currently using the potentially insecure fallback logic in `resolve_oc_model_queryset`. This includes:
+
+- **Analysis**: Critical for AI analysis security
+- **Extract**: Critical for data extraction security
+- **Fieldset/Column/Datacell**: High volume permission checks
+- **AnnotationLabel/LabelSet**: Core annotation system security
+
+### Phase 1 Implementation Details
+
+The immediate fix updates `resolve_oc_model_queryset` to:
+
+```python
+def resolve_oc_model_queryset(
+    django_obj_model_type: type[BaseOCModel] = None,
+    user: AnonymousUser | User | int | str = None,
+) -> QuerySet[BaseOCModel]:
+    """
+    DEPRECATED: This function is being phased out in favor of Model.objects.visible_to_user(user).
+
+    Phase 1: Check for visible_to_user method and use it when available.
+    Phase 2: All models will have visible_to_user implemented.
+    Phase 3: This function will be removed entirely.
+    """
+    # ... user validation logic ...
+
+    # Phase 1: Try to use visible_to_user if available
+    if hasattr(django_obj_model_type.objects, 'visible_to_user'):
+        logger.info(f"Using visible_to_user for {django_obj_model_type.__name__} (SECURE)")
+        return django_obj_model_type.objects.visible_to_user(user)
+
+    # Fallback to legacy logic with security warning
+    logger.warning(f"Using legacy permission logic for {django_obj_model_type.__name__} - SECURITY RISK")
+    logger.warning(f"Model {django_obj_model_type.__name__} needs visible_to_user implementation")
+
+    # ... existing legacy logic ...
+```
+
+### Monitoring and Metrics
+
+During Phase 1, logging will track:
+- Which models use `visible_to_user` (secure path)
+- Which models use fallback logic (potential security risk)
+- Frequency of fallback usage for prioritizing Phase 2 implementations
+- Performance metrics for both paths
+
+### Migration Timeline
+
+- **Phase 1**: Complete within 1 sprint (immediate security improvement)
+- **Phase 2**: Complete within 2-3 sprints (full model coverage)
+- **Phase 3**: Complete within 1 sprint (cleanup and removal)
+
+**Total estimated timeline: 4-5 sprints for complete migration**
+
 ## Current Implementation Status
 
 ✅ **Backend**: Full implementation with query optimizer for annotations
@@ -1013,9 +1261,10 @@ def resolve_analysis_annotations(analysis, info):
 ✅ **Permission Inheritance**: Private annotations require matching permission level on source object
 ✅ **Structural Annotation Handling**: Structural annotations bypass privacy for READ operations
 ✅ **Documentation**: This guide reflects current implementation including privacy model
+🚧 **resolve_oc_model_queryset Migration**: Phase 1 implementation in progress - using visible_to_user when available
 
 ⚠️ **Extract Integration**: While the privacy model supports `created_by_extract`, the extract system may need updates to:
 - Set `created_by_extract` when creating annotations from extracts
 - Ensure proper permission checks for extract-created annotations (already handled by enhanced permission system)
 
-The annotation permission system is production-ready with significant performance improvements and privacy controls. The centralized permission checking through `user_has_permission_for_obj` ensures consistent enforcement of the privacy model across all mutations without requiring each mutation to understand the complexity of the privacy rules.
+🔴 **Security Notice**: Several models still rely on legacy permission logic in `resolve_oc_model_queryset`. Phase 1 migration provides immediate improvement by using `visible_to_user` when available. Complete migration to Phase 2 and 3 is critical for full security compliance.

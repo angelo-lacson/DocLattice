@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from graphql_relay import from_global_id
-
-from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
-
 
 SUPPORTED_FILTER_KEYS = {
     "annotationLabel_LabelType",
@@ -33,7 +30,7 @@ UNSUPPORTED_FILTER_KEYS = {
 }
 
 
-def _to_pk(global_id: Optional[str]) -> Optional[int]:
+def _to_pk(global_id: str | None) -> int | None:
     if not global_id:
         return None
     try:
@@ -54,7 +51,9 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
         return self.doc_annotations.all()
 
     unsupported = {
-        key for key, value in kwargs.items() if value not in (None, "", []) and key in UNSUPPORTED_FILTER_KEYS
+        key
+        for key, value in kwargs.items()
+        if value not in (None, "", []) and key in UNSUPPORTED_FILTER_KEYS
     }
     if unsupported:
         return self.doc_annotations.all()
@@ -70,24 +69,28 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
         return self.doc_annotations.all()
 
     # Check if we have any filters that require list processing
-    has_filters = any([
-        kwargs.get("annotationLabel_LabelType"),
-        kwargs.get("annotationLabelId"),
-        kwargs.get("annotationLabel_Text"),
-        kwargs.get("annotationLabel_Text_Contains"),
-        kwargs.get("annotationLabel_Description_Contains"),
-        kwargs.get("rawText_Contains"),
-        kwargs.get("analysis_Isnull") is not None,
-        kwargs.get("order"),
-        kwargs.get("offset"),
-        kwargs.get("first"),
-        kwargs.get("last"),
-    ])
+    has_filters = any(
+        [
+            kwargs.get("annotationLabel_LabelType"),
+            kwargs.get("annotationLabelId"),
+            kwargs.get("annotationLabel_Text"),
+            kwargs.get("annotationLabel_Text_Contains"),
+            kwargs.get("annotationLabel_Description_Contains"),
+            kwargs.get("rawText_Contains"),
+            kwargs.get("analysis_Isnull") is not None,
+            kwargs.get("order"),
+            kwargs.get("offset"),
+            kwargs.get("first"),
+            kwargs.get("last"),
+        ]
+    )
 
     # If no filters and no special arguments, just return the queryset
     if not has_filters:
         # Use optimizer for permission filtering
-        from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
 
         optimizer_kwargs = {
             "document_id": self.id,
@@ -128,7 +131,9 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
         if corpus_pk is not None:
             optimizer_kwargs["corpus_id"] = corpus_pk
 
-        annotations = list(AnnotationQueryOptimizer.get_document_annotations(**optimizer_kwargs))
+        annotations = list(
+            AnnotationQueryOptimizer.get_document_annotations(**optimizer_kwargs)
+        )
 
     if not annotations:
         return self.doc_annotations.none()
@@ -137,7 +142,10 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
     if label_type:
         annotations = _apply_filter(
             annotations,
-            lambda item: getattr(getattr(item, "annotation_label", None), "label_type", None) == label_type,
+            lambda item: getattr(
+                getattr(item, "annotation_label", None), "label_type", None
+            )
+            == label_type,
         )
 
     label_id = kwargs.get("annotationLabelId")
@@ -145,20 +153,24 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
         pk = _to_pk(label_id)
         if pk is None:
             return self.doc_annotations.all()
-        annotations = _apply_filter(annotations, lambda item: item.annotation_label_id == pk)
+        annotations = _apply_filter(
+            annotations, lambda item: item.annotation_label_id == pk
+        )
 
     label_text = kwargs.get("annotationLabel_Text")
     if label_text:
         annotations = _apply_filter(
             annotations,
-            lambda item: getattr(getattr(item, "annotation_label", None), "text", None) == label_text,
+            lambda item: getattr(getattr(item, "annotation_label", None), "text", None)
+            == label_text,
         )
 
     contains_text = kwargs.get("annotationLabel_Text_Contains")
     if contains_text:
         annotations = _apply_filter(
             annotations,
-            lambda item: contains_text in (getattr(getattr(item, "annotation_label", None), "text", "") or ""),
+            lambda item: contains_text
+            in (getattr(getattr(item, "annotation_label", None), "text", "") or ""),
         )
 
     contains_description = kwargs.get("annotationLabel_Description_Contains")
@@ -166,7 +178,10 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
         annotations = _apply_filter(
             annotations,
             lambda item: contains_description
-            in (getattr(getattr(item, "annotation_label", None), "description", "") or ""),
+            in (
+                getattr(getattr(item, "annotation_label", None), "description", "")
+                or ""
+            ),
         )
 
     raw_text_contains = kwargs.get("rawText_Contains")
@@ -189,7 +204,9 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
         corpus_pk = _to_pk(corpus_id_value)
         if corpus_pk is None:
             return self.doc_annotations.all()
-        annotations = _apply_filter(annotations, lambda item: item.corpus_id == corpus_pk)
+        annotations = _apply_filter(
+            annotations, lambda item: item.corpus_id == corpus_pk
+        )
 
     created_by = kwargs.get("createdByAnalysisIds")
     if created_by:
@@ -212,7 +229,9 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
 
     created_with_analyzer = kwargs.get("createdWithAnalyzerId")
     if created_with_analyzer:
-        parts = [token.strip() for token in created_with_analyzer.split(",") if token.strip()]
+        parts = [
+            token.strip() for token in created_with_analyzer.split(",") if token.strip()
+        ]
         analyzer_pks = set()
         for token in parts:
             pk = _to_pk(token)
@@ -222,7 +241,8 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
 
         annotations = _apply_filter(
             annotations,
-            lambda item: getattr(getattr(item, "analysis", None), "analyzer_id", None) in analyzer_pks,
+            lambda item: getattr(getattr(item, "analysis", None), "analyzer_id", None)
+            in analyzer_pks,
         )
 
     order_value = kwargs.get("orderBy") or kwargs.get("order_by")

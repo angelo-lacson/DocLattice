@@ -1,11 +1,13 @@
 """
 Enhanced storage backends with connection pooling and caching.
 """
+
+import logging
 import threading
 from functools import lru_cache
-from storages.backends.s3boto3 import S3Boto3Storage as BaseS3Storage
+
 from django.conf import settings
-import logging
+from storages.backends.s3boto3 import S3Boto3Storage as BaseS3Storage
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +29,14 @@ class PooledS3Boto3Storage(BaseS3Storage):
         super().__init__(*args, **kwargs)
         # Set connection pool size from settings
         self.config = {
-            'max_pool_connections': getattr(settings, 'AWS_S3_CONNECTION_POOL_SIZE', 10),
-            'region_name': self.region_name,
+            "max_pool_connections": getattr(
+                settings, "AWS_S3_CONNECTION_POOL_SIZE", 10
+            ),
+            "region_name": self.region_name,
         }
-        logger.info(f"Initializing S3 storage with connection pool size: {self.config['max_pool_connections']}")
+        logger.info(
+            f"Initializing S3 storage with connection pool size: {self.config['max_pool_connections']}"
+        )
 
     @property
     def connection(self):
@@ -42,28 +48,25 @@ class PooledS3Boto3Storage(BaseS3Storage):
         2. Configure connection pooling
         """
         # Check if we already have a client for this thread
-        if not hasattr(_thread_local, 's3_connection'):
+        if not hasattr(_thread_local, "s3_connection"):
             import boto3
             from botocore.config import Config
 
             # Create boto3 config with connection pooling
             boto_config = Config(
-                max_pool_connections=self.config['max_pool_connections'],
+                max_pool_connections=self.config["max_pool_connections"],
                 # Also set retries for resilience
-                retries={
-                    'max_attempts': 3,
-                    'mode': 'adaptive'
-                }
+                retries={"max_attempts": 3, "mode": "adaptive"},
             )
 
             # Create the S3 client with pooling config
             session = boto3.Session()
             _thread_local.s3_connection = session.client(
-                's3',
+                "s3",
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
                 aws_session_token=self.security_token,
-                region_name=self.config['region_name'],
+                region_name=self.config["region_name"],
                 use_ssl=self.use_ssl,
                 endpoint_url=self.endpoint_url,
                 config=boto_config,  # Use our pooling config
@@ -84,10 +87,7 @@ class PooledS3Boto3Storage(BaseS3Storage):
         Cache URL generation parameters that don't change often.
         This avoids recalculating the same values repeatedly.
         """
-        return {
-            'Bucket': self.bucket_name,
-            'Key': self._get_key(name)
-        }
+        return {"Bucket": self.bucket_name, "Key": self._get_key(name)}
 
     def url(self, name, parameters=None, expire=None, http_method=None):
         """
@@ -103,7 +103,7 @@ class PooledS3Boto3Storage(BaseS3Storage):
 
             # Use the pooled connection to generate URL
             return self.connection.generate_presigned_url(
-                'get_object',
+                "get_object",
                 Params=params,
                 ExpiresIn=expire or self.querystring_expire,
             )
@@ -114,11 +114,13 @@ class PooledS3Boto3Storage(BaseS3Storage):
 
 class PooledMediaRootS3Storage(PooledS3Boto3Storage):
     """Media files storage with connection pooling."""
+
     location = "media"
     file_overwrite = False
 
 
 class PooledStaticRootS3Storage(PooledS3Boto3Storage):
     """Static files storage with connection pooling."""
+
     location = "static"
     default_acl = "public-read"

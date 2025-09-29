@@ -575,20 +575,28 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
 
         # Validate mutual exclusivity of created_by fields
         if self.created_by_analysis and self.created_by_extract:
-            raise ValidationError({
-                'created_by_analysis': 'An annotation cannot be created by both an analysis and an extract.',
-                'created_by_extract': 'An annotation cannot be created by both an analysis and an extract.'
-            })
+            raise ValidationError(
+                {
+                    "created_by_analysis": "An annotation cannot be created by both an analysis and an extract.",
+                    "created_by_extract": "An annotation cannot be created by both an analysis and an extract.",
+                }
+            )
 
         # Ensure consistency: if created_by_analysis is set, analysis should also be set
         if self.created_by_analysis and not self.analysis:
             self.analysis = self.created_by_analysis
 
         # Validate that created_by_analysis matches analysis if both are set
-        if self.created_by_analysis and self.analysis and self.created_by_analysis != self.analysis:
-            raise ValidationError({
-                'created_by_analysis': 'created_by_analysis must match the analysis field if both are set.'
-            })
+        if (
+            self.created_by_analysis
+            and self.analysis
+            and self.created_by_analysis != self.analysis
+        ):
+            raise ValidationError(
+                {
+                    "created_by_analysis": "created_by_analysis must match the analysis field if both are set."
+                }
+            )
 
     # ------------------------------------------------------------------
     # Persistence

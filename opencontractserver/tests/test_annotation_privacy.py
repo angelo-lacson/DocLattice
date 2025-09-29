@@ -3,19 +3,23 @@ Test annotation privacy model with created_by_analysis and created_by_extract fi
 """
 
 import logging
-from django.test import TestCase
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.test import TestCase
 
-from opencontractserver.documents.models import Document
-from opencontractserver.corpuses.models import Corpus
-from opencontractserver.annotations.models import Annotation, AnnotationLabel, TOKEN_LABEL
 from opencontractserver.analyzer.models import Analysis, Analyzer, GremlinEngine
-from opencontractserver.extracts.models import Extract, Fieldset, Column
+from opencontractserver.annotations.models import (
+    TOKEN_LABEL,
+    Annotation,
+    AnnotationLabel,
+)
 from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+from opencontractserver.corpuses.models import Corpus
+from opencontractserver.documents.models import Document
+from opencontractserver.extracts.models import Column, Extract, Fieldset
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
-
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -36,34 +40,29 @@ class AnnotationPrivacyTestCase(TestCase):
             title="Test Document",
             creator=self.owner,
             is_public=False,
-            backend_lock=False  # Ensure document is not locked
+            backend_lock=False,  # Ensure document is not locked
         )
 
         # Create corpus
         self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.owner,
-            is_public=False
+            title="Test Corpus", creator=self.owner, is_public=False
         )
         self.corpus.documents.add(self.doc)
 
         # Create label
         self.label = AnnotationLabel.objects.create(
-            text="Test Label",
-            label_type=TOKEN_LABEL,
-            creator=self.owner
+            text="Test Label", label_type=TOKEN_LABEL, creator=self.owner
         )
 
         # Setup analyzer infrastructure
         self.gremlin = GremlinEngine.objects.create(
-            url="http://test-gremlin:8000",
-            creator=self.owner
+            url="http://test-gremlin:8000", creator=self.owner
         )
         self.analyzer = Analyzer.objects.create(
             id="TEST.ANALYZER",
             host_gremlin=self.gremlin,
             creator=self.owner,
-            description="Test analyzer"
+            description="Test analyzer",
         )
 
         # Create analysis
@@ -71,37 +70,56 @@ class AnnotationPrivacyTestCase(TestCase):
             analyzer=self.analyzer,
             analyzed_corpus=self.corpus,
             creator=self.owner,
-            is_public=False
+            is_public=False,
         )
         self.analysis.analyzed_documents.add(self.doc)
 
         # Create extract
         self.fieldset = Fieldset.objects.create(
-            name="Test Fieldset",
-            creator=self.owner
+            name="Test Fieldset", creator=self.owner
         )
         self.column = Column.objects.create(
             name="Test Column",
             fieldset=self.fieldset,
             creator=self.owner,
-            output_type="string"
+            output_type="string",
         )
         self.extract = Extract.objects.create(
             name="Test Extract",
             corpus=self.corpus,
             fieldset=self.fieldset,
-            creator=self.owner
+            creator=self.owner,
         )
         self.extract.documents.add(self.doc)
 
         # Set permissions
         # Owner gets full permissions to their created objects
-        set_permissions_for_obj_to_user(self.owner, self.doc, [PermissionTypes.READ, PermissionTypes.CREATE, PermissionTypes.UPDATE, PermissionTypes.DELETE])
-        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.READ, PermissionTypes.CREATE, PermissionTypes.UPDATE, PermissionTypes.DELETE])
+        set_permissions_for_obj_to_user(
+            self.owner,
+            self.doc,
+            [
+                PermissionTypes.READ,
+                PermissionTypes.CREATE,
+                PermissionTypes.UPDATE,
+                PermissionTypes.DELETE,
+            ],
+        )
+        set_permissions_for_obj_to_user(
+            self.owner,
+            self.corpus,
+            [
+                PermissionTypes.READ,
+                PermissionTypes.CREATE,
+                PermissionTypes.UPDATE,
+                PermissionTypes.DELETE,
+            ],
+        )
 
         # Viewer can see doc and corpus but NOT analysis/extract
         set_permissions_for_obj_to_user(self.viewer, self.doc, [PermissionTypes.READ])
-        set_permissions_for_obj_to_user(self.viewer, self.corpus, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(
+            self.viewer, self.corpus, [PermissionTypes.READ]
+        )
 
     def test_annotation_without_created_by_is_visible(self):
         """Test that regular annotations without created_by fields are visible."""
@@ -112,14 +130,12 @@ class AnnotationPrivacyTestCase(TestCase):
             corpus=self.corpus,
             creator=self.owner,
             page=1,
-            raw_text="Regular annotation"
+            raw_text="Regular annotation",
         )
 
         # Viewer should see it (has doc and corpus permissions)
         visible_annotations = AnnotationQueryOptimizer.get_document_annotations(
-            document_id=self.doc.id,
-            user=self.viewer,
-            corpus_id=self.corpus.id
+            document_id=self.doc.id, user=self.viewer, corpus_id=self.corpus.id
         )
 
         self.assertIn(annotation, visible_annotations)
@@ -135,23 +151,19 @@ class AnnotationPrivacyTestCase(TestCase):
             created_by_analysis=self.analysis,  # Mark as created by analysis
             creator=self.owner,
             page=1,
-            raw_text="Private analysis annotation"
+            raw_text="Private analysis annotation",
         )
 
         # Viewer should NOT see it (no analysis permission)
         visible_annotations = AnnotationQueryOptimizer.get_document_annotations(
-            document_id=self.doc.id,
-            user=self.viewer,
-            corpus_id=self.corpus.id
+            document_id=self.doc.id, user=self.viewer, corpus_id=self.corpus.id
         )
 
         self.assertNotIn(private_annotation, visible_annotations)
 
         # Owner should see it (has analysis permission as creator)
         owner_annotations = AnnotationQueryOptimizer.get_document_annotations(
-            document_id=self.doc.id,
-            user=self.owner,
-            corpus_id=self.corpus.id
+            document_id=self.doc.id, user=self.owner, corpus_id=self.corpus.id
         )
 
         self.assertIn(private_annotation, owner_annotations)
@@ -166,23 +178,19 @@ class AnnotationPrivacyTestCase(TestCase):
             created_by_extract=self.extract,  # Mark as created by extract
             creator=self.owner,
             page=1,
-            raw_text="Private extract annotation"
+            raw_text="Private extract annotation",
         )
 
         # Viewer should NOT see it (no extract permission)
         visible_annotations = AnnotationQueryOptimizer.get_document_annotations(
-            document_id=self.doc.id,
-            user=self.viewer,
-            corpus_id=self.corpus.id
+            document_id=self.doc.id, user=self.viewer, corpus_id=self.corpus.id
         )
 
         self.assertNotIn(private_annotation, visible_annotations)
 
         # Owner should see it (has extract permission as creator)
         owner_annotations = AnnotationQueryOptimizer.get_document_annotations(
-            document_id=self.doc.id,
-            user=self.owner,
-            corpus_id=self.corpus.id
+            document_id=self.doc.id, user=self.owner, corpus_id=self.corpus.id
         )
 
         self.assertIn(private_annotation, owner_annotations)
@@ -197,7 +205,7 @@ class AnnotationPrivacyTestCase(TestCase):
             created_by_extract=self.extract,  # Both fields set - should fail!
             creator=self.owner,
             page=1,
-            raw_text="Invalid annotation"
+            raw_text="Invalid annotation",
         )
         with self.assertRaises(ValidationError):
             annotation.full_clean()  # This should raise ValidationError
@@ -213,25 +221,23 @@ class AnnotationPrivacyTestCase(TestCase):
             created_by_analysis=self.analysis,
             creator=self.owner,
             page=1,
-            raw_text="Private analysis annotation"
+            raw_text="Private analysis annotation",
         )
 
         # Initially viewer can't see it
         visible = AnnotationQueryOptimizer.get_document_annotations(
-            document_id=self.doc.id,
-            user=self.viewer,
-            corpus_id=self.corpus.id
+            document_id=self.doc.id, user=self.viewer, corpus_id=self.corpus.id
         )
         self.assertNotIn(private_annotation, visible)
 
         # Grant analysis permission to viewer
-        set_permissions_for_obj_to_user(self.viewer, self.analysis, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(
+            self.viewer, self.analysis, [PermissionTypes.READ]
+        )
 
         # Now viewer should see it
         visible = AnnotationQueryOptimizer.get_document_annotations(
-            document_id=self.doc.id,
-            user=self.viewer,
-            corpus_id=self.corpus.id
+            document_id=self.doc.id, user=self.viewer, corpus_id=self.corpus.id
         )
         self.assertIn(private_annotation, visible)
 
@@ -247,7 +253,7 @@ class AnnotationPrivacyTestCase(TestCase):
             structural=True,  # Mark as structural
             creator=self.owner,
             page=1,
-            raw_text="Structural annotation"
+            raw_text="Structural annotation",
         )
 
         # Viewer should see it even without analysis permission (structural trumps privacy)
@@ -255,7 +261,7 @@ class AnnotationPrivacyTestCase(TestCase):
             document_id=self.doc.id,
             user=self.viewer,
             corpus_id=self.corpus.id,
-            structural=True
+            structural=True,
         )
 
         self.assertIn(structural_annotation, visible_annotations)

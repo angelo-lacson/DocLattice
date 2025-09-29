@@ -12,11 +12,11 @@ from graphene_django.filter import DjangoFilterConnectionField
 from graphql_relay import from_global_id, to_global_id
 
 from config.graphql.base import CountableConnection
+from config.graphql.custom_resolvers import resolve_doc_annotations_optimized
 from config.graphql.filters import AnnotationFilter, LabelFilter
 from config.graphql.permissioning.permission_annotator.mixins import (
     AnnotatePermissionsForReadMixin,
 )
-from config.graphql.custom_resolvers import resolve_doc_annotations_optimized
 from opencontractserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from opencontractserver.annotations.models import (
     Annotation,
@@ -45,7 +45,6 @@ from opencontractserver.pipeline.base.file_types import (
     FileTypeEnum as BackendFileTypeEnum,
 )
 from opencontractserver.pipeline.utils import get_components_by_mimetype
-from opencontractserver.shared.resolvers import resolve_oc_model_queryset
 from opencontractserver.users.models import Assignment, UserExport, UserImport
 
 User = get_user_model()
@@ -145,7 +144,7 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_feedback_count(self, info):
         # If feedback_count was annotated on the queryset, use it
-        if hasattr(self, 'feedback_count'):
+        if hasattr(self, "feedback_count"):
             return self.feedback_count
         # Otherwise, count it (but this triggers N+1)
         return self.user_feedback.count()
@@ -290,9 +289,9 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def get_queryset(cls, queryset, info):
         # Check if permissions were already handled by the query optimizer
         # The optimizer adds _can_read, _can_create, etc. annotations
-        if hasattr(queryset, 'query') and queryset.query.annotations:
+        if hasattr(queryset, "query") and queryset.query.annotations:
             # Check if the queryset has permission annotations from the optimizer
-            if any(key.startswith('_can_') for key in queryset.query.annotations):
+            if any(key.startswith("_can_") for key in queryset.query.annotations):
                 # Permissions already handled by query optimizer, don't filter again
                 return queryset
 
@@ -568,11 +567,11 @@ class NoteRevisionType(DjangoObjectType):
 class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     # Import optimized resolvers for file fields
     from config.graphql.optimized_file_resolvers import (
-        resolve_pdf_file_optimized,
         resolve_icon_optimized,
-        resolve_txt_extract_file_optimized,
         resolve_md_summary_file_optimized,
         resolve_pawls_parse_file_optimized,
+        resolve_pdf_file_optimized,
+        resolve_txt_extract_file_optimized,
     )
 
     # Use optimized resolvers that minimize storage backend overhead
@@ -586,7 +585,10 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     all_structural_annotations = graphene.List(AnnotationType)
 
     def resolve_all_structural_annotations(self, info):
-        from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
         return AnnotationQueryOptimizer.get_document_annotations(
             document_id=self.id,
             user=getattr(info.context, "user", None),
@@ -605,12 +607,17 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_all_annotations(
         self, info, corpus_id=None, analysis_id=None, is_structural=None
     ):
-        from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
         user = getattr(info.context, "user", None)
         corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
         analysis_pk = None
         if analysis_id:
-            analysis_pk = 0 if analysis_id == "__none__" else from_global_id(analysis_id)[1]
+            analysis_pk = (
+                0 if analysis_id == "__none__" else from_global_id(analysis_id)[1]
+            )
         return AnnotationQueryOptimizer.get_document_annotations(
             document_id=self.id,
             user=user,
@@ -791,7 +798,14 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     def resolve_page_annotations(
-        self, info, corpus_id, page=None, pages=None, structural=None, analysis_id=None, extract_id=None
+        self,
+        info,
+        corpus_id,
+        page=None,
+        pages=None,
+        structural=None,
+        analysis_id=None,
+        extract_id=None,
     ):
         """Resolve annotations for specific page(s) using optimized queries."""
         from django.contrib.auth.models import AnonymousUser
@@ -854,7 +868,14 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
 
     def resolve_page_relationships(
-        self, info, corpus_id, pages, structural=None, analysis_id=None, extract_id=None, strict_extract_mode=False
+        self,
+        info,
+        corpus_id,
+        pages,
+        structural=None,
+        analysis_id=None,
+        extract_id=None,
+        strict_extract_mode=False,
     ):
         """Resolve relationships for specific page(s) using the optimizer."""
         from django.contrib.auth.models import AnonymousUser
@@ -958,7 +979,9 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         from django.contrib.auth.models import AnonymousUser
         from graphql import GraphQLError
 
-        from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
 
         user = info.context.user if hasattr(info.context, "user") else None
         _, extract_pk = from_global_id(extract_id)
@@ -971,7 +994,9 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 )
             elif user != self.creator and not user.is_superuser:
                 from opencontractserver.types.enums import PermissionTypes
-                from opencontractserver.utils.permissioning import user_has_permission_for_obj
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
 
                 if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
                     raise GraphQLError(
@@ -979,10 +1004,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                     )
 
         return AnnotationQueryOptimizer.get_extract_annotation_summary(
-            document_id=self.id,
-            extract_id=extract_pk,
-            user=user,
-            use_cache=True
+            document_id=self.id, extract_id=extract_pk, user=user, use_cache=True
         )
 
     class Meta:
@@ -1175,7 +1197,9 @@ class AnalysisType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     def resolve_full_annotation_list(self, info, document_id=None):
-        from opencontractserver.annotations.query_optimizer import AnalysisQueryOptimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnalysisQueryOptimizer,
+        )
 
         if document_id is not None:
             document_pk = int(from_global_id(document_id)[1])
@@ -1191,7 +1215,9 @@ class AnalysisType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         Override the default node resolution to apply permission checks.
         """
-        from opencontractserver.annotations.query_optimizer import AnalysisQueryOptimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnalysisQueryOptimizer,
+        )
 
         has_perm, analysis = AnalysisQueryOptimizer.check_analysis_permission(
             info.context.user, int(id)
@@ -1278,8 +1304,8 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
 
     def resolve_full_document_list(self, info):
-        from opencontractserver.utils.permissioning import user_has_permission_for_obj
         from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
         # Filter to only documents user can read
         if info.context.user.is_superuser:
@@ -1287,7 +1313,12 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         readable_docs = []
         for doc in self.documents.all():
-            if user_has_permission_for_obj(info.context.user, doc, PermissionTypes.READ, include_group_permissions=True):
+            if user_has_permission_for_obj(
+                info.context.user,
+                doc,
+                PermissionTypes.READ,
+                include_group_permissions=True,
+            ):
                 readable_docs.append(doc)
         return readable_docs
 
