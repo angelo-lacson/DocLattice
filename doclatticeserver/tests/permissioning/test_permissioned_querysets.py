@@ -102,17 +102,15 @@ class ComprehensivePermissionTestCase(TestCase):
         result = self.owner_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 3)
 
-        # Test for collaborator - AT THE MOMENT, PER INSTANCE PERMISSIONS ARE NOT USED ON QUERY RETRIEVAL.
-        # THIS IS FOR SAFETY. We are moving the insetance-leval permission filter into GraphqlObjectType
-        # get_queryset(...) to ensure safety on nested FKs and M2M.
+        # Should be 2 - the public corpus and the shared corpus with collaborator
         result = self.collaborator_client.execute(query)
-        self.assertEqual(len(result["data"]["corpuses"]["edges"]), 1)
+        self.assertEqual(len(result["data"]["corpuses"]["edges"]), 2)
 
-        # Test for regular user
+        # Test for regular user - only the public corpus
         result = self.regular_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 1)
 
-        # Test for anonymous user
+        # Test for anonymous user - only the public corpus
         result = self.anonymous_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 1)
 
