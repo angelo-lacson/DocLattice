@@ -231,6 +231,10 @@ class UserFeedbackManager(BaseVisibilityManager):
     def get_queryset(self):
         return UserFeedbackQuerySet(self.model, using=self._db)
 
+    def visible_to_user(self, user):
+        """Delegate to the queryset's visible_to_user method"""
+        return self.get_queryset().visible_to_user(user)
+
     def get_or_none(self, *args, **kwargs):
         try:
             return self.get(*args, **kwargs)

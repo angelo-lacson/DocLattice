@@ -1029,6 +1029,31 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         label_types=graphene.List(LabelTypeEnum),
     )
 
+    def resolve_annotations(self, info):
+        """
+        Custom resolver for annotations field that properly computes permissions.
+        Uses AnnotationQueryOptimizer to ensure permission flags are set.
+        """
+        from opencontractserver.annotations.models import Annotation
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        user = getattr(info.context, "user", None)
+
+        # Get all document IDs in this corpus
+        document_ids = self.documents.values_list("id", flat=True)
+
+        # Collect annotations for all documents with proper permission computation
+        all_annotations = Annotation.objects.none()
+        for doc_id in document_ids:
+            annotations = AnnotationQueryOptimizer.get_document_annotations(
+                document_id=doc_id, user=user, corpus_id=self.id, use_cache=True
+            )
+            all_annotations = all_annotations | annotations
+
+        return all_annotations.distinct()
+
     def resolve_all_annotation_summaries(self, info, **kwargs):
 
         analysis_id = kwargs.get("analysis_id", None)

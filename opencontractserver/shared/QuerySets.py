@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Q
 from django.utils import timezone
 from django_cte import CTEQuerySet
 from tree_queries.query import TreeQuerySet
@@ -101,26 +101,27 @@ class UserFeedbackQuerySet(models.QuerySet):
         return self.filter(creator=creator)
 
     def visible_to_user(self, user):
-        from opencontractserver.annotations.models import (  # Import here to avoid circular imports
-            Annotation,
-        )
-
         if user.is_superuser:
             return self.all()
 
         if user.is_anonymous:
             return self.filter(Q(is_public=True)).distinct()
 
-        return self.filter(
+        # UserFeedback is visible if:
+        # 1. Created by the user, OR
+        # 2. Is public, OR
+        # 3. Has a commented_annotation that is public (handle NULL case)
+
+        result = self.filter(
             Q(creator=user)
             | Q(is_public=True)
-            | Q(commented_annotation__isnull=False)
-            & Exists(
-                Annotation.objects.filter(
-                    id=OuterRef("commented_annotation"), is_public=True
-                )
+            | (
+                Q(commented_annotation__isnull=False)
+                & Q(commented_annotation__is_public=True)
             )
         ).distinct()
+
+        return result
 
 
 class PermissionQuerySet(models.QuerySet):

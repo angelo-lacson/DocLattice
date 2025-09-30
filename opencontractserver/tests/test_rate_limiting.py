@@ -1,6 +1,6 @@
 import json
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -511,8 +511,16 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
 
         self.assertTrue(hit_limit, "Mutation should have rate limiting")
 
-    def test_corpuses_query_rate_limited(self):
+    @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
+    def test_corpuses_query_rate_limited(self, mock_visible_to_user):
         """Test that corpuses query is rate limited."""
+        # Mock the visible_to_user to return a minimal queryset quickly
+        # This avoids the database overhead while still testing rate limiting
+        from opencontractserver.corpuses.models import Corpus
+
+        mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         query = """query { corpuses { edges { node { id } } } }"""
 
         # Clear cache to ensure fresh rate limit counter
@@ -532,8 +540,16 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
 
         self.assertTrue(hit_limit, "Corpuses query should be rate limited")
 
-    def test_documents_query_rate_limited(self):
+    @patch("opencontractserver.documents.models.Document.objects.visible_to_user")
+    def test_documents_query_rate_limited(self, mock_visible_to_user):
         """Test that documents query is rate limited."""
+        # Mock the visible_to_user to return a minimal queryset quickly
+        # This avoids the database overhead while still testing rate limiting
+        from opencontractserver.documents.models import Document
+
+        mock_queryset = Document.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         query = """query { documents { edges { node { id } } } }"""
 
         # Clear cache to ensure fresh rate limit counter
@@ -553,8 +569,16 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
 
         self.assertTrue(hit_limit, "Documents query should be rate limited")
 
-    def test_labelsets_query_rate_limited(self):
+    @patch("opencontractserver.annotations.models.LabelSet.objects.visible_to_user")
+    def test_labelsets_query_rate_limited(self, mock_visible_to_user):
         """Test that labelsets query is rate limited."""
+        # Mock the visible_to_user to return a minimal queryset quickly
+        # This avoids the database overhead while still testing rate limiting
+        from opencontractserver.annotations.models import LabelSet
+
+        mock_queryset = LabelSet.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         query = """query { labelsets { edges { node { id } } } }"""
 
         # Clear cache to ensure fresh rate limit counter
