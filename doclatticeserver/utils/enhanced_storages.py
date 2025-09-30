@@ -34,7 +34,7 @@ class PooledS3Boto3Storage(BaseS3Storage):
     @property
     def connection(self):
         """
-        Get or create a cached boto3 S3 client with connection pooling.
+        Get or create a cached boto3 S3 resource with connection pooling.
         Thread-safe implementation using thread-local storage.
         """
         if not hasattr(_thread_local, "s3_connection"):
@@ -46,18 +46,19 @@ class PooledS3Boto3Storage(BaseS3Storage):
                 retries={"max_attempts": 3, "mode": "adaptive"},
             )
 
-            session = boto3.Session()
-            _thread_local.s3_connection = session.client(
-                "s3",
+            session = boto3.Session(
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
                 aws_session_token=self.security_token,
                 region_name=self.region_name,
+            )
+            _thread_local.s3_connection = session.resource(
+                "s3",
                 use_ssl=self.use_ssl,
                 endpoint_url=self.endpoint_url,
                 config=boto_config,
             )
-            logger.debug("Created new S3 client with connection pooling")
+            logger.debug("Created new S3 resource with connection pooling")
 
         return _thread_local.s3_connection
 

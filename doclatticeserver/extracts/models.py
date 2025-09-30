@@ -212,6 +212,7 @@ class Extract(BaseOCModel):
             ("read_extract", "read extract"),
             ("update_extract", "update extract"),
             ("remove_extract", "delete extract"),
+            ("comment_extract", "comment extract"),
         )
 
 
@@ -453,6 +454,7 @@ class Datacell(BaseOCModel):
             ("read_datacell", "read datacell"),
             ("update_datacell", "update datacell"),
             ("remove_datacell", "delete datacell"),
+            ("comment_datacell", "comment datacell"),
         )
         constraints = [
             django.db.models.UniqueConstraint(

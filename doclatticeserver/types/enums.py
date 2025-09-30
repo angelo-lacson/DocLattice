@@ -39,6 +39,7 @@ class PermissionTypes(str, enum.Enum):
     EDIT = "EDIT"
     UPDATE = "UPDATE"
     DELETE = "DELETE"
+    COMMENT = "COMMENT"
     PERMISSION = "PERMISSION"
     PUBLISH = "PUBLISH"
     CRUD = "CRUD"

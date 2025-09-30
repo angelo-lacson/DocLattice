@@ -123,6 +123,8 @@ class AnnotatePermissionsForReadMixin:
                 permissions.add(f"update_{model_name}")
             if getattr(self, "_can_delete", False):
                 permissions.add(f"remove_{model_name}")
+            if getattr(self, "_can_comment", False):
+                permissions.add(f"comment_{model_name}")
 
             # Check for publish permission if available
             if getattr(self, "_can_publish", False):

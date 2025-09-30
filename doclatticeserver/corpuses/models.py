@@ -246,6 +246,7 @@ class Corpus(TreeNode):
             ("read_corpus", "read corpus"),
             ("update_corpus", "update corpus"),
             ("remove_corpus", "delete corpus"),
+            ("comment_corpus", "comment corpus"),
         )
         indexes = [
             django.db.models.Index(fields=["title"]),

@@ -57,6 +57,7 @@ def set_permissions_for_obj_to_user(
         f"{app_name}.read_{model_name}",
         f"{app_name}.update_{model_name}",
         f"{app_name}.remove_{model_name}",
+        f"{app_name}.comment_{model_name}",
         f"{app_name}.permission_{model_name}",
         f"{app_name}.publish_{model_name}",
     ]
@@ -138,6 +139,17 @@ def set_permissions_for_obj_to_user(
         ):
             # logger.info("requested_permission_set - assign permissioning permission")
             assign_perm(f"{app_name}.permission_{model_name}", user, instance)
+
+        if (
+            len(
+                {PermissionTypes.COMMENT, PermissionTypes.ALL}.intersection(
+                    requested_permission_set
+                )
+            )
+            > 0
+        ):
+            # logger.info("requested_permission_set - assign comment permission")
+            assign_perm(f"{app_name}.comment_{model_name}", user, instance)
 
         if (
             len(
@@ -324,7 +336,7 @@ def user_has_permission_for_obj(
                         return False
 
             # Now check document+corpus permissions using the query optimizer
-            can_read, can_create, can_update, can_delete = (
+            can_read, can_create, can_update, can_delete, can_comment = (
                 AnnotationQueryOptimizer._compute_effective_permissions(
                     user=user,
                     document_id=instance.document_id,
@@ -344,11 +356,19 @@ def user_has_permission_for_obj(
                 return can_update
             elif permission == PermissionTypes.DELETE:
                 return can_delete
+            elif permission == PermissionTypes.COMMENT:
+                return can_comment
             elif permission == PermissionTypes.CRUD:
                 return can_read and can_create and can_update and can_delete
             elif permission == PermissionTypes.ALL:
-                # For annotations, ALL is same as CRUD (no publish/permission for annotations)
-                return can_read and can_create and can_update and can_delete
+                # For annotations, ALL includes COMMENT but not publish/permission
+                return (
+                    can_read
+                    and can_create
+                    and can_update
+                    and can_delete
+                    and can_comment
+                )
             else:
                 # Annotations don't support PUBLISH or PERMISSION
                 return False
@@ -377,6 +397,10 @@ def user_has_permission_for_obj(
     elif permission == PermissionTypes.DELETE:
         return (
             len(model_permissions_for_user.intersection({f"remove_{model_name}"})) > 0
+        )
+    elif permission == PermissionTypes.COMMENT:
+        return (
+            len(model_permissions_for_user.intersection({f"comment_{model_name}"})) > 0
         )
     elif permission == PermissionTypes.PUBLISH:
         return (
@@ -410,12 +434,13 @@ def user_has_permission_for_obj(
                         f"read_{model_name}",
                         f"update_{model_name}",
                         f"remove_{model_name}",
+                        f"comment_{model_name}",
                         f"publish_{model_name}",
                         f"permission_{model_name}",
                     }
                 )
             )
-            == 6
+            == 7
         )
     else:
         return False

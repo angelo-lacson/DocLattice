@@ -1726,20 +1726,17 @@ class RejectAnnotation(graphene.Mutation):
                 ok=False, user_feedback=None, message="Annotation not found"
             )
 
-        # Check if user can see and interact with this annotation
-        # For feedback, user needs either READ permission (to see it) OR UPDATE permission (to modify it)
-        can_read = user_has_permission_for_obj(
-            user, annotation, PermissionTypes.READ, include_group_permissions=True
-        )
-        can_update = user_has_permission_for_obj(
-            user, annotation, PermissionTypes.UPDATE, include_group_permissions=True
+        # Check if user has COMMENT permission on this annotation
+        # COMMENT permission respects document+corpus inheritance and corpus.allow_comments
+        can_comment = user_has_permission_for_obj(
+            user, annotation, PermissionTypes.COMMENT, include_group_permissions=True
         )
 
-        if not (can_read or can_update):
+        if not can_comment:
             return RejectAnnotation(
                 ok=False,
                 user_feedback=None,
-                message="You don't have permission to provide feedback on this annotation",
+                message="You don't have permission to comment on this annotation",
             )
 
         user_feedback, created = UserFeedback.objects.get_or_create(
@@ -1789,20 +1786,17 @@ class ApproveAnnotation(graphene.Mutation):
                 ok=False, user_feedback=None, message="Annotation not found"
             )
 
-        # Check if user can see and interact with this annotation
-        # For feedback, user needs either READ permission (to see it) OR UPDATE permission (to modify it)
-        can_read = user_has_permission_for_obj(
-            user, annotation, PermissionTypes.READ, include_group_permissions=True
-        )
-        can_update = user_has_permission_for_obj(
-            user, annotation, PermissionTypes.UPDATE, include_group_permissions=True
+        # Check if user has COMMENT permission on this annotation
+        # COMMENT permission respects document+corpus inheritance and corpus.allow_comments
+        can_comment = user_has_permission_for_obj(
+            user, annotation, PermissionTypes.COMMENT, include_group_permissions=True
         )
 
-        if not (can_read or can_update):
+        if not can_comment:
             return ApproveAnnotation(
                 ok=False,
                 user_feedback=None,
-                message="You don't have permission to provide feedback on this annotation",
+                message="You don't have permission to comment on this annotation",
             )
 
         user_feedback, created = UserFeedback.objects.get_or_create(

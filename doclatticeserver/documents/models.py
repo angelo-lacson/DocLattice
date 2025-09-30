@@ -106,6 +106,7 @@ class Document(BaseOCModel, HasEmbeddingMixin):
             ("read_document", "read document"),
             ("update_document", "update document"),
             ("remove_document", "delete document"),
+            ("comment_document", "comment document"),
         )
         indexes = [
             django.db.models.Index(fields=["title"]),
