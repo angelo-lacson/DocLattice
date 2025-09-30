@@ -1495,12 +1495,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     useState<SidebarViewMode["mode"]>("chat");
   const [feedFilters, setFeedFilters] = useState<ContentFilters>({
     contentTypes: new Set(["note", "annotation", "relationship", "search"]),
-    annotationFilters: {
-      showStructural: false,
-    },
-    relationshipFilters: {
-      showStructural: false,
-    },
+    // Note: annotationFilters and relationshipFilters are now managed via atoms
+    // in useAnnotationDisplay() for consistency across all components
   });
   const [feedSortBy, setFeedSortBy] = useState<SortOption>("page");
 

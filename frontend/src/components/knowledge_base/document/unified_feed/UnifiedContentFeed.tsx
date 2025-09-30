@@ -16,7 +16,7 @@ import {
   Note,
 } from "./types";
 import { useVisibleAnnotations } from "../../../annotator/hooks/useVisibleAnnotations";
-import { usePdfAnnotations } from "../../../annotator/hooks/AnnotationHooks";
+import { useVisibleRelationships } from "../../../annotator/hooks/useVisibleRelationships";
 import {
   useTextSearchState,
   useSearchText,
@@ -127,7 +127,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
 }) => {
   /* Data sources */
   const visibleAnnotations = useVisibleAnnotations();
-  const { pdfAnnotations } = usePdfAnnotations();
+  const visibleRelationships = useVisibleRelationships();
   const { textSearchMatches } = useTextSearchState();
   const { searchText } = useSearchText();
 
@@ -191,12 +191,9 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
     }
 
     // Add relationships if enabled
-    if (filters.contentTypes.has("relationship") && pdfAnnotations?.relations) {
-      const relationships = filters.relationshipFilters?.showStructural
-        ? pdfAnnotations.relations
-        : pdfAnnotations.relations.filter((rel) => !rel.structural);
-
-      relationships.forEach((rel) => {
+    if (filters.contentTypes.has("relationship")) {
+      // Use the unified filtering from useVisibleRelationships hook
+      visibleRelationships.forEach((rel) => {
         // Calculate minimum page from source/target annotations
         let minPage = 1;
         const allAnnotationIds = [...rel.sourceIds, ...rel.targetIds];
@@ -277,7 +274,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
   }, [
     notes,
     visibleAnnotations,
-    pdfAnnotations.relations,
+    visibleRelationships,
     textSearchMatches,
     searchText,
     filters,
