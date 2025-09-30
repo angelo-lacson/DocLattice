@@ -262,3 +262,110 @@ class TestDoclingParser(TestCase):
 
         self.assertIsNone(result)
         mock_post.assert_called_once()
+
+    def test_maybe_add_cloud_run_auth_non_cloud_run_url(self):
+        """Test that non-Cloud Run URLs return headers unchanged."""
+        headers = {"Content-Type": "application/json"}
+        result = DoclingParser._maybe_add_cloud_run_auth(
+            "http://localhost:8000/parse", headers
+        )
+        # Should return original headers without Authorization
+        self.assertEqual(result, headers)
+        self.assertNotIn("Authorization", result)
+
+    def test_maybe_add_cloud_run_auth_https_non_cloud_run(self):
+        """Test that HTTPS URLs not ending in .run.app return headers unchanged."""
+        headers = {"Content-Type": "application/json"}
+        result = DoclingParser._maybe_add_cloud_run_auth(
+            "https://example.com/parse", headers
+        )
+        # Should return original headers without Authorization
+        self.assertEqual(result, headers)
+        self.assertNotIn("Authorization", result)
+
+    @patch("google.oauth2.id_token.fetch_id_token")
+    @patch("google.auth.transport.requests.Request")
+    def test_maybe_add_cloud_run_auth_success(
+        self, mock_request_class, mock_fetch_id_token
+    ):
+        """Test successful Cloud Run auth token addition."""
+        # Mock the google auth components
+        mock_request_instance = MagicMock()
+        mock_request_class.return_value = mock_request_instance
+        mock_fetch_id_token.return_value = "fake_token_12345"
+
+        headers = {"Content-Type": "application/json"}
+        result = DoclingParser._maybe_add_cloud_run_auth(
+            "https://my-service-abc123.run.app/parse", headers
+        )
+
+        # Should have Authorization header added
+        self.assertIn("Authorization", result)
+        self.assertEqual(result["Authorization"], "Bearer fake_token_12345")
+        # Original headers should still be present
+        self.assertEqual(result["Content-Type"], "application/json")
+        # Verify the token was fetched with correct audience
+        mock_fetch_id_token.assert_called_once_with(
+            mock_request_instance, "https://my-service-abc123.run.app"
+        )
+
+    @patch("google.oauth2.id_token.fetch_id_token")
+    @patch("google.auth.transport.requests.Request")
+    def test_maybe_add_cloud_run_auth_token_is_none(
+        self, mock_request_class, mock_fetch_id_token
+    ):
+        """Test handling when fetch_id_token returns None."""
+        mock_request_instance = MagicMock()
+        mock_request_class.return_value = mock_request_instance
+        mock_fetch_id_token.return_value = None
+
+        headers = {"Content-Type": "application/json"}
+        result = DoclingParser._maybe_add_cloud_run_auth(
+            "https://my-service-abc123.run.app/parse", headers
+        )
+
+        # Should return original headers without Authorization
+        self.assertNotIn("Authorization", result)
+        self.assertEqual(result["Content-Type"], "application/json")
+
+    @patch("google.oauth2.id_token.fetch_id_token")
+    @patch("google.auth.transport.requests.Request")
+    def test_maybe_add_cloud_run_auth_import_error(
+        self, mock_request_class, mock_fetch_id_token
+    ):
+        """Test handling when google auth libraries are not available."""
+        # Simulate ImportError by making the import fail
+        mock_request_class.side_effect = Exception("No module named 'google'")
+
+        headers = {"Content-Type": "application/json"}
+        result = DoclingParser._maybe_add_cloud_run_auth(
+            "https://my-service-abc123.run.app/parse", headers
+        )
+
+        # Should return original headers without Authorization
+        self.assertNotIn("Authorization", result)
+        self.assertEqual(result["Content-Type"], "application/json")
+
+    @patch("google.oauth2.id_token.fetch_id_token")
+    @patch("google.auth.transport.requests.Request")
+    def test_maybe_add_cloud_run_auth_force_flag(
+        self, mock_request_class, mock_fetch_id_token
+    ):
+        """Test force flag adds auth even for non-Cloud Run URLs."""
+        mock_request_instance = MagicMock()
+        mock_request_class.return_value = mock_request_instance
+        mock_fetch_id_token.return_value = "forced_token_999"
+
+        headers = {"Content-Type": "application/json"}
+        # Force auth on a non-Cloud Run URL
+        result = DoclingParser._maybe_add_cloud_run_auth(
+            "https://example.com/parse", headers, force=True
+        )
+
+        # Should have Authorization header added due to force flag
+        self.assertIn("Authorization", result)
+        self.assertEqual(result["Authorization"], "Bearer forced_token_999")
+        # Verify the token was fetched with correct audience
+        mock_fetch_id_token.assert_called_once_with(
+            mock_request_instance, "https://example.com"
+        )

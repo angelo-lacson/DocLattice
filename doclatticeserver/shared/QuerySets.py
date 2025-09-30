@@ -74,6 +74,15 @@ class PermissionedTreeQuerySet(TreeQuerySet):
                 # Fall back to creator/public check only if Guardian not available
                 queryset = self.filter(Q(creator=user) | Q(is_public=True)).distinct()
 
+        # Apply model-specific optimizations
+        model_name = self.model._meta.model_name
+        if model_name == "corpus":
+            queryset = queryset.select_related(
+                "creator",
+                "label_set",
+                "user_lock",
+            ).prefetch_related("documents")
+
         return queryset.with_tree_fields()
 
     def with_tree_fields(self):
