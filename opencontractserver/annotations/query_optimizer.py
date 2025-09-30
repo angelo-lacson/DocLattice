@@ -28,10 +28,15 @@ class AnnotationQueryOptimizer:
     @classmethod
     def _compute_effective_permissions(
         cls, user, document_id: int, corpus_id: Optional[int] = None
-    ) -> tuple[bool, bool, bool, bool]:
+    ) -> tuple[bool, bool, bool, bool, bool]:
         """
         Compute effective permissions based on document and corpus.
-        Returns: (can_read, can_create, can_update, can_delete)
+
+        Special handling for COMMENT permission:
+        - If corpus.allow_comments is True, any readable annotation is commentable
+        - Otherwise, standard MIN(doc_comment, corpus_comment) logic applies
+
+        Returns: (can_read, can_create, can_update, can_delete, can_comment)
         """
         from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import Document
@@ -40,7 +45,7 @@ class AnnotationQueryOptimizer:
 
         # Superusers have all permissions
         if user.is_superuser:
-            return True, True, True, True
+            return True, True, True, True, True
 
         # First check document permissions (primary)
         try:
@@ -55,16 +60,19 @@ class AnnotationQueryOptimizer:
             doc_delete = user_has_permission_for_obj(
                 user, document, PermissionTypes.DELETE
             )
+            doc_comment = user_has_permission_for_obj(
+                user, document, PermissionTypes.COMMENT
+            )
         except Document.DoesNotExist:
-            return False, False, False, False
+            return False, False, False, False, False
 
         # If no document read permission, no access at all
         if not doc_read:
-            return False, False, False, False
+            return False, False, False, False, False
 
         # If no corpus, use document permissions only
         if not corpus_id:
-            return doc_read, doc_create, doc_update, doc_delete
+            return doc_read, doc_create, doc_update, doc_delete, doc_comment
 
         # Check corpus permissions and apply most restrictive
         try:
@@ -81,17 +89,31 @@ class AnnotationQueryOptimizer:
             corpus_delete = user_has_permission_for_obj(
                 user, corpus, PermissionTypes.DELETE
             )
+            corpus_comment = user_has_permission_for_obj(
+                user, corpus, PermissionTypes.COMMENT
+            )
 
-            # Return minimum permissions (most restrictive)
+            # Compute final read permission
+            final_read = doc_read and corpus_read
+
+            # BACON MODE: If corpus allows comments, readable = commentable
+            if corpus.allow_comments:
+                final_comment = final_read  # Can see it? Can comment on it.
+            else:
+                # Standard restrictive model
+                final_comment = doc_comment and corpus_comment
+
+            # Return computed permissions
             return (
-                doc_read and corpus_read,
+                final_read,
                 doc_create and corpus_create,
                 doc_update and corpus_update,
                 doc_delete and corpus_delete,
+                final_comment,
             )
         except Corpus.DoesNotExist:
             # Corpus doesn't exist, use document permissions
-            return doc_read, doc_create, doc_update, doc_delete
+            return doc_read, doc_create, doc_update, doc_delete, doc_comment
 
     @classmethod
     def get_document_annotations(
@@ -112,7 +134,7 @@ class AnnotationQueryOptimizer:
         from opencontractserver.annotations.models import Annotation
 
         # Compute effective permissions once
-        can_read, can_create, can_update, can_delete = (
+        can_read, can_create, can_update, can_delete, can_comment = (
             cls._compute_effective_permissions(user, document_id, corpus_id)
         )
         # No read permission = no annotations
@@ -225,6 +247,7 @@ class AnnotationQueryOptimizer:
                 _can_create=Value(can_create),
                 _can_update=Value(can_update),
                 _can_delete=Value(can_delete),
+                _can_comment=Value(can_comment),
             )
             .distinct()
         )
@@ -250,7 +273,7 @@ class AnnotationQueryOptimizer:
             corpus_id = None
 
         # Use unified permission check
-        can_read, _, _, _ = cls._compute_effective_permissions(
+        can_read, _, _, _, _ = cls._compute_effective_permissions(
             user, document_id, corpus_id
         )
 
@@ -298,7 +321,9 @@ class AnnotationQueryOptimizer:
         DEPRECATED: Use _compute_effective_permissions instead.
         Kept for backwards compatibility.
         """
-        can_read, _, _, _ = cls._compute_effective_permissions(user, document_id, None)
+        can_read, _, _, _, _ = cls._compute_effective_permissions(
+            user, document_id, None
+        )
         return can_read
 
     @classmethod
@@ -342,7 +367,7 @@ class RelationshipQueryOptimizer:
         from opencontractserver.annotations.models import Relationship
 
         # Use unified permission check from AnnotationQueryOptimizer
-        can_read, can_create, can_update, can_delete = (
+        can_read, can_create, can_update, can_delete, can_comment = (
             AnnotationQueryOptimizer._compute_effective_permissions(
                 user, document_id, corpus_id
             )
@@ -420,6 +445,7 @@ class RelationshipQueryOptimizer:
                 _can_create=Value(can_create),
                 _can_update=Value(can_update),
                 _can_delete=Value(can_delete),
+                _can_comment=Value(can_comment),
             )
             .distinct()
         )
@@ -434,7 +460,7 @@ class RelationshipQueryOptimizer:
         from opencontractserver.annotations.models import Relationship
 
         # Use unified permission check
-        can_read, _, _, _ = AnnotationQueryOptimizer._compute_effective_permissions(
+        can_read, _, _, _, _ = AnnotationQueryOptimizer._compute_effective_permissions(
             user, document_id, corpus_id
         )
 

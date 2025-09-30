@@ -150,22 +150,6 @@ class AnnotationLabel(BaseOCModel):
         return super().save(*args, **kwargs)
 
 
-# Model for Django Guardian permissions... trying to improve performance...
-class AnnotationLabelUserObjectPermission(UserObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "AnnotationLabel", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class AnnotationLabelGroupObjectPermission(GroupObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "AnnotationLabel", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
-
-
 class Relationship(BaseOCModel):
     relationship_label = django.db.models.ForeignKey(
         "AnnotationLabel",
@@ -239,6 +223,7 @@ class Relationship(BaseOCModel):
             ("read_relationship", "read relationship"),
             ("update_relationship", "update relationship"),
             ("remove_relationship", "delete relationship"),
+            ("comment_relationship", "comment relationship"),
             ("publish_relationship", "publish relationship"),
         )
 
@@ -260,22 +245,6 @@ class Relationship(BaseOCModel):
         self.modified = timezone.now()
 
         return super().save(*args, **kwargs)
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class RelationshipUserObjectPermission(UserObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "Relationship", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class RelationshipGroupObjectPermission(GroupObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "Relationship", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
 
 
 class Embedding(BaseOCModel):
@@ -630,6 +599,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             ("read_annotation", "read annotation"),
             ("update_annotation", "update annotation"),
             ("remove_annotation", "delete annotation"),
+            ("comment_annotation", "comment annotation"),
             ("publish_annotation", "publish relationship"),
         )
 

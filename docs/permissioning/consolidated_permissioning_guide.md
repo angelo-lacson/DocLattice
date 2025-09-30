@@ -4,6 +4,8 @@
 
 > **🔵 NEW FEATURE**: Annotations can now be marked as "created by" an analysis or extract using `created_by_analysis` and `created_by_extract` fields. These annotations are private to the source object and only visible to users with permission to that analysis/extract.
 
+> **🟢 NEW FEATURE**: COMMENT permission added with special "open commenting" mode. When `corpus.allow_comments = True`, any user who can READ an annotation can COMMENT on it. Enables community feedback without explicit permission grants.
+
 > **⚠️ DEPRECATION WARNING**: The `resolve_oc_model_queryset` function in `opencontractserver.shared.resolvers` was DEPRECATED and replaced with `Model.objects.visible_to_user(user)` calls.
 
 ## Key Changes in Current Implementation
@@ -22,14 +24,15 @@
 1. [Overview](#overview)
 2. [Architecture](#architecture)
 3. [Permission Types](#permission-types)
-4. [Backend Implementation](#backend-implementation)
-5. [Frontend Implementation](#frontend-implementation)
-6. [Annotation Permission Inheritance](#annotation-permission-inheritance)
-7. [Performance Optimizations](#performance-optimizations)
-8. [Component Integration](#component-integration)
-9. [Testing](#testing)
-10. [Troubleshooting](#troubleshooting)
-11. [resolve_oc_model_queryset Deprecation](#resolve_oc_model_queryset-deprecation)
+4. [COMMENT Permission System](#comment-permission-system)
+5. [Backend Implementation](#backend-implementation)
+6. [Frontend Implementation](#frontend-implementation)
+7. [Annotation Permission Inheritance](#annotation-permission-inheritance)
+8. [Performance Optimizations](#performance-optimizations)
+9. [Component Integration](#component-integration)
+10. [Testing](#testing)
+11. [Troubleshooting](#troubleshooting)
+12. [resolve_oc_model_queryset Deprecation](#resolve_oc_model_queryset-deprecation)
 
 ## Overview
 
@@ -160,6 +163,12 @@ Source Permission (REQUIRED) ∩ Document Permission ∩ Corpus Permission = Eff
 
 For Structural Annotations:
 Document READ Permission = Always Visible (READ-ONLY)
+
+For COMMENT Permission (Special Case):
+IF corpus.allow_comments == True:
+    can_comment = can_read  # Readable = Commentable
+ELSE:
+    can_comment = doc_comment AND corpus_comment  # Standard MIN logic
 ```
 
 ## Permission Types
@@ -173,10 +182,11 @@ class PermissionTypes(str, enum.Enum):
     EDIT = "EDIT"         # Alias for UPDATE
     UPDATE = "UPDATE"
     DELETE = "DELETE"
+    COMMENT = "COMMENT"   # NEW: Comment on annotations/relationships
     PERMISSION = "PERMISSION"
     PUBLISH = "PUBLISH"
     CRUD = "CRUD"         # Shorthand for CREATE+READ+UPDATE+DELETE
-    ALL = "ALL"           # All permissions including PUBLISH+PERMISSION
+    ALL = "ALL"           # All permissions including COMMENT+PUBLISH+PERMISSION
 ```
 
 ### Frontend Enum (frontend/src/components/types.ts)
@@ -221,6 +231,120 @@ The GraphQL layer translates between backend Django Guardian format and frontend
 | **CAN_PUBLISH** | Make corpus public | Make document public | Public visibility |
 | **CAN_PERMISSION** | Manage corpus access | Manage document access | Permission management |
 | **CAN_COMMENT** | Add comments | Add comments | Comment functionality |
+
+## COMMENT Permission System
+
+### Overview
+
+The COMMENT permission allows users to add comments/feedback on annotations and relationships. It follows the same inheritance model as other permissions (READ, CREATE, UPDATE, DELETE) but includes a special "open commenting" mode via the `corpus.allow_comments` field.
+
+### Permission Models
+
+**Standard Mode** (`corpus.allow_comments = False`):
+```
+can_comment = MIN(doc_comment, corpus_comment)
+```
+- Requires explicit COMMENT permission on both document AND corpus
+- Most restrictive permission wins
+- Same behavior as READ, CREATE, UPDATE, DELETE
+
+**Open Commenting Mode** (`corpus.allow_comments = True`):
+```
+can_comment = can_read
+```
+- Any user who can READ an annotation can COMMENT on it
+- Enables community feedback and collaboration without permission overhead
+- Still respects all READ boundaries (document, corpus, privacy)
+
+### Key Rules
+
+1. **READ is Required**: Cannot comment on what you cannot see
+   - No document READ = no comment
+   - No corpus READ = no comment
+   - Private annotation (analysis/extract) not accessible = no comment
+
+2. **Corpus Override**: `corpus.allow_comments` only applies when corpus context exists
+   - Document-only views use document COMMENT permission
+   - No corpus = standard permission check on document
+
+3. **Privacy Respected**: Open commenting mode still respects all visibility boundaries
+   - `created_by_analysis` annotations: need analysis permission
+   - `created_by_extract` annotations: need extract permission
+   - Different users may see different subsets of annotations
+
+### Implementation
+
+**In `AnnotationQueryOptimizer._compute_effective_permissions()`:**
+
+```python
+# Compute final read permission
+final_read = doc_read and corpus_read
+
+# BACON MODE: If corpus allows comments, readable = commentable
+if corpus.allow_comments:
+    final_comment = final_read  # Can see it? Can comment on it.
+else:
+    # Standard restrictive model
+    final_comment = doc_comment and corpus_comment
+
+return (final_read, can_create, can_update, can_delete, final_comment)
+```
+
+### Model Permissions
+
+COMMENT permission must be defined in model Meta for:
+- `Document` - `comment_document`
+- `Corpus` - `comment_corpus`
+- `Annotation` - `comment_annotation`
+- `Relationship` - `comment_relationship`
+
+### Use Cases
+
+**Open Commenting Mode (`allow_comments=True`):**
+- Public annotation projects with community feedback
+- Collaborative document review where everyone can comment
+- Educational corpuses where students can discuss annotations
+- Beta testing environments with open feedback
+
+**Standard Mode (`allow_comments=False`):**
+- Confidential/sensitive documents with controlled access
+- Professional environments requiring explicit permission grants
+- Multi-tier access where some users can only view
+
+### Examples
+
+**Example 1: Open Commenting**
+```python
+# Setup
+corpus.allow_comments = True
+set_permissions(user, document, [READ])  # No COMMENT
+set_permissions(user, corpus, [READ])    # No COMMENT
+
+# Result
+can_comment = True  # READ granted = COMMENT granted
+```
+
+**Example 2: Controlled Commenting**
+```python
+# Setup
+corpus.allow_comments = False
+set_permissions(user, document, [READ])         # No COMMENT
+set_permissions(user, corpus, [READ, COMMENT])  # Has COMMENT
+
+# Result
+can_comment = False  # Document lacks COMMENT (most restrictive wins)
+```
+
+**Example 3: Respecting Boundaries**
+```python
+# Setup
+corpus.allow_comments = True
+set_permissions(user, corpus, [READ])     # Has corpus access
+# NO document permissions
+
+# Result
+can_comment = False  # Cannot read document = cannot comment
+```
 
 ## Backend Implementation
 
