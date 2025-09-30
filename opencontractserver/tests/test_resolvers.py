@@ -404,3 +404,33 @@ class PermissionBasedVisibilityTest(TestCase):
             0,
             "Anonymous user should only see structural annotations on public documents",
         )
+
+    def test_corpus_queryset_optimizations(self):
+        """Test that Corpus.visible_to_user applies proper query optimizations."""
+        corpus_qs = Corpus.objects.visible_to_user(self.owner)
+
+        # Check that the queryset has the expected optimizations
+        self.assertQuerysetOptimized(
+            corpus_qs,
+            Corpus,
+            expected_select=["creator", "label_set", "user_lock"],
+            expected_prefetch=["documents"],
+        )
+
+    def test_document_queryset_optimizations(self):
+        """Test that Document.visible_to_user applies proper query optimizations."""
+        doc_qs = Document.objects.visible_to_user(self.owner)
+
+        # Check that the queryset has the expected optimizations
+        self.assertQuerysetOptimized(
+            doc_qs,
+            Document,
+            expected_select=["creator", "user_lock"],
+            expected_prefetch=[
+                "doc_annotations",
+                "rows",
+                "source_relationships",
+                "target_relationships",
+                "notes",
+            ],
+        )
