@@ -77,9 +77,9 @@ class BaseVisibilityManager(Manager):
                 f"Consider implementing tuned visible_to_user method on {model_name} manager"
             )
 
-            # === LEGACY PERMISSION LOGIC (SECURITY RISK) ===
-            # This logic is deprecated and will be removed in Phase 3.
-            # It has known edge cases and should not be used for new code.
+            # === TOP_LEVEL PERMISSION LOGIC ===
+            # This logic is for objs that don't follow some parent permissions logic
+
             # Get the base queryset first (only stuff given user CAN see)
             queryset = self.model.objects.none()  # Start with an empty queryset
 
