@@ -122,6 +122,7 @@ class AnnotationLabel(BaseOCModel):
             ("read_annotationlabel", "read Annotationlabel"),
             ("update_annotationlabel", "update Annotationlabel"),
             ("remove_annotationlabel", "delete Annotationlabel"),
+            ("comment_annotationlabel", "comment Annotationlabel"),
         )
 
         indexes = [
@@ -693,6 +694,7 @@ class LabelSet(BaseOCModel):
             ("read_labelset", "Can read labelset"),
             ("update_labelset", "Can update labelset"),
             ("remove_labelset", "Can delete labelset"),
+            ("comment_labelset", "Can comment labelset"),
         )
 
         indexes = [
@@ -948,6 +950,7 @@ class Note(BaseOCModel, HasEmbeddingMixin):
             ("read_note", "read note"),
             ("update_note", "update note"),
             ("remove_note", "delete note"),
+            ("comment_note", "comment note"),
         )
         indexes = [
             django.db.models.Index(fields=["title"]),

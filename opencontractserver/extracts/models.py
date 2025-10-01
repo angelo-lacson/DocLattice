@@ -48,6 +48,8 @@ class Fieldset(BaseOCModel):
             ("read_fieldset", "read fieldset"),
             ("update_fieldset", "update fieldset"),
             ("remove_fieldset", "delete fieldset"),
+            ("comment_fieldset", "comment fieldset"),
+            ("publish_fieldset", "publish fieldset"),
         )
 
 
@@ -151,6 +153,8 @@ class Column(BaseOCModel):
             ("read_column", "read column"),
             ("update_column", "update column"),
             ("remove_column", "delete column"),
+            ("comment_column", "comment column"),
+            ("publish_column", "publish column"),
         )
         indexes = [
             django.db.models.Index(fields=["fieldset", "display_order"]),
@@ -213,6 +217,7 @@ class Extract(BaseOCModel):
             ("update_extract", "update extract"),
             ("remove_extract", "delete extract"),
             ("comment_extract", "comment extract"),
+            ("publish_extract", "publish extract"),
         )
 
 
@@ -455,6 +460,7 @@ class Datacell(BaseOCModel):
             ("update_datacell", "update datacell"),
             ("remove_datacell", "delete datacell"),
             ("comment_datacell", "comment datacell"),
+            ("publish_datacell", "publish datacell"),
         )
         constraints = [
             django.db.models.UniqueConstraint(

@@ -257,8 +257,16 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         # If we didn't hit a rate limit, that's unexpected
         self.fail("Did not hit rate limit after 25 mutation requests")
 
-    def test_superuser_gets_higher_rate_limits(self):
+    @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
+    def test_superuser_gets_higher_rate_limits(self, mock_visible_to_user):
         """Test that superusers get higher rate limits than regular users."""
+        # Mock the visible_to_user to return a minimal queryset quickly
+        # This avoids the database overhead while still testing rate limiting
+        from opencontractserver.corpuses.models import Corpus
+
+        mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         query = """
             query GetCorpuses {
                 corpuses {
@@ -270,6 +278,9 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 }
             }
         """
+
+        # Clear cache to ensure fresh rate limit counter
+        cache.clear()
 
         # Regular user should hit limit around 200 requests
         # Superuser should get 10x that (1000/m)

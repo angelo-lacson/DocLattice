@@ -32,6 +32,7 @@ class GremlinEngine(BaseOCModel):
             ("read_gremlinengine", "read gremlin engine"),
             ("update_gremlinengine", "update gremlin engine"),
             ("remove_gremlinengine", "delete gremlin engine"),
+            ("comment_gremlinengine", "comment gremlin engine"),
         )
 
     url = django.db.models.CharField(
@@ -89,6 +90,7 @@ class Analyzer(BaseOCModel):
             ("read_analyzer", "read analyzer"),
             ("update_analyzer", "update analyzer"),
             ("remove_analyzer", "delete analyzer"),
+            ("comment_analyzer", "comment analyzer"),
         )
         constraints = [
             django.db.models.CheckConstraint(

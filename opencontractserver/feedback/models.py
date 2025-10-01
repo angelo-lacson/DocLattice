@@ -33,6 +33,7 @@ class UserFeedback(BaseOCModel):
             ("read_userfeedback", "read UserFeedback"),
             ("update_userfeedback", "update UserFeedback"),
             ("remove_userfeedback", "delete UserFeedback"),
+            ("comment_userfeedback", "comment UserFeedback"),
         )
 
     def clean(self):
