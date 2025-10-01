@@ -861,3 +861,96 @@ class PermissioningTestCase(TestCase):
 
         # Assert that both methods return the same results
         self.assertEqual(set(visible_feedback_user1), set(naive_filtered))
+
+    def test_annotation_permission_types(self):
+        """
+        Test all annotation permission types including CREATE, CRUD, ALL, and unsupported types.
+        This ensures full coverage of the annotation-specific permission checking logic.
+        """
+        logger.info("----- TEST ANNOTATION PERMISSION TYPES -----")
+
+        # Get an annotation from the corpus
+        annotation = Annotation.objects.filter(corpus=self.corpus).first()
+        self.assertIsNotNone(annotation)
+
+        # Give user full permissions on corpus and documents
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+        for doc_id in self.doc_ids:
+            doc = Document.objects.get(id=doc_id)
+            set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+
+        # Test CREATE permission
+        logger.info("Testing CREATE permission for annotation")
+        has_create = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.CREATE,
+            include_group_permissions=True,
+        )
+        self.assertTrue(has_create)
+
+        # Test CRUD permission (requires all 4 base permissions)
+        logger.info("Testing CRUD permission for annotation")
+        has_crud = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.CRUD,
+            include_group_permissions=True,
+        )
+        self.assertTrue(has_crud)
+
+        # Test ALL permission (includes COMMENT)
+        logger.info("Testing ALL permission for annotation")
+        has_all = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.ALL,
+            include_group_permissions=True,
+        )
+        self.assertTrue(has_all)
+
+        # Test unsupported permissions (PUBLISH and PERMISSION should return False for annotations)
+        logger.info("Testing PUBLISH permission (should be False for annotations)")
+        has_publish = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.PUBLISH,
+            include_group_permissions=True,
+        )
+        self.assertFalse(has_publish)
+
+        logger.info("Testing PERMISSION permission (should be False for annotations)")
+        has_permission = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.PERMISSION,
+            include_group_permissions=True,
+        )
+        self.assertFalse(has_permission)
+
+        # Test with user_2 who has no permissions - all should be False
+        logger.info("Testing permissions for user without access")
+        self.assertFalse(
+            user_has_permission_for_obj(
+                instance=annotation,
+                user_val=self.user_2,
+                permission=PermissionTypes.CREATE,
+                include_group_permissions=True,
+            )
+        )
+        self.assertFalse(
+            user_has_permission_for_obj(
+                instance=annotation,
+                user_val=self.user_2,
+                permission=PermissionTypes.CRUD,
+                include_group_permissions=True,
+            )
+        )
+        self.assertFalse(
+            user_has_permission_for_obj(
+                instance=annotation,
+                user_val=self.user_2,
+                permission=PermissionTypes.ALL,
+                include_group_permissions=True,
+            )
+        )
