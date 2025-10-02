@@ -2087,6 +2087,145 @@ class RemoveRelationships(graphene.Mutation):
         return RemoveRelationships(ok=True)
 
 
+class UpdateRelationship(graphene.Mutation):
+    """
+    Update an existing relationship by adding or removing annotations
+    from source or target sets.
+    """
+
+    class Arguments:
+        relationship_id = graphene.String(
+            required=True, description="ID of the relationship to update"
+        )
+        add_source_ids = graphene.List(
+            graphene.String,
+            required=False,
+            description="List of annotation IDs to add as sources",
+        )
+        add_target_ids = graphene.List(
+            graphene.String,
+            required=False,
+            description="List of annotation IDs to add as targets",
+        )
+        remove_source_ids = graphene.List(
+            graphene.String,
+            required=False,
+            description="List of annotation IDs to remove from sources",
+        )
+        remove_target_ids = graphene.List(
+            graphene.String,
+            required=False,
+            description="List of annotation IDs to remove from targets",
+        )
+
+    ok = graphene.Boolean()
+    relationship = graphene.Field(RelationshipType)
+    message = graphene.String()
+
+    @login_required
+    def mutate(
+        root,
+        info,
+        relationship_id,
+        add_source_ids=None,
+        add_target_ids=None,
+        remove_source_ids=None,
+        remove_target_ids=None,
+    ):
+        try:
+            relationship_pk = from_global_id(relationship_id)[1]
+            relationship = Relationship.objects.get(pk=relationship_pk)
+
+            # Check UPDATE permission on the relationship
+            if not user_has_permission_for_obj(
+                info.context.user,
+                relationship,
+                PermissionTypes.UPDATE,
+                include_group_permissions=True,
+            ):
+                return UpdateRelationship(
+                    ok=False,
+                    relationship=None,
+                    message="You don't have permission to update this relationship",
+                )
+
+            # Add source annotations
+            if add_source_ids:
+                source_pks = [from_global_id(sid)[1] for sid in add_source_ids]
+                source_annotations = Annotation.objects.filter(id__in=source_pks)
+
+                # Verify user can read all annotations
+                for annotation in source_annotations:
+                    if not user_has_permission_for_obj(
+                        info.context.user,
+                        annotation,
+                        PermissionTypes.READ,
+                        include_group_permissions=True,
+                    ):
+                        return UpdateRelationship(
+                            ok=False,
+                            relationship=None,
+                            message=f"You don't have permission to see annotation {annotation.id}",
+                        )
+
+                relationship.source_annotations.add(*source_annotations)
+
+            # Add target annotations
+            if add_target_ids:
+                target_pks = [from_global_id(tid)[1] for tid in add_target_ids]
+                target_annotations = Annotation.objects.filter(id__in=target_pks)
+
+                # Verify user can read all annotations
+                for annotation in target_annotations:
+                    if not user_has_permission_for_obj(
+                        info.context.user,
+                        annotation,
+                        PermissionTypes.READ,
+                        include_group_permissions=True,
+                    ):
+                        return UpdateRelationship(
+                            ok=False,
+                            relationship=None,
+                            message=f"You don't have permission to see annotation {annotation.id}",
+                        )
+
+                relationship.target_annotations.add(*target_annotations)
+
+            # Remove source annotations
+            if remove_source_ids:
+                source_pks = [from_global_id(sid)[1] for sid in remove_source_ids]
+                source_annotations = Annotation.objects.filter(id__in=source_pks)
+                relationship.source_annotations.remove(*source_annotations)
+
+            # Remove target annotations
+            if remove_target_ids:
+                target_pks = [from_global_id(tid)[1] for tid in remove_target_ids]
+                target_annotations = Annotation.objects.filter(id__in=target_pks)
+                relationship.target_annotations.remove(*target_annotations)
+
+            relationship.save()
+
+            return UpdateRelationship(
+                ok=True,
+                relationship=relationship,
+                message="Relationship updated successfully",
+            )
+
+        except Relationship.DoesNotExist:
+            return UpdateRelationship(
+                ok=False,
+                relationship=None,
+                message="Relationship not found",
+            )
+        except Exception as e:
+            logger.error(f"Error updating relationship: {e}")
+            return UpdateRelationship(
+                ok=False,
+                relationship=None,
+                message=f"Error updating relationship: {str(e)}",
+            )
+
+
 class UpdateAnnotation(DRFMutation):
     class IOSettings:
         pk_fields = ["annotation_label"]
@@ -3513,6 +3652,7 @@ class Mutation(graphene.ObjectType):
     add_relationship = AddRelationship.Field()
     remove_relationship = RemoveRelationship.Field()
     remove_relationships = RemoveRelationships.Field()
+    update_relationship = UpdateRelationship.Field()
     update_relationships = UpdateRelations.Field()
 
     # LABELSET MUTATIONS #######################################################

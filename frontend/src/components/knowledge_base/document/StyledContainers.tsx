@@ -13,6 +13,10 @@ export const HeaderContainer = styled(Segment)`
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
     z-index: 100;
     position: relative;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
 
     /* Mobile-friendly header */
     @media (max-width: 768px) {
@@ -1865,5 +1869,165 @@ export const MobileTab = styled.button<{ $active?: boolean }>`
   svg {
     width: 16px;
     height: 16px;
+  }
+`;
+
+/* Sidebar Tabs - positioned on the left edge of the sliding panel when open, right edge when closed */
+export const SidebarTabsContainer = styled.div<{ $panelOpen: boolean }>`
+  position: ${(props) => (props.$panelOpen ? "absolute" : "fixed")};
+  left: ${(props) => (props.$panelOpen ? "-48px" : "auto")};
+  right: ${(props) => (props.$panelOpen ? "auto" : "0")};
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: ${(props) => (props.$panelOpen ? "0" : "8px")};
+  z-index: ${(props) => (props.$panelOpen ? "100002" : "1999")};
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+`;
+
+export const SidebarTab = styled(motion.button)<{
+  $isActive: boolean;
+  $panelOpen: boolean;
+}>`
+  width: ${(props) => (props.$panelOpen ? "48px" : "40px")};
+  height: ${(props) => (props.$panelOpen ? "120px" : "100px")};
+  background: ${(props) =>
+    props.$isActive
+      ? "linear-gradient(90deg, rgba(66, 153, 225, 0.95) 0%, rgba(59, 130, 246, 0.95) 100%)"
+      : "rgba(255, 255, 255, 0.95)"};
+  backdrop-filter: blur(12px);
+  border: 1px solid
+    ${(props) =>
+      props.$isActive ? "rgba(59, 130, 246, 0.3)" : "rgba(226, 232, 240, 0.3)"};
+  border-right: ${(props) =>
+    props.$panelOpen ? "none" : "1px solid rgba(226, 232, 240, 0.3)"};
+  border-left: ${(props) =>
+    props.$panelOpen ? "1px solid rgba(226, 232, 240, 0.3)" : "none"};
+  border-radius: 12px 0 0 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: ${(props) =>
+    props.$isActive
+      ? props.$panelOpen
+        ? "4px 0 16px rgba(59, 130, 246, 0.25)"
+        : "-4px 0 16px rgba(59, 130, 246, 0.25)"
+      : props.$panelOpen
+      ? "2px 0 8px rgba(0, 0, 0, 0.05)"
+      : "-2px 0 8px rgba(0, 0, 0, 0.05)"};
+  position: relative;
+  overflow: hidden;
+
+  /* Subtle gradient overlay */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: ${(props) =>
+      props.$isActive
+        ? "linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%)"
+        : "linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, transparent 100%)"};
+    opacity: ${(props) => (props.$isActive ? 1 : 0)};
+    transition: opacity 0.3s ease;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: ${(props) => (props.$isActive ? "white" : "#64748b")};
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  .tab-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: ${(props) => (props.$isActive ? "white" : "#64748b")};
+    text-transform: uppercase;
+    white-space: nowrap;
+    position: relative;
+    z-index: 1;
+  }
+
+  &:hover {
+    transform: ${(props) => {
+      // When panel is open, hover moves tab right (out from panel)
+      // When panel is closed, hover moves tab left (out from screen edge)
+      if (props.$panelOpen) {
+        return props.$isActive ? "translateX(2px)" : "translateX(4px)";
+      } else {
+        return props.$isActive ? "translateX(-2px)" : "translateX(-4px)";
+      }
+    }};
+    box-shadow: ${(props) =>
+      props.$isActive
+        ? props.$panelOpen
+          ? "6px 0 24px rgba(59, 130, 246, 0.35)"
+          : "-6px 0 24px rgba(59, 130, 246, 0.35)"
+        : props.$panelOpen
+        ? "4px 0 16px rgba(0, 0, 0, 0.08)"
+        : "-4px 0 16px rgba(0, 0, 0, 0.08)"};
+    background: ${(props) =>
+      props.$isActive
+        ? "linear-gradient(90deg, rgba(66, 153, 225, 1) 0%, rgba(59, 130, 246, 1) 100%)"
+        : "rgba(248, 250, 252, 0.98)"};
+
+    &::before {
+      opacity: 1;
+    }
+
+    svg {
+      transform: ${(props) => (props.$isActive ? "scale(1.1)" : "scale(1.05)")};
+      color: ${(props) => (props.$isActive ? "white" : "#3b82f6")};
+    }
+
+    .tab-label {
+      color: ${(props) => (props.$isActive ? "white" : "#3b82f6")};
+    }
+  }
+
+  &:active {
+    transform: ${(props) =>
+      props.$panelOpen
+        ? "translateX(2px) scale(0.98)"
+        : "translateX(-2px) scale(0.98)"};
+  }
+
+  /* Active state indicator line */
+  &::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: ${(props) => (props.$isActive ? "60%" : "0")};
+    background: white;
+    border-radius: 2px 0 0 2px;
+    transition: height 0.3s ease;
+  }
+
+  /* First tab (top) */
+  &:first-child {
+    margin-bottom: 4px;
+  }
+
+  /* Second tab (bottom) */
+  &:last-child {
+    margin-top: 0;
   }
 `;

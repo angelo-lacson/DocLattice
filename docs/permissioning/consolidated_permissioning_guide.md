@@ -1,6 +1,8 @@
 # OpenContracts Permission System - Complete Guide
 
-> **🔴 CRITICAL CHANGE**: Annotations no longer have individual permissions. All annotations in a document share the same permissions computed from document + corpus. This eliminates N+1 queries and simplifies the security model.
+> **🔴 CRITICAL CHANGE**: Annotations and Relationships no longer have individual permissions. Both inherit permissions from document + corpus. This eliminates N+1 queries and simplifies the security model.
+
+> **🔴 CRITICAL SECURITY**: Structural annotations and relationships are ALWAYS read-only except for superusers. Even owners with full CRUD permissions cannot modify structural items. This is enforced in `user_has_permission_for_obj` at `permissioning.py:297-303` (annotations) and `permissioning.py:388-394` (relationships).
 
 > **🔵 NEW FEATURE**: Annotations can now be marked as "created by" an analysis or extract using `created_by_analysis` and `created_by_extract` fields. These annotations are private to the source object and only visible to users with permission to that analysis/extract.
 
@@ -13,10 +15,12 @@
 | Component | Old Model | New Model | Impact |
 |-----------|-----------|-----------|---------|
 | **Annotation Permissions** | Individual per-annotation | Inherited from document+corpus | No N+1 queries |
+| **Relationship Permissions** | Individual per-relationship | Inherited from document+corpus | Same as annotations |
+| **Structural Items** | Could be modified by owners | **READ-ONLY except for superusers** | Critical security |
 | **Permission Priority** | Corpus > Document | Document > Corpus (most restrictive) | Better security |
-| **Database Queries** | 1 per annotation | 2 total (doc + corpus) | Massive performance gain |
+| **Database Queries** | 1 per annotation/relationship | 2 total (doc + corpus) | Massive performance gain |
 | **Permission Storage** | `annotationuserobjectpermission` table | None - computed at runtime | Simpler database |
-| **Permission Uniformity** | Each annotation different | All annotations same in document | Predictable behavior |
+| **Permission Uniformity** | Each annotation/relationship different | All same in document | Predictable behavior |
 | **Analysis Privacy** | All annotations visible with doc+corpus perms | Annotations created by analysis are private | Enhanced privacy control |
 | **Extract Privacy** | All annotations visible with doc+corpus perms | Annotations created by extract are private | Enhanced privacy control |
 
@@ -45,13 +49,15 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
    - Corpus-level permissions can provide additional context when viewing documents
 
 2. **Annotations and Relationships - NO INDIVIDUAL PERMISSIONS**
-   - **IMPORTANT: Annotations no longer have individual permissions**
-   - All annotations inherit permissions from their parent document and corpus
+   - **IMPORTANT: Annotations and Relationships do NOT have individual permissions**
+   - Both annotations and relationships inherit permissions from their parent document and corpus
    - **Document permissions are PRIMARY** (most restrictive)
    - **Corpus permissions are SECONDARY** (additional restrictions)
    - Formula: `Effective Permission = MIN(document_permission, corpus_permission)`
-   - This ensures annotations are never more permissive than their parent document
+   - This ensures annotations/relationships are never more permissive than their parent document
    - **Performance benefit**: Eliminates N+1 permission queries
+   - **CRITICAL**: Structural annotations and relationships are ALWAYS read-only except for superusers
+   - Relationships use the same permission inheritance model as annotations (implemented at `permissioning.py:376-433`)
 
 3. **Analyses and Extracts - HYBRID MODEL**
    - Have their own individual permissions (can be shared independently)
@@ -506,28 +512,39 @@ class AnnotationQueryOptimizer:
 
 ### Special Cases
 
-1. **Structural Annotations**
-   - Always READ-ONLY if document is readable
-   - Cannot be edited regardless of other permissions
-   - Filtered automatically when no corpus context
+1. **Structural Annotations** ⚠️ **CRITICAL SECURITY RULE**
+   - **ALWAYS READ-ONLY except for superusers**
+   - **Cannot be edited, updated, or deleted by ANY user (including owners with full CRUD permissions)**
+   - Only superusers can modify or delete structural annotations
+   - This protection is enforced in `user_has_permission_for_obj` at `permissioning.py:297-303`
    - Structural annotations are ALWAYS visible regardless of `created_by_*` fields
+   - Filtered automatically when no corpus context
 
-2. **Analysis-Created Annotations** (NEW)
+2. **Structural Relationships** ⚠️ **CRITICAL SECURITY RULE**
+   - **ALWAYS READ-ONLY except for superusers**
+   - **Cannot be edited, updated, or deleted by ANY user (including owners with full CRUD permissions)**
+   - Only superusers can modify or delete structural relationships
+   - This protection is enforced in `user_has_permission_for_obj` at `permissioning.py:388-394`
+   - Relationships inherit permissions from document+corpus (just like annotations)
+   - Structural protection is checked BEFORE any other permission logic
+
+3. **Analysis-Created Annotations** (NEW)
    - Annotations with `created_by_analysis` field set are private to that analysis
    - Only visible to users who have permission to the analysis object
    - Even if user has document+corpus permissions, they cannot see these annotations without analysis permission
    - Structural annotations are exempt from this privacy rule
 
-3. **Extract-Created Annotations** (NEW)
+4. **Extract-Created Annotations** (NEW)
    - Annotations with `created_by_extract` field set are private to that extract
    - Only visible to users who have permission to the extract object
    - Even if user has document+corpus permissions, they cannot see these annotations without extract permission
    - Structural annotations are exempt from this privacy rule
 
-4. **Superuser Access**
+5. **Superuser Access**
    - Superusers bypass all permission checks
    - Get full permissions automatically
    - Can see all annotations including private analysis/extract annotations
+   - **Only superusers can modify or delete structural annotations/relationships**
 
 ## Annotation Privacy Model (NEW)
 
@@ -539,13 +556,19 @@ The annotation privacy model allows annotations to be marked as "created by" a s
 
 **CRITICAL**: The function `user_has_permission_for_obj` in `opencontractserver/utils/permissioning.py` is THE single source of truth for ALL permission checks in the system. Never bypass this function or implement custom permission logic.
 
-All permission checks for annotations now go through the enhanced `user_has_permission_for_obj` function, which automatically handles:
+All permission checks for annotations and relationships now go through the enhanced `user_has_permission_for_obj` function, which automatically handles:
 
-1. **Superuser bypass** - Superusers always have full permissions
-2. **Structural annotations** - Always read-only regardless of other permissions
+1. **Superuser bypass** - Superusers always have full permissions (including structural items)
+2. **Structural protection** - Structural annotations/relationships are ALWAYS read-only for non-superusers
 3. **Privacy enforcement** - Checks source object permissions for private annotations
 4. **Permission inheritance** - Requires SAME permission level on source object as requested
 5. **Document+corpus computation** - Uses AnnotationQueryOptimizer for final permissions
+
+**Implementation Details:**
+- Structural annotation protection: `permissioning.py:297-303`
+- Structural relationship protection: `permissioning.py:388-394`
+- Both checks happen BEFORE any other permission logic
+- All mutations automatically respect this (RemoveAnnotation, UpdateAnnotation, RemoveRelationship, UpdateRelationship, etc.)
 
 This means mutations don't need to understand the privacy model - they just call `user_has_permission_for_obj` and it handles everything.
 
@@ -907,12 +930,16 @@ The permission system is thoroughly tested in:
 - `opencontractserver/tests/permissioning/test_annotation_privacy_scoping.py` - Proves privacy scoping works
 - `opencontractserver/tests/permissioning/test_annotation_permission_inheritance.py` - Validates inheritance model
 - `opencontractserver/tests/permissioning/test_analysis_extract_hybrid_permissions.py` - Tests hybrid permission model
+- `opencontractserver/tests/test_structural_protection.py` - **Tests structural annotation/relationship protection**
+- `opencontractserver/tests/test_relationship_mutation_permissions.py` - Tests relationship permission inheritance
 
 These tests definitively prove that:
 1. Private annotations are properly scoped to analyses/extracts
 2. Multiple teams can work on shared corpuses without seeing each other's private annotations
 3. Permission changes take effect immediately
 4. Mutations properly respect the privacy model
+5. **Structural annotations/relationships CANNOT be modified by non-superusers (even owners with full CRUD)**
+6. Relationships inherit permissions from document+corpus exactly like annotations
 
 ### Backend Tests
 
@@ -1019,6 +1046,73 @@ def test_structural_annotations_always_visible():
     )
     assert structural in visible  # Still visible because structural
 ```
+
+#### Structural Protection Tests (CRITICAL)
+```python
+def test_owner_cannot_update_structural_annotation():
+    """Owner CANNOT UPDATE structural annotations even with full permissions."""
+    # Create structural annotation
+    structural_annotation = Annotation.objects.create(
+        annotation_label=token_label,
+        document=doc,
+        corpus=corpus,
+        creator=owner,
+        structural=True,
+    )
+
+    # Grant owner FULL permissions on document and corpus
+    set_permissions_for_obj_to_user(owner, doc, [PermissionTypes.CRUD])
+    set_permissions_for_obj_to_user(owner, corpus, [PermissionTypes.CRUD])
+
+    # Owner STILL cannot update structural annotation
+    assert not user_has_permission_for_obj(
+        owner,
+        structural_annotation,
+        PermissionTypes.UPDATE,
+        include_group_permissions=True,
+    )
+
+def test_superuser_can_update_structural_annotation():
+    """Superuser CAN UPDATE structural annotations."""
+    superuser = User.objects.create_superuser(username="super", password="test")
+
+    # Superuser can modify structural items
+    assert user_has_permission_for_obj(
+        superuser,
+        structural_annotation,
+        PermissionTypes.UPDATE,
+        include_group_permissions=True,
+    )
+
+def test_owner_cannot_delete_structural_relationship():
+    """Owner CANNOT DELETE structural relationships even with full permissions."""
+    structural_rel = Relationship.objects.create(
+        relationship_label=relationship_label,
+        document=doc,
+        corpus=corpus,
+        creator=owner,
+        structural=True,
+    )
+
+    # Owner has full permissions
+    set_permissions_for_obj_to_user(owner, doc, [PermissionTypes.CRUD])
+    set_permissions_for_obj_to_user(owner, corpus, [PermissionTypes.CRUD])
+
+    # But STILL cannot delete structural relationship
+    assert not user_has_permission_for_obj(
+        owner,
+        structural_rel,
+        PermissionTypes.DELETE,
+        include_group_permissions=True,
+    )
+```
+
+**Key Validation Points:**
+- File: `opencontractserver/tests/test_structural_protection.py`
+- 12 comprehensive tests covering annotations and relationships
+- Tests verify non-superusers CANNOT modify structural items even with CRUD
+- Tests verify superusers CAN modify structural items
+- Tests verify non-structural items work normally
 
 ### Frontend Tests
 

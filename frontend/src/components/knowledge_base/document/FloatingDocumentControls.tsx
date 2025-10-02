@@ -1,7 +1,14 @@
 import React, { useState, useEffect, memo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, Eye, BarChart3, Database, Plus } from "lucide-react";
+import {
+  Settings,
+  Eye,
+  BarChart3,
+  Database,
+  Plus,
+  Columns,
+} from "lucide-react";
 import { useCorpusState } from "../../annotator/context/CorpusAtom";
 import {
   useDocumentPermissions,
@@ -124,6 +131,62 @@ const PanelHeader = styled.div`
   }
 `;
 
+const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: ${(props) =>
+    props.$isActive
+      ? "linear-gradient(135deg, rgba(66, 153, 225, 0.08), rgba(66, 153, 225, 0.05))"
+      : "transparent"};
+  color: ${(props) => (props.$isActive ? "#4299e1" : "#64748b")};
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+
+  /* Subtle left accent for active state */
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: ${(props) => (props.$isActive ? "60%" : "0")};
+    background: #4299e1;
+    border-radius: 1px;
+    transition: height 0.2s ease;
+  }
+
+  &:hover {
+    background: ${(props) =>
+      props.$isActive
+        ? "linear-gradient(135deg, rgba(66, 153, 225, 0.12), rgba(66, 153, 225, 0.08))"
+        : "rgba(0, 0, 0, 0.02)"};
+    color: ${(props) => (props.$isActive ? "#4299e1" : "#475569")};
+    transform: translateX(2px);
+  }
+
+  &:active {
+    transform: translateX(2px) scale(0.98);
+  }
+
+  .percentage {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    font-weight: 400;
+  }
+`;
+
 interface FloatingDocumentControlsProps {
   /** Whether to show the controls (e.g., only in document layer) */
   visible?: boolean;
@@ -141,6 +204,10 @@ interface FloatingDocumentControlsProps {
   panelOffset?: number;
   /** When true, hide create/edit functionality */
   readOnly?: boolean;
+  /** Current panel width mode */
+  panelWidthMode?: "quarter" | "half" | "full";
+  /** Callback when panel width changes */
+  onPanelWidthChange?: (mode: "quarter" | "half" | "full") => void;
 }
 
 export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
@@ -154,8 +221,11 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
       extractsOpen = false,
       panelOffset = 0,
       readOnly = false,
+      panelWidthMode = "half",
+      onPanelWidthChange,
     }) => {
       const [expandedSettings, setExpandedSettings] = useState(false);
+      const [expandedWidthMenu, setExpandedWidthMenu] = useState(false);
 
       // Get document permissions to check if user can create analyses (not corpus permissions!)
       const { permissions: documentPermissions, setPermissions } =
@@ -280,6 +350,13 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
         }
       }, [showRightPanel]); // Remove expandedSettings from deps to avoid closure issues
 
+      // Close width menu when right panel opens
+      useEffect(() => {
+        if (showRightPanel && expandedWidthMenu) {
+          setExpandedWidthMenu(false);
+        }
+      }, [showRightPanel]);
+
       // Add logging for early return
       if (!visible) {
         console.log(
@@ -319,6 +396,56 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
       return (
         <ControlsContainer $panelOffset={panelOffset}>
           <AnimatePresence>
+            {expandedWidthMenu && showRightPanel && (
+              <ControlPanel
+                data-testid="width-menu-panel"
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <PanelHeader>
+                  <Columns />
+                  Panel Width
+                </PanelHeader>
+                <WidthMenuItem
+                  $isActive={panelWidthMode === "quarter"}
+                  onClick={() => {
+                    onPanelWidthChange?.("quarter");
+                    setExpandedWidthMenu(false);
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Compact
+                  <span className="percentage">25%</span>
+                </WidthMenuItem>
+                <WidthMenuItem
+                  $isActive={panelWidthMode === "half"}
+                  onClick={() => {
+                    onPanelWidthChange?.("half");
+                    setExpandedWidthMenu(false);
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Standard
+                  <span className="percentage">50%</span>
+                </WidthMenuItem>
+                <WidthMenuItem
+                  $isActive={panelWidthMode === "full"}
+                  onClick={() => {
+                    onPanelWidthChange?.("full");
+                    setExpandedWidthMenu(false);
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Wide
+                  <span className="percentage">90%</span>
+                </WidthMenuItem>
+              </ControlPanel>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
             {expandedSettings && (
               <ControlPanel
                 data-testid="settings-panel"
@@ -339,6 +466,20 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
               </ControlPanel>
             )}
           </AnimatePresence>
+
+          {/* Width control button - only show when right panel is open */}
+          {showRightPanel && (
+            <ActionButton
+              data-expanded={expandedWidthMenu}
+              data-testid="width-button"
+              onClick={() => setExpandedWidthMenu(!expandedWidthMenu)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title="Panel Width"
+            >
+              <Columns />
+            </ActionButton>
+          )}
 
           {/* Only show Settings button when right panel is closed */}
           {!showRightPanel && (

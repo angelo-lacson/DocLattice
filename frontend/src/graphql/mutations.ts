@@ -1197,6 +1197,86 @@ export const REQUEST_CREATE_RELATIONSHIP = gql`
   }
 `;
 
+export interface UpdateRelationshipInput {
+  relationshipId: string;
+  addSourceIds?: string[];
+  addTargetIds?: string[];
+  removeSourceIds?: string[];
+  removeTargetIds?: string[];
+}
+
+export interface UpdateRelationshipOutput {
+  updateRelationship: {
+    ok: boolean;
+    message: string;
+    relationship: {
+      id: string;
+      structural: boolean;
+      relationshipLabel: AnnotationLabelType;
+      sourceAnnotations: {
+        edges: Array<{
+          node: {
+            id: string;
+          };
+        }>;
+      };
+      targetAnnotations: {
+        edges: Array<{
+          node: {
+            id: string;
+          };
+        }>;
+      };
+    } | null;
+  };
+}
+
+export const UPDATE_RELATIONSHIP = gql`
+  mutation UpdateRelationship(
+    $relationshipId: String!
+    $addSourceIds: [String!]
+    $addTargetIds: [String!]
+    $removeSourceIds: [String!]
+    $removeTargetIds: [String!]
+  ) {
+    updateRelationship(
+      relationshipId: $relationshipId
+      addSourceIds: $addSourceIds
+      addTargetIds: $addTargetIds
+      removeSourceIds: $removeSourceIds
+      removeTargetIds: $removeTargetIds
+    ) {
+      ok
+      message
+      relationship {
+        id
+        structural
+        relationshipLabel {
+          id
+          text
+          color
+          icon
+          description
+        }
+        sourceAnnotations {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        targetAnnotations {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 export interface RemoveRelationshipOutputType {
   removeRelationship: {
     ok: boolean;

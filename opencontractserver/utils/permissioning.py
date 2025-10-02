@@ -373,6 +373,65 @@ def user_has_permission_for_obj(
                 # Annotations don't support PUBLISH or PERMISSION
                 return False
 
+    # Special handling for relationships (similar to annotations)
+    if model_name == "relationship" and app_label == "annotations":
+        from opencontractserver.annotations.models import Relationship
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        if isinstance(instance, Relationship):
+            # Superusers always have permission
+            if user.is_superuser:
+                return True
+
+            # Structural relationships are ALWAYS read-only (only superusers can modify)
+            # Check this FIRST before any other permission checks
+            if instance.structural and permission != PermissionTypes.READ:
+                logger.info(
+                    f"User {user.username} denied write access to structural relationship {instance.id}"
+                )
+                return False
+
+            # Relationships inherit permissions from document+corpus
+            # Use the same logic as annotations
+            can_read, can_create, can_update, can_delete, can_comment = (
+                AnnotationQueryOptimizer._compute_effective_permissions(
+                    user=user,
+                    document_id=instance.document_id,
+                    corpus_id=instance.corpus_id,
+                )
+            )
+
+            # Map the requested permission to the computed permissions
+            if permission == PermissionTypes.READ:
+                return can_read
+            elif permission == PermissionTypes.CREATE:
+                return can_create
+            elif (
+                permission == PermissionTypes.UPDATE
+                or permission == PermissionTypes.EDIT
+            ):
+                return can_update
+            elif permission == PermissionTypes.DELETE:
+                return can_delete
+            elif permission == PermissionTypes.COMMENT:
+                return can_comment
+            elif permission == PermissionTypes.CRUD:
+                return can_read and can_create and can_update and can_delete
+            elif permission == PermissionTypes.ALL:
+                # For relationships, ALL includes COMMENT but not publish/permission
+                return (
+                    can_read
+                    and can_create
+                    and can_update
+                    and can_delete
+                    and can_comment
+                )
+            else:
+                # Relationships don't support PUBLISH or PERMISSION
+                return False
+
     # Standard permission checking for all other models
     model_permissions_for_user = get_users_permissions_for_obj(
         user=user,

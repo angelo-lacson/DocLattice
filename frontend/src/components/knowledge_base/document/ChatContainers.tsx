@@ -59,18 +59,22 @@ export const ChatInputContainer = styled(motion.div)<{ $isTyping?: boolean }>`
   bottom: 0;
   display: flex;
   align-items: flex-end;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: 0.875rem;
+  padding: 1.25rem 1.5rem;
   background: white;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.03);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
 
   /* Glass morphism effect */
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(249, 250, 251, 0.98) 100%
+  );
 
   /* Smooth transitions */
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Ensure proper containment */
   box-sizing: border-box;
@@ -79,8 +83,13 @@ export const ChatInputContainer = styled(motion.div)<{ $isTyping?: boolean }>`
   max-height: 40vh; /* Limit maximum expansion */
 
   &:focus-within {
-    box-shadow: 0 -2px 20px rgba(66, 153, 225, 0.08);
-    border-top-color: rgba(66, 153, 225, 0.2);
+    box-shadow: 0 -4px 24px rgba(66, 153, 225, 0.12);
+    border-top-color: rgba(102, 126, 234, 0.25);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(247, 250, 252, 1) 100%
+    );
   }
 `;
 
@@ -89,21 +98,24 @@ export const ChatInputWrapper = styled.div`
   display: flex;
   flex-direction: column;
   position: relative;
-  background: #f8fafb;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  background: #fafbfc;
+  border: 2px solid #e8ecf0;
+  border-radius: 14px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 
   &:hover {
-    border-color: #cbd5e0;
-    background: #f7fafc;
+    border-color: #d0d7de;
+    background: #f6f8fa;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   }
 
   &:focus-within {
-    border-color: #4299e1;
+    border-color: #667eea;
     background: white;
-    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.12),
+      0 4px 16px rgba(0, 0, 0, 0.08);
   }
 `;
 
@@ -168,45 +180,84 @@ export const CharacterCount = styled.div<{ $nearLimit?: boolean }>`
 `;
 
 export const SendButton = styled(motion.button)<{ $hasText?: boolean }>`
-  background: ${(props) => (props.$hasText ? "#4299e1" : "#e2e8f0")};
-  color: ${(props) => (props.$hasText ? "white" : "#a0aec0")};
+  background: ${(props) =>
+    props.$hasText
+      ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+      : "#e8ecf0"};
+  color: ${(props) => (props.$hasText ? "white" : "#94a3b8")};
   border: none;
-  border-radius: 10px;
-  width: 40px;
-  height: 40px;
+  border-radius: 12px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: ${(props) => (props.$hasText ? "pointer" : "not-allowed")};
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   align-self: flex-end;
   flex-shrink: 0;
+  box-shadow: ${(props) =>
+    props.$hasText
+      ? "0 4px 12px rgba(102, 126, 234, 0.2)"
+      : "0 2px 6px rgba(0, 0, 0, 0.04)"};
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
 
   &:hover {
-    background: ${(props) => (props.$hasText ? "#3182ce" : "#e2e8f0")};
-    transform: ${(props) => (props.$hasText ? "scale(1.05)" : "none")};
+    background: ${(props) =>
+      props.$hasText
+        ? "linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)"
+        : "#e8ecf0"};
+    transform: ${(props) => (props.$hasText ? "translateY(-2px)" : "none")};
+    box-shadow: ${(props) =>
+      props.$hasText
+        ? "0 8px 20px rgba(102, 126, 234, 0.3)"
+        : "0 2px 6px rgba(0, 0, 0, 0.04)"};
+
+    &::before {
+      opacity: ${(props) => (props.$hasText ? 1 : 0)};
+    }
   }
 
   &:active {
-    transform: ${(props) => (props.$hasText ? "scale(0.95)" : "none")};
+    transform: ${(props) => (props.$hasText ? "translateY(0)" : "none")};
+    box-shadow: ${(props) =>
+      props.$hasText
+        ? "0 2px 8px rgba(102, 126, 234, 0.3)"
+        : "0 2px 6px rgba(0, 0, 0, 0.04)"};
   }
 
   &:disabled {
-    background: #e2e8f0;
-    color: #a0aec0;
+    background: #e8ecf0;
+    color: #94a3b8;
     cursor: not-allowed;
     transform: none !important;
+    box-shadow: none;
   }
 
   svg {
-    width: 18px;
-    height: 18px;
-    transition: transform 0.2s ease;
+    width: 20px;
+    height: 20px;
+    transition: transform 0.25s ease;
+    stroke-width: 2.5;
   }
 
   &:hover svg {
     transform: ${(props) =>
-      props.$hasText ? "translateX(1px) translateY(-1px)" : "none"};
+      props.$hasText ? "translateX(2px) translateY(-2px)" : "none"};
   }
 `;
 

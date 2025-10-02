@@ -49,61 +49,7 @@ const ControlBarContainer = styled.div`
   z-index: 20;
 `;
 
-const ViewToggle = styled.div`
-  display: flex;
-  gap: 0;
-  background: #f8fafc;
-  padding: 0.375rem;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 1.25rem;
-`;
-
-const ToggleButton = styled(motion.button)<{ $isActive: boolean }>`
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.625rem;
-  padding: 0.875rem 1.25rem;
-  border: none;
-  background: ${(props) => (props.$isActive ? "white" : "transparent")};
-  color: ${(props) => (props.$isActive ? "#3b82f6" : "#64748b")};
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.9375rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: ${(props) =>
-    props.$isActive ? "0 2px 8px rgba(59, 130, 246, 0.15)" : "none"};
-  position: relative;
-
-  svg {
-    width: 20px;
-    height: 20px;
-  }
-
-  &:hover:not(:disabled) {
-    color: ${(props) => (props.$isActive ? "#3b82f6" : "#475569")};
-    background: ${(props) =>
-      props.$isActive ? "white" : "rgba(0, 0, 0, 0.02)"};
-  }
-
-  &::after {
-    content: "";
-    position: absolute;
-    bottom: -3px;
-    left: 50%;
-    transform: translateX(-50%) scaleX(${(props) => (props.$isActive ? 1 : 0)});
-    width: 40%;
-    height: 3px;
-    background: #3b82f6;
-    border-radius: 3px;
-    transition: transform 0.3s ease;
-  }
-`;
-
-const FilterSection = styled(motion.div)`
+const FilterSection = styled.div`
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -471,154 +417,128 @@ export const SidebarControlBar: React.FC<SidebarControlBarProps> = memo(
     const showAnnotationFilters =
       viewMode === "feed" && filters.contentTypes.has("annotation");
 
+    // Don't show control bar in chat mode at all
+    if (viewMode === "chat") {
+      return null;
+    }
+
     return (
       <ControlBarContainer>
-        {/* View Mode Toggle */}
-        <ViewToggle>
-          <ToggleButton
-            data-testid="view-mode-chat"
-            $isActive={viewMode === "chat"}
-            onClick={() => onViewModeChange("chat")}
-            whileTap={{ scale: 0.98 }}
-          >
-            <MessageSquare />
-            Chat
-          </ToggleButton>
-          <ToggleButton
-            data-testid="view-mode-feed"
-            $isActive={viewMode === "feed"}
-            onClick={() => onViewModeChange("feed")}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Layers />
-            Content Feed
-          </ToggleButton>
-        </ViewToggle>
-
         {/* Feed Filters (only shown in feed mode) */}
-        <AnimatePresence>
-          {viewMode === "feed" && (
-            <FilterSection
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {/* Search Input */}
-              <SearchInputWrapper>
-                <SearchIconWrapper>
-                  <Search />
-                </SearchIconWrapper>
-                <StyledSearchInput
-                  placeholder="Search in content..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                />
-              </SearchInputWrapper>
+        <FilterSection>
+          {/* Search Input */}
+          <SearchInputWrapper>
+            <SearchIconWrapper>
+              <Search />
+            </SearchIconWrapper>
+            <StyledSearchInput
+              placeholder="Search in content..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+            />
+          </SearchInputWrapper>
 
-              {/* Content Types and Sort Row */}
-              <FilterRow>
-                {/* Content Type Multi-Select */}
-                <DropdownContainer ref={dropdownRef}>
-                  <MultiSelectDropdown
-                    $isOpen={showContentDropdown}
-                    onClick={() => setShowContentDropdown(!showContentDropdown)}
-                  >
-                    <DropdownHeader>
-                      <DropdownLabel>
-                        <Filter />
-                        Content Types
-                        {selectedCount > 0 && (
-                          <SelectedCount>{selectedCount}</SelectedCount>
-                        )}
-                      </DropdownLabel>
-                      <ChevronIcon $isOpen={showContentDropdown} />
-                    </DropdownHeader>
-                  </MultiSelectDropdown>
-
-                  <AnimatePresence>
-                    {showContentDropdown && (
-                      <DropdownMenu
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.15 }}
-                      >
-                        {availableContentTypes.map((type) => (
-                          <DropdownMenuItem
-                            key={type}
-                            $isSelected={filters.contentTypes.has(type)}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleContentTypeToggle(type);
-                            }}
-                          >
-                            <MenuItemLabel
-                              style={{ color: contentTypeColors[type] }}
-                            >
-                              {contentTypeIcons[type]}
-                              {contentTypeLabels[type]}
-                            </MenuItemLabel>
-                            {filters.contentTypes.has(type) && <CheckIcon />}
-                          </DropdownMenuItem>
-                        ))}
-                        <QuickActions>
-                          <QuickActionButton
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSelectAll();
-                            }}
-                          >
-                            Select All
-                          </QuickActionButton>
-                          <QuickActionButton
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleClearAll();
-                            }}
-                          >
-                            Clear All
-                          </QuickActionButton>
-                        </QuickActions>
-                      </DropdownMenu>
+          {/* Content Types and Sort Row */}
+          <FilterRow>
+            {/* Content Type Multi-Select */}
+            <DropdownContainer ref={dropdownRef}>
+              <MultiSelectDropdown
+                $isOpen={showContentDropdown}
+                onClick={() => setShowContentDropdown(!showContentDropdown)}
+              >
+                <DropdownHeader>
+                  <DropdownLabel>
+                    <Filter />
+                    Content Types
+                    {selectedCount > 0 && (
+                      <SelectedCount>{selectedCount}</SelectedCount>
                     )}
-                  </AnimatePresence>
-                </DropdownContainer>
+                  </DropdownLabel>
+                  <ChevronIcon $isOpen={showContentDropdown} />
+                </DropdownHeader>
+              </MultiSelectDropdown>
 
-                {/* Sort Dropdown */}
-                <SortDropdownStyled
-                  fluid
-                  selection
-                  icon={<SortDesc size={18} style={{ color: "#64748b" }} />}
-                  options={sortOptions}
-                  value={sortBy}
-                  onChange={(_: any, data: any) =>
-                    onSortChange(data.value as SortOption)
-                  }
-                  placeholder="Sort by..."
-                />
-              </FilterRow>
-
-              {/* Annotation-specific Filters - Collapsible */}
               <AnimatePresence>
-                {showAnnotationFilters && (
-                  <AnnotationFiltersWrapper
-                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                    animate={{
-                      opacity: 1,
-                      height: "auto",
-                      marginTop: "0.75rem",
-                    }}
-                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                    transition={{ duration: 0.2 }}
+                {showContentDropdown && (
+                  <DropdownMenu
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.15 }}
                   >
-                    <CollapsibleAnnotationControls showLabelFilters />
-                  </AnnotationFiltersWrapper>
+                    {availableContentTypes.map((type) => (
+                      <DropdownMenuItem
+                        key={type}
+                        $isSelected={filters.contentTypes.has(type)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleContentTypeToggle(type);
+                        }}
+                      >
+                        <MenuItemLabel
+                          style={{ color: contentTypeColors[type] }}
+                        >
+                          {contentTypeIcons[type]}
+                          {contentTypeLabels[type]}
+                        </MenuItemLabel>
+                        {filters.contentTypes.has(type) && <CheckIcon />}
+                      </DropdownMenuItem>
+                    ))}
+                    <QuickActions>
+                      <QuickActionButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectAll();
+                        }}
+                      >
+                        Select All
+                      </QuickActionButton>
+                      <QuickActionButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClearAll();
+                        }}
+                      >
+                        Clear All
+                      </QuickActionButton>
+                    </QuickActions>
+                  </DropdownMenu>
                 )}
               </AnimatePresence>
-            </FilterSection>
-          )}
-        </AnimatePresence>
+            </DropdownContainer>
+
+            {/* Sort Dropdown */}
+            <SortDropdownStyled
+              fluid
+              selection
+              icon={<SortDesc size={18} style={{ color: "#64748b" }} />}
+              options={sortOptions}
+              value={sortBy}
+              onChange={(_: any, data: any) =>
+                onSortChange(data.value as SortOption)
+              }
+              placeholder="Sort by..."
+            />
+          </FilterRow>
+
+          {/* Annotation-specific Filters - Collapsible */}
+          <AnimatePresence>
+            {showAnnotationFilters && (
+              <AnnotationFiltersWrapper
+                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                animate={{
+                  opacity: 1,
+                  height: "auto",
+                  marginTop: "0.75rem",
+                }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <CollapsibleAnnotationControls showLabelFilters />
+              </AnnotationFiltersWrapper>
+            )}
+          </AnimatePresence>
+        </FilterSection>
       </ControlBarContainer>
     );
   }

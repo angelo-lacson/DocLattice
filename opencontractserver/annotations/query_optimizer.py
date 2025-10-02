@@ -226,6 +226,10 @@ class AnnotationQueryOptimizer:
             except Analysis.DoesNotExist:
                 return Annotation.objects.none()
             qs = qs.filter(analysis_id=analysis_id)
+        else:
+            # When analysis_id is not provided, exclude all analysis annotations
+            # We only want user/manual annotations in this case
+            qs = qs.filter(analysis__isnull=True)
 
         if extract_id:
             # Filter to annotations that are sources for datacells in this extract
@@ -400,6 +404,10 @@ class RelationshipQueryOptimizer:
                 except Analysis.DoesNotExist:
                     return Relationship.objects.none()
                 qs = qs.filter(analysis_id=analysis_id)
+        else:
+            # When analysis_id is not provided (None), exclude analysis relationships
+            # We only want user/manual relationships in this case
+            qs = qs.filter(analysis__isnull=True)
 
         if structural is not None:
             qs = qs.filter(structural=structural)
