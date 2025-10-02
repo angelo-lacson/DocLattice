@@ -130,6 +130,8 @@ interface HighlightItemProps {
   relations: Array<{ sourceIds: string[]; targetIds: string[] }>;
   onDelete?: (annotationId: string) => void;
   onSelect: (annotationId: string) => void;
+  onToggleMultiSelect?: () => void;
+  isMultiSelected?: boolean;
 }
 
 export const HighlightItem: React.FC<HighlightItemProps> = ({
@@ -139,6 +141,8 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   relations,
   onDelete,
   onSelect,
+  onToggleMultiSelect,
+  isMultiSelected = false,
 }) => {
   const { selectedAnnotations, handleAnnotationSelect } =
     useAnnotationSelection();
@@ -165,7 +169,21 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
         handleAnnotationSelect(annotation.id);
       }}
     >
-      <div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        {onToggleMultiSelect && (
+          <Icon
+            name={isMultiSelected ? "check square" : "square outline"}
+            size="large"
+            style={{
+              cursor: "pointer",
+              color: isMultiSelected ? "#3b82f6" : "#94a3b8",
+            }}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              onToggleMultiSelect();
+            }}
+          />
+        )}
         <AnnotationLabel color={annotation.annotationLabel.color}>
           {annotation.annotationLabel.icon && (
             <Icon name={annotation.annotationLabel.icon} />

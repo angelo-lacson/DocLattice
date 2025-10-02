@@ -47,6 +47,7 @@ import {
   annotationObjsAtom,
   docTypeAnnotationsAtom,
   initialAnnotationsAtom,
+  initialRelationsAtom,
 } from "../context/AnnotationAtoms";
 import {
   selectedDocumentAtom,
@@ -209,7 +210,13 @@ export function useInitialAnnotations() {
   const [initialAnnotations, setInitialAnnotations] = useAtom(
     initialAnnotationsAtom
   );
-  return { initialAnnotations, setInitialAnnotations };
+  const [initialRelations, setInitialRelations] = useAtom(initialRelationsAtom);
+  return {
+    initialAnnotations,
+    setInitialAnnotations,
+    initialRelations,
+    setInitialRelations,
+  };
 }
 
 /**
