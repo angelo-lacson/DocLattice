@@ -1,6 +1,7 @@
 import React, { useState, useEffect, memo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
+import { Checkbox } from "semantic-ui-react";
 import {
   Settings,
   Eye,
@@ -8,6 +9,7 @@ import {
   Database,
   Plus,
   Columns,
+  Maximize2,
 } from "lucide-react";
 import { useCorpusState } from "../../annotator/context/CorpusAtom";
 import {
@@ -113,6 +115,51 @@ const ControlItem = styled.div`
   }
 `;
 
+const ControlLabel = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #1e293b;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    color: #64748b;
+  }
+`;
+
+const StyledCheckbox = styled(Checkbox)`
+  &&& {
+    transform: scale(1.1);
+
+    label {
+      padding-left: 1.75rem !important;
+
+      &:before {
+        border-color: #e2e8f0 !important;
+        border-radius: 4px !important;
+      }
+
+      &:after {
+        border-radius: 2px !important;
+      }
+    }
+
+    &.checked label:before {
+      border-color: #3b82f6 !important;
+      background: #3b82f6 !important;
+    }
+  }
+`;
+
+const Divider = styled.div`
+  height: 1px;
+  background: #f1f5f9;
+  margin: 0.5rem 0;
+`;
+
 const PanelHeader = styled.div`
   display: flex;
   align-items: center;
@@ -208,6 +255,10 @@ interface FloatingDocumentControlsProps {
   panelWidthMode?: "quarter" | "half" | "full";
   /** Callback when panel width changes */
   onPanelWidthChange?: (mode: "quarter" | "half" | "full") => void;
+  /** Whether auto-zoom is enabled */
+  autoZoomEnabled?: boolean;
+  /** Callback when auto-zoom toggle changes */
+  onAutoZoomChange?: (enabled: boolean) => void;
 }
 
 export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
@@ -223,6 +274,8 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
       readOnly = false,
       panelWidthMode = "half",
       onPanelWidthChange,
+      autoZoomEnabled = true,
+      onAutoZoomChange,
     }) => {
       const [expandedSettings, setExpandedSettings] = useState(false);
       const [expandedWidthMenu, setExpandedWidthMenu] = useState(false);
@@ -463,6 +516,20 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
                   showLabelFilters
                   compact
                 />
+
+                <Divider />
+
+                <ControlItem>
+                  <ControlLabel>
+                    <Maximize2 />
+                    Auto-Zoom Sidebar
+                  </ControlLabel>
+                  <StyledCheckbox
+                    toggle
+                    checked={autoZoomEnabled}
+                    onChange={() => onAutoZoomChange?.(!autoZoomEnabled)}
+                  />
+                </ControlItem>
               </ControlPanel>
             )}
           </AnimatePresence>

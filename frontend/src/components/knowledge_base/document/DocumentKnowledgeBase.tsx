@@ -376,6 +376,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   const [viewState, setViewState] = useState<ViewState>(ViewState.LOADING);
   const [showRightPanel, setShowRightPanel] = useState(false);
+  const [autoZoomEnabled, setAutoZoomEnabled] = useState<boolean>(true);
+
+  // Track base zoom level (when sidebar is closed) for proportional adjustment
+  const baseZoomRef = useRef<number>(zoomLevel);
+  const isAdjustingZoomRef = useRef<boolean>(false);
+  const justToggledAutoZoomRef = useRef<boolean>(false);
 
   // Calculate floating controls offset and visibility
   const calculateFloatingControlsState = () => {
@@ -684,8 +690,146 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     [setContainerWidth, setScrollContainerRef]
   );
 
+  // Watch for width changes when sidebar opens/closes
+  useEffect(() => {
+    const node = pdfContainerRef.current;
+    if (!node) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const newWidth = entry.contentRect.width;
+        setContainerWidth(newWidth);
+      }
+    });
+
+    resizeObserver.observe(node);
+    return () => resizeObserver.disconnect();
+  }, [setContainerWidth]);
+
   /* clear on unmount so stale refs are never used */
   useEffect(() => () => setScrollContainerRef(null), [setScrollContainerRef]);
+
+  // Track previous auto-zoom state to detect when user toggles it
+  const prevAutoZoomEnabledRef = useRef<boolean>(autoZoomEnabled);
+
+  // When auto-zoom is toggled ON, capture current zoom as the new base
+  useEffect(() => {
+    const wasDisabled = !prevAutoZoomEnabledRef.current;
+    const isNowEnabled = autoZoomEnabled;
+
+    if (wasDisabled && isNowEnabled) {
+      // User just toggled auto-zoom from OFF to ON
+      // Capture current zoom as the new base, don't adjust yet
+      baseZoomRef.current = zoomLevel;
+      justToggledAutoZoomRef.current = true;
+      console.log(
+        "Auto-zoom toggled ON - setting base zoom to current:",
+        zoomLevel
+      );
+    }
+
+    prevAutoZoomEnabledRef.current = autoZoomEnabled;
+  }, [autoZoomEnabled, zoomLevel]);
+
+  // Automatically adjust zoom level when sidebar opens/closes to maintain proportional document width
+  useEffect(() => {
+    // Skip if auto-zoom is disabled
+    if (!autoZoomEnabled) {
+      return;
+    }
+
+    if (isMobile || activeLayer !== "document") {
+      return;
+    }
+
+    // If user just toggled auto-zoom ON, skip this adjustment cycle
+    if (justToggledAutoZoomRef.current) {
+      justToggledAutoZoomRef.current = false;
+      return;
+    }
+
+    // If we're currently auto-adjusting, skip to prevent loops
+    if (isAdjustingZoomRef.current) {
+      isAdjustingZoomRef.current = false;
+      return;
+    }
+
+    const panelWidth = getPanelWidthPercentage();
+
+    if (showRightPanel) {
+      // Sidebar just opened or resized
+      // If we don't have a base zoom yet, store current zoom
+      if (baseZoomRef.current === zoomLevel || !baseZoomRef.current) {
+        baseZoomRef.current = zoomLevel;
+      }
+
+      // Calculate adjusted zoom: reduce proportionally to viewport shrinkage
+      const viewportReduction = (100 - panelWidth) / 100;
+      const adjustedZoom = baseZoomRef.current * viewportReduction;
+
+      // Clamp to valid zoom range
+      const clampedZoom = Math.max(0.5, Math.min(4, adjustedZoom));
+
+      // Only update if there's a meaningful difference
+      if (Math.abs(zoomLevel - clampedZoom) > 0.01) {
+        isAdjustingZoomRef.current = true;
+        setZoomLevel(clampedZoom);
+      }
+    } else {
+      // Sidebar closed - restore base zoom
+      if (
+        baseZoomRef.current &&
+        Math.abs(zoomLevel - baseZoomRef.current) > 0.01
+      ) {
+        isAdjustingZoomRef.current = true;
+        setZoomLevel(baseZoomRef.current);
+      }
+    }
+  }, [
+    autoZoomEnabled,
+    showRightPanel,
+    mode,
+    customWidth,
+    isMobile,
+    activeLayer,
+    zoomLevel,
+    setZoomLevel,
+  ]);
+
+  // When user manually zooms while sidebar is open, update base zoom for proper restoration
+  useEffect(() => {
+    // Only track manual zoom changes if auto-zoom is enabled
+    if (!autoZoomEnabled) {
+      return;
+    }
+
+    if (
+      !isMobile &&
+      showRightPanel &&
+      activeLayer === "document" &&
+      !isAdjustingZoomRef.current
+    ) {
+      // User manually changed zoom while sidebar is open
+      // Back-calculate what the base zoom should be
+      const panelWidth = getPanelWidthPercentage();
+      const viewportReduction = (100 - panelWidth) / 100;
+      const backCalculatedBase = zoomLevel / viewportReduction;
+
+      // Update base zoom so when sidebar closes, it restores to the right level
+      baseZoomRef.current = Math.max(0.5, Math.min(4, backCalculatedBase));
+    } else if (!showRightPanel && !isAdjustingZoomRef.current) {
+      // Sidebar is closed, keep baseZoom in sync with current zoom
+      baseZoomRef.current = zoomLevel;
+    }
+  }, [
+    autoZoomEnabled,
+    zoomLevel,
+    showRightPanel,
+    isMobile,
+    activeLayer,
+    mode,
+    customWidth,
+  ]);
 
   const handleKeyUpPress = useCallback(
     (event: { keyCode: any }) => {
@@ -1699,12 +1843,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         ref={documentAreaRef}
         onMouseEnter={handleDocumentMouseEnter}
         style={{
-          flex: 1,
           position: "relative",
-          marginRight:
+          width:
             !isMobile && showRightPanel
-              ? `${getPanelWidthPercentage()}%`
-              : undefined,
+              ? `${100 - getPanelWidthPercentage()}%`
+              : "100%",
+          height: "100%",
+          overflow: "hidden",
+          transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
         {viewerContent}
@@ -1964,6 +2110,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 readOnly={readOnly}
                 panelWidthMode={mode === "custom" ? "half" : mode}
                 onPanelWidthChange={setMode}
+                autoZoomEnabled={autoZoomEnabled}
+                onAutoZoomChange={setAutoZoomEnabled}
               />
 
               {/* Floating Analyses Panel - only show with corpus */}
