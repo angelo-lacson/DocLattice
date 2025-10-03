@@ -7,6 +7,7 @@ from typing import Union, cast
 
 import django
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -121,6 +122,7 @@ class AnnotationLabel(BaseOCModel):
             ("read_annotationlabel", "read Annotationlabel"),
             ("update_annotationlabel", "update Annotationlabel"),
             ("remove_annotationlabel", "delete Annotationlabel"),
+            ("comment_annotationlabel", "comment Annotationlabel"),
         )
 
         indexes = [
@@ -147,22 +149,6 @@ class AnnotationLabel(BaseOCModel):
         self.modified = timezone.now()
 
         return super().save(*args, **kwargs)
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class AnnotationLabelUserObjectPermission(UserObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "AnnotationLabel", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class AnnotationLabelGroupObjectPermission(GroupObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "AnnotationLabel", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
 
 
 class Relationship(BaseOCModel):
@@ -238,6 +224,7 @@ class Relationship(BaseOCModel):
             ("read_relationship", "read relationship"),
             ("update_relationship", "update relationship"),
             ("remove_relationship", "delete relationship"),
+            ("comment_relationship", "comment relationship"),
             ("publish_relationship", "publish relationship"),
         )
 
@@ -259,22 +246,6 @@ class Relationship(BaseOCModel):
         self.modified = timezone.now()
 
         return super().save(*args, **kwargs)
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class RelationshipUserObjectPermission(UserObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "Relationship", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class RelationshipGroupObjectPermission(GroupObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "Relationship", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
 
 
 class Embedding(BaseOCModel):
@@ -460,6 +431,25 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         related_name="annotations",
     )
 
+    # Privacy fields - if set, annotation is only visible to those with permission to the source
+    created_by_analysis = django.db.models.ForeignKey(
+        "analyzer.Analysis",
+        null=True,
+        blank=True,
+        on_delete=django.db.models.SET_NULL,
+        related_name="created_annotations",
+        help_text="If set, this annotation is private to the analysis that created it",
+    )
+
+    created_by_extract = django.db.models.ForeignKey(
+        "extracts.Extract",
+        null=True,
+        blank=True,
+        on_delete=django.db.models.SET_NULL,
+        related_name="created_annotations",
+        help_text="If set, this annotation is private to the extract that created it",
+    )
+
     # Mark structural / layout annotations explicitly.
     structural = django.db.models.BooleanField(default=False)
 
@@ -553,6 +543,31 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
 
         # Other annotation types are free-form – no validation.
 
+        # Validate mutual exclusivity of created_by fields
+        if self.created_by_analysis and self.created_by_extract:
+            raise ValidationError(
+                {
+                    "created_by_analysis": "An annotation cannot be created by both an analysis and an extract.",
+                    "created_by_extract": "An annotation cannot be created by both an analysis and an extract.",
+                }
+            )
+
+        # Ensure consistency: if created_by_analysis is set, analysis should also be set
+        if self.created_by_analysis and not self.analysis:
+            self.analysis = self.created_by_analysis
+
+        # Validate that created_by_analysis matches analysis if both are set
+        if (
+            self.created_by_analysis
+            and self.analysis
+            and self.created_by_analysis != self.analysis
+        ):
+            raise ValidationError(
+                {
+                    "created_by_analysis": "created_by_analysis must match the analysis field if both are set."
+                }
+            )
+
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
@@ -585,6 +600,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             ("read_annotation", "read annotation"),
             ("update_annotation", "update annotation"),
             ("remove_annotation", "delete annotation"),
+            ("comment_annotation", "comment annotation"),
             ("publish_annotation", "publish relationship"),
         )
 
@@ -599,9 +615,23 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             django.db.models.Index(fields=["document", "corpus"]),
             django.db.models.Index(fields=["document", "corpus", "creator"]),
             django.db.models.Index(fields=["analysis"]),
+            django.db.models.Index(fields=["created_by_analysis"]),
+            django.db.models.Index(fields=["created_by_extract"]),
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
+        ]
+
+        constraints = [
+            # Ensure an annotation can't be created by both analysis AND extract
+            django.db.models.CheckConstraint(
+                check=(
+                    django.db.models.Q(created_by_analysis__isnull=True)
+                    | django.db.models.Q(created_by_extract__isnull=True)
+                ),
+                name="annotation_created_by_only_one_source",
+                violation_error_message="An annotation cannot be created by both an analysis and an extract",
+            ),
         ]
 
 
@@ -664,6 +694,7 @@ class LabelSet(BaseOCModel):
             ("read_labelset", "Can read labelset"),
             ("update_labelset", "Can update labelset"),
             ("remove_labelset", "Can delete labelset"),
+            ("comment_labelset", "Can comment labelset"),
         )
 
         indexes = [
@@ -919,6 +950,7 @@ class Note(BaseOCModel, HasEmbeddingMixin):
             ("read_note", "read note"),
             ("update_note", "update note"),
             ("remove_note", "delete note"),
+            ("comment_note", "comment note"),
         )
         indexes = [
             django.db.models.Index(fields=["title"]),

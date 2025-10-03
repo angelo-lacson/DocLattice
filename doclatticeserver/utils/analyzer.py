@@ -347,6 +347,7 @@ def import_annotations_from_analysis(
                         annotation_label_id=label_id_map[doc_label_data],
                         document_id=doc_id,
                         analysis_id=analysis_id,
+                        created_by_analysis_id=analysis_id,  # Mark as created by this analysis
                         creator_id=creator_id,
                         corpus=analysis.analyzed_corpus,
                     )
@@ -382,6 +383,7 @@ def import_annotations_from_analysis(
                         ],
                         document_id=doc_id,
                         analysis_id=analysis_id,
+                        created_by_analysis_id=analysis_id,  # Mark as created by this analysis
                         creator_id=creator_id,
                         raw_text=span_label_data["rawText"],
                         page=span_label_data["page"],

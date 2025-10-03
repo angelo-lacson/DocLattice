@@ -44,7 +44,9 @@ class GraphQLConversationTestCase(TestCase):
         self.client = Client(schema, context_value=TestContext(self.user))
 
         # Create a test corpus and document
-        self.corpus = Corpus.objects.create(title="GraphQL Test Corpus")
+        self.corpus = Corpus.objects.create(
+            title="GraphQL Test Corpus", creator=self.user
+        )
         pdf_file = ContentFile(b"%PDF-1.4 test pdf content", name="test_graphql.pdf")
         self.doc = Document.objects.create(
             creator=self.user,

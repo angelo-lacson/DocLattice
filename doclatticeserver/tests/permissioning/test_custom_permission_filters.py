@@ -266,12 +266,11 @@ class PermissionFilteringTestCase(TestCase):
             self.user2, self.corpus1, [PermissionTypes.READ]
         )
 
-        # Test again for user2
-        # NOTE - we are not filtering on per-instance level permissions YET, so preceding permission won't affect
-        # returned values.
+        # Test again for user2 - permission grant above SHOULD have affected the result
         result2 = self.client2.execute(query)
-        self.assertEqual(len(result2["data"]["corpuses"]["edges"]), 1)
+        self.assertEqual(len(result2["data"]["corpuses"]["edges"]), 2)
         titles = [
             edge["node"]["title"] for edge in result2["data"]["corpuses"]["edges"]
         ]
         self.assertIn("Corpus 2", titles)
+        self.assertIn("Corpus 1", titles)
