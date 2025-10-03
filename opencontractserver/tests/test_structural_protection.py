@@ -11,8 +11,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from opencontractserver.annotations.models import (
-    TOKEN_LABEL,
     RELATIONSHIP_LABEL,
+    TOKEN_LABEL,
     Annotation,
     AnnotationLabel,
     Relationship,
