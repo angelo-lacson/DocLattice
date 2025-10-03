@@ -11,7 +11,6 @@ from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id, to_global_id
 
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
-from opencontractserver.shared.resolvers import resolve_single_oc_model_from_id
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import (
     set_permissions_for_obj_to_user,
@@ -51,10 +50,9 @@ class OpenContractsNode(Node):
 
         # Here's where we replace the base Graphene Relay get_node code with a custom
         # resolver that is permission-aware... it was kind of a pain in the @ss to figure this out...
-        return resolve_single_oc_model_from_id(
-            model_type=graphene_type._meta.model,
-            user=info.context.user,
-            graphql_id=global_id,
+        _, pk = from_global_id(global_id)
+        return graphene_type._meta.model.objects.visible_to_user(info.context.user).get(
+            id=pk
         )
 
 

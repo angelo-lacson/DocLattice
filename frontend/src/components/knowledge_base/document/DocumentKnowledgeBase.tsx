@@ -16,15 +16,19 @@ import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
   GetDocumentKnowledgeAndAnnotationsInput,
   GetDocumentKnowledgeAndAnnotationsOutput,
-  GET_DOCUMENT_ONLY,
-  GetDocumentOnlyInput,
-  GetDocumentOnlyOutput,
+  GET_DOCUMENT_WITH_STRUCTURE,
+  GetDocumentWithStructureInput,
+  GetDocumentWithStructureOutput,
   GET_DOCUMENT_ANNOTATIONS_ONLY,
   GetDocumentAnnotationsOnlyInput,
   GetDocumentAnnotationsOnlyOutput,
 } from "../../../graphql/queries";
 import { useFeatureAvailability } from "../../../hooks/useFeatureAvailability";
-import { getDocumentRawText, getPawlsLayer } from "../../annotator/api/rest";
+import {
+  getDocumentRawText,
+  getPawlsLayer,
+  getCachedPDFUrl,
+} from "../../annotator/api/cachedRest";
 import {
   CorpusType,
   LabelType,
@@ -862,20 +866,29 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         data.document.fileType === "application/pdf" &&
         data.document.pdfFile
       ) {
+        console.log("\n=== DOCUMENT LOAD START ===");
+        console.log("Type: PDF");
+        console.log("Document ID:", data.document.id);
+        console.log("Hash:", data.document.pdfFileHash || "no hash");
         setViewState(ViewState.LOADING); // Set loading state
-        const loadingTask: PDFDocumentLoadingTask = getDocument(
-          data.document.pdfFile
-        );
-        loadingTask.onProgress = (p: { loaded: number; total: number }) => {
-          setProgress(Math.round((p.loaded / p.total) * 100));
-        };
 
         const pawlsPath = data.document.pawlsParseFile || "";
+        const pdfHash = data.document.pdfFileHash || "";
+        const docId = data.document.id;
 
-        Promise.all([
-          loadingTask.promise,
-          getPawlsLayer(pawlsPath), // Fetches PAWLS via REST
-        ])
+        // First get the cached or fresh PDF URL
+        getCachedPDFUrl(data.document.pdfFile, docId, pdfHash)
+          .then((pdfUrl) => {
+            const loadingTask: PDFDocumentLoadingTask = getDocument(pdfUrl);
+            loadingTask.onProgress = (p: { loaded: number; total: number }) => {
+              setProgress(Math.round((p.loaded / p.total) * 100));
+            };
+
+            return Promise.all([
+              loadingTask.promise,
+              getPawlsLayer(pawlsPath, docId), // Fetches PAWLS via REST with caching
+            ]);
+          })
           .then(([pdfDocProxy, pawlsData]) => {
             // --- DETAILED LOGGING FOR PAWLS DATA ---
             if (!pawlsData) {
@@ -939,10 +952,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             });
             setDocText(doc_text);
             setViewState(ViewState.LOADED); // Set loaded state only after everything is done
+            console.log("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
             // Log the specific error causing the catch
             console.error("Error during PDF/PAWLS loading Promise.all:", err);
+            console.log("=== DOCUMENT LOAD FAILED ===");
             setViewState(ViewState.ERROR);
             toast.error(
               `Error loading PDF details: ${
@@ -955,15 +970,27 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           data.document.fileType === "text/plain") &&
         data.document.txtExtractFile
       ) {
-        console.log("onCompleted: Loading TXT", data.document.txtExtractFile);
+        console.log("\n=== DOCUMENT LOAD START ===");
+        console.log("Type: TEXT");
+        console.log("Document ID:", data.document.id);
+        console.log("Hash:", data.document.pdfFileHash || "no hash");
+        console.log("File URL:", data.document.txtExtractFile);
         setViewState(ViewState.LOADING); // Set loading state
-        getDocumentRawText(data.document.txtExtractFile)
+        const docId = data.document.id;
+        const textHash = data.document.pdfFileHash; // Can use same hash field for text files
+        getDocumentRawText(
+          data.document.txtExtractFile,
+          docId,
+          textHash ?? undefined
+        )
           .then((txt) => {
             setDocText(txt);
             setViewState(ViewState.LOADED);
+            console.log("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
             setViewState(ViewState.ERROR);
+            console.log("=== DOCUMENT LOAD FAILED ===");
             toast.error(
               `Error loading text content: ${
                 err instanceof Error ? err.message : String(err)
@@ -1004,162 +1031,182 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     nextFetchPolicy: "no-cache",
   });
 
-  // Query for document without corpus
+  // Query for document with structure but without corpus
   const {
     data: documentOnlyData,
     loading: documentLoading,
     error: documentError,
     refetch: refetchDocumentOnly,
-  } = useQuery<GetDocumentOnlyOutput, GetDocumentOnlyInput>(GET_DOCUMENT_ONLY, {
-    skip: !authReady || !documentId || Boolean(corpusId),
-    variables: {
-      documentId,
-    },
-    onCompleted: (data) => {
-      if (!data?.document) {
-        console.error("onCompleted: No document data received.");
-        setViewState(ViewState.ERROR);
-        toast.error("Failed to load document details.");
-        return;
-      }
-      setDocumentType(data.document.fileType ?? "");
-      let processedDocData = {
-        ...data.document,
-        // Keep permissions as raw strings for consistency
-        myPermissions: data.document.myPermissions ?? [],
-      };
-      setDocument(processedDocData as any);
-      setPermissions(getPermissions(data.document.myPermissions));
-
-      // Load PDF/TXT content
-      if (
-        data.document.fileType === "application/pdf" &&
-        data.document.pdfFile
-      ) {
-        setViewState(ViewState.LOADING);
-        const loadingTask: PDFDocumentLoadingTask = getDocument(
-          data.document.pdfFile
-        );
-        loadingTask.onProgress = (p: { loaded: number; total: number }) => {
-          setProgress(Math.round((p.loaded / p.total) * 100));
+  } = useQuery<GetDocumentWithStructureOutput, GetDocumentWithStructureInput>(
+    GET_DOCUMENT_WITH_STRUCTURE,
+    {
+      skip: !authReady || !documentId || Boolean(corpusId),
+      variables: {
+        documentId,
+      },
+      onCompleted: (data) => {
+        if (!data?.document) {
+          console.error("onCompleted: No document data received.");
+          setViewState(ViewState.ERROR);
+          toast.error("Failed to load document details.");
+          return;
+        }
+        setDocumentType(data.document.fileType ?? "");
+        let processedDocData = {
+          ...data.document,
+          // Keep permissions as raw strings for consistency
+          myPermissions: data.document.myPermissions ?? [],
         };
+        setDocument(processedDocData as any);
+        setPermissions(getPermissions(data.document.myPermissions));
 
-        const pawlsPath = data.document.pawlsParseFile || "";
+        // Load PDF/TXT content
+        if (
+          data.document.fileType === "application/pdf" &&
+          data.document.pdfFile
+        ) {
+          setViewState(ViewState.LOADING);
+          const loadingTask: PDFDocumentLoadingTask = getDocument(
+            data.document.pdfFile
+          );
+          loadingTask.onProgress = (p: { loaded: number; total: number }) => {
+            setProgress(Math.round((p.loaded / p.total) * 100));
+          };
 
-        Promise.all([loadingTask.promise, getPawlsLayer(pawlsPath)])
-          .then(([pdfDocProxy, pawlsData]) => {
-            if (!pawlsData) {
-              console.error(
-                "onCompleted: PAWLS data received is null or undefined!"
-              );
-            }
+          const pawlsPath = data.document.pawlsParseFile || "";
 
-            if (!pdfDocProxy) {
-              throw new Error("PDF document proxy is null or undefined.");
-            }
-            setPdfDoc(pdfDocProxy);
+          Promise.all([loadingTask.promise, getPawlsLayer(pawlsPath)])
+            .then(([pdfDocProxy, pawlsData]) => {
+              if (!pawlsData) {
+                console.error(
+                  "onCompleted: PAWLS data received is null or undefined!"
+                );
+              }
 
-            const loadPagesPromises: Promise<PDFPageInfo>[] = [];
-            for (let i = 1; i <= pdfDocProxy.numPages; i++) {
-              const pageNum = i;
-              loadPagesPromises.push(
-                pdfDocProxy.getPage(pageNum).then((p) => {
-                  let pageTokens: Token[] = [];
-                  const pageIndex = p.pageNumber - 1;
+              if (!pdfDocProxy) {
+                throw new Error("PDF document proxy is null or undefined.");
+              }
+              setPdfDoc(pdfDocProxy);
 
-                  if (
-                    !pawlsData ||
-                    !Array.isArray(pawlsData) ||
-                    pageIndex >= pawlsData.length
-                  ) {
-                    console.warn(
-                      `Page ${pageNum}: PAWLS data index out of bounds. Index: ${pageIndex}, Length: ${pawlsData.length}`
-                    );
-                    pageTokens = [];
-                  } else {
-                    const pageData = pawlsData[pageIndex];
+              const loadPagesPromises: Promise<PDFPageInfo>[] = [];
+              for (let i = 1; i <= pdfDocProxy.numPages; i++) {
+                const pageNum = i;
+                loadPagesPromises.push(
+                  pdfDocProxy.getPage(pageNum).then((p) => {
+                    let pageTokens: Token[] = [];
+                    const pageIndex = p.pageNumber - 1;
 
-                    if (!pageData) {
-                      pageTokens = [];
-                    } else if (typeof pageData.tokens === "undefined") {
-                      pageTokens = [];
-                    } else if (!Array.isArray(pageData.tokens)) {
-                      console.error(
-                        `Page ${pageNum}: CRITICAL - pageData.tokens is not an array at index ${pageIndex}! Type: ${typeof pageData.tokens}`
+                    if (
+                      !pawlsData ||
+                      !Array.isArray(pawlsData) ||
+                      pageIndex >= pawlsData.length
+                    ) {
+                      console.warn(
+                        `Page ${pageNum}: PAWLS data index out of bounds. Index: ${pageIndex}, Length: ${pawlsData.length}`
                       );
                       pageTokens = [];
                     } else {
-                      pageTokens = pageData.tokens;
-                    }
-                  }
-                  return new PDFPageInfo(p, pageTokens, zoomLevel);
-                }) as unknown as Promise<PDFPageInfo>
-              );
-            }
-            return Promise.all(loadPagesPromises);
-          })
-          .then((loadedPages) => {
-            setPages(loadedPages);
-            const { doc_text, string_index_token_map } =
-              createTokenStringSearch(loadedPages);
-            setPageTextMaps({
-              ...string_index_token_map,
-              ...pageTextMaps,
-            });
-            setDocText(doc_text);
-            setViewState(ViewState.LOADED);
-          })
-          .catch((err) => {
-            console.error("Error during PDF/PAWLS loading Promise.all:", err);
-            setViewState(ViewState.ERROR);
-            toast.error(
-              `Error loading PDF details: ${
-                err instanceof Error ? err.message : String(err)
-              }`
-            );
-          });
-      } else if (
-        (data.document.fileType === "application/txt" ||
-          data.document.fileType === "text/plain") &&
-        data.document.txtExtractFile
-      ) {
-        console.log("onCompleted: Loading TXT", data.document.txtExtractFile);
-        setViewState(ViewState.LOADING);
-        getDocumentRawText(data.document.txtExtractFile)
-          .then((txt) => {
-            setDocText(txt);
-            setViewState(ViewState.LOADED);
-          })
-          .catch((err) => {
-            setViewState(ViewState.ERROR);
-            toast.error(
-              `Error loading text content: ${
-                err instanceof Error ? err.message : String(err)
-              }`
-            );
-          });
-      } else {
-        console.warn(
-          "onCompleted: Unsupported file type or missing file path.",
-          data.document.fileType
-        );
-        setViewState(ViewState.ERROR);
-      }
+                      const pageData = pawlsData[pageIndex];
 
-      // Keep global navigation vars in sync
-      openedDocument(data.document as any);
-      // Clear annotations when no corpus
-      setPdfAnnotations(new PdfAnnotations([], [], [], true));
-      setStructuralAnnotations([]);
-    },
-    onError: (error) => {
-      console.error("GraphQL Query Error fetching document data:", error);
-      toast.error(`Failed to load document details: ${error.message}`);
-      setViewState(ViewState.ERROR);
-    },
-    fetchPolicy: "network-only",
-    nextFetchPolicy: "no-cache",
-  });
+                      if (!pageData) {
+                        pageTokens = [];
+                      } else if (typeof pageData.tokens === "undefined") {
+                        pageTokens = [];
+                      } else if (!Array.isArray(pageData.tokens)) {
+                        console.error(
+                          `Page ${pageNum}: CRITICAL - pageData.tokens is not an array at index ${pageIndex}! Type: ${typeof pageData.tokens}`
+                        );
+                        pageTokens = [];
+                      } else {
+                        pageTokens = pageData.tokens;
+                      }
+                    }
+                    return new PDFPageInfo(p, pageTokens, zoomLevel);
+                  }) as unknown as Promise<PDFPageInfo>
+                );
+              }
+              return Promise.all(loadPagesPromises);
+            })
+            .then((loadedPages) => {
+              setPages(loadedPages);
+              const { doc_text, string_index_token_map } =
+                createTokenStringSearch(loadedPages);
+              setPageTextMaps({
+                ...string_index_token_map,
+                ...pageTextMaps,
+              });
+              setDocText(doc_text);
+              setViewState(ViewState.LOADED);
+            })
+            .catch((err) => {
+              console.error("Error during PDF/PAWLS loading Promise.all:", err);
+              console.log("=== DOCUMENT LOAD FAILED ===");
+              setViewState(ViewState.ERROR);
+              toast.error(
+                `Error loading PDF details: ${
+                  err instanceof Error ? err.message : String(err)
+                }`
+              );
+            });
+        } else if (
+          (data.document.fileType === "application/txt" ||
+            data.document.fileType === "text/plain") &&
+          data.document.txtExtractFile
+        ) {
+          console.log("\n=== DOCUMENT LOAD START ===");
+          console.log("Type: TEXT");
+          console.log("Document ID:", data.document.id);
+          console.log("Hash:", data.document.pdfFileHash || "no hash");
+          console.log("File URL:", data.document.txtExtractFile);
+          setViewState(ViewState.LOADING);
+          getDocumentRawText(data.document.txtExtractFile)
+            .then((txt) => {
+              setDocText(txt);
+              setViewState(ViewState.LOADED);
+              console.log("=== DOCUMENT LOAD COMPLETE ===");
+            })
+            .catch((err) => {
+              setViewState(ViewState.ERROR);
+              console.log("=== DOCUMENT LOAD FAILED ===");
+              toast.error(
+                `Error loading text content: ${
+                  err instanceof Error ? err.message : String(err)
+                }`
+              );
+            });
+        } else {
+          console.warn(
+            "onCompleted: Unsupported file type or missing file path.",
+            data.document.fileType
+          );
+          setViewState(ViewState.ERROR);
+        }
+
+        // Keep global navigation vars in sync
+        openedDocument(data.document as any);
+
+        // Process structural annotations even without corpus
+        if (data.document.allStructuralAnnotations) {
+          const structuralAnns = data.document.allStructuralAnnotations.map(
+            (ann) => convertToServerAnnotation(ann)
+          );
+          setStructuralAnnotations(structuralAnns);
+        } else {
+          setStructuralAnnotations([]);
+        }
+
+        // Clear regular annotations when no corpus
+        setPdfAnnotations(new PdfAnnotations([], [], [], true));
+      },
+      onError: (error) => {
+        console.error("GraphQL Query Error fetching document data:", error);
+        toast.error(`Failed to load document details: ${error.message}`);
+        setViewState(ViewState.ERROR);
+      },
+      fetchPolicy: "network-only",
+      nextFetchPolicy: "no-cache",
+    }
+  );
 
   // Lightweight query for fetching just annotations when switching analyses
   const { refetch: refetchAnnotationsOnly } = useQuery<

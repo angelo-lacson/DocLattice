@@ -12,6 +12,7 @@ from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from opencontractserver.shared.db_utils import table_has_column
 from opencontractserver.shared.defaults import jsonfield_default_value
 from opencontractserver.shared.fields import NullableJSONField
+from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.slug_utils import (
     generate_unique_slug,
     sanitize_slug,
@@ -192,6 +193,7 @@ class Assignment(django.db.models.Model):
             ("read_assignment", "read assignment"),
             ("update_assignment", "update assignment"),
             ("remove_assignment", "delete assignment"),
+            ("comment_assignment", "comment assignment"),
         )
 
     # Override save to update modified on save
@@ -227,7 +229,7 @@ def calculate_export_filename(instance, filename):
     )
 
 
-class UserExport(django.db.models.Model):
+class UserExport(BaseOCModel):
 
     file = django.db.models.FileField(blank=True, upload_to=calculate_export_filename)
     name = django.db.models.CharField(max_length=1024, null=True, blank=True)
@@ -277,6 +279,7 @@ class UserExport(django.db.models.Model):
             ("read_userexport", "read user export"),
             ("update_userexport", "update user export"),
             ("remove_userexport", "delete user export"),
+            ("comment_userexport", "comment user export"),
         )
 
     # Override save to update modified on save
@@ -311,7 +314,7 @@ def calculate_import_filename(instance, filename):
     )
 
 
-class UserImport(django.db.models.Model):
+class UserImport(BaseOCModel):
     zip = django.db.models.FileField(blank=True, upload_to=calculate_import_filename)
     name = django.db.models.CharField(max_length=1024, null=True, blank=True)
     created = django.db.models.DateTimeField(default=timezone.now)
@@ -336,6 +339,7 @@ class UserImport(django.db.models.Model):
             ("read_userimport", "read user import"),
             ("update_userimport", "update user import"),
             ("remove_userimport", "delete user import"),
+            ("comment_userimport", "comment user import"),
         )
 
     # Override save to update modified on save

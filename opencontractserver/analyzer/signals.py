@@ -1,3 +1,5 @@
+import logging
+
 from celery import chain
 from django.db import transaction
 
@@ -5,6 +7,8 @@ from opencontractserver.tasks.analyzer_tasks import (
     install_analyzer_task,
     request_gremlin_manifest,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def install_gremlin_on_creation(sender, instance, created, **kwargs):
@@ -21,3 +25,9 @@ def install_gremlin_on_creation(sender, instance, created, **kwargs):
                 ]
             ).apply_async()
         )
+
+
+def handle_analysis_completion(sender, instance, **kwargs):
+    """Handle analysis completion."""
+    if hasattr(instance, "status") and instance.status == "COMPLETE":
+        logger.info(f"Analysis {instance.id} completed")

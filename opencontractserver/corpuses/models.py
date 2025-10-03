@@ -246,6 +246,7 @@ class Corpus(TreeNode):
             ("read_corpus", "read corpus"),
             ("update_corpus", "update corpus"),
             ("remove_corpus", "delete corpus"),
+            ("comment_corpus", "comment corpus"),
         )
         indexes = [
             django.db.models.Index(fields=["title"]),
@@ -426,6 +427,7 @@ class CorpusQuery(BaseOCModel):
             ("read_corpusquery", "read corpusquery"),
             ("update_corpusquery", "update corpusquery"),
             ("remove_corpusquery", "delete corpusquery"),
+            ("comment_corpusquery", "comment corpusquery"),
         )
         indexes = [
             django.db.models.Index(fields=["corpus"]),
@@ -498,6 +500,7 @@ class CorpusAction(BaseOCModel):
             ("read_corpusaction", "read corpusaction"),
             ("update_corpusaction", "update corpusaction"),
             ("remove_corpusaction", "delete corpusaction"),
+            ("comment_corpusaction", "comment corpusaction"),
         )
 
     def clean(self):

@@ -25,14 +25,13 @@ from opencontractserver.tasks.permissioning_tasks import (
     make_analysis_public_task,
     make_corpus_public_task,
 )
+from opencontractserver.tests.fixtures import SAMPLE_PDF_FILE_ONE_PATH
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import (
     get_users_permissions_for_obj,
     set_permissions_for_obj_to_user,
     user_has_permission_for_obj,
 )
-
-from .fixtures import SAMPLE_PDF_FILE_ONE_PATH
 
 User = get_user_model()
 
@@ -206,6 +205,7 @@ class PermissioningTestCase(TestCase):
                         node {
                           id
                           myPermissions
+                          structural
                         }
                       }
                     }
@@ -353,12 +353,34 @@ class PermissioningTestCase(TestCase):
                 "read_corpus",
                 "update_corpus",
                 "remove_corpus",
+                "comment_corpus",
             },
         )
         for doc in user_one_corpus_response["data"]["corpuses"]["edges"][0]["node"][
             "documents"
         ]["edges"]:
             self.assertEqual(doc["node"]["myPermissions"], ["read_document"])
+
+        # Check annotation permissions - they should inherit from document and corpus
+        # Since user has READ on documents and ALL on corpus, annotations get READ
+        # (most restrictive permission wins)
+        for ann in user_one_corpus_response["data"]["corpuses"]["edges"][0]["node"][
+            "annotations"
+        ]["edges"]:
+            print("Ann response in __test_user_retrieval_permissions: ", ann)
+            ann_permissions = ann["node"]["myPermissions"]
+            # Annotations inherit minimum of document (READ) and corpus (ALL) = READ
+            self.assertIn(
+                "read_annotation",
+                ann_permissions,
+                "Annotations should have READ permission inherited from document",
+            )
+            # Should NOT have update even though corpus has ALL, because document only has READ
+            self.assertNotIn(
+                "update_annotation",
+                ann_permissions,
+                "Annotations should NOT have UPDATE (limited by document READ)",
+            )
 
         user_two_corpus_response = self.graphene_client_2.execute(request_corpuses)
         logger.info(f"user_two_corpus_response: {user_two_corpus_response}")
@@ -540,6 +562,7 @@ class PermissioningTestCase(TestCase):
                 "read_corpus",
                 "update_corpus",
                 "remove_corpus",
+                "comment_corpus",
             },
             set(full_permission_response["data"]["corpus"]["myPermissions"]),
         )
@@ -839,55 +862,95 @@ class PermissioningTestCase(TestCase):
         # Assert that both methods return the same results
         self.assertEqual(set(visible_feedback_user1), set(naive_filtered))
 
-    # def test_direct_user_permissions(self):
-    #     logger.info("----- TEST DIRECT USER PERMISSIONS -----")
-    #
-    #     # Create a corpus
-    #     with transaction.atomic():
-    #         corpus = Corpus.objects.create(title="Direct Permission Corpus", creator=self.superuser)
-    #
-    #     # Grant read permission directly to user1
-    #     set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.READ])
-    #
-    #     # Ensure user2 has no permissions
-    #     # No action needed as user2 has no permissions by default
-    #
-    #     # Verify that user1 can access the object
-    #     accessible_corpuses_user1 = Corpus.permissioned_objects.for_user(self.user, perm='read')
-    #     print("Access dis: ")
-    #     print(accessible_corpuses_user1)
-    #     print(accessible_corpuses_user1[0].title)
-    #     self.assertIn(corpus, accessible_corpuses_user1)
-    #     logger.info("User1 can access the corpus via direct permission.")
-    #
-    #     # Verify that user2 cannot access the object
-    #     accessible_corpuses_user2 = Corpus.permissioned_objects.for_user(self.user_2, perm='read')
-    #     self.assertNotIn(corpus, accessible_corpuses_user2)
-    #     logger.info("User2 cannot access the corpus without permissions.")
-    #
-    # def test_group_permissions(self):
-    #     logger.info("----- TEST GROUP PERMISSIONS -----")
-    #
-    #     # Create a corpus
-    #     with transaction.atomic():
-    #         corpus = Corpus.objects.create(title="Group Permission Corpus", creator=self.superuser)
-    #
-    #     # Create a group and add user1 to it
-    #     group = Group.objects.create(name="Test Group")
-    #     self.user.groups.add(group)
-    #
-    #     # Grant read permission to the group
-    #     assign_perm('read_corpus', group, corpus)
-    #
-    #     # Ensure user2 is not in the group
-    #     # No action needed as user2 is not added to any group
-    #
-    #     # Verify that user1 can access the object via group permission
-    #     accessible_corpuses_user1 = Corpus.permissioned_objects.for_user(self.user, perm='read')
-    #     self.assertIn(corpus, accessible_corpuses_user1)
-    #     logger.info("User1 can access the corpus via group permission.")
-    #
-    #     # Verify that user2 cannot access the object
-    #     accessible_corpuses_user2 = Corpus.permissioned_objects.for_user(self.user_2, perm='read')
-    #     self.assertNotIn(corpus, accessible_corpuses_user2)
-    #     logger.info("User2 cannot access the corpus without permissions.")
+    def test_annotation_permission_types(self):
+        """
+        Test all annotation permission types including CREATE, CRUD, ALL, and unsupported types.
+        This ensures full coverage of the annotation-specific permission checking logic.
+        """
+        logger.info("----- TEST ANNOTATION PERMISSION TYPES -----")
+
+        # Get an annotation from the corpus
+        annotation = Annotation.objects.filter(corpus=self.corpus).first()
+        self.assertIsNotNone(annotation)
+
+        # Give user full permissions on corpus and documents
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+        for doc_id in self.doc_ids:
+            doc = Document.objects.get(id=doc_id)
+            set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+
+        # Test CREATE permission
+        logger.info("Testing CREATE permission for annotation")
+        has_create = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.CREATE,
+            include_group_permissions=True,
+        )
+        self.assertTrue(has_create)
+
+        # Test CRUD permission (requires all 4 base permissions)
+        logger.info("Testing CRUD permission for annotation")
+        has_crud = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.CRUD,
+            include_group_permissions=True,
+        )
+        self.assertTrue(has_crud)
+
+        # Test ALL permission (includes COMMENT)
+        logger.info("Testing ALL permission for annotation")
+        has_all = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.ALL,
+            include_group_permissions=True,
+        )
+        self.assertTrue(has_all)
+
+        # Test unsupported permissions (PUBLISH and PERMISSION should return False for annotations)
+        logger.info("Testing PUBLISH permission (should be False for annotations)")
+        has_publish = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.PUBLISH,
+            include_group_permissions=True,
+        )
+        self.assertFalse(has_publish)
+
+        logger.info("Testing PERMISSION permission (should be False for annotations)")
+        has_permission = user_has_permission_for_obj(
+            instance=annotation,
+            user_val=self.user,
+            permission=PermissionTypes.PERMISSION,
+            include_group_permissions=True,
+        )
+        self.assertFalse(has_permission)
+
+        # Test with user_2 who has no permissions - all should be False
+        logger.info("Testing permissions for user without access")
+        self.assertFalse(
+            user_has_permission_for_obj(
+                instance=annotation,
+                user_val=self.user_2,
+                permission=PermissionTypes.CREATE,
+                include_group_permissions=True,
+            )
+        )
+        self.assertFalse(
+            user_has_permission_for_obj(
+                instance=annotation,
+                user_val=self.user_2,
+                permission=PermissionTypes.CRUD,
+                include_group_permissions=True,
+            )
+        )
+        self.assertFalse(
+            user_has_permission_for_obj(
+                instance=annotation,
+                user_val=self.user_2,
+                permission=PermissionTypes.ALL,
+                include_group_permissions=True,
+            )
+        )

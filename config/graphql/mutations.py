@@ -1669,14 +1669,37 @@ class RemoveAnnotation(graphene.Mutation):
         )
 
     ok = graphene.Boolean()
+    message = graphene.String()
 
     @login_required
     def mutate(root, info, annotation_id):
-        annotation_pk = from_global_id(annotation_id)[1]
-        annotation_obj = Annotation.objects.get(pk=annotation_pk)
-        annotation_obj.delete()
+        try:
+            annotation_pk = from_global_id(annotation_id)[1]
+            annotation_obj = Annotation.objects.get(pk=annotation_pk)
 
-        return RemoveAnnotation(ok=True)
+            # Check if user has permission to delete this annotation
+            # This now handles privacy-aware permissions for annotations with created_by_* fields
+            if not user_has_permission_for_obj(
+                info.context.user,
+                annotation_obj,
+                PermissionTypes.DELETE,
+                include_group_permissions=True,
+            ):
+                return RemoveAnnotation(
+                    ok=False,
+                    message="You don't have permission to delete this annotation",
+                )
+
+            annotation_obj.delete()
+            return RemoveAnnotation(ok=True, message="Annotation deleted successfully")
+
+        except Annotation.DoesNotExist:
+            return RemoveAnnotation(ok=False, message="Annotation not found")
+        except Exception as e:
+            logger.error(f"Error deleting annotation {annotation_id}: {e}")
+            return RemoveAnnotation(
+                ok=False, message=f"Error deleting annotation: {str(e)}"
+            )
 
 
 class RejectAnnotation(graphene.Mutation):
@@ -1688,6 +1711,7 @@ class RejectAnnotation(graphene.Mutation):
 
     ok = graphene.Boolean()
     user_feedback = graphene.Field(UserFeedbackType)
+    message = graphene.String()
 
     @login_required
     @transaction.atomic
@@ -1698,7 +1722,22 @@ class RejectAnnotation(graphene.Mutation):
         try:
             annotation = Annotation.objects.get(pk=annotation_pk)
         except ObjectDoesNotExist:
-            return RejectAnnotation(ok=False, user_feedback=None)
+            return RejectAnnotation(
+                ok=False, user_feedback=None, message="Annotation not found"
+            )
+
+        # Check if user has COMMENT permission on this annotation
+        # COMMENT permission respects document+corpus inheritance and corpus.allow_comments
+        can_comment = user_has_permission_for_obj(
+            user, annotation, PermissionTypes.COMMENT, include_group_permissions=True
+        )
+
+        if not can_comment:
+            return RejectAnnotation(
+                ok=False,
+                user_feedback=None,
+                message="You don't have permission to comment on this annotation",
+            )
 
         user_feedback, created = UserFeedback.objects.get_or_create(
             commented_annotation=annotation,
@@ -1718,7 +1757,9 @@ class RejectAnnotation(graphene.Mutation):
 
         set_permissions_for_obj_to_user(user, user_feedback, [PermissionTypes.CRUD])
 
-        return RejectAnnotation(ok=True, user_feedback=user_feedback)
+        return RejectAnnotation(
+            ok=True, user_feedback=user_feedback, message="Annotation rejected"
+        )
 
 
 class ApproveAnnotation(graphene.Mutation):
@@ -1730,6 +1771,7 @@ class ApproveAnnotation(graphene.Mutation):
 
     ok = graphene.Boolean()
     user_feedback = graphene.Field(UserFeedbackType)
+    message = graphene.String()
 
     @login_required
     @transaction.atomic
@@ -1740,7 +1782,22 @@ class ApproveAnnotation(graphene.Mutation):
         try:
             annotation = Annotation.objects.get(pk=annotation_pk)
         except ObjectDoesNotExist:
-            return ApproveAnnotation(ok=False, user_feedback=None)
+            return ApproveAnnotation(
+                ok=False, user_feedback=None, message="Annotation not found"
+            )
+
+        # Check if user has COMMENT permission on this annotation
+        # COMMENT permission respects document+corpus inheritance and corpus.allow_comments
+        can_comment = user_has_permission_for_obj(
+            user, annotation, PermissionTypes.COMMENT, include_group_permissions=True
+        )
+
+        if not can_comment:
+            return ApproveAnnotation(
+                ok=False,
+                user_feedback=None,
+                message="You don't have permission to comment on this annotation",
+            )
 
         user_feedback, created = UserFeedback.objects.get_or_create(
             commented_annotation=annotation,
@@ -1760,7 +1817,9 @@ class ApproveAnnotation(graphene.Mutation):
 
         set_permissions_for_obj_to_user(user, user_feedback, [PermissionTypes.CRUD])
 
-        return ApproveAnnotation(ok=True, user_feedback=user_feedback)
+        return ApproveAnnotation(
+            ok=True, user_feedback=user_feedback, message="Annotation approved"
+        )
 
 
 class AddAnnotation(graphene.Mutation):
@@ -1873,14 +1932,38 @@ class RemoveRelationship(graphene.Mutation):
         )
 
     ok = graphene.Boolean()
+    message = graphene.String()
 
     @login_required
     def mutate(root, info, relationship_id):
-        relationship_pk = from_global_id(relationship_id)[1]
-        relationship_obj = Relationship.objects.get(pk=relationship_pk)
-        relationship_obj.delete()
+        try:
+            relationship_pk = from_global_id(relationship_id)[1]
+            relationship_obj = Relationship.objects.get(pk=relationship_pk)
 
-        return RemoveRelationship(ok=True)
+            # Check if user has permission to delete this relationship
+            if not user_has_permission_for_obj(
+                info.context.user,
+                relationship_obj,
+                PermissionTypes.DELETE,
+                include_group_permissions=True,
+            ):
+                return RemoveRelationship(
+                    ok=False,
+                    message="You don't have permission to delete this relationship",
+                )
+
+            relationship_obj.delete()
+            return RemoveRelationship(
+                ok=True, message="Relationship deleted successfully"
+            )
+
+        except Relationship.DoesNotExist:
+            return RemoveRelationship(ok=False, message="Relationship not found")
+        except Exception as e:
+            logger.error(f"Error deleting relationship {relationship_id}: {e}")
+            return RemoveRelationship(
+                ok=False, message=f"Error deleting relationship: {str(e)}"
+            )
 
 
 class AddRelationship(graphene.Mutation):
@@ -1907,6 +1990,7 @@ class AddRelationship(graphene.Mutation):
 
     ok = graphene.Boolean()
     relationship = graphene.Field(RelationshipType)
+    message = graphene.String()
 
     @login_required
     def mutate(
@@ -1918,30 +2002,74 @@ class AddRelationship(graphene.Mutation):
         corpus_id,
         document_id,
     ):
-        source_pks = list(
-            map(lambda graphene_id: from_global_id(graphene_id)[1], source_ids)
-        )
-        target_pks = list(
-            map(lambda graphene_id: from_global_id(graphene_id)[1], target_ids)
-        )
-        relationship_label_pk = from_global_id(relationship_label_id)[1]
-        corpus_pk = from_global_id(corpus_id)[1]
-        document_pk = from_global_id(document_id)[1]
-        source_annotations = Annotation.objects.filter(id__in=source_pks)
-        target_annotations = Annotation.objects.filter(id__in=target_pks)
-        relationship = Relationship.objects.create(
-            creator=info.context.user,
-            relationship_label_id=relationship_label_pk,
-            corpus_id=corpus_pk,
-            document_id=document_pk,
-        )
-        set_permissions_for_obj_to_user(
-            info.context.user, relationship, [PermissionTypes.CRUD]
-        )
-        relationship.target_annotations.set(target_annotations)
-        relationship.source_annotations.set(source_annotations)
+        try:
+            source_pks = list(
+                map(lambda graphene_id: from_global_id(graphene_id)[1], source_ids)
+            )
+            target_pks = list(
+                map(lambda graphene_id: from_global_id(graphene_id)[1], target_ids)
+            )
+            relationship_label_pk = from_global_id(relationship_label_id)[1]
+            corpus_pk = from_global_id(corpus_id)[1]
+            document_pk = from_global_id(document_id)[1]
 
-        return AddRelationship(ok=True, relationship=relationship)
+            source_annotations = Annotation.objects.filter(id__in=source_pks)
+            target_annotations = Annotation.objects.filter(id__in=target_pks)
+
+            # Check that user can see all source and target annotations
+            all_annotations = list(source_annotations) + list(target_annotations)
+            for annotation in all_annotations:
+                if not user_has_permission_for_obj(
+                    info.context.user,
+                    annotation,
+                    PermissionTypes.READ,
+                    include_group_permissions=True,
+                ):
+                    return AddRelationship(
+                        ok=False,
+                        relationship=None,
+                        message=f"You don't have permission to see annotation {annotation.id}",
+                    )
+
+            # Check that user has permission to create in the corpus
+            corpus = Corpus.objects.get(pk=corpus_pk)
+            if not user_has_permission_for_obj(
+                info.context.user,
+                corpus,
+                PermissionTypes.CREATE,
+                include_group_permissions=True,
+            ):
+                return AddRelationship(
+                    ok=False,
+                    relationship=None,
+                    message="You don't have permission to create relationships in this corpus",
+                )
+
+            relationship = Relationship.objects.create(
+                creator=info.context.user,
+                relationship_label_id=relationship_label_pk,
+                corpus_id=corpus_pk,
+                document_id=document_pk,
+            )
+            set_permissions_for_obj_to_user(
+                info.context.user, relationship, [PermissionTypes.CRUD]
+            )
+            relationship.target_annotations.set(target_annotations)
+            relationship.source_annotations.set(source_annotations)
+
+            return AddRelationship(
+                ok=True,
+                relationship=relationship,
+                message="Relationship created successfully",
+            )
+
+        except Exception as e:
+            logger.error(f"Error creating relationship: {e}")
+            return AddRelationship(
+                ok=False,
+                relationship=None,
+                message=f"Error creating relationship: {str(e)}",
+            )
 
 
 class RemoveRelationships(graphene.Mutation):

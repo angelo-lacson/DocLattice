@@ -69,11 +69,18 @@ class ComprehensivePermissionTestCase(TestCase):
         self.public_corpus.documents.add(self.public_doc, self.private_doc)
 
         # Create Annotations
+        # Mark as structural since they're not in a corpus (per new permission model)
         self.public_annotation = Annotation.objects.create(
-            document=self.public_doc, creator=self.owner, is_public=True
+            document=self.public_doc,
+            creator=self.owner,
+            is_public=True,
+            structural=True,
         )
         self.private_annotation = Annotation.objects.create(
-            document=self.public_doc, creator=self.owner, is_public=False
+            document=self.public_doc,
+            creator=self.owner,
+            is_public=False,
+            structural=True,
         )
 
     def test_corpus_visibility(self):
@@ -95,17 +102,15 @@ class ComprehensivePermissionTestCase(TestCase):
         result = self.owner_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 3)
 
-        # Test for collaborator - AT THE MOMENT, PER INSTANCE PERMISSIONS ARE NOT USED ON QUERY RETRIEVAL.
-        # THIS IS FOR SAFETY. We are moving the insetance-leval permission filter into GraphqlObjectType
-        # get_queryset(...) to ensure safety on nested FKs and M2M.
+        # Should be 2 - the public corpus and the shared corpus with collaborator
         result = self.collaborator_client.execute(query)
-        self.assertEqual(len(result["data"]["corpuses"]["edges"]), 1)
+        self.assertEqual(len(result["data"]["corpuses"]["edges"]), 2)
 
-        # Test for regular user
+        # Test for regular user - only the public corpus
         result = self.regular_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 1)
 
-        # Test for anonymous user
+        # Test for anonymous user - only the public corpus
         result = self.anonymous_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 1)
 
@@ -158,8 +163,9 @@ class ComprehensivePermissionTestCase(TestCase):
         self.assertEqual(len(result["data"]["document"]["docAnnotations"]["edges"]), 2)
 
         # Test for regular user
+        # With new permission model, structural annotations are visible to anyone who can read the document
         result = self.regular_client.execute(query, variable_values=variables)
-        self.assertEqual(len(result["data"]["document"]["docAnnotations"]["edges"]), 1)
+        self.assertEqual(len(result["data"]["document"]["docAnnotations"]["edges"]), 2)
 
     def test_mutation_permissions(self):
         mutation = """

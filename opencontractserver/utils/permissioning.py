@@ -48,12 +48,27 @@ def set_permissions_for_obj_to_user(
     app_name = instance._meta.app_label
     # logger.info(f"grant_permissions_for_obj_to_user - App name: {app_name}")
 
-    # First, get rid of old permissions ################################################################################
-    with transaction.atomic():
-        existing_permissions = getattr(
-            instance, f"{model_name}userobjectpermission_set"
-        )
-        existing_permissions.all().delete()
+    # First, remove ALL existing permissions for this user on this object ############################################
+    from guardian.shortcuts import remove_perm
+
+    # List all possible permissions for this model type
+    all_perms = [
+        f"{app_name}.create_{model_name}",
+        f"{app_name}.read_{model_name}",
+        f"{app_name}.update_{model_name}",
+        f"{app_name}.remove_{model_name}",
+        f"{app_name}.comment_{model_name}",
+        f"{app_name}.permission_{model_name}",
+        f"{app_name}.publish_{model_name}",
+    ]
+
+    # Remove all existing permissions
+    for perm in all_perms:
+        try:
+            remove_perm(perm, user, instance)
+        except Exception:
+            # Permission might not exist for this model type
+            pass
 
     # Now, add specified permissions ###################################################################################
     requested_permission_set = set(permissions)
@@ -124,6 +139,17 @@ def set_permissions_for_obj_to_user(
         ):
             # logger.info("requested_permission_set - assign permissioning permission")
             assign_perm(f"{app_name}.permission_{model_name}", user, instance)
+
+        if (
+            len(
+                {PermissionTypes.COMMENT, PermissionTypes.ALL}.intersection(
+                    requested_permission_set
+                )
+            )
+            > 0
+        ):
+            # logger.info("requested_permission_set - assign comment permission")
+            assign_perm(f"{app_name}.comment_{model_name}", user, instance)
 
         if (
             len(
@@ -235,6 +261,11 @@ def user_has_permission_for_obj(
     Helper method to see make it easier to check if a given user has a certain permission type
     for a given object. Uses database queries to quickly query what permissions on the model for
     provided users intersect with permission defined in specified PermissionType.
+
+    Special handling for Annotations:
+    - Annotations with created_by_analysis or created_by_extract fields require permission
+      to the source object (analysis/extract) in addition to document+corpus permissions.
+    - Uses AnnotationQueryOptimizer for computing effective permissions.
     """
     # Provides some flexibility to use ids where passing object is not practical
     if isinstance(user_val, str) or isinstance(user_val, int):
@@ -251,6 +282,98 @@ def user_has_permission_for_obj(
     app_label = instance._meta.app_label
     logger.info(f"get_users_permissions_for_obj - App name: {app_label}")
 
+    # Special handling for annotations with privacy fields
+    if model_name == "annotation" and app_label == "annotations":
+        from opencontractserver.annotations.models import Annotation
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        if isinstance(instance, Annotation):
+            # Superusers always have permission
+            if user.is_superuser:
+                return True
+
+            # Structural annotations are always read-only if document is readable
+            # Check this BEFORE privacy checks so structural annotations are always visible
+            if instance.structural and permission != PermissionTypes.READ:
+                logger.info(
+                    f"User {user.username} denied write access to structural annotation {instance.id}"
+                )
+                return False
+
+            # Check if this is a private annotation (but not if it's structural and we're just reading)
+            if (
+                instance.created_by_analysis_id or instance.created_by_extract_id
+            ) and not (instance.structural and permission == PermissionTypes.READ):
+                # For private annotations, permissions are limited by BOTH the source object AND doc+corpus
+                # We need to check the source object permissions match or exceed what's being requested
+                if instance.created_by_analysis_id:
+                    # Check if user has the requested permission level on the analysis
+                    if not user_has_permission_for_obj(
+                        user,
+                        instance.created_by_analysis,
+                        permission,  # Check for the same permission level being requested
+                        include_group_permissions=include_group_permissions,
+                    ):
+                        logger.info(
+                            f"User {user.username} denied {permission} access to annotation {instance.id} - "
+                            f"insufficient permission on analysis {instance.created_by_analysis_id}"
+                        )
+                        return False
+                elif instance.created_by_extract_id:
+                    # Check if user has the requested permission level on the extract
+                    if not user_has_permission_for_obj(
+                        user,
+                        instance.created_by_extract,
+                        permission,  # Check for the same permission level being requested
+                        include_group_permissions=include_group_permissions,
+                    ):
+                        logger.info(
+                            f"User {user.username} denied {permission} access to annotation {instance.id} - "
+                            f"insufficient permission on extract {instance.created_by_extract_id}"
+                        )
+                        return False
+
+            # Now check document+corpus permissions using the query optimizer
+            can_read, can_create, can_update, can_delete, can_comment = (
+                AnnotationQueryOptimizer._compute_effective_permissions(
+                    user=user,
+                    document_id=instance.document_id,
+                    corpus_id=instance.corpus_id,
+                )
+            )
+
+            # Map the requested permission to the computed permissions
+            if permission == PermissionTypes.READ:
+                return can_read
+            elif permission == PermissionTypes.CREATE:
+                return can_create
+            elif (
+                permission == PermissionTypes.UPDATE
+                or permission == PermissionTypes.EDIT
+            ):
+                return can_update
+            elif permission == PermissionTypes.DELETE:
+                return can_delete
+            elif permission == PermissionTypes.COMMENT:
+                return can_comment
+            elif permission == PermissionTypes.CRUD:
+                return can_read and can_create and can_update and can_delete
+            elif permission == PermissionTypes.ALL:
+                # For annotations, ALL includes COMMENT but not publish/permission
+                return (
+                    can_read
+                    and can_create
+                    and can_update
+                    and can_delete
+                    and can_comment
+                )
+            else:
+                # Annotations don't support PUBLISH or PERMISSION
+                return False
+
+    # Standard permission checking for all other models
     model_permissions_for_user = get_users_permissions_for_obj(
         user=user,
         instance=instance,
@@ -274,6 +397,10 @@ def user_has_permission_for_obj(
     elif permission == PermissionTypes.DELETE:
         return (
             len(model_permissions_for_user.intersection({f"remove_{model_name}"})) > 0
+        )
+    elif permission == PermissionTypes.COMMENT:
+        return (
+            len(model_permissions_for_user.intersection({f"comment_{model_name}"})) > 0
         )
     elif permission == PermissionTypes.PUBLISH:
         return (
@@ -307,12 +434,13 @@ def user_has_permission_for_obj(
                         f"read_{model_name}",
                         f"update_{model_name}",
                         f"remove_{model_name}",
+                        f"comment_{model_name}",
                         f"publish_{model_name}",
                         f"permission_{model_name}",
                     }
                 )
             )
-            == 6
+            == 7
         )
     else:
         return False

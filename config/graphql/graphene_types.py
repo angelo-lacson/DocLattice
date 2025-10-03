@@ -12,6 +12,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 from graphql_relay import from_global_id, to_global_id
 
 from config.graphql.base import CountableConnection
+from config.graphql.custom_resolvers import resolve_doc_annotations_optimized
 from config.graphql.filters import AnnotationFilter, LabelFilter
 from config.graphql.permissioning.permission_annotator.mixins import (
     AnnotatePermissionsForReadMixin,
@@ -44,7 +45,6 @@ from opencontractserver.pipeline.base.file_types import (
     FileTypeEnum as BackendFileTypeEnum,
 )
 from opencontractserver.pipeline.utils import get_components_by_mimetype
-from opencontractserver.shared.resolvers import resolve_oc_model_queryset
 from opencontractserver.users.models import Assignment, UserExport, UserImport
 
 User = get_user_model()
@@ -138,8 +138,16 @@ class AnnotationInputType(AnnotatePermissionsForReadMixin, graphene.InputObjectT
 
 class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     json = GenericScalar()  # noqa
+    feedback_count = graphene.Int(description="Count of user feedback")
 
     all_source_node_in_relationship = graphene.List(lambda: RelationshipType)
+
+    def resolve_feedback_count(self, info):
+        # If feedback_count was annotated on the queryset, use it
+        if hasattr(self, "feedback_count"):
+            return self.feedback_count
+        # Otherwise, count it (but this triggers N+1)
+        return self.user_feedback.count()
 
     def resolve_all_source_node_in_relationship(self, info):
         return self.source_node_in_relationships.all()
@@ -279,6 +287,15 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
+        # Check if permissions were already handled by the query optimizer
+        # The optimizer adds _can_read, _can_create, etc. annotations
+        if hasattr(queryset, "query") and queryset.query.annotations:
+            # Check if the queryset has permission annotations from the optimizer
+            if any(key.startswith("_can_") for key in queryset.query.annotations):
+                # Permissions already handled by query optimizer, don't filter again
+                return queryset
+
+        # Fall back to original permission filtering
         if issubclass(type(queryset), QuerySet):
             return queryset.visible_to_user(info.context.user)
         elif "RelatedManager" in str(type(queryset)):
@@ -304,13 +321,6 @@ class LabelTypeEnum(graphene.Enum):
     DOC_TYPE_LABEL = "DOC_TYPE_LABEL"
     TOKEN_LABEL = "TOKEN_LABEL"
     SPAN_LABEL = "SPAN_LABEL"
-
-
-class AnnotationSummaryType(graphene.ObjectType):
-    id: graphene.String()  # type: ignore
-    label = graphene.String()
-    type = LabelTypeEnum()
-    raw_text = graphene.String()
 
 
 class DocumentRelationshipType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -555,41 +565,36 @@ class NoteRevisionType(DjangoObjectType):
 
 
 class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
-    def resolve_pdf_file(self, info):
-        return (
-            ""
-            if not self.pdf_file
-            else info.context.build_absolute_uri(self.pdf_file.url)
-        )
+    # Import optimized resolvers for file fields
+    from config.graphql.optimized_file_resolvers import (
+        resolve_icon_optimized,
+        resolve_md_summary_file_optimized,
+        resolve_pawls_parse_file_optimized,
+        resolve_pdf_file_optimized,
+        resolve_txt_extract_file_optimized,
+    )
 
-    def resolve_icon(self, info):
-        return "" if not self.icon else info.context.build_absolute_uri(self.icon.url)
-
-    def resolve_txt_extract_file(self, info):
-        return (
-            ""
-            if not self.txt_extract_file
-            else info.context.build_absolute_uri(self.txt_extract_file.url)
-        )
-
-    def resolve_md_summary_file(self, info):
-        return (
-            ""
-            if not self.md_summary_file
-            else info.context.build_absolute_uri(self.md_summary_file.url)
-        )
-
-    def resolve_pawls_parse_file(self, info):
-        return (
-            ""
-            if not self.pawls_parse_file
-            else info.context.build_absolute_uri(self.pawls_parse_file.url)
-        )
+    # Use optimized resolvers that minimize storage backend overhead
+    resolve_pdf_file = resolve_pdf_file_optimized
+    resolve_icon = resolve_icon_optimized
+    resolve_txt_extract_file = resolve_txt_extract_file_optimized
+    resolve_md_summary_file = resolve_md_summary_file_optimized
+    resolve_pawls_parse_file = resolve_pawls_parse_file_optimized
+    resolve_doc_annotations = resolve_doc_annotations_optimized
 
     all_structural_annotations = graphene.List(AnnotationType)
 
     def resolve_all_structural_annotations(self, info):
-        return self.doc_annotations.filter(structural=True).distinct()
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        return AnnotationQueryOptimizer.get_document_annotations(
+            document_id=self.id,
+            user=getattr(info.context, "user", None),
+            structural=True,
+            use_cache=True,
+        )
 
     # Updated field and resolver for all annotations with enhanced filtering
     all_annotations = graphene.List(
@@ -602,49 +607,25 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_all_annotations(
         self, info, corpus_id=None, analysis_id=None, is_structural=None
     ):
-        try:
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
 
-            if corpus_id is None:
-                annotations = self.doc_annotations.filter(structural=True)
-            else:
-                corpus_pk = from_global_id(corpus_id)[1]
-                # Get structural annotations + corpus annotations
-                # We'll filter corpus annotations based on analysis_id below
-                if is_structural is not None:
-                    annotations = self.doc_annotations.filter(
-                        corpus_id=corpus_pk, structural=is_structural
-                    )
-                else:
-                    # Get both structural and corpus annotations
-                    annotations = self.doc_annotations.filter(
-                        Q(structural=True) | Q(corpus_id=corpus_pk)
-                    )
-
-            # Filter based on analysis_id
-            # IMPORTANT: When analysis_id is None (not provided), we should only show
-            # user-created annotations (analysis__isnull=True) plus structural ones
-            if (
-                corpus_id is not None
-            ):  # Only apply analysis filtering for corpus queries
-                if analysis_id is None or analysis_id == "__none__":
-                    # No analysis selected: show only user annotations (no analysis) + structural
-                    annotations = annotations.filter(
-                        Q(analysis__isnull=True) | Q(structural=True)
-                    )
-                else:
-                    # Specific analysis selected: show that analysis's annotations + structural
-                    analysis_pk = from_global_id(analysis_id)[1]
-                    annotations = annotations.filter(
-                        Q(analysis_id=analysis_pk) | Q(structural=True)
-                    )
-
-            return annotations.distinct()
-        except Exception as e:
-            logger.warning(
-                f"Failed resolving query for document {self.id} with input: corpus_id={corpus_id}, "
-                f"analysis_id={analysis_id}, is_structural={is_structural}. Error: {e}"
+        user = getattr(info.context, "user", None)
+        corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+        analysis_pk = None
+        if analysis_id:
+            analysis_pk = (
+                0 if analysis_id == "__none__" else from_global_id(analysis_id)[1]
             )
-            return []
+        return AnnotationQueryOptimizer.get_document_annotations(
+            document_id=self.id,
+            user=user,
+            corpus_id=corpus_pk,
+            analysis_id=analysis_pk,
+            structural=is_structural,
+            use_cache=True,
+        )
 
     # New field and resolver for all relationships
     all_relationships = graphene.List(
@@ -654,32 +635,32 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     def resolve_all_relationships(self, info, corpus_id=None, analysis_id=None):
+        """Resolve all relationships using the optimizer."""
+        from opencontractserver.annotations.query_optimizer import (
+            RelationshipQueryOptimizer,
+        )
+
         try:
-            # Want to limit to structural relationships or corpus relationships
-            if corpus_id is None:
-                relationships = self.relationships.filter(structural=True)
-            else:
-                corpus_pk = from_global_id(corpus_id)[1]
-                relationships = self.relationships.filter(
-                    Q(corpus_id=corpus_pk) | Q(structural=True)
-                )
+            corpus_pk = None
+            analysis_pk = None
 
-                # Filter based on analysis_id
-                # IMPORTANT: When analysis_id is None (not provided), we should only show
-                # user-created relationships (analysis__isnull=True) plus structural ones
-                if analysis_id is None or analysis_id == "__none__":
-                    # No analysis selected: show only user relationships (no analysis) + structural
-                    relationships = relationships.filter(
-                        Q(analysis__isnull=True) | Q(structural=True)
-                    )
-                else:
-                    # Specific analysis selected: show that analysis's relationships + structural
-                    analysis_pk = from_global_id(analysis_id)[1]
-                    relationships = relationships.filter(
-                        Q(analysis_id=analysis_pk) | Q(structural=True)
-                    )
+            if corpus_id:
+                _, corpus_pk = from_global_id(corpus_id)
+            if analysis_id and analysis_id != "__none__":
+                _, analysis_pk = from_global_id(analysis_id)
+            elif analysis_id == "__none__":
+                analysis_pk = 0  # Special case for user relationships
 
-            return relationships.distinct()
+            # Get user from context
+            user = info.context.user if hasattr(info.context, "user") else None
+
+            return RelationshipQueryOptimizer.get_document_relationships(
+                document_id=self.id,
+                user=user,
+                corpus_id=corpus_pk,
+                analysis_id=analysis_pk,
+                use_cache=True,
+            )
         except Exception as e:
             logger.warning(
                 f"Failed resolving relationships query for document {self.id} with input: corpus_id={corpus_id}, "
@@ -725,29 +706,25 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_all_notes(self, info, corpus_id: Optional[str] = None):
         """
         Return the set of Note objects related to this Document instance that the user can see,
-        filtered by corpus_id. This approach uses resolve_oc_model_queryset to apply the same
-        permissioning logic applied elsewhere, ensuring consistency and potentially reducing
-        the query overhead by using a well-defined base queryset.
+        filtered by corpus_id.
         """
         from opencontractserver.annotations.models import Note
 
         user = info.context.user
 
         # Start with a base queryset of all Notes the user can see
-        base_qs = resolve_oc_model_queryset(django_obj_model_type=Note, user=user)
+        base_qs = Note.objects.visible_to_user(user=user)
 
         if corpus_id is None:
             corpus_pk = None
-            return base_qs.filter(id__in=self.notes.values_list("id", flat=True))
+            return base_qs.filter(document=self)
 
         else:
             corpus_pk = from_global_id(corpus_id)[1]
             # Then intersect with this Document's related notes, filtering by the given corpus_id
             # This ensures we only query notes that are both visible to the user and belong to
             # this specific Document (through the related manager self.notes).
-            return base_qs.filter(
-                id__in=self.notes.values_list("id", flat=True), corpus_id=corpus_pk
-            )
+            return base_qs.filter(document=self, corpus_id=corpus_pk)
 
     # Summary version history (corpus-specific)
     summary_revisions = graphene.List(
@@ -799,10 +776,239 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except Corpus.DoesNotExist:
             return ""
 
+    page_annotations = graphene.List(
+        AnnotationType,
+        corpus_id=graphene.ID(required=True),
+        page=graphene.Int(),  # Now optional for backwards compatibility
+        pages=graphene.List(graphene.Int),  # NEW: Accept multiple pages
+        structural=graphene.Boolean(),
+        analysis_id=graphene.ID(),
+        description="Get annots for spec. page(s) using opt. queries. Either 'page' (single) or 'pages' (multiple).",
+    )
+
+    page_relationships = graphene.List(
+        RelationshipType,
+        corpus_id=graphene.ID(required=True),
+        pages=graphene.List(graphene.Int, required=True),
+        structural=graphene.Boolean(),
+        analysis_id=graphene.ID(),
+        description="Get relationships where source or target annotations are on the specified page(s).",
+    )
+
+    def resolve_page_annotations(
+        self,
+        info,
+        corpus_id,
+        page=None,
+        pages=None,
+        structural=None,
+        analysis_id=None,
+        extract_id=None,
+    ):
+        """Resolve annotations for specific page(s) using optimized queries."""
+        from django.contrib.auth.models import AnonymousUser
+        from graphql import GraphQLError
+
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        _, corpus_pk = from_global_id(corpus_id)
+        analysis_pk = None
+        if analysis_id:
+            _, analysis_pk = from_global_id(analysis_id)
+        extract_pk = None
+        if extract_id:
+            _, extract_pk = from_global_id(extract_id)
+
+        # Get user from the GraphQL context
+        user = info.context.user if hasattr(info.context, "user") else None
+
+        # Check if user has permission to access this document
+        if not self.is_public:
+            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+                raise GraphQLError(
+                    "Permission denied: Authentication required to access private documents"
+                )
+            elif user != self.creator and not user.is_superuser:
+                # Check if user has explicit permission
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
+
+                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
+                    raise GraphQLError(
+                        "Permission denied: You do not have access to this document"
+                    )
+
+        # Handle both single page and multiple pages
+        # Priority: if 'pages' is provided, use it; otherwise fall back to 'page'
+        page_list = None
+        if pages is not None and len(pages) > 0:
+            page_list = pages
+        elif page is not None:
+            page_list = [page]
+
+        # If neither is provided, return empty list (maintain backwards compatibility)
+        if page_list is None:
+            return []
+
+        return AnnotationQueryOptimizer.get_document_annotations(
+            document_id=self.id,
+            user=user,
+            corpus_id=corpus_pk,
+            pages=page_list,  # Pass list of pages
+            structural=structural,
+            analysis_id=analysis_pk,
+            extract_id=extract_pk,
+            use_cache=True,
+        )
+
+    def resolve_page_relationships(
+        self,
+        info,
+        corpus_id,
+        pages,
+        structural=None,
+        analysis_id=None,
+        extract_id=None,
+        strict_extract_mode=False,
+    ):
+        """Resolve relationships for specific page(s) using the optimizer."""
+        from django.contrib.auth.models import AnonymousUser
+        from graphql import GraphQLError
+
+        from opencontractserver.annotations.query_optimizer import (
+            RelationshipQueryOptimizer,
+        )
+
+        _, corpus_pk = from_global_id(corpus_id)
+        analysis_pk = None
+        if analysis_id:
+            if analysis_id == "__none__":
+                analysis_pk = 0  # Special case for user annotations
+            else:
+                _, analysis_pk = from_global_id(analysis_id)
+        extract_pk = None
+        if extract_id:
+            _, extract_pk = from_global_id(extract_id)
+
+        # Get user from the GraphQL context
+        user = info.context.user if hasattr(info.context, "user") else None
+
+        # Permission checks mirroring annotation resolvers
+        if not self.is_public:
+            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+                raise GraphQLError(
+                    "Permission denied: Authentication required to access private documents"
+                )
+            elif user != self.creator and not user.is_superuser:
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
+
+                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
+                    raise GraphQLError(
+                        "Permission denied: You do not have access to this document"
+                    )
+
+        return RelationshipQueryOptimizer.get_document_relationships(
+            document_id=self.id,
+            user=user,
+            corpus_id=corpus_pk,
+            pages=pages if pages else None,
+            structural=structural,
+            analysis_id=analysis_pk,
+            extract_id=extract_pk,
+            strict_extract_mode=strict_extract_mode,
+            use_cache=True,
+        )
+
+    relationship_summary = graphene.Field(
+        GenericScalar,
+        corpus_id=graphene.ID(required=True),
+        description="Get relationship summary statistics for this document and corpus (MV-backed).",
+    )
+
+    # Extract-specific summary
+    extract_annotation_summary = graphene.Field(
+        GenericScalar,
+        extract_id=graphene.ID(required=True),
+        description="Get summary of annotations used in specific extract.",
+    )
+
+    def resolve_relationship_summary(self, info, corpus_id):
+        from django.contrib.auth.models import AnonymousUser
+        from graphql import GraphQLError
+
+        from opencontractserver.annotations.query_optimizer import (
+            RelationshipQueryOptimizer,
+        )
+
+        # Permissions mirroring annotation summary style
+        user = info.context.user if hasattr(info.context, "user") else None
+
+        if not self.is_public:
+            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+                raise GraphQLError(
+                    "Permission denied: Authentication required to access private documents"
+                )
+            elif user != self.creator and not user.is_superuser:
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
+
+                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
+                    raise GraphQLError(
+                        "Permission denied: You do not have access to this document"
+                    )
+
+        _, corpus_pk = from_global_id(corpus_id)
+        summary = RelationshipQueryOptimizer.get_relationship_summary(
+            document_id=self.id, corpus_id=corpus_pk, user=user
+        )
+        return summary
+
+    def resolve_extract_annotation_summary(self, info, extract_id):
+        """Get summary of annotations in extract."""
+        from django.contrib.auth.models import AnonymousUser
+        from graphql import GraphQLError
+
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        user = info.context.user if hasattr(info.context, "user") else None
+        _, extract_pk = from_global_id(extract_id)
+
+        # Check if user has permission to access this document
+        if not self.is_public:
+            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+                raise GraphQLError(
+                    "Permission denied: Authentication required to access private documents"
+                )
+            elif user != self.creator and not user.is_superuser:
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
+
+                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
+                    raise GraphQLError(
+                        "Permission denied: You do not have access to this document"
+                    )
+
+        return AnnotationQueryOptimizer.get_extract_annotation_summary(
+            document_id=self.id, extract_id=extract_pk, user=user, use_cache=True
+        )
+
     class Meta:
         model = Document
         interfaces = [relay.Node]
-        exclude = ("embedding", "description_embedding")
+        exclude = ("embedding",)
         connection_class = CountableConnection
 
     @classmethod
@@ -822,6 +1028,31 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         analysis_id=graphene.ID(),
         label_types=graphene.List(LabelTypeEnum),
     )
+
+    def resolve_annotations(self, info):
+        """
+        Custom resolver for annotations field that properly computes permissions.
+        Uses AnnotationQueryOptimizer to ensure permission flags are set.
+        """
+        from opencontractserver.annotations.models import Annotation
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        user = getattr(info.context, "user", None)
+
+        # Get all document IDs in this corpus
+        document_ids = self.documents.values_list("id", flat=True)
+
+        # Collect annotations for all documents with proper permission computation
+        all_annotations = Annotation.objects.none()
+        for doc_id in document_ids:
+            annotations = AnnotationQueryOptimizer.get_document_annotations(
+                document_id=doc_id, user=user, corpus_id=self.id, use_cache=True
+            )
+            all_annotations = all_annotations | annotations
+
+        return all_annotations.distinct()
 
     def resolve_all_annotation_summaries(self, info, **kwargs):
 
@@ -989,16 +1220,32 @@ class AnalysisType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     def resolve_full_annotation_list(self, info, document_id=None):
+        from opencontractserver.annotations.query_optimizer import (
+            AnalysisQueryOptimizer,
+        )
 
-        results = self.annotations.all()
         if document_id is not None:
-            document_pk = from_global_id(document_id)[1]
-            logger.info(
-                f"Resolve full annotations for analysis {self.id} with doc {document_pk}"
-            )
-            results = results.filter(document_id=document_pk)
+            document_pk = int(from_global_id(document_id)[1])
+        else:
+            document_pk = None
 
-        return results
+        return AnalysisQueryOptimizer.get_analysis_annotations(
+            self, info.context.user, document_id=document_pk
+        )
+
+    @classmethod
+    def get_node(cls, info, id):
+        """
+        Override the default node resolution to apply permission checks.
+        """
+        from opencontractserver.annotations.query_optimizer import (
+            AnalysisQueryOptimizer,
+        )
+
+        has_perm, analysis = AnalysisQueryOptimizer.check_analysis_permission(
+            info.context.user, int(id)
+        )
+        return analysis if has_perm else None
 
     class Meta:
         model = Analysis
@@ -1055,16 +1302,48 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     full_datacell_list = graphene.List(DatacellType)
     full_document_list = graphene.List(DocumentType)
 
+    @classmethod
+    def get_node(cls, info, id):
+        """
+        Override the default node resolution to apply permission checks.
+        """
+        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+
+        has_perm, extract = ExtractQueryOptimizer.check_extract_permission(
+            info.context.user, int(id)
+        )
+        return extract if has_perm else None
+
     class Meta:
         model = Extract
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
     def resolve_full_datacell_list(self, info):
-        return self.extracted_datacells.all()
+        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+
+        return ExtractQueryOptimizer.get_extract_datacells(
+            self, info.context.user, document_id=None
+        )
 
     def resolve_full_document_list(self, info):
-        return self.documents.all()
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        # Filter to only documents user can read
+        if info.context.user.is_superuser:
+            return self.documents.all()
+
+        readable_docs = []
+        for doc in self.documents.all():
+            if user_has_permission_for_obj(
+                info.context.user,
+                doc,
+                PermissionTypes.READ,
+                include_group_permissions=True,
+            ):
+                readable_docs.append(doc)
+        return readable_docs
 
 
 class CorpusQueryType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -1209,8 +1488,6 @@ def resolve_pipeline_components(self, info, mimetype=None):
 
 
 # ---------------- CorpusDescriptionRevisionType ----------------
-
-
 class CorpusDescriptionRevisionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for corpus description revisions."""
 

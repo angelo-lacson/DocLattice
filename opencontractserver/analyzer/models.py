@@ -20,6 +20,10 @@ def calculate_analyzer_icon_path(instance, filename):
 
 
 class GremlinEngine(BaseOCModel):
+    """
+    Model for a Gremlin API endpoint that can execute Gremlin queries against.
+    """
+
     class Meta:
         permissions = (
             ("permission_gremlinengine", "permission gremlin engine"),
@@ -28,6 +32,7 @@ class GremlinEngine(BaseOCModel):
             ("read_gremlinengine", "read gremlin engine"),
             ("update_gremlinengine", "update gremlin engine"),
             ("remove_gremlinengine", "delete gremlin engine"),
+            ("comment_gremlinengine", "comment gremlin engine"),
         )
 
     url = django.db.models.CharField(
@@ -71,6 +76,12 @@ class GremlinEngineGroupObjectPermission(GroupObjectPermissionBase):
 
 
 class Analyzer(BaseOCModel):
+    """
+    Model representing an analyzer that can be run on a corpus. An analyzer is a
+    Python package that is installed in a Gremlin Engine and can be run on a corpus
+    to produce annotations.
+    """
+
     class Meta:
         permissions = (
             ("permission_analyzer", "permission analyzer"),
@@ -79,6 +90,7 @@ class Analyzer(BaseOCModel):
             ("read_analyzer", "read analyzer"),
             ("update_analyzer", "update analyzer"),
             ("remove_analyzer", "delete analyzer"),
+            ("comment_analyzer", "comment analyzer"),
         )
         constraints = [
             django.db.models.CheckConstraint(
@@ -170,6 +182,7 @@ class Analysis(BaseOCModel):
             ("read_analysis", "read Analysis"),
             ("update_analysis", "update Analysis"),
             ("remove_analysis", "delete Analysis"),
+            ("comment_analysis", "comment Analysis"),
             ("publish_analysis", "publish Analysis"),
             ("permission_analysis", "permission Analysis"),
         )

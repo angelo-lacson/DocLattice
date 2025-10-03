@@ -58,7 +58,8 @@ USE_ANALYZER = env.bool("USE_ANALYZER", False)
 CALLBACK_ROOT_URL_FOR_ANALYZER = env.str("CALLBACK_ROOT_URL_FOR_ANALYZER", None)
 
 # Allow Graphene Django Debug Toolbar middleware
-ALLOW_GRAPHQL_DEBUG = env.bool("ALLOW_GRAPHQL_DEBUG", default=True)
+# Default to False for performance - only enable when actually debugging
+ALLOW_GRAPHQL_DEBUG = env.bool("ALLOW_GRAPHQL_DEBUG", default=False)
 
 # Set max file upload size to 5 GB for large corpuses
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880000
@@ -318,6 +319,11 @@ elif STORAGE_BACKEND == "AWS":
     }
     # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
     AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default=None)
+
+    # Connection pooling for better performance
+    # Reuse connections instead of creating new ones for each request
+    AWS_S3_CONNECTION_POOL_SIZE = env.int("AWS_S3_CONNECTION_POOL_SIZE", default=10)
+
     # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#cloudfront
     AWS_S3_CUSTOM_DOMAIN = env("AWS_S3_CUSTOM_DOMAIN", default=None)
     aws_s3_domain = (
@@ -333,13 +339,19 @@ elif STORAGE_BACKEND == "AWS":
 
     # STATIC
     # ------------------------
-    STATICFILES_STORAGE = "opencontractserver.utils.storages.StaticRootS3Boto3Storage"
+    # Use pooled storage backends for better performance
+    STATICFILES_STORAGE = (
+        "opencontractserver.utils.enhanced_storages.PooledStaticRootS3Storage"
+    )
     COLLECTFAST_STRATEGY = "collectfast.strategies.boto3.Boto3Strategy"
     STATIC_URL = f"https://{aws_s3_domain}/static/"
 
     # MEDIA
     # ------------------------------------------------------------------------------
-    DEFAULT_FILE_STORAGE = "opencontractserver.utils.storages.MediaRootS3Boto3Storage"
+    # Use pooled storage backends for better performance
+    DEFAULT_FILE_STORAGE = (
+        "opencontractserver.utils.enhanced_storages.PooledMediaRootS3Storage"
+    )
     MEDIA_URL = f"https://{aws_s3_domain}/media/"
     S3_DOCUMENT_PATH = env("S3_DOCUMENT_PATH", default="open_contracts")
     MEDIA_ROOT = str(APPS_DIR / "media")
@@ -600,7 +612,8 @@ if ALLOW_GRAPHQL_DEBUG:
 GRAPHENE = {
     "SCHEMA": "config.graphql.schema.schema",
     "MIDDLEWARE": GRAPHENE_MIDDLEWARE,
-    "RELAY_CONNECTION_MAX_LIMIT": 10,
+    # Increased from 10 for better performance with larger datasets
+    "RELAY_CONNECTION_MAX_LIMIT": 100,
 }
 
 GRAPHQL_JWT = {

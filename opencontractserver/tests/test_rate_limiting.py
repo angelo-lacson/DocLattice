@@ -1,6 +1,6 @@
 import json
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -257,8 +257,16 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         # If we didn't hit a rate limit, that's unexpected
         self.fail("Did not hit rate limit after 25 mutation requests")
 
-    def test_superuser_gets_higher_rate_limits(self):
+    @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
+    def test_superuser_gets_higher_rate_limits(self, mock_visible_to_user):
         """Test that superusers get higher rate limits than regular users."""
+        # Mock the visible_to_user to return a minimal queryset quickly
+        # This avoids the database overhead while still testing rate limiting
+        from opencontractserver.corpuses.models import Corpus
+
+        mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         query = """
             query GetCorpuses {
                 corpuses {
@@ -270,6 +278,9 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 }
             }
         """
+
+        # Clear cache to ensure fresh rate limit counter
+        cache.clear()
 
         # Regular user should hit limit around 200 requests
         # Superuser should get 10x that (1000/m)
@@ -335,6 +346,8 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
             ):
                 # Successfully hit rate limit
                 return
+
+        self.fail("Did not hit grouped rate limit after expected number of requests")
 
     def test_anonymous_user_rate_limiting(self):
         """Test that anonymous users get rate limited by IP."""
@@ -424,8 +437,12 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         # Clean up
         other_user.delete()
 
-    def test_different_operations_have_different_limits(self):
+    @patch("time.time")
+    def test_different_operations_have_different_limits(self, mock_time):
         """Test that different operations have appropriate rate limits."""
+        # Freeze time to keep all requests within one window
+        mock_time.return_value = 1000000.0
+        cache.clear()
         # Test a heavy read operation vs light read operation
         heavy_query = """
             query GetAnnotations($corpusId: ID!) {
@@ -477,12 +494,19 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 break
 
         # Light queries should allow more requests than heavy queries
-        if heavy_hit_at and light_hit_at:
-            self.assertGreater(
-                light_hit_at,
-                heavy_hit_at,
-                "Light queries should have higher rate limit than heavy queries",
-            )
+        self.assertIsNotNone(
+            heavy_hit_at,
+            "Heavy query should hit rate limit within expected request window",
+        )
+        self.assertIsNotNone(
+            light_hit_at,
+            "Light query should hit rate limit within expected request window",
+        )
+        self.assertGreater(
+            light_hit_at,
+            heavy_hit_at,
+            "Light queries should have higher rate limit than heavy queries",
+        )
 
     def test_specific_mutations_are_rate_limited(self):
         """Test that specific mutations have rate limiting applied."""
@@ -511,16 +535,31 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
 
         self.assertTrue(hit_limit, "Mutation should have rate limiting")
 
-    def test_corpuses_query_rate_limited(self):
+    @patch("time.time")
+    @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
+    def test_corpuses_query_rate_limited(self, mock_visible_to_user, mock_time):
         """Test that corpuses query is rate limited."""
+        # Freeze time to ensure all requests fall within the same rate limit window
+        mock_time.return_value = 1000000.0
+
+        # Mock the visible_to_user to return a minimal queryset quickly
+        # This avoids the database overhead while still testing rate limiting
+        from opencontractserver.corpuses.models import Corpus
+
+        mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         query = """query { corpuses { edges { node { id } } } }"""
 
         # Clear cache to ensure fresh rate limit counter
         cache.clear()
 
         hit_limit = False
+        request_count = 0
         for i in range(210):
             result = self.execute_graphql(query)
+            request_count = i + 1
+
             if (
                 result.get("errors")
                 and "Limit exceeded" in result["errors"][0]["message"]
@@ -530,18 +569,36 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 self.assertLess(i, 210, "Should hit around request 200")
                 break
 
-        self.assertTrue(hit_limit, "Corpuses query should be rate limited")
+        self.assertTrue(
+            hit_limit,
+            f"Corpuses query should be rate limited (made {request_count} requests without hitting limit)",
+        )
 
-    def test_documents_query_rate_limited(self):
+    @patch("time.time")
+    @patch("opencontractserver.documents.models.Document.objects.visible_to_user")
+    def test_documents_query_rate_limited(self, mock_visible_to_user, mock_time):
         """Test that documents query is rate limited."""
+        # Freeze time to ensure all requests fall within the same rate limit window
+        mock_time.return_value = 1000000.0
+
+        # Mock the visible_to_user to return a minimal queryset quickly
+        # This avoids the database overhead while still testing rate limiting
+        from opencontractserver.documents.models import Document
+
+        mock_queryset = Document.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         query = """query { documents { edges { node { id } } } }"""
 
         # Clear cache to ensure fresh rate limit counter
         cache.clear()
 
         hit_limit = False
+        request_count = 0
         for i in range(210):
             result = self.execute_graphql(query)
+            request_count = i + 1
+
             if (
                 result.get("errors")
                 and "Limit exceeded" in result["errors"][0]["message"]
@@ -551,18 +608,36 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 self.assertLess(i, 210, "Should hit around request 200")
                 break
 
-        self.assertTrue(hit_limit, "Documents query should be rate limited")
+        self.assertTrue(
+            hit_limit,
+            f"Documents query should be rate limited (made {request_count} requests without hitting limit)",
+        )
 
-    def test_labelsets_query_rate_limited(self):
+    @patch("time.time")
+    @patch("opencontractserver.annotations.models.LabelSet.objects.visible_to_user")
+    def test_labelsets_query_rate_limited(self, mock_visible_to_user, mock_time):
         """Test that labelsets query is rate limited."""
+        # Freeze time to ensure all requests fall within the same rate limit window
+        mock_time.return_value = 1000000.0
+
+        # Mock the visible_to_user to return a minimal queryset quickly
+        # This avoids the database overhead while still testing rate limiting
+        from opencontractserver.annotations.models import LabelSet
+
+        mock_queryset = LabelSet.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         query = """query { labelsets { edges { node { id } } } }"""
 
         # Clear cache to ensure fresh rate limit counter
         cache.clear()
 
         hit_limit = False
+        request_count = 0
         for i in range(210):
             result = self.execute_graphql(query)
+            request_count = i + 1
+
             if (
                 result.get("errors")
                 and "Limit exceeded" in result["errors"][0]["message"]
@@ -572,7 +647,10 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 self.assertLess(i, 210, "Should hit around request 200")
                 break
 
-        self.assertTrue(hit_limit, "Labelsets query should be rate limited")
+        self.assertTrue(
+            hit_limit,
+            f"Labelsets query should be rate limited (made {request_count} requests without hitting limit)",
+        )
 
     def test_usage_capped_users_get_reduced_limits(self):
         """Test that usage-capped users get reduced rate limits."""
@@ -604,6 +682,7 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         """
 
         # Capped users should hit rate limit sooner
+        hit_limit = False
         for i in range(150):  # Should hit before regular user limit
             response = capped_client.post(
                 "/graphql/",
@@ -620,7 +699,13 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 self.assertLess(
                     i, 200, "Capped user should hit rate limit before regular limit"
                 )
+                hit_limit = True
                 break
+
+        self.assertTrue(
+            hit_limit,
+            "Capped user did not hit rate limit within expected request window",
+        )
 
         # Clean up
         test_corpus.delete()
