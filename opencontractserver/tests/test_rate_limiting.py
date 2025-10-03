@@ -347,6 +347,8 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 # Successfully hit rate limit
                 return
 
+        self.fail("Did not hit grouped rate limit after expected number of requests")
+
     def test_anonymous_user_rate_limiting(self):
         """Test that anonymous users get rate limited by IP."""
         # Log out to test as anonymous
@@ -435,8 +437,12 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         # Clean up
         other_user.delete()
 
-    def test_different_operations_have_different_limits(self):
+    @patch("time.time")
+    def test_different_operations_have_different_limits(self, mock_time):
         """Test that different operations have appropriate rate limits."""
+        # Freeze time to keep all requests within one window
+        mock_time.return_value = 1000000.0
+        cache.clear()
         # Test a heavy read operation vs light read operation
         heavy_query = """
             query GetAnnotations($corpusId: ID!) {
@@ -488,12 +494,19 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 break
 
         # Light queries should allow more requests than heavy queries
-        if heavy_hit_at and light_hit_at:
-            self.assertGreater(
-                light_hit_at,
-                heavy_hit_at,
-                "Light queries should have higher rate limit than heavy queries",
-            )
+        self.assertIsNotNone(
+            heavy_hit_at,
+            "Heavy query should hit rate limit within expected request window",
+        )
+        self.assertIsNotNone(
+            light_hit_at,
+            "Light query should hit rate limit within expected request window",
+        )
+        self.assertGreater(
+            light_hit_at,
+            heavy_hit_at,
+            "Light queries should have higher rate limit than heavy queries",
+        )
 
     def test_specific_mutations_are_rate_limited(self):
         """Test that specific mutations have rate limiting applied."""
@@ -669,6 +682,7 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         """
 
         # Capped users should hit rate limit sooner
+        hit_limit = False
         for i in range(150):  # Should hit before regular user limit
             response = capped_client.post(
                 "/graphql/",
@@ -685,7 +699,13 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 self.assertLess(
                     i, 200, "Capped user should hit rate limit before regular limit"
                 )
+                hit_limit = True
                 break
+
+        self.assertTrue(
+            hit_limit,
+            "Capped user did not hit rate limit within expected request window",
+        )
 
         # Clean up
         test_corpus.delete()
