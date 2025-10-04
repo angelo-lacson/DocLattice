@@ -5,7 +5,7 @@ import {
   useQuery,
   useReactiveVar,
 } from "@apollo/client";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import _ from "lodash";
 
@@ -21,9 +21,6 @@ import {
   RequestDocumentsInputs,
   RequestDocumentsOutputs,
   GET_DOCUMENTS,
-  GET_DOCUMENT_ONLY,
-  GetDocumentOnlyInput,
-  GetDocumentOnlyOutput,
 } from "../graphql/queries";
 import {
   authToken,
@@ -62,7 +59,6 @@ import { CorpusDocumentCards } from "../components/documents/CorpusDocumentCards
 import { BulkUploadModal } from "../components/widgets/modals/BulkUploadModal";
 
 export const Documents = () => {
-  const { documentId: routeDocumentId } = useParams();
   const auth_token = useReactiveVar(authToken);
   const current_user = useReactiveVar(userObj);
   const backend_user = useReactiveVar(backendUserObj);
@@ -206,55 +202,12 @@ export const Documents = () => {
     debouncedSearch.current(value);
   };
 
-  /**
-   * URL → State hydration for openedDocument
-   * When a user lands on /documents/:documentId, fetch the document (if needed)
-   * and ensure openedDocument reflects the route selection.
-   */
-  useEffect(() => {
-    if (!routeDocumentId) {
-      // If URL no longer has a document id, clear openedDocument
-      if (openedDocument()) openedDocument(null);
-      return;
-    }
-    // If we already have the correct opened document, do nothing
-    const current = openedDocument();
-    if (current && current.id === routeDocumentId) return;
-    // Set a minimal placeholder so downstream UI updates quickly; detailed data can be hydrated elsewhere
-    openedDocument({ id: routeDocumentId } as any);
-  }, [routeDocumentId]);
-
-  /**
-   * Deep-link hydration: if the selected document id is not present in the
-   * current list results, lazily fetch it and populate openedDocument.
-   */
-  const [fetchDocumentById, { data: docByIdData, loading: docByIdLoading }] =
-    useLazyQuery<GetDocumentOnlyOutput, GetDocumentOnlyInput>(
-      GET_DOCUMENT_ONLY,
-      {
-        fetchPolicy: "network-only",
-      }
-    );
-
-  useEffect(() => {
-    if (!routeDocumentId) return;
-    const inList = document_items.some((d) => d.id === routeDocumentId);
-    if (!inList && !docByIdLoading && !docByIdData) {
-      fetchDocumentById({ variables: { documentId: routeDocumentId } });
-    }
-  }, [
-    routeDocumentId,
-    document_items,
-    docByIdLoading,
-    docByIdData,
-    fetchDocumentById,
-  ]);
-
-  useEffect(() => {
-    if (docByIdData?.document) {
-      openedDocument(docByIdData.document as any);
-    }
-  }, [docByIdData]);
+  /* --------------------------------------------------------------------------------------------------
+   * Entity resolution is now handled by CentralRouteManager
+   * - When user navigates to /d/:user/:document → CentralRouteManager fetches and sets openedDocument
+   * - This component just reads openedDocument reactive var and displays appropriate view
+   * - /documents route is a browse route with NO params (list view only)
+   * -------------------------------------------------------------------------------------------------- */
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Implementing various resolvers / mutations to create action methods

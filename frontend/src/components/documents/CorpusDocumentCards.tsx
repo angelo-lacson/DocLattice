@@ -29,9 +29,6 @@ import {
   RequestDocumentsInputs,
   RequestDocumentsOutputs,
   GET_DOCUMENTS,
-  GET_CORPUS_BY_ID_FOR_REDIRECT,
-  GetCorpusByIdForRedirectInput,
-  GetCorpusByIdForRedirectOutput,
 } from "../../graphql/queries";
 import { DocumentType } from "../../types/graphql-api";
 import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
@@ -82,25 +79,10 @@ export const CorpusDocumentCards = ({
   const navigate = useNavigate();
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // Setup corpus and document resolvers and mutations
+  // Setup document queries and mutations
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // Query corpus data to ensure openedCorpus is set for file uploads
-  const { data: corpusData } = useQuery<
-    GetCorpusByIdForRedirectOutput,
-    GetCorpusByIdForRedirectInput
-  >(GET_CORPUS_BY_ID_FOR_REDIRECT, {
-    variables: { id: opened_corpus_id || "" },
-    skip: !opened_corpus_id,
-    onCompleted: (data) => {
-      if (data?.corpus) {
-        // Ensure the global openedCorpus state is set
-        const currentOpenedCorpus = openedCorpus();
-        if (!currentOpenedCorpus || currentOpenedCorpus.id !== data.corpus.id) {
-          openedCorpus(data.corpus as any);
-        }
-      }
-    },
-  });
+  // Note: openedCorpus is set by CentralRouteManager when on /c/:user/:corpus route
+  // This component just reads it for context (e.g., file uploads)
 
   const {
     refetch: refetchDocuments,

@@ -68,10 +68,8 @@ export const NavMenu = () => {
     }
   };
 
-  const clearSelections = () => {
-    openedCorpus(null);
-    openedDocument(null);
-  };
+  // Note: CentralRouteManager automatically clears openedCorpus/openedDocument when navigating
+  // No need to manually clear on menu clicks
 
   const items = public_header_items.map((item) => (
     <Menu.Item
@@ -79,7 +77,6 @@ export const NavMenu = () => {
       name={item.title}
       active={getIsActive(item.route)}
       key={`${item.title}`}
-      onClick={clearSelections}
     >
       <Link to={item.route}>{item.title}</Link>
     </Menu.Item>
@@ -91,7 +88,6 @@ export const NavMenu = () => {
       name={item.title}
       active={getIsActive(item.route)}
       key={`${item.title}`}
-      onClick={clearSelections}
     >
       <Link to={item.route}>{item.title}</Link>
     </Menu.Item>

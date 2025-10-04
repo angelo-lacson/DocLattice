@@ -9,7 +9,7 @@ import {
   useQuery,
   useReactiveVar,
 } from "@apollo/client";
-import { useLocation, useParams, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   FileText,
   MessageSquare,
@@ -1394,7 +1394,6 @@ export const Corpuses = () => {
   const opened_query_obj = useReactiveVar(openedQueryObj);
 
   const location = useLocation();
-  const { corpusId: routeCorpusId } = useParams();
   const navigate = useNavigate();
 
   const corpusUploadRef = useRef() as React.MutableRefObject<HTMLInputElement>;
@@ -1513,60 +1512,10 @@ export const Corpuses = () => {
   });
 
   /* --------------------------------------------------------------------------------------------------
-   * Deep-link support: if the user navigates directly to `/corpuses/:id` we may not have the corpus in
-   * the paginated GET_CORPUSES response yet. We therefore lazily fetch the corpus metadata **by id**
-   * and hydrate the `openedCorpus` reactive var as soon as it arrives.
+   * Entity resolution is now handled by CentralRouteManager
+   * - When user navigates to /c/:user/:corpus → CentralRouteManager fetches and sets openedCorpus
+   * - This component just reads openedCorpus reactive var and displays appropriate view
    * -------------------------------------------------------------------------------------------------- */
-  const [
-    fetchCorpusById,
-    { data: corpusByIdData, loading: corpusByIdLoading },
-  ] = useLazyQuery<GetCorpusMetadataOutputs, GetCorpusMetadataInputs>(
-    GET_CORPUS_METADATA,
-    {
-      fetchPolicy: "network-only",
-    }
-  );
-
-  /* Trigger the lazy query when we have a route id but no opened corpus and the list query finished. */
-  useEffect(() => {
-    if (
-      routeCorpusId &&
-      !opened_corpus &&
-      !loading_corpuses &&
-      !corpusByIdLoading &&
-      !corpusByIdData
-    ) {
-      // Only fetch if we actually have a valid routeCorpusId
-      if (routeCorpusId) {
-        // Check if it's a valid GraphQL ID before fetching
-        const { id: validId, isValid } = ensureValidCorpusId({
-          id: routeCorpusId,
-        });
-        if (isValid && validId) {
-          fetchCorpusById({ variables: { metadataForCorpusId: validId } });
-        } else {
-          console.warn(
-            "Route corpus ID is not a valid GraphQL ID:",
-            routeCorpusId
-          );
-        }
-      }
-    }
-  }, [
-    routeCorpusId,
-    opened_corpus,
-    loading_corpuses,
-    fetchCorpusById,
-    corpusByIdLoading,
-    corpusByIdData,
-  ]);
-
-  /* When the single-corpus query returns, sync it with the global reactive var. */
-  useEffect(() => {
-    if (corpusByIdData?.corpus) {
-      openedCorpus(corpusByIdData.corpus);
-    }
-  }, [corpusByIdData]);
 
   if (corpus_load_error) {
     console.log("Corpuses.tsx - corpus_load_error", corpus_load_error);
@@ -1644,12 +1593,8 @@ export const Corpuses = () => {
         }
       }
     } else if (!auth_token) {
-      // Clear opened corpus when logged out
-      openedCorpus(null);
-      // Navigate to corpuses list if we were viewing a specific corpus
-      if (routeCorpusId) {
-        navigate("/corpuses");
-      }
+      // Note: CentralRouteManager will clear openedCorpus when navigating away
+      // No need to manually clear here
     }
   }, [auth_token]); // Re-run when auth token changes
 
@@ -1658,18 +1603,14 @@ export const Corpuses = () => {
     refetchCorpuses();
   }, [corpus_search_term]);
 
-  // If we detech user navigated to this page, refetch
+  // If we detect user navigated to this page, refetch
+  // Note: CentralRouteManager handles clearing openedCorpus when navigating away from /c/:user/:corpus
   useEffect(() => {
     if (location.pathname === "/corpuses") {
-      // Clear opened corpus when navigating to corpus list
-      // This ensures the list view is shown even if a corpus was previously persisted
-      if (!routeCorpusId) {
-        openedCorpus(null);
-      }
       refetchCorpuses();
     }
     showQueryViewState("ASK");
-  }, [location, routeCorpusId]);
+  }, [location]);
 
   useEffect(() => {
     console.log("Switched opened_corpus", opened_corpus);
@@ -2267,26 +2208,11 @@ export const Corpuses = () => {
     content = <></>;
   }
 
-  // After corpus_items derived
   /* ------------------------------------------------------------------ */
-  /* URL → open corpus                                                  */
-  useEffect(() => {
-    if (!routeCorpusId) return;
-    if (opened_corpus && opened_corpus.id === routeCorpusId) return;
-
-    // attempt to find in already fetched list
-    const match = corpus_items.find((c) => c.id === routeCorpusId);
-    if (match) {
-      openedCorpus(match);
-    } else {
-      // not in current page; best effort: trigger refetch with search param to include id? skip for now
-      // could call refetchCorpuses but we already fetch all pages lazily; leave.
-    }
-  }, [routeCorpusId, opened_corpus, corpus_items]);
-
-  /* ------------------------------------------------------------------ */
-  /* Navigation is now handled by route components (CorpusLandingRoute)  */
-  /* This prevents redirect loops                                        */
+  /* Entity resolution is now handled by CentralRouteManager            */
+  /* - /corpuses route → shows list (no entity)                         */
+  /* - /c/:user/:corpus route → CentralRouteManager sets openedCorpus   */
+  /* This component just reads openedCorpus and renders appropriately   */
   /* ------------------------------------------------------------------ */
 
   return (
@@ -2438,8 +2364,7 @@ export const Corpuses = () => {
             <MobileNavGroup>
               <MobileNavButton
                 onClick={() => {
-                  openedCorpus(null);
-                  navigate("/corpuses");
+                  navigate("/corpuses"); // CentralRouteManager will clear openedCorpus
                 }}
                 title="Back to Corpuses"
                 icon
@@ -2512,8 +2437,7 @@ export const Corpuses = () => {
             <MobileNavGroup>
               <MobileNavButton
                 onClick={() => {
-                  openedCorpus(null);
-                  navigate("/corpuses");
+                  navigate("/corpuses"); // CentralRouteManager will clear openedCorpus
                 }}
                 title="Back to Corpuses"
                 icon

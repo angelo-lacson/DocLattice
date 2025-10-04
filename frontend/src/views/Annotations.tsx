@@ -50,6 +50,8 @@ export const Annotations = () => {
 
   const location = useLocation();
 
+  // URL query parameters (?ann=123) are now synced by CentralRouteManager
+
   const [searchCache, setSearchCache] = useState<string>("");
 
   let annotation_variables: LooseObject = {

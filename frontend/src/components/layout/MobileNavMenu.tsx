@@ -66,10 +66,8 @@ export const MobileNavMenu = () => {
     return pathname === route || pathname.startsWith(`${route}/`);
   };
 
-  const clearSelections = () => {
-    openedCorpus(null);
-    openedDocument(null);
-  };
+  // Note: CentralRouteManager automatically clears openedCorpus/openedDocument when navigating
+  // No need to manually clear on menu clicks
 
   const items = public_header_items.map((item) => (
     <Dropdown.Item
@@ -78,7 +76,6 @@ export const MobileNavMenu = () => {
       name={item.title}
       active={isActive(item.route)}
       key={`${item.title}`}
-      onClick={clearSelections}
     >
       <Link to={item.route}>{item.title}</Link>
     </Dropdown.Item>
@@ -91,7 +88,6 @@ export const MobileNavMenu = () => {
       name={item.title}
       active={isActive(item.route)}
       key={`${item.title}`}
-      onClick={clearSelections}
     >
       <Link to={item.route}>{item.title}</Link>
     </Dropdown.Item>

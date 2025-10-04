@@ -62,9 +62,9 @@ import { SelectAnalyzerOrFieldsetModal } from "./components/widgets/modals/Selec
 import { DocumentUploadModal } from "./components/widgets/modals/DocumentUploadModal";
 import { FileUploadPackageProps } from "./components/widgets/modals/DocumentUploadModal";
 import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
-import { useRouteStateSync } from "./hooks/RouteStateSync";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
+import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
 import {
   editDocForm_Schema,
@@ -151,9 +151,6 @@ export const App = () => {
     showUploadNewDocumentsModal(true);
     uploadModalPreloadedFiles(filePackages);
   }, []);
-
-  // Central bidirectional sync between Router <-> reactive vars
-  useRouteStateSync();
 
   /* ---------------------------------------------------------------------- */
   /* Cookie consent initialization                                          */
@@ -294,6 +291,9 @@ export const App = () => {
                 fileLabel="PDF File"
                 fileIsImage={false}
               />
+              {/* Central routing state manager - handles ALL URL ↔ State sync */}
+              <CentralRouteManager />
+
               <AuthGate
                 useAuth0={REACT_APP_USE_AUTH0}
                 audience={REACT_APP_AUDIENCE}

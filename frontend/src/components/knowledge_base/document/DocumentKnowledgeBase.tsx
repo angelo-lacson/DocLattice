@@ -654,12 +654,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         console.log("[processAnnotationsData] setCorpus called.");
       }
 
-      // Keep global navigation vars in sync so router & other components know
-      openedDocument(data.document as any);
-      if (data.corpus) {
-        // Don't transform permissions - openedCorpus expects raw string[] permissions
-        openedCorpus(data.corpus as CorpusType);
-      }
+      // Note: openedDocument and openedCorpus are managed by CentralRouteManager
+      // Components should only READ these reactive vars, not SET them
       setPermissions(getPermissions(data.document.myPermissions));
     }
   };
@@ -1361,8 +1357,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           setViewState(ViewState.ERROR);
         }
 
-        // Keep global navigation vars in sync
-        openedDocument(data.document as any);
+        // Note: openedDocument is managed by CentralRouteManager, not set here
 
         // Process structural annotations even without corpus
         if (data.document.allStructuralAnnotations) {
@@ -1892,11 +1887,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   useUrlAnnotationSync();
 
   /* ------------------------------------------------------ */
-  /*  Cleanup on unmount – clear document + annotation sel  */
+  /*  Cleanup on unmount – clear annotation selections      */
   /* ------------------------------------------------------ */
+  // Note: openedDocument is managed by CentralRouteManager and cleared when route changes
   useEffect(() => {
     return () => {
-      openedDocument(null); // leave corpus intact
       setSelectedAnnotations([]);
       setSelectedRelations([]); // Clear selected relationships
       selectedAnnotationIds([]);

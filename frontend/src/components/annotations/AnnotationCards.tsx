@@ -18,6 +18,7 @@ import {
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import {
   selectedAnnotation,
+  selectedAnnotationIds,
   selectedAnalysesIds,
   displayAnnotationOnAnnotatorLoad,
 } from "../../graphql/cache";
@@ -167,13 +168,14 @@ export const AnnotationCards: React.FC<AnnotationCardProps> = ({
   const card_cols = determineCardColCount(width);
 
   const selected_annotation = useReactiveVar(selectedAnnotation);
+  const selected_annotation_ids = useReactiveVar(selectedAnnotationIds); // URL-driven highlighting
   const [targetAnnotation, setTargetAnnotation] =
     useState<AnnotationToNavigateTo>();
   const navigate = useNavigate();
 
   const handleUpdate = () => {
     if (!loading && pageInfo?.hasNextPage) {
-      console.log("Fetching more annotation cards...");
+      // console.log("Fetching more annotation cards...");
       fetchMore({
         variables: {
           limit: 20,
@@ -253,8 +255,9 @@ export const AnnotationCards: React.FC<AnnotationCardProps> = ({
         <StyledCard
           key={item.id}
           style={{
-            backgroundColor:
-              item.id === selected_annotation?.id ? "#e2ffdb" : "",
+            backgroundColor: selected_annotation_ids.includes(item.id)
+              ? "#e2ffdb"
+              : "",
           }}
           onClick={() => {
             if (item && item.document && item.corpus) {
