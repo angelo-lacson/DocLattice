@@ -16,9 +16,8 @@ export const CorpusBreadcrumbs = () => {
 
   const navigate = useNavigate();
 
+  // Note: CentralRouteManager automatically clears openedCorpus/openedDocument when navigating
   const gotoHome = () => {
-    openedCorpus(null);
-    openedDocument(null);
     navigate("/corpuses");
   };
   const gotoCorpus = () => {

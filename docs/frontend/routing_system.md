@@ -5,343 +5,310 @@
 1. [Overview](#overview)
 2. [Architecture](#architecture)
 3. [Route Patterns](#route-patterns)
-4. [Core Components](#core-components)
-5. [Data Hydration](#data-hydration)
-6. [Navigation Utilities](#navigation-utilities)
-7. [GraphQL Integration](#graphql-integration)
-8. [Annotation Handling](#annotation-handling)
-9. [ID-Based Navigation & Redirection](#id-based-navigation-redirection)
-10. [Performance & Caching](#performance-caching)
-11. [Error Handling](#error-handling)
-12. [Testing Guide](#testing-guide)
-13. [Migration Guide](#migration-guide)
-14. [Best Practices](#best-practices)
+4. [CentralRouteManager](#centralroutemanager)
+5. [Route Components](#route-components)
+6. [State Management](#state-management)
+7. [Navigation Utilities](#navigation-utilities)
+8. [Testing](#testing)
+9. [Best Practices](#best-practices)
 
 ## Overview
 
-The OpenContracts routing system uses explicit, deterministic slug-based routing with clear URL prefixes to eliminate ambiguity. Every route clearly indicates its content type through `/c/` (corpus) and `/d/` (document) prefixes. The system supports both slug-based and ID-based navigation, with IDs automatically redirecting to canonical slug URLs.
+The OpenContracts routing system follows a **centralized architecture** where **one component rules them all**: `CentralRouteManager`. This component handles ALL URL ↔ State synchronization, entity fetching, and canonical redirects, while route components are simple consumers of global state.
 
 ### Key Principles
 
+- **One Place to Rule Them All**: `CentralRouteManager` is the single source of truth for routing
+- **Four-Phase Architecture**: Clean separation of URL parsing, query params, redirects, and sync
 - **Explicit Routes**: Clear patterns with `/c/` and `/d/` prefixes eliminate ambiguity
-- **Slug-First**: Slugs are preferred for SEO and readability, IDs redirect to slug URLs
-- **Deterministic**: Each URL pattern maps to exactly one route handler
-- **Graceful Fallback**: ID-based URLs automatically resolve and redirect to canonical URLs
-- **No Page Reloads**: Navigation uses React Router for smooth SPA transitions
-- **Performant**: Single GraphQL query per route with efficient caching strategies
+- **Slug-First**: SEO-friendly URLs with automatic ID → slug redirection
+- **Dumb Consumers**: Route components just read reactive vars and render
+- **URL as Source of Truth**: No persistent state, URL drives everything
+- **Centralized Query Params**: All `?ann=`, `?analysis=`, `?extract=` handled in one place
+
+### The Critical Convention
+
+**ONLY `CentralRouteManager` is allowed to SET the following reactive variables:**
+- `openedCorpus()`
+- `openedDocument()`
+
+**ALL other components must ONLY READ these reactive variables using `useReactiveVar()`.**
+
+This is non-negotiable. Violations cause infinite loops, route jittering, competing state updates, and unpredictable behavior. During development, we systematically removed all violations from:
+- `CorpusDocumentCards.tsx` (caused infinite loop bug)
+- `DocumentKnowledgeBase.tsx` (4 violations)
+- `FloatingDocumentControls.tsx` (1 violation)
+- `NavMenu.tsx` / `MobileNavMenu.tsx` (clearing on menu clicks)
+- `CorpusBreadcrumbs.tsx` (manual clearing)
+- `Corpuses.tsx` (3 violations)
+- Deleted obsolete `RouteStateSync.ts` hook (14 violations)
+
+**If you find yourself writing `openedCorpus(someValue)` or `openedDocument(someValue)` anywhere except `CentralRouteManager.tsx`, STOP. You are introducing a bug.**
 
 ### Design Decisions
 
-- **Hybrid Support**: Both slug and ID-based navigation work seamlessly
-- **Canonical URLs**: IDs always redirect to slug-based canonical URLs for SEO
-- **No Ambiguity**: Routes use explicit prefixes to avoid pattern conflicts
-- **Smart Resolution**: Automatically detects IDs vs slugs and handles appropriately
-- **Clear Intent**: URLs clearly communicate content type to users and crawlers
+**Why Centralized?**
+- Previous scattered approach had URL parsing in 6+ locations
+- Circular dependencies between components
+- Duplicate entity fetching
+- Difficult to maintain and test
+
+**The Solution:**
+- `CentralRouteManager` owns all routing logic (`src/routing/CentralRouteManager.tsx`)
+- Route components are ~40 lines (was ~180 lines)
+- Single GraphQL query per route
+- Predictable state flow: URL → Manager → Reactive Vars → Components
 
 ## Architecture
 
 ```mermaid
 graph TB
-    subgraph "Route Components"
-        A[App.tsx Routes] --> B[CorpusLandingRoute]
-        A --> C[DocumentLandingRoute]
+    subgraph "User Action"
+        A[Browser URL Change]
+        B[User Clicks Link/Button]
     end
 
-    subgraph "Resolution Layer"
-        B --> D[useSlugResolver Hook]
-        C --> D
-        D --> E[Request Tracker]
-        D --> F[Slug Cache]
-        D --> G[Route Cache]
+    subgraph "CentralRouteManager (One Place)"
+        C[Phase 1: URL Path → Entity Resolution]
+        D[Phase 2: Query Params → Reactive Vars]
+        E[Phase 3: Entity Data → Canonical Redirect]
+        F[Phase 4: Reactive Vars → URL Sync]
     end
 
-    subgraph "GraphQL Queries"
-        D --> H[RESOLVE_CORPUS_BY_SLUGS_FULL]
-        D --> I[RESOLVE_DOCUMENT_BY_SLUGS_FULL]
-        D --> J[RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL]
+    subgraph "Global State"
+        G[openedCorpus]
+        H[openedDocument]
+        I[selectedAnnotationIds]
+        J[selectedAnalysesIds]
+        K[selectedExtractIds]
+        L[routeLoading]
+        M[routeError]
     end
 
-    subgraph "State Management"
-        D --> K[openedCorpus Reactive Var]
-        D --> L[openedDocument Reactive Var]
-        D --> M[selectedAnnotationIds Reactive Var]
+    subgraph "Route Components (Dumb Consumers)"
+        N[CorpusLandingRoute]
+        O[DocumentLandingRoute]
+        P[Corpuses/Documents/etc]
     end
 
-    subgraph "Navigation Utilities"
-        N[navigateToCorpus]
-        O[navigateToDocument]
-        P[getCorpusUrl]
-        Q[getDocumentUrl]
-    end
+    A --> C
+    B --> F
+    C --> G
+    C --> H
+    D --> I
+    D --> J
+    D --> K
+    E --> A
+    F --> A
+    G --> N
+    H --> O
+    I --> N
+    I --> O
+    J --> N
+    J --> O
+    K --> N
+    K --> O
+    L --> N
+    L --> O
 ```
+
+### Four-Phase Flow
+
+**Phase 1: URL Path → Entity Resolution** (`CentralRouteManager.tsx:116-330`)
+- Parse pathname: `/c/john/corpus` → `{ type: "corpus", userIdent: "john", corpusIdent: "corpus" }`
+- Detect entity routes vs browse routes
+- Fetch entities via GraphQL (corpus/document)
+- Set `openedCorpus`/`openedDocument` reactive vars
+- Handle loading/error states
+
+**Phase 2: URL Query Params → Reactive Vars** (`CentralRouteManager.tsx:332-347`)
+- Extract `?ann=123,456` → `selectedAnnotationIds(["123", "456"])`
+- Extract `?analysis=789` → `selectedAnalysesIds(["789"])`
+- Extract `?extract=101` → `selectedExtractIds(["101"])`
+- Centralized for ALL routes (corpus, document, browse)
+
+**Phase 3: Entity Data → Canonical Redirects** (`CentralRouteManager.tsx:349-372`)
+- Check if URL matches canonical slug path
+- Redirect `/c/john/old-slug` → `/c/john-doe/normalized-slug`
+- Preserve query parameters during redirect
+- Ensure SEO-friendly URLs
+
+**Phase 4: Reactive Vars → URL Sync** (`CentralRouteManager.tsx:374-407`)
+- Watch reactive var changes (user selects annotation)
+- Build query string: `ann=123&analysis=456`
+- Update URL with `navigate({ search: queryString }, { replace: true })`
+- Bidirectional: URL drives state, state updates URL
 
 ## Route Patterns
 
-### Primary URL Patterns
+### Entity Routes (Full Object Fetching)
 
-| Pattern                                 | Example                       | Component            | Description                    |
-| --------------------------------------- | ----------------------------- | -------------------- | ------------------------------ |
-| **Corpus Routes**                      |                               |                      |                                |
-| `/c/:userIdent/:corpusIdent`           | `/c/john/my-corpus`           | CorpusLandingRoute | Slug-based corpus route        |
-| **Document Routes**                    |                               |                      |                                |
-| `/d/:userIdent/:docIdent`              | `/d/john/my-document`         | DocumentLandingRoute | Standalone document            |
-| `/d/:userIdent/:corpusIdent/:docIdent` | `/d/john/my-corpus/contract` | DocumentLandingRoute | Document within corpus context |
-| **List Views**                         |                               |                      |                                |
-| `/corpuses`                            | `/corpuses`                   | Corpuses             | Browse all corpuses            |
-| `/documents`                           | `/documents`                  | Documents            | Browse all documents           |
+| Pattern                                 | Example                       | Component            | CentralRouteManager Action |
+| --------------------------------------- | ----------------------------- | -------------------- | -------------------------- |
+| `/c/:userIdent/:corpusIdent`           | `/c/john/my-corpus`           | CorpusLandingRoute   | Phase 1: Fetch corpus      |
+| `/d/:userIdent/:docIdent`              | `/d/john/my-document`         | DocumentLandingRoute | Phase 1: Fetch document    |
+| `/d/:userIdent/:corpusIdent/:docIdent` | `/d/john/corpus/doc`          | DocumentLandingRoute | Phase 1: Fetch both        |
 
-### Query Parameters
+### Browse Routes (Query Params Only)
 
-| Parameter | Purpose                     | Example                        | Component Handling   |
-| --------- | --------------------------- | ------------------------------ | -------------------- |
-| `?ann=`   | Select specific annotations | `/d/john/doc?ann=123`          | DocumentLandingRoute |
-|           | Multiple annotations        | `/d/john/doc?ann=123,456,789` | Comma-separated IDs  |
+| Pattern        | Example                    | Component    | CentralRouteManager Action    |
+| -------------- | -------------------------- | ------------ | ----------------------------- |
+| `/corpuses`    | `/corpuses?analysis=123`   | Corpuses     | Phase 2: Parse query params   |
+| `/documents`   | `/documents`               | Documents    | Phase 2: Parse query params   |
+| `/annotations` | `/annotations?ann=123,456` | Annotations  | Phase 2: Parse query params   |
+| `/extracts`    | `/extracts?extract=789`    | Extracts     | Phase 2: Parse query params   |
+| `/label_sets`  | `/label_sets`              | Labelsets    | No action (simple list view)  |
 
-### Route Configuration (App.tsx)
+### Query Parameters (All Routes)
 
+| Parameter    | Purpose                     | Example                           | Set By         |
+| ------------ | --------------------------- | --------------------------------- | -------------- |
+| `?ann=`      | Select annotations          | `?ann=123,456,789`                | Phase 2 or 4   |
+| `?analysis=` | Select analyses             | `?analysis=123,456`               | Phase 2 or 4   |
+| `?extract=`  | Select extracts             | `?extract=456,789`                | Phase 2 or 4   |
+
+**Examples:**
+```bash
+# Corpus with selections
+/c/john/legal-corpus?analysis=5678&extract=9012
+
+# Document with annotation
+/d/jane/contract?ann=1234
+
+# Document in corpus with all params
+/d/john/corpus/doc?ann=1,2&analysis=3&extract=4
+
+# Browse with highlighting
+/annotations?ann=123,456
+```
+
+### Route Configuration
+
+**App.tsx** (lines 301-343):
 ```typescript
-// Document routes - explicit /d/ prefix
-<Route path="/d/:userIdent/:corpusIdent/:docIdent" element={<DocumentLandingRoute />} />
-<Route path="/d/:userIdent/:docIdent" element={<DocumentLandingRoute />} />
+{/* CentralRouteManager handles ALL URL ↔ State sync */}
+<CentralRouteManager />
 
-// Corpus routes - explicit /c/ prefix
-<Route path="/c/:userIdent/:corpusIdent" element={<CorpusLandingRoute />} />
+<Routes>
+  {/* Entity routes */}
+  <Route path="/d/:userIdent/:corpusIdent/:docIdent" element={<DocumentLandingRoute />} />
+  <Route path="/d/:userIdent/:docIdent" element={<DocumentLandingRoute />} />
+  <Route path="/c/:userIdent/:corpusIdent" element={<CorpusLandingRoute />} />
 
-// List views
-<Route path="/corpuses" element={<Corpuses />} />
-<Route path="/documents" element={<Documents />} />
+  {/* Browse routes */}
+  <Route path="/corpuses" element={<Corpuses />} />
+  <Route path="/documents" element={<Documents />} />
+  <Route path="/annotations" element={<Annotations />} />
+  <Route path="/extracts" element={<Extracts />} />
+  <Route path="/label_sets" element={<Labelsets />} />
+
+  {/* 404 */}
+  <Route path="/404" element={<NotFound />} />
+  <Route path="*" element={<NotFound />} />
+</Routes>
 ```
 
 ### ID-Based Navigation (Auto-Redirect)
 
-These patterns automatically redirect to canonical slug URLs:
+CentralRouteManager automatically detects IDs and redirects to canonical slug URLs:
 
-- ✅ `/c/john/123` → `/c/john/my-corpus` (corpus ID redirects to slug)
-- ✅ `/d/john/456` → `/d/john/my-document` (document ID redirects to slug)
-- ✅ `/d/john/corpus/789` → `/d/john/corpus/doc` (mixed ID/slug supported)
-- ✅ `/d/456` → `/d/john/my-document` (single ID redirects with user context)
+✅ `/c/john/Q29ycHVzOjEyMw==` → `/c/john-doe/my-corpus`
+✅ `/d/jane/4567` → `/d/jane/my-document`
+✅ `/d/john/corpus/7890` → `/d/john/corpus/doc-slug`
 
-### Deprecated Patterns
+**Detection Logic** (`utils/navigationUtils.ts:getIdentifierType()`):
+- Base64 strings (e.g., `Q29ycHVzOjEyMw==`)
+- Numeric IDs ≥4 digits (e.g., `1234`, `456789`)
+- GID format (e.g., `gid://app/Corpus/123`)
 
-These patterns are NO LONGER SUPPORTED:
+## CentralRouteManager
 
-- ❌ `/corpuses/:corpusId` (use `/c/user/corpus`)
-- ❌ `/documents/:documentId` (use `/d/user/document`)
-- ❌ `/corpus/:corpusId/document/:documentId` (use new patterns)
-- ❌ `/:userIdent/:secondIdent` (ambiguous - use explicit prefixes)
+**Location:** `src/routing/CentralRouteManager.tsx`
 
-## Core Components
+### Core Responsibilities
 
-### DocumentLandingRoute
+1. **Parse URLs** → Determine route type (corpus/document/browse)
+2. **Fetch Entities** → GraphQL queries for corpus/document
+3. **Extract Query Params** → Parse `?ann=`, `?analysis=`, `?extract=`
+4. **Set Global State** → Update reactive vars
+5. **Canonical Redirects** → Ensure SEO-friendly URLs
+6. **Bidirectional Sync** → Watch state changes, update URL
 
-Handles all document routes with explicit `/d/` prefix.
+### Implementation Details
 
-**Route patterns:**
-- `/d/:userIdent/:corpusIdent/:docIdent` - Document within a corpus
-- `/d/:userIdent/:docIdent` - Standalone document
-
-**Key Features:**
-- Simple parameter extraction from route
-- Uses `useSlugResolver` for data fetching
-- Handles both standalone and corpus-context documents
-- Clean error handling and loading states
-- Automatic annotation selection from query params
-
-### CorpusLandingRoute
-
-Handles corpus routes with explicit `/c/` prefix.
-
-**Route pattern:**
-- `/c/:userIdent/:corpusIdent`
-
-**Key Features:**
-- Single route pattern to handle
-- Uses `useSlugResolver` for data fetching
-- Clean, minimal implementation
-- Proper meta tags for SEO
-- Automatic stats loading
-
-### useSlugResolver Hook
-
-Central hub for all slug resolution logic, handling both slug and ID-based navigation.
-
-```typescript
-interface SlugResolverOptions {
-  userIdent?: string;
-  corpusIdent?: string;
-  documentIdent?: string;
-  annotationIds?: string[];
-  onResolved?: (result: SlugResolverResult) => void;
-}
-
-interface SlugResolverResult {
-  loading: boolean;
-  error: Error | undefined;
-  corpus: CorpusType | null;
-  document: DocumentType | null;
-}
-```
-
-**Resolution Strategy:**
-
-1. **Document in Corpus (3 identifiers)**
-   - Pattern: `userIdent + corpusIdent + documentIdent`
-   - Query: `RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL`
-   - Returns both corpus and document
-
-2. **Standalone Document (2 identifiers)**
-   - Pattern: `userIdent + documentIdent`
-   - Query: `RESOLVE_DOCUMENT_BY_SLUGS_FULL`
-   - Returns document only
-
-3. **Corpus (2 identifiers)**
-   - Pattern: `userIdent + corpusIdent`
-   - Query: `RESOLVE_CORPUS_BY_SLUGS_FULL`
-   - Returns corpus only
-
-## Data Hydration
-
-### State Management
-
-The routing system manages global state through Apollo reactive variables:
-
-```typescript
-// Reactive variables for global state
-export const openedCorpus = makeVar<CorpusType | null>(null);
-export const openedDocument = makeVar<DocumentType | null>(null);
-export const selectedAnnotationIds = makeVar<string[]>([]);
-```
-
-### Hydration Flow
-
-```mermaid
-sequenceDiagram
-    participant Route
-    participant Resolver
-    participant GraphQL
-    participant ReactiveVars
-    participant Component
-
-    Route->>Resolver: Extract params
-    Resolver->>GraphQL: Query by slugs/IDs
-    GraphQL-->>Resolver: Return data
-    Resolver->>ReactiveVars: Update openedCorpus/Document
-    ReactiveVars->>Component: Trigger re-render
-    Component->>Component: Display hydrated data
-```
-
-### Hydration Guards
-
-The system includes guards to prevent incomplete data from being set:
-
-```typescript
-// Never set incomplete corpus objects
-if (corpus && corpus.id && corpus.slug && corpus.title) {
-  openedCorpus(corpus);
-}
-
-// Never set incomplete document objects
-if (document && document.id && document.slug && document.title) {
-  openedDocument(document);
-}
-```
-
-### Component Unmount Cleanup
-
-Components clean up global state on unmount:
-
+**Phase 1: Entity Resolution** (lines 116-330)
 ```typescript
 useEffect(() => {
-  return () => {
-    // Clear reactive vars on unmount
+  const route = parseRoute(location.pathname);
+
+  // Browse routes - clear entities
+  if (route.type === "browse" || route.type === "unknown") {
+    openedCorpus(null);
     openedDocument(null);
-    selectedAnnotationIds([]);
-  };
-}, []);
-```
-
-## Navigation Utilities
-
-### URL Generation
-
-```typescript
-// Builds corpus URL - always with /c/ prefix
-getCorpusUrl(corpus); // Returns: /c/john/my-corpus
-
-// Builds document URL - always with /d/ prefix
-getDocumentUrl(document, corpus); // Returns: /d/john/my-corpus/doc
-getDocumentUrl(document); // Returns: /d/john/doc
-```
-
-**Important**: These functions return `"#"` if slugs are missing, preventing navigation to invalid routes.
-
-### Smart Navigation
-
-```typescript
-// Navigate to corpus (won't navigate if already there)
-navigateToCorpus(corpus, navigate, currentPath);
-
-// Navigate to document (won't navigate if already there)
-navigateToDocument(document, corpus, navigate, currentPath);
-```
-
-These functions:
-- Check if already at destination
-- Prevent navigation without slugs
-- Use replace navigation for cleaner history
-- Use React Router's `navigate()` to avoid full page reloads
-
-### Document Closing Behavior
-
-When closing a document:
-
-```typescript
-const handleClose = () => {
-  // Uses React Router navigation (no page reload)
-  if (corpus) {
-    navigate(`/c/${corpus.creator.slug}/${corpus.slug}`);
-  } else {
-    navigate("/documents");
+    routeLoading(false);
+    return;
   }
-};
+
+  // Entity routes - fetch from GraphQL
+  if (route.type === "corpus") {
+    // RESOLVE_CORPUS_BY_SLUGS_FULL
+    const { data } = await resolveCorpus({
+      variables: { userSlug, corpusSlug }
+    });
+    openedCorpus(data.corpusBySlugs);
+  }
+
+  if (route.type === "document") {
+    // RESOLVE_DOCUMENT_BY_SLUGS_FULL or
+    // RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL
+    const { data } = await resolveDocument(...);
+    openedDocument(data.documentBySlugs);
+    openedCorpus(data.corpusBySlugs || null);
+  }
+}, [location.pathname]);
 ```
 
-Benefits:
-- **No Page Reload**: Smooth SPA transition
-- **State Preservation**: App state remains intact
-- **Fast Navigation**: Instant UI updates
-- **Proper Cleanup**: Reactive vars cleared on unmount
-
-## GraphQL Integration
-
-### Query Strategy
-
-The resolver selects queries based on available parameters:
-
+**Phase 2: Query Params** (lines 332-347)
 ```typescript
-// Document in corpus - full context
-if (userIdent && corpusIdent && documentIdent) {
-  // Uses RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL
-  // Returns both corpus and document
-}
+useEffect(() => {
+  const annIds = parseQueryParam(searchParams.get("ann"));
+  const analysisIds = parseQueryParam(searchParams.get("analysis"));
+  const extractIds = parseQueryParam(searchParams.get("extract"));
 
-// Standalone document
-else if (userIdent && documentIdent && !corpusIdent) {
-  // Uses RESOLVE_DOCUMENT_BY_SLUGS_FULL
-  // Returns document only
-}
+  selectedAnnotationIds(annIds);
+  selectedAnalysesIds(analysisIds);
+  selectedExtractIds(extractIds);
+}, [searchParams]);
+```
 
-// Corpus only
-else if (userIdent && corpusIdent && !documentIdent) {
-  // Uses RESOLVE_CORPUS_BY_SLUGS_FULL
-  // Returns corpus only
-}
+**Phase 3: Canonical Redirects** (lines 349-372)
+```typescript
+useEffect(() => {
+  const canonicalPath = buildCanonicalPath(document, corpus);
+  if (canonicalPath && currentPath !== canonicalPath) {
+    navigate(canonicalPath + location.search, { replace: true });
+  }
+}, [corpus, document, location.pathname]);
+```
+
+**Phase 4: URL Sync** (lines 374-407)
+```typescript
+useEffect(() => {
+  const queryString = buildQueryParams({
+    annotationIds: annIds,
+    analysisIds,
+    extractIds,
+  });
+
+  if (currentSearch !== queryString) {
+    navigate({ search: queryString }, { replace: true });
+  }
+}, [annIds, analysisIds, extractIds]);
 ```
 
 ### GraphQL Queries
 
-#### Corpus Resolution
-
+**Corpus Resolution** (`src/graphql/queries.ts:RESOLVE_CORPUS_BY_SLUGS_FULL`):
 ```graphql
 query ResolveCorpusBySlugsFull($userSlug: String!, $corpusSlug: String!) {
   corpusBySlugs(userSlug: $userSlug, corpusSlug: $corpusSlug) {
@@ -349,36 +316,15 @@ query ResolveCorpusBySlugsFull($userSlug: String!, $corpusSlug: String!) {
     slug
     title
     description
-    mdDescription
-    created
-    modified
-    isPublic
+    creator { id username slug }
+    labelSet { id title }
     myPermissions
-    creator {
-      id
-      username
-      slug
-    }
-    labelSet {
-      id
-      title
-      description
-    }
-    descriptionRevisions(first: 5) {
-      edges {
-        node {
-          id
-          description
-          created
-        }
-      }
-    }
+    isPublic
   }
 }
 ```
 
-#### Document Resolution
-
+**Document Resolution** (`src/graphql/queries.ts:RESOLVE_DOCUMENT_BY_SLUGS_FULL`):
 ```graphql
 query ResolveDocumentBySlugsFull($userSlug: String!, $documentSlug: String!) {
   documentBySlugs(userSlug: $userSlug, documentSlug: $documentSlug) {
@@ -386,331 +332,452 @@ query ResolveDocumentBySlugsFull($userSlug: String!, $documentSlug: String!) {
     slug
     title
     description
-    pdfFile {
-      id
-      url
-      name
-      size
-    }
-    creator {
-      id
-      username
-      slug
-    }
-    corpus {
-      id
-      slug
-      title
-      creator {
-        id
-        username
-        slug
-      }
-    }
-    # ... other fields
+    creator { id username slug }
+    corpus { id slug title creator { id slug } }
+    pdfFile { id url }
   }
 }
 ```
 
-### Fetch Policies
+**Document in Corpus** (`src/graphql/queries.ts:RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL`):
+```graphql
+query ResolveDocumentInCorpusBySlugsFull(
+  $userSlug: String!
+  $corpusSlug: String!
+  $documentSlug: String!
+) {
+  corpusBySlugs(userSlug: $userSlug, corpusSlug: $corpusSlug) { ... }
+  documentInCorpusBySlugs(
+    userSlug: $userSlug
+    corpusSlug: $corpusSlug
+    documentSlug: $documentSlug
+  ) { ... }
+}
+```
 
+### Performance Optimizations
+
+**Request Deduplication** (`utils/performanceMonitoring.ts:RequestTracker`):
+```typescript
+// Prevents duplicate simultaneous requests
+if (requestTracker.isPending(requestKey)) {
+  return; // Skip duplicate request
+}
+
+await requestTracker.trackRequest(requestKey, async () => {
+  // Perform GraphQL query
+});
+```
+
+**Route Processing Guard** (line 120-123):
+```typescript
+// Skip if we've already processed this exact path
+if (lastProcessedPath.current === currentPath) {
+  return;
+}
+lastProcessedPath.current = currentPath;
+```
+
+**Apollo Cache**:
 ```typescript
 fetchPolicy: "cache-first"
 nextFetchPolicy: "cache-and-network"
 ```
 
-- Initial load uses cache if available
-- Subsequent loads check network for updates
-- Provides fast initial render with fresh data updates
+## Route Components
 
-## Annotation Handling
+Route components are now **dumb consumers** that read reactive vars and render UI.
 
-### Overview
+### DocumentLandingRoute
 
-The navigation system supports deep linking to specific annotations within documents through query parameters.
-
-### URL Format
-
-```
-/d/john/my-document?ann=annotation-id
-/d/john/my-corpus/doc?ann=id1,id2,id3
-```
-
-### Parameter Processing
+**Location:** `src/components/routes/DocumentLandingRoute.tsx` (48 lines, was 180)
 
 ```typescript
-// Extract annotation IDs from URL
-const [searchParams] = useSearchParams();
-const annParam = searchParams.get("ann");
-const annotationIds = annParam ? annParam.split(",").filter(Boolean) : [];
+export const DocumentLandingRoute: React.FC = () => {
+  const navigate = useNavigate();
 
-// Set global state
-if (annotationIds.length > 0) {
-  selectedAnnotationIds(annotationIds);
-}
-```
+  // Just read state from reactive vars (set by CentralRouteManager)
+  const document = useReactiveVar(openedDocument);
+  const corpus = useReactiveVar(openedCorpus);
+  const loading = useReactiveVar(routeLoading);
+  const error = useReactiveVar(routeError);
 
-### Navigation with Annotations
+  // Loading/error states
+  if (loading) return <ModernLoadingDisplay type="document" />;
+  if (error || !document) return <ModernErrorDisplay error={error} />;
 
-```typescript
-// Navigate to annotation
-const url = getDocumentUrl(document, corpus);
-navigate(`${url}?ann=${annotation.id}`);
-
-// Navigate to multiple annotations
-const annotationIds = [id1, id2, id3].join(",");
-navigate(`${url}?ann=${annotationIds}`);
-```
-
-### Components That Navigate with Annotations
-
-- **QueryResultsViewer**: Navigate to annotation from query results
-- **AnnotationCards**: Navigate to selected annotation
-- **ExtractCellFormatter**: Navigate to source annotations
-- **DataCell**: Navigate to extract source annotations
-
-## ID-Based Navigation & Redirection
-
-### Overview
-
-The system supports GraphQL ID-based navigation with automatic redirection to canonical slug URLs, ensuring backward compatibility while maintaining SEO-friendly URLs.
-
-### ID Detection
-
-The system automatically detects GraphQL IDs:
-
-- Numeric IDs (e.g., `123`, `456789`)
-- Base64 encoded IDs (e.g., `Q29ycHVzOjEyMw==`)
-- GID prefixed IDs (e.g., `gid://app/Corpus/123`)
-
-### Resolution Process
-
-```typescript
-// When an ID is detected in the URL
-if (isValidGraphQLId(identifier)) {
-  // 1. Query for entity by ID
-  const entity = await resolveEntityById(identifier);
-  
-  // 2. Extract slug information
-  const slugUrl = buildCanonicalUrl(entity);
-  
-  // 3. Redirect to slug URL (preserving query params)
-  navigate(slugUrl, { replace: true });
-}
-```
-
-### Supported ID Patterns
-
-| Pattern     | Example              | Resolution             | Final URL                    |
-| ----------- | -------------------- | ---------------------- | ---------------------------- |
-| Corpus ID   | `/c/john/123`        | Queries corpus by ID   | `/c/john-doe/my-corpus`      |
-| Document ID | `/d/john/456`        | Queries document by ID | `/d/john-doe/my-document`    |
-| Mixed       | `/d/john/corpus/789` | Queries document by ID | `/d/john/corpus/my-document` |
-| Single ID   | `/d/789`             | Queries document by ID | `/d/john-doe/my-document`    |
-
-### ID Resolution Queries
-
-```graphql
-# Corpus ID resolution
-query GetCorpusByIdForRedirect($id: ID!) {
-  corpus(id: $id) {
-    id
-    slug
-    title
-    creator {
-      id
-      slug
-      username
+  // Close handler
+  const handleClose = () => {
+    if (corpus) {
+      navigate(`/c/${corpus.creator.slug}/${corpus.slug}`);
+    } else {
+      navigate("/documents");
     }
-  }
-}
+  };
 
-# Document ID resolution
-query GetDocumentByIdForRedirect($id: String!) {
-  document(id: $id) {
-    id
-    slug
-    title
-    creator {
-      id
-      slug
-      username
-    }
-    corpus {
-      id
-      slug
-      title
-      creator {
-        id
-        slug
-        username
-      }
-    }
-  }
-}
+  // Just render with hydrated data
+  return (
+    <ErrorBoundary>
+      <MetaTags title={document.title} type="document" />
+      <DocumentKnowledgeBase
+        documentId={document.id}
+        corpusId={corpus?.id}
+        onClose={handleClose}
+      />
+    </ErrorBoundary>
+  );
+};
 ```
 
-## Performance & Caching
+**Key Points:**
+- No `useParams()` → CentralRouteManager owns URL parsing
+- No GraphQL queries → CentralRouteManager fetches entities
+- No URL sync → CentralRouteManager handles query params
+- Just reads `openedDocument`, `openedCorpus`, `routeLoading`, `routeError`
+- Pure view logic
 
-### Three-Layer Caching Strategy
+### CorpusLandingRoute
 
-1. **Route Cache** (In-Memory)
+**Location:** `src/components/routes/CorpusLandingRoute.tsx` (42 lines, was 120)
+
 ```typescript
-// Prevents re-processing of same route
-const routeCache = new Map<string, ProcessedRoute>();
+export const CorpusLandingRoute: React.FC = () => {
+  const corpus = useReactiveVar(openedCorpus);
+  const loading = useReactiveVar(routeLoading);
+  const error = useReactiveVar(routeError);
+
+  if (loading) return <ModernLoadingDisplay type="corpus" />;
+  if (error || !corpus) return <ModernErrorDisplay error={error} />;
+
+  return (
+    <ErrorBoundary>
+      <MetaTags title={corpus.title} type="corpus" />
+      <Corpuses />
+    </ErrorBoundary>
+  );
+};
 ```
 
-2. **Slug Cache** (In-Memory)
+### Browse Views (Corpuses, Documents, Annotations, Extracts)
+
+**Example:** `src/views/Annotations.tsx`
+
 ```typescript
-// Caches slug resolutions
-const slugCache = new Map<string, { corpus?: string; document?: string }>();
+export const Annotations = () => {
+  // URL query parameters already set by CentralRouteManager
+  const annotation_ids = useReactiveVar(selectedAnnotationIds);
+  const analysis_ids = useReactiveVar(selectedAnalysesIds);
+
+  // Just consume the state and render
+  return <AnnotationCards />;
+};
 ```
 
-3. **Apollo Cache** (GraphQL)
-- Normalized cache for GraphQL responses
-- Shared across all components
-- Automatic cache updates on mutations
+**What They DON'T Do:**
+- ❌ No `useParams()` extraction
+- ❌ No entity fetching by route
+- ❌ No URL query param parsing
+- ❌ No canonical redirects
 
-### Request Deduplication
+**What They DO:**
+- ✅ Read reactive vars
+- ✅ Fetch lists (not entities)
+- ✅ Display UI
+- ✅ Update selections (which CentralRouteManager syncs to URL)
+
+## State Management
+
+### Global Reactive Variables
+
+**Location:** `src/graphql/cache.ts`
 
 ```typescript
-class RequestTracker {
-  private pendingRequests = new Map<string, Promise<any>>();
-  
-  // Prevents duplicate simultaneous requests
-  // Returns existing promise if request pending
-  async track(key: string, request: () => Promise<any>) {
-    if (this.pendingRequests.has(key)) {
-      return this.pendingRequests.get(key);
-    }
-    
-    const promise = request();
-    this.pendingRequests.set(key, promise);
-    
-    try {
-      const result = await promise;
-      return result;
-    } finally {
-      this.pendingRequests.delete(key);
-    }
-  }
-}
+// Entity state (set by CentralRouteManager Phase 1)
+export const openedCorpus = makeVar<CorpusType | null>(null);
+export const openedDocument = makeVar<DocumentType | null>(null);
+
+// Selection state (set by CentralRouteManager Phase 2, watched by Phase 4)
+export const selectedAnnotationIds = makeVar<string[]>([]);
+export const selectedAnalysesIds = makeVar<string[]>([]);
+export const selectedExtractIds = makeVar<string[]>([]);
+
+// Loading/error state (set by CentralRouteManager Phase 1)
+export const routeLoading = makeVar<boolean>(false);
+export const routeError = makeVar<Error | null>(null);
 ```
 
-### Performance Monitoring
+### State Flow
 
-```typescript
-performanceMonitor.startMetric("slug-resolution", {
-  userIdent,
-  corpusIdent,
-  documentIdent,
-});
-
-// ... resolution logic ...
-
-performanceMonitor.endMetric("slug-resolution", {
-  success: true,
-  cacheHit: fromCache,
-});
+```
+┌─────────────────────────────────────────────────────────────┐
+│ URL: /c/john/my-corpus?analysis=123&extract=456            │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+          ┌───────────────────────────┐
+          │   CentralRouteManager     │
+          │  (One Place to Rule All)  │
+          └───────────────────────────┘
+                    ↓           ↓
+         ┌──────────────┐  ┌──────────────────────┐
+         │ Phase 1      │  │ Phase 2              │
+         │ Parse path   │  │ Parse query params   │
+         │ Fetch corpus │  │ ?analysis=123        │
+         └──────────────┘  │ ?extract=456         │
+                ↓          └──────────────────────┘
+    ┌───────────────────┐           ↓
+    │ openedCorpus      │  ┌────────────────────────┐
+    │ = CorpusType      │  │ selectedAnalysesIds    │
+    │                   │  │ = ["123"]              │
+    │ routeLoading      │  │                        │
+    │ = false           │  │ selectedExtractIds     │
+    └───────────────────┘  │ = ["456"]              │
+                ↓          └────────────────────────┘
+        ┌─────────────────────────┐
+        │  CorpusLandingRoute     │
+        │  (Dumb Consumer)        │
+        │                         │
+        │  const corpus =         │
+        │    useReactiveVar(      │
+        │      openedCorpus       │
+        │    );                   │
+        │                         │
+        │  return <Corpuses />    │
+        └─────────────────────────┘
+                    ↓
+            ┌──────────────┐
+            │  Corpuses    │
+            │  View        │
+            │  Renders!    │
+            └──────────────┘
 ```
 
-Tracks:
-- Resolution time
-- Success/failure rates
-- Cache hit rates
-- Query performance
+### Bidirectional Sync Example
 
-## Error Handling
-
-### Error States
-
-1. **Missing Slugs**
+**User selects annotation → URL updates:**
 ```typescript
-if (!corpus.slug || !corpus.creator?.slug) {
-  console.warn("Cannot generate corpus URL without slugs");
-  return "#"; // Safe fallback
-}
+// Component updates reactive var
+selectedAnnotationIds(["123", "456"]);
+
+// CentralRouteManager Phase 4 watches reactive vars
+useEffect(() => {
+  const queryString = buildQueryParams({ annotationIds: annIds, ... });
+  navigate({ search: queryString }, { replace: true });
+}, [annIds]);
+
+// URL becomes: ?ann=123,456
 ```
 
-2. **Not Found**
+**URL changes → Component updates:**
 ```typescript
-if (!document) {
-  navigate("/404", { replace: true });
-  return;
-}
+// CentralRouteManager Phase 2 watches URL
+useEffect(() => {
+  const annIds = parseQueryParam(searchParams.get("ann"));
+  selectedAnnotationIds(annIds); // ["123", "456"]
+}, [searchParams]);
+
+// Component reads reactive var
+const annotation_ids = useReactiveVar(selectedAnnotationIds);
+// Renders with: ["123", "456"]
 ```
 
-3. **Invalid Routes**
+## Navigation Utilities
+
+**Location:** `src/utils/navigationUtils.ts`
+
+### Core Functions
+
+**parseRoute()** - Parse URL pathname
 ```typescript
-if (!userIdent) {
-  setState({
-    error: new Error("Missing required route parameters"),
-    loading: false,
+parseRoute("/c/john/my-corpus")
+// Returns: { type: "corpus", userIdent: "john", corpusIdent: "my-corpus" }
+
+parseRoute("/d/john/corpus/doc")
+// Returns: { type: "document", userIdent: "john",
+//           corpusIdent: "corpus", documentIdent: "doc" }
+
+parseRoute("/annotations")
+// Returns: { type: "browse", browsePath: "annotations" }
+```
+
+**parseQueryParam()** - Parse comma-separated IDs
+```typescript
+parseQueryParam("123,456,789")
+// Returns: ["123", "456", "789"]
+
+parseQueryParam(null)
+// Returns: []
+```
+
+**buildCanonicalPath()** - Build SEO-friendly path
+```typescript
+buildCanonicalPath(document, corpus)
+// Returns: "/d/john-doe/my-corpus/doc-slug"
+
+buildCanonicalPath(document, null)
+// Returns: "/d/jane/standalone-doc"
+
+buildCanonicalPath(null, corpus)
+// Returns: "/c/john/my-corpus"
+```
+
+**buildQueryParams()** - Build query string
+```typescript
+buildQueryParams({
+  annotationIds: ["1", "2"],
+  analysisIds: ["3"],
+  extractIds: ["4"]
+})
+// Returns: "?ann=1,2&analysis=3&extract=4"
+```
+
+### Navigation Functions
+
+**getCorpusUrl()** - Generate corpus URL
+```typescript
+getCorpusUrl(corpus)
+// Returns: "/c/john/my-corpus"
+
+getCorpusUrl(corpus, { analysisIds: ["123"] })
+// Returns: "/c/john/my-corpus?analysis=123"
+
+getCorpusUrl({ id: "1", slug: "" }) // Missing slug
+// Returns: "#" (safe fallback)
+```
+
+**getDocumentUrl()** - Generate document URL
+```typescript
+getDocumentUrl(document, corpus)
+// Returns: "/d/john/corpus/doc"
+
+getDocumentUrl(document, null)
+// Returns: "/d/jane/standalone-doc"
+
+getDocumentUrl(document, corpus, {
+  annotationIds: ["1"],
+  analysisIds: ["2"],
+  extractIds: ["3"]
+})
+// Returns: "/d/john/corpus/doc?ann=1&analysis=2&extract=3"
+```
+
+**navigateToCorpus()** - Smart corpus navigation
+```typescript
+navigateToCorpus(corpus, navigate, currentPath)
+// Only navigates if not already there
+
+navigateToCorpus(corpus, navigate, currentPath, { analysisIds: ["123"] })
+// Navigates with query params
+```
+
+**navigateToDocument()** - Smart document navigation
+```typescript
+navigateToDocument(document, corpus, navigate, currentPath)
+// Only navigates if not already there
+
+navigateToDocument(document, corpus, navigate, currentPath, {
+  annotationIds: ["456"]
+})
+// Navigates with query params
+```
+
+### Usage in Components
+
+```typescript
+// Card component
+const handleClick = () => {
+  const url = getDocumentUrl(document, corpus, {
+    annotationIds: [annotation.id]
   });
-}
+  if (url !== "#") {
+    navigate(url);
+  }
+};
+
+// Smart navigation (checks if already there)
+const handleNavigate = () => {
+  navigateToDocument(document, corpus, navigate, location.pathname, {
+    annotationIds: selectedAnnotationIds(),
+    analysisIds: selectedAnalysesIds()
+  });
+};
 ```
 
-4. **Network Errors**
-```typescript
-catch (error) {
-  console.error("Failed to resolve route:", error);
-  navigate("/404", { replace: true });
-}
-```
-
-### User Experience
-
-- Clear error messages in console
-- Graceful fallbacks to safe states
-- 404 page for not found content
-- Loading states during resolution
-- Network error handling with retries
-
-## Testing Guide
+## Testing
 
 ### Unit Tests
 
+**navigationUtils.test.ts** (74 tests):
 ```typescript
-describe("Navigation URLs", () => {
-  it("generates corpus URL with prefix", () => {
-    const corpus = {
-      id: "1",
-      slug: "my-corpus",
-      creator: { slug: "john" },
-    };
-    expect(getCorpusUrl(corpus)).toBe("/c/john/my-corpus");
+describe("parseRoute()", () => {
+  it("should parse corpus route", () => {
+    expect(parseRoute("/c/john/my-corpus")).toEqual({
+      type: "corpus",
+      userIdent: "john",
+      corpusIdent: "my-corpus"
+    });
   });
 
-  it("returns safe fallback without slugs", () => {
-    const corpus = { id: "1" };
-    expect(getCorpusUrl(corpus)).toBe("#");
+  it("should parse browse routes", () => {
+    expect(parseRoute("/annotations")).toEqual({
+      type: "browse",
+      browsePath: "annotations"
+    });
+  });
+});
+
+describe("buildQueryParams()", () => {
+  it("should build query string", () => {
+    expect(buildQueryParams({
+      annotationIds: ["1", "2"],
+      analysisIds: ["3"]
+    })).toBe("?ann=1,2&analysis=3");
   });
 });
 ```
 
 ### Integration Tests
 
+**CentralRouteManager.test.tsx** (21 tests, 500+ lines):
 ```typescript
-describe("Route Resolution", () => {
-  it("resolves corpus route", async () => {
-    render(<CorpusLandingRoute />, {
-      route: "/c/john/my-corpus",
-    });
+describe("Phase 1: URL Path → Entity Resolution", () => {
+  it("should resolve corpus from slug-based URL", async () => {
+    const mocks = [/* GraphQL mock */];
 
-    await waitFor(() => {
-      expect(screen.getByText("My Corpus")).toBeInTheDocument();
-    });
+    render(
+      <MockedProvider mocks={mocks}>
+        <MemoryRouter initialEntries={["/c/john/my-corpus"]}>
+          <CentralRouteManager />
+        </MemoryRouter>
+      </MockedProvider>
+    );
+
+    expect(routeLoading()).toBe(true);
+    await waitFor(() => expect(routeLoading()).toBe(false));
+    expect(openedCorpus()).toEqual(mockCorpus);
   });
+});
 
-  it("redirects ID to slug", async () => {
-    const { result } = renderHook(() => useSlugResolver({
-      userIdent: "john",
-      corpusIdent: "123", // ID
-    }));
+describe("Phase 2: Query Params → Reactive Vars", () => {
+  it("should parse annotation IDs from URL", () => {
+    render(
+      <MemoryRouter initialEntries={["/annotations?ann=123,456"]}>
+        <CentralRouteManager />
+      </MemoryRouter>
+    );
+
+    expect(selectedAnnotationIds()).toEqual(["123", "456"]);
+  });
+});
+
+describe("Phase 4: Reactive Vars → URL Sync", () => {
+  it("should update URL when annotation IDs change", async () => {
+    render(<CentralRouteManager />);
+
+    selectedAnnotationIds(["new-123"]);
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith(
-        "/c/john/my-corpus",
+        { search: "ann=new-123" },
         { replace: true }
       );
     });
@@ -718,170 +785,533 @@ describe("Route Resolution", () => {
 });
 ```
 
-### Component Tests (Playwright)
-
+**routing-integration.test.tsx** (7 full-flow tests):
 ```typescript
-test("navigates to document with annotation", async ({ mount, page }) => {
-  await mount(<DocumentCard document={mockDocument} />);
-  
-  await page.click('[data-testid="annotation-link"]');
-  
-  await expect(page).toHaveURL(/\/d\/.*\?ann=\d+/);
+it("should flow from URL → Manager → Reactive Vars → Component", async () => {
+  const mocks = [/* corpus mock */];
+
+  render(
+    <MockedProvider mocks={mocks}>
+      <MemoryRouter initialEntries={["/c/john/my-corpus?analysis=123"]}>
+        <CentralRouteManager />
+        <Routes>
+          <Route path="/c/:userIdent/:corpusIdent" element={<CorpusLandingRoute />} />
+        </Routes>
+      </MemoryRouter>
+    </MockedProvider>
+  );
+
+  // Phase 1: Loading
+  expect(routeLoading()).toBe(true);
+
+  // Phase 2: Wait for resolution
+  await waitFor(() => expect(routeLoading()).toBe(false));
+
+  // Phase 3: Verify reactive vars
+  expect(openedCorpus()).toEqual(mockCorpus);
+  expect(selectedAnalysesIds()).toEqual(["123"]);
+
+  // Phase 4: Verify component rendered
+  expect(screen.getByTestId("corpus-view")).toBeInTheDocument();
 });
 ```
 
-### E2E Test Scenarios
+### Route Component Tests
 
-1. **Corpus Navigation**
-   - Navigate to `/c/john/my-corpus`
-   - Verify corpus loads
-   - Check meta tags
-
-2. **Document Navigation**
-   - Navigate to `/d/john/doc`
-   - Verify document loads
-   - Test close navigation
-
-3. **Document in Corpus**
-   - Navigate to `/d/john/corpus/doc`
-   - Verify both corpus and document load
-   - Check breadcrumbs
-
-4. **Annotation Navigation**
-   - Navigate to `/d/john/doc?ann=123`
-   - Verify annotation selected
-   - Test multiple annotations
-
-5. **ID Redirection**
-   - Navigate to `/c/john/123`
-   - Verify redirect to `/c/john/my-corpus`
-   - Check query params preserved
-
-6. **Error Handling**
-   - Navigate to invalid routes
-   - Verify 404 page
-   - Check console warnings
-
-## Migration Guide
-
-### From Legacy Routes
-
-All legacy routes must be updated to use the new explicit patterns:
-
-| Old Pattern                          | New Pattern                           |
-| ------------------------------------ | ------------------------------------- |
-| `/corpuses/[id]`                     | `/c/[user]/[corpus]`                  |
-| `/documents/[id]`                    | `/d/[user]/[document]`                |
-| `/corpus/[id]/document/[id]`        | `/d/[user]/[corpus]/[document]`       |
-| `/[user]/[item]`                    | `/c/[user]/[corpus]` or `/d/[user]/[document]` |
-
-### Backend Requirements
-
-1. **Slugs Required**
-   - All entities must have `slug` field
-   - All entities must have `creator.slug`
-
-2. **GraphQL Queries**
-   - Implement slug-based resolution queries
-   - Support ID-based fallback queries
-
-3. **URL Generation**
-   - Use utility functions for all URL generation
-   - Never hardcode URLs
-
-### Component Updates
-
+**DocumentLandingRoute.test.tsx** (6 tests):
 ```typescript
-// Old
-const url = `/corpuses/${corpus.id}`;
+describe("State-Driven Rendering", () => {
+  beforeEach(() => {
+    openedDocument(null);
+    routeLoading(false);
+    routeError(null);
+  });
 
-// New
-import { getCorpusUrl } from "utils/navigationUtils";
-const url = getCorpusUrl(corpus);
-```
+  it("should show loading when routeLoading is true", () => {
+    routeLoading(true);
+    render(<DocumentLandingRoute />);
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+  });
 
-### Handling Missing Slugs
-
-```typescript
-// Check before navigation
-const url = getDocumentUrl(document);
-if (url === "#") {
-  console.error("Cannot navigate: missing slugs");
-  return;
-}
-navigate(url);
+  it("should render view when document is loaded", () => {
+    openedDocument(mockDocument);
+    routeLoading(false);
+    render(<DocumentLandingRoute />);
+    expect(screen.getByText("DocumentKnowledgeBase")).toBeInTheDocument();
+  });
+});
 ```
 
 ## Best Practices
 
-### DO
+### Critical Rules (MUST Follow)
 
-- ✅ Always use navigation utility functions
-- ✅ Use explicit route prefixes (`/c/`, `/d/`)
-- ✅ Handle missing slugs gracefully
-- ✅ Use TypeScript types for route params
-- ✅ Test navigation flows thoroughly
-- ✅ Preserve annotation parameters when navigating
-- ✅ Use comma-separated IDs for multiple annotations
-- ✅ Clean up reactive vars on component unmount
-- ✅ Check for "#" return from URL generators
+**🚨 RULE #1: NEVER Set `openedCorpus` or `openedDocument` Outside CentralRouteManager**
 
-### DON'T
+```typescript
+// ❌ NEVER DO THIS (anywhere except CentralRouteManager.tsx):
+openedCorpus(someCorpus);
+openedDocument(someDocument);
+openedCorpus(null);
+openedDocument(null);
 
-- ❌ Hardcode navigation URLs
-- ❌ Assume slugs exist
-- ❌ Use raw IDs for navigation (they will redirect)
-- ❌ Create ambiguous routes
-- ❌ Add fallback logic for legacy routes
-- ❌ Forget to append `?ann=` when navigating to annotations
-- ❌ Navigate without checking URL generation success
-- ❌ Set incomplete objects in reactive vars
-- ❌ Skip cleanup on component unmount
+// ✅ ALWAYS DO THIS:
+const corpus = useReactiveVar(openedCorpus);  // Read only
+const document = useReactiveVar(openedDocument);  // Read only
+```
+
+**Why?** Setting these vars from multiple places creates competing state updates, infinite loops, and route jittering. We learned this the hard way when `CorpusDocumentCards.tsx` was fetching corpus data and setting `openedCorpus()`, creating an infinite loop with `CentralRouteManager`.
+
+**🚨 RULE #2: NEVER Fetch Entities in Route Components**
+
+```typescript
+// ❌ NEVER DO THIS in route components:
+const { data } = useQuery(GET_CORPUS_BY_ID, {
+  onCompleted: (data) => {
+    openedCorpus(data.corpus);  // VIOLATION!
+  }
+});
+
+// ✅ CentralRouteManager handles ALL entity fetching:
+// - Corpus resolution via RESOLVE_CORPUS_BY_SLUGS_FULL
+// - Document resolution via RESOLVE_DOCUMENT_BY_SLUGS_FULL
+// - Automatic caching and deduplication
+```
+
+**Why?** Duplicate fetching wastes bandwidth, creates race conditions, and makes caching impossible. Let CentralRouteManager do its job.
+
+**🚨 RULE #3: NEVER Parse Route Parameters Outside CentralRouteManager**
+
+```typescript
+// ❌ NEVER DO THIS:
+const { userIdent, corpusIdent } = useParams();
+// Parse URL yourself...
+
+// ✅ ALWAYS DO THIS:
+const corpus = useReactiveVar(openedCorpus);
+// CentralRouteManager already parsed the URL and fetched the corpus
+```
+
+**Why?** URL parsing logic should exist in exactly one place. Multiple parsers lead to inconsistencies and bugs.
+
+**🚨 RULE #4: NEVER Manually Clear Route State**
+
+```typescript
+// ❌ NEVER DO THIS:
+const gotoHome = () => {
+  openedCorpus(null);  // VIOLATION!
+  openedDocument(null);  // VIOLATION!
+  navigate("/corpuses");
+};
+
+// ✅ ALWAYS DO THIS:
+const gotoHome = () => {
+  navigate("/corpuses");
+  // CentralRouteManager will detect the route change and clear state automatically
+};
+```
+
+**Why?** CentralRouteManager watches the URL and automatically clears `openedCorpus`/`openedDocument` when navigating to browse routes. Manual clearing creates race conditions.
+
+### DO ✅
+
+**Routing:**
+- ✅ Let CentralRouteManager handle ALL URL ↔ State sync
+- ✅ Route components just read reactive vars with `useReactiveVar()`
+- ✅ Use navigation utilities (`getCorpusUrl`, `getDocumentUrl`, etc.)
+- ✅ Preserve query params when navigating
+- ✅ Check for `"#"` return from URL generators (indicates missing data)
+- ✅ Trust that CentralRouteManager will clear state when routes change
+
+**State:**
+- ✅ URL is source of truth (no persistent local state)
+- ✅ Read entity vars: `const corpus = useReactiveVar(openedCorpus);`
+- ✅ Update selection vars: `selectedAnnotationIds(["123"]);`
+- ✅ Let Phase 4 sync selection changes → URL automatically
+- ✅ Check `routeLoading` before accessing entities
+- ✅ Handle `routeError` for failed entity resolution
+
+**Navigation:**
+- ✅ Use `getCorpusUrl(corpus)` to generate URLs
+- ✅ Use `getDocumentUrl(document, corpus)` with optional query params
+- ✅ Use `navigateToCorpus()` / `navigateToDocument()` for smart navigation (checks if already there)
+- ✅ Pass current path to smart navigation functions
+- ✅ Include query params to preserve user selections
+
+**Component Architecture:**
+- ✅ Route components are < 50 lines (just read state and render)
+- ✅ View components consume reactive vars for selections
+- ✅ Card components use navigation utilities
+- ✅ Modal components read corpus/document context from reactive vars
+
+**Testing:**
+- ✅ Test CentralRouteManager phases independently
+- ✅ Test route components as dumb consumers (mock reactive vars)
+- ✅ Test full integration flow (URL → Manager → Component)
+- ✅ In tests, you CAN set reactive vars directly for setup
+
+### DON'T ❌
+
+**Routing (CRITICAL - These cause bugs):**
+- ❌ NEVER set `openedCorpus()` or `openedDocument()` outside CentralRouteManager
+- ❌ NEVER parse URLs with `useParams()` in route components or views
+- ❌ NEVER fetch corpus/document entities in route components
+- ❌ NEVER manually clear `openedCorpus(null)` or `openedDocument(null)` on navigation
+- ❌ NEVER add routing logic outside CentralRouteManager
+- ❌ NEVER sync reactive vars to URL manually (Phase 4 does this)
+
+**State:**
+- ❌ Don't persist routing state in localStorage/sessionStorage
+- ❌ Don't assume entities are loaded (always check `routeLoading` and handle null)
+- ❌ Don't ignore `routeError` (display error state)
+- ❌ Don't set entity reactive vars from `onCompleted` handlers
+
+**Navigation:**
+- ❌ Don't navigate without checking URL validity (check for `"#"` return)
+- ❌ Don't assume slugs exist (use `getCorpusUrl()` which handles missing slugs)
+- ❌ Don't hardcode URLs (use navigation utilities)
+- ❌ Don't drop query params (loses user selections)
+- ❌ Don't use raw IDs in URLs (they auto-redirect to slugs anyway)
 
 ### Code Examples
 
-#### Correct Navigation
-
+**❌ WRONG - Scattered URL parsing:**
 ```typescript
-// Good - uses utility function
+// Old approach (DELETED)
+const { userIdent, corpusIdent } = useParams();
+const [resolveCorpus] = useLazyQuery(RESOLVE_CORPUS);
+
+useEffect(() => {
+  resolveCorpus({ variables: { userSlug: userIdent, corpusSlug: corpusIdent } });
+}, [userIdent, corpusIdent]);
+```
+
+**✅ CORRECT - Centralized:**
+```typescript
+// Route component (simple consumer)
+export const CorpusLandingRoute = () => {
+  const corpus = useReactiveVar(openedCorpus);
+  const loading = useReactiveVar(routeLoading);
+
+  if (loading) return <Loading />;
+  return <Corpuses />;
+};
+
+// CentralRouteManager handles everything
+```
+
+**❌ WRONG - Manual URL sync:**
+```typescript
+// Old approach (DELETED)
+useEffect(() => {
+  const queryString = annotationIds.join(",");
+  navigate(`?ann=${queryString}`);
+}, [annotationIds]);
+```
+
+**✅ CORRECT - Automatic sync:**
+```typescript
+// Just update reactive var
+selectedAnnotationIds(["123", "456"]);
+
+// CentralRouteManager Phase 4 watches and syncs to URL automatically
+```
+
+## Component Ecosystem
+
+The routing system coordinates multiple components that work together. Understanding their roles and dependencies is critical.
+
+### Core Components
+
+**CentralRouteManager** (`src/routing/CentralRouteManager.tsx`)
+- **Role**: The ONLY component that sets `openedCorpus` and `openedDocument`
+- **Responsibilities**: URL parsing, entity fetching, canonical redirects, query param sync
+- **Dependencies**: None (it's the source of truth)
+- **Used by**: All route components and views (indirectly via reactive vars)
+
+**CorpusLandingRoute** (`src/components/routes/CorpusLandingRoute.tsx`)
+- **Role**: Dumb consumer for corpus entity routes (`/c/:user/:corpus`)
+- **Reads**: `openedCorpus`, `routeLoading`, `routeError`
+- **Never Sets**: Any reactive vars
+- **Renders**: `<Corpuses />` view when corpus is loaded
+
+**DocumentLandingRoute** (`src/components/routes/DocumentLandingRoute.tsx`)
+- **Role**: Dumb consumer for document entity routes (`/d/:user/:doc`)
+- **Reads**: `openedDocument`, `openedCorpus`, `routeLoading`, `routeError`
+- **Never Sets**: Any reactive vars
+- **Renders**: `<DocumentKnowledgeBase />` when document is loaded
+
+### View Components
+
+**Corpuses** (`src/views/Corpuses.tsx`)
+- **Role**: Main corpus list/detail view
+- **Reads**: `openedCorpus`, `selectedAnalysesIds`, `selectedExtractIds`
+- **Never Sets**: `openedCorpus` (CentralRouteManager owns this)
+- **Can Set**: Selection vars like `selectedAnalysesIds()` (Phase 4 syncs to URL)
+- **Queries**: Fetches corpus LIST data, NOT entity data by route
+
+**Documents** (`src/views/Documents.tsx`)
+- **Role**: Document list view
+- **Reads**: `openedDocument`, selection vars
+- **Never Sets**: Entity vars
+- **Queries**: Document lists, not route entities
+
+**Annotations** (`src/views/Annotations.tsx`)
+- **Role**: Annotation browse view
+- **Reads**: `selectedAnnotationIds`, `selectedAnalysesIds`
+- **Never Sets**: Entity vars
+- **Uses**: Query params set by CentralRouteManager Phase 2
+
+**Extracts** (`src/views/Extracts.tsx`)
+- **Role**: Extract browse view
+- **Reads**: `selectedExtractIds`, context from `openedCorpus`/`openedDocument`
+- **Never Sets**: Entity vars
+- **Uses**: Query params set by CentralRouteManager Phase 2
+
+### Card Components
+
+**CorpusDocumentCards** (`src/components/documents/CorpusDocumentCards.tsx`)
+- **Role**: Display documents in a corpus
+- **Reads**: `openedCorpus` for context (e.g., file uploads)
+- **Never Sets**: `openedCorpus` ⚠️ This caused the infinite loop bug!
+- **Navigation**: Uses `navigateToDocument()` utility
+- **Previous Bug**: Was fetching corpus and setting `openedCorpus()` in `onCompleted`
+
+**DocumentItem** (`src/components/documents/DocumentItem.tsx`)
+- **Role**: Individual document card
+- **Reads**: `openedCorpus()` for context
+- **Never Sets**: Any entity vars
+- **Navigation**: Uses `navigateToDocument(document, corpus, navigate, path)`
+
+**AnnotationCards** (`src/components/annotations/AnnotationCards.tsx`)
+- **Role**: Display annotation list
+- **Updates**: `selectedAnnotationIds()` when user selects (Phase 4 syncs to URL)
+- **Reads**: Context from `openedCorpus`/`openedDocument`
+
+**ExtractCards** (`src/components/extracts/ExtractCards.tsx`)
+- **Role**: Display extract list
+- **Updates**: `selectedExtractIds()` when user selects
+- **Reads**: Context from entity vars
+
+**AnalysesCards** (`src/components/analyses/AnalysesCards.tsx`)
+- **Role**: Display analysis list
+- **Updates**: `selectedAnalysesIds()` when user selects
+- **Reads**: Context from entity vars
+
+### Knowledge Base Components
+
+**DocumentKnowledgeBase** (`src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`)
+- **Role**: Main document viewer with PDF, annotations, etc.
+- **Reads**: `openedDocument`, `openedCorpus` for rendering
+- **Never Sets**: These vars ⚠️ Had 4 violations removed (lines 658, 661, 1365, 1899)
+- **Receives**: `documentId` and `corpusId` as props from route component
+- **Previous Violations**: Was setting entities in query `onCompleted` handlers and cleanup effects
+
+**FloatingDocumentControls** (`src/components/knowledge_base/document/FloatingDocumentControls.tsx`)
+- **Role**: Toolbar for document actions (analysis, export, etc.)
+- **Reads**: `openedCorpus()` for context
+- **Never Sets**: Entity vars ⚠️ Had 1 violation removed (line 652)
+- **Uses**: Jotai atom `corpusStateAtom` for component-local state (this is fine)
+- **Previous Violation**: Was setting `openedCorpus(selectedCorpus)` before opening modal
+
+### Navigation Components
+
+**NavMenu** (`src/components/layout/NavMenu.tsx`)
+- **Role**: Desktop top navigation
+- **Reads**: `openedCorpus`, `openedDocument` (only for display, not actively used)
+- **Never Sets**: Entity vars ⚠️ Had violations removed
+- **Navigation**: Just calls `navigate()` - CentralRouteManager clears state
+- **Previous Violation**: Had `clearSelections()` function that set vars to null
+
+**MobileNavMenu** (`src/components/layout/MobileNavMenu.tsx`)
+- **Role**: Mobile hamburger navigation
+- **Reads**: Entity vars (not actively used)
+- **Never Sets**: Entity vars ⚠️ Had violations removed
+- **Navigation**: Just calls `navigate()` like NavMenu
+
+**CorpusBreadcrumbs** (`src/components/corpuses/CorpusBreadcrumbs.tsx`)
+- **Role**: Display breadcrumb navigation (Corpuses > Corpus > Document)
+- **Reads**: `openedCorpus`, `openedDocument` for display
+- **Never Sets**: Entity vars ⚠️ Had violations removed
+- **Navigation**: Uses `navigateToCorpus()` utility
+- **Previous Violation**: Was manually clearing vars in `gotoHome()`
+
+### Data Flow: How Components Work Together
+
+```
+1. User clicks link
+        ↓
+2. Browser URL changes to /c/john/my-corpus?analysis=123
+        ↓
+3. CentralRouteManager detects URL change
+        ↓
+4. Phase 1: Parse path → Fetch corpus → Set openedCorpus(data)
+   Phase 2: Parse query → Set selectedAnalysesIds(["123"])
+        ↓
+5. Reactive var changes trigger re-renders
+        ↓
+6. CorpusLandingRoute reads openedCorpus → Renders <Corpuses />
+        ↓
+7. Corpuses reads openedCorpus, selectedAnalysesIds → Renders UI
+        ↓
+8. User clicks analysis in AnalysesCards
+        ↓
+9. Component updates: selectedAnalysesIds(["456"])
+        ↓
+10. Phase 4: CentralRouteManager detects change → Updates URL to ?analysis=456
+        ↓
+11. Cycle continues...
+```
+
+### Common Patterns
+
+**Pattern 1: Card Component Navigating**
+```typescript
+// In DocumentItem.tsx, AnnotationCard.tsx, etc.
+const handleClick = () => {
+  const corpus = openedCorpus();  // Read for context
+  navigateToDocument(document, corpus, navigate, location.pathname);
+  // CentralRouteManager will detect URL change and set openedDocument()
+};
+```
+
+**Pattern 2: View Component Reading Selections**
+```typescript
+// In Annotations.tsx, Extracts.tsx, etc.
+const annotation_ids = useReactiveVar(selectedAnnotationIds);
+const corpus = useReactiveVar(openedCorpus);  // Context only
+
+// Render with this data
+return <AnnotationCards selectedIds={annotation_ids} />;
+```
+
+**Pattern 3: Route Component Delegating**
+```typescript
+// In DocumentLandingRoute.tsx, CorpusLandingRoute.tsx
+const document = useReactiveVar(openedDocument);
+const loading = useReactiveVar(routeLoading);
+
+if (loading) return <Loading />;
+return <DocumentKnowledgeBase documentId={document.id} />;
+// No fetching, no URL parsing, just read and render
+```
+
+**Pattern 4: Navigation Without State Manipulation**
+```typescript
+// In NavMenu.tsx, CorpusBreadcrumbs.tsx, etc.
 const handleNavigate = () => {
-  const url = getCorpusUrl(corpus);
-  if (url !== "#") {
-    navigate(url);
-  }
-};
-
-// Good - preserves annotations
-const navigateWithAnnotation = (annotationId: string) => {
-  const baseUrl = getDocumentUrl(document, corpus);
-  navigate(`${baseUrl}?ann=${annotationId}`);
+  navigate("/corpuses");
+  // DON'T set openedCorpus(null) - CentralRouteManager handles this
 };
 ```
 
-#### Incorrect Navigation
+### Key Relationships
 
-```typescript
-// Bad - hardcoded URL
-navigate(`/corpuses/${corpus.id}`);
+**CentralRouteManager ← → Reactive Vars ← → All Components**
+- CentralRouteManager is the ONLY writer of `openedCorpus`/`openedDocument`
+- All other components are readers via `useReactiveVar()`
+- Selection vars can be updated by views/cards (Phase 4 syncs to URL)
 
-// Bad - assumes slug exists
-navigate(`/c/${corpus.creator.slug}/${corpus.slug}`);
+**Route Components → View Components**
+- Route components just delegate to views after checking loading/error
+- Views don't know about routes, just consume reactive vars
 
-// Bad - doesn't check for valid URL
-navigate(getCorpusUrl(corpus)); // Could be "#"
-```
+**View Components → Card Components**
+- Views orchestrate layout and pass data
+- Cards handle interactions and navigation
+- Cards use navigation utilities, never raw URLs
+
+**CentralRouteManager → Navigation Utilities**
+- CentralRouteManager uses `parseRoute()`, `buildCanonicalPath()`, etc.
+- Components use `getCorpusUrl()`, `navigateToDocument()`, etc.
+- Shared utilities ensure consistency
 
 ## Summary
 
-The OpenContracts routing system provides:
+The OpenContracts routing system follows the principle: **One Place to Rule Them All**.
 
-- **Explicit Routes**: Clear `/c/` and `/d/` prefixes eliminate ambiguity
-- **Simple Implementation**: Minimal code, easy to understand
-- **Deterministic Behavior**: Each URL maps to exactly one handler
-- **Performance**: Single query per route, efficient caching
-- **Maintainability**: Clean separation of concerns
-- **SEO Friendly**: Canonical slug-based URLs with ID redirection
-- **Developer Experience**: TypeScript types, utility functions, clear patterns
-- **User Experience**: Fast navigation, deep linking, error handling
+### The Core Mantra
 
-The system requires slugs for canonical URLs but supports ID-based navigation through automatic redirection, providing both backward compatibility and forward-looking clean URLs.
+**ONLY `CentralRouteManager` sets `openedCorpus` and `openedDocument`.**
+
+All other components READ ONLY via `useReactiveVar()`. Violations cause bugs.
+
+### Architecture Overview
+
+**CentralRouteManager** (`src/routing/CentralRouteManager.tsx`):
+- 🎯 Single source of truth for ALL routing logic
+- 📍 4-phase architecture: Parse → Query → Redirect → Sync
+- 🔄 Bidirectional URL ↔ State synchronization
+- 🚀 Automatic canonical redirects (ID → slug)
+- ⚡ Request deduplication and caching
+- 🎭 Enables route components to be ~40 lines (was ~180)
+
+**Route Components** (CorpusLandingRoute, DocumentLandingRoute):
+- Read reactive vars with `useReactiveVar()`
+- Handle loading/error states
+- Delegate to view components
+- NEVER fetch entities or parse URLs
+
+**View Components** (Corpuses, Documents, Annotations, Extracts):
+- Consume reactive vars for entity context
+- Update selection reactive vars (Phase 4 syncs to URL)
+- Fetch list data (not route entities)
+- Use navigation utilities for links
+
+**Card Components** (DocumentItem, AnnotationCards, etc.):
+- Use `getCorpusUrl()` / `getDocumentUrl()` for links
+- Use `navigateToCorpus()` / `navigateToDocument()` for smart navigation
+- Read entity vars for context only
+- NEVER set entity vars
+
+### Key Benefits
+
+- ✨ **Simple**: Predictable unidirectional flow (URL → Manager → Vars → UI)
+- 🧪 **Testable**: Phases isolated, components are dumb consumers
+- 🔧 **Maintainable**: One place to change routing logic
+- 🐛 **Reliable**: No circular dependencies, race conditions, or competing updates
+- 📚 **Clear**: Explicit architecture with documented patterns
+- 🚀 **Performant**: Request deduplication, caching, smart navigation
+
+### Critical Rules (Remember These!)
+
+1. **NEVER** set `openedCorpus()` or `openedDocument()` outside CentralRouteManager
+2. **NEVER** fetch corpus/document entities in route components
+3. **NEVER** parse URLs with `useParams()` in components/views
+4. **NEVER** manually clear entity vars on navigation
+5. **ALWAYS** use navigation utilities (`getCorpusUrl`, `navigateToDocument`, etc.)
+6. **ALWAYS** check `routeLoading` before accessing entities
+7. **ALWAYS** preserve query params when navigating
+
+### When You Need To...
+
+**Add a new entity type route:**
+1. Add GraphQL resolver query to `queries.ts`
+2. Add parsing logic to `parseRoute()` in `navigationUtils.ts`
+3. Add fetch logic to CentralRouteManager Phase 1
+4. Add reactive var to `cache.ts`
+5. Create dumb route component that reads the var
+6. Add route to `App.tsx`
+
+**Add a new query parameter:**
+1. Add reactive var to `cache.ts`
+2. Add parsing in CentralRouteManager Phase 2
+3. Add syncing in CentralRouteManager Phase 4
+4. Update `buildQueryParams()` in `navigationUtils.ts`
+
+**Debug a routing issue:**
+1. Check CentralRouteManager console logs
+2. Verify reactive vars are set correctly
+3. Confirm component is reading vars with `useReactiveVar()`
+4. Ensure no components are SETTING entity vars (use grep)
+5. Check that navigation utilities are being used
+
+### The Golden Rule
+
+**When in doubt, read the code in `CentralRouteManager.tsx`.**
+
+It's the single source of truth. If routing behavior seems wrong, the fix goes there. If a component needs routing data, it reads reactive vars. If you're writing `openedCorpus(...)` outside CentralRouteManager, you're doing it wrong.
+
+---
+
+**This architecture doesn't suck because it's simple, testable, and maintainable. Keep it that way.**

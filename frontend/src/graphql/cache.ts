@@ -190,6 +190,12 @@ export const cache = new InMemoryCache({
 /**
  * Global GUI State / Variables
  */
+/**
+ * Routing state - managed by CentralRouteManager
+ */
+export const routeLoading = makeVar<boolean>(false);
+export const routeError = makeVar<Error | null>(null);
+
 // Cookie consent modal reactive variable.
 // Initialized to `false`; the App component decides at runtime whether to
 // show the modal based on the browser's localStorage state.
@@ -236,20 +242,22 @@ export const allowUserInput = makeVar<boolean>(false);
  *  Document-related global variables.
  */
 export const documentSearchTerm = makeVar<string>("");
-export const openedDocument = persistentVar<DocumentType | null>(
-  "oc_openedDocument",
-  null
-);
+export const openedDocument = makeVar<DocumentType | null>(null);
 export const selectedDocumentIds = makeVar<string[]>([]);
 export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
 
 /**
  * Extract-related global variables
+ *
+ * URL-DRIVEN STATE: selectedExtractIds is controlled by URL query parameter ?extract=
+ * Examples:
+ *   /c/user/corpus?extract=456        → selectedExtractIds(["456"])
+ *   /d/user/doc?extract=456,789       → selectedExtractIds(["456", "789"])
  */
-export const selectedExtractIds = makeVar<string[]>([]);
-export const selectedExtract = makeVar<ExtractType | null>(null);
-export const openedExtract = makeVar<ExtractType | null>(null);
+export const selectedExtractIds = makeVar<string[]>([]); // PRIMARY - URL-driven
+export const selectedExtract = makeVar<ExtractType | null>(null); // Legacy - kept for backward compatibility
+export const openedExtract = makeVar<ExtractType | null>(null); // Used in Extracts view for opening
 export const extractSearchTerm = makeVar<string>("");
 
 /**
@@ -258,10 +266,7 @@ export const extractSearchTerm = makeVar<string>("");
 export const corpusSearchTerm = makeVar<string>("");
 export const filterToCorpus = makeVar<CorpusType | null>(null);
 export const selectedCorpus = makeVar<CorpusType | null>(null);
-export const openedCorpus = persistentVar<CorpusType | null>(
-  "oc_openedCorpus",
-  null
-);
+export const openedCorpus = makeVar<CorpusType | null>(null);
 export const viewingCorpus = makeVar<CorpusType | null>(null);
 export const deletingCorpus = makeVar<CorpusType | null>(null);
 export const editingCorpus = makeVar<CorpusType | null>(null);
@@ -309,10 +314,15 @@ export const analyzerSearchTerm = makeVar<string | null>(null);
 
 /**
  * Analysis-related global variables
+ *
+ * URL-DRIVEN STATE: selectedAnalysesIds is controlled by URL query parameter ?analysis=
+ * Examples:
+ *   /c/user/corpus?analysis=123       → selectedAnalysesIds(["123"])
+ *   /d/user/doc?analysis=123,456      → selectedAnalysesIds(["123", "456"])
  */
-export const selectedAnalysis = makeVar<AnalysisType | null>(null);
-export const selectedAnalyses = makeVar<AnalysisType[]>([]);
-export const selectedAnalysesIds = makeVar<(string | number)[]>([]);
+export const selectedAnalysesIds = makeVar<string[]>([]); // PRIMARY - URL-driven
+export const selectedAnalysis = makeVar<AnalysisType | null>(null); // Legacy - kept for backward compatibility
+export const selectedAnalyses = makeVar<AnalysisType[]>([]); // Legacy - kept for backward compatibility
 export const analysisSearchTerm = makeVar<string>("");
 
 /**

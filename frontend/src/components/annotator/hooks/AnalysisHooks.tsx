@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useCallback } from "react";
-import { useQuery, useLazyQuery } from "@apollo/client";
+import { useQuery, useLazyQuery, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 import _ from "lodash";
 import { useAtom, useAtomValue } from "jotai";
@@ -51,6 +51,10 @@ import {
   ServerSpanAnnotation,
 } from "../types/annotations";
 import { selectedDocumentAtom } from "../context/DocumentAtom";
+import {
+  selectedAnalysesIds,
+  selectedExtractIds,
+} from "../../../graphql/cache";
 
 /**
  * Custom hook to manage analysis and extract data using Jotai atoms.
@@ -164,13 +168,85 @@ export const useAnalysisManager = () => {
       const { analysisRows, extracts } = analysesData.documentCorpusActions;
       setAnalysisRows(analysisRows);
       setExtracts(extracts);
-      setAnalyses(
-        analysisRows
-          .map((row) => row.analysis)
-          .filter((a): a is AnalysisType => a !== null && a !== undefined)
+      const fetchedAnalyses = analysisRows
+        .map((row) => row.analysis)
+        .filter((a): a is AnalysisType => a !== null && a !== undefined);
+      setAnalyses(fetchedAnalyses);
+
+      console.log(
+        "[AnalysisHooks] ✅ Loaded analyses and extracts:",
+        fetchedAnalyses.length,
+        "analyses,",
+        extracts.length,
+        "extracts"
+      );
+      console.log(
+        "[AnalysisHooks] Analysis IDs:",
+        fetchedAnalyses.map((a) => a.id)
+      );
+      console.log(
+        "[AnalysisHooks] Extract IDs:",
+        extracts.map((e) => e.id)
       );
     }
   }, [analysesData]);
+
+  // Reactively read ID selections from reactive vars (set by CentralRouteManager)
+  const analysis_ids_from_reactive_var = useReactiveVar(selectedAnalysesIds);
+  const extract_ids_from_reactive_var = useReactiveVar(selectedExtractIds);
+
+  // Sync reactive var IDs → Jotai atoms (find full objects in fetched lists)
+  // CentralRouteManager sets IDs, we resolve them to full objects for UI
+  useEffect(() => {
+    if (analyses.length === 0 && extracts.length === 0) {
+      return; // Wait for data to load
+    }
+
+    // Sync analysis: ID → full object
+    if (analysis_ids_from_reactive_var.length > 0) {
+      const analysisId = analysis_ids_from_reactive_var[0];
+      if (!selected_analysis || selected_analysis.id !== analysisId) {
+        const matchingAnalysis = analyses.find((a) => a.id === analysisId);
+        if (matchingAnalysis) {
+          console.log(
+            "[AnalysisHooks] ✅ Setting analysis:",
+            matchingAnalysis.id
+          );
+          setSelectedAnalysis(matchingAnalysis);
+        } else {
+          console.warn("[AnalysisHooks] ❌ Analysis not found:", analysisId);
+        }
+      }
+    } else if (selected_analysis) {
+      // Clear selection if reactive var is empty
+      setSelectedAnalysis(null);
+    }
+
+    // Sync extract: ID → full object
+    if (extract_ids_from_reactive_var.length > 0) {
+      const extractId = extract_ids_from_reactive_var[0];
+      if (!selected_extract || selected_extract.id !== extractId) {
+        const matchingExtract = extracts.find((e) => e.id === extractId);
+        if (matchingExtract) {
+          console.log(
+            "[AnalysisHooks] ✅ Setting extract:",
+            matchingExtract.id
+          );
+          setSelectedExtract(matchingExtract);
+        } else {
+          console.warn("[AnalysisHooks] ❌ Extract not found:", extractId);
+        }
+      }
+    } else if (selected_extract) {
+      // Clear selection if reactive var is empty
+      setSelectedExtract(null);
+    }
+  }, [
+    analyses,
+    extracts,
+    analysis_ids_from_reactive_var,
+    extract_ids_from_reactive_var,
+  ]);
 
   // Fetch analyses and extracts only when we have a valid document
   useEffect(() => {
@@ -381,6 +457,10 @@ export const useAnalysisManager = () => {
       setShowSelectedAnnotationOnly(false);
       setSelectedAnalysis(analysis);
       setSelectedExtract(null);
+
+      // Update reactive var so CentralRouteManager syncs to URL
+      selectedAnalysesIds(analysis ? [analysis.id] : []);
+      selectedExtractIds([]);
     },
     [
       setShowAnnotationBoundingBoxes,
@@ -399,6 +479,10 @@ export const useAnalysisManager = () => {
   const onSelectExtract = (extract: ExtractType | null) => {
     setSelectedExtract(extract);
     setSelectedAnalysis(null);
+
+    // Update reactive var so CentralRouteManager syncs to URL
+    selectedExtractIds(extract ? [extract.id] : []);
+    selectedAnalysesIds([]);
   };
 
   return {

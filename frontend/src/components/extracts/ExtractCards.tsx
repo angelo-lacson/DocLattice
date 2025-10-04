@@ -33,19 +33,25 @@ export const ExtractCards = ({
   const card_cols = determineCardColCount(width);
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
 
-  //   const selected_extract_ids = useReactiveVar(selectedExtractIds);
+  // Use selectedExtractIds (URL-driven state) for multi-select
+  const selected_extract_ids = useReactiveVar(selectedExtractIds);
   const opened_extract = useReactiveVar(openedExtract);
 
-  //   const toggleExtract = (selected_extract: ExtractType) => {
-  //     if (selected_extract_ids.includes(selected_extract.id)) {
-  //       const cleaned_extracts = selected_extract_ids.filter(
-  //         (extract) => extract !== selected_extract.id
-  //       );
-  //       selectedExtractIds(cleaned_extracts);
-  //     } else {
-  //       selectedExtractIds([...selected_extract_ids, selected_extract.id]);
-  //     }
-  //   };
+  const toggleExtract = (selected_extract: ExtractType) => {
+    if (selected_extract_ids.includes(selected_extract.id)) {
+      // Remove from selection
+      const cleaned_ids = selected_extract_ids.filter(
+        (id) => id !== selected_extract.id
+      );
+      selectedExtractIds(cleaned_ids);
+    } else {
+      // Add to selection
+      selectedExtractIds([...selected_extract_ids, selected_extract.id]);
+    }
+
+    // Also update openedExtract for backward compatibility
+    openedExtract(selected_extract);
+  };
 
   const extract_items =
     extracts.length > 0 && opened_corpus ? (
@@ -54,9 +60,9 @@ export const ExtractCards = ({
           key={extract.id}
           extract={extract}
           corpus={opened_corpus}
-          selected={opened_extract?.id === extract.id}
+          selected={selected_extract_ids.includes(extract.id)}
           read_only={read_only}
-          onSelect={() => openedExtract(extract)}
+          onSelect={() => toggleExtract(extract)}
         />
       ))
     ) : (

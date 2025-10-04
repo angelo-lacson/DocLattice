@@ -644,12 +644,12 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
                     }
                   );
 
-                  // Ensure corpus context is set before opening modal
+                  // Note: openedCorpus is managed by CentralRouteManager, not set here
+                  // Modal reads corpus from reactive var or component state as needed
                   if (selectedCorpus) {
                     console.log(
-                      "FloatingDocumentControls: Setting openedCorpus and showing modal"
+                      "FloatingDocumentControls: Opening analysis modal with corpus context"
                     );
-                    openedCorpus(selectedCorpus);
                     showSelectCorpusAnalyzerOrFieldsetModal(true);
                   } else {
                     console.warn(

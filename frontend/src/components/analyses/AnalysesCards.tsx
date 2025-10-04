@@ -33,8 +33,6 @@ export const AnalysesCards = ({
   loading,
   fetchMore,
 }: AnalysesCardsProps) => {
-  console.log("AnalysesCards - ");
-
   // Let's figure out the viewport so we can size the cards appropriately.
   const { width } = useWindowDimensions();
   const card_cols = determineCardColCount(width);
@@ -42,26 +40,31 @@ export const AnalysesCards = ({
 
   //////////////////////////////////////////////////////////////////////
   // Global State Vars in Apollo Cache
-  const analyses_to_display = useReactiveVar(selectedAnalyses);
-  const analysis_ids_to_display = analyses_to_display.map(
-    (analysis) => analysis.id
-  );
+  // Use selectedAnalysesIds (URL-driven state) instead of selectedAnalyses
+  const analysis_ids_to_display = useReactiveVar(selectedAnalysesIds);
 
   //////////////////////////////////////////////////////////////////////
   const toggleAnalysis = (selected_analysis: AnalysisType) => {
     if (analysis_ids_to_display.includes(selected_analysis.id)) {
-      let cleaned_analyses = analyses_to_display.filter(
-        (analysis) => analysis.id !== selected_analysis.id
+      // Remove from selection
+      const cleaned_ids = analysis_ids_to_display.filter(
+        (id) => id !== selected_analysis.id
       );
-      selectedAnalysesIds(cleaned_analyses.map((analysis) => analysis.id));
+      selectedAnalysesIds(cleaned_ids);
+
+      // Also update legacy selectedAnalyses for backward compatibility
+      const cleaned_analyses = analyses.filter((a) =>
+        cleaned_ids.includes(a.id)
+      );
       selectedAnalyses(cleaned_analyses);
     } else {
-      selectedAnalysesIds(
-        [...analyses_to_display, selected_analysis].map(
-          (analysis) => analysis.id
-        )
-      );
-      selectedAnalyses([...analyses_to_display, selected_analysis]);
+      // Add to selection
+      const new_ids = [...analysis_ids_to_display, selected_analysis.id];
+      selectedAnalysesIds(new_ids);
+
+      // Also update legacy selectedAnalyses for backward compatibility
+      const new_analyses = analyses.filter((a) => new_ids.includes(a.id));
+      selectedAnalyses(new_analyses);
     }
   };
 

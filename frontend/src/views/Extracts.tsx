@@ -73,6 +73,8 @@ export const Extracts = () => {
 
   const location = useLocation();
 
+  // URL query parameters (?extract=123) are now synced by CentralRouteManager
+
   const debouncedExportSearch = useRef(
     _.debounce((searchTerm) => {
       extractSearchTerm(searchTerm);
