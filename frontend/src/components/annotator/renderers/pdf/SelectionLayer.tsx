@@ -12,7 +12,7 @@ import { ServerTokenAnnotation } from "../../types/annotations";
 import { SelectionBoundary } from "../../display/components/SelectionBoundary";
 import { SelectionTokenGroup } from "../../display/components/SelectionTokenGroup";
 import { useCorpusState } from "../../context/CorpusAtom";
-import { useAnnotationSelection } from "../../hooks/useAnnotationSelection";
+import { useAnnotationSelection } from "../../context/UISettingsAtom";
 import { useAtom } from "jotai";
 import { isCreatingAnnotationAtom } from "../../context/UISettingsAtom";
 import styled from "styled-components";

@@ -339,15 +339,17 @@ export function useAnnotationControls() {
 /**
  * Custom hook for managing annotation display settings
  * Now uses Apollo reactive vars from cache.ts for URL synchronization
- * FOLLOWS THE ONE OLACE TO RULE THEM ALL: Components update URL,
- * CentralRouteManager sets reactive vars
- * @returns Object containing annotation display states and their setters
+ *
+ * ⚠️ ARCHITECTURE: Components should NOT use the setter functions from this hook!
+ * Instead use updateAnnotationDisplayParams() from navigationUtils.ts
+ *
+ * The setters are kept ONLY for component tests that don't have CentralRouteManager.
+ * In production, CentralRouteManager is the ONLY component that sets reactive vars.
+ *
+ * @returns Object containing annotation display states (read-only in production)
  */
 export function useAnnotationDisplay() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  // Use Apollo reactive vars for URL-synchronized state
+  // Use Apollo reactive vars for URL-synchronized state (READ-ONLY)
   const showBoundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
   const showLabels = useReactiveVar(showAnnotationLabels);
   const showStructural = useReactiveVar(showStructuralAnnotations);
@@ -359,86 +361,49 @@ export function useAnnotationDisplay() {
   );
   const [hideLabels, setHideLabels] = useAtom(hideLabelsAtom);
 
-  // Setters that update BOTH reactive vars (for immediate effect) AND URL (for persistence)
-  // In real app: CentralRouteManager Phase 2 also syncs URL → reactive vars
-  // In component tests: Direct reactive var update ensures immediate UI updates
-  const setShowBoundingBoxes = useCallback(
-    (value: boolean) => {
-      // Update reactive var immediately
-      showAnnotationBoundingBoxes(value);
+  // ⚠️ DEPRECATED SETTERS - DO NOT USE IN COMPONENTS
+  // These exist ONLY for component tests without CentralRouteManager
+  // Production code should use updateAnnotationDisplayParams() utility
+  const setShowBoundingBoxes = useCallback((value: boolean) => {
+    console.warn(
+      "[useAnnotationDisplay] setShowBoundingBoxes is deprecated. Use updateAnnotationDisplayParams() instead."
+    );
+    showAnnotationBoundingBoxes(value);
+  }, []);
 
-      // Also update URL to maintain URL as source of truth
-      const searchParams = new URLSearchParams(location.search);
-      if (value) {
-        searchParams.set("boundingBoxes", "true");
-      } else {
-        searchParams.delete("boundingBoxes");
-      }
-      navigate({ search: searchParams.toString() }, { replace: true });
-    },
-    [navigate, location.search]
-  );
+  const setShowLabels = useCallback((value: LabelDisplayBehavior) => {
+    console.warn(
+      "[useAnnotationDisplay] setShowLabels is deprecated. Use updateAnnotationDisplayParams() instead."
+    );
+    showAnnotationLabels(value);
+  }, []);
 
-  const setShowLabels = useCallback(
-    (value: LabelDisplayBehavior) => {
-      // Update reactive var immediately
-      showAnnotationLabels(value);
+  const setShowStructural = useCallback((value: boolean) => {
+    console.warn(
+      "[useAnnotationDisplay] setShowStructural is deprecated. Use updateAnnotationDisplayParams() instead."
+    );
+    showStructuralAnnotations(value);
+  }, []);
 
-      // Also update URL to maintain URL as source of truth
-      const searchParams = new URLSearchParams(location.search);
-      if (value !== "ON_HOVER") {
-        searchParams.set("labels", value);
-      } else {
-        searchParams.delete("labels");
-      }
-      navigate({ search: searchParams.toString() }, { replace: true });
-    },
-    [navigate, location.search]
-  );
-
-  const setShowStructural = useCallback(
-    (value: boolean) => {
-      // Update reactive var immediately
-      showStructuralAnnotations(value);
-
-      // Also update URL to maintain URL as source of truth
-      const searchParams = new URLSearchParams(location.search);
-      if (value) {
-        searchParams.set("structural", "true");
-      } else {
-        searchParams.delete("structural");
-      }
-      navigate({ search: searchParams.toString() }, { replace: true });
-    },
-    [navigate, location.search]
-  );
-
-  const setShowSelectedOnly = useCallback(
-    (value: boolean) => {
-      // Update reactive var immediately
-      showSelectedAnnotationOnly(value);
-
-      // Also update URL to maintain URL as source of truth
-      const searchParams = new URLSearchParams(location.search);
-      if (value) {
-        searchParams.set("selectedOnly", "true");
-      } else {
-        searchParams.delete("selectedOnly");
-      }
-      navigate({ search: searchParams.toString() }, { replace: true });
-    },
-    [navigate, location.search]
-  );
+  const setShowSelectedOnly = useCallback((value: boolean) => {
+    console.warn(
+      "[useAnnotationDisplay] setShowSelectedOnly is deprecated. Use updateAnnotationDisplayParams() instead."
+    );
+    showSelectedAnnotationOnly(value);
+  }, []);
 
   return {
+    // Read-only reactive var values
     showBoundingBoxes,
-    setShowBoundingBoxes,
     showLabels,
-    setShowLabels,
     showStructural,
-    setShowStructural,
     showSelectedOnly,
+    // Deprecated setters (test-only)
+    setShowBoundingBoxes,
+    setShowLabels,
+    setShowStructural,
     setShowSelectedOnly,
+    // Local Jotai state (still valid)
     hideLabels,
     setHideLabels,
     showStructuralRelationships,

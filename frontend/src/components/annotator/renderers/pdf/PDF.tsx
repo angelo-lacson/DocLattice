@@ -441,7 +441,8 @@ export const PDF: React.FC<PDFProps> = ({
    * Scroll to the selected annotation's page whenever:
    * 1. A new annotation is selected, OR
    * 2. The page heights become available, OR
-   * 3. The zoom level changes (which affects page positions)
+   * 3. The zoom level changes (which affects page positions), OR
+   * 4. Annotations finish loading (critical for deep links)
    *
    * This effect handles the first part of the scroll-to-annotation process:
    * - Scroll the container so the correct PAGE is visible
@@ -468,6 +469,7 @@ export const PDF: React.FC<PDFProps> = ({
     zoomLevel,
     getScrollElement,
     setPendingScrollId,
+    allAnnotations, // ✅ CRITICAL: Re-run when annotations load (fixes deep link race condition)
   ]);
 
   /* 2. scroll container & notify pages (mirrors annotation logic) */

@@ -32,7 +32,6 @@ import {
   selectedExtractAtom,
   allowUserInputAtom,
 } from "../context/AnalysisAtoms";
-import { useAnnotationDisplay } from "../context/UISettingsAtom";
 import { useInitialAnnotations, usePdfAnnotations } from "./AnnotationHooks";
 import { useCorpusState } from "../context/CorpusAtom";
 import {
@@ -52,7 +51,10 @@ import {
   selectedAnalysesIds,
   selectedExtractIds,
 } from "../../../graphql/cache";
-import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
+import {
+  updateAnnotationSelectionParams,
+  updateAnnotationDisplayParams,
+} from "../../../utils/navigationUtils";
 
 /**
  * Custom hook to manage analysis and extract data using Jotai atoms.
@@ -78,10 +80,6 @@ export const useAnalysisManager = () => {
   const [selected_extract, setSelectedExtract] = useAtom(selectedExtractAtom);
 
   const [, setAllowUserInput] = useAtom(allowUserInputAtom);
-
-  // Use wrapped setters that update both reactive vars AND URL
-  const { setShowBoundingBoxes, setShowLabels, setShowSelectedOnly } =
-    useAnnotationDisplay();
 
   const { replaceDocTypeAnnotations, replaceAnnotations, replaceRelations } =
     usePdfAnnotations();
@@ -444,34 +442,43 @@ export const useAnalysisManager = () => {
 
   /**
    * Handles selection of an analysis.
+   * Sets display defaults for analysis view and updates URL parameters.
+   * CentralRouteManager Phase 2 will read URL and set reactive vars.
    *
    * @param analysis The analysis to select.
    */
   const onSelectAnalysis = useCallback(
     (analysis: AnalysisType | null) => {
-      // When a new analysis is loaded, reset the view behaviors
-      // Use wrapped setters that update both reactive vars AND URL
-      setShowBoundingBoxes(true);
-      setShowLabels(LabelDisplayBehavior.ON_HOVER);
-      setShowSelectedOnly(false);
       setSelectedAnalysis(analysis);
       setSelectedExtract(null);
 
-      // Update URL - CentralRouteManager will set reactive vars
-      updateAnnotationSelectionParams(location, navigate, {
-        analysisIds: analysis ? [analysis.id] : [],
-        extractIds: [],
-      });
+      // CRITICAL: Update all params in ONE navigate() call to avoid race conditions
+      // Read current URL params, modify all at once, then navigate once
+      const searchParams = new URLSearchParams(location.search);
+
+      // Clear annotation selection
+      searchParams.delete("ann");
+
+      // Set analysis selection
+      if (analysis) {
+        searchParams.set("analysis", analysis.id);
+      } else {
+        searchParams.delete("analysis");
+      }
+
+      // Clear extract selection
+      searchParams.delete("extract");
+
+      // Reset visualization settings for analysis view
+      searchParams.set("boundingBoxes", "true");
+      searchParams.delete("labels"); // ON_HOVER is default, don't add to URL
+      searchParams.delete("selectedOnly"); // false is default
+      searchParams.delete("structural"); // false is default
+
+      // Single navigate() call with all changes
+      navigate({ search: searchParams.toString() }, { replace: true });
     },
-    [
-      setShowBoundingBoxes,
-      setShowLabels,
-      setShowSelectedOnly,
-      setSelectedAnalysis,
-      setSelectedExtract,
-      location,
-      navigate,
-    ]
+    [setSelectedAnalysis, setSelectedExtract, location, navigate]
   );
 
   /**

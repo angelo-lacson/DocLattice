@@ -108,7 +108,7 @@ import {
 import { FullScreenModal } from "./LayoutComponents";
 import { ChatTray } from "./right_tray/ChatTray";
 import { SafeMarkdown } from "../markdown/SafeMarkdown";
-import { useAnnotationSelection } from "../../annotator/hooks/useAnnotationSelection";
+import { useAnnotationSelection } from "../../annotator/context/UISettingsAtom";
 import styled from "styled-components";
 import { Icon } from "semantic-ui-react";
 import { useChatSourceState } from "../../annotator/context/ChatSourceAtom";
@@ -117,7 +117,6 @@ import { useScrollContainerRef } from "../../annotator/context/DocumentAtom";
 import { useChatPanelWidth } from "../../annotator/context/UISettingsAtom";
 import { NoteEditor } from "./NoteEditor";
 import { NewNoteModal } from "./NewNoteModal";
-import { useUrlAnnotationSync } from "../../../hooks/useUrlAnnotationSync";
 import { FloatingSummaryPreview } from "./floating_summary_preview/FloatingSummaryPreview";
 import { ZoomControls } from "./ZoomControls";
 
@@ -1888,32 +1887,45 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   // }, [corpusId, combinedData?.document?.allAnnotations, setSidebarViewMode]);
 
   /* ------------------------------------------------------------------ */
-  /* Seed selection atom once if the caller provided initial ids         */
-  useEffect(() => {
-    if (initialAnnotationIds && initialAnnotationIds.length > 0) {
-      setSelectedAnnotations(initialAnnotationIds);
-    }
-  }, [initialAnnotationIds, setSelectedAnnotations]);
+  /* NOTE: Initial annotation seeding removed - incompatible with router-based state
+   *
+   * With router-based architecture, annotation selection is controlled by URL params.
+   * For route-based usage: URL already contains ?ann=... via CentralRouteManager
+   * For modal usage: This needs refactoring - calling setSelectedAnnotations navigates
+   * the URL which is wrong for modals. Future fix should use a different approach for
+   * modal contexts (e.g., navigate to URL when opening modal, restore on close).
+   *
+   * TODO: Implement proper modal annotation seeding that doesn't conflict with routing
+   */
 
-  // keep URL ↔ selection in sync
-  useUrlAnnotationSync();
+  /* ------------------------------------------------------------------ */
+  /* NOTE: useUrlAnnotationSync removed - redundant with CentralRouteManager
+   *
+   * CentralRouteManager handles ALL URL ↔ State synchronization:
+   * - Phase 2: URL query params → reactive vars (selectedAnnotationIds, etc.)
+   * - Phase 4: Reactive vars → URL updates
+   *
+   * useUrlAnnotationSync created competing sync loops causing infinite navigation cycles.
+   * See routing_system.md for architecture details.
+   */
 
   /* ------------------------------------------------------ */
-  /*  Cleanup on unmount – clear annotation selections      */
+  /*  Cleanup on unmount                                    */
   /* ------------------------------------------------------ */
-  // Note: openedDocument is managed by CentralRouteManager and cleared when route changes
   useEffect(() => {
     return () => {
-      setSelectedAnnotations([]);
-      setSelectedRelations([]); // Clear selected relationships
-      // DO NOT call navigate() during unmount - causes "operation is insecure" error
-      // URL cleanup is handled by CentralRouteManager when route changes
+      // DO NOT call setSelectedAnnotations([]) - it navigates the URL during unmount!
+      // CentralRouteManager handles clearing state when routes change.
+
+      // Clear selected relationships (local Jotai atom, not URL-driven)
+      setSelectedRelations([]);
+
       // Clean up zoom indicator timer
       if (zoomIndicatorTimer.current) {
         clearTimeout(zoomIndicatorTimer.current);
       }
     };
-  }, [setSelectedAnnotations, setSelectedRelations]);
+  }, [setSelectedRelations]);
 
   const [selectedSummaryContent, setSelectedSummaryContent] = useState<
     string | null

@@ -71,6 +71,9 @@ export function CentralRouteManager() {
   // Track last processed route to prevent duplicate work
   const lastProcessedPath = useRef<string>("");
 
+  // Track if Phase 2 has run at least once (prevents Phase 4 from overwriting URL on mount)
+  const hasInitializedFromUrl = useRef<boolean>(false);
+
   // ═══════════════════════════════════════════════════════════════
   // GraphQL Queries - Slug-based
   // ═══════════════════════════════════════════════════════════════
@@ -451,6 +454,12 @@ export function CentralRouteManager() {
   // PHASE 2: URL Query Params → Reactive Vars
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
+    console.log("🔍 Phase 2 RAW URL CHECK:", {
+      "location.search": location.search,
+      "window.location.search": window.location.search,
+      "window.location.href": window.location.href,
+    });
+
     // Selection state
     const annIds = parseQueryParam(searchParams.get("ann"));
     const analysisIds = parseQueryParam(searchParams.get("analysis"));
@@ -462,7 +471,7 @@ export function CentralRouteManager() {
     const boundingBoxes = searchParams.get("boundingBoxes") === "true";
     const labelsParam = searchParams.get("labels");
 
-    console.log("[RouteManager] Setting query param state:", {
+    console.log("[RouteManager] Phase 2: Setting query param state:", {
       annIds,
       analysisIds,
       extractIds,
@@ -482,6 +491,11 @@ export function CentralRouteManager() {
     showSelectedAnnotationOnly(selectedOnly);
     showAnnotationBoundingBoxes(boundingBoxes);
 
+    console.log(
+      "[RouteManager] Phase 2: Reactive vars updated. Annotation IDs:",
+      annIds
+    );
+
     // Parse label display behavior (default to ON_HOVER if not specified)
     if (labelsParam === "ALWAYS") {
       showAnnotationLabels("ALWAYS" as any);
@@ -490,6 +504,9 @@ export function CentralRouteManager() {
     } else {
       showAnnotationLabels("ON_HOVER" as any);
     }
+
+    // Mark that we've initialized from URL - allows Phase 4 to start syncing
+    hasInitializedFromUrl.current = true;
   }, [searchParams]);
 
   // ═══════════════════════════════════════════════════════════════
@@ -511,11 +528,16 @@ export function CentralRouteManager() {
     const canonical = normalize(canonicalPath);
 
     if (currentPath !== canonical) {
-      console.log(
-        "[RouteManager] Redirecting to canonical path:",
-        canonicalPath
-      );
+      console.log("[RouteManager] Phase 3: Redirecting to canonical path:", {
+        from: currentPath,
+        to: canonical,
+        preservingSearch: location.search,
+      });
       navigate(canonicalPath + location.search, { replace: true });
+    } else {
+      console.log(
+        "[RouteManager] Phase 3: Path already canonical, no redirect"
+      );
     }
   }, [corpus, document, location.pathname]);
 
@@ -531,6 +553,46 @@ export function CentralRouteManager() {
   const labels = useReactiveVar(showAnnotationLabels);
 
   useEffect(() => {
+    console.log("🔄 Phase 4 sync triggered:", {
+      annIds,
+      analysisIds,
+      extractIds,
+      structural,
+      selectedOnly,
+      boundingBoxes,
+      labels,
+      routeLoading: routeLoading(), // Check loading state
+      hasInitializedFromUrl: hasInitializedFromUrl.current,
+    });
+
+    // CRITICAL: Don't sync on initial mount - wait for Phase 2 to read URL first
+    // This prevents overwriting deep link params with default reactive var values
+    if (!hasInitializedFromUrl.current) {
+      console.log(
+        "[RouteManager] Phase 4 SKIPPED - waiting for Phase 2 initialization"
+      );
+      return;
+    }
+
+    // CRITICAL: Don't sync while route is loading!
+    // Prevents race condition where Phase 4 reads stale reactive vars before Phase 2 updates them
+    if (routeLoading()) {
+      console.log(
+        "[RouteManager] Phase 4 SKIPPED - route still loading, preventing race condition"
+      );
+      return;
+    }
+
+    console.log("[RouteManager] Phase 4: Building query from reactive vars:", {
+      annIds,
+      analysisIds,
+      extractIds,
+      structural,
+      selectedOnly,
+      boundingBoxes,
+      labels,
+    });
+
     const queryString = buildQueryParams({
       annotationIds: annIds,
       analysisIds,
@@ -545,8 +607,17 @@ export function CentralRouteManager() {
     const expectedSearch = queryString; // Already has "?" from buildQueryParams
     const currentSearch = location.search; // Also has "?"
 
+    console.log("[RouteManager] Phase 4: URL comparison:", {
+      current: currentSearch,
+      expected: expectedSearch,
+      match: currentSearch === expectedSearch,
+    });
+
     if (currentSearch !== expectedSearch) {
-      console.log("[RouteManager] Syncing reactive vars → URL:", queryString);
+      console.log(
+        "[RouteManager] Phase 4: Syncing reactive vars → URL:",
+        queryString
+      );
       navigate({ search: queryString }, { replace: true });
     }
   }, [

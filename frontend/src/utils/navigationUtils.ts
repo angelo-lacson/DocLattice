@@ -145,6 +145,8 @@ export function buildCanonicalPath(
 export function buildQueryParams(params: QueryParams): string {
   const searchParams = new URLSearchParams();
 
+  console.log("[buildQueryParams] Input params:", params);
+
   // Selection state
   if (params.annotationIds?.length) {
     searchParams.set("ann", params.annotationIds.join(","));
@@ -172,7 +174,9 @@ export function buildQueryParams(params: QueryParams): string {
   }
 
   const query = searchParams.toString();
-  return query ? `?${query}` : "";
+  const result = query ? `?${query}` : "";
+  console.log("[buildQueryParams] Output:", result);
+  return result;
 }
 
 /**
