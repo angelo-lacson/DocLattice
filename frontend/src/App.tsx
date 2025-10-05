@@ -2,7 +2,13 @@ import { useEffect, useCallback } from "react";
 
 import { useAuth0 } from "@auth0/auth0-react";
 
-import { Routes, Route, Navigate } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 
 import _ from "lodash";
 
@@ -66,6 +72,7 @@ import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
+import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
 import {
   editDocForm_Schema,
   editDocForm_Ui_Schema,
@@ -105,6 +112,9 @@ export const App = () => {
   const { width } = useWindowDimensions();
   const show_mobile_menu = width <= 1000;
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const {
     data: meData,
     loading: meLoading,
@@ -129,9 +139,12 @@ export const App = () => {
 
   useEffect(() => {
     if (width <= 800) {
-      showAnnotationLabels(LabelDisplayBehavior.ALWAYS);
+      // Update display settings via URL - CentralRouteManager will set reactive vars
+      updateAnnotationDisplayParams(location, navigate, {
+        labelDisplay: LabelDisplayBehavior.ALWAYS,
+      });
     }
-  }, [width]);
+  }, [width, location, navigate]);
 
   // Auth logic has been moved to AuthGate component to ensure it completes
   // before any components that need authentication are rendered

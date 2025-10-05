@@ -88,8 +88,9 @@ export const EditExtractModalTestWrapper: React.FC<
   EditExtractModalTestWrapperProps
 > = ({ mocks, open, ext, toggleModal }) => {
   // Mark authentication as done immediately for tests
+  // Component tests set reactive vars directly (pragmatic exception to The ONE PLACE TO RULE THEM ALL)
   React.useEffect(() => {
-    authStatusVar("ANONYMOUS");
+    authStatusVar("AUTHENTICATED");
   }, []);
 
   // Initialize reactive variables

@@ -296,6 +296,13 @@ test.describe("FloatingDocumentControls", () => {
     // Click structural toggle
     await structuralToggleWrapper.click();
 
+    // ARCHITECTURAL NOTE: In Playwright component tests, MemoryRouter location changes
+    // don't reliably propagate to trigger reactive var updates via useEffect hooks.
+    // The test wrapper now intercepts navigate calls to immediately sync reactive vars,
+    // simulating what CentralRouteManager Phase 2 does in the real app.
+    // Add small delay to allow intercepted navigate to process
+    await page.waitForTimeout(100);
+
     // Both should now be checked
     await expect(structuralToggle).toBeChecked();
     await expect(selectedOnlyToggle).toBeChecked();

@@ -24,7 +24,7 @@ beforeEach(() => {
 });
 
 describe("CorpusBreadcrumbs", () => {
-  it("clears selection and navigates on root click", () => {
+  it("navigates to /corpuses on root click (CentralRouteManager will clear state)", () => {
     const { getByText } = render(
       <MemoryRouter>
         <CorpusBreadcrumbs />
@@ -34,8 +34,11 @@ describe("CorpusBreadcrumbs", () => {
     const corpusesLink = getByText("Corpuses");
     fireEvent.click(corpusesLink);
 
-    expect(openedCorpus()).toBeNull();
-    expect(openedDocument()).toBeNull();
+    // PURE TEST: Component's responsibility is to navigate
     expect(mockNavigate).toHaveBeenCalledWith("/corpuses");
+
+    // NOTE: We do NOT test that openedCorpus/openedDocument are cleared
+    // That's CentralRouteManager Phase 1's job when it detects the route change
+    // Only CentralRouteManager is allowed to set URL-driven reactive vars
   });
 });

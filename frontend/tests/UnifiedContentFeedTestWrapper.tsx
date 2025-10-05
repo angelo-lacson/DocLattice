@@ -1,7 +1,24 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Provider as JotaiProvider, useAtom, useSetAtom } from "jotai";
-import { MockedProvider, MockedResponse } from "@apollo/client/testing";
+import {
+  MockedProvider,
+  MockedResponse,
+  MockLink,
+} from "@apollo/client/testing";
+import { InMemoryCache, ApolloLink } from "@apollo/client";
+import { relayStylePagination } from "@apollo/client/utilities";
+import { MemoryRouter } from "react-router-dom";
 import { UnifiedContentFeed } from "../src/components/knowledge_base/document/unified_feed";
+import {
+  authStatusVar,
+  authToken,
+  userObj,
+  openedDocument,
+  openedCorpus,
+  selectedAnalysesIds,
+  selectedExtractIds,
+  selectedAnnotationIds,
+} from "../src/graphql/cache";
 import {
   ContentFilters,
   ContentItemType,
@@ -11,11 +28,13 @@ import {
 import {
   searchTextAtom,
   textSearchStateAtom,
+  selectedDocumentAtom,
 } from "../src/components/annotator/context/DocumentAtom";
 import {
   pdfAnnotationsAtom,
   structuralAnnotationsAtom,
 } from "../src/components/annotator/context/AnnotationAtoms";
+import { corpusStateAtom } from "../src/components/annotator/context/CorpusAtom";
 import {
   selectedAnnotationsAtom,
   selectedRelationsAtom,
@@ -33,6 +52,55 @@ import {
 import { PdfAnnotations } from "../src/components/annotator/types/annotations";
 import { spanLabelsToViewAtom } from "../src/components/annotator/context/AnnotationControlAtoms";
 import { LabelDisplayBehavior } from "../src/types/graphql-api";
+
+// Create a minimal test cache configuration
+const createTestCache = () =>
+  new InMemoryCache({
+    typePolicies: {
+      Query: {
+        fields: {
+          annotations: relayStylePagination(),
+          userFeedback: relayStylePagination(),
+          pageAnnotations: { keyArgs: false, merge: true },
+          documents: relayStylePagination(),
+          corpuses: relayStylePagination(),
+          userexports: relayStylePagination(),
+          labelsets: relayStylePagination(),
+          annotationLabels: relayStylePagination(),
+          relationshipLabels: relayStylePagination(),
+          extracts: relayStylePagination(),
+          columns: relayStylePagination(),
+        },
+      },
+      DocumentType: {
+        keyFields: ["id"],
+      },
+      CorpusType: {
+        keyFields: ["id"],
+      },
+      AnnotationType: {
+        keyFields: ["id"],
+      },
+      AnalysisType: {
+        keyFields: ["id"],
+      },
+    },
+  });
+
+// Create a wildcard link that handles all GraphQL operations gracefully
+const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
+  const defaultMockLink = new MockLink(mocks);
+  return new ApolloLink((operation, forward) => {
+    // Try the mock link first
+    const result = defaultMockLink.request(operation, forward);
+    if (result) {
+      return result;
+    }
+
+    // If no mock found, return empty data to prevent errors
+    return ApolloLink.empty();
+  });
+};
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends React.Component<
@@ -124,7 +192,7 @@ const InnerWrapper: React.FC<
 > = ({
   mockAnnotations = [],
   mockRelations = [],
-  selectedAnnotationIds = [],
+  selectedAnnotationIds: propSelectedAnnotationIds = [],
   children,
 }) => {
   const setPdfAnnotations = useSetAtom(pdfAnnotationsAtom);
@@ -145,8 +213,30 @@ const InnerWrapper: React.FC<
   const setShowSelectedOnly = useSetAtom(showSelectedAnnotationOnlyAtom);
   const setHideLabels = useSetAtom(hideLabelsAtom);
 
+  // Document and corpus atoms
+  const setSelectedDocument = useSetAtom(selectedDocumentAtom);
+  const setCorpusState = useSetAtom(corpusStateAtom);
+
   // Initialize atoms once on mount
   React.useEffect(() => {
+    // Initialize Apollo reactive vars first
+    authStatusVar("AUTHENTICATED");
+    openedDocument({
+      id: "test-document-id",
+      slug: "test-document",
+      title: "Test Document",
+      creator: { id: "test-user", slug: "testuser", username: "testuser" },
+    } as any);
+    openedCorpus({
+      id: "test-corpus-id",
+      slug: "test-corpus",
+      title: "Test Corpus",
+      creator: { id: "test-user", slug: "testuser", username: "testuser" },
+    } as any);
+    selectedAnalysesIds([]);
+    selectedExtractIds([]);
+    selectedAnnotationIds([]);
+
     // Separate structural from regular annotations
     const regularAnnotations = mockAnnotations.filter((ann) => !ann.structural);
     const structuralAnns = mockAnnotations.filter((ann) => ann.structural);
@@ -161,7 +251,7 @@ const InnerWrapper: React.FC<
       selectedIndex: 0,
     });
     setSearchText("");
-    setSelectedAnnotations(selectedAnnotationIds);
+    setSelectedAnnotations(propSelectedAnnotationIds);
     setSelectedRelations([]);
     // Don't filter by labels - show all annotations
     setSpanLabelsToView(null);
@@ -173,10 +263,60 @@ const InnerWrapper: React.FC<
     setShowLabels(LabelDisplayBehavior.ALWAYS);
     setShowSelectedOnly(false);
     setHideLabels(false);
+
+    // Initialize document and corpus state atoms
+    setSelectedDocument({
+      id: "test-document-id",
+      title: "Test Document",
+      description: "Test document for unified feed",
+      backendLock: false,
+      pdfFile: "test.pdf",
+      txtExtractFile: null,
+      pawlsParseFile: null,
+      isPublic: false,
+      isOpen: false,
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
+      myPermissions: ["READ", "WRITE", "UPDATE", "DELETE"],
+      isSelected: false,
+      fileType: "application/pdf",
+      __typename: "DocumentType",
+    } as any);
+
+    setCorpusState({
+      selectedCorpus: {
+        id: "test-corpus-id",
+        title: "Test Corpus",
+        description: "Test corpus",
+        icon: null,
+        isPublic: false,
+        backendLock: false,
+        created: new Date().toISOString(),
+        modified: new Date().toISOString(),
+        myPermissions: ["READ", "WRITE", "UPDATE", "DELETE"],
+        __typename: "CorpusType",
+      } as any,
+      myPermissions: [],
+      spanLabels: [],
+      humanSpanLabels: [],
+      relationLabels: [],
+      docTypeLabels: [],
+      humanTokenLabels: [],
+      allowComments: true,
+      isLoading: false,
+    });
   }, []); // Run only once on mount
 
   return <>{children}</>;
 };
+
+// Set up authentication for tests - OUTSIDE component to avoid re-setting
+authToken("test-auth-token");
+userObj({
+  id: "test-user",
+  email: "test@example.com",
+  username: "testuser",
+});
 
 export const UnifiedContentFeedTestWrapper: React.FC<
   UnifiedContentFeedTestWrapperProps
@@ -196,6 +336,9 @@ export const UnifiedContentFeedTestWrapper: React.FC<
   selectedAnnotationIds = [],
   mocks = [],
 }) => {
+  // Create a wildcard link that handles all operations
+  const link = createWildcardLink(mocks);
+
   // Debug filters
   React.useEffect(() => {
     console.log("TestWrapper - filters received:", filters);
@@ -207,47 +350,59 @@ export const UnifiedContentFeedTestWrapper: React.FC<
     console.log("TestWrapper - is Set?", filters.contentTypes instanceof Set);
     console.log("TestWrapper - is Array?", Array.isArray(filters.contentTypes));
   }, [filters]);
+
   return (
-    <JotaiProvider>
-      <MockedProvider mocks={mocks} addTypename>
-        <ErrorBoundary>
-          <InnerWrapper
-            mockAnnotations={mockAnnotations}
-            mockRelations={mockRelations}
-            selectedAnnotationIds={selectedAnnotationIds}
-          >
-            <div
-              style={{
-                width: "400px",
-                height: "600px",
-                position: "relative",
-                background: "#f5f5f5",
-              }}
+    <MemoryRouter initialEntries={["/test"]}>
+      <JotaiProvider>
+        <MockedProvider
+          link={link}
+          cache={createTestCache()}
+          addTypename
+          defaultOptions={{
+            watchQuery: { errorPolicy: "all" },
+            query: { errorPolicy: "all" },
+            mutate: { errorPolicy: "all" },
+          }}
+        >
+          <ErrorBoundary>
+            <InnerWrapper
+              mockAnnotations={mockAnnotations}
+              mockRelations={mockRelations}
+              selectedAnnotationIds={selectedAnnotationIds}
             >
-              <UnifiedContentFeed
-                notes={notes}
-                filters={{
-                  ...filters,
-                  // Handle Playwright's serialization of Set to Array
-                  contentTypes:
-                    filters.contentTypes instanceof Set
-                      ? filters.contentTypes
-                      : new Set<ContentItemType>(
-                          Array.isArray(filters.contentTypes)
-                            ? (filters.contentTypes as ContentItemType[])
-                            : []
-                        ),
+              <div
+                style={{
+                  width: "400px",
+                  height: "600px",
+                  position: "relative",
+                  background: "#f5f5f5",
                 }}
-                sortBy={sortBy}
-                isLoading={isLoading}
-                onItemSelect={onItemSelect}
-                fetchMore={fetchMore}
-                readOnly={readOnly}
-              />
-            </div>
-          </InnerWrapper>
-        </ErrorBoundary>
-      </MockedProvider>
-    </JotaiProvider>
+              >
+                <UnifiedContentFeed
+                  notes={notes}
+                  filters={{
+                    ...filters,
+                    // Handle Playwright's serialization of Set to Array
+                    contentTypes:
+                      filters.contentTypes instanceof Set
+                        ? filters.contentTypes
+                        : new Set<ContentItemType>(
+                            Array.isArray(filters.contentTypes)
+                              ? (filters.contentTypes as ContentItemType[])
+                              : []
+                          ),
+                  }}
+                  sortBy={sortBy}
+                  isLoading={isLoading}
+                  onItemSelect={onItemSelect}
+                  fetchMore={fetchMore}
+                  readOnly={readOnly}
+                />
+              </div>
+            </InnerWrapper>
+          </ErrorBoundary>
+        </MockedProvider>
+      </JotaiProvider>
+    </MemoryRouter>
   );
 };

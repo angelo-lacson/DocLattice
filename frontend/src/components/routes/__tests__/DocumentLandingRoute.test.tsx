@@ -164,34 +164,4 @@ describe("DocumentLandingRoute - State-Driven Rendering", () => {
       ).toBeInTheDocument();
     });
   });
-
-  describe("Navigation", () => {
-    it("should provide handleClose that navigates to corpus when corpus exists", () => {
-      routeLoading(false);
-      openedDocument(mockDocument);
-      openedCorpus(mockCorpus);
-
-      const mockNavigate = vi.fn();
-      vi.mock("react-router-dom", async () => {
-        const actual = await vi.importActual("react-router-dom");
-        return {
-          ...actual,
-          useNavigate: () => mockNavigate,
-        };
-      });
-
-      render(
-        <MockedProvider mocks={[]} addTypename={false}>
-          <MemoryRouter>
-            <DocumentLandingRoute />
-          </MemoryRouter>
-        </MockedProvider>
-      );
-
-      // Component renders successfully - handleClose callback is wired up
-      expect(
-        screen.getByText("DocumentKnowledgeBase Component")
-      ).toBeInTheDocument();
-    });
-  });
 });

@@ -1,10 +1,15 @@
 /**
  * Atom-based state management for UI settings, annotation selection,
  * and display settings using Jotai.
+ *
+ * Note: Annotation display settings (showStructural, showBoundingBoxes, etc.)
+ * have been moved to Apollo reactive vars in cache.ts for URL synchronization.
  */
 
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useRef } from "react";
+import { useReactiveVar } from "@apollo/client";
+import { useNavigate, useLocation } from "react-router-dom";
 import { RelationGroup } from "../types/annotations";
 import { LabelDisplayBehavior } from "../../../types/graphql-api";
 import {
@@ -16,6 +21,13 @@ import {
 } from "./AnnotationControlAtoms";
 import { useCorpusState } from "./CorpusAtom";
 import { useSelectedDocument } from "./DocumentAtom";
+import {
+  showStructuralAnnotations,
+  showSelectedAnnotationOnly,
+  showAnnotationBoundingBoxes,
+  showAnnotationLabels,
+  selectedAnnotationIds,
+} from "../../../graphql/cache";
 
 /**
  * Types for query loading states and errors.
@@ -68,14 +80,16 @@ export const hoveredAnnotationIdAtom = atom<string | null>(null);
 
 /**
  * Annotation Display Atoms
+ *
+ * DEPRECATED: These atoms are deprecated in favor of Apollo reactive vars in cache.ts
+ * for proper URL synchronization. Kept as exports for backward compatibility.
+ * DO NOT USE - Use useAnnotationDisplay() hook instead.
  */
-export const showAnnotationBoundingBoxesAtom = atom<boolean>(true);
-export const showAnnotationLabelsAtom = atom<LabelDisplayBehavior>(
-  LabelDisplayBehavior.ON_HOVER
-);
-export const showStructuralAnnotationsAtom = atom<boolean>(false);
-export const showSelectedAnnotationOnlyAtom = atom<boolean>(false);
-export const hideLabelsAtom = atom<boolean>(false);
+export const showAnnotationBoundingBoxesAtom = atom<boolean>(true); // DEPRECATED - use reactive var
+export const showAnnotationLabelsAtom = atom<any>("ON_HOVER"); // DEPRECATED - use reactive var
+export const showStructuralAnnotationsAtom = atom<boolean>(false); // DEPRECATED - use reactive var
+export const showSelectedAnnotationOnlyAtom = atom<boolean>(false); // DEPRECATED - use reactive var
+export const hideLabelsAtom = atom<boolean>(false); // Still used locally
 
 /**
  * Relationship Display Atoms
@@ -324,23 +338,97 @@ export function useAnnotationControls() {
 
 /**
  * Custom hook for managing annotation display settings
+ * Now uses Apollo reactive vars from cache.ts for URL synchronization
+ * FOLLOWS THE ONE OLACE TO RULE THEM ALL: Components update URL,
+ * CentralRouteManager sets reactive vars
  * @returns Object containing annotation display states and their setters
  */
 export function useAnnotationDisplay() {
-  const [showBoundingBoxes, setShowBoundingBoxes] = useAtom(
-    showAnnotationBoundingBoxesAtom
-  );
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Use Apollo reactive vars for URL-synchronized state
+  const showBoundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
+  const showLabels = useReactiveVar(showAnnotationLabels);
+  const showStructural = useReactiveVar(showStructuralAnnotations);
+  const showSelectedOnly = useReactiveVar(showSelectedAnnotationOnly);
+
+  // Local Jotai state for non-URL-synchronized settings
   const [showStructuralRelationships, setShowStructuralRelationships] = useAtom(
     showStructuralRelationshipsAtom
   );
-  const [showLabels, setShowLabels] = useAtom(showAnnotationLabelsAtom);
-  const [showStructural, setShowStructural] = useAtom(
-    showStructuralAnnotationsAtom
-  );
-  const [showSelectedOnly, setShowSelectedOnly] = useAtom(
-    showSelectedAnnotationOnlyAtom
-  );
   const [hideLabels, setHideLabels] = useAtom(hideLabelsAtom);
+
+  // Setters that update BOTH reactive vars (for immediate effect) AND URL (for persistence)
+  // In real app: CentralRouteManager Phase 2 also syncs URL → reactive vars
+  // In component tests: Direct reactive var update ensures immediate UI updates
+  const setShowBoundingBoxes = useCallback(
+    (value: boolean) => {
+      // Update reactive var immediately
+      showAnnotationBoundingBoxes(value);
+
+      // Also update URL to maintain URL as source of truth
+      const searchParams = new URLSearchParams(location.search);
+      if (value) {
+        searchParams.set("boundingBoxes", "true");
+      } else {
+        searchParams.delete("boundingBoxes");
+      }
+      navigate({ search: searchParams.toString() }, { replace: true });
+    },
+    [navigate, location.search]
+  );
+
+  const setShowLabels = useCallback(
+    (value: LabelDisplayBehavior) => {
+      // Update reactive var immediately
+      showAnnotationLabels(value);
+
+      // Also update URL to maintain URL as source of truth
+      const searchParams = new URLSearchParams(location.search);
+      if (value !== "ON_HOVER") {
+        searchParams.set("labels", value);
+      } else {
+        searchParams.delete("labels");
+      }
+      navigate({ search: searchParams.toString() }, { replace: true });
+    },
+    [navigate, location.search]
+  );
+
+  const setShowStructural = useCallback(
+    (value: boolean) => {
+      // Update reactive var immediately
+      showStructuralAnnotations(value);
+
+      // Also update URL to maintain URL as source of truth
+      const searchParams = new URLSearchParams(location.search);
+      if (value) {
+        searchParams.set("structural", "true");
+      } else {
+        searchParams.delete("structural");
+      }
+      navigate({ search: searchParams.toString() }, { replace: true });
+    },
+    [navigate, location.search]
+  );
+
+  const setShowSelectedOnly = useCallback(
+    (value: boolean) => {
+      // Update reactive var immediately
+      showSelectedAnnotationOnly(value);
+
+      // Also update URL to maintain URL as source of truth
+      const searchParams = new URLSearchParams(location.search);
+      if (value) {
+        searchParams.set("selectedOnly", "true");
+      } else {
+        searchParams.delete("selectedOnly");
+      }
+      navigate({ search: searchParams.toString() }, { replace: true });
+    },
+    [navigate, location.search]
+  );
 
   return {
     showBoundingBoxes,
@@ -360,17 +448,38 @@ export function useAnnotationDisplay() {
 
 /**
  * Custom hook for managing annotation selection and hover states
+ * Now uses Apollo reactive var for annotation IDs (URL-synchronized)
+ * FOLLOWS THE ONE OLACE TO RULE THEM ALL: Components update URL,
+ * CentralRouteManager sets reactive vars
  * @returns Object containing selection and hover states and their setters
  */
 export function useAnnotationSelection() {
-  const [selectedAnnotations, setSelectedAnnotations] = useAtom(
-    selectedAnnotationsAtom
-  );
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Use Apollo reactive var for URL-synchronized annotation selection
+  const selectedAnnotations = useReactiveVar(selectedAnnotationIds);
+
+  // Local Jotai state for non-URL-synchronized selection
   const [selectedRelations, setSelectedRelations] = useAtom(
     selectedRelationsAtom
   );
   const [hoveredAnnotationId, setHoveredAnnotationId] = useAtom(
     hoveredAnnotationIdAtom
+  );
+
+  // Setter that updates URL - CentralRouteManager Phase 2 handles reactive var
+  const setSelectedAnnotations = useCallback(
+    (ids: string[]) => {
+      const searchParams = new URLSearchParams(location.search);
+      if (ids.length > 0) {
+        searchParams.set("ann", ids.join(","));
+      } else {
+        searchParams.delete("ann");
+      }
+      navigate({ search: searchParams.toString() }, { replace: true });
+    },
+    [navigate, location.search]
   );
 
   return {

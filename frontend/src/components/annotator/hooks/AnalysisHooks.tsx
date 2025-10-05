@@ -3,6 +3,7 @@ import { useQuery, useLazyQuery, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 import _ from "lodash";
 import { useAtom, useAtomValue } from "jotai";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import {
   AnalysisType,
@@ -31,11 +32,7 @@ import {
   selectedExtractAtom,
   allowUserInputAtom,
 } from "../context/AnalysisAtoms";
-import {
-  showAnnotationBoundingBoxesAtom,
-  showAnnotationLabelsAtom,
-  showSelectedAnnotationOnlyAtom,
-} from "../context/UISettingsAtom";
+import { useAnnotationDisplay } from "../context/UISettingsAtom";
 import { useInitialAnnotations, usePdfAnnotations } from "./AnnotationHooks";
 import { useCorpusState } from "../context/CorpusAtom";
 import {
@@ -55,12 +52,16 @@ import {
   selectedAnalysesIds,
   selectedExtractIds,
 } from "../../../graphql/cache";
+import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
 
 /**
  * Custom hook to manage analysis and extract data using Jotai atoms.
  * @returns An object containing analysis and extract data and related functions.
  */
 export const useAnalysisManager = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // Get document and corpus from atoms instead of props
   const selectedDocument = useAtomValue(selectedDocumentAtom);
   const { selectedCorpus } = useCorpusState();
@@ -77,13 +78,10 @@ export const useAnalysisManager = () => {
   const [selected_extract, setSelectedExtract] = useAtom(selectedExtractAtom);
 
   const [, setAllowUserInput] = useAtom(allowUserInputAtom);
-  const [, setShowAnnotationBoundingBoxes] = useAtom(
-    showAnnotationBoundingBoxesAtom
-  );
-  const [, setShowAnnotationLabels] = useAtom(showAnnotationLabelsAtom);
-  const [, setShowSelectedAnnotationOnly] = useAtom(
-    showSelectedAnnotationOnlyAtom
-  );
+
+  // Use wrapped setters that update both reactive vars AND URL
+  const { setShowBoundingBoxes, setShowLabels, setShowSelectedOnly } =
+    useAnnotationDisplay();
 
   const { replaceDocTypeAnnotations, replaceAnnotations, replaceRelations } =
     usePdfAnnotations();
@@ -452,22 +450,27 @@ export const useAnalysisManager = () => {
   const onSelectAnalysis = useCallback(
     (analysis: AnalysisType | null) => {
       // When a new analysis is loaded, reset the view behaviors
-      setShowAnnotationBoundingBoxes(true);
-      setShowAnnotationLabels(LabelDisplayBehavior.ON_HOVER);
-      setShowSelectedAnnotationOnly(false);
+      // Use wrapped setters that update both reactive vars AND URL
+      setShowBoundingBoxes(true);
+      setShowLabels(LabelDisplayBehavior.ON_HOVER);
+      setShowSelectedOnly(false);
       setSelectedAnalysis(analysis);
       setSelectedExtract(null);
 
-      // Update reactive var so CentralRouteManager syncs to URL
-      selectedAnalysesIds(analysis ? [analysis.id] : []);
-      selectedExtractIds([]);
+      // Update URL - CentralRouteManager will set reactive vars
+      updateAnnotationSelectionParams(location, navigate, {
+        analysisIds: analysis ? [analysis.id] : [],
+        extractIds: [],
+      });
     },
     [
-      setShowAnnotationBoundingBoxes,
-      setShowAnnotationLabels,
-      setShowSelectedAnnotationOnly,
+      setShowBoundingBoxes,
+      setShowLabels,
+      setShowSelectedOnly,
       setSelectedAnalysis,
       setSelectedExtract,
+      location,
+      navigate,
     ]
   );
 
@@ -476,14 +479,19 @@ export const useAnalysisManager = () => {
    *
    * @param extract The extract to select.
    */
-  const onSelectExtract = (extract: ExtractType | null) => {
-    setSelectedExtract(extract);
-    setSelectedAnalysis(null);
+  const onSelectExtract = useCallback(
+    (extract: ExtractType | null) => {
+      setSelectedExtract(extract);
+      setSelectedAnalysis(null);
 
-    // Update reactive var so CentralRouteManager syncs to URL
-    selectedExtractIds(extract ? [extract.id] : []);
-    selectedAnalysesIds([]);
-  };
+      // Update URL - CentralRouteManager will set reactive vars
+      updateAnnotationSelectionParams(location, navigate, {
+        extractIds: extract ? [extract.id] : [],
+        analysisIds: [],
+      });
+    },
+    [setSelectedExtract, setSelectedAnalysis, location, navigate]
+  );
 
   return {
     analysisRows,

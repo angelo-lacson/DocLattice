@@ -23,6 +23,10 @@ import {
   routeLoading,
   routeError,
   authStatusVar,
+  showStructuralAnnotations,
+  showSelectedAnnotationOnly,
+  showAnnotationBoundingBoxes,
+  showAnnotationLabels,
 } from "../graphql/cache";
 import {
   RESOLVE_CORPUS_BY_SLUGS_FULL,
@@ -438,19 +442,45 @@ export function CentralRouteManager() {
   // PHASE 2: URL Query Params → Reactive Vars
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
+    // Selection state
     const annIds = parseQueryParam(searchParams.get("ann"));
     const analysisIds = parseQueryParam(searchParams.get("analysis"));
     const extractIds = parseQueryParam(searchParams.get("extract"));
+
+    // Visualization state (booleans and enums)
+    const structural = searchParams.get("structural") === "true";
+    const selectedOnly = searchParams.get("selectedOnly") === "true";
+    const boundingBoxes = searchParams.get("boundingBoxes") === "true";
+    const labelsParam = searchParams.get("labels");
 
     console.log("[RouteManager] Setting query param state:", {
       annIds,
       analysisIds,
       extractIds,
+      structural,
+      selectedOnly,
+      boundingBoxes,
+      labels: labelsParam,
     });
 
+    // Update selection reactive vars
     selectedAnnotationIds(annIds);
     selectedAnalysesIds(analysisIds);
     selectedExtractIds(extractIds);
+
+    // Update visualization reactive vars
+    showStructuralAnnotations(structural);
+    showSelectedAnnotationOnly(selectedOnly);
+    showAnnotationBoundingBoxes(boundingBoxes);
+
+    // Parse label display behavior (default to ON_HOVER if not specified)
+    if (labelsParam === "ALWAYS") {
+      showAnnotationLabels("ALWAYS" as any);
+    } else if (labelsParam === "HIDE") {
+      showAnnotationLabels("HIDE" as any);
+    } else {
+      showAnnotationLabels("ON_HOVER" as any);
+    }
   }, [searchParams]);
 
   // ═══════════════════════════════════════════════════════════════
@@ -486,24 +516,39 @@ export function CentralRouteManager() {
   const annIds = useReactiveVar(selectedAnnotationIds);
   const analysisIds = useReactiveVar(selectedAnalysesIds);
   const extractIds = useReactiveVar(selectedExtractIds);
+  const structural = useReactiveVar(showStructuralAnnotations);
+  const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
+  const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
+  const labels = useReactiveVar(showAnnotationLabels);
 
   useEffect(() => {
     const queryString = buildQueryParams({
       annotationIds: annIds,
       analysisIds,
       extractIds,
+      showStructural: structural,
+      showSelectedOnly: selectedOnly,
+      showBoundingBoxes: boundingBoxes,
+      labelDisplay: labels,
     });
 
-    const expectedSearch = queryString || "";
-    const currentSearch = location.search.startsWith("?")
-      ? location.search.substring(1)
-      : location.search;
+    // Both should have consistent "?" prefix for comparison
+    const expectedSearch = queryString; // Already has "?" from buildQueryParams
+    const currentSearch = location.search; // Also has "?"
 
     if (currentSearch !== expectedSearch) {
       console.log("[RouteManager] Syncing reactive vars → URL:", queryString);
       navigate({ search: queryString }, { replace: true });
     }
-  }, [annIds, analysisIds, extractIds]);
+  }, [
+    annIds,
+    analysisIds,
+    extractIds,
+    structural,
+    selectedOnly,
+    boundingBoxes,
+    labels,
+  ]);
 
   // This component is purely side-effect driven, renders nothing
   return null;

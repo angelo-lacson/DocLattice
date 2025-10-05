@@ -23,6 +23,10 @@ export interface QueryParams {
   annotationIds?: string[];
   analysisIds?: string[];
   extractIds?: string[];
+  showStructural?: boolean;
+  showSelectedOnly?: boolean;
+  showBoundingBoxes?: boolean;
+  labelDisplay?: string; // "ALWAYS" | "ON_HOVER" | "HIDE"
 }
 
 /**
@@ -135,12 +139,13 @@ export function buildCanonicalPath(
  * Used for preserving state across navigation
  *
  * @example
- * buildQueryParams({ annotationIds: ["1", "2"], analysisIds: ["3"] })
- * // Returns: "?ann=1,2&analysis=3"
+ * buildQueryParams({ annotationIds: ["1", "2"], analysisIds: ["3"], showStructural: true })
+ * // Returns: "?ann=1,2&analysis=3&structural=true"
  */
 export function buildQueryParams(params: QueryParams): string {
   const searchParams = new URLSearchParams();
 
+  // Selection state
   if (params.annotationIds?.length) {
     searchParams.set("ann", params.annotationIds.join(","));
   }
@@ -149,6 +154,21 @@ export function buildQueryParams(params: QueryParams): string {
   }
   if (params.extractIds?.length) {
     searchParams.set("extract", params.extractIds.join(","));
+  }
+
+  // Visualization state - only add non-default values to keep URLs clean
+  if (params.showStructural) {
+    searchParams.set("structural", "true");
+  }
+  if (params.showSelectedOnly) {
+    searchParams.set("selectedOnly", "true");
+  }
+  if (params.showBoundingBoxes) {
+    searchParams.set("boundingBoxes", "true");
+  }
+  if (params.labelDisplay && params.labelDisplay !== "ON_HOVER") {
+    // Only add if not the default
+    searchParams.set("labels", params.labelDisplay);
   }
 
   const query = searchParams.toString();
@@ -361,4 +381,137 @@ export function buildRequestKey(
 ): string {
   const parts = [type, userIdent, corpusIdent, documentIdent].filter(Boolean);
   return parts.join("-");
+}
+
+/**
+ * SACRED UTILITY: Update annotation display settings via URL
+ * Components MUST use this instead of directly setting reactive vars
+ *
+ * @param location - Current location from useLocation()
+ * @param navigate - Navigate function from useNavigate()
+ * @param settings - Display settings to update
+ *
+ * @example
+ * updateAnnotationDisplayParams(location, navigate, {
+ *   showStructural: true,
+ *   showBoundingBoxes: true,
+ *   labelDisplay: "ALWAYS"
+ * });
+ */
+export function updateAnnotationDisplayParams(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  settings: {
+    showStructural?: boolean;
+    showSelectedOnly?: boolean;
+    showBoundingBoxes?: boolean;
+    labelDisplay?: string;
+  }
+) {
+  const searchParams = new URLSearchParams(location.search);
+
+  // Update only specified params
+  if (settings.showStructural !== undefined) {
+    if (settings.showStructural) {
+      searchParams.set("structural", "true");
+    } else {
+      searchParams.delete("structural");
+    }
+  }
+
+  if (settings.showSelectedOnly !== undefined) {
+    if (settings.showSelectedOnly) {
+      searchParams.set("selectedOnly", "true");
+    } else {
+      searchParams.delete("selectedOnly");
+    }
+  }
+
+  if (settings.showBoundingBoxes !== undefined) {
+    if (settings.showBoundingBoxes) {
+      searchParams.set("boundingBoxes", "true");
+    } else {
+      searchParams.delete("boundingBoxes");
+    }
+  }
+
+  if (settings.labelDisplay !== undefined) {
+    if (settings.labelDisplay !== "ON_HOVER") {
+      searchParams.set("labels", settings.labelDisplay);
+    } else {
+      searchParams.delete("labels");
+    }
+  }
+
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * SACRED UTILITY: Update annotation selection via URL
+ * Components MUST use this instead of directly setting reactive vars
+ *
+ * @param location - Current location from useLocation()
+ * @param navigate - Navigate function from useNavigate()
+ * @param selection - Selection IDs to update
+ *
+ * @example
+ * updateAnnotationSelectionParams(location, navigate, {
+ *   annotationIds: ["123", "456"]
+ * });
+ */
+export function updateAnnotationSelectionParams(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  selection: {
+    annotationIds?: string[];
+    analysisIds?: string[];
+    extractIds?: string[];
+  }
+) {
+  const searchParams = new URLSearchParams(location.search);
+
+  // Update only specified params
+  if (selection.annotationIds !== undefined) {
+    if (selection.annotationIds.length > 0) {
+      searchParams.set("ann", selection.annotationIds.join(","));
+    } else {
+      searchParams.delete("ann");
+    }
+  }
+
+  if (selection.analysisIds !== undefined) {
+    if (selection.analysisIds.length > 0) {
+      searchParams.set("analysis", selection.analysisIds.join(","));
+    } else {
+      searchParams.delete("analysis");
+    }
+  }
+
+  if (selection.extractIds !== undefined) {
+    if (selection.extractIds.length > 0) {
+      searchParams.set("extract", selection.extractIds.join(","));
+    } else {
+      searchParams.delete("extract");
+    }
+  }
+
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * SACRED UTILITY: Clear all annotation selection via URL
+ * Use this for cleanup on unmount
+ *
+ * @param location - Current location from useLocation()
+ * @param navigate - Navigate function from useNavigate()
+ */
+export function clearAnnotationSelection(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void
+) {
+  updateAnnotationSelectionParams(location, navigate, {
+    annotationIds: [],
+    analysisIds: [],
+    extractIds: [],
+  });
 }
