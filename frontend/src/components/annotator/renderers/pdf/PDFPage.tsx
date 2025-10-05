@@ -66,6 +66,10 @@ export const PDFPage = ({
   createAnnotationHandler,
   onZoomRenderRequest,
 }: PDFPageProps) => {
+  console.log(`[PDFPage.tsx] 🔄 Render page ${pageInfo.page.pageNumber}`, {
+    hasOnZoomRenderRequest: !!onZoomRenderRequest,
+  });
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<PDFPageRenderer | null>(null);
   const { pdfAnnotations } = usePdfAnnotations();
@@ -131,7 +135,21 @@ export const PDFPage = ({
 
   const lastRenderedZoom = useRef<number | null>(null);
 
+  // Track when onZoomRenderRequest callback changes
+  const lastCallbackRef = useRef(onZoomRenderRequest);
   useEffect(() => {
+    if (lastCallbackRef.current !== onZoomRenderRequest) {
+      console.log(
+        `[PDFPage.tsx] ⚠️  onZoomRenderRequest callback changed for page ${pageInfo.page.pageNumber}`
+      );
+      lastCallbackRef.current = onZoomRenderRequest;
+    }
+  });
+
+  useEffect(() => {
+    console.log(
+      `[PDFPage.tsx] 📝 Calling setPages for page ${pageInfo.page.pageNumber}`
+    );
     setPages((prevPages) => ({
       ...prevPages,
       [pageInfo.page.pageNumber - 1]: updatedPageInfo,

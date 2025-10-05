@@ -36,6 +36,13 @@ export const DocumentLandingRoute: React.FC = () => {
   const loading = useReactiveVar(routeLoading);
   const error = useReactiveVar(routeError);
 
+  console.log("[DocumentLandingRoute] 🔄 Render triggered", {
+    hasDocument: !!document,
+    hasCorpus: !!corpus,
+    loading,
+    hasError: !!error,
+  });
+
   // Handle close navigation
   const handleClose = React.useCallback(() => {
     // Navigate back to corpus if we have one, otherwise to documents list

@@ -2,7 +2,9 @@ import React, { memo, useCallback } from "react";
 import styled, { css } from "styled-components";
 import { Checkbox, CheckboxProps, Dropdown } from "semantic-ui-react";
 import { User, Square, Layers, Eye, Tags } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAnnotationDisplay } from "../context/UISettingsAtom";
+import { updateAnnotationDisplayParams } from "../../../utils/navigationUtils";
 import { ViewLabelSelector } from "../labels/view_labels_selector/ViewLabelSelector";
 import { LabelDisplayBehavior } from "../../../types/graphql-api";
 
@@ -177,47 +179,57 @@ const LabelSelectorWrapper = styled.div`
  */
 export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
   ({ variant = "sidebar", compact = false, showLabelFilters = false }) => {
-    const {
-      showStructural,
-      setShowStructural,
-      showSelectedOnly,
-      setShowSelectedOnly,
-      showBoundingBoxes,
-      setShowBoundingBoxes,
-      showLabels,
-      setShowLabels,
-    } = useAnnotationDisplay();
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    // Read current display settings from reactive vars (set by CentralRouteManager)
+    const { showStructural, showSelectedOnly, showBoundingBoxes, showLabels } =
+      useAnnotationDisplay();
 
     // Memoize callbacks to prevent child rerenders
+    // Use navigation utility to update URL - CentralRouteManager Phase 2 will set reactive vars
     const handleShowSelectedChange = useCallback(
       (checked: boolean) => {
-        setShowSelectedOnly(checked);
+        updateAnnotationDisplayParams(location, navigate, {
+          showSelectedOnly: checked,
+        });
       },
-      [setShowSelectedOnly]
+      [location, navigate]
     );
 
     const handleShowStructuralChange = useCallback(() => {
       const newStructuralValue = !showStructural;
-      setShowStructural(newStructuralValue);
 
       // If enabling structural view, force "show selected only" to be true
+      // Update BOTH params in a SINGLE navigate() call to avoid race condition
       if (newStructuralValue) {
-        setShowSelectedOnly(true);
+        updateAnnotationDisplayParams(location, navigate, {
+          showStructural: true,
+          showSelectedOnly: true,
+        });
+      } else {
+        updateAnnotationDisplayParams(location, navigate, {
+          showStructural: false,
+        });
       }
-    }, [showStructural, setShowStructural, setShowSelectedOnly]);
+    }, [showStructural, location, navigate]);
 
     const handleShowBoundingBoxesChange = useCallback(
       (checked: boolean) => {
-        setShowBoundingBoxes(checked);
+        updateAnnotationDisplayParams(location, navigate, {
+          showBoundingBoxes: checked,
+        });
       },
-      [setShowBoundingBoxes]
+      [location, navigate]
     );
 
     const handleLabelBehaviorChange = useCallback(
       (value: LabelDisplayBehavior) => {
-        setShowLabels(value);
+        updateAnnotationDisplayParams(location, navigate, {
+          labelDisplay: value,
+        });
       },
-      [setShowLabels]
+      [location, navigate]
     );
 
     const labelDisplayOptions = [
