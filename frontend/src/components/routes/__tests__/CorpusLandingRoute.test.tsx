@@ -48,9 +48,14 @@ describe("CorpusLandingRoute - State-Driven Rendering", () => {
       id: "user-1",
       slug: "john",
       username: "john",
+      email: "john@example.com",
     },
     isPublic: true,
     myPermissions: ["read_corpus"],
+    analyses: {
+      edges: [],
+      pageInfo: { hasNextPage: false, hasPreviousPage: false },
+    },
   };
 
   beforeEach(() => {
@@ -116,7 +121,7 @@ describe("CorpusLandingRoute - State-Driven Rendering", () => {
   describe("Success State", () => {
     it("should render Corpuses view when corpus is loaded", () => {
       routeLoading(false);
-      openedCorpus(mockCorpus);
+      openedCorpus(mockCorpus as any);
 
       render(
         <MockedProvider mocks={[]} addTypename={false}>
@@ -131,7 +136,7 @@ describe("CorpusLandingRoute - State-Driven Rendering", () => {
 
     it("should pass corpus data to view component", () => {
       routeLoading(false);
-      openedCorpus(mockCorpus);
+      openedCorpus(mockCorpus as any);
 
       render(
         <MockedProvider mocks={[]} addTypename={false}>
@@ -150,7 +155,7 @@ describe("CorpusLandingRoute - State-Driven Rendering", () => {
   describe("Reactive State Updates", () => {
     it("should re-render when corpus changes", () => {
       routeLoading(false);
-      openedCorpus(mockCorpus);
+      openedCorpus(mockCorpus as any);
 
       const { rerender } = render(
         <MockedProvider mocks={[]} addTypename={false}>
@@ -168,7 +173,7 @@ describe("CorpusLandingRoute - State-Driven Rendering", () => {
         id: "corpus-456",
         title: "New Corpus",
       };
-      openedCorpus(newCorpus);
+      openedCorpus(newCorpus as any);
 
       rerender(
         <MockedProvider mocks={[]} addTypename={false}>

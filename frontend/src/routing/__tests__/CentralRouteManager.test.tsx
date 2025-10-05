@@ -407,7 +407,7 @@ describe("CentralRouteManager", () => {
       // Since we can't reliably test navigate calls with MemoryRouter,
       // we verify the corpus was loaded correctly (canonical redirect is internal)
       expect(openedCorpus()?.slug).toBe("normalized-slug");
-      expect(openedCorpus()?.creator.slug).toBe("john-doe");
+      expect(openedCorpus()?.creator?.slug).toBe("john-doe");
     });
 
     it("should preserve query params during canonical redirect", async () => {
@@ -463,7 +463,7 @@ describe("CentralRouteManager", () => {
       // Phase 3 canonical redirect happens automatically
       // The redirect preserves query params internally
       expect(openedDocument()?.slug).toBe("canonical-doc");
-      expect(openedDocument()?.creator.slug).toBe("jane");
+      expect(openedDocument()?.creator?.slug).toBe("jane");
     });
   });
 
@@ -586,7 +586,11 @@ describe("CentralRouteManager", () => {
         id: "corpus-123",
         slug: "my-corpus",
         title: "My Corpus",
-        creator: { id: "user-1", slug: "john" },
+        creator: { id: "user-1", slug: "john", email: "john@example.com" },
+        analyses: {
+          edges: [],
+          pageInfo: { hasNextPage: false, hasPreviousPage: false },
+        },
       };
 
       const queryMock = vi.fn(() => ({
@@ -636,7 +640,11 @@ describe("CentralRouteManager", () => {
         id: "corpus-123",
         slug: "my-corpus",
         title: "My Corpus",
-        creator: { id: "user-1", slug: "john" },
+        creator: { id: "user-1", slug: "john", email: "john@example.com" },
+        analyses: {
+          edges: [],
+          pageInfo: { hasNextPage: false, hasPreviousPage: false },
+        },
       };
 
       // Set initial corpus

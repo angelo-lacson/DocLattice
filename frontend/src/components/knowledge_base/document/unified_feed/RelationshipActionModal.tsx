@@ -233,7 +233,7 @@ export const RelationshipActionModal: React.FC<
     if (!labelSearchTerm) return labels;
 
     return labels.filter((label) =>
-      label.text.toLowerCase().includes(labelSearchTerm.toLowerCase())
+      label.text?.toLowerCase().includes(labelSearchTerm.toLowerCase())
     );
   }, [relationLabels, labelSearchTerm, hasCorpus, selectedCorpus?.labelSet]);
 

@@ -53,6 +53,7 @@ describe("DocumentLandingRoute - State-Driven Rendering", () => {
       id: "user-1",
       slug: "john",
       username: "john",
+      email: "john@example.com",
     },
   };
 
@@ -63,6 +64,11 @@ describe("DocumentLandingRoute - State-Driven Rendering", () => {
     creator: {
       id: "user-1",
       slug: "john",
+      email: "john@example.com",
+    },
+    analyses: {
+      edges: [],
+      pageInfo: { hasNextPage: false, hasPreviousPage: false },
     },
   };
 

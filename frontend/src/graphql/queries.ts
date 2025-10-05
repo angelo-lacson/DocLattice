@@ -2954,6 +2954,7 @@ export const GET_CORPUS_BY_ID_FOR_REDIRECT = gql`
         id
         slug
         username
+        email
       }
     }
   }
@@ -2972,6 +2973,7 @@ export interface GetCorpusByIdForRedirectOutput {
       id: string;
       slug: string;
       username: string;
+      email: string;
     };
   } | null;
 }
@@ -2986,6 +2988,7 @@ export const GET_DOCUMENT_BY_ID_FOR_REDIRECT = gql`
         id
         slug
         username
+        email
       }
       corpus {
         id
@@ -2995,6 +2998,7 @@ export const GET_DOCUMENT_BY_ID_FOR_REDIRECT = gql`
           id
           slug
           username
+          email
         }
       }
     }
@@ -3014,6 +3018,7 @@ export interface GetDocumentByIdForRedirectOutput {
       id: string;
       slug: string;
       username: string;
+      email: string;
     };
     corpus: {
       id: string;
@@ -3023,6 +3028,7 @@ export interface GetDocumentByIdForRedirectOutput {
         id: string;
         slug: string;
         username: string;
+        email: string;
       };
     } | null;
   } | null;
