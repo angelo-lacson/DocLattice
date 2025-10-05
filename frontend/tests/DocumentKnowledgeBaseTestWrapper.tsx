@@ -15,8 +15,17 @@ import { LabelType } from "../src/components/annotator/types/enums";
 import { OperationDefinitionNode } from "graphql";
 
 import DocumentKnowledgeBase from "../src/components/knowledge_base/document/DocumentKnowledgeBase";
-import { authStatusVar, authToken, userObj } from "../src/graphql/cache";
+import {
+  authStatusVar,
+  authToken,
+  userObj,
+  openedCorpus,
+  openedDocument,
+  selectedAnnotationIds,
+} from "../src/graphql/cache";
 import { MemoryRouter } from "react-router-dom";
+import { CentralRouteManager } from "../src/routing/CentralRouteManager";
+import { GET_DOCUMENT_ANNOTATIONS_ONLY } from "../src/graphql/queries";
 
 // --- Minimal Test Cache Definition (copied from previous step) ---
 // Create a minimal cache configuration for testing based on the real cache.
@@ -4219,8 +4228,33 @@ export const DocumentKnowledgeBaseTestWrapper: React.FC<WrapperProps> = ({
   corpusId,
   readOnly = false,
 }) => {
+  // Create default annotation mock that will be added to all test mocks
+  const defaultAnnotationsMock = {
+    request: {
+      query: GET_DOCUMENT_ANNOTATIONS_ONLY,
+      variables: {
+        documentId,
+        corpusId,
+        analysisId: null,
+      },
+    },
+    result: {
+      data: {
+        document: {
+          id: documentId,
+          allStructuralAnnotations: [],
+          allAnnotations: [],
+          allRelationships: [],
+        },
+      },
+    },
+  };
+
+  // Combine provided mocks with default annotation mock
+  const allMocks = [...mocks, defaultAnnotationsMock];
+
   // Create a link that handles wildcard mutation and other mocks
-  const link = createWildcardLink(mocks);
+  const link = createWildcardLink(allMocks);
 
   // Set up authentication for tests - BEFORE any components mount
   // This ensures ChatTray has auth token available on first render
@@ -4231,10 +4265,25 @@ export const DocumentKnowledgeBaseTestWrapper: React.FC<WrapperProps> = ({
     username: "testuser",
   });
 
-  // Mark auth as ready (anonymous) for tests
+  // Set reactive vars that CentralRouteManager would normally set
+  // Component tests run in isolation, so we set these directly
   useEffect(() => {
-    authStatusVar("ANONYMOUS");
-  }, []);
+    authStatusVar("AUTHENTICATED");
+    openedDocument({
+      id: documentId,
+      slug: "test-document",
+      title: "Test Document",
+      creator: { id: "test-user", slug: "testuser", username: "testuser" },
+    } as any);
+    openedCorpus({
+      id: corpusId,
+      slug: "test-corpus",
+      title: "Test Corpus",
+      creator: { id: "test-user", slug: "testuser", username: "testuser" },
+    } as any);
+    // Initialize selection state
+    selectedAnnotationIds([]);
+  }, [documentId, corpusId]);
   return (
     <MemoryRouter
       initialEntries={[`/corpus/${corpusId}/document/${documentId}`]}

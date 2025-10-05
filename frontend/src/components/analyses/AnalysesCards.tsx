@@ -1,4 +1,5 @@
 import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import _ from "lodash";
 
@@ -11,6 +12,7 @@ import { selectedAnalyses, selectedAnalysesIds } from "../../graphql/cache";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { determineCardColCount } from "../../utils/layout";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { updateAnnotationSelectionParams } from "../../utils/navigationUtils";
 
 interface AnalysesCardsProps {
   style?: Record<string, any>;
@@ -33,6 +35,9 @@ export const AnalysesCards = ({
   loading,
   fetchMore,
 }: AnalysesCardsProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // Let's figure out the viewport so we can size the cards appropriately.
   const { width } = useWindowDimensions();
   const card_cols = determineCardColCount(width);
@@ -50,7 +55,10 @@ export const AnalysesCards = ({
       const cleaned_ids = analysis_ids_to_display.filter(
         (id) => id !== selected_analysis.id
       );
-      selectedAnalysesIds(cleaned_ids);
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        analysisIds: cleaned_ids,
+      });
 
       // Also update legacy selectedAnalyses for backward compatibility
       const cleaned_analyses = analyses.filter((a) =>
@@ -60,7 +68,10 @@ export const AnalysesCards = ({
     } else {
       // Add to selection
       const new_ids = [...analysis_ids_to_display, selected_analysis.id];
-      selectedAnalysesIds(new_ids);
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        analysisIds: new_ids,
+      });
 
       // Also update legacy selectedAnalyses for backward compatibility
       const new_analyses = analyses.filter((a) => new_ids.includes(a.id));

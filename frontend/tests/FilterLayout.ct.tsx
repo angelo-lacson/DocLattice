@@ -1,6 +1,6 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
-import { MockedProvider } from "@apollo/client/testing";
+import { FilterLayoutTestWrapper } from "./FilterLayoutTestWrapper";
 import { CreateAndSearchBar } from "../src/components/layout/CreateAndSearchBar";
 import { FilterToLabelSelector } from "../src/components/widgets/model-filters/FilterToLabelSelector";
 import { FilterToAnalysesSelector } from "../src/components/widgets/model-filters/FilterToAnalysesSelector";
@@ -137,9 +137,8 @@ test.describe("Filter Layout", () => {
     page,
   }) => {
     const component = await mount(
-      <MockedProvider
+      <FilterLayoutTestWrapper
         mocks={[mockLabels, mockLabelsets, mockCorpuses]}
-        addTypename={false}
       >
         <CreateAndSearchBar
           actions={[]}
@@ -154,7 +153,7 @@ test.describe("Filter Layout", () => {
             </>
           }
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Check that the filter button is visible
@@ -190,7 +189,7 @@ test.describe("Filter Layout", () => {
 
   test("filter popup has glassmorphic styling", async ({ mount, page }) => {
     const component = await mount(
-      <MockedProvider mocks={[mockLabels]} addTypename={false}>
+      <FilterLayoutTestWrapper mocks={[mockLabels]}>
         <CreateAndSearchBar
           actions={[]}
           placeholder="Search..."
@@ -198,7 +197,7 @@ test.describe("Filter Layout", () => {
           onChange={() => {}}
           filters={<FilterToLabelSelector />}
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -221,9 +220,8 @@ test.describe("Filter Layout", () => {
   }) => {
     // Mount all filter components in a single container to avoid React root issues
     const component = await mount(
-      <MockedProvider
+      <FilterLayoutTestWrapper
         mocks={[mockLabels, mockAnalyses, mockLabelsets, mockCorpuses]}
-        addTypename={false}
       >
         <div
           style={{
@@ -240,7 +238,7 @@ test.describe("Filter Layout", () => {
           <FilterToCorpusSelector />
           <FilterToStructuralAnnotationsSelector />
         </div>
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Check that all filter components render with their labels
@@ -267,7 +265,7 @@ test.describe("Filter Layout", () => {
     page,
   }) => {
     const component = await mount(
-      <MockedProvider mocks={[mockLabels, mockLabelsets]} addTypename={false}>
+      <FilterLayoutTestWrapper mocks={[mockLabels, mockLabelsets]}>
         <CreateAndSearchBar
           actions={[]}
           placeholder="Search..."
@@ -280,7 +278,7 @@ test.describe("Filter Layout", () => {
             </>
           }
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -314,9 +312,8 @@ test.describe("Filter Layout", () => {
     page,
   }) => {
     const component = await mount(
-      <MockedProvider
+      <FilterLayoutTestWrapper
         mocks={[mockLabels, mockLabelsets, mockCorpuses]}
-        addTypename={false}
       >
         <CreateAndSearchBar
           actions={[]}
@@ -332,7 +329,7 @@ test.describe("Filter Layout", () => {
             </>
           }
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -364,7 +361,7 @@ test.describe("Filter Layout", () => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     const component = await mount(
-      <MockedProvider mocks={[mockLabels]} addTypename={false}>
+      <FilterLayoutTestWrapper mocks={[mockLabels]}>
         <CreateAndSearchBar
           actions={[]}
           placeholder="Search..."
@@ -372,7 +369,7 @@ test.describe("Filter Layout", () => {
           onChange={() => {}}
           filters={<FilterToLabelSelector />}
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Check that the filter button is still accessible on mobile
@@ -396,9 +393,8 @@ test.describe("Filter Layout", () => {
     page,
   }) => {
     const component = await mount(
-      <MockedProvider
+      <FilterLayoutTestWrapper
         mocks={[mockLabels, mockLabelsets, mockCorpuses]}
-        addTypename={false}
       >
         <CreateAndSearchBar
           actions={[]}
@@ -413,7 +409,7 @@ test.describe("Filter Layout", () => {
             </>
           }
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -498,7 +494,7 @@ test.describe("Filter Layout", () => {
 
   test("dropdown selection updates filter state", async ({ mount, page }) => {
     const component = await mount(
-      <MockedProvider mocks={[mockLabels]} addTypename={false}>
+      <FilterLayoutTestWrapper mocks={[mockLabels]}>
         <CreateAndSearchBar
           actions={[]}
           placeholder="Search..."
@@ -506,7 +502,7 @@ test.describe("Filter Layout", () => {
           onChange={() => {}}
           filters={<FilterToLabelSelector />}
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup

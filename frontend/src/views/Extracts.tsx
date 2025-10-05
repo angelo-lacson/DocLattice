@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import _ from "lodash";
 
@@ -30,6 +30,7 @@ import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import { ExtractList } from "../components/extracts/list/ExtractList";
 import { CreateAndSearchBar } from "../components/layout/CreateAndSearchBar";
 import { CreateExtractModal } from "../components/widgets/modals/CreateExtractModal";
+import { updateAnnotationSelectionParams } from "../utils/navigationUtils";
 
 const styles = {
   container: {
@@ -72,6 +73,7 @@ export const Extracts = () => {
     useState<string>(extract_search_term);
 
   const location = useLocation();
+  const navigate = useNavigate();
 
   // URL query parameters (?extract=123) are now synced by CentralRouteManager
 
@@ -121,7 +123,10 @@ export const Extracts = () => {
     RequestDeleteExtractInputType
   >(REQUEST_DELETE_EXTRACT, {
     onCompleted: () => {
-      selectedExtractIds([]);
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        extractIds: [],
+      });
       refetchExtracts();
     },
   });
@@ -182,7 +187,10 @@ export const Extracts = () => {
                       handleDeleteExtract(id);
                     }
                     showDeleteExtractModal(false);
-                    selectedExtractIds([]);
+                    // Update URL - CentralRouteManager will set reactive var
+                    updateAnnotationSelectionParams(location, navigate, {
+                      extractIds: [],
+                    });
                   }
                 : () => {}
             }

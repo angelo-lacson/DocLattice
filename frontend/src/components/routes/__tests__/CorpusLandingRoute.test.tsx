@@ -95,9 +95,10 @@ describe("CorpusLandingRoute - State-Driven Rendering", () => {
       expect(screen.getByText(/Error:/)).toBeInTheDocument();
     });
 
-    it("should show error when corpus is null", () => {
+    it("should show Corpuses list when corpus is null (no error)", () => {
       routeLoading(false);
       openedCorpus(null);
+      // No routeError set - this is the normal state for browsing corpus list
 
       render(
         <MockedProvider mocks={[]} addTypename={false}>
@@ -107,7 +108,8 @@ describe("CorpusLandingRoute - State-Driven Rendering", () => {
         </MockedProvider>
       );
 
-      expect(screen.getByText(/Error:/)).toBeInTheDocument();
+      // When corpus is null without error, show corpus list view
+      expect(screen.getByText("Corpuses Component")).toBeInTheDocument();
     });
   });
 

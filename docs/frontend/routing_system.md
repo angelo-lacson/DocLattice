@@ -24,15 +24,34 @@ The OpenContracts routing system follows a **centralized architecture** where **
 - **Slug-First**: SEO-friendly URLs with automatic ID → slug redirection
 - **Dumb Consumers**: Route components just read reactive vars and render
 - **URL as Source of Truth**: No persistent state, URL drives everything
-- **Centralized Query Params**: All `?ann=`, `?analysis=`, `?extract=` handled in one place
+- **Centralized Query Params**: All selection (`?ann=`, `?analysis=`) and visualization (`?structural=`, `?labels=`) params handled in one place
+- **Auth-Gated Resolution**: Entity fetching waits for authentication to prevent 401/403 errors on deep links
+- **Complete Viewer State**: URLs encode full document viewer state (selections + visualization settings)
 
 ### The Critical Convention
 
 **ONLY `CentralRouteManager` is allowed to SET the following reactive variables:**
+
+**Entity State (set by Phase 1):**
 - `openedCorpus()`
 - `openedDocument()`
 
-**ALL other components must ONLY READ these reactive variables using `useReactiveVar()`.**
+**URL-Driven State (set by Phase 2, watched by Phase 4):**
+- `selectedAnnotationIds()`
+- `selectedAnalysesIds()`
+- `selectedExtractIds()`
+- `showStructuralAnnotations()`
+- `showSelectedAnnotationOnly()`
+- `showAnnotationBoundingBoxes()`
+- `showAnnotationLabels()`
+
+**ALL other components must:**
+- **ONLY READ** these reactive vars with `useReactiveVar()`
+- **NEVER SET** these reactive vars directly
+- **UPDATE STATE** by using navigation utilities that update the URL
+
+**The Correct Pattern:**
+Components wanting to change URL-driven state must use utility functions that update the URL. CentralRouteManager Phase 2 will detect the URL change and set the reactive var. This maintains unidirectional data flow: Component → URL → CentralRouteManager → Reactive Var → Component.
 
 This is non-negotiable. Violations cause infinite loops, route jittering, competing state updates, and unpredictable behavior. During development, we systematically removed all violations from:
 - `CorpusDocumentCards.tsx` (caused infinite loop bug)
@@ -121,11 +140,18 @@ graph TB
 - Set `openedCorpus`/`openedDocument` reactive vars
 - Handle loading/error states
 
-**Phase 2: URL Query Params → Reactive Vars** (`CentralRouteManager.tsx:332-347`)
-- Extract `?ann=123,456` → `selectedAnnotationIds(["123", "456"])`
-- Extract `?analysis=789` → `selectedAnalysesIds(["789"])`
-- Extract `?extract=101` → `selectedExtractIds(["101"])`
+**Phase 2: URL Query Params → Reactive Vars** (`CentralRouteManager.tsx:444-484`)
+- Extract selection params → reactive vars:
+  - `?ann=123,456` → `selectedAnnotationIds(["123", "456"])`
+  - `?analysis=789` → `selectedAnalysesIds(["789"])`
+  - `?extract=101` → `selectedExtractIds(["101"])`
+- Extract visualization params → reactive vars:
+  - `?structural=true` → `showStructuralAnnotations(true)`
+  - `?selectedOnly=true` → `showSelectedAnnotationOnly(true)`
+  - `?boundingBoxes=true` → `showAnnotationBoundingBoxes(true)`
+  - `?labels=ALWAYS` → `showAnnotationLabels("ALWAYS")`
 - Centralized for ALL routes (corpus, document, browse)
+- Enables deep linking with complete viewer state
 
 **Phase 3: Entity Data → Canonical Redirects** (`CentralRouteManager.tsx:349-372`)
 - Check if URL matches canonical slug path
@@ -133,11 +159,13 @@ graph TB
 - Preserve query parameters during redirect
 - Ensure SEO-friendly URLs
 
-**Phase 4: Reactive Vars → URL Sync** (`CentralRouteManager.tsx:374-407`)
-- Watch reactive var changes (user selects annotation)
-- Build query string: `ann=123&analysis=456`
+**Phase 4: Reactive Vars → URL Sync** (`CentralRouteManager.tsx:514-544`)
+- Watch selection reactive vars (user selects annotation/analysis)
+- Watch visualization reactive vars (user toggles structural/bounding boxes)
+- Build query string: `ann=123&analysis=456&structural=true&labels=ALWAYS`
 - Update URL with `navigate({ search: queryString }, { replace: true })`
 - Bidirectional: URL drives state, state updates URL
+- Only adds non-default visualization values to keep URLs clean
 
 ## Route Patterns
 
@@ -161,25 +189,39 @@ graph TB
 
 ### Query Parameters (All Routes)
 
+**Selection Parameters:**
+
 | Parameter    | Purpose                     | Example                           | Set By         |
 | ------------ | --------------------------- | --------------------------------- | -------------- |
 | `?ann=`      | Select annotations          | `?ann=123,456,789`                | Phase 2 or 4   |
 | `?analysis=` | Select analyses             | `?analysis=123,456`               | Phase 2 or 4   |
 | `?extract=`  | Select extracts             | `?extract=456,789`                | Phase 2 or 4   |
 
+**Visualization Parameters (Document Viewer):**
+
+| Parameter         | Purpose                          | Values                      | Default      | Set By     |
+| ----------------- | -------------------------------- | --------------------------- | ------------ | ---------- |
+| `?structural=`    | Show structural annotations      | `true` or omit              | `false`      | Phase 2/4  |
+| `?selectedOnly=`  | Show only selected annotations   | `true` or omit              | `false`      | Phase 2/4  |
+| `?boundingBoxes=` | Show annotation bounding boxes   | `true` or omit              | `false`      | Phase 2/4  |
+| `?labels=`        | Label display behavior           | `ALWAYS\|ON_HOVER\|HIDE`    | `ON_HOVER`   | Phase 2/4  |
+
 **Examples:**
 ```bash
 # Corpus with selections
 /c/john/legal-corpus?analysis=5678&extract=9012
 
-# Document with annotation
-/d/jane/contract?ann=1234
+# Document with annotation (structural annotations visible for deep linking)
+/d/jane/contract?ann=1234&structural=true
 
-# Document in corpus with all params
-/d/john/corpus/doc?ann=1,2&analysis=3&extract=4
+# Document with full visualization state
+/d/john/corpus/doc?ann=1,2&analysis=3&structural=true&boundingBoxes=true&labels=ALWAYS
 
 # Browse with highlighting
 /annotations?ann=123,456
+
+# Deep link to structural annotation with optimal viewer settings
+/d/user/corpus/document?ann=structural-ann-123&structural=true&selectedOnly=true&labels=ALWAYS
 ```
 
 ### Route Configuration
@@ -268,16 +310,35 @@ useEffect(() => {
 }, [location.pathname]);
 ```
 
-**Phase 2: Query Params** (lines 332-347)
+**Phase 2: Query Params** (lines 444-484)
 ```typescript
 useEffect(() => {
+  // Selection state
   const annIds = parseQueryParam(searchParams.get("ann"));
   const analysisIds = parseQueryParam(searchParams.get("analysis"));
   const extractIds = parseQueryParam(searchParams.get("extract"));
 
+  // Visualization state
+  const structural = searchParams.get("structural") === "true";
+  const selectedOnly = searchParams.get("selectedOnly") === "true";
+  const boundingBoxes = searchParams.get("boundingBoxes") === "true";
+  const labelsParam = searchParams.get("labels");
+
+  // Update reactive vars
   selectedAnnotationIds(annIds);
   selectedAnalysesIds(analysisIds);
   selectedExtractIds(extractIds);
+  showStructuralAnnotations(structural);
+  showSelectedAnnotationOnly(selectedOnly);
+  showAnnotationBoundingBoxes(boundingBoxes);
+
+  if (labelsParam === "ALWAYS") {
+    showAnnotationLabels("ALWAYS");
+  } else if (labelsParam === "HIDE") {
+    showAnnotationLabels("HIDE");
+  } else {
+    showAnnotationLabels("ON_HOVER");
+  }
 }, [searchParams]);
 ```
 
@@ -291,19 +352,32 @@ useEffect(() => {
 }, [corpus, document, location.pathname]);
 ```
 
-**Phase 4: URL Sync** (lines 374-407)
+**Phase 4: URL Sync** (lines 514-544)
 ```typescript
+// Watch reactive vars
+const annIds = useReactiveVar(selectedAnnotationIds);
+const analysisIds = useReactiveVar(selectedAnalysesIds);
+const extractIds = useReactiveVar(selectedExtractIds);
+const structural = useReactiveVar(showStructuralAnnotations);
+const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
+const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
+const labels = useReactiveVar(showAnnotationLabels);
+
 useEffect(() => {
   const queryString = buildQueryParams({
     annotationIds: annIds,
     analysisIds,
     extractIds,
+    showStructural: structural,
+    showSelectedOnly: selectedOnly,
+    showBoundingBoxes: boundingBoxes,
+    labelDisplay: labels,
   });
 
   if (currentSearch !== queryString) {
     navigate({ search: queryString }, { replace: true });
   }
-}, [annIds, analysisIds, extractIds]);
+}, [annIds, analysisIds, extractIds, structural, selectedOnly, boundingBoxes, labels]);
 ```
 
 ### GraphQL Queries
@@ -483,7 +557,7 @@ export const Annotations = () => {
 - ✅ Read reactive vars
 - ✅ Fetch lists (not entities)
 - ✅ Display UI
-- ✅ Update selections (which CentralRouteManager syncs to URL)
+- ✅ Update selections via URL utilities (CentralRouteManager Phase 2 sets reactive vars)
 
 ## State Management
 
@@ -501,9 +575,16 @@ export const selectedAnnotationIds = makeVar<string[]>([]);
 export const selectedAnalysesIds = makeVar<string[]>([]);
 export const selectedExtractIds = makeVar<string[]>([]);
 
+// Visualization state (set by CentralRouteManager Phase 2, watched by Phase 4)
+export const showStructuralAnnotations = makeVar<boolean>(false);
+export const showSelectedAnnotationOnly = makeVar<boolean>(false);
+export const showAnnotationBoundingBoxes = makeVar<boolean>(false);
+export const showAnnotationLabels = makeVar<LabelDisplayBehavior>("ON_HOVER");
+
 // Loading/error state (set by CentralRouteManager Phase 1)
 export const routeLoading = makeVar<boolean>(false);
 export const routeError = makeVar<Error | null>(null);
+export const authStatusVar = makeVar<AuthStatus>("LOADING");
 ```
 
 ### State Flow
@@ -555,10 +636,18 @@ export const routeError = makeVar<Error | null>(null);
 
 **User selects annotation → URL updates:**
 ```typescript
-// Component updates reactive var
-selectedAnnotationIds(["123", "456"]);
+// Component updates URL via utility
+updateAnnotationSelectionParams(location, navigate, {
+  annotationIds: ["123", "456"],
+});
 
-// CentralRouteManager Phase 4 watches reactive vars
+// CentralRouteManager Phase 2 detects URL change
+useEffect(() => {
+  const annIds = parseQueryParam(searchParams.get("ann"));
+  selectedAnnotationIds(annIds); // Sets reactive var
+}, [searchParams]);
+
+// CentralRouteManager Phase 4 keeps URL in sync if var changes from elsewhere
 useEffect(() => {
   const queryString = buildQueryParams({ annotationIds: annIds, ... });
   navigate({ search: queryString }, { replace: true });
@@ -679,6 +768,77 @@ navigateToDocument(document, corpus, navigate, currentPath, {
 })
 // Navigates with query params
 ```
+
+### State Update Utilities
+
+**CRITICAL:** Components must NEVER directly set URL-driven reactive vars. Instead, use these utilities that update the URL, allowing CentralRouteManager Phase 2 to set the reactive var.
+
+**updateAnnotationSelectionParams()** - Update selection state via URL
+```typescript
+import { updateAnnotationSelectionParams } from "../utils/navigationUtils";
+
+// Component wants to change analysis selection
+const handleSelectAnalysis = (analysisId: string) => {
+  updateAnnotationSelectionParams(location, navigate, {
+    analysisIds: [analysisId],
+    extractIds: [],  // Clear extracts when selecting analysis
+  });
+  // CentralRouteManager Phase 2 will detect URL change and set selectedAnalysesIds
+};
+
+// Component wants to toggle annotation selection
+const toggleAnnotation = (annotationId: string) => {
+  const currentIds = useReactiveVar(selectedAnnotationIds);
+  const newIds = currentIds.includes(annotationId)
+    ? currentIds.filter(id => id !== annotationId)
+    : [...currentIds, annotationId];
+
+  updateAnnotationSelectionParams(location, navigate, {
+    annotationIds: newIds,
+  });
+};
+```
+
+**updateAnnotationDisplayParams()** - Update visualization state via URL
+```typescript
+import { updateAnnotationDisplayParams } from "../utils/navigationUtils";
+
+// Component wants to change display settings
+const handleToggleStructural = (value: boolean) => {
+  updateAnnotationDisplayParams(location, navigate, {
+    showStructural: value,
+  });
+  // CentralRouteManager Phase 2 will detect URL change and set showStructuralAnnotations
+};
+
+// Setting multiple visualization params at once
+const viewExtractAnnotations = () => {
+  updateAnnotationDisplayParams(location, navigate, {
+    showStructural: true,
+    showBoundingBoxes: true,
+    showSelectedOnly: false,
+    labelDisplay: "ALWAYS",
+  });
+};
+```
+
+**clearAnnotationSelection()** - Clear all selection state via URL
+```typescript
+import { clearAnnotationSelection } from "../utils/navigationUtils";
+
+// Cleanup on component unmount
+useEffect(() => {
+  return () => {
+    clearAnnotationSelection(location, navigate);
+  };
+}, [location, navigate]);
+```
+
+**Why These Utilities?**
+- Maintains unidirectional data flow: Component → URL → CentralRouteManager → Reactive Var
+- Prevents competing writes to reactive vars
+- Ensures URL is always source of truth
+- Avoids infinite loops and race conditions
 
 ### Usage in Components
 
@@ -926,8 +1086,9 @@ const gotoHome = () => {
 **State:**
 - ✅ URL is source of truth (no persistent local state)
 - ✅ Read entity vars: `const corpus = useReactiveVar(openedCorpus);`
-- ✅ Update selection vars: `selectedAnnotationIds(["123"]);`
-- ✅ Let Phase 4 sync selection changes → URL automatically
+- ✅ Update selection via utilities: `updateAnnotationSelectionParams(location, navigate, { annotationIds: ["123"] });`
+- ✅ Update display via utilities: `updateAnnotationDisplayParams(location, navigate, { showStructural: true });`
+- ✅ Let CentralRouteManager Phase 2 set reactive vars from URL changes
 - ✅ Check `routeLoading` before accessing entities
 - ✅ Handle `routeError` for failed entity resolution
 
@@ -1000,21 +1161,27 @@ export const CorpusLandingRoute = () => {
 // CentralRouteManager handles everything
 ```
 
-**❌ WRONG - Manual URL sync:**
+**❌ WRONG - Directly setting reactive vars:**
 ```typescript
-// Old approach (DELETED)
-useEffect(() => {
-  const queryString = annotationIds.join(",");
-  navigate(`?ann=${queryString}`);
-}, [annotationIds]);
+// This creates competing writers and breaks unidirectional flow!
+selectedAnnotationIds(["123", "456"]);
+showStructuralAnnotations(true);
+
+// CentralRouteManager ALSO sets these vars from URL (Phase 2)
+// Result: Race conditions, infinite loops, unpredictable behavior
 ```
 
-**✅ CORRECT - Automatic sync:**
+**✅ CORRECT - Update URL, let CentralRouteManager set vars:**
 ```typescript
-// Just update reactive var
-selectedAnnotationIds(["123", "456"]);
+import { updateAnnotationSelectionParams } from "../utils/navigationUtils";
 
-// CentralRouteManager Phase 4 watches and syncs to URL automatically
+// Update URL - CentralRouteManager Phase 2 will set reactive var
+updateAnnotationSelectionParams(location, navigate, {
+  annotationIds: ["123", "456"],
+});
+
+// Clean unidirectional flow:
+// Component → URL → CentralRouteManager Phase 2 → Reactive Var → Component
 ```
 
 ## Component Ecosystem
@@ -1047,7 +1214,7 @@ The routing system coordinates multiple components that work together. Understan
 - **Role**: Main corpus list/detail view
 - **Reads**: `openedCorpus`, `selectedAnalysesIds`, `selectedExtractIds`
 - **Never Sets**: `openedCorpus` (CentralRouteManager owns this)
-- **Can Set**: Selection vars like `selectedAnalysesIds()` (Phase 4 syncs to URL)
+- **Updates Selections**: Via utilities like `updateAnnotationSelectionParams()` (updates URL, CentralRouteManager Phase 2 sets vars)
 - **Queries**: Fetches corpus LIST data, NOT entity data by route
 
 **Documents** (`src/views/Documents.tsx`)
@@ -1085,17 +1252,17 @@ The routing system coordinates multiple components that work together. Understan
 
 **AnnotationCards** (`src/components/annotations/AnnotationCards.tsx`)
 - **Role**: Display annotation list
-- **Updates**: `selectedAnnotationIds()` when user selects (Phase 4 syncs to URL)
+- **Updates**: Selection via `updateAnnotationSelectionParams()` (updates URL, CentralRouteManager Phase 2 sets reactive vars)
 - **Reads**: Context from `openedCorpus`/`openedDocument`
 
 **ExtractCards** (`src/components/extracts/ExtractCards.tsx`)
 - **Role**: Display extract list
-- **Updates**: `selectedExtractIds()` when user selects
+- **Updates**: Selection via `updateAnnotationSelectionParams()` (updates URL, CentralRouteManager Phase 2 sets reactive vars)
 - **Reads**: Context from entity vars
 
 **AnalysesCards** (`src/components/analyses/AnalysesCards.tsx`)
 - **Role**: Display analysis list
-- **Updates**: `selectedAnalysesIds()` when user selects
+- **Updates**: Selection via `updateAnnotationSelectionParams()` (updates URL, CentralRouteManager Phase 2 sets reactive vars)
 - **Reads**: Context from entity vars
 
 ### Knowledge Base Components
@@ -1156,11 +1323,15 @@ The routing system coordinates multiple components that work together. Understan
         ↓
 8. User clicks analysis in AnalysesCards
         ↓
-9. Component updates: selectedAnalysesIds(["456"])
+9. Component calls: updateAnnotationSelectionParams(location, navigate, { analysisIds: ["456"] })
         ↓
-10. Phase 4: CentralRouteManager detects change → Updates URL to ?analysis=456
+10. URL updates to ?analysis=456
         ↓
-11. Cycle continues...
+11. Phase 2: CentralRouteManager detects URL change → Sets selectedAnalysesIds(["456"])
+        ↓
+12. Reactive var change triggers re-render
+        ↓
+13. Cycle continues...
 ```
 
 ### Common Patterns
@@ -1175,7 +1346,23 @@ const handleClick = () => {
 };
 ```
 
-**Pattern 2: View Component Reading Selections**
+**Pattern 2: Card Component Updating Selection**
+```typescript
+// In AnnotationCards.tsx, ExtractCards.tsx, AnalysesCards.tsx
+const handleToggleSelection = (id: string) => {
+  const currentIds = useReactiveVar(selectedAnnotationIds);
+  const newIds = currentIds.includes(id)
+    ? currentIds.filter(existingId => existingId !== id)
+    : [...currentIds, id];
+
+  // Update URL - CentralRouteManager Phase 2 will set reactive var
+  updateAnnotationSelectionParams(location, navigate, {
+    annotationIds: newIds,
+  });
+};
+```
+
+**Pattern 3: View Component Reading Selections**
 ```typescript
 // In Annotations.tsx, Extracts.tsx, etc.
 const annotation_ids = useReactiveVar(selectedAnnotationIds);
@@ -1185,7 +1372,7 @@ const corpus = useReactiveVar(openedCorpus);  // Context only
 return <AnnotationCards selectedIds={annotation_ids} />;
 ```
 
-**Pattern 3: Route Component Delegating**
+**Pattern 4: Route Component Delegating**
 ```typescript
 // In DocumentLandingRoute.tsx, CorpusLandingRoute.tsx
 const document = useReactiveVar(openedDocument);
@@ -1196,7 +1383,7 @@ return <DocumentKnowledgeBase documentId={document.id} />;
 // No fetching, no URL parsing, just read and render
 ```
 
-**Pattern 4: Navigation Without State Manipulation**
+**Pattern 5: Navigation Without State Manipulation**
 ```typescript
 // In NavMenu.tsx, CorpusBreadcrumbs.tsx, etc.
 const handleNavigate = () => {
@@ -1208,9 +1395,9 @@ const handleNavigate = () => {
 ### Key Relationships
 
 **CentralRouteManager ← → Reactive Vars ← → All Components**
-- CentralRouteManager is the ONLY writer of `openedCorpus`/`openedDocument`
+- CentralRouteManager is the ONLY writer of ALL URL-driven reactive vars
 - All other components are readers via `useReactiveVar()`
-- Selection vars can be updated by views/cards (Phase 4 syncs to URL)
+- Components update state by modifying URL via utilities (CentralRouteManager Phase 2 sets vars)
 
 **Route Components → View Components**
 - Route components just delegate to views after checking loading/error
@@ -1226,15 +1413,110 @@ const handleNavigate = () => {
 - Components use `getCorpusUrl()`, `navigateToDocument()`, etc.
 - Shared utilities ensure consistency
 
+## Key Bug Fixes & Lessons Learned
+
+### Bug #1: Infinite Loop on Document Click (Fixed)
+
+**Problem:**
+```typescript
+// CorpusDocumentCards.tsx was doing this:
+const { data } = useQuery(GET_CORPUS, {
+  onCompleted: (data) => {
+    openedCorpus(data.corpus);  // ❌ Competing with CentralRouteManager
+  }
+});
+```
+
+**Symptoms:** Clicking a document caused infinite jittering, route flip-flopping between adding/removing doc ID, DocumentKnowledgeBase opening/closing infinitely.
+
+**Root Cause:** Multiple components setting `openedCorpus()` created competing state updates.
+
+**Fix:** Removed ALL `openedCorpus()`/`openedDocument()` setters except in CentralRouteManager. Components now only READ via `useReactiveVar()`.
+
+### Bug #2: Deep Link 404 on Page Refresh (Fixed)
+
+**Problem:** Pasting a document URL into a new browser tab redirected to 404, but navigating in-app worked fine.
+
+**Symptoms:**
+```
+[RouteManager] ⚠️  documentInCorpusBySlugs is null
+[RouteManager] ⚠️  corpusBySlugs is null
+[RouteManager] Document in corpus not found
+```
+
+**Root Cause:** Race condition - CentralRouteManager tried to fetch entities BEFORE Auth0 finished initializing, causing GraphQL queries to execute without auth token (401/403 → null response → 404 redirect).
+
+**Fix:** Added auth status check in Phase 1:
+```typescript
+if (authStatus === "LOADING") {
+  console.log("⏳ Waiting for auth to initialize...");
+  routeLoading(true);
+  return; // Don't fetch until authenticated
+}
+```
+
+Now depends on `authStatus` in useEffect deps, re-processes route when auth becomes "AUTHENTICATED".
+
+### Bug #3: Deep Link to Structural Annotation Shows Nothing (Fixed)
+
+**Problem:** Deep linking to a structural annotation resulted in document loading but annotation not visible (structural annotations hidden by default).
+
+**Symptoms:** URL has `?ann=structural-123`, annotation is selected in sidebar, but not visible in PDF viewer because "Show Structural" checkbox is unchecked.
+
+**Root Cause:** Visualization settings (showStructural, boundingBoxes, labels) were Jotai atoms in component-local state, not synchronized with URL.
+
+**Fix:** Moved visualization settings to Apollo reactive vars, added to CentralRouteManager Phase 2 (URL → State) and Phase 4 (State → URL):
+```typescript
+// Phase 2: Parse URL
+const structural = searchParams.get("structural") === "true";
+showStructuralAnnotations(structural);
+
+// Phase 4: Sync to URL
+const structural = useReactiveVar(showStructuralAnnotations);
+useEffect(() => {
+  const queryString = buildQueryParams({
+    annotationIds,
+    showStructural: structural // ✅ In URL now
+  });
+  navigate({ search: queryString }, { replace: true });
+}, [structural]);
+```
+
+Now deep links include: `?ann=123&structural=true&boundingBoxes=true&labels=ALWAYS`
+
+### Architecture Lessons
+
+1. **One Source of Truth Prevents Chaos:** Scattered state management creates race conditions and infinite loops. Centralization eliminates 90% of routing bugs.
+
+2. **Auth Must Gate Protected Requests:** Always check `authStatusVar` before making authenticated GraphQL queries on routes that support deep linking.
+
+3. **URL Should Encode Complete State:** If a user can change a setting, it should be in the URL for:
+   - Deep linking (share exact view)
+   - Browser back/forward (preserves state)
+   - Bookmarks (save complete context)
+
+4. **Replace useEffect Cleanup with URL Changes:** Instead of manually clearing state in `useEffect` cleanup, let CentralRouteManager clear when URL changes. Simpler and more predictable.
+
+5. **Components Should Be Dumb Consumers:** If a component has URL parsing or GraphQL entity fetching, it's doing too much. Move logic to CentralRouteManager.
+
 ## Summary
 
 The OpenContracts routing system follows the principle: **One Place to Rule Them All**.
 
-### The Core Mantra
+### The Core Convention
 
-**ONLY `CentralRouteManager` sets `openedCorpus` and `openedDocument`.**
+**ONLY `CentralRouteManager` sets URL-driven reactive variables.**
 
-All other components READ ONLY via `useReactiveVar()`. Violations cause bugs.
+This includes:
+- Entity state: `openedCorpus`, `openedDocument`
+- Selection state: `selectedAnnotationIds`, `selectedAnalysesIds`, `selectedExtractIds`
+- Visualization state: `showStructuralAnnotations`, `showSelectedAnnotationOnly`, `showAnnotationBoundingBoxes`, `showAnnotationLabels`
+
+All other components:
+- READ ONLY via `useReactiveVar()`
+- UPDATE STATE via URL utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`
+
+Violations cause race conditions, infinite loops, and unpredictable behavior.
 
 ### Architecture Overview
 
@@ -1254,7 +1536,7 @@ All other components READ ONLY via `useReactiveVar()`. Violations cause bugs.
 
 **View Components** (Corpuses, Documents, Annotations, Extracts):
 - Consume reactive vars for entity context
-- Update selection reactive vars (Phase 4 syncs to URL)
+- Update selections via URL utilities (CentralRouteManager Phase 2 sets reactive vars)
 - Fetch list data (not route entities)
 - Use navigation utilities for links
 
@@ -1279,9 +1561,11 @@ All other components READ ONLY via `useReactiveVar()`. Violations cause bugs.
 2. **NEVER** fetch corpus/document entities in route components
 3. **NEVER** parse URLs with `useParams()` in components/views
 4. **NEVER** manually clear entity vars on navigation
-5. **ALWAYS** use navigation utilities (`getCorpusUrl`, `navigateToDocument`, etc.)
-6. **ALWAYS** check `routeLoading` before accessing entities
-7. **ALWAYS** preserve query params when navigating
+5. **NEVER** directly set URL-driven reactive vars (use utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`)
+6. **ALWAYS** use navigation utilities (`getCorpusUrl`, `navigateToDocument`, etc.)
+7. **ALWAYS** check `routeLoading` before accessing entities
+8. **ALWAYS** preserve query params when navigating (includes both selection AND visualization params)
+9. **ALWAYS** check `authStatusVar` before fetching protected entities in new routing code
 
 ### When You Need To...
 
@@ -1293,24 +1577,77 @@ All other components READ ONLY via `useReactiveVar()`. Violations cause bugs.
 5. Create dumb route component that reads the var
 6. Add route to `App.tsx`
 
-**Add a new query parameter:**
-1. Add reactive var to `cache.ts`
-2. Add parsing in CentralRouteManager Phase 2
-3. Add syncing in CentralRouteManager Phase 4
-4. Update `buildQueryParams()` in `navigationUtils.ts`
+**Add a new URL-driven state parameter:**
+1. Add reactive var to `cache.ts`: `export const myNewSetting = makeVar<boolean>(false);`
+2. Import in CentralRouteManager and add to Phase 2 parsing:
+   ```typescript
+   const myNewValue = searchParams.get("myParam") === "true";
+   myNewSetting(myNewValue);
+   ```
+3. Add to Phase 4 syncing:
+   ```typescript
+   const myNewValue = useReactiveVar(myNewSetting);
+   useEffect(() => {
+     const queryString = buildQueryParams({
+       // ... existing params
+       myNewParam: myNewValue
+     });
+   }, [...deps, myNewValue]);
+   ```
+4. Update `QueryParams` interface in `navigationUtils.ts`:
+   ```typescript
+   export interface QueryParams {
+     // ... existing
+     myNewParam?: boolean;
+   }
+   ```
+5. Update `buildQueryParams()` to include the new param:
+   ```typescript
+   if (params.myNewParam) {
+     searchParams.set("myParam", "true");
+   }
+   ```
+6. Add utility function to `navigationUtils.ts` or extend existing utilities:
+   ```typescript
+   export function updateMyNewSetting(
+     location: { search: string },
+     navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+     value: boolean
+   ) {
+     const searchParams = new URLSearchParams(location.search);
+     if (value) {
+       searchParams.set("myParam", "true");
+     } else {
+       searchParams.delete("myParam");
+     }
+     navigate({ search: searchParams.toString() }, { replace: true });
+   }
+   ```
+7. Update components to use reactive var via utility:
+   ```typescript
+   // Replace Jotai atom or useState
+   const myValue = useReactiveVar(myNewSetting);
+
+   // Update via utility (not direct setting!)
+   const setMyValue = (val: boolean) => {
+     updateMyNewSetting(location, navigate, val);
+     // CentralRouteManager Phase 2 will set myNewSetting(val)
+   };
+   ```
 
 **Debug a routing issue:**
 1. Check CentralRouteManager console logs
 2. Verify reactive vars are set correctly
 3. Confirm component is reading vars with `useReactiveVar()`
-4. Ensure no components are SETTING entity vars (use grep)
-5. Check that navigation utilities are being used
+4. Ensure no components are directly SETTING URL-driven reactive vars (use grep)
+5. Check that navigation utilities are being used (`updateAnnotationSelectionParams`, etc.)
+6. Verify components update URL instead of reactive vars
 
 ### The Golden Rule
 
 **When in doubt, read the code in `CentralRouteManager.tsx`.**
 
-It's the single source of truth. If routing behavior seems wrong, the fix goes there. If a component needs routing data, it reads reactive vars. If you're writing `openedCorpus(...)` outside CentralRouteManager, you're doing it wrong.
+It's the single source of truth. If routing behavior seems wrong, the fix goes there. If a component needs routing data, it reads reactive vars. If you're writing `openedCorpus(...)`, `selectedAnnotationIds(...)`, or `showStructuralAnnotations(...)` outside CentralRouteManager, you're doing it wrong - use the navigation utilities instead.
 
 ---
 

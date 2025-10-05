@@ -1,5 +1,6 @@
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { DropdownItemProps, DropdownProps, Label } from "semantic-ui-react";
 import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
@@ -16,6 +17,7 @@ import {
 import { AnalysisType, CorpusType } from "../../../types/graphql-api";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
+import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
 
 interface FilterToAnalysesSelectorProps {
   corpus: CorpusType;
@@ -26,6 +28,9 @@ export const FilterToAnalysesSelector = ({
   corpus,
   style,
 }: FilterToAnalysesSelectorProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const { width } = useWindowDimensions();
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
 
@@ -56,10 +61,16 @@ export const FilterToAnalysesSelector = ({
       }
       console.log("Set selected analyses", selected_analyses);
       selectedAnalyses(selected_analyses);
-      selectedAnalysesIds(selected_analyses.map((analysis) => analysis.id));
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        analysisIds: selected_analyses.map((analysis) => analysis.id),
+      });
     } else {
       selectedAnalyses([]);
-      selectedAnalysesIds([]);
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        analysisIds: [],
+      });
     }
   };
 

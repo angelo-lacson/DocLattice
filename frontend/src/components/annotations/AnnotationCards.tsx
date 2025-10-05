@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useReactiveVar } from "@apollo/client";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import _ from "lodash";
 import styled from "styled-components";
-import { getDocumentUrl } from "../../utils/navigationUtils";
+import {
+  getDocumentUrl,
+  updateAnnotationSelectionParams,
+} from "../../utils/navigationUtils";
 import { Card, Dimmer, Loader, Label, Header, Popup } from "semantic-ui-react";
 import {
   Tags,
@@ -172,6 +175,7 @@ export const AnnotationCards: React.FC<AnnotationCardProps> = ({
   const [targetAnnotation, setTargetAnnotation] =
     useState<AnnotationToNavigateTo>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleUpdate = () => {
     if (!loading && pageInfo?.hasNextPage) {
@@ -190,7 +194,10 @@ export const AnnotationCards: React.FC<AnnotationCardProps> = ({
       displayAnnotationOnAnnotatorLoad(targetAnnotation.selected_annotation);
       selectedAnnotation(targetAnnotation.selected_annotation);
       if (targetAnnotation.selected_annotation.analysis?.id) {
-        selectedAnalysesIds([targetAnnotation.selected_annotation.analysis.id]);
+        // Update URL - CentralRouteManager will set reactive var
+        updateAnnotationSelectionParams(location, navigate, {
+          analysisIds: [targetAnnotation.selected_annotation.analysis.id],
+        });
       }
       const url = getDocumentUrl(
         targetAnnotation.selected_document,

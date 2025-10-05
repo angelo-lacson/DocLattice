@@ -1,30 +1,31 @@
-import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook } from "@testing-library/react-hooks";
 import { waitFor } from "@testing-library/react";
 import { MockedProvider } from "@apollo/client/testing";
 import { Provider } from "jotai";
+import { useHydrateAtoms } from "jotai/utils";
+import { MemoryRouter } from "react-router-dom";
+import * as React from "react";
+import type { ReactNode } from "react";
 import { useAnalysisManager } from "../AnalysisHooks";
 import {
   selectedAnalysesIds,
   selectedExtractIds,
 } from "../../../../graphql/cache";
-import {
-  GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
-  GET_ANNOTATIONS_FOR_ANALYSIS,
-  GET_DATACELLS_FOR_EXTRACT,
-} from "../../../../graphql/queries";
+import { GET_DOCUMENT_ANALYSES_AND_EXTRACTS } from "../../../../graphql/queries";
 import { selectedDocumentAtom } from "../../context/DocumentAtom";
 import { corpusStateAtom } from "../../context/CorpusAtom";
-import { useAtom } from "jotai";
-import { ReactNode } from "react";
+import * as navigationUtils from "../../../../utils/navigationUtils";
+
+// Spy on navigation utilities
+vi.spyOn(navigationUtils, "updateAnnotationSelectionParams");
 
 // Mock document for testing
 const mockDocument = {
   id: "doc-123",
   slug: "test-document",
   title: "Test Document",
-  creator: { id: "user-1", slug: "john" },
+  creator: { id: "user-1", slug: "john", email: "john@example.com" },
 };
 
 // Mock corpus for testing
@@ -32,7 +33,7 @@ const mockCorpus = {
   id: "corpus-123",
   slug: "test-corpus",
   title: "Test Corpus",
-  creator: { id: "user-1", slug: "john" },
+  creator: { id: "user-1", slug: "john", email: "john@example.com" },
 };
 
 // Mock analyses
@@ -45,6 +46,8 @@ const mockAnalysis1 = {
   analysisStarted: "2024-01-01T00:00:00Z",
   analysisCompleted: "2024-01-01T00:01:00Z",
   annotations: { totalCount: 5 },
+  corpusAction: null,
+  status: "COMPLETED",
   fullAnnotationList: [],
 };
 
@@ -57,13 +60,19 @@ const mockAnalysis2 = {
   analysisStarted: "2024-01-01T00:00:00Z",
   analysisCompleted: "2024-01-01T00:01:00Z",
   annotations: { totalCount: 3 },
+  corpusAction: null,
+  status: "COMPLETED",
   fullAnnotationList: [],
 };
 
-// Mock extracts
+// Mock extracts (with fields matching query structure)
 const mockExtract1 = {
   id: "extract-1234",
   name: "Test Extract",
+  corpusAction: null,
+  created: "2024-01-01T00:00:00Z",
+  started: "2024-01-01T00:00:00Z",
+  finished: "2024-01-01T00:00:00Z",
   fieldset: { id: "fieldset-1", fullColumnList: [] },
   fullDatacellList: [],
 };
@@ -71,26 +80,23 @@ const mockExtract1 = {
 const mockExtract2 = {
   id: "extract-5678",
   name: "Another Extract",
+  corpusAction: null,
+  created: "2024-01-01T00:00:00Z",
+  started: "2024-01-01T00:00:00Z",
+  finished: "2024-01-01T00:00:00Z",
   fieldset: { id: "fieldset-2", fullColumnList: [] },
   fullDatacellList: [],
 };
 
-describe("AnalysisHooks - URL Synchronization", () => {
-  // Wrapper component that provides both Jotai and Apollo context
-  const createWrapper = (
-    initialDocument = mockDocument,
-    initialCorpus = mockCorpus
-  ) => {
-    return ({ children }: { children: ReactNode }) => {
-      // Set up initial atoms
-      const [, setDocument] = useAtom(selectedDocumentAtom);
-      const [, setCorpusState] = useAtom(corpusStateAtom);
-
-      // Initialize atoms with test data
-      React.useEffect(() => {
-        setDocument(initialDocument as any);
-        setCorpusState({
-          selectedCorpus: initialCorpus as any,
+describe("AnalysisHooks - Pure Architecture Tests", () => {
+  // Helper component to hydrate atoms
+  const HydrateAtoms = ({ children }: { children: ReactNode }) => {
+    useHydrateAtoms([
+      [selectedDocumentAtom, mockDocument],
+      [
+        corpusStateAtom,
+        {
+          selectedCorpus: mockCorpus as any,
           myPermissions: [],
           spanLabels: [],
           humanSpanLabels: [],
@@ -99,18 +105,35 @@ describe("AnalysisHooks - URL Synchronization", () => {
           humanTokenLabels: [],
           allowComments: true,
           isLoading: false,
-        });
-      }, []);
-
-      return (
-        <Provider>
-          <MockedProvider mocks={[]} addTypename={false}>
-            {children}
-          </MockedProvider>
-        </Provider>
-      );
-    };
+        },
+      ],
+    ]);
+    return <>{children}</>;
   };
+
+  // Wrapper that sets up Jotai atoms and provides context
+  const TestWrapper: React.FC<{ children: ReactNode; mocks?: any[] }> = ({
+    children,
+    mocks = [],
+  }) => {
+    return (
+      <MemoryRouter>
+        <Provider>
+          <HydrateAtoms>
+            <MockedProvider mocks={mocks} addTypename={false}>
+              {children}
+            </MockedProvider>
+          </HydrateAtoms>
+        </Provider>
+      </MemoryRouter>
+    );
+  };
+
+  // Helper to create properly typed wrapper for renderHook
+  const createWrapper =
+    (mocks: any[] = []) =>
+    ({ children }: { children: ReactNode }) =>
+      <TestWrapper mocks={mocks}>{children}</TestWrapper>;
 
   beforeEach(() => {
     // Clear reactive variables before each test
@@ -119,9 +142,8 @@ describe("AnalysisHooks - URL Synchronization", () => {
     vi.clearAllMocks();
   });
 
-  describe("Reactive Vars → Atoms (URL to Component State)", () => {
-    it("should sync analysis ID from reactive var to atom when analyses load", async () => {
-      // Set up mock with analyses data
+  describe("Hook Reads Reactive Vars (CentralRouteManager's Output)", () => {
+    it("should read analysis ID from reactive var when analyses load", async () => {
       const mockQuery = {
         request: {
           query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
@@ -133,9 +155,10 @@ describe("AnalysisHooks - URL Synchronization", () => {
         result: {
           data: {
             documentCorpusActions: {
+              corpusActions: [],
               analysisRows: [
-                { analysis: mockAnalysis1 },
-                { analysis: mockAnalysis2 },
+                { id: "row-1", analysis: mockAnalysis1, data: { edges: [] } },
+                { id: "row-2", analysis: mockAnalysis2, data: { edges: [] } },
               ],
               extracts: [mockExtract1, mockExtract2],
             },
@@ -143,22 +166,15 @@ describe("AnalysisHooks - URL Synchronization", () => {
         },
       };
 
-      const wrapper = createWrapper();
-
-      // Pre-set reactive var as if URL had ?analysis=analysis-1234
+      // Simulate CentralRouteManager Phase 2 setting reactive var from URL
       selectedAnalysesIds(["analysis-1234"]);
 
+      // Provide mock multiple times for fetchPolicy: "network-only"
       const { result } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
+        wrapper: createWrapper([mockQuery, mockQuery, mockQuery]),
       });
 
-      // Wait for analyses to load and sync
+      // Wait for analyses to load
       await waitFor(
         () => {
           expect(result.current.analyses.length).toBe(2);
@@ -166,14 +182,12 @@ describe("AnalysisHooks - URL Synchronization", () => {
         { timeout: 3000 }
       );
 
-      // The hook should have synced the reactive var to the atom
-      // Note: We can't directly check the atom here, but we can verify
-      // that analyses are loaded
+      // Hook should read the reactive var correctly
       expect(result.current.analyses).toHaveLength(2);
       expect(result.current.analyses[0].id).toBe("analysis-1234");
     });
 
-    it("should sync extract ID from reactive var to atom when extracts load", async () => {
+    it("should read extract ID from reactive var when extracts load", async () => {
       const mockQuery = {
         request: {
           query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
@@ -185,6 +199,7 @@ describe("AnalysisHooks - URL Synchronization", () => {
         result: {
           data: {
             documentCorpusActions: {
+              corpusActions: [],
               analysisRows: [],
               extracts: [mockExtract1, mockExtract2],
             },
@@ -192,17 +207,11 @@ describe("AnalysisHooks - URL Synchronization", () => {
         },
       };
 
-      // Pre-set reactive var as if URL had ?extract=extract-1234
+      // Simulate CentralRouteManager Phase 2 setting reactive var from URL
       selectedExtractIds(["extract-1234"]);
 
       const { result } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
+        wrapper: createWrapper([mockQuery, mockQuery, mockQuery]),
       });
 
       await waitFor(
@@ -212,11 +221,14 @@ describe("AnalysisHooks - URL Synchronization", () => {
         { timeout: 3000 }
       );
 
+      // Hook should read the reactive var correctly
       expect(result.current.extracts).toHaveLength(2);
       expect(result.current.extracts[0].id).toBe("extract-1234");
     });
+  });
 
-    it("should handle multiple IDs in reactive var by taking first", async () => {
+  describe("Hook Updates URL (Hook's Actual Responsibility)", () => {
+    it("should update URL when analysis is selected via onSelectAnalysis", async () => {
       const mockQuery = {
         request: {
           query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
@@ -228,9 +240,9 @@ describe("AnalysisHooks - URL Synchronization", () => {
         result: {
           data: {
             documentCorpusActions: {
+              corpusActions: [],
               analysisRows: [
-                { analysis: mockAnalysis1 },
-                { analysis: mockAnalysis2 },
+                { id: "row-1", analysis: mockAnalysis1, data: { edges: [] } },
               ],
               extracts: [],
             },
@@ -238,59 +250,8 @@ describe("AnalysisHooks - URL Synchronization", () => {
         },
       };
 
-      // Set multiple IDs - should use first one
-      selectedAnalysesIds(["analysis-1234", "analysis-5678"]);
-
       const { result } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
-      });
-
-      await waitFor(
-        () => {
-          expect(result.current.analyses.length).toBe(2);
-        },
-        { timeout: 3000 }
-      );
-
-      // Should have loaded analyses
-      expect(result.current.analyses).toHaveLength(2);
-    });
-  });
-
-  describe("Atoms → Reactive Vars (Component State to URL)", () => {
-    it("should update reactive var when analysis is selected via UI", async () => {
-      const mockQuery = {
-        request: {
-          query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
-          variables: {
-            documentId: "doc-123",
-            corpusId: "corpus-123",
-          },
-        },
-        result: {
-          data: {
-            documentCorpusActions: {
-              analysisRows: [{ analysis: mockAnalysis1 }],
-              extracts: [],
-            },
-          },
-        },
-      };
-
-      const { result } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
+        wrapper: createWrapper([mockQuery, mockQuery, mockQuery]),
       });
 
       await waitFor(
@@ -303,14 +264,24 @@ describe("AnalysisHooks - URL Synchronization", () => {
       // Simulate user selecting an analysis
       result.current.onSelectAnalysis(mockAnalysis1 as any);
 
-      // Wait for effect to run and update reactive var
+      // PURE TEST: Verify hook called utility to update URL (its responsibility)
       await waitFor(() => {
-        const ids = selectedAnalysesIds();
-        expect(ids).toEqual(["analysis-1234"]);
+        expect(
+          navigationUtils.updateAnnotationSelectionParams
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({ search: "" }),
+          expect.any(Function),
+          expect.objectContaining({
+            analysisIds: ["analysis-1234"],
+          })
+        );
       });
+
+      // NOTE: We do NOT test that selectedAnalysesIds() is updated
+      // That's CentralRouteManager Phase 2's job, not the hook's job
     });
 
-    it("should clear reactive var when analysis is deselected", async () => {
+    it("should update URL to clear analysis when deselected", async () => {
       const mockQuery = {
         request: {
           query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
@@ -322,23 +293,21 @@ describe("AnalysisHooks - URL Synchronization", () => {
         result: {
           data: {
             documentCorpusActions: {
-              analysisRows: [{ analysis: mockAnalysis1 }],
+              corpusActions: [],
+              analysisRows: [
+                { id: "row-1", analysis: mockAnalysis1, data: { edges: [] } },
+              ],
               extracts: [],
             },
           },
         },
       };
 
+      // Simulate CentralRouteManager had previously set this
       selectedAnalysesIds(["analysis-1234"]);
 
       const { result } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
+        wrapper: createWrapper([mockQuery, mockQuery, mockQuery]),
       });
 
       await waitFor(
@@ -351,12 +320,21 @@ describe("AnalysisHooks - URL Synchronization", () => {
       // Deselect analysis
       result.current.onSelectAnalysis(null);
 
+      // PURE TEST: Verify utility called to clear analysis from URL
       await waitFor(() => {
-        expect(selectedAnalysesIds()).toEqual([]);
+        expect(
+          navigationUtils.updateAnnotationSelectionParams
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({ search: "" }), // MemoryRouter has no initial query params
+          expect.any(Function),
+          expect.objectContaining({
+            analysisIds: [],
+          })
+        );
       });
     });
 
-    it("should update reactive var when extract is selected", async () => {
+    it("should update URL when extract is selected via onSelectExtract", async () => {
       const mockQuery = {
         request: {
           query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
@@ -368,6 +346,7 @@ describe("AnalysisHooks - URL Synchronization", () => {
         result: {
           data: {
             documentCorpusActions: {
+              corpusActions: [],
               analysisRows: [],
               extracts: [mockExtract1],
             },
@@ -376,13 +355,7 @@ describe("AnalysisHooks - URL Synchronization", () => {
       };
 
       const { result } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
+        wrapper: createWrapper([mockQuery, mockQuery, mockQuery]),
       });
 
       await waitFor(
@@ -392,16 +365,26 @@ describe("AnalysisHooks - URL Synchronization", () => {
         { timeout: 3000 }
       );
 
+      // Select extract
       result.current.onSelectExtract(mockExtract1 as any);
 
+      // PURE TEST: Verify utility called to update URL with extract param
       await waitFor(() => {
-        expect(selectedExtractIds()).toEqual(["extract-1234"]);
+        expect(
+          navigationUtils.updateAnnotationSelectionParams
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({ search: "" }),
+          expect.any(Function),
+          expect.objectContaining({
+            extractIds: ["extract-1234"],
+          })
+        );
       });
     });
   });
 
-  describe("Cleanup on Unmount", () => {
-    it("should clear reactive vars when hook unmounts", async () => {
+  describe("Cleanup on Unmount - Respects the ONE PLACE TO RULE THEM ALL", () => {
+    it("should NOT clear reactive vars when hook unmounts (only CentralRouteManager sets vars)", async () => {
       const mockQuery = {
         request: {
           query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
@@ -413,37 +396,40 @@ describe("AnalysisHooks - URL Synchronization", () => {
         result: {
           data: {
             documentCorpusActions: {
-              analysisRows: [{ analysis: mockAnalysis1 }],
+              corpusActions: [],
+              analysisRows: [
+                { id: "row-1", analysis: mockAnalysis1, data: { edges: [] } },
+              ],
               extracts: [mockExtract1],
             },
           },
         },
       };
 
+      // Simulate CentralRouteManager had set these from URL
       selectedAnalysesIds(["analysis-1234"]);
       selectedExtractIds(["extract-1234"]);
 
       const { unmount } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
+        wrapper: createWrapper([mockQuery, mockQuery, mockQuery]),
       });
 
       // Unmount the hook
       unmount();
 
-      // Reactive vars should be cleared
-      expect(selectedAnalysesIds()).toEqual([]);
-      expect(selectedExtractIds()).toEqual([]);
+      // PURE TEST: Reactive vars should NOT be cleared by hook
+      // Only CentralRouteManager is allowed to set URL-driven reactive vars
+      expect(selectedAnalysesIds()).toEqual(["analysis-1234"]);
+      expect(selectedExtractIds()).toEqual(["extract-1234"]);
+
+      // NOTE: If URL changes (user navigates away), CentralRouteManager Phase 2
+      // will detect that and update reactive vars appropriately. That's not
+      // the hook's responsibility.
     });
   });
 
   describe("Edge Cases", () => {
-    it("should not sync if analysis ID doesn't match any loaded analyses", async () => {
+    it("should handle empty analyses list gracefully", async () => {
       const mockQuery = {
         request: {
           query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
@@ -455,49 +441,7 @@ describe("AnalysisHooks - URL Synchronization", () => {
         result: {
           data: {
             documentCorpusActions: {
-              analysisRows: [{ analysis: mockAnalysis1 }],
-              extracts: [],
-            },
-          },
-        },
-      };
-
-      // Set ID that doesn't exist
-      selectedAnalysesIds(["nonexistent-id"]);
-
-      const { result } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
-      });
-
-      await waitFor(
-        () => {
-          expect(result.current.analyses.length).toBe(1);
-        },
-        { timeout: 3000 }
-      );
-
-      // Should have loaded analyses but not selected anything
-      expect(result.current.analyses).toHaveLength(1);
-    });
-
-    it("should not sync if analyses list is empty", async () => {
-      const mockQuery = {
-        request: {
-          query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
-          variables: {
-            documentId: "doc-123",
-            corpusId: "corpus-123",
-          },
-        },
-        result: {
-          data: {
-            documentCorpusActions: {
+              corpusActions: [],
               analysisRows: [],
               extracts: [],
             },
@@ -505,16 +449,8 @@ describe("AnalysisHooks - URL Synchronization", () => {
         },
       };
 
-      selectedAnalysesIds(["analysis-1234"]);
-
       const { result } = renderHook(() => useAnalysisManager(), {
-        wrapper: ({ children }) => (
-          <Provider>
-            <MockedProvider mocks={[mockQuery]} addTypename={false}>
-              {children}
-            </MockedProvider>
-          </Provider>
-        ),
+        wrapper: createWrapper([mockQuery, mockQuery, mockQuery]),
       });
 
       await waitFor(
@@ -524,8 +460,48 @@ describe("AnalysisHooks - URL Synchronization", () => {
         { timeout: 3000 }
       );
 
-      // Should handle empty list gracefully
-      expect(result.current.analyses).toHaveLength(0);
+      expect(result.current.analyses).toEqual([]);
+      expect(result.current.extracts).toEqual([]);
+    });
+
+    it("should handle analysis ID that doesn't match loaded analyses", async () => {
+      const mockQuery = {
+        request: {
+          query: GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
+          variables: {
+            documentId: "doc-123",
+            corpusId: "corpus-123",
+          },
+        },
+        result: {
+          data: {
+            documentCorpusActions: {
+              corpusActions: [],
+              analysisRows: [
+                { id: "row-1", analysis: mockAnalysis1, data: { edges: [] } },
+              ],
+              extracts: [],
+            },
+          },
+        },
+      };
+
+      // Simulate CentralRouteManager set an ID that doesn't match loaded analyses
+      selectedAnalysesIds(["nonexistent-analysis-id"]);
+
+      const { result } = renderHook(() => useAnalysisManager(), {
+        wrapper: createWrapper([mockQuery, mockQuery, mockQuery]),
+      });
+
+      await waitFor(
+        () => {
+          expect(result.current.analyses.length).toBe(1);
+        },
+        { timeout: 3000 }
+      );
+
+      // Hook should handle gracefully - no crash, just no match
+      expect(result.current.analyses).toHaveLength(1);
     });
   });
 });

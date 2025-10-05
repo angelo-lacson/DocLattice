@@ -1,4 +1,5 @@
 import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ExtractItem } from "./ExtractItem";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
@@ -8,6 +9,7 @@ import { openedExtract, selectedExtractIds } from "../../graphql/cache";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { determineCardColCount } from "../../utils/layout";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { updateAnnotationSelectionParams } from "../../utils/navigationUtils";
 
 interface ExtractCardsProps {
   style?: Record<string, any>;
@@ -29,6 +31,9 @@ export const ExtractCards = ({
   loading,
   fetchMore,
 }: ExtractCardsProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const { width } = useWindowDimensions();
   const card_cols = determineCardColCount(width);
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
@@ -43,10 +48,16 @@ export const ExtractCards = ({
       const cleaned_ids = selected_extract_ids.filter(
         (id) => id !== selected_extract.id
       );
-      selectedExtractIds(cleaned_ids);
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        extractIds: cleaned_ids,
+      });
     } else {
       // Add to selection
-      selectedExtractIds([...selected_extract_ids, selected_extract.id]);
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        extractIds: [...selected_extract_ids, selected_extract.id],
+      });
     }
 
     // Also update openedExtract for backward compatibility

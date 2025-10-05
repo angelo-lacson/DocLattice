@@ -22,12 +22,23 @@ import {
   selectedExtractIds,
   routeLoading,
   routeError,
+  authStatusVar,
 } from "../graphql/cache";
 import {
   RESOLVE_CORPUS_BY_SLUGS_FULL,
   RESOLVE_DOCUMENT_BY_SLUGS_FULL,
   RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL,
 } from "../graphql/queries";
+
+// Mock useNavigate
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
 // Mock all view components
 vi.mock("../components/knowledge_base", () => ({
@@ -82,6 +93,11 @@ describe("Routing Integration - Full Flow", () => {
     selectedExtractIds([]);
     routeLoading(false);
     routeError(null);
+    mockNavigate.mockReset();
+
+    // CRITICAL: Set auth status so CentralRouteManager proceeds with entity fetching
+    // Without this, CentralRouteManager waits forever for auth to initialize
+    authStatusVar("AUTHENTICATED");
   });
 
   afterEach(() => {
@@ -270,15 +286,6 @@ describe("Routing Integration - Full Flow", () => {
 
   describe("State to URL Synchronization", () => {
     it("should update URL when reactive vars change", async () => {
-      const mockNavigate = vi.fn();
-      vi.mock("react-router-dom", async () => {
-        const actual = await vi.importActual("react-router-dom");
-        return {
-          ...actual,
-          useNavigate: () => mockNavigate,
-        };
-      });
-
       render(
         <MockedProvider mocks={[]} addTypename={false}>
           <MemoryRouter initialEntries={["/annotations"]}>
@@ -296,7 +303,8 @@ describe("Routing Integration - Full Flow", () => {
         const calls = mockNavigate.mock.calls;
         const lastCall = calls[calls.length - 1];
         if (lastCall && lastCall[0]?.search) {
-          expect(lastCall[0].search).toContain("ann=new-1,new-2");
+          // Comma is URL-encoded as %2C
+          expect(lastCall[0].search).toContain("ann=new-1%2Cnew-2");
           expect(lastCall[0].search).toContain("analysis=new-3");
         }
       });
@@ -304,7 +312,7 @@ describe("Routing Integration - Full Flow", () => {
   });
 
   describe("Error Handling", () => {
-    it("should display error when entity fetch fails", async () => {
+    it("should navigate to 404 when entity fetch fails", async () => {
       const mocks = [
         {
           request: {
@@ -333,55 +341,20 @@ describe("Routing Integration - Full Flow", () => {
         </MockedProvider>
       );
 
+      // GraphQL errors trigger navigation to /404, not routeError
       await waitFor(() => {
-        expect(routeError()).toBeTruthy();
-        expect(routeLoading()).toBe(false);
+        expect(mockNavigate).toHaveBeenCalledWith("/404", { replace: true });
       });
-
-      expect(screen.getByText(/Error:/)).toBeInTheDocument();
     });
   });
 
   describe("Navigation Between Routes", () => {
-    it("should clear old entity when navigating to different route type", async () => {
-      const corpusMocks = [
-        {
-          request: {
-            query: RESOLVE_CORPUS_BY_SLUGS_FULL,
-            variables: {
-              userSlug: "john",
-              corpusSlug: "my-corpus",
-            },
-          },
-          result: {
-            data: {
-              corpusBySlugs: mockCorpus,
-            },
-          },
-        },
-      ];
-
-      const { rerender } = render(
-        <MockedProvider mocks={corpusMocks} addTypename={false}>
-          <MemoryRouter initialEntries={["/c/john/my-corpus"]}>
-            <CentralRouteManager />
-
-            <Routes>
-              <Route
-                path="/c/:userIdent/:corpusIdent"
-                element={<CorpusLandingRoute />}
-              />
-            </Routes>
-          </MemoryRouter>
-        </MockedProvider>
-      );
-
-      await waitFor(() => {
-        expect(openedCorpus()).toEqual(mockCorpus);
-      });
+    it("should clear old entity when navigating to browse route", async () => {
+      // Set initial corpus state (simulating previous navigation)
+      openedCorpus(mockCorpus);
 
       // Navigate to browse route
-      rerender(
+      render(
         <MockedProvider mocks={[]} addTypename={false}>
           <MemoryRouter initialEntries={["/annotations"]}>
             <CentralRouteManager />
@@ -389,8 +362,9 @@ describe("Routing Integration - Full Flow", () => {
         </MockedProvider>
       );
 
-      // Corpus should be cleared
+      // CentralRouteManager should immediately clear entities on browse routes
       expect(openedCorpus()).toBeNull();
+      expect(openedDocument()).toBeNull();
     });
   });
 });

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Table, Icon, Popup, Modal, Button, Loader } from "semantic-ui-react";
-import { useNavigate } from "react-router-dom";
-import { getDocumentUrl } from "../../../utils/navigationUtils";
+import { useNavigate, useLocation } from "react-router-dom";
+import {
+  getDocumentUrl,
+  updateAnnotationDisplayParams,
+} from "../../../utils/navigationUtils";
 
 import {
   DatacellType,
@@ -74,18 +77,22 @@ export const ExtractDatacell = ({
   );
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // console.log("DataCell - viewSourceAnnotations", viewSourceAnnotations);
     if (viewSourceAnnotations !== null) {
       onlyDisplayTheseAnnotations(viewSourceAnnotations);
       // Want to make sure that we see all annotatations *clearly*
-      showSelectedAnnotationOnly(false);
-      showAnnotationBoundingBoxes(true);
-      showStructuralAnnotations(true);
-      showAnnotationLabels(LabelDisplayBehavior.ALWAYS);
+      // Update display settings via URL - CentralRouteManager will set reactive vars
+      updateAnnotationDisplayParams(location, navigate, {
+        showSelectedOnly: false,
+        showBoundingBoxes: true,
+        showStructural: true,
+        labelDisplay: LabelDisplayBehavior.ALWAYS,
+      });
     }
-  }, [viewSourceAnnotations]);
+  }, [viewSourceAnnotations, location, navigate]);
 
   useEffect(() => {
     console.log(

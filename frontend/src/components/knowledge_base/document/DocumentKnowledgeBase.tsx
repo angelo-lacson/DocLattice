@@ -82,6 +82,8 @@ import {
   useAnnotationControls,
   selectedRelationsAtom,
 } from "../../annotator/context/UISettingsAtom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { clearAnnotationSelection } from "../../../utils/navigationUtils";
 
 import {
   ContentArea,
@@ -332,6 +334,9 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const { setProgress, zoomLevel, setShiftDown, setZoomLevel } = useUISettings({
     width,
   });
+
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Chat panel width management
   const { mode, customWidth, setMode, setCustomWidth, minimize, restore } =
@@ -746,7 +751,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
     // If we're currently auto-adjusting, skip to prevent loops
     if (isAdjustingZoomRef.current) {
-      isAdjustingZoomRef.current = false;
       return;
     }
 
@@ -770,6 +774,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       if (Math.abs(zoomLevel - clampedZoom) > 0.01) {
         isAdjustingZoomRef.current = true;
         setZoomLevel(clampedZoom);
+        // Reset flag after state update completes
+        setTimeout(() => {
+          isAdjustingZoomRef.current = false;
+        }, 0);
       }
     } else {
       // Sidebar closed - restore base zoom
@@ -779,6 +787,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       ) {
         isAdjustingZoomRef.current = true;
         setZoomLevel(baseZoomRef.current);
+        // Reset flag after state update completes
+        setTimeout(() => {
+          isAdjustingZoomRef.current = false;
+        }, 0);
       }
     }
   }, [
@@ -788,7 +800,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     customWidth,
     isMobile,
     activeLayer,
-    zoomLevel,
+    // NOTE: Do NOT include zoomLevel here - it causes auto-zoom to override manual zoom changes
     setZoomLevel,
   ]);
 
@@ -1894,7 +1906,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     return () => {
       setSelectedAnnotations([]);
       setSelectedRelations([]); // Clear selected relationships
-      selectedAnnotationIds([]);
+      // DO NOT call navigate() during unmount - causes "operation is insecure" error
+      // URL cleanup is handled by CentralRouteManager when route changes
       // Clean up zoom indicator timer
       if (zoomIndicatorTimer.current) {
         clearTimeout(zoomIndicatorTimer.current);
