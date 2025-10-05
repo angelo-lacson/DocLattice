@@ -168,8 +168,10 @@ export function CentralRouteManager() {
       routeLoading(true);
       routeError(null);
 
+      // Type assertion: route.type is guaranteed to be "document" | "corpus" here
+      // because "browse" and "unknown" are handled by early return above
       const requestKey = buildRequestKey(
-        route.type,
+        route.type as "document" | "corpus",
         route.userIdent,
         route.corpusIdent,
         route.documentIdent
@@ -262,9 +264,11 @@ export function CentralRouteManager() {
 
               if (idData?.document) {
                 // Redirect to canonical slug URL
+                // Type assertion: redirect query doesn't include analyses field,
+                // but buildCanonicalPath only needs slug and creator
                 const canonicalPath = buildCanonicalPath(
-                  idData.document,
-                  idData.document.corpus
+                  idData.document as any,
+                  idData.document.corpus as any
                 );
                 if (canonicalPath) {
                   navigate(canonicalPath + location.search, { replace: true });
@@ -408,7 +412,12 @@ export function CentralRouteManager() {
               });
 
               if (idData?.corpus) {
-                const canonicalPath = buildCanonicalPath(null, idData.corpus);
+                // Type assertion: redirect query doesn't include analyses field,
+                // but buildCanonicalPath only needs slug and creator
+                const canonicalPath = buildCanonicalPath(
+                  null,
+                  idData.corpus as any
+                );
                 if (canonicalPath) {
                   navigate(canonicalPath + location.search, { replace: true });
                   return;

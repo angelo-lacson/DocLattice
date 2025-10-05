@@ -74,7 +74,11 @@ describe("Routing Integration - Full Flow", () => {
     id: "corpus-123",
     slug: "my-corpus",
     title: "My Corpus",
-    creator: { id: "user-1", slug: "john" },
+    creator: { id: "user-1", slug: "john", email: "john@example.com" },
+    analyses: {
+      edges: [],
+      pageInfo: { hasNextPage: false, hasPreviousPage: false },
+    },
   };
 
   const mockDocument = {

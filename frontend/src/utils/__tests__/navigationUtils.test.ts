@@ -110,7 +110,7 @@ describe("getCorpusUrl()", () => {
 
     it("should return # when creator is null", () => {
       const invalidCorpus = { ...mockCorpus, creator: null };
-      expect(getCorpusUrl(invalidCorpus as CorpusType)).toBe("#");
+      expect(getCorpusUrl(invalidCorpus as unknown as CorpusType)).toBe("#");
     });
   });
 
