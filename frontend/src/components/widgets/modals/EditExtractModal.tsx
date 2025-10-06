@@ -24,6 +24,7 @@ import {
   RequestGetExtractInput,
 } from "../../../graphql/queries";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   REQUEST_ADD_DOC_TO_EXTRACT,
   REQUEST_CREATE_COLUMN,
@@ -614,6 +615,7 @@ export const EditExtractModal = ({
   ext,
   toggleModal,
 }: EditExtractModalProps) => {
+  const navigate = useNavigate();
   const dataGridRef = useRef<ExtractDataGridHandle>(null);
   const isMobile = useIsMobile();
 
@@ -623,6 +625,12 @@ export const EditExtractModal = ({
   const [columns, setColumns] = useState<ColumnType[]>([]);
   const adding_column_to_extract = useReactiveVar(addingColumnToExtract);
   const editing_column_for_extract = useReactiveVar(editingColumnForExtract);
+
+  // Following the routing mantra: navigate to browse route, CentralRouteManager clears entity state
+  const handleClose = () => {
+    navigate("/extracts");
+    // CentralRouteManager will detect browse route and clear openedExtract(null)
+  };
 
   useEffect(() => {
     console.log("adding_column_to_extract", adding_column_to_extract);
@@ -941,7 +949,7 @@ export const EditExtractModal = ({
         closeIcon={!isMobile}
         size="fullscreen"
         open={open}
-        onClose={toggleModal}
+        onClose={handleClose}
         data-testid="edit-extract-modal"
       >
         <ModalHeader>
@@ -955,7 +963,7 @@ export const EditExtractModal = ({
             </ExtractMeta>
           </HeaderTitle>
           <MobileCloseButton
-            onClick={toggleModal}
+            onClick={handleClose}
             data-testid="close-button-mobile"
           >
             <Icon name="close" size="large" />
@@ -1122,7 +1130,7 @@ export const EditExtractModal = ({
         <ModalActions>
           <ResponsiveButton
             id="close-button"
-            onClick={toggleModal}
+            onClick={handleClose}
             data-testid="close-button"
           >
             Close

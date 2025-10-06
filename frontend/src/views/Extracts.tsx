@@ -16,7 +16,6 @@ import {
 } from "../graphql/queries";
 import {
   authToken,
-  openedExtract,
   selectedExtractIds,
   showDeleteExtractModal,
   showCreateExtractModal,
@@ -30,7 +29,10 @@ import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import { ExtractList } from "../components/extracts/list/ExtractList";
 import { CreateAndSearchBar } from "../components/layout/CreateAndSearchBar";
 import { CreateExtractModal } from "../components/widgets/modals/CreateExtractModal";
-import { updateAnnotationSelectionParams } from "../utils/navigationUtils";
+import {
+  updateAnnotationSelectionParams,
+  navigateToExtract,
+} from "../utils/navigationUtils";
 
 const styles = {
   container: {
@@ -225,7 +227,10 @@ export const Extracts = () => {
         loading={extracts_loading}
         fetchMore={fetchMoreExtracts}
         onDelete={handleDeleteExtract}
-        onSelectRow={(it: ExtractType) => openedExtract(it)}
+        onSelectRow={(it: ExtractType) => {
+          // Navigate to extract entity route - CentralRouteManager will set openedExtract
+          navigateToExtract(it, navigate, location.pathname);
+        }}
       />
     </CardLayout>
   );

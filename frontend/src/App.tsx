@@ -68,6 +68,7 @@ import { SelectAnalyzerOrFieldsetModal } from "./components/widgets/modals/Selec
 import { DocumentUploadModal } from "./components/widgets/modals/DocumentUploadModal";
 import { FileUploadPackageProps } from "./components/widgets/modals/DocumentUploadModal";
 import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
+import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
@@ -334,6 +335,12 @@ export const App = () => {
                   <Route
                     path="/c/:userIdent/:corpusIdent"
                     element={<CorpusLandingRoute />}
+                  />
+
+                  {/* Extract routes */}
+                  <Route
+                    path="/e/:userIdent/:extractIdent"
+                    element={<ExtractLandingRoute />}
                   />
 
                   {/* List views */}

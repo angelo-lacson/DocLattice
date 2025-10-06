@@ -1,18 +1,24 @@
 /**
  * Navigation utilities for consistent slug-based routing
- * Only supports new explicit route patterns with /c/ and /d/ prefixes
+ * Only supports new explicit route patterns with /c/, /d/, and /e/ prefixes
  */
 
-import { CorpusType, DocumentType, UserType } from "../types/graphql-api";
+import {
+  CorpusType,
+  DocumentType,
+  ExtractType,
+  UserType,
+} from "../types/graphql-api";
 
 /**
  * Route parsing types
  */
 export interface ParsedRoute {
-  type: "corpus" | "document" | "browse" | "unknown";
+  type: "corpus" | "document" | "extract" | "browse" | "unknown";
   userIdent?: string;
   corpusIdent?: string;
   documentIdent?: string;
+  extractIdent?: string;
   browsePath?: string;
 }
 
@@ -35,6 +41,7 @@ export interface QueryParams {
  * - /c/:userIdent/:corpusIdent
  * - /d/:userIdent/:docIdent
  * - /d/:userIdent/:corpusIdent/:docIdent
+ * - /e/:userIdent/:extractIdent
  * - /annotations, /extracts, /corpuses, /documents, etc.
  *
  * @param pathname - URL pathname to parse
@@ -73,6 +80,15 @@ export function parseRoute(pathname: string): ParsedRoute {
     }
   }
 
+  // Extract route: /e/user/extract-id
+  if (segments[0] === "e" && segments.length === 3) {
+    return {
+      type: "extract",
+      userIdent: segments[1],
+      extractIdent: segments[2],
+    };
+  }
+
   // Browse routes: /annotations, /extracts, /corpuses, /documents, /label_sets
   const browseRoutes = [
     "annotations",
@@ -102,15 +118,22 @@ export function parseQueryParam(param: string | null): string[] {
 }
 
 /**
- * Builds canonical path from corpus/document entities
+ * Builds canonical path from corpus/document/extract entities
  * @param document - Optional document entity
  * @param corpus - Optional corpus entity
+ * @param extract - Optional extract entity
  * @returns Canonical path or empty string if entities missing
  */
 export function buildCanonicalPath(
   document?: DocumentType | null,
-  corpus?: CorpusType | null
+  corpus?: CorpusType | null,
+  extract?: ExtractType | null
 ): string {
+  // Extract (ID-based since extracts don't have slugs yet)
+  if (extract?.id && extract?.creator?.slug) {
+    return `/e/${extract.creator.slug}/${extract.id}`;
+  }
+
   // Document in corpus context
   if (
     document?.slug &&
@@ -255,6 +278,34 @@ export function getDocumentUrl(
 }
 
 /**
+ * Builds the URL for an extract
+ * Uses ID-based URL with /e/ prefix (extracts don't have slugs yet)
+ *
+ * @param extract - Extract object with id and creator
+ * @param queryParams - Optional query parameters for URL-driven state
+ * @returns Full extract URL with query string, or "#" if required fields missing
+ */
+export function getExtractUrl(
+  extract: Pick<ExtractType, "id" | "name"> & {
+    creator?: Pick<UserType, "id" | "slug"> | null;
+  },
+  queryParams?: QueryParams
+): string {
+  // Extracts don't have slugs yet, so we use ID-based URLs
+  if (!extract.id || !extract.creator?.slug) {
+    console.warn(
+      "Cannot generate extract URL without id and creator slug:",
+      extract
+    );
+    return "#"; // Return a safe fallback that won't navigate
+  }
+
+  const basePath = `/e/${extract.creator.slug}/${extract.id}`;
+  const query = queryParams ? buildQueryParams(queryParams) : "";
+  return basePath + query;
+}
+
+/**
  * Checks if the current path matches the canonical path
  * Prevents unnecessary redirects
  */
@@ -340,6 +391,41 @@ export function navigateToDocument(
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
     console.log("Already at canonical document path:", targetPath);
+    return;
+  }
+
+  // Push to history (not replace) so back button works
+  navigate(targetPath);
+}
+
+/**
+ * Smart navigation function for extracts
+ * Only navigates if not already at the destination
+ *
+ * @param extract - Extract to navigate to
+ * @param navigate - React Router navigate function
+ * @param currentPath - Current path to check if already at destination
+ * @param queryParams - Optional query parameters to preserve in URL
+ */
+export function navigateToExtract(
+  extract: Pick<ExtractType, "id" | "name"> & {
+    creator?: Pick<UserType, "id" | "slug"> | null;
+  },
+  navigate: (path: string, options?: { replace?: boolean }) => void,
+  currentPath?: string,
+  queryParams?: QueryParams
+) {
+  const targetPath = getExtractUrl(extract, queryParams);
+
+  // Don't navigate to invalid URL
+  if (targetPath === "#") {
+    console.error("Cannot navigate to extract without id and creator slug");
+    return;
+  }
+
+  // Don't navigate if we're already there
+  if (currentPath && isCanonicalPath(currentPath, targetPath)) {
+    console.log("Already at canonical extract path:", targetPath);
     return;
   }
 
