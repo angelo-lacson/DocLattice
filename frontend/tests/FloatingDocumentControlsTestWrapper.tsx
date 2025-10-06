@@ -146,33 +146,39 @@ const TestSetup: React.FC<{
   const setRawPermissions = useSetAtom(rawPermissionsAtom);
 
   /**
-   * DISABLED: URL watching interferes with direct reactive var updates
+   * CRITICAL: Simulate CentralRouteManager Phase 2 in tests
    *
-   * Now that setters in useAnnotationDisplay() update reactive vars directly,
-   * we don't need the test wrapper to sync URL → reactive vars.
-   * CentralRouteManager does this in the real app, but in tests the direct
-   * updates are sufficient and more reliable.
+   * After routing refactor, components use navigate() to update URL, then
+   * CentralRouteManager Phase 2 syncs URL → reactive vars. Without this,
+   * component tests fail because reactive vars never update when toggles change.
+   *
+   * This effect replicates Phase 2 behavior for component tests.
    */
-  // useEffect(() => {
-  //   console.log('[TEST WRAPPER] URL changed:', location.search);
-  //   const searchParams = new URLSearchParams(location.search);
+  useEffect(() => {
+    console.log("[TEST WRAPPER] URL changed:", location.search);
+    const searchParams = new URLSearchParams(location.search);
 
-  //   // Always sync ALL params (not just when present)
-  //   const structuralParam = searchParams.get('structural');
-  //   const newStructural = structuralParam === 'true';
-  //   console.log('[TEST WRAPPER] Syncing structural:', newStructural);
-  //   showStructuralAnnotations(newStructural);
+    // Sync URL params → reactive vars (Phase 2 simulation)
+    const structuralParam = searchParams.get("structural");
+    const newStructural = structuralParam === "true";
+    console.log("[TEST WRAPPER] Syncing structural:", newStructural);
+    showStructuralAnnotations(newStructural);
 
-  //   const selectedOnlyParam = searchParams.get('selectedOnly');
-  //   const newSelectedOnly = selectedOnlyParam === 'true';
-  //   console.log('[TEST WRAPPER] Syncing selectedOnly:', newSelectedOnly);
-  //   showSelectedAnnotationOnly(newSelectedOnly);
+    const selectedOnlyParam = searchParams.get("selectedOnly");
+    const newSelectedOnly = selectedOnlyParam === "true";
+    console.log("[TEST WRAPPER] Syncing selectedOnly:", newSelectedOnly);
+    showSelectedAnnotationOnly(newSelectedOnly);
 
-  //   const boundingBoxesParam = searchParams.get('boundingBoxes');
-  //   const newBoundingBoxes = boundingBoxesParam === 'true';
-  //   console.log('[TEST WRAPPER] Syncing boundingBoxes:', newBoundingBoxes);
-  //   showAnnotationBoundingBoxes(newBoundingBoxes);
-  // }, [location.search]);
+    const boundingBoxesParam = searchParams.get("boundingBoxes");
+    const newBoundingBoxes = boundingBoxesParam === "true";
+    console.log("[TEST WRAPPER] Syncing boundingBoxes:", newBoundingBoxes);
+    showAnnotationBoundingBoxes(newBoundingBoxes);
+
+    const labelsParam = searchParams.get("labels");
+    if (labelsParam) {
+      showAnnotationLabels(labelsParam);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     // Initialize Apollo reactive vars that the routing system would normally set

@@ -149,13 +149,22 @@ export const PDF: React.FC<PDFProps> = ({
   const allAnnotations = useAllAnnotations();
 
   /* ---------- build index & heights ---------------------------------- */
-  const pageInfos = useMemo(
-    () =>
-      Object.values(pages).sort(
-        (a, b) => a.page.pageNumber - b.page.pageNumber
-      ),
-    [pages]
-  );
+  const pageInfos = useMemo(() => {
+    const result = Object.values(pages).sort(
+      (a, b) => a.page.pageNumber - b.page.pageNumber
+    );
+    console.log("[PDF.tsx] 📊 pageInfos recalculated", {
+      count: result.length,
+      pagesKeys: Object.keys(pages).length,
+    });
+    return result;
+  }, [pages]);
+
+  // Store pageInfos in a ref to avoid recreating requestPageRender callback
+  const pageInfosRef = useRef(pageInfos);
+  useEffect(() => {
+    pageInfosRef.current = pageInfos;
+  }, [pageInfos]);
 
   /**
    * Returns the zero-based page index of the first selected annotation, or undefined if
@@ -215,6 +224,12 @@ export const PDF: React.FC<PDFProps> = ({
     if (!source) return undefined;
     return Math.min(...Object.keys(source.boundsByPage).map(Number));
   }, [messages, selectedMessageId, selectedSourceIndex]);
+
+  // Track renders and pageInfos changes
+  console.log("[PDF.tsx] 🔄 Render", {
+    pageCount: pageInfos.length,
+    zoomLevel,
+  });
 
   /* build the cache once per zoom level */
   useEffect(() => {
@@ -356,6 +371,9 @@ export const PDF: React.FC<PDFProps> = ({
       canvas: HTMLCanvasElement | null,
       onComplete?: (zoomLevel: number) => void
     ) => {
+      console.log(
+        `[PDF.tsx] 🎨 requestPageRender called for page ${pageNumber}`
+      );
       // Skip if we already have this page in queue - just update zoom level if needed
       if (renderQueueRef.current.has(pageNumber)) {
         const existingRequest = renderQueueRef.current.get(pageNumber);
@@ -407,7 +425,7 @@ export const PDF: React.FC<PDFProps> = ({
           if (!request.renderer || !request.canvas) return;
 
           try {
-            const viewport = pageInfos[
+            const viewport = pageInfosRef.current[
               request.pageNumber - 1
             ]?.page.getViewport({ scale: zoomLevel });
             if (viewport) {
@@ -434,7 +452,7 @@ export const PDF: React.FC<PDFProps> = ({
         renderQueueRef.current.clear();
       }, 100); // Single shared debounce delay
     },
-    [zoomLevel, pageInfos]
+    [zoomLevel] // ✅ Removed pageInfos - using pageInfosRef.current instead
   );
 
   /**

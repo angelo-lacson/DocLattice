@@ -297,12 +297,26 @@ export function CentralRouteManager() {
             console.log("[RouteManager] Resolving standalone document");
 
             // Try slug-based resolution
+            console.log(
+              "[GraphQL] 🔵 CentralRouteManager: Calling RESOLVE_DOCUMENT_BY_SLUGS_FULL",
+              {
+                userSlug: route.userIdent!,
+                documentSlug: route.documentIdent,
+              }
+            );
             const { data, error } = await resolveDocumentOnly({
               variables: {
                 userSlug: route.userIdent!,
                 documentSlug: route.documentIdent,
               },
             });
+            console.log(
+              "[GraphQL] ✅ CentralRouteManager: RESOLVE_DOCUMENT_BY_SLUGS_FULL completed",
+              {
+                hasData: !!data?.documentBySlugs,
+                hasError: !!error,
+              }
+            );
 
             if (error) {
               console.error(

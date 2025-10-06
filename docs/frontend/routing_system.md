@@ -364,6 +364,17 @@ const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
 const labels = useReactiveVar(showAnnotationLabels);
 
 useEffect(() => {
+  // CRITICAL: Don't sync on initial mount - wait for Phase 2 to read URL first
+  if (!hasInitializedFromUrl.current) {
+    return;
+  }
+
+  // CRITICAL: Don't sync while route is loading!
+  // Prevents race condition where Phase 4 reads stale reactive vars before Phase 2 updates them
+  if (routeLoading()) {
+    return;
+  }
+
   const queryString = buildQueryParams({
     annotationIds: annIds,
     analysisIds,
@@ -1484,6 +1495,49 @@ useEffect(() => {
 
 Now deep links include: `?ann=123&structural=true&boundingBoxes=true&labels=ALWAYS`
 
+### Bug #4: Deep Link Query Params Stripped on Initial Load (Fixed)
+
+**Problem:** When pasting a URL with full query params like `?ann=123&structural=true&boundingBoxes=true`, the params would be stripped down to only `?selectedOnly=true` during initial page load, preventing deep linking from working.
+
+**Symptoms:**
+- URL starts with all params: `?ann=QW5ub3RhdGlvblR5cGU6Mw==&structural=true&selectedOnly=true&boundingBoxes=true`
+- URL gets rewritten to: `?selectedOnly=true`
+- Document loads but annotation is not selected/visible
+- Works fine when navigating within the app, only breaks on fresh page load/refresh
+
+**Root Cause:** Classic race condition between Phase 2 and Phase 4:
+1. Phase 2 correctly parses URL params and sets reactive vars: `selectedAnnotationIds(['QW5ub3RhdGlvblR5cGU6Mw=='])`
+2. Phase 4 fires in the SAME render cycle before reactive vars propagate
+3. Phase 4 reads **stale/default** reactive var values (`selectedAnnotationIds = []`)
+4. Phase 4 syncs stale values back to URL, stripping the params: `?selectedOnly=true`
+5. Phase 2 runs again, reading the now-stripped URL
+
+**Logs showing the bug:**
+```
+Phase 2: annIds: ["QW5ub3RhdGlvblR5cGU6Mw=="]  ✅ Correct from URL
+Phase 4: annIds: []                             ❌ Stale value!
+Phase 4: Syncing → URL: ?selectedOnly=true      💥 Strips params!
+Phase 2: annIds: []                             😢 Reads stripped URL
+```
+
+**Fix:** Added `routeLoading()` guard in Phase 4 to prevent URL sync during entity resolution:
+```typescript
+useEffect(() => {
+  // Don't sync on initial mount
+  if (!hasInitializedFromUrl.current) return;
+
+  // CRITICAL: Don't sync while route is loading!
+  // Prevents race condition where Phase 4 reads stale reactive vars before Phase 2 updates them
+  if (routeLoading()) return;
+
+  // Safe to sync now - reactive vars are up to date
+  const queryString = buildQueryParams({ annotationIds: annIds, ... });
+  navigate({ search: queryString }, { replace: true });
+}, [annIds, ...]);
+```
+
+Now Phase 4 waits until `routeLoading = false` (after Phase 1 entity resolution completes), ensuring reactive vars have stabilized before syncing to URL.
+
 ### Architecture Lessons
 
 1. **One Source of Truth Prevents Chaos:** Scattered state management creates race conditions and infinite loops. Centralization eliminates 90% of routing bugs.
@@ -1498,6 +1552,8 @@ Now deep links include: `?ann=123&structural=true&boundingBoxes=true&labels=ALWA
 4. **Replace useEffect Cleanup with URL Changes:** Instead of manually clearing state in `useEffect` cleanup, let CentralRouteManager clear when URL changes. Simpler and more predictable.
 
 5. **Components Should Be Dumb Consumers:** If a component has URL parsing or GraphQL entity fetching, it's doing too much. Move logic to CentralRouteManager.
+
+6. **Guard Bidirectional Sync During Loading:** When implementing bidirectional URL ↔ State sync, always check `routeLoading()` in the State → URL direction to prevent race conditions where stale reactive var values overwrite URL params during initial load.
 
 ## Summary
 

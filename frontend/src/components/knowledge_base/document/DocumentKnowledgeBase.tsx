@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery } from "@apollo/client";
+import { useQuery, useReactiveVar } from "@apollo/client";
 import { Button, Header, Modal, Loader, Message } from "semantic-ui-react";
 import {
   MessageSquare,
@@ -122,8 +122,15 @@ import { ZoomControls } from "./ZoomControls";
 
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
-import { openedDocument, openedCorpus } from "../../../graphql/cache";
-import { selectedAnnotationIds } from "../../../graphql/cache";
+import {
+  openedDocument,
+  openedCorpus,
+  selectedAnnotationIds,
+  selectedAnalysesIds,
+  showStructuralAnnotations,
+  showSelectedAnnotationOnly,
+  showAnnotationBoundingBoxes,
+} from "../../../graphql/cache";
 import { useAuthReady } from "../../../hooks/useAuthReady";
 
 // New imports for unified feed
@@ -302,6 +309,24 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   showCorpusInfo,
   showSuccessMessage,
 }) => {
+  // Track what's causing re-renders by reading reactive vars
+  const selectedAnnots = useReactiveVar(selectedAnnotationIds);
+  const selectedAnalyses = useReactiveVar(selectedAnalysesIds);
+  const showStructural = useReactiveVar(showStructuralAnnotations);
+  const showSelectedOnly = useReactiveVar(showSelectedAnnotationOnly);
+  const showBBoxes = useReactiveVar(showAnnotationBoundingBoxes);
+
+  console.log("[DocumentKnowledgeBase] 🔄 Render triggered", {
+    documentId,
+    corpusId,
+    readOnly,
+    selectedAnnots,
+    selectedAnalyses,
+    showStructural,
+    showSelectedOnly,
+    showBBoxes,
+  });
+
   // Validate documentId - must be non-empty
   if (!documentId || documentId === "") {
     console.error(
@@ -1218,6 +1243,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   });
 
   // Query for document with structure but without corpus
+  console.log(
+    "[GraphQL] 🔵 DocumentKnowledgeBase: GET_DOCUMENT_WITH_STRUCTURE query state",
+    {
+      skip: !authReady || !documentId || Boolean(corpusId),
+      authReady,
+      documentId,
+      corpusId,
+    }
+  );
+
   const {
     data: documentOnlyData,
     loading: documentLoading,
@@ -1231,6 +1266,15 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         documentId,
       },
       onCompleted: (data) => {
+        console.log(
+          "[GraphQL] ✅ DocumentKnowledgeBase: GET_DOCUMENT_WITH_STRUCTURE completed",
+          {
+            documentId,
+            hasDocument: !!data?.document,
+            hasStructuralAnnotations:
+              data?.document?.allStructuralAnnotations?.length ?? 0,
+          }
+        );
         if (!data?.document) {
           console.error("onCompleted: No document data received.");
           setViewState(ViewState.ERROR);
