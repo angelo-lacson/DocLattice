@@ -1,12 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useReactiveVar } from "@apollo/client";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import _ from "lodash";
 import styled from "styled-components";
-import {
-  getDocumentUrl,
-  updateAnnotationSelectionParams,
-} from "../../utils/navigationUtils";
+import { getDocumentUrl } from "../../utils/navigationUtils";
 import { Card, Dimmer, Loader, Label, Header, Popup } from "semantic-ui-react";
 import {
   Tags,
@@ -19,12 +16,7 @@ import {
 } from "lucide-react";
 
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
-import {
-  selectedAnnotation,
-  selectedAnnotationIds,
-  selectedAnalysesIds,
-  displayAnnotationOnAnnotatorLoad,
-} from "../../graphql/cache";
+import { selectedAnnotationIds } from "../../graphql/cache";
 import {
   ServerAnnotationType,
   PageInfo,
@@ -170,12 +162,10 @@ export const AnnotationCards: React.FC<AnnotationCardProps> = ({
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
   const card_cols = determineCardColCount(width);
 
-  const selected_annotation = useReactiveVar(selectedAnnotation);
   const selected_annotation_ids = useReactiveVar(selectedAnnotationIds); // URL-driven highlighting
   const [targetAnnotation, setTargetAnnotation] =
     useState<AnnotationToNavigateTo>();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const handleUpdate = () => {
     if (!loading && pageInfo?.hasNextPage) {
@@ -191,26 +181,44 @@ export const AnnotationCards: React.FC<AnnotationCardProps> = ({
 
   useEffect(() => {
     if (targetAnnotation) {
-      displayAnnotationOnAnnotatorLoad(targetAnnotation.selected_annotation);
-      selectedAnnotation(targetAnnotation.selected_annotation);
+      // CRITICAL: Only update URL - do NOT set reactive vars directly!
+      // Flow: URL → CentralRouteManager Phase 2 → reactive vars → component updates
+
+      // Build query params for navigation
+      const queryParams: {
+        annotationIds: string[];
+        analysisIds?: string[];
+      } = {
+        annotationIds: [targetAnnotation.selected_annotation.id],
+      };
+
+      // If annotation has an associated analysis, include it in URL
       if (targetAnnotation.selected_annotation.analysis?.id) {
-        // Update URL - CentralRouteManager will set reactive var
-        updateAnnotationSelectionParams(location, navigate, {
-          analysisIds: [targetAnnotation.selected_annotation.analysis.id],
-        });
+        queryParams.analysisIds = [
+          targetAnnotation.selected_annotation.analysis.id,
+        ];
       }
+
+      // Build complete URL with all query params using navigation utility
       const url = getDocumentUrl(
         targetAnnotation.selected_document,
-        targetAnnotation.selected_corpus
+        targetAnnotation.selected_corpus,
+        queryParams
       );
+
       if (url !== "#") {
-        navigate(`${url}?ann=${targetAnnotation.selected_annotation.id}`);
+        navigate(url);
+        // CentralRouteManager Phase 2 will:
+        // 1. Set selectedAnnotationIds([annotation.id])
+        // 2. Set selectedAnalysesIds([analysis.id]) if present
+        // Then components will re-render with the selections
       } else {
         console.warn("Cannot navigate - missing slugs:", targetAnnotation);
       }
+
       setTargetAnnotation(undefined);
     }
-  }, [targetAnnotation]);
+  }, [targetAnnotation, navigate]);
 
   const getSourceInfo = (item: ServerAnnotationType) => {
     if (item.structural) {

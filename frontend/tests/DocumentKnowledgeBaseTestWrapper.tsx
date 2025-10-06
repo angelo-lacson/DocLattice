@@ -57,6 +57,10 @@ const createTestCache = () =>
       },
       CorpusType: {
         keyFields: ["id"],
+        fields: {
+          // CRITICAL: Handle DocumentTypeConnection properly to prevent infinite loops
+          documents: relayStylePagination(),
+        },
       },
       LabelSetType: {
         keyFields: ["id"],

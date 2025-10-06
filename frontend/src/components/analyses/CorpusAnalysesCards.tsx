@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import _ from "lodash";
 import { toast } from "react-toastify";
 import { useQuery, useReactiveVar } from "@apollo/client";
@@ -36,13 +36,17 @@ export const CorpusAnalysesCards = () => {
 
   //////////////////////////////////////////////////////////////////////
   // Craft the query variables obj based on current application state
-  const analyses_variables: LooseObject = {
-    corpusId: opened_corpus?.id ? opened_corpus.id : "",
-    analyzedCorpus_Isnull: !show_corpus_action_outputs,
-  };
-  if (analysis_search_term) {
-    analyses_variables["searchText"] = analysis_search_term;
-  }
+  // CRITICAL: Memoize to prevent new object on every render (causes infinite Apollo refetch)
+  const analyses_variables = useMemo(() => {
+    const vars: LooseObject = {
+      corpusId: opened_corpus?.id ? opened_corpus.id : "",
+      analyzedCorpus_Isnull: !show_corpus_action_outputs,
+    };
+    if (analysis_search_term) {
+      vars["searchText"] = analysis_search_term;
+    }
+    return vars;
+  }, [opened_corpus?.id, show_corpus_action_outputs, analysis_search_term]);
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Setup document resolvers and mutations
@@ -57,6 +61,7 @@ export const CorpusAnalysesCards = () => {
     variables: analyses_variables,
     fetchPolicy: "network-only",
     notifyOnNetworkStatusChange: true,
+    skip: !opened_corpus?.id, // CRITICAL: Don't query when no corpus selected!
   });
   if (analyses_load_error) {
     console.error("Corpus analysis fetch error", analyses_load_error);

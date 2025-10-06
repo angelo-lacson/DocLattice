@@ -764,6 +764,7 @@ getDocumentUrl(document, corpus, {
 ```typescript
 navigateToCorpus(corpus, navigate, currentPath)
 // Only navigates if not already there
+// Pushes to browser history (not replace) so back button works
 
 navigateToCorpus(corpus, navigate, currentPath, { analysisIds: ["123"] })
 // Navigates with query params
@@ -773,12 +774,15 @@ navigateToCorpus(corpus, navigate, currentPath, { analysisIds: ["123"] })
 ```typescript
 navigateToDocument(document, corpus, navigate, currentPath)
 // Only navigates if not already there
+// Pushes to browser history (not replace) so back button works
 
 navigateToDocument(document, corpus, navigate, currentPath, {
   annotationIds: ["456"]
 })
 // Navigates with query params
 ```
+
+**Important:** These navigation functions use `navigate(path)` (push) NOT `navigate(path, { replace: true })`. This ensures browser history is maintained and the back button works correctly. When a user opens a document/corpus, a new history entry is created, allowing them to use the browser back button to return to the previous view.
 
 ### State Update Utilities
 
@@ -1537,6 +1541,47 @@ useEffect(() => {
 ```
 
 Now Phase 4 waits until `routeLoading = false` (after Phase 1 entity resolution completes), ensuring reactive vars have stabilized before syncing to URL.
+
+### Bug #5: Infinite Rendering Loop from Apollo Cache Conflicts (Fixed)
+
+**Problem:** After selecting a corpus, the application entered an infinite rendering loop, repeatedly firing GraphQL queries (ResolveCorpusFull, GetCorpusWithHistory, GET_CORPUS_METADATA) and "hammering" the server every render cycle.
+
+**Symptoms:**
+- Console showed `[setCorpus] No changes detected, skipping update` (Jotai atom deep equality working correctly)
+- But Corpuses component continued re-rendering infinitely (#14, #15, #16...)
+- Apollo DevTools showed continuous cache updates despite no data changes
+- Apollo console error: `"DocumentTypeConnection... either ensure all objects of type DocumentTypeConnection have an ID or a custom merge function"`
+- Three queries firing on every render cycle:
+  1. `ResolveCorpusFull`
+  2. `GetCorpusWithHistory`
+  3. `GET_CORPUS_METADATA`
+
+**Root Cause:** Apollo cache conflict with `DocumentTypeConnection` (the `corpus.documents` field). Apollo couldn't properly merge the documents connection because it lacked proper cache configuration. Without a merge function, Apollo created **new object references** for `corpus.documents` on every query, triggering cache updates, causing components to re-render, which triggered new queries → **INFINITE LOOP**.
+
+Even though CorpusAtom's deep equality checks were correctly reusing object references by ID, the Apollo cache itself was creating new references for the `documents` field, bypassing the atom's optimization and forcing re-renders.
+
+**Fix:** Added `relayStylePagination()` field policy for the `documents` field on `CorpusType` in `src/graphql/cache.ts`:
+```typescript
+CorpusType: {
+  keyFields: ["id"],
+  fields: {
+    is_selected: {
+      read(existing) { return existing ?? false; }
+    },
+    is_open: {
+      read(existing) { return existing ?? false; }
+    },
+    // CRITICAL: Handle DocumentTypeConnection properly to prevent infinite loops
+    // Without this, Apollo creates new object references for documents on every query,
+    // triggering cache updates and infinite re-renders
+    documents: relayStylePagination(),
+  },
+},
+```
+
+**Impact:** This single line fix resolved the infinite loop immediately. Also required updating test wrappers (`CorpusHomeTestWrapper.tsx` and `DocumentKnowledgeBaseTestWrapper.tsx`) to include the same cache configuration to prevent test failures from cache mismatches.
+
+**Lesson:** Always configure Apollo cache type policies for Relay-style pagination connections (`Connection` types with `edges`, `pageInfo`, etc.). Without proper merge functions, Apollo creates new object references on every query, breaking React's referential equality checks and causing infinite re-renders. This is especially critical when components use deep equality or memo optimizations that depend on stable object references.
 
 ### Architecture Lessons
 
