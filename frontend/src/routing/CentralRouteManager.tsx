@@ -17,6 +17,7 @@ import { useReactiveVar } from "@apollo/client";
 import {
   openedCorpus,
   openedDocument,
+  openedExtract,
   selectedAnnotationIds,
   selectedAnalysesIds,
   selectedExtractIds,
@@ -32,14 +33,17 @@ import {
   RESOLVE_CORPUS_BY_SLUGS_FULL,
   RESOLVE_DOCUMENT_BY_SLUGS_FULL,
   RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL,
+  RESOLVE_EXTRACT_BY_ID,
   GET_CORPUS_BY_ID_FOR_REDIRECT,
   GET_DOCUMENT_BY_ID_FOR_REDIRECT,
   GetCorpusByIdForRedirectInput,
   GetCorpusByIdForRedirectOutput,
   GetDocumentByIdForRedirectInput,
   GetDocumentByIdForRedirectOutput,
+  ResolveExtractByIdInput,
+  ResolveExtractByIdOutput,
 } from "../graphql/queries";
-import { CorpusType, DocumentType } from "../types/graphql-api";
+import { CorpusType, DocumentType, ExtractType } from "../types/graphql-api";
 import {
   ResolveCorpusFullQuery,
   ResolveCorpusFullVariables,
@@ -118,6 +122,14 @@ export function CentralRouteManager() {
     nextFetchPolicy: "cache-and-network",
   });
 
+  const [resolveExtract] = useLazyQuery<
+    ResolveExtractByIdOutput,
+    ResolveExtractByIdInput
+  >(RESOLVE_EXTRACT_BY_ID, {
+    fetchPolicy: "cache-first",
+    nextFetchPolicy: "cache-and-network",
+  });
+
   // ═══════════════════════════════════════════════════════════════
   // PHASE 1: URL Path → Entity Resolution
   // ═══════════════════════════════════════════════════════════════
@@ -131,6 +143,7 @@ export function CentralRouteManager() {
     if (route.type === "browse" || route.type === "unknown") {
       openedCorpus(null);
       openedDocument(null);
+      openedExtract(null);
       routeLoading(false);
       routeError(null);
       lastProcessedPath.current = currentPath;
@@ -164,13 +177,14 @@ export function CentralRouteManager() {
       routeLoading(true);
       routeError(null);
 
-      // Type assertion: route.type is guaranteed to be "document" | "corpus" here
+      // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" here
       // because "browse" and "unknown" are handled by early return above
       const requestKey = buildRequestKey(
-        route.type as "document" | "corpus",
+        route.type as "document" | "corpus" | "extract",
         route.userIdent,
         route.corpusIdent,
-        route.documentIdent
+        route.documentIdent,
+        route.extractIdent
       );
 
       // Prevent duplicate simultaneous requests
@@ -440,6 +454,53 @@ export function CentralRouteManager() {
             return;
           }
 
+          // ────────────────────────────────────────────────────────
+          // EXTRACT (/e/user/extract-id)
+          // ────────────────────────────────────────────────────────
+          if (route.type === "extract" && route.extractIdent) {
+            console.log("[RouteManager] Resolving extract");
+
+            // Extracts don't have slugs yet, so we use ID-based resolution
+            const { data, error } = await resolveExtract({
+              variables: {
+                extractId: route.extractIdent,
+              },
+            });
+
+            if (error) {
+              console.error(
+                "[RouteManager] ❌ GraphQL error resolving extract:",
+                error
+              );
+              console.error("[RouteManager] Variables:", {
+                extractId: route.extractIdent,
+              });
+            }
+
+            if (!data?.extract) {
+              console.warn("[RouteManager] ⚠️  extract is null");
+            }
+
+            if (!error && data?.extract) {
+              const extract = data.extract as any as ExtractType;
+
+              console.log(
+                "[RouteManager] ✅ Resolved extract via ID:",
+                extract.id
+              );
+
+              openedExtract(extract);
+              openedCorpus(null);
+              openedDocument(null);
+              routeLoading(false);
+              return;
+            }
+
+            console.warn("[RouteManager] Extract not found");
+            navigate("/404", { replace: true });
+            return;
+          }
+
           // Invalid route configuration
           console.warn("[RouteManager] Invalid route configuration:", route);
           navigate("/404", { replace: true });
@@ -547,14 +608,16 @@ export function CentralRouteManager() {
   // ═══════════════════════════════════════════════════════════════
   const corpus = useReactiveVar(openedCorpus);
   const document = useReactiveVar(openedDocument);
+  const extract = useReactiveVar(openedExtract);
 
   // CRITICAL: Use IDs as dependencies to avoid infinite loops
   // GraphQL returns new object references even when data unchanged
   const corpusId = corpus?.id;
   const documentId = document?.id;
+  const extractId = extract?.id;
 
   useEffect(() => {
-    if (!corpus && !document) return;
+    if (!corpus && !document && !extract) return;
 
     // IMPORTANT: Don't redirect if we're on a browse route
     // This prevents race conditions where reactive vars haven't been cleared yet
@@ -566,7 +629,7 @@ export function CentralRouteManager() {
       return;
     }
 
-    const canonicalPath = buildCanonicalPath(document, corpus);
+    const canonicalPath = buildCanonicalPath(document, corpus, extract);
     if (!canonicalPath) return;
 
     // Normalize paths for comparison (remove trailing slashes)
@@ -587,7 +650,7 @@ export function CentralRouteManager() {
         "[RouteManager] Phase 3: Path already canonical, no redirect"
       );
     }
-  }, [corpusId, documentId, location.pathname]); // Only depend on IDs, not full objects
+  }, [corpusId, documentId, extractId, location.pathname]); // Only depend on IDs, not full objects
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 4: Reactive Vars → URL Sync (Bidirectional)

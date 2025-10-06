@@ -253,6 +253,47 @@ export const RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL = gql`
   }
 `;
 
+export interface ResolveExtractByIdInput {
+  extractId: string;
+}
+
+export interface ResolveExtractByIdOutput {
+  extract: ExtractType | null;
+}
+
+export const RESOLVE_EXTRACT_BY_ID = gql`
+  query ResolveExtractById($extractId: ID!) {
+    extract(id: $extractId) {
+      id
+      name
+      created
+      started
+      finished
+      error
+      myPermissions
+      creator {
+        id
+        username
+        slug
+      }
+      corpus {
+        id
+        slug
+        title
+        creator {
+          id
+          slug
+        }
+      }
+      fieldset {
+        id
+        name
+        description
+      }
+    }
+  }
+`;
+
 export const SEARCH_DOCUMENTS = gql`
   query (
     $inCorpusWithId: String
@@ -1633,6 +1674,7 @@ export const GET_EXTRACTS = gql`
           creator {
             id
             username
+            slug
           }
           created
           started

@@ -254,14 +254,25 @@ export const editingDocument = makeVar<DocumentType | null>(null);
 /**
  * Extract-related global variables
  *
- * URL-DRIVEN STATE: selectedExtractIds is controlled by URL query parameter ?extract=
+ * ENTITY STATE (set by CentralRouteManager Phase 1):
+ *   openedExtract - Extract resolved from /e/:user/:extractId route
+ *
+ * URL-DRIVEN STATE (set by CentralRouteManager Phase 2):
+ *   selectedExtractIds - Controlled by URL query parameter ?extract=
+ *
+ * CRITICAL: ONLY CentralRouteManager is allowed to SET openedExtract and selectedExtractIds
+ * All other components must:
+ *   - ONLY READ via useReactiveVar()
+ *   - UPDATE STATE via navigateToExtract() or updateAnnotationSelectionParams()
+ *
  * Examples:
+ *   /e/user/extract-123               → openedExtract(extractObj)
  *   /c/user/corpus?extract=456        → selectedExtractIds(["456"])
  *   /d/user/doc?extract=456,789       → selectedExtractIds(["456", "789"])
  */
-export const selectedExtractIds = makeVar<string[]>([]); // PRIMARY - URL-driven
+export const openedExtract = makeVar<ExtractType | null>(null); // ENTITY STATE - set by CentralRouteManager Phase 1
+export const selectedExtractIds = makeVar<string[]>([]); // URL-DRIVEN - set by CentralRouteManager Phase 2
 export const selectedExtract = makeVar<ExtractType | null>(null); // Legacy - kept for backward compatibility
-export const openedExtract = makeVar<ExtractType | null>(null); // Used in Extracts view for opening
 export const extractSearchTerm = makeVar<string>("");
 
 /**
