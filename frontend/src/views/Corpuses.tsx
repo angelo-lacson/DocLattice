@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Button, Tab, Menu } from "semantic-ui-react";
 import _ from "lodash";
 import { toast } from "react-toastify";
@@ -416,11 +416,25 @@ const CorpusQueryView = ({
   opened_corpus,
   opened_corpus_id,
   setShowDescriptionEditor,
+  stats,
+  statsLoading,
 }: {
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
   setShowDescriptionEditor: (show: boolean) => void;
+  stats: {
+    totalDocs: number;
+    totalAnnotations: number;
+    totalAnalyses: number;
+    totalExtracts: number;
+  };
+  statsLoading: boolean;
 }) => {
+  console.log("🔍🔍🔍 [CorpusQueryView] COMPONENT RENDER with props:", {
+    opened_corpus_id,
+    hasCorpus: !!opened_corpus,
+  });
+
   const [chatExpanded, setChatExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearchMode, setIsSearchMode] = useState<boolean>(true);
@@ -572,6 +586,8 @@ const CorpusQueryView = ({
             <CorpusHome
               corpus={opened_corpus as CorpusType}
               onEditDescription={() => setShowDescriptionEditor(true)}
+              stats={stats}
+              statsLoading={statsLoading}
             />
             <div
               style={{
@@ -1366,6 +1382,7 @@ const NotificationBadge = styled.div`
 
 export const Corpuses = () => {
   const { width } = useWindowDimensions();
+
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
 
   const show_remove_docs_from_corpus_modal = useReactiveVar(
@@ -1375,7 +1392,15 @@ export const Corpuses = () => {
     selectedMetaAnnotationId
   );
 
-  const { setCorpus } = useCorpusState();
+  // CRITICAL: Only call useCorpusState ONCE to avoid infinite re-renders
+  // Calling it multiple times creates new object references each time
+  const corpusState = useCorpusState();
+  const {
+    setCorpus,
+    canUpdateCorpus,
+    myPermissions: corpusAtomPermissions,
+  } = corpusState;
+
   const selected_document_ids = useReactiveVar(selectedDocumentIds);
   const document_search_term = useReactiveVar(documentSearchTerm);
   const corpus_search_term = useReactiveVar(corpusSearchTerm);
@@ -1384,6 +1409,7 @@ export const Corpuses = () => {
   const corpus_to_edit = useReactiveVar(editingCorpus);
   const corpus_to_view = useReactiveVar(viewingCorpus);
   const opened_corpus = useReactiveVar(openedCorpus);
+
   const exporting_corpus = useReactiveVar(exportingCorpus);
   const opened_document = useReactiveVar(openedDocument);
   const filter_to_label_id = useReactiveVar(filterToLabelId);
@@ -1493,10 +1519,16 @@ export const Corpuses = () => {
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to get corpuses
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  let corpus_variables: LooseObject = {};
-  if (corpus_search_term) {
-    corpus_variables["textSearch"] = corpus_search_term;
-  }
+  // CRITICAL: Memoize corpus_variables to prevent infinite re-renders
+  // Creating new object on every render causes Apollo to refetch → cache update → re-render → new object → LOOP
+  const corpus_variables = useMemo(() => {
+    const vars: LooseObject = {};
+    if (corpus_search_term) {
+      vars["textSearch"] = corpus_search_term;
+    }
+    return vars;
+  }, [corpus_search_term]);
+
   // Now that auth is guaranteed to be ready before this component renders,
   // we can use a regular useQuery
   const {
@@ -1507,7 +1539,10 @@ export const Corpuses = () => {
     fetchMore: fetchMoreCorpusesOrig,
   } = useQuery<GetCorpusesOutputs, GetCorpusesInputs>(GET_CORPUSES, {
     variables: corpus_variables,
-    fetchPolicy: "network-only",
+    // CHANGED from "network-only" to "cache-and-network" to prevent infinite refetch loops
+    // "network-only" bypasses cache and refetches on EVERY render, causing infinite loops
+    // "cache-and-network" uses cache immediately and fetches in background for updates
+    fetchPolicy: "cache-and-network",
     notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
   });
 
@@ -1592,45 +1627,31 @@ export const Corpuses = () => {
           fetchMetadata({ variables: { metadataForCorpusId: validId } });
         }
       }
-    } else if (!auth_token) {
-      // Note: CentralRouteManager will clear openedCorpus when navigating away
-      // No need to manually clear here
     }
   }, [auth_token]); // Re-run when auth token changes
 
+  // Search term effect - needed because fetchPolicy is "network-only"
   useEffect(() => {
-    // console.log("corpus_search_term");
     refetchCorpuses();
   }, [corpus_search_term]);
 
-  // If we detect user navigated to this page, refetch
-  // Note: CentralRouteManager handles clearing openedCorpus when navigating away from /c/:user/:corpus
-  useEffect(() => {
-    if (location.pathname === "/corpuses") {
-      refetchCorpuses();
-    }
-    showQueryViewState("ASK");
-  }, [location]);
+  // REMOVED: location-based refetch - was hammering server on every navigation
+  // Component already refetches on mount and when search term changes
+
+  // Sync opened_corpus to CorpusAtom and fetch metadata when corpus selected
+  // CRITICAL: Use stable ID as dependency to avoid infinite loops
+  // Apollo reactive vars return new object references even when data unchanged
+  const openedCorpusId = opened_corpus?.id;
 
   useEffect(() => {
-    console.log("Switched opened_corpus", opened_corpus);
     if (opened_corpus) {
       const corpus_permissions = getPermissions(opened_corpus.myPermissions);
       setCorpus({
         selectedCorpus: opened_corpus,
         myPermissions: corpus_permissions,
       });
-    } else {
-      setCorpus({
-        selectedCorpus: opened_corpus,
-        myPermissions: [],
-      });
-    }
-    if (!opened_corpus || opened_corpus === null) {
-      refetchCorpuses();
-    } else if (opened_corpus?.id) {
-      console.log("Fetch metadata for corpus id: ", opened_corpus.id);
-      // Only fetch metadata if we have a valid corpus ID
+
+      // Fetch metadata when corpus is selected
       const { id: validId, isValid } = ensureValidCorpusId(opened_corpus);
       if (isValid && validId) {
         try {
@@ -1645,30 +1666,32 @@ export const Corpuses = () => {
           opened_corpus.id
         );
       }
+    } else {
+      setCorpus({
+        selectedCorpus: opened_corpus,
+        myPermissions: [],
+      });
     }
-  }, [opened_corpus]);
+    // REMOVED: refetchCorpuses on opened_corpus null - unnecessary, query already has data
+  }, [openedCorpusId]); // Only depend on ID, not full object
 
   // Update CorpusAtom when metadata is fetched
+  // IMPORTANT: Only depend on corpus ID, not the whole object, to avoid infinite loops
+  // GraphQL returns new object references on every render even if data unchanged
+  const metadataCorpusId = metadata_data?.corpus?.id;
+
   useEffect(() => {
-    if (metadata_data?.corpus) {
+    if (metadata_data?.corpus && metadataCorpusId) {
       const corpus = metadata_data.corpus;
-      console.log(
-        "Metadata fetched, updating CorpusAtom with permissions:",
-        corpus.myPermissions
-      );
       const corpus_permissions = getPermissions(corpus.myPermissions || []);
       setCorpus({
         selectedCorpus: corpus,
         myPermissions: corpus_permissions,
       });
     }
-  }, [metadata_data]);
+  }, [metadataCorpusId]); // Only depend on ID, not the full object
 
   useEffect(() => {
-    console.log(
-      "selected_metadata_id_to_filter_on changed",
-      selected_metadata_id_to_filter_on
-    );
     refetch_documents();
   }, [selected_metadata_id_to_filter_on]);
 
@@ -1685,16 +1708,28 @@ export const Corpuses = () => {
   } = useQuery(GET_CORPUS_STATS, {
     variables: { corpusId: validCorpusId || "" }, // Provide empty string as fallback
     skip: !validCorpusId, // Skip if we don't have a valid ID
-    pollInterval: 5000, // Poll every 5 seconds for real-time updates
-    fetchPolicy: "cache-and-network", // Always fetch fresh data while showing cached
+    // REMOVED pollInterval - was hammering server every 5 seconds
+    // Stats are not real-time critical and will update when corpus changes
   });
 
-  const stats = statsData?.corpusStats || {
-    totalDocs: 0,
-    totalAnnotations: 0,
-    totalAnalyses: 0,
-    totalExtracts: 0,
-  };
+  // CRITICAL: Memoize stats object to prevent new object reference on every render
+  // New object reference would cause navigationItems useMemo to re-run infinitely
+  // Depend on primitive values, not the object itself, as Apollo returns new object refs
+  const stats = useMemo(() => {
+    return (
+      statsData?.corpusStats || {
+        totalDocs: 0,
+        totalAnnotations: 0,
+        totalAnalyses: 0,
+        totalExtracts: 0,
+      }
+    );
+  }, [
+    statsData?.corpusStats?.totalDocs,
+    statsData?.corpusStats?.totalAnnotations,
+    statsData?.corpusStats?.totalAnalyses,
+    statsData?.corpusStats?.totalExtracts,
+  ]);
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to shape item data
@@ -1897,100 +1932,95 @@ export const Corpuses = () => {
     });
   }
 
-  const { canUpdateCorpus, myPermissions: corpusAtomPermissions } =
-    useCorpusState();
+  // NOTE: canUpdateCorpus and corpusAtomPermissions are already destructured above
+  // Removed duplicate useCorpusState() call that was causing infinite re-renders
 
   // Navigation items configuration
-  const navigationItems = [
-    {
-      id: "home",
-      label: "Home",
-      icon: <Brain />,
-      component: (
-        <CorpusQueryView
-          opened_corpus={opened_corpus}
-          opened_corpus_id={opened_corpus_id}
-          setShowDescriptionEditor={setShowDescriptionEditor}
-        />
-      ),
-    },
-    {
-      id: "documents",
-      label: "Documents",
-      icon: <FileText />,
-      badge: stats.totalDocs,
-      component: <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />,
-    },
-    {
-      id: "annotations",
-      label: "Annotations",
-      icon: <MessageSquare />,
-      badge: stats.totalAnnotations,
-      component: <CorpusAnnotationCards opened_corpus_id={opened_corpus_id} />,
-    },
-    {
-      id: "analyses",
-      label: "Analyses",
-      icon: <Factory />,
-      badge: stats.totalAnalyses,
-      component: <CorpusAnalysesCards />,
-    },
-    {
-      id: "extracts",
-      label: "Extracts",
-      icon: <Table />,
-      badge: stats.totalExtracts,
-      component: <CorpusExtractCards />,
-    },
-    ...(opened_corpus &&
-    (() => {
-      const legacyPermissions = getPermissions(
-        opened_corpus.myPermissions || []
-      );
-      const legacyHasUpdate = legacyPermissions.includes(
-        PermissionTypes.CAN_UPDATE
-      );
-
-      console.log("CorpusSettings Debug:", {
-        corpusId: opened_corpus.id,
-        corpusTitle: opened_corpus.title,
-        legacyRawPermissions: opened_corpus.myPermissions,
-        legacyProcessedPermissions: legacyPermissions,
-        legacyHasUpdatePermission: legacyHasUpdate,
-        corpusAtomPermissions,
-        canUpdateCorpusFromAtom: canUpdateCorpus,
-        creator: opened_corpus.creator?.email,
-        usingAtomPermissions: true,
-      });
-
-      return canUpdateCorpus;
-    })()
-      ? [
-          {
-            id: "settings",
-            label: "Settings",
-            icon: <Settings />,
-            component: opened_corpus?.title ? (
-              <CorpusSettings
-                corpus={{
-                  id: opened_corpus.id,
-                  title: opened_corpus.title,
-                  description: opened_corpus.description || "",
-                  allowComments: opened_corpus.allowComments || false,
-                  preferredEmbedder: opened_corpus.preferredEmbedder,
-                  slug: (opened_corpus as any).slug || null,
-                  creator: opened_corpus.creator,
-                  created: opened_corpus.created,
-                  modified: opened_corpus.modified,
-                  isPublic: opened_corpus.isPublic,
-                  myPermissions: corpusAtomPermissions,
-                }}
-              />
-            ) : null,
-          },
-        ]
-      : []),
-  ];
+  // Memoize to prevent recreating on every render
+  const navigationItems = useMemo(() => {
+    return [
+      {
+        id: "home",
+        label: "Home",
+        icon: <Brain />,
+        component: (
+          <CorpusQueryView
+            opened_corpus={opened_corpus}
+            opened_corpus_id={opened_corpus_id}
+            setShowDescriptionEditor={setShowDescriptionEditor}
+            stats={stats}
+            statsLoading={statsLoading}
+          />
+        ),
+      },
+      {
+        id: "documents",
+        label: "Documents",
+        icon: <FileText />,
+        badge: stats.totalDocs,
+        component: <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />,
+      },
+      {
+        id: "annotations",
+        label: "Annotations",
+        icon: <MessageSquare />,
+        badge: stats.totalAnnotations,
+        component: (
+          <CorpusAnnotationCards opened_corpus_id={opened_corpus_id} />
+        ),
+      },
+      {
+        id: "analyses",
+        label: "Analyses",
+        icon: <Factory />,
+        badge: stats.totalAnalyses,
+        component: <CorpusAnalysesCards />,
+      },
+      {
+        id: "extracts",
+        label: "Extracts",
+        icon: <Table />,
+        badge: stats.totalExtracts,
+        component: <CorpusExtractCards />,
+      },
+      ...(opened_corpus && canUpdateCorpus
+        ? [
+            {
+              id: "settings",
+              label: "Settings",
+              icon: <Settings />,
+              component: opened_corpus?.title ? (
+                <CorpusSettings
+                  corpus={{
+                    id: opened_corpus.id,
+                    title: opened_corpus.title,
+                    description: opened_corpus.description || "",
+                    allowComments: opened_corpus.allowComments || false,
+                    preferredEmbedder: opened_corpus.preferredEmbedder,
+                    slug: (opened_corpus as any).slug || null,
+                    creator: opened_corpus.creator,
+                    created: opened_corpus.created,
+                    modified: opened_corpus.modified,
+                    isPublic: opened_corpus.isPublic,
+                    myPermissions: corpusAtomPermissions,
+                  }}
+                />
+              ) : null,
+            },
+          ]
+        : []),
+    ];
+  }, [
+    openedCorpusId, // Use stable ID instead of full object
+    opened_corpus_id,
+    stats.totalDocs,
+    stats.totalAnnotations,
+    stats.totalAnalyses,
+    stats.totalExtracts,
+    canUpdateCorpus,
+    // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
+    // and is a stable boolean, so we don't need corpusAtomPermissions in deps
+  ]);
 
   const currentView = navigationItems[active_tab];
 
@@ -2027,8 +2057,8 @@ export const Corpuses = () => {
       </div>
     );
   } else if (
-    (opened_corpus !== null || opened_corpus !== undefined) &&
-    (opened_document === null || opened_document === undefined)
+    opened_corpus && // Corpus selected
+    !opened_document // No document selected
   ) {
     content = (
       <CorpusViewContainer id="corpus-view-container">

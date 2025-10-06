@@ -108,6 +108,10 @@ export const cache = new InMemoryCache({
             return openedCorpus() && openedCorpus()?.id === readField("id");
           },
         },
+        // CRITICAL: Handle DocumentTypeConnection properly to prevent infinite loops
+        // Without this, Apollo creates new object references for documents on every query,
+        // triggering cache updates and infinite re-renders
+        documents: relayStylePagination(),
       },
     },
     LabelSetType: {

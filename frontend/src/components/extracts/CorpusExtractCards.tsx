@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useLocation } from "react-router-dom";
@@ -23,13 +23,17 @@ export const CorpusExtractCards = () => {
   const auth_token = useReactiveVar(authToken);
   const location = useLocation();
 
-  const extract_variables: LooseObject = {
-    corpusId: opened_corpus?.id ? opened_corpus.id : "",
-    corpusAction_Isnull: show_corpus_action_outputs,
-  };
-  if (analysis_search_term) {
-    extract_variables["searchText"] = analysis_search_term;
-  }
+  // CRITICAL: Memoize to prevent new object on every render (causes infinite Apollo refetch)
+  const extract_variables = useMemo(() => {
+    const vars: LooseObject = {
+      corpusId: opened_corpus?.id ? opened_corpus.id : "",
+      corpusAction_Isnull: show_corpus_action_outputs,
+    };
+    if (analysis_search_term) {
+      vars["searchText"] = analysis_search_term;
+    }
+    return vars;
+  }, [opened_corpus?.id, show_corpus_action_outputs, analysis_search_term]);
 
   const {
     refetch: refetchExtracts,
@@ -41,6 +45,7 @@ export const CorpusExtractCards = () => {
     variables: extract_variables,
     fetchPolicy: "network-only",
     notifyOnNetworkStatusChange: true,
+    skip: !opened_corpus?.id, // CRITICAL: Don't query when no corpus selected!
   });
 
   if (extracts_load_error) {

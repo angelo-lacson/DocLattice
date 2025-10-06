@@ -127,13 +127,6 @@ export function CentralRouteManager() {
     const currentPath = location.pathname;
     const route = parseRoute(currentPath);
 
-    console.log(
-      "[RouteManager] Processing route:",
-      route,
-      "authStatus:",
-      authStatus
-    );
-
     // Browse routes - no entity fetch needed
     if (route.type === "browse" || route.type === "unknown") {
       openedCorpus(null);
@@ -495,29 +488,55 @@ export function CentralRouteManager() {
       labels: labelsParam,
     });
 
-    // Update selection reactive vars
-    selectedAnnotationIds(annIds);
-    selectedAnalysesIds(analysisIds);
-    selectedExtractIds(extractIds);
+    // CRITICAL: Only update reactive vars if values have changed
+    // Reactive vars trigger re-renders even when set to same value, causing infinite loops
+    const currentAnnIds = selectedAnnotationIds();
+    const currentAnalysisIds = selectedAnalysesIds();
+    const currentExtractIds = selectedExtractIds();
+    const currentStructural = showStructuralAnnotations();
+    const currentSelectedOnly = showSelectedAnnotationOnly();
+    const currentBoundingBoxes = showAnnotationBoundingBoxes();
+    const currentLabels = showAnnotationLabels();
 
-    // Update visualization reactive vars
-    showStructuralAnnotations(structural);
-    showSelectedAnnotationOnly(selectedOnly);
-    showAnnotationBoundingBoxes(boundingBoxes);
+    // Helper to compare arrays
+    const arraysEqual = (a: string[], b: string[]) =>
+      a.length === b.length && a.every((val, idx) => val === b[idx]);
 
-    console.log(
-      "[RouteManager] Phase 2: Reactive vars updated. Annotation IDs:",
-      annIds
-    );
+    if (!arraysEqual(currentAnnIds, annIds)) {
+      selectedAnnotationIds(annIds);
+    }
+    if (!arraysEqual(currentAnalysisIds, analysisIds)) {
+      selectedAnalysesIds(analysisIds);
+    }
+    if (!arraysEqual(currentExtractIds, extractIds)) {
+      selectedExtractIds(extractIds);
+    }
+    if (currentStructural !== structural) {
+      showStructuralAnnotations(structural);
+    }
+    if (currentSelectedOnly !== selectedOnly) {
+      showSelectedAnnotationOnly(selectedOnly);
+    }
+    if (currentBoundingBoxes !== boundingBoxes) {
+      showAnnotationBoundingBoxes(boundingBoxes);
+    }
 
     // Parse label display behavior (default to ON_HOVER if not specified)
-    if (labelsParam === "ALWAYS") {
-      showAnnotationLabels("ALWAYS" as any);
-    } else if (labelsParam === "HIDE") {
-      showAnnotationLabels("HIDE" as any);
-    } else {
-      showAnnotationLabels("ON_HOVER" as any);
+    const newLabels =
+      labelsParam === "ALWAYS"
+        ? "ALWAYS"
+        : labelsParam === "HIDE"
+        ? "HIDE"
+        : "ON_HOVER";
+
+    if (currentLabels !== newLabels) {
+      showAnnotationLabels(newLabels as any);
     }
+
+    console.log(
+      "[RouteManager] Phase 2: Reactive vars updated (if changed). Annotation IDs:",
+      annIds
+    );
 
     // Mark that we've initialized from URL - allows Phase 4 to start syncing
     hasInitializedFromUrl.current = true;
@@ -529,8 +548,23 @@ export function CentralRouteManager() {
   const corpus = useReactiveVar(openedCorpus);
   const document = useReactiveVar(openedDocument);
 
+  // CRITICAL: Use IDs as dependencies to avoid infinite loops
+  // GraphQL returns new object references even when data unchanged
+  const corpusId = corpus?.id;
+  const documentId = document?.id;
+
   useEffect(() => {
     if (!corpus && !document) return;
+
+    // IMPORTANT: Don't redirect if we're on a browse route
+    // This prevents race conditions where reactive vars haven't been cleared yet
+    const currentRoute = parseRoute(location.pathname);
+    if (currentRoute.type === "browse" || currentRoute.type === "unknown") {
+      console.log(
+        "[RouteManager] Phase 3: Skipping redirect - on browse route"
+      );
+      return;
+    }
 
     const canonicalPath = buildCanonicalPath(document, corpus);
     if (!canonicalPath) return;
@@ -553,7 +587,7 @@ export function CentralRouteManager() {
         "[RouteManager] Phase 3: Path already canonical, no redirect"
       );
     }
-  }, [corpus, document, location.pathname]);
+  }, [corpusId, documentId, location.pathname]); // Only depend on IDs, not full objects
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 4: Reactive Vars → URL Sync (Bidirectional)
@@ -570,20 +604,6 @@ export function CentralRouteManager() {
     const currentUrlParams = new URLSearchParams(location.search);
     const urlAnalysisIds = parseQueryParam(currentUrlParams.get("analysis"));
     const urlExtractIds = parseQueryParam(currentUrlParams.get("extract"));
-
-    console.log("🔄 Phase 4 sync triggered:", {
-      "reactive var analysisIds": analysisIds,
-      "reactive var extractIds": extractIds,
-      "reactive var annIds": annIds,
-      "URL analysisIds": urlAnalysisIds,
-      "URL extractIds": urlExtractIds,
-      structural,
-      selectedOnly,
-      boundingBoxes,
-      labels,
-      routeLoading: routeLoading(),
-      hasInitializedFromUrl: hasInitializedFromUrl.current,
-    });
 
     // CRITICAL: Don't sync on initial mount - wait for Phase 2 to read URL first
     // This prevents overwriting deep link params with default reactive var values

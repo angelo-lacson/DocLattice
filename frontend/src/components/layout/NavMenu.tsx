@@ -11,8 +11,6 @@ import {
   authToken,
   showExportModal,
   userObj,
-  openedCorpus,
-  openedDocument,
   showUserSettingsModal,
 } from "../../graphql/cache";
 import UserSettingsModal from "../modals/UserSettingsModal";
@@ -77,8 +75,10 @@ export const NavMenu = () => {
       name={item.title}
       active={getIsActive(item.route)}
       key={`${item.title}`}
+      as={Link}
+      to={item.route}
     >
-      <Link to={item.route}>{item.title}</Link>
+      {item.title}
     </Menu.Item>
   ));
 
@@ -88,8 +88,10 @@ export const NavMenu = () => {
       name={item.title}
       active={getIsActive(item.route)}
       key={`${item.title}`}
+      as={Link}
+      to={item.route}
     >
-      <Link to={item.route}>{item.title}</Link>
+      {item.title}
     </Menu.Item>
   ));
 
@@ -248,8 +250,10 @@ export const NavMenu = () => {
                 name="Login"
                 active={pathname === "/login"}
                 key="login_nav_button"
+                as={Link}
+                to="/login"
               >
-                <Link to="/login">Login</Link>
+                Login
               </Menu.Item>
             )}
           </Menu.Menu>

@@ -257,9 +257,7 @@ describe("navigateToCorpus()", () => {
   it("should call navigate with correct URL", () => {
     const mockNavigate = vi.fn();
     navigateToCorpus(mockCorpus, mockNavigate);
-    expect(mockNavigate).toHaveBeenCalledWith("/c/john/my-corpus", {
-      replace: true,
-    });
+    expect(mockNavigate).toHaveBeenCalledWith("/c/john/my-corpus");
   });
 
   it("should append query params when provided", () => {
@@ -305,17 +303,13 @@ describe("navigateToDocument()", () => {
   it("should navigate to standalone document", () => {
     const mockNavigate = vi.fn();
     navigateToDocument(mockDocument, null, mockNavigate);
-    expect(mockNavigate).toHaveBeenCalledWith("/d/john/my-document", {
-      replace: true,
-    });
+    expect(mockNavigate).toHaveBeenCalledWith("/d/john/my-document");
   });
 
   it("should navigate to document in corpus", () => {
     const mockNavigate = vi.fn();
     navigateToDocument(mockDocument, mockCorpus, mockNavigate);
-    expect(mockNavigate).toHaveBeenCalledWith("/d/john/my-corpus/my-document", {
-      replace: true,
-    });
+    expect(mockNavigate).toHaveBeenCalledWith("/d/john/my-corpus/my-document");
   });
 
   it("should append query params", () => {

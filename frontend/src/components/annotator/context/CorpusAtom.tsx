@@ -40,16 +40,66 @@ export function useCorpusState() {
   /**
    * Batch-update the corpus state to avoid multiple, separate set calls.
    *
+   * CRITICAL: Only update if values have actually changed to prevent infinite re-renders
+   *
    * @param partial partial object to merge into the CorpusState
    */
-  function setCorpus(partial: Partial<CorpusState>) {
-    console.log("[setCorpus] Setting corpus state with:", partial);
-    setCorpusState((prev) => {
-      const newState = { ...prev, ...partial };
-      console.log("[setCorpus] New corpus state:", newState);
-      return newState;
-    });
-  }
+  const setCorpus = useCallback(
+    (partial: Partial<CorpusState>) => {
+      setCorpusState((prev) => {
+        // Build merged state, reusing previous object references when IDs match
+        const mergedPartial: Partial<CorpusState> = {};
+        let hasChanges = false;
+
+        for (const key in partial) {
+          const typedKey = key as keyof CorpusState;
+          const prevVal = prev[typedKey];
+          const newVal = partial[typedKey];
+
+          // Special handling for selectedCorpus - compare by ID, REUSE prev object if same
+          if (key === "selectedCorpus") {
+            const prevId = (prevVal as any)?.id;
+            const newId = (newVal as any)?.id;
+            if (prevId === newId) {
+              (mergedPartial as any)[typedKey] = prevVal; // REUSE previous object
+              continue; // Not a change
+            } else {
+              (mergedPartial as any)[typedKey] = newVal;
+              hasChanges = true;
+              continue;
+            }
+          }
+
+          // Deep equality check for arrays (like myPermissions)
+          if (Array.isArray(prevVal) && Array.isArray(newVal)) {
+            const prevArray = prevVal as any[];
+            const newArray = newVal as any[];
+            const arraysEqual =
+              prevArray.length === newArray.length &&
+              prevArray.every((val: any, idx: number) => val === newArray[idx]);
+            if (!arraysEqual) {
+              (mergedPartial as any)[typedKey] = newVal;
+              hasChanges = true;
+            } else {
+              (mergedPartial as any)[typedKey] = prevVal; // REUSE previous array
+            }
+          } else if (prevVal !== newVal) {
+            (mergedPartial as any)[typedKey] = newVal;
+            hasChanges = true;
+          } else {
+            (mergedPartial as any)[typedKey] = prevVal; // REUSE previous value
+          }
+        }
+
+        if (!hasChanges) {
+          return prev; // Return same reference to prevent re-render
+        }
+
+        return { ...prev, ...mergedPartial };
+      });
+    },
+    [setCorpusState]
+  );
 
   /**
    * Helper to check for a given permission type in the corpus permissions.
@@ -70,6 +120,8 @@ export function useCorpusState() {
   const canManageCorpus = hasCorpusPermission(PermissionTypes.CAN_PERMISSION);
 
   // Memoize for performance, so consumers don't re-render unnecessarily
+  // CRITICAL: Depend on individual values from corpusState, NOT the corpusState object itself
+  // to avoid re-creating the return object when corpusState reference changes but values don't
   return useMemo(
     () => ({
       // State
@@ -84,6 +136,22 @@ export function useCorpusState() {
       canManageCorpus,
       hasCorpusPermission,
     }),
-    [corpusState, hasCorpusPermission] // Only depend on corpusState and the memoized function
+    [
+      // Depend on individual values, not the whole corpusState object
+      corpusState.selectedCorpus,
+      corpusState.myPermissions,
+      corpusState.spanLabels,
+      corpusState.humanSpanLabels,
+      corpusState.relationLabels,
+      corpusState.docTypeLabels,
+      corpusState.humanTokenLabels,
+      corpusState.allowComments,
+      corpusState.isLoading,
+      setCorpus,
+      canUpdateCorpus,
+      canDeleteCorpus,
+      canManageCorpus,
+      hasCorpusPermission,
+    ]
   );
 }

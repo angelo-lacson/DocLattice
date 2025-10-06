@@ -285,6 +285,11 @@ interface DocumentKnowledgeBaseProps {
    * the usual scroll-to-annotation behaviour in the PDF/TXT viewers.
    */
   initialAnnotationIds?: string[];
+  /**
+   * Optional close handler for programmatic modal usage.
+   * If not provided, uses navigate(-1) to go back in browser history.
+   * @deprecated Prefer routing-based navigation over programmatic modals
+   */
   onClose?: () => void;
   /**
    * When true, disables all editing capabilities and shows only view-only features.
@@ -327,29 +332,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     showBBoxes,
   });
 
-  // Validate documentId - must be non-empty
-  if (!documentId || documentId === "") {
-    console.error(
-      "DocumentKnowledgeBase: Invalid documentId provided:",
-      documentId
-    );
-    return (
-      <Modal open onClose={onClose}>
-        <Modal.Content>
-          <Message error>
-            <Message.Header>Invalid Document</Message.Header>
-            <p>Cannot load document: Invalid document ID</p>
-          </Message>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={onClose}>Close</Button>
-        </Modal.Actions>
-      </Modal>
-    );
-  } else {
-    console.log("DocumentKnowledgeBase: Document ID is valid:", documentId);
-  }
-
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const { isFeatureAvailable, getFeatureStatus, hasCorpus } =
@@ -361,6 +343,38 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Handle close: use provided onClose callback or navigate back in history
+  const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+    } else {
+      navigate(-1);
+    }
+  }, [onClose, navigate]);
+
+  // Validate documentId - must be non-empty
+  if (!documentId || documentId === "") {
+    console.error(
+      "DocumentKnowledgeBase: Invalid documentId provided:",
+      documentId
+    );
+    return (
+      <Modal open onClose={handleClose}>
+        <Modal.Content>
+          <Message error>
+            <Message.Header>Invalid Document</Message.Header>
+            <p>Cannot load document: Invalid document ID</p>
+          </Message>
+        </Modal.Content>
+        <Modal.Actions>
+          <Button onClick={handleClose}>Close</Button>
+        </Modal.Actions>
+      </Modal>
+    );
+  } else {
+    console.log("DocumentKnowledgeBase: Document ID is valid:", documentId);
+  }
 
   // Chat panel width management
   const { mode, customWidth, setMode, setCustomWidth, minimize, restore } =
@@ -1987,7 +2001,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const [showAddToCorpusModal, setShowAddToCorpusModal] = useState(false);
 
   return (
-    <FullScreenModal id="knowledge-base-modal" open={true} onClose={onClose}>
+    <FullScreenModal
+      id="knowledge-base-modal"
+      open={true}
+      onClose={handleClose}
+    >
       <HeaderContainer>
         <div
           style={{
@@ -2036,8 +2054,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               Add to Corpus
             </HeaderButton>
           )}
-          <HeaderButton onClick={onClose}>
-            <X />
+          <HeaderButton
+            onClick={handleClose}
+            title="Go back"
+            data-testid="back-button"
+          >
+            <ArrowLeft />
           </HeaderButton>
         </HeaderButtonGroup>
       </HeaderContainer>

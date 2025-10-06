@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Button,
   Modal,
@@ -178,9 +178,14 @@ export function AddToCorpusModal({
     }
   );
 
-  let corpus_variables = {
-    textSearch: search_term,
-  };
+  // Memoize to prevent new object on every render causing Apollo refetch
+  const corpus_variables = useMemo(
+    () => ({
+      textSearch: search_term,
+    }),
+    [search_term]
+  );
+
   const {
     refetch: refetch_corpuses,
     loading: corpus_loading,
@@ -189,6 +194,7 @@ export function AddToCorpusModal({
   } = useQuery<GetCorpusesOutputs, GetCorpusesInputs>(GET_CORPUSES, {
     variables: corpus_variables,
     notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
+    skip: !open, // CRITICAL: Only fetch when modal is open to prevent cache conflicts
   });
 
   useEffect(() => {

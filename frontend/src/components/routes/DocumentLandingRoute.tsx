@@ -1,5 +1,4 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import { DocumentKnowledgeBase } from "../knowledge_base";
 import { MetaTags } from "../seo/MetaTags";
@@ -28,8 +27,6 @@ import {
  * This component is now a DUMB CONSUMER - it just reads state set by CentralRouteManager.
  */
 export const DocumentLandingRoute: React.FC = () => {
-  const navigate = useNavigate();
-
   // Read state from reactive vars (set by CentralRouteManager)
   const document = useReactiveVar(openedDocument);
   const corpus = useReactiveVar(openedCorpus);
@@ -42,20 +39,6 @@ export const DocumentLandingRoute: React.FC = () => {
     loading,
     hasError: !!error,
   });
-
-  // Handle close navigation
-  const handleClose = React.useCallback(() => {
-    // Navigate back to corpus if we have one, otherwise to documents list
-    if (corpus && corpus.creator?.slug && corpus.slug) {
-      const canonicalCorpusPath = `/c/${corpus.creator.slug}/${corpus.slug}`;
-      navigate(canonicalCorpusPath);
-    } else {
-      navigate("/documents");
-    }
-  }, [corpus, navigate]);
-
-  // Note: We now let DocumentKnowledgeBase determine read-only status
-  // based on the actual permissions available in the component tree
 
   if (loading) {
     return <ModernLoadingDisplay type="document" size="large" />;
@@ -78,11 +61,7 @@ export const DocumentLandingRoute: React.FC = () => {
         entity={document}
         entityType="document"
       />
-      <DocumentKnowledgeBase
-        documentId={document.id}
-        corpusId={corpus?.id}
-        onClose={handleClose}
-      />
+      <DocumentKnowledgeBase documentId={document.id} corpusId={corpus?.id} />
     </ErrorBoundary>
   );
 };

@@ -893,14 +893,21 @@ export const GET_ANNOTATIONS = gql`
           page
           corpus {
             id
+            slug
             icon
             title
             description
             preferredEmbedder
+            creator {
+              id
+              slug
+              __typename
+            }
             __typename
           }
           document {
             id
+            slug
             title
             description
             backendLock
@@ -909,6 +916,11 @@ export const GET_ANNOTATIONS = gql`
             pawlsParseFile
             icon
             fileType
+            creator {
+              id
+              slug
+              __typename
+            }
             __typename
           }
           analysis {

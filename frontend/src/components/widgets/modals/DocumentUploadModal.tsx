@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { gql, useReactiveVar } from "@apollo/client";
 import {
   Button,
@@ -136,14 +136,21 @@ export function DocumentUploadModal(props: DocumentUploadModalProps) {
   const [uploadDocument] =
     useMutation<UploadDocumentOutputProps>(UPLOAD_DOCUMENT);
 
+  // CRITICAL: Memoize variables to prevent new object on every render causing Apollo refetch
+  const corpusesVariables = useMemo(
+    () => ({ textSearch: search_term }),
+    [search_term]
+  );
+
   const {
     refetch: refetch_corpuses,
     loading: corpus_loading,
     data: corpus_load_data,
     error: corpus_load_error,
   } = useQuery<GetCorpusesOutputs, GetCorpusesInputs>(GET_CORPUSES, {
-    variables: { textSearch: search_term },
+    variables: corpusesVariables,
     notifyOnNetworkStatusChange: true,
+    skip: !open, // CRITICAL: Only fetch when modal is open to prevent cache conflicts
   });
 
   const corpuses = corpus_load_data?.corpuses?.edges

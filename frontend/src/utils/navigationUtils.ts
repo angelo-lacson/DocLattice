@@ -302,7 +302,8 @@ export function navigateToCorpus(
     return;
   }
 
-  navigate(targetPath, { replace: true });
+  // Push to history (not replace) so back button works
+  navigate(targetPath);
 }
 
 /**
@@ -342,7 +343,8 @@ export function navigateToDocument(
     return;
   }
 
-  navigate(targetPath, { replace: true });
+  // Push to history (not replace) so back button works
+  navigate(targetPath);
 }
 
 /**

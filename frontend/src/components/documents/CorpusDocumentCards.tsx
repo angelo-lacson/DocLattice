@@ -111,13 +111,10 @@ export const CorpusDocumentCards = ({
     toast.error("ERROR\nCould not fetch documents for corpus.");
   }
 
-  useEffect(() => {
-    refetchDocuments();
-  }, [document_search_term]);
-
-  useEffect(() => {
-    refetchDocuments();
-  }, [selected_metadata_id_to_filter_on]);
+  // REMOVED: All manual refetch effects
+  // useQuery automatically refetches when variables change (document_search_term,
+  // selected_metadata_id_to_filter_on, filter_to_label_id, opened_corpus_id)
+  // These manual refetches were causing excessive server requests
 
   const [removeDocumentsFromCorpus, {}] = useMutation<
     RemoveDocumentsFromCorpusOutputs,
@@ -127,37 +124,6 @@ export const CorpusDocumentCards = ({
       refetchDocuments();
     },
   });
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // Effects to reload data on certain changes
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // If user logs in while on this page... refetch to get their authorized corpuses
-  useEffect(() => {
-    // console.log("Auth token change", auth_token);
-    if (auth_token && opened_corpus_id) {
-      refetchDocuments();
-    }
-  }, [auth_token]);
-
-  useEffect(() => {
-    if (filter_to_label_id) {
-      refetchDocuments();
-    }
-  }, [filter_to_label_id]);
-
-  // If we detech user navigated to this page, refetch
-  useEffect(() => {
-    if (opened_corpus_id && location.pathname === "/corpuses") {
-      refetchDocuments();
-    }
-  }, [location]);
-
-  useEffect(() => {
-    console.log("Opened corpus id changed", opened_corpus_id);
-    if (opened_corpus_id) {
-      refetchDocuments();
-    }
-  }, [opened_corpus_id]);
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to shape item data
