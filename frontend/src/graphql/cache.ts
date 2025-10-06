@@ -92,6 +92,16 @@ export const cache = new InMemoryCache({
             return openedDocument() && openedDocument()?.id === readField("id");
           },
         },
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        // Without these, Apollo creates new object references on every query,
+        // triggering cache updates and infinite re-renders
+        assignmentSet: relayStylePagination(),
+        corpusSet: relayStylePagination(),
+        annotationSet: relayStylePagination(),
+        docLabelAnnotations: relayStylePagination(),
+        metadataAnnotations: relayStylePagination(),
+        conversations: relayStylePagination(),
+        chatMessages: relayStylePagination(),
       },
     },
     CorpusType: {
@@ -108,10 +118,15 @@ export const cache = new InMemoryCache({
             return openedCorpus() && openedCorpus()?.id === readField("id");
           },
         },
-        // CRITICAL: Handle DocumentTypeConnection properly to prevent infinite loops
-        // Without this, Apollo creates new object references for documents on every query,
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        // Without these, Apollo creates new object references on every query,
         // triggering cache updates and infinite re-renders
         documents: relayStylePagination(),
+        assignmentSet: relayStylePagination(),
+        relationshipSet: relayStylePagination(),
+        annotations: relayStylePagination(),
+        analyses: relayStylePagination(),
+        conversations: relayStylePagination(),
       },
     },
     LabelSetType: {
@@ -130,9 +145,76 @@ export const cache = new InMemoryCache({
         },
       },
     },
+    AnalysisType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        analyzedDocuments: relayStylePagination(),
+        annotations: relayStylePagination(),
+      },
+    },
     ServerAnnotationType: {
       fields: {
         userFeedback: mergeArrayByIdFieldPolicy,
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        created_by_analyses: relayStylePagination(),
+        assignmentSet: relayStylePagination(),
+        sourceNodeInRelationships: relayStylePagination(),
+        targetNodeInRelationships: relayStylePagination(),
+        chatMessages: relayStylePagination(),
+        createdByChatMessage: relayStylePagination(),
+      },
+    },
+    RelationshipLabelType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        sourceAnnotations: relayStylePagination(),
+        targetAnnotations: relayStylePagination(),
+        assignmentSet: relayStylePagination(),
+      },
+    },
+    UserType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        createdAssignments: relayStylePagination(),
+        myAssignments: relayStylePagination(),
+        userexportSet: relayStylePagination(),
+        userimportSet: relayStylePagination(),
+        editingDocuments: relayStylePagination(),
+        documentSet: relayStylePagination(),
+        corpusSet: relayStylePagination(),
+        editingCorpuses: relayStylePagination(),
+        labelSet: relayStylePagination(),
+        relationshipSet: relayStylePagination(),
+        annotationSet: relayStylePagination(),
+        labelsetSet: relayStylePagination(),
+      },
+    },
+    FieldsetType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        annotationlabelSet: relayStylePagination(),
+        relationshipSet: relayStylePagination(),
+        labelsetSet: relayStylePagination(),
+        analysisSet: relayStylePagination(),
+      },
+    },
+    ExtractType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        extractedDatacells: relayStylePagination(),
+      },
+    },
+    ConversationType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        chatMessages: relayStylePagination(),
+      },
+    },
+    ChatMessageType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        sourceAnnotations: relayStylePagination(),
+        createdAnnotations: relayStylePagination(),
       },
     },
     UserFeedbackType: {
