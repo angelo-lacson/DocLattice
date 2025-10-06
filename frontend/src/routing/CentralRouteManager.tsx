@@ -567,15 +567,21 @@ export function CentralRouteManager() {
   const labels = useReactiveVar(showAnnotationLabels);
 
   useEffect(() => {
+    const currentUrlParams = new URLSearchParams(location.search);
+    const urlAnalysisIds = parseQueryParam(currentUrlParams.get("analysis"));
+    const urlExtractIds = parseQueryParam(currentUrlParams.get("extract"));
+
     console.log("🔄 Phase 4 sync triggered:", {
-      annIds,
-      analysisIds,
-      extractIds,
+      "reactive var analysisIds": analysisIds,
+      "reactive var extractIds": extractIds,
+      "reactive var annIds": annIds,
+      "URL analysisIds": urlAnalysisIds,
+      "URL extractIds": urlExtractIds,
       structural,
       selectedOnly,
       boundingBoxes,
       labels,
-      routeLoading: routeLoading(), // Check loading state
+      routeLoading: routeLoading(),
       hasInitializedFromUrl: hasInitializedFromUrl.current,
     });
 
@@ -593,6 +599,30 @@ export function CentralRouteManager() {
     if (routeLoading()) {
       console.log(
         "[RouteManager] Phase 4 SKIPPED - route still loading, preventing race condition"
+      );
+      return;
+    }
+
+    // CRITICAL: Don't sync if URL has analysis/extract params but corresponding reactive vars are empty
+    // This prevents stripping params during the window when GET_DOCUMENT_ANALYSES_AND_EXTRACTS is still loading
+    // Phase 2 sets reactive vars from URL, but if they're cleared or not yet propagated, we must wait
+    const urlHasAnalysis = urlAnalysisIds.length > 0;
+    const urlHasExtract = urlExtractIds.length > 0;
+    const analysisVarEmpty = analysisIds.length === 0;
+    const extractVarEmpty = extractIds.length === 0;
+
+    if (
+      (urlHasAnalysis && analysisVarEmpty) ||
+      (urlHasExtract && extractVarEmpty)
+    ) {
+      console.log(
+        "[RouteManager] Phase 4 SKIPPED - URL has params but reactive vars don't match (analyses/extracts still loading or cleared)",
+        {
+          urlHasAnalysis,
+          analysisVarEmpty,
+          urlHasExtract,
+          extractVarEmpty,
+        }
       );
       return;
     }

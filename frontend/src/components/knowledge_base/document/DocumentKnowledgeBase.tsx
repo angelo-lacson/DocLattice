@@ -520,11 +520,20 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     });
   }, [setTextSearchState]);
 
-  useEffect(() => {
-    // Reset or set the default selections.
-    onSelectAnalysis(null);
-    onSelectExtract(null);
-  }, []);
+  /**
+   * REMOVED: useEffect that cleared analysis/extract selections on mount.
+   *
+   * This was causing deep link params to be stripped because:
+   * 1. CentralRouteManager Phase 2 correctly sets reactive vars from URL
+   * 2. DocumentKnowledgeBase mounts
+   * 3. This effect called onSelectAnalysis(null) which now updates URL
+   * 4. URL params get stripped!
+   *
+   * The routing system handles initialization:
+   * - URL → CentralRouteManager Phase 2 → reactive vars
+   * - Reactive vars → AnalysisHooks sync effect → Jotai atoms
+   * - No manual clearing needed
+   */
 
   /**
    * If analysis or annotation is selected, switch to document view.

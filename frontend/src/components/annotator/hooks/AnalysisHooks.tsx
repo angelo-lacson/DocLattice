@@ -442,18 +442,20 @@ export const useAnalysisManager = () => {
 
   /**
    * Handles selection of an analysis.
-   * Sets display defaults for analysis view and updates URL parameters.
-   * CentralRouteManager Phase 2 will read URL and set reactive vars.
+   * CRITICAL: Only updates URL - does NOT set Jotai atoms directly.
+   * Flow: URL change → CentralRouteManager Phase 2 → reactive var → sync effect → Jotai atoms
+   * This ensures deep linking works correctly (URL is source of truth).
    *
    * @param analysis The analysis to select.
    */
   const onSelectAnalysis = useCallback(
     (analysis: AnalysisType | null) => {
-      setSelectedAnalysis(analysis);
-      setSelectedExtract(null);
+      // DON'T set Jotai atoms directly - let sync effect handle it!
+      // setSelectedAnalysis(analysis);  ❌ VIOLATION - breaks deep linking
+      // setSelectedExtract(null);        ❌ VIOLATION - breaks deep linking
 
-      // CRITICAL: Update all params in ONE navigate() call to avoid race conditions
-      // Read current URL params, modify all at once, then navigate once
+      // ONLY update URL - CentralRouteManager Phase 2 will set reactive vars,
+      // then sync effect (lines 196-245) will set Jotai atoms
       const searchParams = new URLSearchParams(location.search);
 
       // Clear annotation selection
@@ -466,7 +468,7 @@ export const useAnalysisManager = () => {
         searchParams.delete("analysis");
       }
 
-      // Clear extract selection
+      // Clear extract selection (exclusive: can't have both analysis and extract selected)
       searchParams.delete("extract");
 
       // Reset visualization settings for analysis view
@@ -476,28 +478,39 @@ export const useAnalysisManager = () => {
       searchParams.delete("structural"); // false is default
 
       // Single navigate() call with all changes
+      // Flow: navigate → CentralRouteManager Phase 2 → selectedAnalysesIds reactive var →
+      //       sync effect → setSelectedAnalysis Jotai atom → component re-renders
       navigate({ search: searchParams.toString() }, { replace: true });
     },
-    [setSelectedAnalysis, setSelectedExtract, location, navigate]
+    [location, navigate]
   );
 
   /**
    * Handles selection of an extract.
+   * CRITICAL: Only updates URL - does NOT set Jotai atoms directly.
+   * Flow: URL change → CentralRouteManager Phase 2 → reactive var → sync effect → Jotai atoms
+   * This ensures deep linking works correctly (URL is source of truth).
    *
    * @param extract The extract to select.
    */
   const onSelectExtract = useCallback(
     (extract: ExtractType | null) => {
-      setSelectedExtract(extract);
-      setSelectedAnalysis(null);
+      // DON'T set Jotai atoms directly - let sync effect handle it!
+      // setSelectedExtract(extract);   ❌ VIOLATION - breaks deep linking
+      // setSelectedAnalysis(null);     ❌ VIOLATION - breaks deep linking
 
-      // Update URL - CentralRouteManager will set reactive vars
+      // ONLY update URL - CentralRouteManager Phase 2 will set reactive vars,
+      // then sync effect (lines 196-245) will set Jotai atoms
       updateAnnotationSelectionParams(location, navigate, {
         extractIds: extract ? [extract.id] : [],
-        analysisIds: [],
+        analysisIds: [], // Clear analysis selection (exclusive)
       });
+
+      // Flow: updateAnnotationSelectionParams → navigate → CentralRouteManager Phase 2 →
+      //       selectedExtractIds reactive var → sync effect → setSelectedExtract Jotai atom →
+      //       component re-renders
     },
-    [setSelectedExtract, setSelectedAnalysis, location, navigate]
+    [location, navigate]
   );
 
   return {
