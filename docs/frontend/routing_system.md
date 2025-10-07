@@ -35,11 +35,12 @@ The OpenContracts routing system follows a **centralized architecture** where **
 **Entity State (set by Phase 1):**
 - `openedCorpus()`
 - `openedDocument()`
+- `openedExtract()`
 
 **URL-Driven State (set by Phase 2, watched by Phase 4):**
 - `selectedAnnotationIds()`
 - `selectedAnalysesIds()`
-- `selectedExtractIds()`
+- `selectedExtractIds()` (when in browse/entity context, NOT on `/e/` routes where it's entity state)
 - `showStructuralAnnotations()`
 - `showSelectedAnnotationOnly()`
 - `showAnnotationBoundingBoxes()`
@@ -62,7 +63,7 @@ This is non-negotiable. Violations cause infinite loops, route jittering, compet
 - `Corpuses.tsx` (3 violations)
 - Deleted obsolete `RouteStateSync.ts` hook (14 violations)
 
-**If you find yourself writing `openedCorpus(someValue)` or `openedDocument(someValue)` anywhere except `CentralRouteManager.tsx`, STOP. You are introducing a bug.**
+**If you find yourself writing `openedCorpus(someValue)`, `openedDocument(someValue)`, or `openedExtract(someValue)` anywhere except `CentralRouteManager.tsx`, STOP. You are introducing a bug.**
 
 ### Design Decisions
 
@@ -176,6 +177,7 @@ graph TB
 | `/c/:userIdent/:corpusIdent`           | `/c/john/my-corpus`           | CorpusLandingRoute   | Phase 1: Fetch corpus      |
 | `/d/:userIdent/:docIdent`              | `/d/john/my-document`         | DocumentLandingRoute | Phase 1: Fetch document    |
 | `/d/:userIdent/:corpusIdent/:docIdent` | `/d/john/corpus/doc`          | DocumentLandingRoute | Phase 1: Fetch both        |
+| `/e/:userIdent/:extractIdent`          | `/e/john/extract-123`         | ExtractLandingRoute  | Phase 1: Fetch extract     |
 
 ### Browse Routes (Query Params Only)
 
@@ -269,11 +271,11 @@ CentralRouteManager automatically detects IDs and redirects to canonical slug UR
 
 ### Core Responsibilities
 
-1. **Parse URLs** → Determine route type (corpus/document/browse)
-2. **Fetch Entities** → GraphQL queries for corpus/document
+1. **Parse URLs** → Determine route type (corpus/document/extract/browse)
+2. **Fetch Entities** → GraphQL queries for corpus/document/extract
 3. **Extract Query Params** → Parse `?ann=`, `?analysis=`, `?extract=`
 4. **Set Global State** → Update reactive vars
-5. **Canonical Redirects** → Ensure SEO-friendly URLs
+5. **Canonical Redirects** → Ensure SEO-friendly URLs (ID → slug for corpus/document)
 6. **Bidirectional Sync** → Watch state changes, update URL
 
 ### Implementation Details
@@ -287,6 +289,7 @@ useEffect(() => {
   if (route.type === "browse" || route.type === "unknown") {
     openedCorpus(null);
     openedDocument(null);
+    openedExtract(null);
     routeLoading(false);
     return;
   }
@@ -298,6 +301,8 @@ useEffect(() => {
       variables: { userSlug, corpusSlug }
     });
     openedCorpus(data.corpusBySlugs);
+    openedDocument(null);
+    openedExtract(null);
   }
 
   if (route.type === "document") {
@@ -306,6 +311,17 @@ useEffect(() => {
     const { data } = await resolveDocument(...);
     openedDocument(data.documentBySlugs);
     openedCorpus(data.corpusBySlugs || null);
+    openedExtract(null);
+  }
+
+  if (route.type === "extract") {
+    // RESOLVE_EXTRACT_BY_ID (extracts use IDs, not slugs yet)
+    const { data } = await resolveExtract({
+      variables: { extractId: route.extractIdent }
+    });
+    openedExtract(data.extract);
+    openedCorpus(null);
+    openedDocument(null);
   }
 }, [location.pathname]);
 ```
@@ -420,6 +436,24 @@ query ResolveDocumentBySlugsFull($userSlug: String!, $documentSlug: String!) {
     creator { id username slug }
     corpus { id slug title creator { id slug } }
     pdfFile { id url }
+  }
+}
+```
+
+**Extract Resolution** (`src/graphql/queries.ts:RESOLVE_EXTRACT_BY_ID`):
+```graphql
+query ResolveExtractById($extractId: ID!) {
+  extract(id: $extractId) {
+    id
+    name
+    created
+    started
+    finished
+    error
+    myPermissions
+    creator { id username slug }
+    corpus { id slug title creator { id slug } }
+    fieldset { id name description }
   }
 }
 ```
@@ -580,6 +614,7 @@ export const Annotations = () => {
 // Entity state (set by CentralRouteManager Phase 1)
 export const openedCorpus = makeVar<CorpusType | null>(null);
 export const openedDocument = makeVar<DocumentType | null>(null);
+export const openedExtract = makeVar<ExtractType | null>(null);
 
 // Selection state (set by CentralRouteManager Phase 2, watched by Phase 4)
 export const selectedAnnotationIds = makeVar<string[]>([]);
@@ -710,14 +745,17 @@ parseQueryParam(null)
 
 **buildCanonicalPath()** - Build SEO-friendly path
 ```typescript
-buildCanonicalPath(document, corpus)
+buildCanonicalPath(document, corpus, extract)
 // Returns: "/d/john-doe/my-corpus/doc-slug"
 
-buildCanonicalPath(document, null)
+buildCanonicalPath(document, null, null)
 // Returns: "/d/jane/standalone-doc"
 
-buildCanonicalPath(null, corpus)
+buildCanonicalPath(null, corpus, null)
 // Returns: "/c/john/my-corpus"
+
+buildCanonicalPath(null, null, extract)
+// Returns: "/e/john/extract-123" (ID-based, no slugs yet)
 ```
 
 **buildQueryParams()** - Build query string
@@ -760,6 +798,18 @@ getDocumentUrl(document, corpus, {
 // Returns: "/d/john/corpus/doc?ann=1&analysis=2&extract=3"
 ```
 
+**getExtractUrl()** - Generate extract URL
+```typescript
+getExtractUrl(extract)
+// Returns: "/e/john/extract-123"
+
+getExtractUrl(extract, { analysisIds: ["456"] })
+// Returns: "/e/john/extract-123?analysis=456"
+
+getExtractUrl({ id: "1", creator: null }) // Missing creator
+// Returns: "#" (safe fallback)
+```
+
 **navigateToCorpus()** - Smart corpus navigation
 ```typescript
 navigateToCorpus(corpus, navigate, currentPath)
@@ -779,6 +829,16 @@ navigateToDocument(document, corpus, navigate, currentPath)
 navigateToDocument(document, corpus, navigate, currentPath, {
   annotationIds: ["456"]
 })
+// Navigates with query params
+```
+
+**navigateToExtract()** - Smart extract navigation
+```typescript
+navigateToExtract(extract, navigate, currentPath)
+// Only navigates if not already there
+// Pushes to browser history (not replace) so back button works
+
+navigateToExtract(extract, navigate, currentPath, { analysisIds: ["123"] })
 // Navigates with query params
 ```
 
@@ -1021,18 +1081,21 @@ describe("State-Driven Rendering", () => {
 
 ### Critical Rules (MUST Follow)
 
-**🚨 RULE #1: NEVER Set `openedCorpus` or `openedDocument` Outside CentralRouteManager**
+**🚨 RULE #1: NEVER Set `openedCorpus`, `openedDocument`, or `openedExtract` Outside CentralRouteManager**
 
 ```typescript
 // ❌ NEVER DO THIS (anywhere except CentralRouteManager.tsx):
 openedCorpus(someCorpus);
 openedDocument(someDocument);
+openedExtract(someExtract);
 openedCorpus(null);
 openedDocument(null);
+openedExtract(null);
 
 // ✅ ALWAYS DO THIS:
 const corpus = useReactiveVar(openedCorpus);  // Read only
 const document = useReactiveVar(openedDocument);  // Read only
+const extract = useReactiveVar(openedExtract);  // Read only
 ```
 
 **Why?** Setting these vars from multiple places creates competing state updates, infinite loops, and route jittering. We learned this the hard way when `CorpusDocumentCards.tsx` was fetching corpus data and setting `openedCorpus()`, creating an infinite loop with `CentralRouteManager`.
@@ -1076,6 +1139,7 @@ const corpus = useReactiveVar(openedCorpus);
 const gotoHome = () => {
   openedCorpus(null);  // VIOLATION!
   openedDocument(null);  // VIOLATION!
+  openedExtract(null);  // VIOLATION!
   navigate("/corpuses");
 };
 
@@ -1086,7 +1150,7 @@ const gotoHome = () => {
 };
 ```
 
-**Why?** CentralRouteManager watches the URL and automatically clears `openedCorpus`/`openedDocument` when navigating to browse routes. Manual clearing creates race conditions.
+**Why?** CentralRouteManager watches the URL and automatically clears `openedCorpus`/`openedDocument`/`openedExtract` when navigating to browse routes. Manual clearing creates race conditions.
 
 ### DO ✅
 
@@ -1129,10 +1193,10 @@ const gotoHome = () => {
 ### DON'T ❌
 
 **Routing (CRITICAL - These cause bugs):**
-- ❌ NEVER set `openedCorpus()` or `openedDocument()` outside CentralRouteManager
+- ❌ NEVER set `openedCorpus()`, `openedDocument()`, or `openedExtract()` outside CentralRouteManager
 - ❌ NEVER parse URLs with `useParams()` in route components or views
-- ❌ NEVER fetch corpus/document entities in route components
-- ❌ NEVER manually clear `openedCorpus(null)` or `openedDocument(null)` on navigation
+- ❌ NEVER fetch corpus/document/extract entities in route components
+- ❌ NEVER manually clear `openedCorpus(null)`, `openedDocument(null)`, or `openedExtract(null)` on navigation
 - ❌ NEVER add routing logic outside CentralRouteManager
 - ❌ NEVER sync reactive vars to URL manually (Phase 4 does this)
 
@@ -1223,6 +1287,13 @@ The routing system coordinates multiple components that work together. Understan
 - **Never Sets**: Any reactive vars
 - **Renders**: `<DocumentKnowledgeBase />` when document is loaded
 
+**ExtractLandingRoute** (`src/components/routes/ExtractLandingRoute.tsx`)
+- **Role**: Dumb consumer for extract entity routes (`/e/:user/:extractId`)
+- **Reads**: `openedExtract`, `routeLoading`, `routeError`
+- **Never Sets**: Any reactive vars
+- **Renders**: `<Extracts />` view when extract is loaded
+- **Note**: Extracts use IDs (not slugs) since they don't have slug fields yet
+
 ### View Components
 
 **Corpuses** (`src/views/Corpuses.tsx`)
@@ -1245,10 +1316,11 @@ The routing system coordinates multiple components that work together. Understan
 - **Uses**: Query params set by CentralRouteManager Phase 2
 
 **Extracts** (`src/views/Extracts.tsx`)
-- **Role**: Extract browse view
-- **Reads**: `selectedExtractIds`, context from `openedCorpus`/`openedDocument`
-- **Never Sets**: Entity vars
-- **Uses**: Query params set by CentralRouteManager Phase 2
+- **Role**: Extract list/detail view
+- **Reads**: `openedExtract` (when on `/e/` route), `selectedExtractIds` (browse context)
+- **Never Sets**: `openedExtract` (CentralRouteManager owns this)
+- **Updates Selections**: Via `navigateToExtract()` for entity routes, `updateAnnotationSelectionParams()` for query param selection
+- **Queries**: Fetches extract LIST data, NOT entity data by route
 
 ### Card Components
 
@@ -1544,44 +1616,69 @@ Now Phase 4 waits until `routeLoading = false` (after Phase 1 entity resolution 
 
 ### Bug #5: Infinite Rendering Loop from Apollo Cache Conflicts (Fixed)
 
-**Problem:** After selecting a corpus, the application entered an infinite rendering loop, repeatedly firing GraphQL queries (ResolveCorpusFull, GetCorpusWithHistory, GET_CORPUS_METADATA) and "hammering" the server every render cycle.
+**Problem:** After selecting entities (corpus, annotations, etc.), the application entered infinite rendering loops, repeatedly firing GraphQL queries and "hammering" the server every render cycle.
 
 **Symptoms:**
-- Console showed `[setCorpus] No changes detected, skipping update` (Jotai atom deep equality working correctly)
-- But Corpuses component continued re-rendering infinitely (#14, #15, #16...)
-- Apollo DevTools showed continuous cache updates despite no data changes
-- Apollo console error: `"DocumentTypeConnection... either ensure all objects of type DocumentTypeConnection have an ID or a custom merge function"`
-- Three queries firing on every render cycle:
-  1. `ResolveCorpusFull`
-  2. `GetCorpusWithHistory`
-  3. `GET_CORPUS_METADATA`
+- Components continued re-rendering infinitely despite no data changes
+- Apollo DevTools showed continuous cache updates
+- Apollo console errors: `"DocumentTypeConnection... either ensure all objects of type DocumentTypeConnection have an ID or a custom merge function"`
+- Multiple queries firing on every render cycle
 
-**Root Cause:** Apollo cache conflict with `DocumentTypeConnection` (the `corpus.documents` field). Apollo couldn't properly merge the documents connection because it lacked proper cache configuration. Without a merge function, Apollo created **new object references** for `corpus.documents` on every query, triggering cache updates, causing components to re-render, which triggered new queries → **INFINITE LOOP**.
+**Root Cause:** Apollo cache conflicts with Relay-style connection types (`*Connection` fields like `DocumentTypeConnection`, `AnnotationTypeConnection`, etc.). Apollo couldn't properly merge these connections because they lacked proper cache configuration. Without merge functions, Apollo created **new object references** on every query, triggering cache updates, causing components to re-render, which triggered new queries → **INFINITE LOOP**.
 
-Even though CorpusAtom's deep equality checks were correctly reusing object references by ID, the Apollo cache itself was creating new references for the `documents` field, bypassing the atom's optimization and forcing re-renders.
+Even when components used deep equality checks or memo optimizations, the Apollo cache itself was creating new references, bypassing these optimizations and forcing re-renders.
 
-**Fix:** Added `relayStylePagination()` field policy for the `documents` field on `CorpusType` in `src/graphql/cache.ts`:
+**Fix:** Added comprehensive `relayStylePagination()` field policies for ALL connection fields across ALL entity types in `src/graphql/cache.ts`:
+
 ```typescript
 CorpusType: {
-  keyFields: ["id"],
   fields: {
-    is_selected: {
-      read(existing) { return existing ?? false; }
-    },
-    is_open: {
-      read(existing) { return existing ?? false; }
-    },
-    // CRITICAL: Handle DocumentTypeConnection properly to prevent infinite loops
-    // Without this, Apollo creates new object references for documents on every query,
+    // CRITICAL: Handle all Connection types properly to prevent infinite loops
+    // Without these, Apollo creates new object references on every query,
     // triggering cache updates and infinite re-renders
     documents: relayStylePagination(),
+    assignmentSet: relayStylePagination(),
+    relationshipSet: relayStylePagination(),
+    annotations: relayStylePagination(),
+    analyses: relayStylePagination(),
+    conversations: relayStylePagination(),
   },
 },
+DocumentType: {
+  fields: {
+    assignmentSet: relayStylePagination(),
+    corpusSet: relayStylePagination(),
+    annotationSet: relayStylePagination(),
+    docLabelAnnotations: relayStylePagination(),
+    metadataAnnotations: relayStylePagination(),
+    conversations: relayStylePagination(),
+    chatMessages: relayStylePagination(),
+  },
+},
+AnalysisType: {
+  fields: {
+    analyzedDocuments: relayStylePagination(),
+    annotations: relayStylePagination(),
+  },
+},
+ServerAnnotationType: {
+  fields: {
+    created_by_analyses: relayStylePagination(),
+    assignmentSet: relayStylePagination(),
+    sourceNodeInRelationships: relayStylePagination(),
+    targetNodeInRelationships: relayStylePagination(),
+    chatMessages: relayStylePagination(),
+    createdByChatMessage: relayStylePagination(),
+  },
+},
+// ... and many more entity types
 ```
 
-**Impact:** This single line fix resolved the infinite loop immediately. Also required updating test wrappers (`CorpusHomeTestWrapper.tsx` and `DocumentKnowledgeBaseTestWrapper.tsx`) to include the same cache configuration to prevent test failures from cache mismatches.
+**Impact:** This comprehensive fix resolved infinite loops across the entire application. Also required updating test wrappers to include the same cache configuration.
 
-**Lesson:** Always configure Apollo cache type policies for Relay-style pagination connections (`Connection` types with `edges`, `pageInfo`, etc.). Without proper merge functions, Apollo creates new object references on every query, breaking React's referential equality checks and causing infinite re-renders. This is especially critical when components use deep equality or memo optimizations that depend on stable object references.
+**Lesson:** Always configure Apollo cache type policies for Relay-style pagination connections (`Connection` types with `edges`, `pageInfo`, etc.). Without proper merge functions, Apollo creates new object references on every query, breaking React's referential equality checks and causing infinite re-renders. This is especially critical when components use deep equality or memo optimizations that depend on stable object references. **When adding new GraphQL entity types, ALWAYS add `relayStylePagination()` for all connection fields.**
+
+**Related Issue:** In `Annotations.tsx`, there was also a query/type mismatch where the component declared types for `GET_CORPUS_LABELSET_AND_LABELS` but was actually calling `GET_CORPUSES`. This caused Apollo cache confusion and contributed to infinite loops. The fix was to use the correct query that matches the declared types and pass the proper `corpusId` variable instead of the wrong `annotation_variables` object.
 
 ### Architecture Lessons
 
@@ -1658,15 +1755,16 @@ Violations cause race conditions, infinite loops, and unpredictable behavior.
 
 ### Critical Rules (Remember These!)
 
-1. **NEVER** set `openedCorpus()` or `openedDocument()` outside CentralRouteManager
-2. **NEVER** fetch corpus/document entities in route components
+1. **NEVER** set `openedCorpus()`, `openedDocument()`, or `openedExtract()` outside CentralRouteManager
+2. **NEVER** fetch corpus/document/extract entities in route components
 3. **NEVER** parse URLs with `useParams()` in components/views
 4. **NEVER** manually clear entity vars on navigation
 5. **NEVER** directly set URL-driven reactive vars (use utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`)
-6. **ALWAYS** use navigation utilities (`getCorpusUrl`, `navigateToDocument`, etc.)
+6. **ALWAYS** use navigation utilities (`getCorpusUrl`, `getDocumentUrl`, `getExtractUrl`, `navigateToCorpus`, `navigateToDocument`, `navigateToExtract`)
 7. **ALWAYS** check `routeLoading` before accessing entities
 8. **ALWAYS** preserve query params when navigating (includes both selection AND visualization params)
 9. **ALWAYS** check `authStatusVar` before fetching protected entities in new routing code
+10. **ALWAYS** add `relayStylePagination()` for all connection fields when adding new GraphQL entity types to Apollo cache
 
 ### When You Need To...
 
@@ -1748,7 +1846,9 @@ Violations cause race conditions, infinite loops, and unpredictable behavior.
 
 **When in doubt, read the code in `CentralRouteManager.tsx`.**
 
-It's the single source of truth. If routing behavior seems wrong, the fix goes there. If a component needs routing data, it reads reactive vars. If you're writing `openedCorpus(...)`, `selectedAnnotationIds(...)`, or `showStructuralAnnotations(...)` outside CentralRouteManager, you're doing it wrong - use the navigation utilities instead.
+It's the single source of truth. If routing behavior seems wrong, the fix goes there. If a component needs routing data, it reads reactive vars. If you're writing `openedCorpus(...)`, `openedDocument(...)`, `openedExtract(...)`, `selectedAnnotationIds(...)`, or `showStructuralAnnotations(...)` outside CentralRouteManager, you're doing it wrong - use the navigation utilities instead.
+
+**Recent Extract Implementation:** The extract entity routes (`/e/:userIdent/:extractIdent`) follow this pattern perfectly - see the implementation in `CentralRouteManager.tsx` (Phase 1), `ExtractLandingRoute.tsx` (dumb consumer), `Extracts.tsx` (uses `navigateToExtract` utility), and `navigationUtils.ts` (`getExtractUrl`, `navigateToExtract`).
 
 ---
 
