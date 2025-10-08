@@ -13,7 +13,7 @@ import { color } from "../../theme/colors";
 import osLegalLogo from "../../assets/images/os_legal_FullColor.png";
 
 interface ModernLoadingDisplayProps {
-  type?: "document" | "corpus" | "auth" | "default";
+  type?: "document" | "corpus" | "extract" | "auth" | "default";
   message?: string;
   fullScreen?: boolean;
   size?: "small" | "medium" | "large";
@@ -185,6 +185,8 @@ const getIcon = (type?: string, useOsLogo: boolean = true) => {
       return <FileText />;
     case "corpus":
       return <Archive />;
+    case "extract":
+      return <Database />;
     case "auth":
       return <Lock />;
     default:
@@ -200,6 +202,8 @@ const getMessage = (type?: string, customMessage?: string) => {
       return "Opening Document";
     case "corpus":
       return "Loading Corpus";
+    case "extract":
+      return "Loading Extract";
     case "auth":
       return "Securing Your Session";
     default:
@@ -213,6 +217,8 @@ const getSubMessage = (type?: string) => {
       return "Retrieving document and annotations";
     case "corpus":
       return "Organizing your document collection";
+    case "extract":
+      return "Loading extracted data";
     case "auth":
       return "Verifying credentials";
     default:
