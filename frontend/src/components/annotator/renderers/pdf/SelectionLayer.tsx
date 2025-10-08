@@ -42,12 +42,6 @@ const SelectionLayer = ({
     humanTokenLabels,
   } = useCorpusState();
 
-  // Debug logging
-  console.log("[SelectionLayer] Component state:");
-  console.log("  - read_only prop:", read_only);
-  console.log("  - canUpdateCorpus:", canUpdateCorpus);
-  console.log("  - myPermissions from corpus:", myPermissions);
-  console.log("  - selectedCorpus:", selectedCorpus?.id);
   const { setSelectedAnnotations } = useAnnotationSelection();
   const [, setIsCreatingAnnotation] = useAtom(isCreatingAnnotationAtom);
   const [localPageSelection, setLocalPageSelection] = useState<
@@ -129,9 +123,6 @@ const SelectionLayer = ({
         !selections ||
         Object.keys(selections).length === 0
       ) {
-        console.log(
-          "handleCreateMultiPageAnnotation - no active label or multiSelections"
-        );
         return;
       }
 
@@ -165,11 +156,6 @@ const SelectionLayer = ({
         false
       );
 
-      console.log(
-        "handleCreateMultiPageAnnotation - annotation",
-        JSON.stringify(annotation, null, 2)
-      );
-
       await createAnnotation(annotation);
       setMultiSelections({});
     },
@@ -197,7 +183,6 @@ const SelectionLayer = ({
 
     if (combinedText.trim()) {
       navigator.clipboard.writeText(combinedText.trim());
-      console.log("[SelectionLayer] Text copied to clipboard");
     }
 
     // Clear states
@@ -224,7 +209,6 @@ const SelectionLayer = ({
     setShowActionMenu(false);
     setPendingSelections({});
     setMultiSelections({});
-    console.log("[SelectionLayer] Selection cancelled by user");
   }, []);
 
   /**
@@ -233,10 +217,6 @@ const SelectionLayer = ({
   const handleMouseUp = useCallback(
     (event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
       if (localPageSelection) {
-        console.log(
-          "onMouseUp - localPageSelection",
-          JSON.stringify(localPageSelection, null, 2)
-        );
         const pageNum = pageNumber;
 
         setMultiSelections((prev) => {
@@ -257,8 +237,6 @@ const SelectionLayer = ({
 
           return updatedSelections;
         });
-      } else {
-        console.log("onMouseUp - localPageSelection", localPageSelection);
       }
     },
     [localPageSelection, pageNumber, setIsCreatingAnnotation]
@@ -272,10 +250,6 @@ const SelectionLayer = ({
       if (containerRef.current === null) {
         throw new Error("No Container");
       }
-
-      // Log the exact state of variables when mouse down occurs
-      console.log("[MouseDown] canUpdateCorpus:", canUpdateCorpus);
-      console.log("[MouseDown] read_only:", read_only);
 
       // Allow selection for copying even in read-only mode
       if (!localPageSelection && event.buttons === 1) {
@@ -568,7 +542,6 @@ const SelectionLayer = ({
           clearTimeout(longPressTimer);
           setLongPressTimer(null);
         }
-        console.log("[SelectionLayer] Selection cancelled with ESC");
       }
     };
 

@@ -609,61 +609,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   showCorpusInfo,
   showSuccessMessage,
 }) => {
-  // Performance monitoring: Track render count and changes
-  const renderCount = useRef(0);
-  const prevPropsRef = useRef({ documentId, corpusId, readOnly });
-  renderCount.current += 1;
-
-  // Track what's causing re-renders by reading reactive vars
-  const selectedAnnots = useReactiveVar(selectedAnnotationIds);
-  const selectedAnalyses = useReactiveVar(selectedAnalysesIds);
-  const showStructural = useReactiveVar(showStructuralAnnotations);
-  const showSelectedOnly = useReactiveVar(showSelectedAnnotationOnly);
-  const showBBoxes = useReactiveVar(showAnnotationBoundingBoxes);
-
-  // Detect what changed to cause this render
-  const propsChanged =
-    prevPropsRef.current.documentId !== documentId ||
-    prevPropsRef.current.corpusId !== corpusId ||
-    prevPropsRef.current.readOnly !== readOnly;
-
-  console.log(
-    `[DocumentKnowledgeBase] 🔄 Render #${renderCount.current} triggered`,
-    {
-      documentId,
-      corpusId,
-      readOnly,
-      selectedAnnots,
-      selectedAnalyses,
-      showStructural,
-      showSelectedOnly,
-      showBBoxes,
-      propsChanged: propsChanged
-        ? {
-            documentId:
-              prevPropsRef.current.documentId !== documentId
-                ? "CHANGED"
-                : "same",
-            corpusId:
-              prevPropsRef.current.corpusId !== corpusId ? "CHANGED" : "same",
-            readOnly:
-              prevPropsRef.current.readOnly !== readOnly ? "CHANGED" : "same",
-          }
-        : "none",
-    }
-  );
-
-  prevPropsRef.current = { documentId, corpusId, readOnly };
-
   const { width } = useWindowDimensions();
-  const prevWidthRef = useRef(width);
-  if (prevWidthRef.current !== width) {
-    console.log(
-      `[DocumentKnowledgeBase] ⚠️  Width changed: ${prevWidthRef.current} → ${width}`
-    );
-    prevWidthRef.current = width;
-  }
-
   const isMobile = width < 768;
   const { isFeatureAvailable, getFeatureStatus, hasCorpus } =
     useFeatureAvailability(corpusId);
@@ -779,166 +725,32 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     };
   }, [isMobile, showRightPanel, activeLayer, mode, customWidth, width]); // Dependencies: all values that affect calculation
 
-  const docTypeHook = useDocumentType();
-  const prevDocTypeRef = useRef(docTypeHook);
-  if (prevDocTypeRef.current !== docTypeHook && renderCount.current <= 15) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useDocumentType returned NEW object`
-    );
-    prevDocTypeRef.current = docTypeHook;
-  }
-  const { setDocumentType } = docTypeHook;
-
-  const docStateHook = useDocumentState();
-  const prevDocStateRef = useRef(docStateHook);
-  if (prevDocStateRef.current !== docStateHook && renderCount.current <= 15) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useDocumentState returned NEW object`
-    );
-    prevDocStateRef.current = docStateHook;
-  }
-  const { setDocument } = docStateHook;
-
-  const docTextHook = useDocText();
-  const prevDocTextRef = useRef(docTextHook);
-  if (prevDocTextRef.current !== docTextHook && renderCount.current <= 15) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useDocText returned NEW object`
-    );
-    prevDocTextRef.current = docTextHook;
-  }
-  const { setDocText } = docTextHook;
-
-  const pageTokenMapsHook = usePageTokenTextMaps();
-  const prevPageTokenMapsRef = useRef(pageTokenMapsHook);
-  if (
-    prevPageTokenMapsRef.current !== pageTokenMapsHook &&
-    renderCount.current <= 15
-  ) {
-    console.log(
-      `[Hook Check #${renderCount.current}] usePageTokenTextMaps returned NEW object`
-    );
-    prevPageTokenMapsRef.current = pageTokenMapsHook;
-  }
+  const { setDocumentType } = useDocumentType();
+  const { setDocument } = useDocumentState();
+  const { setDocText } = useDocText();
   const {
     pageTokenTextMaps: pageTextMaps,
     setPageTokenTextMaps: setPageTextMaps,
-  } = pageTokenMapsHook;
-
-  const pagesHook = usePages();
-  const prevPagesRef = useRef(pagesHook);
-  if (prevPagesRef.current !== pagesHook && renderCount.current <= 15) {
-    console.log(
-      `[Hook Check #${renderCount.current}] usePages returned NEW object`
-    );
-    prevPagesRef.current = pagesHook;
-  }
-  const { setPages } = pagesHook;
+  } = usePageTokenTextMaps();
+  const { setPages } = usePages();
 
   const [pdfAnnotations, setPdfAnnotations] = useAtom(pdfAnnotationsAtom);
   const [, setStructuralAnnotations] = useAtom(structuralAnnotationsAtom);
 
-  const corpusStateHook = useCorpusState();
-  const prevCorpusStateRef = useRef(corpusStateHook);
-  if (
-    prevCorpusStateRef.current !== corpusStateHook &&
-    renderCount.current <= 15
-  ) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useCorpusState returned NEW object`
-    );
-    prevCorpusStateRef.current = corpusStateHook;
-  }
   const {
     setCorpus,
     canUpdateCorpus,
     myPermissions: corpusPermissions,
-  } = corpusStateHook;
+  } = useCorpusState();
 
-  const initialAnnotsHook = useInitialAnnotations();
-  const prevInitialAnnotsRef = useRef(initialAnnotsHook);
-  if (
-    prevInitialAnnotsRef.current !== initialAnnotsHook &&
-    renderCount.current <= 15
-  ) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useInitialAnnotations returned NEW object`
-    );
-    prevInitialAnnotsRef.current = initialAnnotsHook;
-  }
-  const { setInitialAnnotations, setInitialRelations } = initialAnnotsHook;
-
-  const searchTextHook = useSearchText();
-  const prevSearchTextRef = useRef(searchTextHook);
-  if (
-    prevSearchTextRef.current !== searchTextHook &&
-    renderCount.current <= 15
-  ) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useSearchText returned NEW object`
-    );
-    prevSearchTextRef.current = searchTextHook;
-  }
-  const { searchText, setSearchText } = searchTextHook;
-
-  const docPermsHook = useDocumentPermissions();
-  const prevDocPermsRef = useRef(docPermsHook);
-  if (prevDocPermsRef.current !== docPermsHook && renderCount.current <= 15) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useDocumentPermissions returned NEW object`
-    );
-    prevDocPermsRef.current = docPermsHook;
-  }
-  const { setPermissions, permissions } = docPermsHook;
-
-  const textSearchStateHook = useTextSearchState();
-  const prevTextSearchStateRef = useRef(textSearchStateHook);
-  if (
-    prevTextSearchStateRef.current !== textSearchStateHook &&
-    renderCount.current <= 15
-  ) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useTextSearchState returned NEW object`
-    );
-    prevTextSearchStateRef.current = textSearchStateHook;
-  }
-  const { setTextSearchState } = textSearchStateHook;
-
-  const annotControlsHook = useAnnotationControls();
-  const prevAnnotControlsRef = useRef(annotControlsHook);
-  if (
-    prevAnnotControlsRef.current !== annotControlsHook &&
-    renderCount.current <= 15
-  ) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useAnnotationControls returned NEW object`
-    );
-    prevAnnotControlsRef.current = annotControlsHook;
-  }
-  const { activeSpanLabel, setActiveSpanLabel } = annotControlsHook;
-
-  const chatSourceHook = useChatSourceState();
-  const prevChatSourceRef = useRef(chatSourceHook);
-  if (
-    prevChatSourceRef.current !== chatSourceHook &&
-    renderCount.current <= 15
-  ) {
-    console.log(
-      `[Hook Check #${renderCount.current}] useChatSourceState returned NEW object`
-    );
-    prevChatSourceRef.current = chatSourceHook;
-  }
-  const { setChatSourceState } = chatSourceHook;
-
-  const pdfDocHook = usePdfDoc();
-  const prevPdfDocRef = useRef(pdfDocHook);
-  if (prevPdfDocRef.current !== pdfDocHook && renderCount.current <= 15) {
-    console.log(
-      `[Hook Check #${renderCount.current}] usePdfDoc returned NEW object`
-    );
-    prevPdfDocRef.current = pdfDocHook;
-  }
-  const { setPdfDoc } = pdfDocHook;
+  const { setInitialAnnotations, setInitialRelations } =
+    useInitialAnnotations();
+  const { searchText, setSearchText } = useSearchText();
+  const { setPermissions, permissions } = useDocumentPermissions();
+  const { setTextSearchState } = useTextSearchState();
+  const { activeSpanLabel, setActiveSpanLabel } = useAnnotationControls();
+  const { setChatSourceState } = useChatSourceState();
+  const { setPdfDoc } = usePdfDoc();
 
   // Determine if user can edit based on permissions and corpus context
   const canEdit = React.useMemo(() => {
@@ -2389,7 +2201,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               <SidebarHeaderTitle>
                 <SafeMarkdown>
                   {selectedAnalysis.analyzer.description ||
-                    selectedAnalysis.analysisName}
+                    selectedAnalysis.analyzer.id}
                 </SafeMarkdown>
               </SidebarHeaderTitle>
               <SidebarHeaderSubtitle>
