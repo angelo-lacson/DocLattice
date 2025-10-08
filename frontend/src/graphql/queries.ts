@@ -2318,6 +2318,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
       title
       fileType
       creator {
+        id
         email
       }
       created
@@ -2333,6 +2334,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
         content
         created
         creator {
+          id
           email
         }
       }
@@ -2592,6 +2594,7 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
       title
       fileType
       creator {
+        id
         email
       }
       created
@@ -2653,6 +2656,7 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
         title
         content
         creator {
+          id
           email
         }
         created

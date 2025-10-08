@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
+import { unstable_batchedUpdates } from "react-dom";
 import { Button, Header, Modal, Loader, Message } from "semantic-ui-react";
 import {
   MessageSquare,
@@ -608,32 +609,15 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   showCorpusInfo,
   showSuccessMessage,
 }) => {
-  // Track what's causing re-renders by reading reactive vars
-  const selectedAnnots = useReactiveVar(selectedAnnotationIds);
-  const selectedAnalyses = useReactiveVar(selectedAnalysesIds);
-  const showStructural = useReactiveVar(showStructuralAnnotations);
-  const showSelectedOnly = useReactiveVar(showSelectedAnnotationOnly);
-  const showBBoxes = useReactiveVar(showAnnotationBoundingBoxes);
-
-  console.log("[DocumentKnowledgeBase] 🔄 Render triggered", {
-    documentId,
-    corpusId,
-    readOnly,
-    selectedAnnots,
-    selectedAnalyses,
-    showStructural,
-    showSelectedOnly,
-    showBBoxes,
-  });
-
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const { isFeatureAvailable, getFeatureStatus, hasCorpus } =
     useFeatureAvailability(corpusId);
 
-  const { setProgress, zoomLevel, setShiftDown, setZoomLevel } = useUISettings({
-    width,
-  });
+  // Memoize UI settings config to prevent creating new object reference on every render
+  const uiSettingsConfig = React.useMemo(() => ({ width }), [width]);
+  const { setProgress, zoomLevel, setShiftDown, setZoomLevel } =
+    useUISettings(uiSettingsConfig);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -720,8 +704,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const isAdjustingZoomRef = useRef<boolean>(false);
   const justToggledAutoZoomRef = useRef<boolean>(false);
 
-  // Calculate floating controls offset and visibility
-  const calculateFloatingControlsState = () => {
+  // Calculate floating controls offset and visibility - MEMOIZED to prevent new object on every render
+  const floatingControlsState = React.useMemo(() => {
     if (isMobile || !showRightPanel || activeLayer !== "document") {
       return { offset: 0, visible: true };
     }
@@ -739,9 +723,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       offset: shouldHide ? 0 : panelWidthPx,
       visible: !shouldHide,
     };
-  };
-
-  const floatingControlsState = calculateFloatingControlsState();
+  }, [isMobile, showRightPanel, activeLayer, mode, customWidth, width]); // Dependencies: all values that affect calculation
 
   const { setDocumentType } = useDocumentType();
   const { setDocument } = useDocumentState();
@@ -751,9 +733,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     setPageTokenTextMaps: setPageTextMaps,
   } = usePageTokenTextMaps();
   const { setPages } = usePages();
+
   const [pdfAnnotations, setPdfAnnotations] = useAtom(pdfAnnotationsAtom);
   const [, setStructuralAnnotations] = useAtom(structuralAnnotationsAtom);
-  const { setCorpus } = useCorpusState();
+
+  const {
+    setCorpus,
+    canUpdateCorpus,
+    myPermissions: corpusPermissions,
+  } = useCorpusState();
+
   const { setInitialAnnotations, setInitialRelations } =
     useInitialAnnotations();
   const { searchText, setSearchText } = useSearchText();
@@ -762,8 +751,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const { activeSpanLabel, setActiveSpanLabel } = useAnnotationControls();
   const { setChatSourceState } = useChatSourceState();
   const { setPdfDoc } = usePdfDoc();
-  const { canUpdateCorpus, myPermissions: corpusPermissions } =
-    useCorpusState();
 
   // Determine if user can edit based on permissions and corpus context
   const canEdit = React.useMemo(() => {
@@ -820,13 +807,18 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   useTextSearch();
 
+  // Initialize search state on mount only - DO NOT include setters in dependencies as they're unstable!
   useEffect(() => {
-    setSearchText("");
-    setTextSearchState({
-      matches: [],
-      selectedIndex: 0,
+    // Batch updates to prevent multiple re-renders
+    unstable_batchedUpdates(() => {
+      setSearchText("");
+      setTextSearchState({
+        matches: [],
+        selectedIndex: 0,
+      });
     });
-  }, [setTextSearchState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps = run once on mount
 
   /**
    * REMOVED: useEffect that cleared analysis/extract selections on mount.
@@ -1408,15 +1400,20 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         toast.error("Failed to load document details.");
         return;
       }
-      setDocumentType(data.document.fileType ?? "");
-      let processedDocData = {
-        ...data.document,
-        // Keep permissions as raw strings for consistency
-        myPermissions: data.document.myPermissions ?? [],
-      };
-      setDocument(processedDocData as any);
-      setPermissions(getPermissions(data.document.myPermissions));
-      processAnnotationsData(data);
+
+      // Batch initial state updates to prevent cascading re-renders
+      console.log("[onCompleted] 🔄 Batching initial state updates");
+      unstable_batchedUpdates(() => {
+        setDocumentType(data.document.fileType ?? "");
+        let processedDocData = {
+          ...data.document,
+          // Keep permissions as raw strings for consistency
+          myPermissions: data.document.myPermissions ?? [],
+        };
+        setDocument(processedDocData as any);
+        setPermissions(getPermissions(data.document.myPermissions));
+        processAnnotationsData(data);
+      });
 
       if (
         data.document.fileType === "application/pdf" &&
@@ -1499,15 +1496,19 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             return Promise.all(loadPagesPromises);
           })
           .then((loadedPages) => {
-            setPages(loadedPages);
-            const { doc_text, string_index_token_map } =
-              createTokenStringSearch(loadedPages);
-            setPageTextMaps({
-              ...string_index_token_map,
-              ...pageTextMaps,
+            // Batch PDF completion state updates to prevent cascading re-renders
+            console.log("[PDF Load] 🔄 Batching PDF completion state updates");
+            unstable_batchedUpdates(() => {
+              setPages(loadedPages);
+              const { doc_text, string_index_token_map } =
+                createTokenStringSearch(loadedPages);
+              setPageTextMaps({
+                ...string_index_token_map,
+                ...pageTextMaps,
+              });
+              setDocText(doc_text);
+              setViewState(ViewState.LOADED); // Set loaded state only after everything is done
             });
-            setDocText(doc_text);
-            setViewState(ViewState.LOADED); // Set loaded state only after everything is done
             console.log("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
@@ -1540,8 +1541,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           textHash ?? undefined
         )
           .then((txt) => {
-            setDocText(txt);
-            setViewState(ViewState.LOADED);
+            // Batch text file completion state updates
+            console.log(
+              "[Text Load] 🔄 Batching text completion state updates"
+            );
+            unstable_batchedUpdates(() => {
+              setDocText(txt);
+              setViewState(ViewState.LOADED);
+            });
             console.log("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
@@ -1626,14 +1633,21 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           toast.error("Failed to load document details.");
           return;
         }
-        setDocumentType(data.document.fileType ?? "");
-        let processedDocData = {
-          ...data.document,
-          // Keep permissions as raw strings for consistency
-          myPermissions: data.document.myPermissions ?? [],
-        };
-        setDocument(processedDocData as any);
-        setPermissions(getPermissions(data.document.myPermissions));
+
+        // Batch initial state updates to prevent cascading re-renders
+        console.log(
+          "[onCompleted] 🔄 Batching initial state updates (document-only)"
+        );
+        unstable_batchedUpdates(() => {
+          setDocumentType(data.document.fileType ?? "");
+          let processedDocData = {
+            ...data.document,
+            // Keep permissions as raw strings for consistency
+            myPermissions: data.document.myPermissions ?? [],
+          };
+          setDocument(processedDocData as any);
+          setPermissions(getPermissions(data.document.myPermissions));
+        });
 
         // Load PDF/TXT content
         if (
@@ -1703,15 +1717,21 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               return Promise.all(loadPagesPromises);
             })
             .then((loadedPages) => {
-              setPages(loadedPages);
-              const { doc_text, string_index_token_map } =
-                createTokenStringSearch(loadedPages);
-              setPageTextMaps({
-                ...string_index_token_map,
-                ...pageTextMaps,
+              // Batch PDF completion state updates (document-only)
+              console.log(
+                "[PDF Load] 🔄 Batching PDF completion state updates (document-only)"
+              );
+              unstable_batchedUpdates(() => {
+                setPages(loadedPages);
+                const { doc_text, string_index_token_map } =
+                  createTokenStringSearch(loadedPages);
+                setPageTextMaps({
+                  ...string_index_token_map,
+                  ...pageTextMaps,
+                });
+                setDocText(doc_text);
+                setViewState(ViewState.LOADED);
               });
-              setDocText(doc_text);
-              setViewState(ViewState.LOADED);
             })
             .catch((err) => {
               console.error("Error during PDF/PAWLS loading Promise.all:", err);
@@ -1736,8 +1756,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           setViewState(ViewState.LOADING);
           getDocumentRawText(data.document.txtExtractFile)
             .then((txt) => {
-              setDocText(txt);
-              setViewState(ViewState.LOADED);
+              // Batch text file completion state updates (document-only)
+              console.log(
+                "[Text Load] 🔄 Batching text completion state updates (document-only)"
+              );
+              unstable_batchedUpdates(() => {
+                setDocText(txt);
+                setViewState(ViewState.LOADED);
+              });
               console.log("=== DOCUMENT LOAD COMPLETE ===");
             })
             .catch((err) => {
@@ -1759,36 +1785,42 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
         // Note: openedDocument is managed by CentralRouteManager, not set here
 
-        // Process structural annotations even without corpus
-        if (data.document.allStructuralAnnotations) {
-          const structuralAnns = data.document.allStructuralAnnotations.map(
-            (ann) => convertToServerAnnotation(ann)
+        // Batch structural annotation updates (document-only)
+        console.log(
+          "[onCompleted] 🔄 Batching structural annotation updates (document-only)"
+        );
+        unstable_batchedUpdates(() => {
+          // Process structural annotations even without corpus
+          if (data.document.allStructuralAnnotations) {
+            const structuralAnns = data.document.allStructuralAnnotations.map(
+              (ann) => convertToServerAnnotation(ann)
+            );
+            setStructuralAnnotations(structuralAnns);
+          } else {
+            setStructuralAnnotations([]);
+          }
+
+          // Process structural relationships even without corpus
+          const processedRelationships = data.document.allRelationships?.map(
+            (rel) =>
+              new RelationGroup(
+                rel.sourceAnnotations.edges
+                  .map((edge) => edge?.node?.id)
+                  .filter((id): id is string => id !== undefined),
+                rel.targetAnnotations.edges
+                  .map((edge) => edge?.node?.id)
+                  .filter((id): id is string => id !== undefined),
+                rel.relationshipLabel,
+                rel.id,
+                rel.structural
+              )
           );
-          setStructuralAnnotations(structuralAnns);
-        } else {
-          setStructuralAnnotations([]);
-        }
 
-        // Process structural relationships even without corpus
-        const processedRelationships = data.document.allRelationships?.map(
-          (rel) =>
-            new RelationGroup(
-              rel.sourceAnnotations.edges
-                .map((edge) => edge?.node?.id)
-                .filter((id): id is string => id !== undefined),
-              rel.targetAnnotations.edges
-                .map((edge) => edge?.node?.id)
-                .filter((id): id is string => id !== undefined),
-              rel.relationshipLabel,
-              rel.id,
-              rel.structural
-            )
-        );
-
-        // Set annotations with structural relationships (no regular annotations without corpus)
-        setPdfAnnotations(
-          new PdfAnnotations([], processedRelationships || [], [], true)
-        );
+          // Set annotations with structural relationships (no regular annotations without corpus)
+          setPdfAnnotations(
+            new PdfAnnotations([], processedRelationships || [], [], true)
+          );
+        });
       },
       onError: (error) => {
         console.error("GraphQL Query Error fetching document data:", error);
@@ -2169,7 +2201,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               <SidebarHeaderTitle>
                 <SafeMarkdown>
                   {selectedAnalysis.analyzer.description ||
-                    selectedAnalysis.analysisName}
+                    selectedAnalysis.analyzer.id}
                 </SafeMarkdown>
               </SidebarHeaderTitle>
               <SidebarHeaderSubtitle>
@@ -2348,13 +2380,17 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   // Set initial state - ensure chat panel starts with proper width
   useEffect(() => {
-    setShowRightPanel(false);
-    setActiveLayer("document");
-    // Force initial width to half
-    if (mode !== "half") {
-      setMode("half");
-    }
-  }, []);
+    // Batch updates to prevent multiple re-renders
+    unstable_batchedUpdates(() => {
+      setShowRightPanel(false);
+      setActiveLayer("document");
+      // Force initial width to half
+      if (mode !== "half") {
+        setMode("half");
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps = run once on mount
 
   // Auto-show right panel with feed view when annotations are available
   // TEMPORARILY DISABLED: This auto-open behavior breaks tests that expect manual sidebar opening
@@ -3014,4 +3050,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   );
 };
 
-export default DocumentKnowledgeBase;
+// Memoize to prevent unnecessary re-renders from parent components
+// This is especially important during route transitions when CentralRouteManager
+// updates multiple reactive vars - we only want to re-render when props actually change
+export default React.memo(DocumentKnowledgeBase);

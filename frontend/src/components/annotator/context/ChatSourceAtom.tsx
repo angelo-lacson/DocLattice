@@ -1,4 +1,5 @@
 import { atom, useAtom } from "jotai";
+import { useMemo } from "react";
 import {
   TokenId,
   BoundingBox,
@@ -50,12 +51,22 @@ export const chatSourcesAtom = atom<ChatSourceState>({
  */
 export const useChatSourceState = () => {
   const [state, setState] = useAtom(chatSourcesAtom);
-  return {
-    messages: state.messages,
-    selectedMessageId: state.selectedMessageId,
-    selectedSourceIndex: state.selectedSourceIndex,
-    setChatSourceState: setState,
-  };
+
+  // Memoize return object to prevent new object on every render
+  return useMemo(
+    () => ({
+      messages: state.messages,
+      selectedMessageId: state.selectedMessageId,
+      selectedSourceIndex: state.selectedSourceIndex,
+      setChatSourceState: setState,
+    }),
+    [
+      state.messages,
+      state.selectedMessageId,
+      state.selectedSourceIndex,
+      setState,
+    ]
+  );
 };
 
 type TextJson = { start: number; end: number; text?: string };
