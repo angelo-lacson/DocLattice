@@ -466,12 +466,19 @@ export const requestTracker = new RequestTracker();
  * Build a unique key for request deduplication
  */
 export function buildRequestKey(
-  type: "corpus" | "document",
+  type: "corpus" | "document" | "extract",
   userIdent?: string,
   corpusIdent?: string,
-  documentIdent?: string
+  documentIdent?: string,
+  extractIdent?: string
 ): string {
-  const parts = [type, userIdent, corpusIdent, documentIdent].filter(Boolean);
+  const parts = [
+    type,
+    userIdent,
+    corpusIdent,
+    documentIdent,
+    extractIdent,
+  ].filter(Boolean);
   return parts.join("-");
 }
 
