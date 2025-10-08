@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { color } from "../../theme/colors";
 
 interface ModernErrorDisplayProps {
-  type?: "document" | "corpus" | "generic";
+  type?: "document" | "corpus" | "extract" | "generic";
   error?: Error | string;
   title?: string;
   onRetry?: () => void;
@@ -159,6 +159,8 @@ const getTitle = (type?: string, customTitle?: string) => {
       return "Document Unavailable";
     case "corpus":
       return "Corpus Not Found";
+    case "extract":
+      return "Extract Not Found";
     default:
       return "Unable to Load Content";
   }
@@ -173,6 +175,8 @@ const getMessage = (type?: string, error?: Error | string) => {
       return "We couldn't locate the requested document. It may have been moved, deleted, or you may not have permission to access it.";
     case "corpus":
       return "The document collection you're looking for is not available. Please check the URL or browse available collections.";
+    case "extract":
+      return "The extract you're looking for is not available. It may have been deleted or you may not have permission to access it.";
     default:
       return "We encountered an issue loading this content. Please try refreshing or return to the homepage.";
   }
@@ -195,6 +199,8 @@ export const ModernErrorDisplay: React.FC<ModernErrorDisplayProps> = ({
       navigate("/documents");
     } else if (type === "corpus") {
       navigate("/corpuses");
+    } else if (type === "extract") {
+      navigate("/extracts");
     } else {
       navigate(-1);
     }
