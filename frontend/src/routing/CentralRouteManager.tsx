@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef } from "react";
+import { unstable_batchedUpdates } from "react-dom";
 import { useLazyQuery } from "@apollo/client";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
@@ -174,7 +175,34 @@ export function CentralRouteManager() {
 
     // Entity routes - async resolution required
     const resolveEntity = async () => {
-      routeLoading(true);
+      // Check if we already have entities loaded that match this route type
+      // This prevents setting loading=true and causing unmount/remount when authStatus changes
+      const currentDoc = openedDocument();
+      const currentCorpus = openedCorpus();
+      const currentExtract = openedExtract();
+
+      const hasEntitiesForRoute =
+        (route.type === "document" &&
+          currentDoc &&
+          (!route.corpusIdent || currentCorpus)) ||
+        (route.type === "corpus" && currentCorpus) ||
+        (route.type === "extract" && currentExtract);
+
+      console.log("[RouteManager] Phase 1 - Entity check:", {
+        routeType: route.type,
+        hasEntitiesForRoute,
+        lastProcessedPath: lastProcessedPath.current,
+        currentPath,
+      });
+
+      if (!hasEntitiesForRoute) {
+        console.log("[RouteManager] Setting loading=true for new entity fetch");
+        routeLoading(true);
+      } else {
+        console.log(
+          "[RouteManager] Entities already loaded, skipping loading state"
+        );
+      }
       routeError(null);
 
       // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" here
@@ -563,25 +591,6 @@ export function CentralRouteManager() {
     const arraysEqual = (a: string[], b: string[]) =>
       a.length === b.length && a.every((val, idx) => val === b[idx]);
 
-    if (!arraysEqual(currentAnnIds, annIds)) {
-      selectedAnnotationIds(annIds);
-    }
-    if (!arraysEqual(currentAnalysisIds, analysisIds)) {
-      selectedAnalysesIds(analysisIds);
-    }
-    if (!arraysEqual(currentExtractIds, extractIds)) {
-      selectedExtractIds(extractIds);
-    }
-    if (currentStructural !== structural) {
-      showStructuralAnnotations(structural);
-    }
-    if (currentSelectedOnly !== selectedOnly) {
-      showSelectedAnnotationOnly(selectedOnly);
-    }
-    if (currentBoundingBoxes !== boundingBoxes) {
-      showAnnotationBoundingBoxes(boundingBoxes);
-    }
-
     // Parse label display behavior (default to ON_HOVER if not specified)
     const newLabels =
       labelsParam === "ALWAYS"
@@ -590,14 +599,48 @@ export function CentralRouteManager() {
         ? "HIDE"
         : "ON_HOVER";
 
+    // Collect all reactive var updates into a batch
+    // This prevents cascading re-renders - all updates happen in one React tick
+    const updates: Array<() => void> = [];
+
+    if (!arraysEqual(currentAnnIds, annIds)) {
+      updates.push(() => selectedAnnotationIds(annIds));
+    }
+    if (!arraysEqual(currentAnalysisIds, analysisIds)) {
+      updates.push(() => selectedAnalysesIds(analysisIds));
+    }
+    if (!arraysEqual(currentExtractIds, extractIds)) {
+      updates.push(() => selectedExtractIds(extractIds));
+    }
+    if (currentStructural !== structural) {
+      updates.push(() => showStructuralAnnotations(structural));
+    }
+    if (currentSelectedOnly !== selectedOnly) {
+      updates.push(() => showSelectedAnnotationOnly(selectedOnly));
+    }
+    if (currentBoundingBoxes !== boundingBoxes) {
+      updates.push(() => showAnnotationBoundingBoxes(boundingBoxes));
+    }
     if (currentLabels !== newLabels) {
-      showAnnotationLabels(newLabels as any);
+      updates.push(() => showAnnotationLabels(newLabels as any));
     }
 
-    console.log(
-      "[RouteManager] Phase 2: Reactive vars updated (if changed). Annotation IDs:",
-      annIds
-    );
+    // Execute all reactive var updates in a single batched operation
+    // This ensures components subscribed via useReactiveVar() only re-render once
+    if (updates.length > 0) {
+      console.log(
+        `[RouteManager] Phase 2: Batching ${updates.length} reactive var updates`
+      );
+      unstable_batchedUpdates(() => {
+        updates.forEach((update) => update());
+      });
+      console.log(
+        "[RouteManager] Phase 2: Batch complete. Annotation IDs:",
+        annIds
+      );
+    } else {
+      console.log("[RouteManager] Phase 2: No reactive var changes detected");
+    }
 
     // Mark that we've initialized from URL - allows Phase 4 to start syncing
     hasInitializedFromUrl.current = true;

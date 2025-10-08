@@ -7,7 +7,7 @@
  */
 
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useReactiveVar } from "@apollo/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { RelationGroup } from "../types/annotations";
@@ -322,18 +322,33 @@ export function useAnnotationControls() {
     setUseFreeFormAnnotations((prev) => !prev);
   }, [setUseFreeFormAnnotations]);
 
-  return {
-    activeSpanLabel,
-    setActiveSpanLabel,
-    spanLabelsToView,
-    setSpanLabelsToView,
-    activeRelationLabel,
-    setActiveRelationLabel,
-    useFreeFormAnnotations,
-    toggleUseFreeFormAnnotations,
-    relationModalVisible,
-    setRelationModalVisible,
-  };
+  // Memoize return object to prevent new object on every render
+  return useMemo(
+    () => ({
+      activeSpanLabel,
+      setActiveSpanLabel,
+      spanLabelsToView,
+      setSpanLabelsToView,
+      activeRelationLabel,
+      setActiveRelationLabel,
+      useFreeFormAnnotations,
+      toggleUseFreeFormAnnotations,
+      relationModalVisible,
+      setRelationModalVisible,
+    }),
+    [
+      activeSpanLabel,
+      setActiveSpanLabel,
+      spanLabelsToView,
+      setSpanLabelsToView,
+      activeRelationLabel,
+      setActiveRelationLabel,
+      useFreeFormAnnotations,
+      toggleUseFreeFormAnnotations,
+      relationModalVisible,
+      setRelationModalVisible,
+    ]
+  );
 }
 
 /**
