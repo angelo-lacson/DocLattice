@@ -22,8 +22,10 @@ import {
   openedCorpus,
   openedDocument,
   selectedAnnotationIds,
+  selectedAnalysesIds,
+  selectedExtractIds,
 } from "../src/graphql/cache";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { CentralRouteManager } from "../src/routing/CentralRouteManager";
 import { GET_DOCUMENT_ANNOTATIONS_ONLY } from "../src/graphql/queries";
 
@@ -99,6 +101,7 @@ interface WrapperProps {
   documentId: string;
   corpusId: string;
   readOnly?: boolean;
+  initialUrl?: string;
 }
 
 // Create a diagnostic component to monitor atom state
@@ -4226,11 +4229,37 @@ const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
   });
 };
 
+// Component to watch for location changes and update reactive vars
+const LocationWatcher: React.FC = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const analysisId = params.get("analysis");
+    const extractId = params.get("extract");
+
+    if (analysisId) {
+      selectedAnalysesIds([analysisId]);
+    } else {
+      selectedAnalysesIds([]);
+    }
+
+    if (extractId) {
+      selectedExtractIds([extractId]);
+    } else {
+      selectedExtractIds([]);
+    }
+  }, [location.search]);
+
+  return null;
+};
+
 export const DocumentKnowledgeBaseTestWrapper: React.FC<WrapperProps> = ({
   mocks,
   documentId,
   corpusId,
   readOnly = false,
+  initialUrl,
 }) => {
   // Create default annotation mock that will be added to all test mocks
   const defaultAnnotationsMock = {
@@ -4285,13 +4314,38 @@ export const DocumentKnowledgeBaseTestWrapper: React.FC<WrapperProps> = ({
       title: "Test Corpus",
       creator: { id: "test-user", slug: "testuser", username: "testuser" },
     } as any);
-    // Initialize selection state
+
+    // Parse URL params to set selection state
     selectedAnnotationIds([]);
-  }, [documentId, corpusId]);
+
+    if (initialUrl) {
+      const urlObj = new URL(initialUrl, "http://localhost");
+      const analysisId = urlObj.searchParams.get("analysis");
+      const extractId = urlObj.searchParams.get("extract");
+
+      if (analysisId) {
+        selectedAnalysesIds([analysisId]);
+      } else {
+        selectedAnalysesIds([]);
+      }
+
+      if (extractId) {
+        selectedExtractIds([extractId]);
+      } else {
+        selectedExtractIds([]);
+      }
+    } else {
+      selectedAnalysesIds([]);
+      selectedExtractIds([]);
+    }
+  }, [documentId, corpusId, initialUrl]);
   return (
     <MemoryRouter
-      initialEntries={[`/corpus/${corpusId}/document/${documentId}`]}
+      initialEntries={[
+        initialUrl || `/corpus/${corpusId}/document/${documentId}`,
+      ]}
     >
+      <LocationWatcher />
       <Provider>
         <CorpusStateDebugger />
         <MockedProvider

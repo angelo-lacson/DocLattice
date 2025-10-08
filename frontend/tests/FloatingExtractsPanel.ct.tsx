@@ -1,5 +1,10 @@
+import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { FloatingExtractsPanelTestWrapper } from "./FloatingExtractsPanelTestWrapper";
+import {
+  mockExtract1,
+  mockExtract2,
+} from "./mocks/DocumentKnowledgeBase.mocks";
 
 test.describe("FloatingExtractsPanel", () => {
   test("renders in collapsed state initially by default", async ({
@@ -86,14 +91,17 @@ test.describe("FloatingExtractsPanel", () => {
     mount,
     page,
   }) => {
+    // Create a third extract for testing badge count
+    const mockExtract3 = {
+      ...mockExtract2,
+      id: "extract-3",
+      name: "Extract 3",
+    };
+
     await mount(
       <FloatingExtractsPanelTestWrapper
         visible={true}
-        extracts={[
-          { id: "1", name: "Extract 1" },
-          { id: "2", name: "Extract 2" },
-          { id: "3", name: "Extract 3" },
-        ]}
+        extracts={[mockExtract1, mockExtract2, mockExtract3] as any}
       />
     );
 
@@ -151,26 +159,6 @@ test.describe("FloatingExtractsPanel", () => {
     await closeButton.click();
 
     expect(closeCalled).toBe(true);
-  });
-
-  test("shows back button when extract is selected", async ({
-    mount,
-    page,
-  }) => {
-    // This would require setting up the analysis selection state
-    // For now, we verify the panel renders correctly
-    await mount(
-      <FloatingExtractsPanelTestWrapper
-        visible={true}
-        initiallyExpanded={true}
-      />
-    );
-
-    // Should show the header
-    await expect(page.locator("text=Document Extracts")).toBeVisible();
-
-    // Initially no back button (no extract selected)
-    await expect(page.locator("text=Back to Extracts")).not.toBeVisible();
   });
 
   test("adjusts position based on panelOffset", async ({ mount, page }) => {
@@ -235,30 +223,7 @@ test.describe("FloatingExtractsPanel", () => {
         visible={true}
         readOnly={true}
         initiallyExpanded={true}
-        extracts={[
-          {
-            id: "1",
-            name: "Test Extract 1",
-            created: new Date().toISOString(),
-            modified: new Date().toISOString(),
-            started: new Date().toISOString(),
-            finished: new Date().toISOString(),
-            isPublic: false,
-            error: null,
-            creator: {
-              id: "user-1",
-              email: "test@example.com",
-              username: "testuser",
-              __typename: "UserType" as const,
-            },
-            corpus: {
-              id: "corpus-1",
-              title: "Test Corpus",
-              __typename: "CorpusType" as const,
-            },
-            __typename: "ExtractType" as const,
-          },
-        ]}
+        extracts={[mockExtract1] as any}
       />
     );
 

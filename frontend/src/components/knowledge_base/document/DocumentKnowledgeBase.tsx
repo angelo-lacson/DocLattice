@@ -13,6 +13,8 @@ import {
   Plus,
   Layers,
   PanelRightOpen,
+  Database,
+  BarChart3,
 } from "lucide-react";
 import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
@@ -83,7 +85,10 @@ import {
   selectedRelationsAtom,
 } from "../../annotator/context/UISettingsAtom";
 import { useNavigate, useLocation } from "react-router-dom";
-import { clearAnnotationSelection } from "../../../utils/navigationUtils";
+import {
+  clearAnnotationSelection,
+  updateAnnotationSelectionParams,
+} from "../../../utils/navigationUtils";
 
 import {
   ContentArea,
@@ -148,6 +153,7 @@ import { FloatingExtractsPanel } from "./FloatingExtractsPanel";
 import UnifiedKnowledgeLayer from "./layers/UnifiedKnowledgeLayer";
 import { AddToCorpusModal } from "../../modals/AddToCorpusModal";
 import { FeatureUnavailable } from "../../common/FeatureUnavailable";
+import { SingleDocumentExtractResults } from "../../annotator/sidebar/SingleDocumentExtractResults";
 
 // Setting worker path to worker bundle.
 GlobalWorkerOptions.workerSrc = workerSrc;
@@ -274,6 +280,294 @@ const ZoomIndicator = styled.div`
   z-index: 2000;
   pointer-events: none;
   transition: opacity 0.2s ease-in-out;
+`;
+
+const ContextBar = styled.div`
+  background: linear-gradient(
+    90deg,
+    rgba(102, 126, 234, 0.95) 0%,
+    rgba(118, 75, 162, 0.95) 100%
+  );
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
+
+const ContextBarContent = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+`;
+
+const ContextBarBadge = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+
+  svg,
+  i {
+    width: 16px;
+    height: 16px;
+    margin: 0 !important;
+  }
+`;
+
+const ContextBarLabel = styled.div`
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.95;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ContextBarStats = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  margin-right: 12px;
+`;
+
+const StatPill = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+
+  svg,
+  i {
+    width: 14px;
+    height: 14px;
+    opacity: 0.9;
+    margin: 0 !important;
+  }
+`;
+
+const CloseButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+
+const SidebarHeader = styled.div`
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+`;
+
+const SidebarHeaderContent = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const SidebarHeaderTitle = styled.div`
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1e293b;
+  max-height: 8.4rem; /* ~6 lines at 1.4 line-height */
+  overflow-y: auto;
+  line-height: 1.4;
+
+  /* Pretty scrollbar */
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 2px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Clean markdown rendering */
+  p {
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  strong,
+  b {
+    font-weight: 700;
+  }
+
+  em,
+  i {
+    font-style: italic;
+  }
+
+  code {
+    background: #e2e8f0;
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-size: 0.875rem;
+    font-family: monospace;
+  }
+
+  /* Don't let markdown break the layout */
+  ul,
+  ol,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    display: none;
+  }
+`;
+
+const SidebarHeaderSubtitle = styled.div`
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.125rem;
+`;
+
+const CompactAnnotationFeed = styled.div`
+  height: 100%;
+  overflow: hidden;
+
+  /* Compact annotation cards for analysis view */
+  .highlight-item {
+    margin-bottom: 0.75rem !important;
+    border-radius: 10px !important;
+    background: white !important;
+  }
+
+  /* Clean up markdown in annotation cards */
+  .annotation-content {
+    p {
+      margin: 0.25rem 0 !important;
+      line-height: 1.5 !important;
+    }
+
+    ul,
+    ol {
+      margin: 0.5rem 0 !important;
+      padding-left: 1.5rem !important;
+    }
+
+    li {
+      margin: 0.25rem 0 !important;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      margin: 0.5rem 0 0.25rem 0 !important;
+      font-size: 0.95rem !important;
+      font-weight: 600 !important;
+    }
+
+    code {
+      background: #f1f5f9 !important;
+      padding: 0.125rem 0.375rem !important;
+      border-radius: 3px !important;
+      font-size: 0.875rem !important;
+    }
+
+    pre {
+      background: #f8fafc !important;
+      padding: 0.75rem !important;
+      border-radius: 6px !important;
+      overflow-x: auto !important;
+      margin: 0.5rem 0 !important;
+    }
+
+    blockquote {
+      border-left: 3px solid #e2e8f0 !important;
+      padding-left: 1rem !important;
+      margin: 0.5rem 0 !important;
+      color: #64748b !important;
+    }
+
+    /* Compact spacing for analysis results */
+    & > *:first-child {
+      margin-top: 0 !important;
+    }
+
+    & > *:last-child {
+      margin-bottom: 0 !important;
+    }
+  }
+
+  /* Hide unnecessary metadata in compact view */
+  .annotation-metadata {
+    font-size: 0.8125rem !important;
+    color: #94a3b8 !important;
+  }
+
+  /* Better page headers */
+  .page-header {
+    background: linear-gradient(to right, #fef3c7 0%, #fef9e7 100%) !important;
+    border-left: 3px solid #f59e0b !important;
+  }
 `;
 
 interface DocumentKnowledgeBaseProps {
@@ -457,7 +751,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     setPageTokenTextMaps: setPageTextMaps,
   } = usePageTokenTextMaps();
   const { setPages } = usePages();
-  const [_, setPdfAnnotations] = useAtom(pdfAnnotationsAtom);
+  const [pdfAnnotations, setPdfAnnotations] = useAtom(pdfAnnotationsAtom);
   const [, setStructuralAnnotations] = useAtom(structuralAnnotationsAtom);
   const { setCorpus } = useCorpusState();
   const { setInitialAnnotations, setInitialRelations } =
@@ -557,6 +851,34 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       setActiveLayer("document");
     }
   }, [selectedAnalysis, selectedAnnotations]);
+
+  /**
+   * Auto-switch to extract tab when extract is selected
+   * Following routing principles: only READ selectedExtract from hook
+   */
+  useEffect(() => {
+    if (selectedExtract) {
+      setActiveLayer("document");
+      setShowRightPanel(true);
+      setSidebarViewMode("extract");
+      // Close floating extracts panel since results now show in sidebar
+      setShowExtractsPanel(false);
+    }
+  }, [selectedExtract]);
+
+  /**
+   * Auto-switch to analysis tab when analysis is selected
+   * Following routing principles: only READ selectedAnalysis from hook
+   */
+  useEffect(() => {
+    if (selectedAnalysis) {
+      setActiveLayer("document");
+      setShowRightPanel(true);
+      setSidebarViewMode("analysis");
+      // Close floating analyses panel since results now show in sidebar
+      setShowAnalysesPanel(false);
+    }
+  }, [selectedAnalysis]);
 
   /**
    * processAnnotationsData
@@ -1787,6 +2109,100 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       />
     );
 
+    // Handle extract mode - show extract results
+    if (sidebarViewMode === "extract" && selectedExtract) {
+      return (
+        <div
+          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+        >
+          <div
+            style={{
+              padding: "1rem 1.5rem",
+              borderBottom: "1px solid #e2e8f0",
+              background: "#f8fafc",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+            }}
+          >
+            <Database size={20} style={{ color: "#8b5cf6" }} />
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: "1rem",
+                  color: "#1e293b",
+                }}
+              >
+                {selectedExtract.name}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.875rem",
+                  color: "#64748b",
+                }}
+              >
+                Data Extract Results
+              </div>
+            </div>
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <SingleDocumentExtractResults
+              datacells={dataCells}
+              columns={columns}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // Handle analysis mode - show analysis annotations
+    if (sidebarViewMode === "analysis" && selectedAnalysis) {
+      const annotationCount = selectedAnalysis.annotations?.totalCount || 0;
+      return (
+        <div
+          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+        >
+          <SidebarHeader>
+            <BarChart3 size={20} style={{ color: "#f59e0b" }} />
+            <SidebarHeaderContent>
+              <SidebarHeaderTitle>
+                <SafeMarkdown>
+                  {selectedAnalysis.analyzer.description ||
+                    selectedAnalysis.analysisName}
+                </SafeMarkdown>
+              </SidebarHeaderTitle>
+              <SidebarHeaderSubtitle>
+                {annotationCount} annotation
+                {annotationCount !== 1 ? "s" : ""} • Analysis Results
+              </SidebarHeaderSubtitle>
+            </SidebarHeaderContent>
+          </SidebarHeader>
+          <CompactAnnotationFeed>
+            <UnifiedContentFeed
+              notes={notes}
+              filters={{
+                contentTypes: new Set(["annotation", "relationship"]),
+              }}
+              sortBy="page"
+              isLoading={loading}
+              readOnly={readOnly}
+              documentId={documentId}
+              onItemSelect={(item) => {
+                // Annotations from analysis
+                if (
+                  item.type === "annotation" ||
+                  item.type === "relationship"
+                ) {
+                  // Already in document view, annotations will scroll into view
+                }
+              }}
+            />
+          </CompactAnnotationFeed>
+        </div>
+      );
+    }
+
     // Handle unified feed mode
     if (sidebarViewMode === "feed") {
       return (
@@ -2000,6 +2416,20 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   const [showAddToCorpusModal, setShowAddToCorpusModal] = useState(false);
 
+  // Handler to clear analysis/extract selection via URL update
+  // Following routing system principles: Component → URL → CentralRouteManager → Reactive Var
+  const handleClearAnalysisExtractSelection = useCallback(() => {
+    updateAnnotationSelectionParams(location, navigate, {
+      analysisIds: [],
+      extractIds: [],
+    });
+    // CentralRouteManager Phase 2 will detect URL change and clear selectedAnalysesIds/selectedExtractIds
+
+    // Close sidebar and switch back to feed view when clearing
+    setShowRightPanel(false);
+    setSidebarViewMode("feed");
+  }, [location, navigate]);
+
   return (
     <FullScreenModal
       id="knowledge-base-modal"
@@ -2063,6 +2493,58 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           </HeaderButton>
         </HeaderButtonGroup>
       </HeaderContainer>
+
+      {/* Context Bar - shows when analysis or extract is selected */}
+      {(selectedAnalysis || selectedExtract) && (
+        <ContextBar data-testid="context-bar">
+          <ContextBarContent>
+            <ContextBarBadge>
+              {selectedAnalysis ? (
+                <>
+                  <Icon name="chart line" />
+                  ANALYSIS
+                </>
+              ) : (
+                <>
+                  <Icon name="table" />
+                  EXTRACT
+                </>
+              )}
+            </ContextBarBadge>
+            <ContextBarLabel>
+              {selectedAnalysis
+                ? selectedAnalysis.analyzer.description ||
+                  selectedAnalysis.analyzer.id
+                : selectedExtract?.fieldset?.name || "Data Extract"}
+            </ContextBarLabel>
+            <ContextBarStats>
+              <StatPill title="Annotations visible">
+                <Icon name="tag" />
+                {pdfAnnotations?.annotations?.length || 0}
+              </StatPill>
+              {selectedAnalysis && (
+                <StatPill title="Total analyses available">
+                  <Icon name="chart line" />
+                  {analyses.length}
+                </StatPill>
+              )}
+              {selectedExtract && (
+                <StatPill title="Total extracts available">
+                  <Icon name="table" />
+                  {extracts.length}
+                </StatPill>
+              )}
+            </ContextBarStats>
+          </ContextBarContent>
+          <CloseButton
+            onClick={handleClearAnalysisExtractSelection}
+            data-testid="clear-analysis-extract-button"
+            title="Clear filter"
+          >
+            <X />
+          </CloseButton>
+        </ContextBar>
+      )}
 
       {/* Error message for GraphQL failures - show prominently and prevent other content */}
       {queryError ? (
@@ -2209,10 +2691,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 onAutoZoomChange={setAutoZoomEnabled}
               />
 
-              {/* Floating Analyses Panel - only show with corpus */}
+              {/* Floating Analyses Panel - only show with corpus and when no analysis selected (results now in sidebar) */}
               {corpusId && (
                 <FloatingAnalysesPanel
-                  visible={showAnalysesPanel && activeLayer === "document"}
+                  visible={
+                    showAnalysesPanel &&
+                    activeLayer === "document" &&
+                    !selectedAnalysis
+                  }
                   analyses={analyses}
                   onClose={() => setShowAnalysesPanel(false)}
                   panelOffset={floatingControlsState.offset}
@@ -2220,10 +2706,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 />
               )}
 
-              {/* Floating Extracts Panel - only show with corpus */}
+              {/* Floating Extracts Panel - only show with corpus and when no extract selected (results now in sidebar) */}
               {corpusId && (
                 <FloatingExtractsPanel
-                  visible={showExtractsPanel && activeLayer === "document"}
+                  visible={
+                    showExtractsPanel &&
+                    activeLayer === "document" &&
+                    !selectedExtract
+                  }
                   extracts={extracts}
                   onClose={() => setShowExtractsPanel(false)}
                   panelOffset={floatingControlsState.offset}
@@ -2262,6 +2752,40 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                     <Layers />
                     <span className="tab-label">Feed</span>
                   </SidebarTab>
+                  {/* Extract tab - only visible when extract is selected */}
+                  {selectedExtract && (
+                    <SidebarTab
+                      $isActive={sidebarViewMode === "extract"}
+                      $panelOpen={false}
+                      onClick={() => {
+                        setSidebarViewMode("extract");
+                        setShowRightPanel(true);
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      data-testid="view-mode-extract"
+                    >
+                      <Database />
+                      <span className="tab-label">Extract</span>
+                    </SidebarTab>
+                  )}
+                  {/* Analysis tab - only visible when analysis is selected */}
+                  {selectedAnalysis && (
+                    <SidebarTab
+                      $isActive={sidebarViewMode === "analysis"}
+                      $panelOpen={false}
+                      onClick={() => {
+                        setSidebarViewMode("analysis");
+                        setShowRightPanel(true);
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      data-testid="view-mode-analysis"
+                    >
+                      <BarChart3 />
+                      <span className="tab-label">Analysis</span>
+                    </SidebarTab>
+                  )}
                 </SidebarTabsContainer>
               )}
 
@@ -2327,6 +2851,50 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                         <Layers />
                         <span className="tab-label">Feed</span>
                       </SidebarTab>
+                      {/* Extract tab - only visible when extract is selected */}
+                      {selectedExtract && (
+                        <SidebarTab
+                          $isActive={sidebarViewMode === "extract"}
+                          $panelOpen={true}
+                          onClick={() => {
+                            if (sidebarViewMode === "extract") {
+                              // Clicking active tab closes the panel
+                              setShowRightPanel(false);
+                            } else {
+                              // Switch to extract mode
+                              setSidebarViewMode("extract");
+                            }
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          data-testid="view-mode-extract"
+                        >
+                          <Database />
+                          <span className="tab-label">Extract</span>
+                        </SidebarTab>
+                      )}
+                      {/* Analysis tab - only visible when analysis is selected */}
+                      {selectedAnalysis && (
+                        <SidebarTab
+                          $isActive={sidebarViewMode === "analysis"}
+                          $panelOpen={true}
+                          onClick={() => {
+                            if (sidebarViewMode === "analysis") {
+                              // Clicking active tab closes the panel
+                              setShowRightPanel(false);
+                            } else {
+                              // Switch to analysis mode
+                              setSidebarViewMode("analysis");
+                            }
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          data-testid="view-mode-analysis"
+                        >
+                          <BarChart3 />
+                          <span className="tab-label">Analysis</span>
+                        </SidebarTab>
+                      )}
                     </SidebarTabsContainer>
 
                     {rightPanelContent}
