@@ -11,10 +11,14 @@ services:
       dockerfile: ./compose/local/django/Dockerfile
     image: opencontractserver_local_django
     depends_on:
-      - postgres
-      - redis
-      - vector-embedder
-      - docling-parser
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # vector-embedder:
+      #   condition: service_started
+      docling-parser:
+        condition: service_started
     volumes:
       - .:/app:z
     env_file:
@@ -33,12 +37,25 @@ services:
     volumes:
       - local_postgres_data:/var/lib/postgresql/data:Z
       - local_postgres_data_backups:/backups:z
+      - ./compose/production/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     env_file:
       - ./.envs/.local/.postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doadmin -d opencontractserver"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:6
     container_name: redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   docling-parser:
     image: jscrudato/docsling-local
