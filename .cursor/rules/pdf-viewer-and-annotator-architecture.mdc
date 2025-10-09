@@ -7,6 +7,7 @@ alwaysApply: false
 
 ## Admin Tasks if you Edit PDF-related frontend code
 1. When working on document knowledge base and pdf-related frontend functionality, ensure you update our cursor rule here [pdf-viewer-and-annotator-architecture.mdc](mdc:.cursor/rules/pdf-viewer-and-annotator-architecture.mdc) such that it captures any material changes to our existing setup.
+2. When modifying filtering logic, ensure changes are applied consistently to both `useVisibleAnnotations` and `useVisibleRelationships` hooks to maintain unified behavior.
 
 ## Context: Document Knowledge Base
 
@@ -57,15 +58,19 @@ The system uses Jotai atoms to manage global state:
 
 ```
 AnnotationAtoms.tsx
-├── pdfAnnotationsAtom - Core annotation state
+├── pdfAnnotationsAtom - Core state (annotations, relations, docTypes)
 ├── structuralAnnotationsAtom - Structural annotations
-├── allAnnotationsAtom - Computed, de-duplicated list
+├── allAnnotationsAtom - Computed, de-duplicated annotation list
 └── perPageAnnotationsAtom - Page-indexed annotation map
 
 UISettingsAtom.tsx
 ├── activeLayerAtom - Current layer (knowledge/document)
 ├── chatPanelWidthAtom - Panel width management
-└── sidebarViewModeAtom - Chat vs feed mode
+├── sidebarViewModeAtom - Chat vs feed mode
+├── showStructuralAtom - Show/hide structural content
+├── showSelectedOnlyAtom - Filter to selected items only
+├── showBoundingBoxesAtom - Visual display setting
+└── showLabelsAtom - Label display behavior
 
 DocumentAtom.tsx
 ├── scrollContainerRefAtom - Scroll container reference
@@ -167,29 +172,41 @@ const calcRange = useCallback(() => {
 }, [/* dependencies */]);
 ```
 
-### Annotation Visibility System
+### Unified Annotation and Relationship Visibility System
 
-The annotation visibility system works through several interconnected components:
+The system implements a unified, atom-based filtering architecture that ensures consistency between annotations and relationships across all components:
 
-1. **ViewSettingsPopup** provides UI controls for filtering annotations:
-   - Toggle for showing only selected annotations
-   - Toggle for showing structural annotations
+1. **AnnotationControls** component (used in FloatingDocumentControls and sidebars):
+   - Toggle for showing only selected annotations/relationships
+   - Toggle for showing structural annotations/relationships
    - Toggle for showing bounding boxes
    - Label filter selection
+   - All settings stored in shared Jotai atoms
 
 2. **useAnnotationDisplay** hook manages display preferences:
-   - Stores user preferences about which annotations to show
-   - Provides setters to update these preferences
+   - `showStructural` - controls both structural annotations AND relationships
+   - `showSelectedOnly` - filters to selected items and their connections
+   - `showBoundingBoxes` - visual display option
+   - `showLabels` - label display behavior (always/hover/hide)
+   - Single source of truth for all filtering preferences
 
-3. **useVisibleAnnotations** hook applies filtering logic:
+3. **useVisibleAnnotations** hook applies filtering logic for annotations:
    - Takes the complete annotation list from `useAllAnnotations`
    - Applies filters based on settings from `useAnnotationDisplay`
    - Returns only the annotations that should be visible
-   - Handles special cases like forcing visibility of selected annotations
+   - Handles forced visibility (selected, relationship-connected)
 
-4. **PDFPage** and other components consume the filtered list:
-   - Render only the annotations returned by `useVisibleAnnotations`
-   - Apply additional page-specific filtering
+4. **useVisibleRelationships** hook applies parallel filtering for relationships:
+   - Filters relationships based on same `useAnnotationDisplay` settings
+   - Ensures consistency with annotation filtering
+   - Only shows relationships with at least one visible annotation
+   - Respects selected-only and structural toggles
+
+5. **Components consume filtered data consistently**:
+   - **PDFPage/TxtAnnotator**: Use `useVisibleAnnotations()` for rendering
+   - **UnifiedContentFeed**: Uses both `useVisibleAnnotations()` and `useVisibleRelationships()`
+   - **RelationshipList**: Uses `useVisibleRelationships()` for display
+   - All components react to the same atom state changes
 
 ### Scroll-to-Annotation System
 
@@ -212,14 +229,27 @@ The system uses a two-phase approach for scrolling to annotations, triggered by:
 
 See [scroll-to-annotation-flow.md](mdc:docs/architecture/components/annotator/current-state/scroll-to-annotation-flow.md) for complete details.
 
-### Data Flow for Annotation Updates
+### Data Flow for Annotation and Relationship Updates
 
-When annotations are updated (added, modified, or filtered):
+When annotations or relationships are updated (added, modified, or filtered):
 
-1. Changes are made to `pdfAnnotationsAtom` via `usePdfAnnotations().setPdfAnnotations`
-2. `allAnnotationsAtom` automatically recomputes to include the changes
-3. `useVisibleAnnotations` applies current filters to the updated list
-4. Components consuming `useVisibleAnnotations` re-render with the new filtered list
+1. **State Updates**: Changes are made to `pdfAnnotationsAtom` via `usePdfAnnotations().setPdfAnnotations`
+   - Contains three arrays: `annotations`, `relations`, and `docTypes`
+   - All updates create new immutable instances
+
+2. **Automatic Recomputation**:
+   - `allAnnotationsAtom` automatically recomputes to include annotation changes
+   - Both `useVisibleAnnotations` and `useVisibleRelationships` recompute based on current filters
+
+3. **Filter Application**:
+   - `useVisibleAnnotations` applies filters from `useAnnotationDisplay` to annotations
+   - `useVisibleRelationships` applies the SAME filters to relationships
+   - Both hooks ensure consistency by reading from the same atom state
+
+4. **Component Re-rendering**:
+   - All components consuming these hooks automatically re-render with filtered data
+   - Changes in filter settings immediately propagate to all consumers
+   - No prop drilling or manual synchronization needed
 
 ## Tab Navigation System
 
@@ -246,9 +276,12 @@ Each tab knows which layer(s) it belongs to and can trigger layer switches when 
 
 4. **Computed Derivations**: `allAnnotationsAtom` and `perPageAnnotationsAtom` are derived states that automatically update when their dependencies change, eliminating manual synchronization.
 
-5. **Centralized Filtering**: The `useVisibleAnnotations` hook centralizes filtering logic so it's consistent across all components.
+5. **Unified Filtering**: The `useVisibleAnnotations` and `useVisibleRelationships` hooks provide parallel filtering logic that ensures annotations and relationships are filtered consistently using the same atom state.
 
-6. **Forced Visibility**: Some annotations (selected ones, those in relationships) are forced to be visible regardless of filter settings.
+6. **Forced Visibility**: Some content is always visible regardless of filter settings:
+   - Selected annotations and relationships
+   - Annotations connected to selected relationships
+   - All content when specific items are being highlighted
 
 7. **Efficient Rendering**: Components only re-render when their specific dependencies change, not on every state update. PDFPage components manage their own lifecycle independently.
 
