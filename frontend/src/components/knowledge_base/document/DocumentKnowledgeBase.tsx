@@ -90,6 +90,7 @@ import {
   clearAnnotationSelection,
   updateAnnotationSelectionParams,
 } from "../../../utils/navigationUtils";
+import { routingLogger } from "../../../utils/routingLogger";
 
 import {
   ContentArea,
@@ -132,7 +133,6 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
   openedDocument,
-  openedCorpus,
   selectedAnnotationIds,
   selectedAnalysesIds,
   showStructuralAnnotations,
@@ -611,7 +611,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   showCorpusInfo,
   showSuccessMessage,
 }) => {
-  console.log("[DocumentKnowledgeBase] 🎬 Component render", {
+  routingLogger.debug("[DocumentKnowledgeBase] 🎬 Component render", {
     documentId,
     corpusId,
     hasOnClose: !!onClose,
@@ -633,7 +633,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   // Track component lifecycle
   useEffect(() => {
-    console.log("[DocumentKnowledgeBase] 🟢 Component MOUNTED", {
+    routingLogger.debug("[DocumentKnowledgeBase] 🟢 Component MOUNTED", {
       documentId,
       corpusId,
       pathname: location.pathname,
@@ -641,7 +641,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     });
 
     return () => {
-      console.log("[DocumentKnowledgeBase] 🔴 Component UNMOUNTING", {
+      routingLogger.debug("[DocumentKnowledgeBase] 🔴 Component UNMOUNTING", {
         documentId,
         corpusId,
         pathname: location.pathname,
@@ -650,59 +650,52 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     };
   }, []); // Empty deps - only log on actual mount/unmount
 
-  // Handle close: use provided onClose callback or navigate to specific URL
-  // Following routing mantra: navigate to specific URLs, never use navigate(-1)
-  // This prevents flickering and state races during route transitions
+  // Handle close: use provided onClose callback or fallback to /documents
+  // Following routing mantra: route components should provide onClose to make navigation decisions
+  // This component should NOT read openedCorpus() to decide navigation - that causes race conditions
   const handleClose = useCallback(() => {
     try {
-      console.log("[DocumentKnowledgeBase] 🚪 handleClose called", {
+      const timestamp = new Date().toISOString();
+      routingLogger.debug(
+        `🚪 [DocumentKnowledgeBase] ════════ handleClose START ════════`
+      );
+      routingLogger.debug("[DocumentKnowledgeBase] Timestamp:", timestamp);
+      routingLogger.debug(
+        "[DocumentKnowledgeBase] Call stack:",
+        new Error().stack?.split("\n").slice(2, 8).join("\n")
+      );
+      routingLogger.debug("[DocumentKnowledgeBase] Current state:", {
         hasOnClose: !!onClose,
-        timestamp: Date.now(),
+        documentId,
+        corpusId,
+        currentUrl: window.location.pathname + window.location.search,
       });
 
       if (onClose) {
-        console.log(
-          "[DocumentKnowledgeBase] → Calling provided onClose callback"
+        routingLogger.debug(
+          "[DocumentKnowledgeBase] ✅ Decision: Calling provided onClose callback"
         );
         onClose();
       } else {
-        console.log(
-          "[DocumentKnowledgeBase] → No onClose callback, navigating to URL"
+        console.warn(
+          "[DocumentKnowledgeBase] ⚠️  Decision: No onClose callback - fallback to /documents"
         );
-
-        // Read corpus from reactive var to determine navigation target
-        const corpus = openedCorpus();
-        console.log("[DocumentKnowledgeBase] → Read corpus from reactive var", {
-          hasCorpus: !!corpus,
-          corpusId: corpus?.id,
-          corpusSlug: corpus?.slug,
-          hasCreator: !!corpus?.creator,
-          creatorSlug: corpus?.creator?.slug,
-        });
-
-        if (corpus?.creator?.slug && corpus?.slug) {
-          const targetUrl = `/c/${corpus.creator.slug}/${corpus.slug}`;
-          console.log(
-            `[DocumentKnowledgeBase] ✅ Navigating to corpus: "${targetUrl}"`
-          );
-          navigate(targetUrl);
-        } else {
-          console.log(
-            "[DocumentKnowledgeBase] ⚠️  No corpus slug, navigating to /documents"
-          );
-          navigate("/documents");
-        }
+        console.warn(
+          "Route components should pass explicit onClose callbacks to avoid race conditions."
+        );
+        navigate("/documents");
       }
 
-      console.log(
-        "[DocumentKnowledgeBase] ✅ handleClose completed successfully"
+      routingLogger.debug(
+        "[DocumentKnowledgeBase] ════════ handleClose END ════════"
       );
     } catch (error) {
       console.error("[DocumentKnowledgeBase] ❌ ERROR in handleClose:", error);
+      console.error("Stack trace:", error);
       // Fallback navigation on error
       navigate("/documents");
     }
-  }, [onClose, navigate]);
+  }, [onClose, navigate, documentId, corpusId]);
 
   // Validate documentId - must be non-empty
   if (!documentId || documentId === "") {
@@ -748,7 +741,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       default:
         width = 50;
     }
-    console.log("Panel width calculation - mode:", mode, "width:", width);
+    routingLogger.debug(
+      "Panel width calculation - mode:",
+      mode,
+      "width:",
+      width
+    );
     return width;
   };
 
@@ -1136,7 +1134,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       // Capture current zoom as the new base, don't adjust yet
       baseZoomRef.current = zoomLevel;
       justToggledAutoZoomRef.current = true;
-      console.log(
+      routingLogger.debug(
         "Auto-zoom toggled ON - setting base zoom to current:",
         zoomLevel
       );
@@ -1454,7 +1452,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       }
 
       // Batch initial state updates to prevent cascading re-renders
-      console.log("[onCompleted] 🔄 Batching initial state updates");
+      routingLogger.debug("[onCompleted] 🔄 Batching initial state updates");
       unstable_batchedUpdates(() => {
         setDocumentType(data.document.fileType ?? "");
         let processedDocData = {
@@ -1471,10 +1469,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         data.document.fileType === "application/pdf" &&
         data.document.pdfFile
       ) {
-        console.log("\n=== DOCUMENT LOAD START ===");
-        console.log("Type: PDF");
-        console.log("Document ID:", data.document.id);
-        console.log("Hash:", data.document.pdfFileHash || "no hash");
+        routingLogger.debug("\n=== DOCUMENT LOAD START ===");
+        routingLogger.debug("Type: PDF");
+        routingLogger.debug("Document ID:", data.document.id);
+        routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
         setViewState(ViewState.LOADING); // Set loading state
 
         const pawlsPath = data.document.pawlsParseFile || "";
@@ -1549,7 +1547,9 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           })
           .then((loadedPages) => {
             // Batch PDF completion state updates to prevent cascading re-renders
-            console.log("[PDF Load] 🔄 Batching PDF completion state updates");
+            routingLogger.debug(
+              "[PDF Load] 🔄 Batching PDF completion state updates"
+            );
             unstable_batchedUpdates(() => {
               setPages(loadedPages);
               const { doc_text, string_index_token_map } =
@@ -1561,12 +1561,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               setDocText(doc_text);
               setViewState(ViewState.LOADED); // Set loaded state only after everything is done
             });
-            console.log("=== DOCUMENT LOAD COMPLETE ===");
+            routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
             // Log the specific error causing the catch
             console.error("Error during PDF/PAWLS loading Promise.all:", err);
-            console.log("=== DOCUMENT LOAD FAILED ===");
+            routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
             setViewState(ViewState.ERROR);
             toast.error(
               `Error loading PDF details: ${
@@ -1579,11 +1579,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           data.document.fileType === "text/plain") &&
         data.document.txtExtractFile
       ) {
-        console.log("\n=== DOCUMENT LOAD START ===");
-        console.log("Type: TEXT");
-        console.log("Document ID:", data.document.id);
-        console.log("Hash:", data.document.pdfFileHash || "no hash");
-        console.log("File URL:", data.document.txtExtractFile);
+        routingLogger.debug("\n=== DOCUMENT LOAD START ===");
+        routingLogger.debug("Type: TEXT");
+        routingLogger.debug("Document ID:", data.document.id);
+        routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
+        routingLogger.debug("File URL:", data.document.txtExtractFile);
         setViewState(ViewState.LOADING); // Set loading state
         const docId = data.document.id;
         const textHash = data.document.pdfFileHash; // Can use same hash field for text files
@@ -1594,18 +1594,18 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         )
           .then((txt) => {
             // Batch text file completion state updates
-            console.log(
+            routingLogger.debug(
               "[Text Load] 🔄 Batching text completion state updates"
             );
             unstable_batchedUpdates(() => {
               setDocText(txt);
               setViewState(ViewState.LOADED);
             });
-            console.log("=== DOCUMENT LOAD COMPLETE ===");
+            routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
             setViewState(ViewState.ERROR);
-            console.log("=== DOCUMENT LOAD FAILED ===");
+            routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
             toast.error(
               `Error loading text content: ${
                 err instanceof Error ? err.message : String(err)
@@ -1647,7 +1647,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   });
 
   // Query for document with structure but without corpus
-  console.log(
+  routingLogger.debug(
     "[GraphQL] 🔵 DocumentKnowledgeBase: GET_DOCUMENT_WITH_STRUCTURE query state",
     {
       skip: !authReady || !documentId || Boolean(corpusId),
@@ -1670,7 +1670,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         documentId,
       },
       onCompleted: (data) => {
-        console.log(
+        routingLogger.debug(
           "[GraphQL] ✅ DocumentKnowledgeBase: GET_DOCUMENT_WITH_STRUCTURE completed",
           {
             documentId,
@@ -1687,7 +1687,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         }
 
         // Batch initial state updates to prevent cascading re-renders
-        console.log(
+        routingLogger.debug(
           "[onCompleted] 🔄 Batching initial state updates (document-only)"
         );
         unstable_batchedUpdates(() => {
@@ -1770,7 +1770,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             })
             .then((loadedPages) => {
               // Batch PDF completion state updates (document-only)
-              console.log(
+              routingLogger.debug(
                 "[PDF Load] 🔄 Batching PDF completion state updates (document-only)"
               );
               unstable_batchedUpdates(() => {
@@ -1787,7 +1787,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             })
             .catch((err) => {
               console.error("Error during PDF/PAWLS loading Promise.all:", err);
-              console.log("=== DOCUMENT LOAD FAILED ===");
+              routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
               setViewState(ViewState.ERROR);
               toast.error(
                 `Error loading PDF details: ${
@@ -1800,27 +1800,27 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             data.document.fileType === "text/plain") &&
           data.document.txtExtractFile
         ) {
-          console.log("\n=== DOCUMENT LOAD START ===");
-          console.log("Type: TEXT");
-          console.log("Document ID:", data.document.id);
-          console.log("Hash:", data.document.pdfFileHash || "no hash");
-          console.log("File URL:", data.document.txtExtractFile);
+          routingLogger.debug("\n=== DOCUMENT LOAD START ===");
+          routingLogger.debug("Type: TEXT");
+          routingLogger.debug("Document ID:", data.document.id);
+          routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
+          routingLogger.debug("File URL:", data.document.txtExtractFile);
           setViewState(ViewState.LOADING);
           getDocumentRawText(data.document.txtExtractFile)
             .then((txt) => {
               // Batch text file completion state updates (document-only)
-              console.log(
+              routingLogger.debug(
                 "[Text Load] 🔄 Batching text completion state updates (document-only)"
               );
               unstable_batchedUpdates(() => {
                 setDocText(txt);
                 setViewState(ViewState.LOADED);
               });
-              console.log("=== DOCUMENT LOAD COMPLETE ===");
+              routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
             })
             .catch((err) => {
               setViewState(ViewState.ERROR);
-              console.log("=== DOCUMENT LOAD FAILED ===");
+              routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
               toast.error(
                 `Error loading text content: ${
                   err instanceof Error ? err.message : String(err)
@@ -1838,7 +1838,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         // Note: openedDocument is managed by CentralRouteManager, not set here
 
         // Batch structural annotation updates (document-only)
-        console.log(
+        routingLogger.debug(
           "[onCompleted] 🔄 Batching structural annotation updates (document-only)"
         );
         unstable_batchedUpdates(() => {
@@ -2573,7 +2573,22 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             </HeaderButton>
           )}
           <HeaderButton
-            onClick={handleClose}
+            onClick={(e) => {
+              routingLogger.debug(
+                `🖱️  [DocumentKnowledgeBase] ════════ BACK BUTTON CLICKED ════════`
+              );
+              routingLogger.debug(
+                "[DocumentKnowledgeBase] Button click event:",
+                {
+                  timestamp: new Date().toISOString(),
+                  button: e.button,
+                  currentTarget: e.currentTarget,
+                  target: e.target,
+                  currentUrl: window.location.pathname + window.location.search,
+                }
+              );
+              handleClose();
+            }}
             title="Go back"
             data-testid="back-button"
           >

@@ -1077,6 +1077,176 @@ describe("State-Driven Rendering", () => {
 });
 ```
 
+## Debugging
+
+### Routing Logger
+
+The routing system includes a **debug logging utility** that keeps console clean by default while providing detailed diagnostics when needed.
+
+**Location:** `src/utils/routingLogger.ts`
+
+#### Log Visibility
+
+**Normal Mode (Default):**
+- ✅ Clean console during navigation
+- ✅ Errors and warnings always visible
+- ✅ Circuit breaker alerts always visible
+- 🔇 Verbose routing logs hidden (Phase 1/2/3/4 details)
+
+**Debug Mode (When Troubleshooting):**
+- ✅ All Phase 1/2/3/4 routing logs visible
+- ✅ Navigation decisions and state changes
+- ✅ Entity resolution details
+- ✅ Circuit breaker tracking
+
+#### Enabling Debug Mode
+
+**Browser Console:**
+```javascript
+// Enable verbose routing logs
+window.DEBUG_ROUTING = true
+
+// Disable verbose routing logs
+window.DEBUG_ROUTING = false
+
+// Or use helper functions
+window.routingLogger.enableDebug()
+window.routingLogger.disableDebug()
+
+// Check status
+window.routingLogger.getStatus()
+// Returns: { debugEnabled: true/false }
+```
+
+#### Implementation Details
+
+All routing logs use `routingLogger.debug()` instead of `console.log()`:
+
+```typescript
+import { routingLogger } from "../utils/routingLogger";
+
+// Verbose logs (hidden by default)
+routingLogger.debug("[RouteManager] Phase 1 - Entity check:", { ... });
+routingLogger.debug("[DocumentLandingRoute] Render triggered", { ... });
+
+// Critical logs (always visible)
+console.error("[RouteManager] ❌ GraphQL error:", error);
+console.warn("[RouteManager] ⚠️  Corpus not found");
+```
+
+**Files Using Routing Logger:**
+- `CentralRouteManager.tsx` - All 4 phases
+- `DocumentLandingRoute.tsx` - Navigation and state changes
+- `DocumentKnowledgeBase.tsx` - Component lifecycle and close handler
+- `navigationCircuitBreaker.ts` - Navigation tracking (errors always visible)
+
+#### Navigation Circuit Breaker
+
+The circuit breaker detects and prevents infinite navigation loops caused by racing state updates.
+
+**Location:** `src/utils/navigationCircuitBreaker.ts`
+
+**Detection Criteria (3-second window):**
+1. **Excessive navigations:** >5 navigations in 3 seconds
+2. **Loop detection:** Same URL appearing ≥3 times
+3. **Ping-pong pattern:** Rapid back-and-forth between two URLs (A→B→A→B)
+
+**When Tripped:**
+```
+🚨🚨🚨 [CircuitBreaker] CIRCUIT TRIPPED! 🚨🚨🚨
+Reason: Ping-pong detected between "/c/user/corpus" and "/d/user/corpus/doc"
+Navigation history (last 3000ms):
+  1. [DocumentLandingRoute] /c/user/corpus @ 2025-10-09T07:00:00.696Z
+  2. [CentralRouteManager] /d/user/corpus/doc @ 2025-10-09T07:00:00.724Z
+  3. [CentralRouteManager] /c/user/corpus @ 2025-10-09T07:00:00.821Z
+  4. [CentralRouteManager] /d/user/corpus/doc @ 2025-10-09T07:00:00.918Z
+Circuit will remain tripped until page reload. Manual navigation required.
+```
+
+**Accessing Circuit Breaker:**
+```javascript
+// Check status
+window.navigationCircuitBreaker.getStatus()
+// Returns: { tripped: boolean, eventCount: number, events: NavigationEvent[] }
+
+// Manual reset (debugging only)
+window.navigationCircuitBreaker.reset()
+```
+
+**Navigation Tracking (Debug Mode):**
+```
+📍 [CircuitBreaker] Recorded navigation #1:
+  { url: "/c/user/corpus", source: "DocumentLandingRoute", timestamp: 1759993200696 }
+📍 [CircuitBreaker] Recorded navigation #2:
+  { url: "/d/user/corpus/doc", source: "CentralRouteManager", timestamp: 1759993200724 }
+```
+
+#### Debugging Workflow
+
+**1. Enable Verbose Logging:**
+```javascript
+window.DEBUG_ROUTING = true
+```
+
+**2. Reproduce the Issue:**
+- Navigate through the application
+- Watch console for routing logs
+- Circuit breaker will catch infinite loops
+
+**3. Analyze the Logs:**
+```
+[RouteManager] Phase 1 - Entity check: { routeType: "corpus", hasEntitiesForRoute: false }
+[RouteManager] Phase 3: Skipping redirect - corpus route but document still set
+[DocumentLandingRoute] ✅ Decision: Navigate to corpus
+🧭 [DocumentLandingRoute] navigate() called: { to: "/c/user/corpus" }
+📍 [CircuitBreaker] Recorded navigation #1
+```
+
+**4. Common Patterns to Look For:**
+- Phase 3 redirects happening when they shouldn't (check entity/route type mismatch guards)
+- Multiple components navigating simultaneously (check for routing violations)
+- State changes triggering unexpected navigations (check Phase 4 guards)
+- Reactive var updates not batched (check for cascading re-renders)
+
+**5. Disable After Fixing:**
+```javascript
+window.DEBUG_ROUTING = false
+```
+
+#### Example: Debugging Route Jittering
+
+**Symptom:** Modal opens/closes repeatedly when clicking back button
+
+**Debug Process:**
+```javascript
+// Enable debug mode
+window.DEBUG_ROUTING = true
+
+// Click back button, observe logs:
+[DocumentLandingRoute] 🚪 handleClose START
+[DocumentLandingRoute] ✅ Decision: Navigate to corpus
+📍 [CircuitBreaker] Recorded navigation #1: /c/user/corpus
+[RouteManager] Phase 3: Skipping redirect - corpus route but document still set ← THE FIX!
+[RouteManager] Phase 3: Path already canonical, no redirect
+
+// Without the guard, you'd see:
+[RouteManager] Phase 3: Redirecting to canonical path: { from: "/c/user/corpus", to: "/d/user/corpus/doc" }
+📍 [CircuitBreaker] Recorded navigation #2: /d/user/corpus/doc
+🚨 [CircuitBreaker] CIRCUIT TRIPPED! Ping-pong detected...
+```
+
+**Root Cause Identified:** Phase 3 was redirecting corpus routes back to document routes because it still saw the stale `openedDocument` reactive var before Phase 1 cleared it (async race condition).
+
+**Fix:** Add guard in Phase 3 to skip redirect when `currentRoute.type === "corpus" && document` (entity doesn't match route type).
+
+#### Tips
+
+- **Enable selectively:** Only enable debug mode when actively troubleshooting to avoid log pollution
+- **Trust the circuit breaker:** If it trips, there's a real bug - don't just reset it
+- **Watch the timestamps:** Navigation events within 50-100ms of each other indicate race conditions
+- **Check the source:** Circuit breaker logs which component triggered each navigation
+- **Inspect state snapshots:** Debug logs include full state context at each decision point
+
 ## Best Practices
 
 ### Critical Rules (MUST Follow)
