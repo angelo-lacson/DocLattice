@@ -1,8 +1,8 @@
-import { Dimmer, Loader } from "semantic-ui-react";
 import { ExportObject } from "../../types/graphql-api";
 import { PageInfo } from "../../types/graphql-api";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExportItemRow } from "./ExportItemRow";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 
 interface ExportListProps {
   items: ExportObject[] | undefined;
@@ -69,10 +69,10 @@ export function ExportList({
     : [];
 
   return (
-    <div style={{ ...styles.container, ...(style || {}) }}>
-      <Dimmer active={loading}>
-        <Loader content="Loading Exports..." />
-      </Dimmer>
+    <div
+      style={{ ...styles.container, ...(style || {}), position: "relative" }}
+    >
+      <LoadingOverlay active={loading} content="Loading Exports..." />
 
       <table style={styles.table}>
         <thead style={styles.header}>

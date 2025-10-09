@@ -1,8 +1,8 @@
 import React, { useState, useRef } from "react";
 import styled from "styled-components";
 import { Code, Check, X, Eye, Edit3, EyeOff } from "lucide-react";
-import { Dimmer, Loader } from "semantic-ui-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { LoadingOverlay } from "../../common/LoadingOverlay";
 import { CellEditor } from "./CellEditor";
 import {
   ColumnType,
@@ -297,16 +297,13 @@ export const SingleDocumentExtractResults: React.FC<
 
   return (
     <Container>
-      <Dimmer.Dimmable
-        as={TableContainer}
-        dimmed={tryingApprove || tryingReject}
-      >
-        <Dimmer active={tryingApprove || tryingReject}>
-          <Loader>
-            {tryingApprove && "Approving..."}
-            {tryingReject && "Rejecting..."}
-          </Loader>
-        </Dimmer>
+      <TableContainer style={{ position: "relative" }}>
+        <LoadingOverlay
+          active={tryingApprove || tryingReject}
+          content={
+            tryingApprove ? "Approving..." : tryingReject ? "Rejecting..." : ""
+          }
+        />
 
         <Table>
           <thead>
@@ -411,7 +408,7 @@ export const SingleDocumentExtractResults: React.FC<
             })}
           </tbody>
         </Table>
-      </Dimmer.Dimmable>
+      </TableContainer>
 
       {isModalOpen && activeCell && (
         <ModalOverlay onClick={() => setIsModalOpen(false)}>

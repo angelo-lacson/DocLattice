@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useReactiveVar } from "@apollo/client";
 import { DocumentKnowledgeBase } from "../knowledge_base";
 import { MetaTags } from "../seo/MetaTags";
@@ -35,10 +35,38 @@ export const DocumentLandingRoute: React.FC = () => {
 
   console.log("[DocumentLandingRoute] 🔄 Render triggered", {
     hasDocument: !!document,
+    documentId: document?.id,
+    documentSlug: document?.slug,
     hasCorpus: !!corpus,
+    corpusId: corpus?.id,
+    corpusSlug: corpus?.slug,
     loading,
     hasError: !!error,
+    timestamp: Date.now(),
   });
+
+  // Track reactive var changes
+  useEffect(() => {
+    console.log("[DocumentLandingRoute] 📡 openedDocument changed", {
+      hasDocument: !!document,
+      documentId: document?.id,
+      documentSlug: document?.slug,
+    });
+  }, [document]);
+
+  useEffect(() => {
+    console.log("[DocumentLandingRoute] 📡 openedCorpus changed", {
+      hasCorpus: !!corpus,
+      corpusId: corpus?.id,
+      corpusSlug: corpus?.slug,
+    });
+  }, [corpus]);
+
+  useEffect(() => {
+    console.log("[DocumentLandingRoute] 📡 routeLoading changed", {
+      loading,
+    });
+  }, [loading]);
 
   if (loading) {
     return <ModernLoadingDisplay type="document" size="large" />;

@@ -102,6 +102,8 @@ import {
   ChatIndicator,
   SidebarTabsContainer,
   SidebarTab,
+  MobileTabBar,
+  MobileTab,
 } from "./StyledContainers";
 import { NoteModal } from "./StickyNotes";
 
@@ -609,6 +611,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   showCorpusInfo,
   showSuccessMessage,
 }) => {
+  console.log("[DocumentKnowledgeBase] 🎬 Component render", {
+    documentId,
+    corpusId,
+    hasOnClose: !!onClose,
+    timestamp: Date.now(),
+  });
+
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const { isFeatureAvailable, getFeatureStatus, hasCorpus } =
@@ -622,12 +631,76 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Handle close: use provided onClose callback or navigate back in history
+  // Track component lifecycle
+  useEffect(() => {
+    console.log("[DocumentKnowledgeBase] 🟢 Component MOUNTED", {
+      documentId,
+      corpusId,
+      pathname: location.pathname,
+      search: location.search,
+    });
+
+    return () => {
+      console.log("[DocumentKnowledgeBase] 🔴 Component UNMOUNTING", {
+        documentId,
+        corpusId,
+        pathname: location.pathname,
+        search: location.search,
+      });
+    };
+  }, []); // Empty deps - only log on actual mount/unmount
+
+  // Handle close: use provided onClose callback or navigate to specific URL
+  // Following routing mantra: navigate to specific URLs, never use navigate(-1)
+  // This prevents flickering and state races during route transitions
   const handleClose = useCallback(() => {
-    if (onClose) {
-      onClose();
-    } else {
-      navigate(-1);
+    try {
+      console.log("[DocumentKnowledgeBase] 🚪 handleClose called", {
+        hasOnClose: !!onClose,
+        timestamp: Date.now(),
+      });
+
+      if (onClose) {
+        console.log(
+          "[DocumentKnowledgeBase] → Calling provided onClose callback"
+        );
+        onClose();
+      } else {
+        console.log(
+          "[DocumentKnowledgeBase] → No onClose callback, navigating to URL"
+        );
+
+        // Read corpus from reactive var to determine navigation target
+        const corpus = openedCorpus();
+        console.log("[DocumentKnowledgeBase] → Read corpus from reactive var", {
+          hasCorpus: !!corpus,
+          corpusId: corpus?.id,
+          corpusSlug: corpus?.slug,
+          hasCreator: !!corpus?.creator,
+          creatorSlug: corpus?.creator?.slug,
+        });
+
+        if (corpus?.creator?.slug && corpus?.slug) {
+          const targetUrl = `/c/${corpus.creator.slug}/${corpus.slug}`;
+          console.log(
+            `[DocumentKnowledgeBase] ✅ Navigating to corpus: "${targetUrl}"`
+          );
+          navigate(targetUrl);
+        } else {
+          console.log(
+            "[DocumentKnowledgeBase] ⚠️  No corpus slug, navigating to /documents"
+          );
+          navigate("/documents");
+        }
+      }
+
+      console.log(
+        "[DocumentKnowledgeBase] ✅ handleClose completed successfully"
+      );
+    } catch (error) {
+      console.error("[DocumentKnowledgeBase] ❌ ERROR in handleClose:", error);
+      // Fallback navigation on error
+      navigate("/documents");
     }
   }, [onClose, navigate]);
 
@@ -850,11 +923,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
    */
   useEffect(() => {
     if (selectedExtract) {
-      setActiveLayer("document");
-      setShowRightPanel(true);
-      setSidebarViewMode("extract");
-      // Close floating extracts panel since results now show in sidebar
-      setShowExtractsPanel(false);
+      // Batch updates to prevent cascade of re-renders (especially in mobile)
+      unstable_batchedUpdates(() => {
+        setActiveLayer("document");
+        setShowRightPanel(true);
+        setSidebarViewMode("extract");
+        // Close floating extracts panel since results now show in sidebar
+        setShowExtractsPanel(false);
+      });
     }
   }, [selectedExtract]);
 
@@ -864,11 +940,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
    */
   useEffect(() => {
     if (selectedAnalysis) {
-      setActiveLayer("document");
-      setShowRightPanel(true);
-      setSidebarViewMode("analysis");
-      // Close floating analyses panel since results now show in sidebar
-      setShowAnalysesPanel(false);
+      // Batch updates to prevent cascade of re-renders (especially in mobile)
+      unstable_batchedUpdates(() => {
+        setActiveLayer("document");
+        setShowRightPanel(true);
+        setSidebarViewMode("analysis");
+        // Close floating analyses panel since results now show in sidebar
+        setShowAnalysesPanel(false);
+      });
     }
   }, [selectedAnalysis]);
 
@@ -2847,7 +2926,71 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                       whileHover={{ scale: 1.02 }}
                     />
 
-                    {/* Tabs when panel is open - positioned on left edge of panel */}
+                    {/* Mobile Tab Bar - horizontal tabs at top for mobile */}
+                    <MobileTabBar>
+                      <MobileTab
+                        $active={sidebarViewMode === "chat"}
+                        onClick={() => {
+                          if (sidebarViewMode === "chat") {
+                            setShowRightPanel(false);
+                          } else {
+                            setSidebarViewMode("chat");
+                          }
+                        }}
+                        data-testid="mobile-view-mode-chat"
+                      >
+                        <MessageSquare />
+                        <span>Chat</span>
+                      </MobileTab>
+                      <MobileTab
+                        $active={sidebarViewMode === "feed"}
+                        onClick={() => {
+                          if (sidebarViewMode === "feed") {
+                            setShowRightPanel(false);
+                          } else {
+                            setSidebarViewMode("feed");
+                          }
+                        }}
+                        data-testid="mobile-view-mode-feed"
+                      >
+                        <Layers />
+                        <span>Feed</span>
+                      </MobileTab>
+                      {selectedExtract && (
+                        <MobileTab
+                          $active={sidebarViewMode === "extract"}
+                          onClick={() => {
+                            if (sidebarViewMode === "extract") {
+                              setShowRightPanel(false);
+                            } else {
+                              setSidebarViewMode("extract");
+                            }
+                          }}
+                          data-testid="mobile-view-mode-extract"
+                        >
+                          <Database />
+                          <span>Extract</span>
+                        </MobileTab>
+                      )}
+                      {selectedAnalysis && (
+                        <MobileTab
+                          $active={sidebarViewMode === "analysis"}
+                          onClick={() => {
+                            if (sidebarViewMode === "analysis") {
+                              setShowRightPanel(false);
+                            } else {
+                              setSidebarViewMode("analysis");
+                            }
+                          }}
+                          data-testid="mobile-view-mode-analysis"
+                        >
+                          <BarChart3 />
+                          <span>Analysis</span>
+                        </MobileTab>
+                      )}
+                    </MobileTabBar>
+
+                    {/* Tabs when panel is open - positioned on left edge of panel (desktop only) */}
                     <SidebarTabsContainer $panelOpen={true}>
                       <SidebarTab
                         $isActive={sidebarViewMode === "chat"}
@@ -3050,7 +3193,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   );
 };
 
-// Memoize to prevent unnecessary re-renders from parent components
-// This is especially important during route transitions when CentralRouteManager
-// updates multiple reactive vars - we only want to re-render when props actually change
-export default React.memo(DocumentKnowledgeBase);
+// REMOVED React.memo - was preventing proper unmounting during route transitions
+// When navigating away, we need the component to unmount immediately, but React.memo
+// was keeping stale instances alive briefly, causing flickering during state changes
+export default DocumentKnowledgeBase;

@@ -1885,7 +1885,8 @@ export const SidebarTabsContainer = styled.div<{ $panelOpen: boolean }>`
   z-index: ${(props) => (props.$panelOpen ? "100002" : "1999")};
 
   @media (max-width: 768px) {
-    display: none;
+    /* Hide when panel is open (mobile tab bar is shown instead) */
+    display: ${(props) => (props.$panelOpen ? "none" : "flex")};
   }
 `;
 
@@ -2029,5 +2030,23 @@ export const SidebarTab = styled(motion.button)<{
   /* Second tab (bottom) */
   &:last-child {
     margin-top: 0;
+  }
+
+  /* Mobile: Icon-only tabs when panel is closed */
+  @media (max-width: 768px) {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    gap: 0;
+    padding: 0.5rem;
+
+    .tab-label {
+      display: none;
+    }
+
+    svg {
+      width: 24px;
+      height: 24px;
+    }
   }
 `;

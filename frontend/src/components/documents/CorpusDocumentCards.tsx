@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Icon, Popup, Segment } from "semantic-ui-react";
 import styled from "styled-components";
 import { navigateToDocument } from "../../utils/navigationUtils";
+import useWindowDimensions from "../hooks/WindowDimensionHook";
 
 import { DocumentCards } from "../../components/documents/DocumentCards";
 import { DocumentMetadataGrid } from "../../components/documents/DocumentMetadataGrid";
@@ -38,7 +39,12 @@ const ViewToggleContainer = styled.div`
   position: absolute;
   top: 1rem;
   right: 1rem;
-  z-index: 100; /* Increased z-index to ensure it's above grid */
+  z-index: 100;
+
+  @media (max-width: 768px) {
+    top: 0.75rem;
+    right: 0.75rem;
+  }
 `;
 
 const ViewToggleButton = styled(Button)`
@@ -46,9 +52,34 @@ const ViewToggleButton = styled(Button)`
     background: white;
     border: 1px solid #e2e8f0;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 0.75rem;
+    min-width: auto;
+    transition: all 0.2s ease;
 
     &:hover {
       background: #f8fafc;
+      border-color: #cbd5e1;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+    }
+
+    &.active {
+      background: #3b82f6;
+      color: white;
+      border-color: #3b82f6;
+
+      &:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+      }
+    }
+
+    @media (max-width: 768px) {
+      padding: 0.625rem;
+
+      .icon {
+        font-size: 1rem;
+      }
     }
   }
 `;
@@ -58,7 +89,13 @@ export const CorpusDocumentCards = ({
 }: {
   opened_corpus_id: string | null;
 }) => {
-  const [viewMode, setViewMode] = useState<"cards" | "grid">("cards");
+  const { width } = useWindowDimensions();
+  const isMobile = width <= 768;
+
+  const [viewMode, setViewMode] = useState<
+    "modern-card" | "modern-list" | "grid"
+  >(isMobile ? "modern-list" : "modern-card");
+
   /**
    * Similar to AnnotationCorpusCards, this component wraps the DocumentCards component
    * (which is a pure rendering component) with some query logic for a given corpus_id.
@@ -209,14 +246,25 @@ export const CorpusDocumentCards = ({
             trigger={
               <ViewToggleButton
                 icon="grid layout"
-                active={viewMode === "cards"}
-                onClick={() => setViewMode("cards")}
+                active={viewMode === "modern-card"}
+                onClick={() => setViewMode("modern-card")}
                 data-testid="card-view-button"
               />
             }
           />
           <Popup
-            content="Metadata Grid View"
+            content="List View"
+            trigger={
+              <ViewToggleButton
+                icon="list"
+                active={viewMode === "modern-list"}
+                onClick={() => setViewMode("modern-list")}
+                data-testid="list-view-button"
+              />
+            }
+          />
+          <Popup
+            content="Table View"
             trigger={
               <ViewToggleButton
                 icon="table"
@@ -240,7 +288,7 @@ export const CorpusDocumentCards = ({
           flexDirection: "column",
         }}
       >
-        {viewMode === "cards" ? (
+        {viewMode !== "grid" ? (
           <DocumentCards
             items={document_items}
             loading={documents_loading}
@@ -264,6 +312,7 @@ export const CorpusDocumentCards = ({
               opened_corpus_id ? handleRemoveContracts : undefined
             }
             onDrop={onDrop}
+            viewMode={viewMode}
           />
         ) : (
           <div

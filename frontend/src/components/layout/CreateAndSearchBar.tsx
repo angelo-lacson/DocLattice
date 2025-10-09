@@ -1,18 +1,19 @@
 import React, { forwardRef } from "react";
 import {
   Form,
-  Dropdown,
   Popup,
   InputOnChangeData,
   Icon,
+  SemanticICONS,
 } from "semantic-ui-react";
 import styled from "styled-components";
+import Dropdown from "../common/Dropdown";
 
 /**
  * Props for each dropdown action item.
  */
 export interface DropdownActionProps {
-  icon: string;
+  icon: SemanticICONS;
   title: string;
   key: string;
   color: string;
@@ -47,10 +48,10 @@ export const CreateAndSearchBar: React.FC<CreateAndSearchBarProps> = ({
 }) => {
   const actionItems = actions.map((action) => (
     <Dropdown.Item
-      icon={action.icon}
-      text={action.title}
-      onClick={action.action_function}
       key={action.key}
+      onClick={action.action_function}
+      icon={<Icon name={action.icon} />}
+      text={action.title}
     />
   ));
 
@@ -105,10 +106,8 @@ export const CreateAndSearchBar: React.FC<CreateAndSearchBarProps> = ({
 
         {actions.length > 0 && (
           <StyledButtonGroup>
-            <StyledDropdown
-              pointing="top right"
-              button
-              className="icon"
+            <Dropdown
+              align="right"
               trigger={
                 <StyledButton aria-label="Add">
                   <Icon name="plus" />
@@ -116,7 +115,7 @@ export const CreateAndSearchBar: React.FC<CreateAndSearchBarProps> = ({
               }
             >
               <Dropdown.Menu>{actionItems}</Dropdown.Menu>
-            </StyledDropdown>
+            </Dropdown>
           </StyledButtonGroup>
         )}
       </ActionsWrapper>
@@ -350,77 +349,5 @@ const FilterPopoverContent = styled.div`
   & > * {
     position: relative;
     z-index: 1;
-  }
-`;
-
-/**
- * Styled dropdown component, removing default Semantic UI styling.
- *
- * @param {React.ButtonHTMLAttributes<HTMLButtonElement>} props - Button properties.
- * @param {React.Ref<HTMLButtonElement>} ref - Reference to the button element.
- * @returns {JSX.Element} The styled button component.
- */
-const StyledDropdown = styled(Dropdown)`
-  &.ui.dropdown {
-    /* Remove default Semantic UI styling */
-    background: none;
-    border: none;
-    padding: 0;
-    min-height: 0;
-
-    /* Hide the dropdown arrow */
-    .dropdown.icon {
-      display: none !important;
-    }
-
-    .menu {
-      margin-top: 0.75rem !important;
-      border: none !important;
-      background: rgba(255, 255, 255, 0.98) !important;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08) !important;
-      border-radius: 16px !important;
-      padding: 0.75rem !important;
-      backdrop-filter: blur(8px);
-      transform-origin: top right;
-      animation: dropdownAppear 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-
-      @keyframes dropdownAppear {
-        from {
-          opacity: 0;
-          transform: scale(0.95) translateY(-8px);
-        }
-        to {
-          opacity: 1;
-          transform: scale(1) translateY(0);
-        }
-      }
-
-      /* Dropdown items */
-      .item {
-        border-radius: 12px !important;
-        margin: 0.3rem 0 !important;
-        padding: 0.8rem 1rem !important;
-        transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-        color: var(--text-primary, #1a2433) !important;
-
-        /* Icon in dropdown items */
-        i.icon {
-          opacity: 0.85 !important;
-          margin-right: 0.75rem !important;
-          transition: all 0.2s ease !important;
-          color: #4285f4 !important;
-        }
-
-        &:hover {
-          background: rgba(66, 133, 244, 0.08) !important;
-          transform: translateX(4px);
-
-          i.icon {
-            opacity: 1 !important;
-            transform: scale(1.1);
-          }
-        }
-      }
-    }
   }
 `;

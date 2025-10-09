@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery, useLazyQuery, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 import _ from "lodash";
@@ -127,6 +127,11 @@ export const useAnalysisManager = () => {
   // Access initial annotations and relations
   const { initialAnnotations, initialRelations } = useInitialAnnotations();
 
+  // Navigation throttling: prevent rapid-fire navigate() calls that trigger browser rate limiting
+  // Track last navigation timestamp to enforce minimum 100ms between calls
+  const lastNavigationTimestamp = useRef<number>(0);
+  const NAVIGATION_THROTTLE_MS = 100;
+
   /**
    * Resets the analysis, data cell, and column states.
    */
@@ -242,6 +247,10 @@ export const useAnalysisManager = () => {
     extracts,
     analysis_ids_from_reactive_var,
     extract_ids_from_reactive_var,
+    selected_analysis,
+    selected_extract,
+    setSelectedAnalysis,
+    setSelectedExtract,
   ]);
 
   // Fetch analyses and extracts only when we have a valid document
@@ -450,6 +459,16 @@ export const useAnalysisManager = () => {
    */
   const onSelectAnalysis = useCallback(
     (analysis: AnalysisType | null) => {
+      // Throttle navigation to prevent browser rate limiting in mobile view
+      const now = Date.now();
+      if (now - lastNavigationTimestamp.current < NAVIGATION_THROTTLE_MS) {
+        console.warn(
+          "[AnalysisHooks] Throttling onSelectAnalysis - too many navigation calls"
+        );
+        return;
+      }
+      lastNavigationTimestamp.current = now;
+
       // DON'T set Jotai atoms directly - let sync effect handle it!
       // setSelectedAnalysis(analysis);  ❌ VIOLATION - breaks deep linking
       // setSelectedExtract(null);        ❌ VIOLATION - breaks deep linking
@@ -495,6 +514,16 @@ export const useAnalysisManager = () => {
    */
   const onSelectExtract = useCallback(
     (extract: ExtractType | null) => {
+      // Throttle navigation to prevent browser rate limiting in mobile view
+      const now = Date.now();
+      if (now - lastNavigationTimestamp.current < NAVIGATION_THROTTLE_MS) {
+        console.warn(
+          "[AnalysisHooks] Throttling onSelectExtract - too many navigation calls"
+        );
+        return;
+      }
+      lastNavigationTimestamp.current = now;
+
       // DON'T set Jotai atoms directly - let sync effect handle it!
       // setSelectedExtract(extract);   ❌ VIOLATION - breaks deep linking
       // setSelectedAnalysis(null);     ❌ VIOLATION - breaks deep linking

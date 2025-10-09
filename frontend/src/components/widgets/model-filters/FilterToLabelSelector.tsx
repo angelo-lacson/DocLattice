@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
-import { Header, Menu, Label, DropdownItemProps } from "semantic-ui-react";
-import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
+import { Label } from "semantic-ui-react";
+import Select, { SelectOption } from "../../common/Select";
+import { SingleValue, MultiValue } from "react-select";
 
 import _ from "lodash";
 
@@ -114,21 +115,15 @@ export const FilterToLabelSelector = ({
     : [];
   // console.log("Labels", labels);
 
-  let label_options: DropdownItemProps[] = [];
+  let label_options: SelectOption[] = [];
   if (labels) {
     label_options = labels
       .filter((item): item is AnnotationLabelType => !!item)
       .map((label) => ({
-        key: label.id,
-        text: label.text,
         value: label.id,
-        content: (
-          <Header
-            icon={label.icon}
-            content={label.text}
-            subheader={label.description}
-          />
-        ),
+        label: label.text || "",
+        ...(label.icon && { icon: label.icon }),
+        ...(label.description && { subheader: label.description }),
       }));
   }
 
@@ -161,31 +156,29 @@ export const FilterToLabelSelector = ({
         Filter by Label
       </Label>
       <div style={{ position: "relative", zIndex: 10 }}>
-        <DropdownNoStrictMode
-          fluid
-          selection
-          clearable
-          search
-          upward={false}
-          selectOnBlur={false}
-          selectOnNavigation={true}
-          loading={annotation_labels_loading}
+        <Select
+          isClearable
+          isSearchable
+          isLoading={annotation_labels_loading}
           options={label_options}
-          onChange={(e: any, { value }: { value: any }) => {
-            // console.log("Set filter label id", value);
-            filterToLabelId(String(value));
+          onChange={(
+            selectedOption: SingleValue<SelectOption> | MultiValue<SelectOption>
+          ) => {
+            // console.log("Set filter label id", selectedOption);
+            // This is a single select, so we know it's SingleValue
+            const singleValue = selectedOption as SingleValue<SelectOption>;
+            filterToLabelId(
+              singleValue && !Array.isArray(singleValue)
+                ? String(singleValue.value)
+                : ""
+            );
           }}
           placeholder="Select a label to filter..."
-          value={filtered_to_label_id ? filtered_to_label_id : ""}
-          style={{
-            margin: "0",
-            minWidth: "260px",
-            fontSize: "0.875rem",
-            background: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-          }}
+          value={
+            filtered_to_label_id
+              ? label_options.find((opt) => opt.value === filtered_to_label_id)
+              : null
+          }
         />
       </div>
     </div>

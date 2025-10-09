@@ -142,6 +142,10 @@ export function CentralRouteManager() {
 
     // Browse routes - no entity fetch needed
     if (route.type === "browse" || route.type === "unknown") {
+      console.log("[RouteManager] 🧹 Clearing entity state for browse route", {
+        routeType: route.type,
+        currentPath,
+      });
       openedCorpus(null);
       openedDocument(null);
       openedExtract(null);

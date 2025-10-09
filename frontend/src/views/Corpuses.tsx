@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Button, Tab, Menu } from "semantic-ui-react";
+import { Tab, Menu } from "semantic-ui-react";
 import _ from "lodash";
 import { toast } from "react-toastify";
 import {
@@ -711,88 +711,85 @@ const CorpusViewContainer = styled.div`
 const NavigationSidebar = styled(motion.div)<{ isExpanded: boolean }>`
   position: relative;
   width: ${(props) => (props.isExpanded ? "280px" : "72px")};
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.98) 0%,
-    rgba(249, 250, 251, 0.95) 100%
-  );
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 50%, #f8f9fa 100%);
   backdrop-filter: blur(10px);
-  border-right: 1px solid rgba(226, 232, 240, 0.8);
+  border-right: 1px solid #e2e8f0;
   box-shadow: ${(props) =>
     props.isExpanded
-      ? "4px 0 24px rgba(0, 0, 0, 0.04), 1px 0 0 rgba(226, 232, 240, 0.5)"
-      : "2px 0 8px rgba(0, 0, 0, 0.02), 1px 0 0 rgba(226, 232, 240, 0.5)"};
+      ? "2px 0 8px rgba(0, 0, 0, 0.06)"
+      : "2px 0 4px rgba(0, 0, 0, 0.04)"};
   z-index: 100;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
 
-  /* Subtle gradient overlay for depth */
-  &::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 120px;
-    background: linear-gradient(
-      180deg,
-      rgba(74, 144, 226, 0.03) 0%,
-      transparent 100%
-    );
-    pointer-events: none;
-    opacity: ${(props) => (props.isExpanded ? 1 : 0.5)};
-    transition: opacity 0.4s ease;
-  }
-
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     position: fixed;
-    left: 0;
-    top: 0;
-    width: ${(props) => (props.isExpanded ? "280px" : "0")};
+    left: 50%;
+    bottom: 0;
+    width: 100%;
+    max-width: 480px;
+    height: ${(props) => (props.isExpanded ? "70vh" : "0")};
+    max-height: 600px;
+    border-right: none;
+    border-top: 1px solid #e2e8f0;
+    border-radius: 24px 24px 0 0;
     box-shadow: ${(props) =>
-      props.isExpanded
-        ? "8px 0 32px rgba(0, 0, 0, 0.12), 2px 0 0 rgba(226, 232, 240, 0.5)"
-        : "none"};
-    transform: translateX(${(props) => (props.isExpanded ? "0" : "-100%")});
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      props.isExpanded ? "0 -8px 32px rgba(0, 0, 0, 0.12)" : "none"};
+    transform: translate(-50%, ${(props) => (props.isExpanded ? "0" : "100%")});
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 200;
+    background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  }
+`;
+
+// Drag handle for bottom sheet
+const BottomSheetHandle = styled.div`
+  display: none;
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    display: flex;
+    justify-content: center;
+    padding: 0.75rem 0;
+    cursor: grab;
+
+    &::after {
+      content: "";
+      width: 40px;
+      height: 4px;
+      background: #cbd5e1;
+      border-radius: 2px;
+      transition: background 0.2s ease;
+    }
+
+    &:active {
+      cursor: grabbing;
+
+      &::after {
+        background: #94a3b8;
+      }
+    }
   }
 `;
 
 const NavigationHeader = styled.div<{ isExpanded: boolean }>`
   padding: 1.5rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(249, 250, 251, 0.3) 100%
-  );
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
   display: flex;
   align-items: center;
   justify-content: ${(props) =>
     props.isExpanded ? "space-between" : "center"};
   min-height: 72px;
   position: relative;
-  z-index: 1;
+  gap: 0.75rem;
 
-  /* Add subtle shine effect */
-  &::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.5) 50%,
-      transparent 100%
-    );
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    padding: 0 1.5rem 1rem;
+    min-height: auto;
   }
 `;
 
@@ -875,6 +872,10 @@ const NavigationItems = styled.div`
   overflow-x: hidden;
   position: relative;
 
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    padding: 0.5rem 0 2rem;
+  }
+
   /* Fade effect at top and bottom */
   &::before,
   &::after {
@@ -954,6 +955,30 @@ const NavigationItems = styled.div`
   /* Firefox scrollbar support */
   scrollbar-width: thin;
   scrollbar-color: rgba(203, 213, 225, 0.8) transparent;
+`;
+
+// Badge for count display on navigation items
+const NavItemBadge = styled.span<{ isActive: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  margin-left: auto;
+  background: ${(props) =>
+    props.isActive
+      ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
+      : "#e2e8f0"};
+  color: ${(props) => (props.isActive ? "white" : "#64748b")};
+  transition: all 0.2s ease;
+  box-shadow: ${(props) =>
+    props.isActive
+      ? "0 2px 4px rgba(74, 144, 226, 0.3)"
+      : "0 1px 2px rgba(0, 0, 0, 0.05)"};
 `;
 
 const NavigationItem = styled(motion.button)<{
@@ -1130,14 +1155,11 @@ const MobileMenuBackdrop = styled(motion.div)`
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(0, 0, 0, 0.5) 0%,
-    rgba(15, 23, 42, 0.4) 100%
-  );
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
   z-index: 190;
   display: none;
+  -webkit-tap-highlight-color: transparent;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: block;
@@ -1152,174 +1174,87 @@ const SearchBarWithNav = styled.div`
   width: 100%;
 `;
 
-const MobileNavGroup = styled.div`
+// Mobile back button - clean and simple
+const MobileBackButton = styled.button`
   display: none;
-  gap: 0;
-  align-items: center;
-  background: linear-gradient(
-    135deg,
-    rgba(74, 144, 226, 0.03) 0%,
-    rgba(74, 144, 226, 0.08) 50%,
-    rgba(99, 102, 241, 0.05) 100%
-  );
-  padding: 0.5rem;
-  border-radius: 14px;
-  box-shadow: 0 4px 6px rgba(74, 144, 226, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(74, 144, 226, 0.25);
-  position: relative;
-  overflow: hidden;
-  min-height: 58px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0.625rem;
+  min-width: auto;
+  width: 44px;
+  height: 44px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #64748b;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
 
-  /* Animated gradient shimmer */
-  &::before {
-    content: "";
-    position: absolute;
-    top: -2px;
-    left: -100%;
-    right: -100%;
-    height: 2px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(74, 144, 226, 0.6) 25%,
-      rgba(99, 102, 241, 0.8) 50%,
-      rgba(74, 144, 226, 0.6) 75%,
-      transparent 100%
-    );
-    animation: shimmer 3s ease-in-out infinite;
-  }
-
-  /* Glow effect on hover */
   &:hover {
-    box-shadow: 0 6px 12px rgba(74, 144, 226, 0.18),
-      0 2px 4px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    border-color: rgba(74, 144, 226, 0.35);
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #475569;
+    transform: translateX(-2px);
   }
 
-  @keyframes shimmer {
-    0% {
-      transform: translateX(-100%);
-    }
-    100% {
-      transform: translateX(200%);
-    }
+  &:active {
+    transform: translateX(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: flex;
+    align-items: center;
+    justify-content: center;
   }
 `;
 
-const MobileNavButton = styled(Button)`
-  &&& {
-    padding: 0.625rem 0.875rem;
-    min-width: auto;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.9) 0%,
-      rgba(255, 255, 255, 0.6) 100%
-    );
-    border: none;
-    border-radius: 10px;
-    color: #4a90e2;
+// Mobile menu button - prominent and clean
+const MobileMenuButton = styled.button`
+  display: none;
+  padding: 0.625rem;
+  min-width: auto;
+  width: 44px;
+  height: 44px;
+  background: #4a90e2;
+  border: none;
+  border-radius: 12px;
+  color: white;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(74, 144, 226, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+  cursor: pointer;
+
+  &:hover {
+    background: #357abd;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(74, 144, 226, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(74, 144, 226, 0.3);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.2s ease;
+    margin: 0 !important;
+  }
+
+  &:hover svg {
+    transform: scale(1.1);
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    height: 42px;
-    font-weight: 500;
-    overflow: hidden;
-
-    /* Subtle inner shadow for depth */
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.05), 0 2px 4px rgba(74, 144, 226, 0.1);
-
-    /* Divider between buttons with glow */
-    &:not(:last-child)::after {
-      content: "";
-      position: absolute;
-      right: -1px;
-      top: 15%;
-      height: 70%;
-      width: 1px;
-      background: linear-gradient(
-        to bottom,
-        transparent,
-        rgba(74, 144, 226, 0.2) 30%,
-        rgba(99, 102, 241, 0.3) 50%,
-        rgba(74, 144, 226, 0.2) 70%,
-        transparent
-      );
-    }
-
-    /* Ripple effect base */
-    &::before {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 0;
-      height: 0;
-      border-radius: 50%;
-      background: radial-gradient(
-        circle,
-        rgba(74, 144, 226, 0.4) 0%,
-        transparent 70%
-      );
-      transform: translate(-50%, -50%);
-      transition: width 0.4s, height 0.4s;
-    }
-
-    &:hover {
-      background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 1) 0%,
-        rgba(237, 245, 255, 1) 100%
-      );
-      color: #3a7bc8;
-      transform: translateY(-1px) scale(1.02);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.03), 0 4px 8px rgba(74, 144, 226, 0.2);
-
-      /* Ripple on hover */
-      &::before {
-        width: 100px;
-        height: 100px;
-      }
-
-      svg {
-        transform: rotate(-5deg) scale(1.15);
-        filter: drop-shadow(0 2px 4px rgba(74, 144, 226, 0.3));
-      }
-    }
-
-    &:active {
-      background: linear-gradient(
-        135deg,
-        rgba(237, 245, 255, 1) 0%,
-        rgba(225, 239, 255, 1) 100%
-      );
-      transform: translateY(0) scale(0.98);
-      box-shadow: inset 0 2px 4px rgba(74, 144, 226, 0.2),
-        0 1px 2px rgba(74, 144, 226, 0.1);
-
-      svg {
-        transform: rotate(0) scale(0.95);
-      }
-    }
-
-    svg {
-      width: 20px;
-      height: 20px;
-      margin: 0 !important;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 1;
-      position: relative;
-    }
   }
 `;
 
@@ -2092,29 +2027,49 @@ export const Corpuses = () => {
           }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
         >
+          <BottomSheetHandle
+            onClick={() => use_mobile_layout && setMobileSidebarOpen(false)}
+          />
           <NavigationHeader
             isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
           >
             {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-              <motion.h3
+              <motion.div
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
                 style={{
-                  margin: 0,
-                  fontSize: "1.125rem",
-                  fontWeight: 600,
-                  background:
-                    "linear-gradient(135deg, #4a90e2 0%, #6366f1 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  letterSpacing: "-0.025em",
-                  display: "inline-block",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.25rem",
+                  flex: 1,
                 }}
               >
-                Navigation
-              </motion.h3>
+                <div
+                  style={{
+                    fontSize: "0.6875rem",
+                    fontWeight: 500,
+                    color: "#94a3b8",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {opened_corpus ? "Corpus" : "Navigation"}
+                </div>
+                <div
+                  style={{
+                    fontSize: "1rem",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    letterSpacing: "-0.015em",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {opened_corpus ? opened_corpus.title : "Menu"}
+                </div>
+              </motion.div>
             )}
             {!use_mobile_layout && (
               <NavigationToggle
@@ -2166,51 +2121,10 @@ export const Corpuses = () => {
                     <span style={{ flex: "1", textAlign: "left" }}>
                       {item.label}
                     </span>
-                    {item.badge !== undefined && (
-                      <motion.span
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 15,
-                          delay: 0.1,
-                        }}
-                        style={{
-                          fontSize: "0.8rem",
-                          fontWeight: 700,
-                          padding: "2px 8px",
-                          borderRadius: "12px",
-                          background:
-                            item.badge > 0
-                              ? active_tab === index
-                                ? "linear-gradient(135deg, rgba(74, 144, 226, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%)"
-                                : "linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(203, 213, 225, 0.1) 100%)"
-                              : "transparent",
-                          border:
-                            item.badge > 0
-                              ? `1px solid ${
-                                  active_tab === index
-                                    ? "rgba(74, 144, 226, 0.2)"
-                                    : "rgba(203, 213, 225, 0.3)"
-                                }`
-                              : "1px solid transparent",
-                          color:
-                            item.badge > 0
-                              ? active_tab === index
-                                ? "#4a90e2"
-                                : "#64748b"
-                              : "#94a3b8",
-                          minWidth: "32px",
-                          textAlign: "center",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <NavItemBadge isActive={active_tab === index}>
                         {item.badge}
-                      </motion.span>
+                      </NavItemBadge>
                     )}
                   </>
                 )}
@@ -2391,24 +2305,14 @@ export const Corpuses = () => {
           />
         ) : currentView?.id === "home" || currentView?.id === "documents" ? (
           <SearchBarWithNav>
-            <MobileNavGroup>
-              <MobileNavButton
-                onClick={() => {
-                  navigate("/corpuses"); // CentralRouteManager will clear openedCorpus
-                }}
-                title="Back to Corpuses"
-                icon
-              >
-                <ArrowLeft />
-              </MobileNavButton>
-              <MobileNavButton
-                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-                title="Open Menu"
-                icon
-              >
-                <LucideMenu />
-              </MobileNavButton>
-            </MobileNavGroup>
+            <MobileBackButton
+              onClick={() => {
+                navigate("/corpuses"); // CentralRouteManager will clear openedCorpus
+              }}
+              title="Back to Corpuses"
+            >
+              <ArrowLeft />
+            </MobileBackButton>
             <SearchBarContainer>
               <CreateAndSearchBar
                 onChange={handleDocumentSearchChange}
@@ -2436,6 +2340,12 @@ export const Corpuses = () => {
                 }
               />
             </SearchBarContainer>
+            <MobileMenuButton
+              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+              title="Open Menu"
+            >
+              <LucideMenu />
+            </MobileMenuButton>
           </SearchBarWithNav>
         ) : currentView?.id === "annotations" ? (
           <CreateAndSearchBar
@@ -2464,24 +2374,14 @@ export const Corpuses = () => {
           />
         ) : currentView?.id === "analyses" || currentView?.id === "extracts" ? (
           <SearchBarWithNav>
-            <MobileNavGroup>
-              <MobileNavButton
-                onClick={() => {
-                  navigate("/corpuses"); // CentralRouteManager will clear openedCorpus
-                }}
-                title="Back to Corpuses"
-                icon
-              >
-                <ArrowLeft />
-              </MobileNavButton>
-              <MobileNavButton
-                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-                title="Open Menu"
-                icon
-              >
-                <LucideMenu />
-              </MobileNavButton>
-            </MobileNavGroup>
+            <MobileBackButton
+              onClick={() => {
+                navigate("/corpuses"); // CentralRouteManager will clear openedCorpus
+              }}
+              title="Back to Corpuses"
+            >
+              <ArrowLeft />
+            </MobileBackButton>
             <SearchBarContainer>
               <CreateAndSearchBar
                 onChange={handleAnalysisSearchChange}
@@ -2496,6 +2396,12 @@ export const Corpuses = () => {
                 }
               />
             </SearchBarContainer>
+            <MobileMenuButton
+              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+              title="Open Menu"
+            >
+              <LucideMenu />
+            </MobileMenuButton>
           </SearchBarWithNav>
         ) : (
           // Default search bar for any other views (like settings)

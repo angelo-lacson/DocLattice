@@ -1,9 +1,10 @@
-import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { Card } from "semantic-ui-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 import _ from "lodash";
 
 import { AnalysisItem } from "./AnalysisItem";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { AnalysisType, CorpusType, PageInfo } from "../../types/graphql-api";
@@ -128,27 +129,24 @@ export const AnalysesCards = ({
   };
 
   return (
-    <>
-      <Dimmer active={loading}>
-        <Loader content={loading_message} />
-      </Dimmer>
-      <div
-        className="AnalysisCards"
-        style={{
-          width: "100%",
-          height: "100%",
-          overflowY: "scroll",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          ...style,
-        }}
-      >
-        <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
-          {analysis_items}
-        </Card.Group>
-        <FetchMoreOnVisible fetchNextPage={handleUpdate} />
-      </div>
-    </>
+    <div
+      className="AnalysisCards"
+      style={{
+        width: "100%",
+        height: "100%",
+        overflowY: "scroll",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        position: "relative",
+        ...style,
+      }}
+    >
+      <LoadingOverlay active={loading} content={loading_message} />
+      <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
+        {analysis_items}
+      </Card.Group>
+      <FetchMoreOnVisible fetchNextPage={handleUpdate} />
+    </div>
   );
 };
