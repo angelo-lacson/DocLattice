@@ -173,22 +173,6 @@ export const useAnalysisManager = () => {
         .map((row) => row.analysis)
         .filter((a): a is AnalysisType => a !== null && a !== undefined);
       setAnalyses(fetchedAnalyses);
-
-      console.log(
-        "[AnalysisHooks] ✅ Loaded analyses and extracts:",
-        fetchedAnalyses.length,
-        "analyses,",
-        extracts.length,
-        "extracts"
-      );
-      console.log(
-        "[AnalysisHooks] Analysis IDs:",
-        fetchedAnalyses.map((a) => a.id)
-      );
-      console.log(
-        "[AnalysisHooks] Extract IDs:",
-        extracts.map((e) => e.id)
-      );
     }
   }, [analysesData]);
 
@@ -209,10 +193,6 @@ export const useAnalysisManager = () => {
       if (!selected_analysis || selected_analysis.id !== analysisId) {
         const matchingAnalysis = analyses.find((a) => a.id === analysisId);
         if (matchingAnalysis) {
-          console.log(
-            "[AnalysisHooks] ✅ Setting analysis:",
-            matchingAnalysis.id
-          );
           setSelectedAnalysis(matchingAnalysis);
         } else {
           console.warn("[AnalysisHooks] ❌ Analysis not found:", analysisId);
@@ -229,10 +209,6 @@ export const useAnalysisManager = () => {
       if (!selected_extract || selected_extract.id !== extractId) {
         const matchingExtract = extracts.find((e) => e.id === extractId);
         if (matchingExtract) {
-          console.log(
-            "[AnalysisHooks] ✅ Setting extract:",
-            matchingExtract.id
-          );
           setSelectedExtract(matchingExtract);
         } else {
           console.warn("[AnalysisHooks] ❌ Extract not found:", extractId);
@@ -255,7 +231,6 @@ export const useAnalysisManager = () => {
 
   // Fetch analyses and extracts only when we have a valid document
   useEffect(() => {
-    console.log("selectedDocument", selectedDocument);
     if (selectedDocument?.id) {
       fetchDocumentAnalysesAndExtracts();
     }
@@ -329,8 +304,6 @@ export const useAnalysisManager = () => {
       replaceDocTypeAnnotations([]);
       setDataCells([]);
 
-      console.log("Annotations data retrieved!", annotationsData);
-
       // Process span annotations
       const rawSpanAnnotations =
         annotationsData.analysis.fullAnnotationList.filter(
@@ -379,10 +352,6 @@ export const useAnalysisManager = () => {
   // Fetch data cells for the selected extract.
   useEffect(() => {
     if (selected_extract) {
-      console.log(
-        "selected_extract changed in AnalysisHooks",
-        selected_extract
-      );
       setAllowUserInput(false);
       setSelectedAnalysis(null);
 

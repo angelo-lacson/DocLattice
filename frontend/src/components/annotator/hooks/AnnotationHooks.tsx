@@ -237,11 +237,6 @@ export function useCreateAnnotation() {
   const selectedDocument = useAtomValue(selectedDocumentAtom);
   const { selectedCorpus } = useCorpusState();
 
-  console.log("[useCreateAnnotation] Hook initialized", {
-    selectedDocumentId: selectedDocument?.id,
-    selectedCorpusId: selectedCorpus?.id,
-  });
-
   const [createAnnotation] = useMutation<
     NewAnnotationOutputType,
     NewAnnotationInputType
