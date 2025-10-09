@@ -10,7 +10,7 @@
  * Components consume state via reactive vars and never touch URLs directly.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { unstable_batchedUpdates } from "react-dom";
 import { useLazyQuery } from "@apollo/client";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -63,14 +63,18 @@ import {
 } from "../utils/navigationUtils";
 import { getIdentifierType, isValidGraphQLId } from "../utils/idValidation";
 import { performanceMonitor } from "../utils/performance";
+import { navigationCircuitBreaker } from "../utils/navigationCircuitBreaker";
+import { routingLogger } from "../utils/routingLogger";
 
 /**
  * CentralRouteManager Component
  * Mounted once in App.tsx, manages all routing state globally
+ *
+ * Debug mode: Enable verbose logging with window.DEBUG_ROUTING = true
  */
 export function CentralRouteManager() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const baseNavigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   // Track last processed route to prevent duplicate work
@@ -78,6 +82,36 @@ export function CentralRouteManager() {
 
   // Track if Phase 2 has run at least once (prevents Phase 4 from overwriting URL on mount)
   const hasInitializedFromUrl = useRef<boolean>(false);
+
+  // Wrapped navigate with circuit breaker and detailed logging
+  const navigate = useCallback(
+    (to: string | { search: string }, options?: { replace?: boolean }) => {
+      const targetUrl =
+        typeof to === "string" ? to : location.pathname + to.search;
+      const source = "CentralRouteManager";
+
+      routingLogger.debug(`🧭 [${source}] navigate() called:`, {
+        to,
+        options,
+        targetUrl,
+        currentUrl: location.pathname + location.search,
+        timestamp: new Date().toISOString(),
+        stack: new Error().stack?.split("\n").slice(2, 5).join("\n"),
+      });
+
+      // Check circuit breaker
+      if (!navigationCircuitBreaker.recordNavigation(targetUrl, source)) {
+        console.error(`❌ [${source}] Navigation BLOCKED by circuit breaker!`, {
+          targetUrl,
+        });
+        return;
+      }
+
+      // Execute navigation
+      baseNavigate(to, options);
+    },
+    [baseNavigate, location]
+  );
 
   // ═══════════════════════════════════════════════════════════════
   // GraphQL Queries - Slug-based
@@ -142,10 +176,13 @@ export function CentralRouteManager() {
 
     // Browse routes - no entity fetch needed
     if (route.type === "browse" || route.type === "unknown") {
-      console.log("[RouteManager] 🧹 Clearing entity state for browse route", {
-        routeType: route.type,
-        currentPath,
-      });
+      routingLogger.debug(
+        "[RouteManager] 🧹 Clearing entity state for browse route",
+        {
+          routeType: route.type,
+          currentPath,
+        }
+      );
       openedCorpus(null);
       openedDocument(null);
       openedExtract(null);
@@ -158,7 +195,7 @@ export function CentralRouteManager() {
     // CRITICAL: Wait for auth to initialize before fetching protected entities
     // This prevents 401/403 errors on deep links and page refreshes
     if (authStatus === "LOADING") {
-      console.log(
+      routingLogger.debug(
         "[RouteManager] ⏳ Waiting for auth to initialize before resolving entity..."
       );
       routeLoading(true);
@@ -168,7 +205,7 @@ export function CentralRouteManager() {
 
     // Skip if we've already processed this exact path (after auth is ready)
     if (lastProcessedPath.current === currentPath) {
-      console.log(
+      routingLogger.debug(
         "[RouteManager] Skipping duplicate path processing:",
         currentPath
       );
@@ -192,7 +229,7 @@ export function CentralRouteManager() {
         (route.type === "corpus" && currentCorpus) ||
         (route.type === "extract" && currentExtract);
 
-      console.log("[RouteManager] Phase 1 - Entity check:", {
+      routingLogger.debug("[RouteManager] Phase 1 - Entity check:", {
         routeType: route.type,
         hasEntitiesForRoute,
         lastProcessedPath: lastProcessedPath.current,
@@ -200,10 +237,12 @@ export function CentralRouteManager() {
       });
 
       if (!hasEntitiesForRoute) {
-        console.log("[RouteManager] Setting loading=true for new entity fetch");
+        routingLogger.debug(
+          "[RouteManager] Setting loading=true for new entity fetch"
+        );
         routeLoading(true);
       } else {
-        console.log(
+        routingLogger.debug(
           "[RouteManager] Entities already loaded, skipping loading state"
         );
       }
@@ -221,7 +260,10 @@ export function CentralRouteManager() {
 
       // Prevent duplicate simultaneous requests
       if (requestTracker.isPending(requestKey)) {
-        console.log("[RouteManager] Request already pending:", requestKey);
+        routingLogger.debug(
+          "[RouteManager] Request already pending:",
+          requestKey
+        );
         return;
       }
 
@@ -238,7 +280,7 @@ export function CentralRouteManager() {
             route.corpusIdent &&
             route.documentIdent
           ) {
-            console.log("[RouteManager] Resolving document in corpus");
+            routingLogger.debug("[RouteManager] Resolving document in corpus");
 
             // Try slug-based resolution first
             const { data, error } = await resolveDocumentInCorpus({
@@ -280,7 +322,7 @@ export function CentralRouteManager() {
               const document =
                 data.documentInCorpusBySlugs as any as DocumentType;
 
-              console.log("[RouteManager] ✅ Resolved via slugs:", {
+              routingLogger.debug("[RouteManager] ✅ Resolved via slugs:", {
                 corpus: corpus.id,
                 document: document.id,
               });
@@ -297,7 +339,7 @@ export function CentralRouteManager() {
               docType === "id" ||
               (docType === "unknown" && isValidGraphQLId(route.documentIdent))
             ) {
-              console.log(
+              routingLogger.debug(
                 "[RouteManager] Trying ID-based fallback for document"
               );
               const { data: idData } = await resolveDocumentById({
@@ -333,10 +375,10 @@ export function CentralRouteManager() {
             !route.corpusIdent &&
             route.documentIdent
           ) {
-            console.log("[RouteManager] Resolving standalone document");
+            routingLogger.debug("[RouteManager] Resolving standalone document");
 
             // Try slug-based resolution
-            console.log(
+            routingLogger.debug(
               "[GraphQL] 🔵 CentralRouteManager: Calling RESOLVE_DOCUMENT_BY_SLUGS_FULL",
               {
                 userSlug: route.userIdent!,
@@ -349,7 +391,7 @@ export function CentralRouteManager() {
                 documentSlug: route.documentIdent,
               },
             });
-            console.log(
+            routingLogger.debug(
               "[GraphQL] ✅ CentralRouteManager: RESOLVE_DOCUMENT_BY_SLUGS_FULL completed",
               {
                 hasData: !!data?.documentBySlugs,
@@ -375,7 +417,7 @@ export function CentralRouteManager() {
             if (!error && data?.documentBySlugs) {
               const document = data.documentBySlugs as any as DocumentType;
 
-              console.log(
+              routingLogger.debug(
                 "[RouteManager] ✅ Resolved document via slugs:",
                 document.id
               );
@@ -392,7 +434,7 @@ export function CentralRouteManager() {
               docType === "id" ||
               (docType === "unknown" && isValidGraphQLId(route.documentIdent))
             ) {
-              console.log(
+              routingLogger.debug(
                 "[RouteManager] Trying ID-based fallback for document"
               );
               const { data: idData } = await resolveDocumentById({
@@ -417,7 +459,7 @@ export function CentralRouteManager() {
           // CORPUS (/c/user/corpus)
           // ────────────────────────────────────────────────────────
           if (route.type === "corpus" && route.corpusIdent) {
-            console.log("[RouteManager] Resolving corpus");
+            routingLogger.debug("[RouteManager] Resolving corpus");
 
             // Try slug-based resolution
             const { data, error } = await resolveCorpus({
@@ -445,7 +487,7 @@ export function CentralRouteManager() {
             if (!error && data?.corpusBySlugs) {
               const corpus = data.corpusBySlugs as any as CorpusType;
 
-              console.log(
+              routingLogger.debug(
                 "[RouteManager] ✅ Resolved corpus via slugs:",
                 corpus.id
               );
@@ -462,7 +504,9 @@ export function CentralRouteManager() {
               corpusType === "id" ||
               (corpusType === "unknown" && isValidGraphQLId(route.corpusIdent))
             ) {
-              console.log("[RouteManager] Trying ID-based fallback for corpus");
+              routingLogger.debug(
+                "[RouteManager] Trying ID-based fallback for corpus"
+              );
               const { data: idData } = await resolveCorpusById({
                 variables: { id: route.corpusIdent },
               });
@@ -490,7 +534,7 @@ export function CentralRouteManager() {
           // EXTRACT (/e/user/extract-id)
           // ────────────────────────────────────────────────────────
           if (route.type === "extract" && route.extractIdent) {
-            console.log("[RouteManager] Resolving extract");
+            routingLogger.debug("[RouteManager] Resolving extract");
 
             // Extracts don't have slugs yet, so we use ID-based resolution
             const { data, error } = await resolveExtract({
@@ -516,7 +560,7 @@ export function CentralRouteManager() {
             if (!error && data?.extract) {
               const extract = data.extract as any as ExtractType;
 
-              console.log(
+              routingLogger.debug(
                 "[RouteManager] ✅ Resolved extract via ID:",
                 extract.id
               );
@@ -554,7 +598,7 @@ export function CentralRouteManager() {
   // PHASE 2: URL Query Params → Reactive Vars
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
-    console.log("🔍 Phase 2 RAW URL CHECK:", {
+    routingLogger.debug("🔍 Phase 2 RAW URL CHECK:", {
       "location.search": location.search,
       "window.location.search": window.location.search,
       "window.location.href": window.location.href,
@@ -571,7 +615,7 @@ export function CentralRouteManager() {
     const boundingBoxes = searchParams.get("boundingBoxes") === "true";
     const labelsParam = searchParams.get("labels");
 
-    console.log("[RouteManager] Phase 2: Setting query param state:", {
+    routingLogger.debug("[RouteManager] Phase 2: Setting query param state:", {
       annIds,
       analysisIds,
       extractIds,
@@ -632,18 +676,20 @@ export function CentralRouteManager() {
     // Execute all reactive var updates in a single batched operation
     // This ensures components subscribed via useReactiveVar() only re-render once
     if (updates.length > 0) {
-      console.log(
+      routingLogger.debug(
         `[RouteManager] Phase 2: Batching ${updates.length} reactive var updates`
       );
       unstable_batchedUpdates(() => {
         updates.forEach((update) => update());
       });
-      console.log(
+      routingLogger.debug(
         "[RouteManager] Phase 2: Batch complete. Annotation IDs:",
         annIds
       );
     } else {
-      console.log("[RouteManager] Phase 2: No reactive var changes detected");
+      routingLogger.debug(
+        "[RouteManager] Phase 2: No reactive var changes detected"
+      );
     }
 
     // Mark that we've initialized from URL - allows Phase 4 to start syncing
@@ -670,8 +716,34 @@ export function CentralRouteManager() {
     // This prevents race conditions where reactive vars haven't been cleared yet
     const currentRoute = parseRoute(location.pathname);
     if (currentRoute.type === "browse" || currentRoute.type === "unknown") {
-      console.log(
+      routingLogger.debug(
         "[RouteManager] Phase 3: Skipping redirect - on browse route"
+      );
+      return;
+    }
+
+    // CRITICAL: Prevent redirects during route transitions when entities don't match route type
+    // Phase 1 is async - it may not have cleared stale entities yet when Phase 3 runs
+    // Example: Navigating from /d/user/corpus/doc → /c/user/corpus
+    //   - Phase 3 fires immediately when pathname changes (still has old document)
+    //   - Phase 1 fires later (async) and clears openedDocument(null)
+    //   - Without this check, Phase 3 would redirect back to document before Phase 1 clears it
+    if (currentRoute.type === "corpus" && document) {
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Skipping redirect - corpus route but document still set (Phase 1 clearing)",
+        { corpusId: corpus?.id, documentId: document.id }
+      );
+      return;
+    }
+    if (currentRoute.type === "document" && !document) {
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Skipping redirect - document route but document not loaded yet (Phase 1 loading)"
+      );
+      return;
+    }
+    if (currentRoute.type === "extract" && !extract) {
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Skipping redirect - extract route but extract not loaded yet (Phase 1 loading)"
       );
       return;
     }
@@ -686,14 +758,17 @@ export function CentralRouteManager() {
     const canonical = normalize(canonicalPath);
 
     if (currentPath !== canonical) {
-      console.log("[RouteManager] Phase 3: Redirecting to canonical path:", {
-        from: currentPath,
-        to: canonical,
-        preservingSearch: location.search,
-      });
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Redirecting to canonical path:",
+        {
+          from: currentPath,
+          to: canonical,
+          preservingSearch: location.search,
+        }
+      );
       navigate(canonicalPath + location.search, { replace: true });
     } else {
-      console.log(
+      routingLogger.debug(
         "[RouteManager] Phase 3: Path already canonical, no redirect"
       );
     }
@@ -718,7 +793,7 @@ export function CentralRouteManager() {
     // CRITICAL: Don't sync on initial mount - wait for Phase 2 to read URL first
     // This prevents overwriting deep link params with default reactive var values
     if (!hasInitializedFromUrl.current) {
-      console.log(
+      routingLogger.debug(
         "[RouteManager] Phase 4 SKIPPED - waiting for Phase 2 initialization"
       );
       return;
@@ -727,7 +802,7 @@ export function CentralRouteManager() {
     // CRITICAL: Don't sync while route is loading!
     // Prevents race condition where Phase 4 reads stale reactive vars before Phase 2 updates them
     if (routeLoading()) {
-      console.log(
+      routingLogger.debug(
         "[RouteManager] Phase 4 SKIPPED - route still loading, preventing race condition"
       );
       return;
@@ -745,7 +820,7 @@ export function CentralRouteManager() {
       (urlHasAnalysis && analysisVarEmpty) ||
       (urlHasExtract && extractVarEmpty)
     ) {
-      console.log(
+      routingLogger.debug(
         "[RouteManager] Phase 4 SKIPPED - URL has params but reactive vars don't match (analyses/extracts still loading or cleared)",
         {
           urlHasAnalysis,
@@ -757,15 +832,18 @@ export function CentralRouteManager() {
       return;
     }
 
-    console.log("[RouteManager] Phase 4: Building query from reactive vars:", {
-      annIds,
-      analysisIds,
-      extractIds,
-      structural,
-      selectedOnly,
-      boundingBoxes,
-      labels,
-    });
+    routingLogger.debug(
+      "[RouteManager] Phase 4: Building query from reactive vars:",
+      {
+        annIds,
+        analysisIds,
+        extractIds,
+        structural,
+        selectedOnly,
+        boundingBoxes,
+        labels,
+      }
+    );
 
     const queryString = buildQueryParams({
       annotationIds: annIds,
@@ -781,14 +859,14 @@ export function CentralRouteManager() {
     const expectedSearch = queryString; // Already has "?" from buildQueryParams
     const currentSearch = location.search; // Also has "?"
 
-    console.log("[RouteManager] Phase 4: URL comparison:", {
+    routingLogger.debug("[RouteManager] Phase 4: URL comparison:", {
       current: currentSearch,
       expected: expectedSearch,
       match: currentSearch === expectedSearch,
     });
 
     if (currentSearch !== expectedSearch) {
-      console.log(
+      routingLogger.debug(
         "[RouteManager] Phase 4: Syncing reactive vars → URL:",
         queryString
       );

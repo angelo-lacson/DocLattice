@@ -743,7 +743,10 @@ const SelectionLayer = ({
               e.stopPropagation();
               handleCopyText();
             }}
-            onTouchStart={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              lastMenuInteractionTime.current = Date.now();
+            }}
             data-testid="copy-text-button"
           >
             <Copy size={16} />
@@ -761,7 +764,10 @@ const SelectionLayer = ({
                     e.stopPropagation();
                     handleApplyLabel();
                   }}
-                  onTouchStart={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    lastMenuInteractionTime.current = Date.now();
+                  }}
                   data-testid="apply-label-button"
                 >
                   <Tag size={16} />
@@ -824,7 +830,10 @@ const SelectionLayer = ({
               e.stopPropagation();
               handleCancel();
             }}
-            onTouchStart={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              lastMenuInteractionTime.current = Date.now();
+            }}
             data-testid="cancel-button"
           >
             <X size={16} />
