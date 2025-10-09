@@ -52,7 +52,7 @@ interface SelectionProps {
   scrollIntoView?: boolean;
 }
 
-const RelationshipIndicator = styled.div<{ type: string; color: string }>`
+const RelationshipIndicator = styled.div<{ $type: string; $color: string }>`
   position: absolute;
   left: -24px;
   top: 50%;
@@ -65,7 +65,7 @@ const RelationshipIndicator = styled.div<{ type: string; color: string }>`
   border-radius: 50%;
   background: ${
     (props) =>
-      props.type === "SOURCE"
+      props.$type === "SOURCE"
         ? "rgba(25, 118, 210, 0.95)" // Blue for source
         : "rgba(230, 74, 25, 0.95)" // Orange-red for target
   };
@@ -75,7 +75,7 @@ const RelationshipIndicator = styled.div<{ type: string; color: string }>`
 
   /* Create tooltip */
   &::before {
-    content: "${(props) => props.type}";
+    content: "${(props) => props.$type}";
     position: absolute;
     left: -8px;
     transform: translateX(-100%);
@@ -97,7 +97,7 @@ const RelationshipIndicator = styled.div<{ type: string; color: string }>`
     border-radius: 50%;
     background: white;
     animation: ${(props) =>
-      props.type === "SOURCE"
+      props.$type === "SOURCE"
         ? "sourcePulse 2s infinite"
         : "targetPulse 2s infinite"};
     pointer-events: none;
@@ -288,26 +288,29 @@ export const Selection: React.FC<SelectionProps> = ({
         {showInfo && !hideLabels && (
           <SelectionInfo
             id="SelectionInfo"
-            bounds={bounds}
+            $bounds={bounds}
             className={`selection_${annotation.id}`}
-            border={border}
-            color={color}
-            showBoundingBox={showBoundingBoxes}
-            approved={approved}
-            rejected={rejected}
+            $border={border}
+            $color={color}
+            $showBoundingBox={showBoundingBoxes}
+            $approved={approved}
+            $rejected={rejected}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
             <SelectionInfoContainer id="SelectionInfoContainer">
               {relationship_type && (
-                <RelationshipIndicator type={relationship_type} color={color} />
+                <RelationshipIndicator
+                  $type={relationship_type}
+                  $color={color}
+                />
               )}
               <VerticallyJustifiedEndDiv>
                 <LabelTagContainer
-                  hidden={hidden}
-                  hovered={hovered}
-                  color={color}
-                  display_behavior={showLabels}
+                  $hidden={hidden}
+                  $hovered={hovered}
+                  $color={color}
+                  $display_behavior={showLabels}
                 >
                   <div
                     style={{
