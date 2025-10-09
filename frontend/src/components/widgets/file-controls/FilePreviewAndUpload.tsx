@@ -179,7 +179,9 @@ export const FilePreviewAndUpload = ({
       {isImage ? (
         <>
           <ImagePreview
-            src={displayedFile ? displayedFile : default_image}
+            src={
+              typeof displayedFile === "string" ? displayedFile : default_image
+            }
             alt="Preview"
           />
           {!readOnly && !disabled && (

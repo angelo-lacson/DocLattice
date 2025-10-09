@@ -90,7 +90,7 @@ function CorpusItem({ corpus, selected, onClick }: AddToCorpusModalCorpusItem) {
       onClick={() => onClick(corpus)}
     >
       <Card.Content>
-        <MiniImage src={corpus?.icon} alt="Corpus Icon" />
+        <MiniImage src={corpus?.icon || undefined} alt="Corpus Icon" />
         <Card.Header>{corpus?.title}</Card.Header>
         <Card.Meta>
           <em>Author: </em>
