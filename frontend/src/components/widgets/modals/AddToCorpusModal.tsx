@@ -9,12 +9,19 @@ import {
   Header,
   Icon,
   Card,
-  Image,
   Label,
   List,
   Message,
 } from "semantic-ui-react";
+import styled from "styled-components";
 import _ from "lodash";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  float: right;
+  object-fit: contain;
+`;
 import {
   LinkDocumentsToCorpusInputs,
   LinkDocumentsToCorpusOutputs,
@@ -83,7 +90,7 @@ function CorpusItem({ corpus, selected, onClick }: AddToCorpusModalCorpusItem) {
       onClick={() => onClick(corpus)}
     >
       <Card.Content>
-        <Image floated="right" size="mini" src={corpus?.icon} />
+        <MiniImage src={corpus?.icon} alt="Corpus Icon" />
         <Card.Header>{corpus?.title}</Card.Header>
         <Card.Meta>
           <em>Author: </em>

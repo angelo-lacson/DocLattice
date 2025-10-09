@@ -1,7 +1,6 @@
 import React from "react";
 import {
   Card,
-  Image,
   Dimmer,
   Loader,
   Statistic,
@@ -19,64 +18,88 @@ import { PermissionTypes } from "../types";
 import { MyPermissionsIndicator } from "../widgets/permissions/MyPermissionsIndicator";
 import { CorpusType, LabelType } from "../../types/graphql-api";
 
-const StyledCard = styled(Card)`
+const StyledCard = styled(Card)<{ $isSelected?: boolean }>`
   &.ui.card {
     display: flex !important;
     flex-direction: column !important;
-    overflow: visible;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
-    transition: all 0.3s ease;
+    overflow: hidden;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid
+      ${(props) => (props.$isSelected ? "#3b82f6" : "rgba(226, 232, 240, 0.8)")};
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.04),
+      ${(props) =>
+        props.$isSelected
+          ? "0 0 0 3px rgba(59, 130, 246, 0.1)"
+          : "0 0 0 0 transparent"};
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     height: 100%;
     width: 100%;
     margin: 0 !important;
+    cursor: pointer;
 
     &:hover {
-      box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
-      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 12px 24px rgba(0, 0, 0, 0.1),
+        0 0 0 1px rgba(99, 102, 241, 0.1);
+      transform: translateY(-4px) scale(1.01);
+      border-color: rgba(99, 102, 241, 0.3);
+    }
+
+    &:active {
+      transform: translateY(-2px) scale(1.005);
     }
 
     .content {
-      padding: 1.2em;
+      padding: 1.5em;
+      background: transparent;
     }
 
     .header {
-      font-size: 1.2em;
-      font-weight: 600;
-      margin-bottom: 0.5em;
+      font-size: 1.25em;
+      font-weight: 700;
+      margin-bottom: 0.4em;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      color: #0f172a;
+      letter-spacing: -0.02em;
     }
 
     .meta {
-      font-size: 0.9em;
-      color: rgba(0, 0, 0, 0.6);
+      font-size: 0.875em;
+      color: #64748b;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-weight: 500;
     }
 
     .description {
-      margin-top: 1em;
-      font-size: 0.95em;
-      line-height: 1.4;
+      margin-top: 0.875em;
+      font-size: 0.9375em;
+      line-height: 1.6;
       overflow: hidden;
       display: -webkit-box;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       text-overflow: ellipsis;
-      min-height: 3.6em;
-      max-height: 3.6em;
+      color: #475569;
+      min-height: 2.8em;
+      max-height: 2.8em;
     }
 
     .extra {
-      border-top: 1px solid rgba(0, 0, 0, 0.05);
-      background-color: #f8f9fa;
-      padding: 0.8em 1.2em;
+      border-top: 1px solid rgba(226, 232, 240, 0.6);
+      background: linear-gradient(
+        to bottom,
+        rgba(248, 250, 252, 0.5),
+        rgba(241, 245, 249, 0.8)
+      );
+      backdrop-filter: blur(8px);
+      padding: 1em 1.5em;
       margin-top: auto !important;
-      min-height: 80px !important;
+      min-height: 85px !important;
     }
   }
 `;
@@ -93,23 +116,42 @@ const StyledLabel = styled(Label)`
   }
 `;
 
-const StyledImage = styled(Image)`
-  &.ui.image {
-    flex: 0 0 auto !important;
-    height: 160px !important;
-    width: 100% !important;
-    background: linear-gradient(to bottom, #f8f9fa, #f8f9fa 50%, #e9ecef 100%);
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    overflow: hidden !important;
+const StyledImageContainer = styled.div`
+  flex: 0 0 auto;
+  height: 180px;
+  width: 100%;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
 
-    img {
-      max-height: 100% !important;
-      width: auto !important;
-      height: auto !important;
-      object-fit: contain !important;
-    }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      circle at 30% 30%,
+      rgba(99, 102, 241, 0.08) 0%,
+      transparent 60%
+    );
+    pointer-events: none;
+  }
+`;
+
+const StyledImage = styled.img`
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.06));
+  transition: transform 0.3s ease;
+
+  ${StyledCard}:hover & {
+    transform: scale(1.05);
   }
 `;
 
@@ -133,125 +175,183 @@ const StyledCardExtra = styled(Card.Content)`
   }
 `;
 
-const LabelsetCorner = styled.div<{ $hasLabelset: boolean }>`
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 100px;
-  height: 100px;
-  overflow: visible;
-  cursor: pointer;
-  z-index: 5;
-
-  &:before {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 0 100px 100px 0;
-    border-color: transparent
-      ${(props) => (props.$hasLabelset ? "#22c55e" : "#ef4444")} transparent
-      transparent;
-    transition: all 0.3s ease;
-    z-index: 1;
-  }
-
-  &:hover:before {
-    border-width: 0 120px 120px 0;
-  }
-`;
-
-const CornerIcon = styled.div`
+const LabelsetBadge = styled.div<{ $hasLabelset: boolean }>`
   position: absolute;
   top: 12px;
   right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: ${(props) =>
+    props.$hasLabelset
+      ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+      : "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"};
+  border-radius: 20px;
   color: white;
-  z-index: 2;
-  transition: all 0.3s ease;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    animation: ${(props) =>
+      props.$hasLabelset ? "none" : "pulse 2s ease-in-out infinite"};
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
 `;
 
 const LabelsetTooltip = styled.div<{ $visible: boolean }>`
   position: absolute;
-  top: 0;
-  right: 45px;
-  background: white;
-  border-radius: 12px;
-  padding: 1.25rem;
-  min-width: 260px;
+  top: 50px;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  padding: 1.5rem;
+  min-width: 280px;
   width: max-content;
-  max-width: 340px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-width: 360px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.12);
   opacity: ${(props) => (props.$visible ? 1 : 0)};
   visibility: ${(props) => (props.$visible ? "visible" : "hidden")};
   transform: ${(props) =>
-    props.$visible ? "translateY(0)" : "translateY(-10px)"};
-  transition: all 0.2s ease;
+    props.$visible ? "translateY(0) scale(1)" : "translateY(-8px) scale(0.95)"};
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
   pointer-events: ${(props) => (props.$visible ? "auto" : "none")};
 
   @media (max-width: 768px) {
-    right: 40px;
+    right: 12px;
     max-width: 280px;
+    min-width: 240px;
   }
 
-  &:after {
+  &:before {
     content: "";
     position: absolute;
-    right: -8px;
-    top: 20px;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 8px 0 8px 8px;
-    border-color: transparent transparent transparent white;
+    top: -6px;
+    right: 20px;
+    width: 12px;
+    height: 12px;
+    background: inherit;
+    border-top: 1px solid rgba(226, 232, 240, 0.8);
+    border-left: 1px solid rgba(226, 232, 240, 0.8);
+    transform: rotate(45deg);
   }
 `;
 
 const StatsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #f1f5f9;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.6);
 `;
 
 const StatItem = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  color: #64748b;
-  font-size: 0.875rem;
-  padding: 0.25rem 0;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.05) 0%,
+    rgba(139, 92, 246, 0.05) 100%
+  );
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.08) 0%,
+      rgba(139, 92, 246, 0.08) 100%
+    );
+    border-color: rgba(99, 102, 241, 0.2);
+    transform: translateY(-1px);
+  }
 
   svg {
     width: 16px;
     height: 16px;
     stroke-width: 2;
     flex-shrink: 0;
+    color: #6366f1;
   }
 
   span {
     white-space: nowrap;
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
+    color: #475569;
+    font-weight: 500;
+
     .count {
-      font-weight: 600;
+      font-weight: 700;
       color: #0f172a;
       margin-left: 0.25rem;
+      font-size: 0.875rem;
     }
   }
 `;
 
 const HeaderImage = styled.img`
-  width: 24px;
-  height: 24px;
-  margin-right: 8px;
-  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  margin-right: 10px;
+  border-radius: 8px;
   object-fit: contain;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  padding: 4px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+`;
+
+const TooltipHeader = styled.div`
+  margin-bottom: 0.75rem;
+
+  h3 {
+    color: #0f172a !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.25rem !important;
+  }
+
+  .header.content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sub.header {
+    color: #64748b !important;
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+    margin-top: 0.25rem !important;
+    line-height: 1.4 !important;
+  }
 `;
 
 interface CorpusItemProps {
@@ -365,7 +465,7 @@ export const CorpusItem: React.FC<CorpusItemProps> = ({
       <StyledCard
         id={id}
         key={id}
-        style={is_selected ? { backgroundColor: "#e2ffdb" } : {}}
+        $isSelected={is_selected}
         onClick={backendLock ? () => {} : cardClickHandler}
         onContextMenu={(e: React.MouseEvent<HTMLElement>) => {
           e.preventDefault();
@@ -387,40 +487,35 @@ export const CorpusItem: React.FC<CorpusItemProps> = ({
             <Loader>Preparing...</Loader>
           </Dimmer>
         ) : null}
-        <LabelsetCorner
+        <LabelsetBadge
           ref={cornerRef}
           $hasLabelset={Boolean(labelSet)}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >
-          <CornerIcon>
-            <Tags size={24} />
-          </CornerIcon>
+          <Tags size={14} />
+          <span>{labelSet ? "Labeled" : "No Labels"}</span>
           <LabelsetTooltip $visible={showTooltip}>
             {labelSet ? (
               <>
-                <Header as="h3" size="small">
-                  {labelSet.icon ? (
-                    <HeaderImage src={labelSet.icon} alt={labelSet.title} />
-                  ) : (
-                    <Tags
-                      size={24}
-                      style={{ marginRight: 8, color: "#64748b" }}
-                    />
-                  )}
-                  <Header.Content>
-                    {labelSet.title}
-                    <Header.Subheader
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "#64748b",
-                        marginTop: 4,
-                      }}
-                    >
-                      {labelSet.description}
-                    </Header.Subheader>
-                  </Header.Content>
-                </Header>
+                <TooltipHeader>
+                  <Header as="h3" size="small">
+                    {labelSet.icon ? (
+                      <HeaderImage src={labelSet.icon} alt={labelSet.title} />
+                    ) : (
+                      <Tags
+                        size={24}
+                        style={{ marginRight: 8, color: "#6366f1" }}
+                      />
+                    )}
+                    <Header.Content>
+                      {labelSet.title}
+                      <Header.Subheader>
+                        {labelSet.description}
+                      </Header.Subheader>
+                    </Header.Content>
+                  </Header>
+                </TooltipHeader>
                 <StatsGrid>
                   <StatItem>
                     <FileText />
@@ -452,22 +547,50 @@ export const CorpusItem: React.FC<CorpusItemProps> = ({
                 </StatsGrid>
               </>
             ) : (
-              <div style={{ textAlign: "center", color: "#64748b" }}>
+              <div
+                style={{
+                  textAlign: "center",
+                  color: "#64748b",
+                  padding: "0.5rem",
+                }}
+              >
+                <Tags
+                  size={32}
+                  style={{
+                    color: "#ef4444",
+                    margin: "0 auto 0.75rem",
+                    display: "block",
+                  }}
+                />
                 <p
-                  style={{ fontWeight: 600, color: "#ef4444", marginBottom: 8 }}
+                  style={{
+                    fontWeight: 700,
+                    color: "#ef4444",
+                    marginBottom: 8,
+                    fontSize: "0.9375rem",
+                  }}
                 >
                   No Labelset Selected
                 </p>
-                <small>Right click to edit and select a labelset</small>
+                <small
+                  style={{
+                    color: "#64748b",
+                    fontSize: "0.8125rem",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Right click to edit and select a labelset
+                </small>
               </div>
             )}
           </LabelsetTooltip>
-        </LabelsetCorner>
-        <StyledImage
-          src={icon ? icon : default_corpus_icon}
-          wrapped
-          ui={false}
-        />
+        </LabelsetBadge>
+        <StyledImageContainer>
+          <StyledImage
+            src={icon ? icon : default_corpus_icon}
+            alt={title || "Corpus"}
+          />
+        </StyledImageContainer>
         <StyledCardContent>
           <Card.Header>{title}</Card.Header>
           <Card.Meta>{item.creator?.email || "Unknown"}</Card.Meta>

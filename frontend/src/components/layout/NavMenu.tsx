@@ -1,5 +1,6 @@
-import { Menu, Image, Icon, Label } from "semantic-ui-react";
+import { Menu, Icon, Label } from "semantic-ui-react";
 import { Link } from "react-router-dom";
+import styled from "styled-components";
 import Dropdown from "../common/Dropdown";
 
 import logo from "../../assets/images/os_legal_128.png";
@@ -9,6 +10,22 @@ import UserSettingsModal from "../modals/UserSettingsModal";
 import { useReactiveVar } from "@apollo/client";
 import { VERSION_TAG } from "../../assets/configurations/constants";
 import { useNavMenu } from "./useNavMenu";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  margin-right: 1.5em;
+  object-fit: contain;
+`;
+
+const AvatarImage = styled.img`
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-block;
+  vertical-align: middle;
+`;
 
 export const NavMenu = () => {
   const {
@@ -59,7 +76,7 @@ export const NavMenu = () => {
         <UserSettingsModal />
         <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
           <Menu.Item header>
-            <Image size="mini" src={logo} style={{ marginRight: "1.5em" }} />
+            <MiniImage src={logo} alt="Open Contracts Logo" />
             Open Contracts
             <Label
               size="tiny"
@@ -74,7 +91,7 @@ export const NavMenu = () => {
             {!isLoading && user ? (
               <>
                 <Menu.Item>
-                  <Image src={user_logo} avatar />
+                  <AvatarImage src={user_logo} alt="User Avatar" />
                   <Dropdown
                     item
                     simple
@@ -123,7 +140,7 @@ export const NavMenu = () => {
         <UserSettingsModal />
         <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
           <Menu.Item header>
-            <Image size="mini" src={logo} style={{ marginRight: "1.5em" }} />
+            <MiniImage src={logo} alt="Open Contracts Logo" />
             Open Contracts
             <Label
               size="tiny"
@@ -138,7 +155,7 @@ export const NavMenu = () => {
             {user ? (
               <>
                 <Menu.Item>
-                  <Image src={user_logo} avatar />
+                  <AvatarImage src={user_logo} alt="User Avatar" />
                   <Dropdown
                     item
                     simple

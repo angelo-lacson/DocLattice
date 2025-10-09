@@ -1,5 +1,6 @@
-import { Menu, Image, Icon } from "semantic-ui-react";
+import { Menu, Icon } from "semantic-ui-react";
 import { Link } from "react-router-dom";
+import styled from "styled-components";
 import Dropdown from "../common/Dropdown";
 
 import logo from "../../assets/images/os_legal_128.png";
@@ -7,6 +8,22 @@ import user_logo from "../../assets/icons/noun-person-113116-FFFFFF.png";
 import { showExportModal } from "../../graphql/cache";
 import "./MobileNavMenu.css";
 import { useNavMenu } from "./useNavMenu";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  margin-right: 1.5em;
+  object-fit: contain;
+`;
+
+const AvatarImage = styled.img`
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-block;
+  vertical-align: middle;
+`;
 
 export const MobileNavMenu = () => {
   const {
@@ -56,7 +73,7 @@ export const MobileNavMenu = () => {
       <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
         <Menu.Menu position="left">
           <Menu.Item>
-            <Image size="mini" src={logo} style={{ marginRight: "1.5em" }} />
+            <MiniImage src={logo} alt="Open Contracts Logo" />
             <Dropdown
               id="MobileMenuDropdown"
               item
@@ -75,7 +92,7 @@ export const MobileNavMenu = () => {
           {!isLoading && user ? (
             <>
               <Menu.Item>
-                <Image src={user_logo} avatar />
+                <AvatarImage src={user_logo} alt="User Avatar" />
                 <Dropdown
                   item
                   simple
@@ -137,7 +154,7 @@ export const MobileNavMenu = () => {
       <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
         <Menu.Menu position="left">
           <Menu.Item>
-            <Image size="mini" src={logo} style={{ marginRight: "1.5em" }} />
+            <MiniImage src={logo} alt="Open Contracts Logo" />
             <Dropdown
               id="MobileMenuDropdown"
               item
@@ -156,7 +173,7 @@ export const MobileNavMenu = () => {
           {user ? (
             <>
               <Menu.Item>
-                <Image src={user_logo} avatar />
+                <AvatarImage src={user_logo} alt="User Avatar" />
                 <Dropdown
                   item
                   simple
