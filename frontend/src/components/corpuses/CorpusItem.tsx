@@ -173,7 +173,7 @@ const CornerIcon = styled.div`
   transition: all 0.3s ease;
 `;
 
-const LabelsetTooltip = styled.div<{ visible: boolean }>`
+const LabelsetTooltip = styled.div<{ $visible: boolean }>`
   position: absolute;
   top: 0;
   right: 45px;
@@ -184,13 +184,13 @@ const LabelsetTooltip = styled.div<{ visible: boolean }>`
   width: max-content;
   max-width: 340px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  opacity: ${(props) => (props.visible ? 1 : 0)};
-  visibility: ${(props) => (props.visible ? "visible" : "hidden")};
+  opacity: ${(props) => (props.$visible ? 1 : 0)};
+  visibility: ${(props) => (props.$visible ? "visible" : "hidden")};
   transform: ${(props) =>
-    props.visible ? "translateY(0)" : "translateY(-10px)"};
+    props.$visible ? "translateY(0)" : "translateY(-10px)"};
   transition: all 0.2s ease;
   z-index: 1000;
-  pointer-events: ${(props) => (props.visible ? "auto" : "none")};
+  pointer-events: ${(props) => (props.$visible ? "auto" : "none")};
 
   @media (max-width: 768px) {
     right: 40px;
@@ -396,7 +396,7 @@ export const CorpusItem: React.FC<CorpusItemProps> = ({
           <CornerIcon>
             <Tags size={24} />
           </CornerIcon>
-          <LabelsetTooltip visible={showTooltip}>
+          <LabelsetTooltip $visible={showTooltip}>
             {labelSet ? (
               <>
                 <Header as="h3" size="small">
