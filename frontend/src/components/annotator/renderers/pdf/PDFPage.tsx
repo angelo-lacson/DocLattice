@@ -196,7 +196,15 @@ export const PDFPage = ({
       canvasRef.current.width = viewport.width;
       canvasRef.current.height = viewport.height;
 
-      rendererRef.current.rescaleAndRender(zoomLevel);
+      rendererRef.current.rescaleAndRender(zoomLevel).catch((err) => {
+        // Silently ignore cancellation errors - these are normal during zoom changes
+        if (
+          err instanceof Error &&
+          !err.message.includes("Rendering cancelled")
+        ) {
+          console.error(`Page ${pageInfo.page.pageNumber} render error:`, err);
+        }
+      });
       lastRenderedZoom.current = zoomLevel;
     }
   };
@@ -477,7 +485,15 @@ export const PDFPage = ({
       canvasRef.current.width = viewport.width;
       canvasRef.current.height = viewport.height;
 
-      rendererRef.current.rescaleAndRender(zoomLevel);
+      rendererRef.current.rescaleAndRender(zoomLevel).catch((err) => {
+        // Silently ignore cancellation errors - these are normal during zoom changes
+        if (
+          err instanceof Error &&
+          !err.message.includes("Rendering cancelled")
+        ) {
+          console.error(`Page ${pageInfo.page.pageNumber} render error:`, err);
+        }
+      });
       lastRenderedZoom.current = zoomLevel;
     }
   }, [zoomLevel, hasPdfPageRendered, pageInfo.page]);
