@@ -5,13 +5,19 @@ import {
   Dimmer,
   Loader,
   Card,
-  Image,
   Icon,
   Label,
   Input,
 } from "semantic-ui-react";
 
 import styled from "styled-components";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  float: right;
+  object-fit: contain;
+`;
 import _ from "lodash";
 import { CorpusType } from "../../types/graphql-api";
 import { getPermissions } from "../../utils/transform";
@@ -87,7 +93,7 @@ function CorpusItem({ corpus, selected, onClick }: CorpusItemProps) {
       onClick={() => onClick(corpus)}
     >
       <Card.Content>
-        <Image floated="right" size="mini" src={corpus?.icon} />
+        <MiniImage src={corpus?.icon} alt="Corpus Icon" />
         <CardHeader>{corpus?.title}</CardHeader>
         <CardMeta>
           <em>Author: </em>

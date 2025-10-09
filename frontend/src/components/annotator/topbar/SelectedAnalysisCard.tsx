@@ -1,5 +1,13 @@
-import { Card, Image } from "semantic-ui-react";
+import { Card } from "semantic-ui-react";
+import styled from "styled-components";
 import { AnalysisType } from "../../../types/graphql-api";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  float: right;
+  object-fit: contain;
+`;
 
 export const SelectedAnalysisCard = () => {
   return (
@@ -11,10 +19,9 @@ export const SelectedAnalysisCard = () => {
       }}
     >
       <Card.Content>
-        <Image
-          floated="right"
-          size="mini"
+        <MiniImage
           src="https://react.semantic-ui.com/images/avatar/large/steve.jpg"
+          alt="Profile"
         />
         <Card.Header>Steve Sanders</Card.Header>
         <Card.Meta>Friends of Elliot</Card.Meta>

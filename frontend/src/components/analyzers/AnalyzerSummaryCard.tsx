@@ -1,7 +1,15 @@
-import { Card, Image, Button, List, Header } from "semantic-ui-react";
+import { Card, Button, List, Header } from "semantic-ui-react";
+import styled from "styled-components";
 import analyzer_icon from "../../assets/icons/noun-epicyclic-gearing-800132.png";
 import { AnalyzerType, CorpusType } from "../../types/graphql-api";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  float: right;
+  object-fit: contain;
+`;
 
 export interface AnalyzerSummaryCardInputs {
   analyzer: AnalyzerType;
@@ -49,7 +57,7 @@ export const AnalyzerSummaryCard = ({
         />
       )}
       <Card.Content>
-        <Image floated="right" size="mini" src={analyzer_icon} />
+        <MiniImage src={analyzer_icon} alt="Analyzer Icon" />
         <Card.Header>
           {analyzer.manifest?.metadata?.title
             ? analyzer.manifest.metadata.title

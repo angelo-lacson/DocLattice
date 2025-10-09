@@ -1,4 +1,4 @@
-import { List, Modal, Header, Icon, Button, Image } from "semantic-ui-react";
+import { List, Modal, Header, Icon, Button } from "semantic-ui-react";
 
 import inverted_cookie_icon from "../../assets/icons/noun-cookie-2123093-FFFFFF.png";
 import { showCookieAcceptModal } from "../../graphql/cache";
