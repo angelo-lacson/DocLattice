@@ -964,15 +964,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const processAnnotationsData = (
     data: GetDocumentKnowledgeAndAnnotationsOutput
   ) => {
-    console.log("[processAnnotationsData] Received data:", data); // Log received data
-    console.log(
-      "[processAnnotationsData] Received data.corpus:",
-      JSON.stringify(data?.corpus, null, 2)
-    ); // Log corpus part specifically
-    console.log(
-      "[processAnnotationsData] Received data.corpus.myPermissions:",
-      data?.corpus?.myPermissions
-    ); // Log corpus part specifically
     if (data?.document) {
       // Backend now filters out analysis annotations when analysisId is not provided
       const processedAnnotations =
@@ -1015,10 +1006,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       }
 
       // Process relationships - backend now filters out analysis relationships
-      console.log(
-        "[processAnnotationsData] Processing relationships:",
-        data.document.allRelationships
-      );
       const processedRelationships = data.document.allRelationships?.map(
         (rel) =>
           new RelationGroup(
@@ -1032,11 +1019,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             rel.id,
             rel.structural
           )
-      );
-
-      console.log(
-        "[processAnnotationsData] Processed relationships:",
-        processedRelationships
       );
 
       // Store the initial relations
@@ -1064,7 +1046,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       // Process labels if labelSet is available
       if (data.corpus?.labelSet) {
-        console.log("[processAnnotationsData] Processing labelSet...");
         const allLabels = data.corpus.labelSet.allAnnotationLabels ?? [];
         // Filter labels by type
         corpusUpdatePayload.spanLabels = allLabels.filter(
@@ -1090,13 +1071,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       // Update corpus state using the constructed payload
       if (Object.keys(corpusUpdatePayload).length > 0) {
-        console.log(
-          "[processAnnotationsData] Corpus update payload:",
-          JSON.stringify(corpusUpdatePayload, null, 2) // Log the final payload
-        );
-        console.log("[processAnnotationsData] Calling setCorpus...");
         setCorpus(corpusUpdatePayload); // Pass the complete payload
-        console.log("[processAnnotationsData] setCorpus called.");
       }
 
       // Note: openedDocument and openedCorpus are managed by CentralRouteManager
