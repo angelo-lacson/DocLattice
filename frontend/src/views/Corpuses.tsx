@@ -1167,39 +1167,44 @@ const MobileMenuBackdrop = styled(motion.div)`
   }
 `;
 
-// Search bar wrapper with mobile navigation buttons
+// Unified search bar wrapper with integrated back button
 const SearchBarWithNav = styled.div`
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: stretch;
   width: 100%;
-`;
-
-// Mobile back button - clean and simple
-const MobileBackButton = styled.button`
-  display: none;
-  padding: 0.625rem;
-  min-width: auto;
-  width: 44px;
-  height: 44px;
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+
+  &:focus-within {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+`;
+
+// Integrated back button - no separate border, part of unified container
+const MobileBackButton = styled.button`
+  display: none;
+  padding: 0 0.875rem;
+  min-width: auto;
+  background: transparent;
+  border: none;
+  border-right: 1px solid #e2e8f0;
   color: #64748b;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   cursor: pointer;
+  flex-shrink: 0;
 
   &:hover {
     background: #f8fafc;
-    border-color: #cbd5e1;
     color: #475569;
-    transform: translateX(-2px);
   }
 
   &:active {
-    transform: translateX(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    background: #f1f5f9;
   }
 
   svg {
@@ -1332,9 +1337,12 @@ const SearchBarContainer = styled.div`
   display: flex;
   min-width: 0; /* Allows flex item to shrink below its content size */
 
-  /* Override CreateAndSearchBar's internal styles */
+  /* Override CreateAndSearchBar's internal styles to remove duplicate borders */
   > div {
     width: 100%;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
 
     /* Override the SearchInputWrapper max-width on mobile */
     > div:first-child {
