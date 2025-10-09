@@ -298,6 +298,11 @@ const SelectionLayer = ({
         throw new Error("No Container");
       }
 
+      // Don't start a new selection if the action menu is visible
+      if (showActionMenu) {
+        return;
+      }
+
       // Only proceed if we're not already selecting
       if (!localPageSelection && event.touches.length === 1) {
         const touch = event.touches[0];
@@ -350,6 +355,7 @@ const SelectionLayer = ({
       pageNumber,
       setSelectedAnnotations,
       setIsCreatingAnnotation,
+      showActionMenu,
     ]
   );
 
@@ -378,6 +384,9 @@ const SelectionLayer = ({
 
       // If long press is active and we have a selection, update it
       if (isLongPressActive && localPageSelection && containerRef.current) {
+        // Prevent default touch behavior (scrolling/panning) during selection
+        event.preventDefault();
+
         const canvasElement = containerRef.current
           .previousSibling as HTMLCanvasElement;
         if (!canvasElement) return;
