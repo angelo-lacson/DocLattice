@@ -21,7 +21,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Menu as LucideMenu,
+  ChevronUp,
   Search,
 } from "lucide-react";
 import styled from "styled-components";
@@ -1146,6 +1146,7 @@ const MainContentArea = styled.div<{ sidebarExpanded: boolean }>`
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     margin-left: 0;
+    padding-bottom: 80px; /* Space for bottom handle */
   }
 `;
 
@@ -1213,48 +1214,116 @@ const MobileBackButton = styled.button`
   }
 `;
 
-// Mobile menu button - prominent and clean
-const MobileMenuButton = styled.button`
+// Mobile bottom navigation handle - modern and sleek
+const BottomNavigationHandle = styled(motion.button)<{ isOpen?: boolean }>`
   display: none;
-  padding: 0.625rem;
-  min-width: auto;
-  width: 44px;
-  height: 44px;
-  background: #4a90e2;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: none;
-  border-radius: 12px;
-  color: white;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(74, 144, 226, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1);
-  position: relative;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  color: #0f172a;
   cursor: pointer;
+  z-index: 250;
+  padding: 0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
 
-  &:hover {
-    background: #357abd;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(74, 144, 226, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    display: flex;
+    flex-direction: column;
   }
 
   &:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(74, 144, 226, 0.3);
+    transform: scale(0.99);
   }
+`;
+
+const BottomHandleContent = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  gap: 1rem;
+  min-height: 64px;
+  width: 100%;
+`;
+
+const BottomHandleLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+`;
+
+const BottomHandleIconWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.4);
 
   svg {
     width: 20px;
     height: 20px;
-    transition: transform 0.2s ease;
-    margin: 0 !important;
   }
+`;
 
-  &:hover svg {
-    transform: scale(1.1);
-  }
+const BottomHandleText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
+`;
 
-  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+const BottomHandleLabel = styled.div`
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+`;
+
+const BottomHandleTitle = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const BottomHandleChevron = styled.div<{ isOpen?: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  flex-shrink: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: rotate(${(props) => (props.isOpen ? "180deg" : "0deg")});
+
+  svg {
+    width: 20px;
+    height: 20px;
   }
 `;
 
@@ -2140,6 +2209,39 @@ export const Corpuses = () => {
         >
           {currentView?.component}
         </MainContentArea>
+
+        {/* Bottom Navigation Handle - Mobile Only */}
+        <AnimatePresence>
+          {use_mobile_layout && opened_corpus && !mobileSidebarOpen && (
+            <BottomNavigationHandle
+              isOpen={mobileSidebarOpen}
+              onClick={() => setMobileSidebarOpen(true)}
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{
+                type: "spring",
+                stiffness: 300,
+                damping: 30,
+              }}
+            >
+              <BottomHandleContent>
+                <BottomHandleLeft>
+                  <BottomHandleIconWrapper>
+                    {currentView?.icon}
+                  </BottomHandleIconWrapper>
+                  <BottomHandleText>
+                    <BottomHandleLabel>Navigate</BottomHandleLabel>
+                    <BottomHandleTitle>{currentView?.label}</BottomHandleTitle>
+                  </BottomHandleText>
+                </BottomHandleLeft>
+                <BottomHandleChevron isOpen={mobileSidebarOpen}>
+                  <ChevronUp />
+                </BottomHandleChevron>
+              </BottomHandleContent>
+            </BottomNavigationHandle>
+          )}
+        </AnimatePresence>
       </CorpusViewContainer>
     );
   } else if (
@@ -2340,12 +2442,6 @@ export const Corpuses = () => {
                 }
               />
             </SearchBarContainer>
-            <MobileMenuButton
-              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-              title="Open Menu"
-            >
-              <LucideMenu />
-            </MobileMenuButton>
           </SearchBarWithNav>
         ) : currentView?.id === "annotations" ? (
           <CreateAndSearchBar
@@ -2396,12 +2492,6 @@ export const Corpuses = () => {
                 }
               />
             </SearchBarContainer>
-            <MobileMenuButton
-              onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-              title="Open Menu"
-            >
-              <LucideMenu />
-            </MobileMenuButton>
           </SearchBarWithNav>
         ) : (
           // Default search bar for any other views (like settings)
