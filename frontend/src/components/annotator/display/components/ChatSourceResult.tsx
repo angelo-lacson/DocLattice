@@ -97,10 +97,10 @@ export const ChatSourceResult = ({
             <SelectionInfoContainer>
               <VerticallyJustifiedEndDiv>
                 <LabelTagContainer
-                  hidden={false}
-                  hovered={hovered}
-                  color={color}
-                  display_behavior={!!showLabels}
+                  $hidden={false}
+                  $hovered={hovered}
+                  $color={color}
+                  $display_behavior={!!showLabels}
                 >
                   <div style={{ whiteSpace: "nowrap", overflowX: "visible" }}>
                     <span>
@@ -168,15 +168,15 @@ const SelectionInfoContainer = styled.div`
 
 // Styled container for the label tag.
 const LabelTagContainer = styled.div<{
-  hidden: boolean;
-  hovered: boolean;
-  color: string;
-  display_behavior: boolean;
+  $hidden: boolean;
+  $hovered: boolean;
+  $color: string;
+  $display_behavior: boolean;
 }>`
   padding: 2px 4px;
-  background-color: ${({ color }) => color};
+  background-color: ${({ $color }) => $color};
   color: #000;
   border-radius: 4px;
-  opacity: ${({ hidden, hovered, display_behavior }) =>
-    hidden || !display_behavior ? 0.5 : 1};
+  opacity: ${({ $hidden, $hovered, $display_behavior }) =>
+    $hidden || !$display_behavior ? 0.5 : 1};
 `;

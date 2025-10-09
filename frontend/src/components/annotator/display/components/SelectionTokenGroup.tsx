@@ -7,7 +7,7 @@ import { TokenId } from "../../types/annotations";
 
 // Add interface for the custom props
 interface SelectionBoxProps {
-  isSelected?: boolean;
+  $isSelected?: boolean;
   highOpacity?: boolean;
   color?: string;
   left?: number;
@@ -31,7 +31,7 @@ const SelectionBox = styled.span.attrs<SelectionBoxProps>((props) => ({
   position: absolute;
   pointer-events: none;
   ${(props) =>
-    props.isSelected &&
+    props.$isSelected &&
     `
     border: 2px solid blue;
   `}
@@ -85,7 +85,7 @@ export const SelectionTokenGroup = ({
               hidden={hidden}
               key={i}
               className={className}
-              isSelected={true}
+              $isSelected={true}
               highOpacity={highOpacity}
               color={color ? color : undefined}
               left={b.left}
