@@ -336,11 +336,11 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
   // Calculate position based on panel offset
   const calculatePosition = () => {
     if (isMobile) {
-      return { bottom: "1rem", right: "1rem" };
+      return { $bottom: "1rem", $right: "1rem" };
     }
     return {
-      bottom: "2.5rem",
-      right: panelOffset > 0 ? `${panelOffset + 24}px` : "1.5rem",
+      $bottom: "2.5rem",
+      $right: panelOffset > 0 ? `${panelOffset + 24}px` : "1.5rem",
     };
   };
 
@@ -738,14 +738,14 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
 interface StyledEnhancedSelectorProps {
   isExpanded: boolean;
   isReadOnly: boolean;
-  bottom: string;
-  right: string;
+  $bottom: string;
+  $right: string;
 }
 
 const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
   position: fixed;
-  bottom: ${(props) => props.bottom};
-  right: ${(props) => props.right};
+  bottom: ${(props) => props.$bottom};
+  right: ${(props) => props.$right};
   z-index: 1000;
   transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
   opacity: ${(props) => (props.isReadOnly ? 0.6 : 1)};
