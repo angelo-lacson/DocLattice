@@ -30,10 +30,12 @@ import {
   selectedAnalysisAtom,
   selectedExtractAtom,
   allowUserInputAtom,
+} from "../context/AnalysisAtoms";
+import {
   showAnnotationBoundingBoxesAtom,
   showAnnotationLabelsAtom,
   showSelectedAnnotationOnlyAtom,
-} from "../context/AnalysisAtoms";
+} from "../context/UISettingsAtom";
 import { useInitialAnnotations, usePdfAnnotations } from "./AnnotationHooks";
 import { useCorpusState } from "../context/CorpusAtom";
 import {
@@ -79,7 +81,8 @@ export const useAnalysisManager = () => {
     showSelectedAnnotationOnlyAtom
   );
 
-  const { replaceDocTypeAnnotations, replaceAnnotations } = usePdfAnnotations();
+  const { replaceDocTypeAnnotations, replaceAnnotations, replaceRelations } =
+    usePdfAnnotations();
   const { setCorpus } = useCorpusState();
 
   const { setQueryLoadingStates } = useQueryLoadingStates();
@@ -121,8 +124,8 @@ export const useAnalysisManager = () => {
     GET_DATACELLS_FOR_EXTRACT
   );
 
-  // Access initial annotations
-  const { initialAnnotations } = useInitialAnnotations();
+  // Access initial annotations and relations
+  const { initialAnnotations, initialRelations } = useInitialAnnotations();
 
   /**
    * Resets the analysis, data cell, and column states.
@@ -188,10 +191,14 @@ export const useAnalysisManager = () => {
   // Fetch annotations for the selected analysis.
   useEffect(() => {
     if (!selected_analysis) {
-      // Just clear annotations when selection is cleared
-      replaceAnnotations([]);
-      replaceDocTypeAnnotations([]);
-      setDataCells([]);
+      // When analysis is deselected, restore initial annotations AND relations
+      // BUT only if extract is also not selected (extract effect handles that case)
+      if (!selected_extract) {
+        replaceAnnotations(initialAnnotations);
+        replaceRelations(initialRelations);
+        replaceDocTypeAnnotations([]);
+        setDataCells([]);
+      }
       return;
     }
 
@@ -201,7 +208,12 @@ export const useAnalysisManager = () => {
         analysisId: selected_analysis.id,
       },
     });
-  }, [selected_analysis]);
+  }, [
+    selected_analysis,
+    selected_extract,
+    initialAnnotations,
+    initialRelations,
+  ]);
 
   // Update query loading states and errors for annotations
   useEffect(() => {
@@ -229,8 +241,10 @@ export const useAnalysisManager = () => {
       annotationsData.analysis &&
       annotationsData.analysis.fullAnnotationList
     ) {
-      // Clear existing annotations and datacell data
+      // Clear existing annotations, relations, and datacell data
+      // Analysis annotations should show ONLY analysis data, not mixed with document relations
       replaceAnnotations([]);
+      replaceRelations([]);
       replaceDocTypeAnnotations([]);
       setDataCells([]);
 
@@ -304,8 +318,8 @@ export const useAnalysisManager = () => {
     } else {
       setAllowUserInput(true);
 
-      // Restore initial annotations
-      replaceAnnotations(initialAnnotations);
+      // Don't restore annotations here - the analysis effect (Effect 1) handles
+      // restoring initialAnnotations when both analysis and extract are null
     }
   }, [selected_extract, selectedDocument?.id, selectedCorpus?.id]);
 

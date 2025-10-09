@@ -11,6 +11,8 @@ import {
   ArrowLeft,
   Settings,
   Plus,
+  Layers,
+  PanelRightOpen,
 } from "lucide-react";
 import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
@@ -76,23 +78,22 @@ import { useInitialAnnotations } from "../../annotator/hooks/AnnotationHooks";
 import { EnhancedLabelSelector } from "../../annotator/labels/EnhancedLabelSelector";
 import { PDF } from "../../annotator/renderers/pdf/PDF";
 import TxtAnnotatorWrapper from "../../annotator/components/wrappers/TxtAnnotatorWrapper";
-import { useAnnotationControls } from "../../annotator/context/UISettingsAtom";
+import {
+  useAnnotationControls,
+  selectedRelationsAtom,
+} from "../../annotator/context/UISettingsAtom";
 
 import {
   ContentArea,
-  ControlButton,
-  ControlButtonGroupLeft,
-  ControlButtonWrapper,
   HeaderContainer,
   MainContentArea,
   MetadataRow,
   SlidingPanel,
   EmptyState,
   ResizeHandle,
-  ResizeHandleControl,
-  WidthControlMenu,
-  WidthMenuItem,
   ChatIndicator,
+  SidebarTabsContainer,
+  SidebarTab,
 } from "./StyledContainers";
 import { NoteModal } from "./StickyNotes";
 
@@ -148,64 +149,82 @@ GlobalWorkerOptions.workerSrc = workerSrc;
 /* ------------------------------------------------------------- */
 
 const HeaderButtonGroup = styled.div`
-  position: absolute;
-  top: 12px;
-  right: 12px;
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-shrink: 0;
 `;
 
 const HeaderButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   height: 36px;
-  padding: 0 ${(props) => (props.$variant === "primary" ? "20px" : "14px")};
+  padding: 0 ${(props) => (props.$variant === "primary" ? "16px" : "10px")};
   background: ${(props) =>
     props.$variant === "primary"
-      ? "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
-      : "rgba(255, 255, 255, 0.95)"};
-  color: ${(props) => (props.$variant === "primary" ? "white" : "#475569")};
+      ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+      : "rgba(255, 255, 255, 0.1)"};
+  color: ${(props) => (props.$variant === "primary" ? "white" : "#64748b")};
   border: 1px solid
     ${(props) =>
       props.$variant === "primary"
-        ? "rgba(37, 99, 235, 0.3)"
-        : "rgba(0, 0, 0, 0.08)"};
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
+        ? "rgba(102, 126, 234, 0.4)"
+        : "rgba(148, 163, 184, 0.2)"};
+  border-radius: 10px;
+  font-size: ${(props) => (props.$variant === "primary" ? "13px" : "14px")};
+  font-weight: ${(props) => (props.$variant === "primary" ? "600" : "500")};
+  letter-spacing: ${(props) => (props.$variant === "primary" ? "0.3px" : "0")};
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
-  gap: 6px;
-  backdrop-filter: blur(10px);
+  gap: ${(props) => (props.$variant === "primary" ? "8px" : "0")};
+  backdrop-filter: blur(12px);
   box-shadow: ${(props) =>
     props.$variant === "primary"
-      ? "0 2px 8px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)"
-      : "0 1px 3px rgba(0, 0, 0, 0.06)"};
+      ? "0 4px 16px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15)"
+      : "0 2px 4px rgba(0, 0, 0, 0.04)"};
+  position: relative;
+  overflow: hidden;
 
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: ${(props) =>
-      props.$variant === "primary"
-        ? "0 4px 12px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
-        : "0 2px 6px rgba(0, 0, 0, 0.1)"};
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
     background: ${(props) =>
       props.$variant === "primary"
-        ? "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
-        : "white"};
+        ? "linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%)"
+        : "transparent"};
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: ${(props) =>
+      props.$variant === "primary"
+        ? "0 8px 24px rgba(102, 126, 234, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25)"
+        : "0 4px 12px rgba(0, 0, 0, 0.08)"};
+    border-color: ${(props) =>
+      props.$variant === "primary"
+        ? "rgba(102, 126, 234, 0.6)"
+        : "rgba(148, 163, 184, 0.3)"};
+
+    &::before {
+      opacity: 1;
+    }
   }
 
   &:active {
     transform: translateY(0);
     box-shadow: ${(props) =>
       props.$variant === "primary"
-        ? "inset 0 2px 4px rgba(0, 0, 0, 0.1)"
-        : "inset 0 1px 2px rgba(0, 0, 0, 0.05)"};
+        ? "0 2px 8px rgba(102, 126, 234, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.1)"
+        : "inset 0 1px 2px rgba(0, 0, 0, 0.08)"};
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: ${(props) => (props.$variant === "primary" ? "18px" : "18px")};
+    height: ${(props) => (props.$variant === "primary" ? "18px" : "18px")};
+    stroke-width: 2.5;
   }
 `;
 
@@ -301,6 +320,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         </Modal.Actions>
       </Modal>
     );
+  } else {
+    console.log("DocumentKnowledgeBase: Document ID is valid:", documentId);
   }
 
   const { width } = useWindowDimensions();
@@ -345,7 +366,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const [dragStartWidth, setDragStartWidth] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
   const documentAreaRef = useRef<HTMLDivElement>(null);
-  const [showWidthMenu, setShowWidthMenu] = useState(false);
 
   const [showGraph, setShowGraph] = useState(false);
 
@@ -356,6 +376,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   const [viewState, setViewState] = useState<ViewState>(ViewState.LOADING);
   const [showRightPanel, setShowRightPanel] = useState(false);
+  const [autoZoomEnabled, setAutoZoomEnabled] = useState<boolean>(true);
+
+  // Track base zoom level (when sidebar is closed) for proportional adjustment
+  const baseZoomRef = useRef<number>(zoomLevel);
+  const isAdjustingZoomRef = useRef<boolean>(false);
+  const justToggledAutoZoomRef = useRef<boolean>(false);
 
   // Calculate floating controls offset and visibility
   const calculateFloatingControlsState = () => {
@@ -391,7 +417,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const [_, setPdfAnnotations] = useAtom(pdfAnnotationsAtom);
   const [, setStructuralAnnotations] = useAtom(structuralAnnotationsAtom);
   const { setCorpus } = useCorpusState();
-  const { setInitialAnnotations } = useInitialAnnotations();
+  const { setInitialAnnotations, setInitialRelations } =
+    useInitialAnnotations();
   const { searchText, setSearchText } = useSearchText();
   const { setPermissions, permissions } = useDocumentPermissions();
   const { setTextSearchState } = useTextSearchState();
@@ -443,6 +470,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const { selectedAnalysis, selectedExtract } = useAnalysisSelection();
   const { selectedAnnotations, setSelectedAnnotations } =
     useAnnotationSelection();
+  const [, setSelectedRelations] = useAtom(selectedRelationsAtom);
 
   const {
     dataCells,
@@ -501,6 +529,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       data?.corpus?.myPermissions
     ); // Log corpus part specifically
     if (data?.document) {
+      // Backend now filters out analysis annotations when analysisId is not provided
       const processedAnnotations =
         data.document.allAnnotations?.map((annotation) =>
           convertToServerAnnotation(annotation)
@@ -540,7 +569,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         setStructuralAnnotations(structuralAnns);
       }
 
-      // Process relationships
+      // Process relationships - backend now filters out analysis relationships
+      console.log(
+        "[processAnnotationsData] Processing relationships:",
+        data.document.allRelationships
+      );
       const processedRelationships = data.document.allRelationships?.map(
         (rel) =>
           new RelationGroup(
@@ -555,6 +588,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             rel.structural
           )
       );
+
+      console.log(
+        "[processAnnotationsData] Processed relationships:",
+        processedRelationships
+      );
+
+      // Store the initial relations
+      setInitialRelations(processedRelationships || []);
 
       setPdfAnnotations(
         (prev) =>
@@ -649,8 +690,146 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     [setContainerWidth, setScrollContainerRef]
   );
 
+  // Watch for width changes when sidebar opens/closes
+  useEffect(() => {
+    const node = pdfContainerRef.current;
+    if (!node) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const newWidth = entry.contentRect.width;
+        setContainerWidth(newWidth);
+      }
+    });
+
+    resizeObserver.observe(node);
+    return () => resizeObserver.disconnect();
+  }, [setContainerWidth]);
+
   /* clear on unmount so stale refs are never used */
   useEffect(() => () => setScrollContainerRef(null), [setScrollContainerRef]);
+
+  // Track previous auto-zoom state to detect when user toggles it
+  const prevAutoZoomEnabledRef = useRef<boolean>(autoZoomEnabled);
+
+  // When auto-zoom is toggled ON, capture current zoom as the new base
+  useEffect(() => {
+    const wasDisabled = !prevAutoZoomEnabledRef.current;
+    const isNowEnabled = autoZoomEnabled;
+
+    if (wasDisabled && isNowEnabled) {
+      // User just toggled auto-zoom from OFF to ON
+      // Capture current zoom as the new base, don't adjust yet
+      baseZoomRef.current = zoomLevel;
+      justToggledAutoZoomRef.current = true;
+      console.log(
+        "Auto-zoom toggled ON - setting base zoom to current:",
+        zoomLevel
+      );
+    }
+
+    prevAutoZoomEnabledRef.current = autoZoomEnabled;
+  }, [autoZoomEnabled, zoomLevel]);
+
+  // Automatically adjust zoom level when sidebar opens/closes to maintain proportional document width
+  useEffect(() => {
+    // Skip if auto-zoom is disabled
+    if (!autoZoomEnabled) {
+      return;
+    }
+
+    if (isMobile || activeLayer !== "document") {
+      return;
+    }
+
+    // If user just toggled auto-zoom ON, skip this adjustment cycle
+    if (justToggledAutoZoomRef.current) {
+      justToggledAutoZoomRef.current = false;
+      return;
+    }
+
+    // If we're currently auto-adjusting, skip to prevent loops
+    if (isAdjustingZoomRef.current) {
+      isAdjustingZoomRef.current = false;
+      return;
+    }
+
+    const panelWidth = getPanelWidthPercentage();
+
+    if (showRightPanel) {
+      // Sidebar just opened or resized
+      // If we don't have a base zoom yet, store current zoom
+      if (baseZoomRef.current === zoomLevel || !baseZoomRef.current) {
+        baseZoomRef.current = zoomLevel;
+      }
+
+      // Calculate adjusted zoom: reduce proportionally to viewport shrinkage
+      const viewportReduction = (100 - panelWidth) / 100;
+      const adjustedZoom = baseZoomRef.current * viewportReduction;
+
+      // Clamp to valid zoom range
+      const clampedZoom = Math.max(0.5, Math.min(4, adjustedZoom));
+
+      // Only update if there's a meaningful difference
+      if (Math.abs(zoomLevel - clampedZoom) > 0.01) {
+        isAdjustingZoomRef.current = true;
+        setZoomLevel(clampedZoom);
+      }
+    } else {
+      // Sidebar closed - restore base zoom
+      if (
+        baseZoomRef.current &&
+        Math.abs(zoomLevel - baseZoomRef.current) > 0.01
+      ) {
+        isAdjustingZoomRef.current = true;
+        setZoomLevel(baseZoomRef.current);
+      }
+    }
+  }, [
+    autoZoomEnabled,
+    showRightPanel,
+    mode,
+    customWidth,
+    isMobile,
+    activeLayer,
+    zoomLevel,
+    setZoomLevel,
+  ]);
+
+  // When user manually zooms while sidebar is open, update base zoom for proper restoration
+  useEffect(() => {
+    // Only track manual zoom changes if auto-zoom is enabled
+    if (!autoZoomEnabled) {
+      return;
+    }
+
+    if (
+      !isMobile &&
+      showRightPanel &&
+      activeLayer === "document" &&
+      !isAdjustingZoomRef.current
+    ) {
+      // User manually changed zoom while sidebar is open
+      // Back-calculate what the base zoom should be
+      const panelWidth = getPanelWidthPercentage();
+      const viewportReduction = (100 - panelWidth) / 100;
+      const backCalculatedBase = zoomLevel / viewportReduction;
+
+      // Update base zoom so when sidebar closes, it restores to the right level
+      baseZoomRef.current = Math.max(0.5, Math.min(4, backCalculatedBase));
+    } else if (!showRightPanel && !isAdjustingZoomRef.current) {
+      // Sidebar is closed, keep baseZoom in sync with current zoom
+      baseZoomRef.current = zoomLevel;
+    }
+  }, [
+    autoZoomEnabled,
+    zoomLevel,
+    showRightPanel,
+    isMobile,
+    activeLayer,
+    mode,
+    customWidth,
+  ]);
 
   const handleKeyUpPress = useCallback(
     (event: { keyCode: any }) => {
@@ -1195,8 +1374,26 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           setStructuralAnnotations([]);
         }
 
-        // Clear regular annotations when no corpus
-        setPdfAnnotations(new PdfAnnotations([], [], [], true));
+        // Process structural relationships even without corpus
+        const processedRelationships = data.document.allRelationships?.map(
+          (rel) =>
+            new RelationGroup(
+              rel.sourceAnnotations.edges
+                .map((edge) => edge?.node?.id)
+                .filter((id): id is string => id !== undefined),
+              rel.targetAnnotations.edges
+                .map((edge) => edge?.node?.id)
+                .filter((id): id is string => id !== undefined),
+              rel.relationshipLabel,
+              rel.id,
+              rel.structural
+            )
+        );
+
+        // Set annotations with structural relationships (no regular annotations without corpus)
+        setPdfAnnotations(
+          new PdfAnnotations([], processedRelationships || [], [], true)
+        );
       },
       onError: (error) => {
         console.error("GraphQL Query Error fetching document data:", error);
@@ -1414,22 +1611,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     }
   }, [showRightPanel]);
 
-  // Close width menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (showWidthMenu && !target.closest("[data-width-menu]")) {
-        setShowWidthMenu(false);
-      }
-    };
-
-    if (showWidthMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [showWidthMenu]);
-
   // Load MD summary if available
   useEffect(() => {
     const fetchMarkdownContent = async () => {
@@ -1495,12 +1676,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     useState<SidebarViewMode["mode"]>("chat");
   const [feedFilters, setFeedFilters] = useState<ContentFilters>({
     contentTypes: new Set(["note", "annotation", "relationship", "search"]),
-    annotationFilters: {
-      showStructural: false,
-    },
-    relationshipFilters: {
-      showStructural: false,
-    },
+    // Note: annotationFilters and relationshipFilters are now managed via atoms
+    // in useAnnotationDisplay() for consistency across all components
   });
   const [feedSortBy, setFeedSortBy] = useState<SortOption>("page");
 
@@ -1550,6 +1727,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             sortBy={feedSortBy}
             isLoading={loading}
             readOnly={readOnly}
+            documentId={documentId}
             onItemSelect={(item) => {
               // Handle item selection based on type
               if (item.type === "annotation" || item.type === "relationship") {
@@ -1665,12 +1843,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         ref={documentAreaRef}
         onMouseEnter={handleDocumentMouseEnter}
         style={{
-          flex: 1,
           position: "relative",
-          marginRight:
+          width:
             !isMobile && showRightPanel
-              ? `${getPanelWidthPercentage()}%`
-              : undefined,
+              ? `${100 - getPanelWidthPercentage()}%`
+              : "100%",
+          height: "100%",
+          overflow: "hidden",
+          transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
         {viewerContent}
@@ -1718,13 +1898,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     return () => {
       openedDocument(null); // leave corpus intact
       setSelectedAnnotations([]);
+      setSelectedRelations([]); // Clear selected relationships
       selectedAnnotationIds([]);
       // Clean up zoom indicator timer
       if (zoomIndicatorTimer.current) {
         clearTimeout(zoomIndicatorTimer.current);
       }
     };
-  }, [setSelectedAnnotations]);
+  }, [setSelectedAnnotations, setSelectedRelations]);
 
   const [selectedSummaryContent, setSelectedSummaryContent] = useState<
     string | null
@@ -1735,9 +1916,26 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   return (
     <FullScreenModal id="knowledge-base-modal" open={true} onClose={onClose}>
       <HeaderContainer>
-        <div>
-          <Header as="h2" style={{ margin: 0 }}>
-            {metadata.title}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+          }}
+        >
+          <Header
+            as="h2"
+            style={{
+              margin: 0,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: "100%",
+            }}
+          >
+            <span title={metadata.title || "Untitled Document"}>
+              {metadata.title || "Untitled Document"}
+            </span>
           </Header>
           <MetadataRow>
             <span>
@@ -1753,7 +1951,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           </MetadataRow>
         </div>
 
-        {/* Custom button group in header */}
         <HeaderButtonGroup>
           {!hasCorpus && !readOnly && (
             <HeaderButton
@@ -1911,6 +2108,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 extractsOpen={showExtractsPanel}
                 panelOffset={floatingControlsState.offset}
                 readOnly={readOnly}
+                panelWidthMode={mode === "custom" ? "half" : mode}
+                onPanelWidthChange={setMode}
+                autoZoomEnabled={autoZoomEnabled}
+                onAutoZoomChange={setAutoZoomEnabled}
               />
 
               {/* Floating Analyses Panel - only show with corpus */}
@@ -1935,6 +2136,40 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 />
               )}
 
+              {/* Sidebar View Mode Tabs - always visible, outside panel when closed, on panel edge when open */}
+              {!showRightPanel && (
+                <SidebarTabsContainer $panelOpen={false}>
+                  <SidebarTab
+                    $isActive={sidebarViewMode === "chat"}
+                    $panelOpen={false}
+                    onClick={() => {
+                      setSidebarViewMode("chat");
+                      setShowRightPanel(true);
+                    }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    data-testid="view-mode-chat"
+                  >
+                    <MessageSquare />
+                    <span className="tab-label">Chat</span>
+                  </SidebarTab>
+                  <SidebarTab
+                    $isActive={sidebarViewMode === "feed"}
+                    $panelOpen={false}
+                    onClick={() => {
+                      setSidebarViewMode("feed");
+                      setShowRightPanel(true);
+                    }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    data-testid="view-mode-feed"
+                  >
+                    <Layers />
+                    <span className="tab-label">Feed</span>
+                  </SidebarTab>
+                </SidebarTabsContainer>
+              )}
+
               {/* Right Panel, if needed */}
               <AnimatePresence>
                 {showRightPanel && (
@@ -1955,108 +2190,52 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                       onMouseDown={handleResizeStart}
                       $isDragging={isDragging}
                       whileHover={{ scale: 1.02 }}
-                    >
-                      <ResizeHandleControl
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowWidthMenu(!showWidthMenu);
-                        }}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <Settings className="settings-icon" />
-                      </ResizeHandleControl>
-                    </ResizeHandle>
+                    />
 
-                    <AnimatePresence>
-                      {showWidthMenu && (
-                        <WidthControlMenu
-                          initial={{ opacity: 0, scale: 0.8, x: -20 }}
-                          animate={{ opacity: 1, scale: 1, x: 0 }}
-                          exit={{ opacity: 0, scale: 0.8, x: -20 }}
-                          transition={{
-                            duration: 0.2,
-                            ease: [0.4, 0, 0.2, 1],
-                          }}
-                          data-width-menu
-                        >
-                          <WidthMenuItem
-                            id="compact-width-menu-item"
-                            $isActive={mode === "quarter"}
-                            onClick={() => {
-                              setMode("quarter");
-                              setShowWidthMenu(false);
-                            }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            Compact
-                            <span className="percentage">25%</span>
-                          </WidthMenuItem>
-                          <WidthMenuItem
-                            $isActive={mode === "half"}
-                            onClick={() => {
-                              setMode("half");
-                              setShowWidthMenu(false);
-                            }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            Standard
-                            <span className="percentage">50%</span>
-                          </WidthMenuItem>
-                          <WidthMenuItem
-                            id="wide-width-menu-item"
-                            $isActive={mode === "full"}
-                            onClick={() => {
-                              setMode("full");
-                              setShowWidthMenu(false);
-                            }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            Wide
-                            <span className="percentage">90%</span>
-                          </WidthMenuItem>
-                        </WidthControlMenu>
-                      )}
-                    </AnimatePresence>
-
-                    <ControlButtonGroupLeft>
-                      <ControlButtonWrapper>
-                        <ControlButton
-                          onClick={() => {
+                    {/* Tabs when panel is open - positioned on left edge of panel */}
+                    <SidebarTabsContainer $panelOpen={true}>
+                      <SidebarTab
+                        $isActive={sidebarViewMode === "chat"}
+                        $panelOpen={true}
+                        onClick={() => {
+                          if (sidebarViewMode === "chat") {
+                            // Clicking active tab closes the panel
                             setShowRightPanel(false);
-                          }}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          <div className="energy-core" />
-                          <div className="arrow-wrapper">
-                            <ArrowLeft strokeWidth={3} />
-                          </div>
-                        </ControlButton>
-                      </ControlButtonWrapper>
-                    </ControlButtonGroupLeft>
+                          } else {
+                            // Switch to chat mode
+                            setSidebarViewMode("chat");
+                          }
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        data-testid="view-mode-chat"
+                      >
+                        <MessageSquare />
+                        <span className="tab-label">Chat</span>
+                      </SidebarTab>
+                      <SidebarTab
+                        $isActive={sidebarViewMode === "feed"}
+                        $panelOpen={true}
+                        onClick={() => {
+                          if (sidebarViewMode === "feed") {
+                            // Clicking active tab closes the panel
+                            setShowRightPanel(false);
+                          } else {
+                            // Switch to feed mode
+                            setSidebarViewMode("feed");
+                          }
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        data-testid="view-mode-feed"
+                      >
+                        <Layers />
+                        <span className="tab-label">Feed</span>
+                      </SidebarTab>
+                    </SidebarTabsContainer>
+
                     {rightPanelContent}
                   </SlidingPanel>
-                )}
-              </AnimatePresence>
-
-              {/* Chat indicator when panel is closed */}
-              <AnimatePresence>
-                {!showRightPanel && (
-                  <ChatIndicator
-                    onClick={() => {
-                      setSidebarViewMode("chat");
-                      setShowRightPanel(true);
-                    }}
-                    initial={{ x: 100, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: 100, opacity: 0 }}
-                    transition={{ type: "spring", damping: 20, stiffness: 300 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <MessageSquare />
-                  </ChatIndicator>
                 )}
               </AnimatePresence>
             </MainContentArea>
@@ -2072,9 +2251,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               {/* Graph or relationship visualization */}
             </Modal.Content>
             <Modal.Actions>
-              <ControlButton onClick={() => setShowGraph(false)}>
+              <Button onClick={() => setShowGraph(false)}>
                 <X size={16} />
-              </ControlButton>
+                Close
+              </Button>
             </Modal.Actions>
           </Modal>
 

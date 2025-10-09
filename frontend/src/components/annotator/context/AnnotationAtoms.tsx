@@ -4,6 +4,7 @@ import {
   ServerTokenAnnotation,
   ServerSpanAnnotation,
   DocTypeAnnotation,
+  RelationGroup,
 } from "../types/annotations";
 
 /**
@@ -36,6 +37,11 @@ export const docTypeAnnotationsAtom = atom<DocTypeAnnotation[]>([]);
 export const initialAnnotationsAtom = atom<
   (ServerTokenAnnotation | ServerSpanAnnotation)[]
 >([]);
+
+/**
+ * Atom to store the initial relations when the document is first loaded.
+ */
+export const initialRelationsAtom = atom<RelationGroup[]>([]);
 
 /**
  * Canonical, de-duplicated list of ALL annotations (regular + structural).

@@ -30,6 +30,8 @@ import { useAnnotationRefs } from "../../../annotator/hooks/useAnnotationRefs";
 interface ContentItemRendererProps {
   item: UnifiedContentItem;
   onSelect?: () => void;
+  onToggleMultiSelect?: () => void;
+  isMultiSelected?: boolean;
   readOnly?: boolean;
 }
 
@@ -130,6 +132,8 @@ function isSearchResult(
 export const ContentItemRenderer: React.FC<ContentItemRendererProps> = ({
   item,
   onSelect,
+  onToggleMultiSelect,
+  isMultiSelected = false,
   readOnly = false,
 }) => {
   const { annotationElementRefs } = useAnnotationRefs();
@@ -209,6 +213,8 @@ export const ContentItemRenderer: React.FC<ContentItemRendererProps> = ({
           read_only={readOnly}
           onSelect={handleSelect}
           onDelete={readOnly ? undefined : handleDeleteAnnotation}
+          onToggleMultiSelect={onToggleMultiSelect}
+          isMultiSelected={isMultiSelected}
         />
       </ItemContainer>
     );

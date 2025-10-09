@@ -1976,6 +1976,9 @@ export const GET_DOCUMENT_ANNOTATIONS_AND_RELATIONSHIPS = gql`
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
         page
+        analysis {
+          id
+        }
         annotationLabel {
           id
           text
@@ -2319,6 +2322,9 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
         page
+        analysis {
+          id
+        }
         annotationLabel {
           id
           text
@@ -2437,6 +2443,9 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
         page
+        analysis {
+          id
+        }
         annotationLabel {
           id
           text
@@ -2557,6 +2566,32 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
         json
         myPermissions
         structural
+      }
+      # Structural relationships (no corpus required)
+      allRelationships {
+        id
+        structural
+        relationshipLabel {
+          id
+          text
+          color
+          icon
+          description
+        }
+        sourceAnnotations {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        targetAnnotations {
+          edges {
+            node {
+              id
+            }
+          }
+        }
       }
       # Document-level notes (no corpus required)
       allNotes {

@@ -246,7 +246,11 @@ The annotation system uses Jotai atoms for efficient, reactive state management:
 ### Core Atoms
 
 #### Annotation Storage
-- **`pdfAnnotationsAtom`**: Main storage for regular annotations (excludes structural)
+- **`pdfAnnotationsAtom`**: Main storage container holding a `PdfAnnotations` object with three arrays:
+  - `annotations`: Regular annotations (excludes structural)
+  - `relations`: Array of `RelationGroup` objects representing relationships between annotations
+  - `docTypes`: Document-level type annotations
+  - `unsavedChanges`: Boolean flag for dirty state tracking
 - **`structuralAnnotationsAtom`**: Separate storage for structural annotations
 - **`allAnnotationsAtom`**: Computed atom that merges both sources with de-duplication
 - **`perPageAnnotationsAtom`**: Computed map of `pageIndex → annotations[]` for efficient page-level access
@@ -279,6 +283,9 @@ useVisibleAnnotations(): Annotation[]
 
 // Manages annotation creation and updates
 useCreateAnnotation(): (annotation: Annotation) => Promise<void>
+
+// Returns the full PdfAnnotations object including relations
+usePdfAnnotations(): { pdfAnnotations: PdfAnnotations }
 ```
 
 ### Data Flow
@@ -288,34 +295,90 @@ useCreateAnnotation(): (annotation: Annotation) => Promise<void>
 3. **Render**: Components subscribe to relevant atoms for reactive updates
 4. **Update**: User actions trigger atom updates → automatic re-renders
 
-## Annotation Filtering System
+### PdfAnnotations Container
 
-The system implements multi-layered filtering for optimal performance and user experience:
+The `PdfAnnotations` class serves as an immutable container for all annotation-related data:
+
+```typescript
+class PdfAnnotations {
+  constructor(
+    public readonly annotations: (ServerTokenAnnotation | ServerSpanAnnotation)[],
+    public readonly relations: RelationGroup[],
+    public readonly docTypes: DocTypeAnnotation[],
+    public readonly unsavedChanges: boolean = false
+  )
+}
+```
+
+All updates create new instances, ensuring React's change detection works correctly.
+
+## Unified Filtering System
+
+The system implements a unified, atom-based filtering architecture that ensures consistency between annotations and relationships across all components.
+
+### Core Principles
+
+1. **Single Source of Truth**: All filtering state is managed through Jotai atoms in `UISettingsAtom`
+2. **Consistent Behavior**: Annotations and relationships follow the same filtering rules
+3. **Reactive Updates**: Filter changes immediately propagate to all consuming components
 
 ### Filter Layers
 
 #### 1. Forced Visibility (Highest Priority)
-Annotations that must always be shown regardless of other filters:
-- Currently selected annotations
+Content that must always be shown regardless of other filters:
+- Currently selected annotations and relationships
 - Annotations involved in selected relationships
 - Structural annotations when relationships are visible
 
 #### 2. Standard Filters
-Applied in order to remaining annotations:
-- **Structural Toggle**: Hide/show structural annotations
-- **Label Filter**: Show only annotations with selected labels
-- **Selected Only Mode**: Show only explicitly selected annotations
+Applied in order to remaining content:
+- **Structural Toggle**: Hide/show structural annotations AND relationships
+- **Label Filter**: Show only content with selected labels
+- **Selected Only Mode**: Show only explicitly selected items and their connections
 
-#### 3. Implementation
+#### 3. Visibility Hooks
 
-The `useVisibleAnnotations()` hook provides the single source of truth:
+The system provides two primary hooks for filtered content:
 
 ```typescript
+// For annotations
 const visibleAnnotations = useVisibleAnnotations();
-// Returns filtered annotations based on all active filters
+
+// For relationships
+const visibleRelationships = useVisibleRelationships();
 ```
 
-This centralized approach ensures consistency across all components and eliminates duplicate filtering logic.
+Both hooks read from the same underlying atom state, ensuring consistency.
+
+### Relationship Filtering Logic
+
+The `useVisibleRelationships()` hook applies the following rules:
+
+1. **Always show selected relationships** (forced visibility)
+2. **Filter structural relationships** based on `showStructural` setting
+3. **In selected-only mode**, only show relationships connected to selected annotations
+4. **Only show relationships with visible annotations** (prevents orphaned relationships)
+
+### State Management Flow
+
+```
+User Action (e.g., toggle filter)
+    ↓
+UISettingsAtom updated
+    ↓
+useVisibleAnnotations() & useVisibleRelationships() recompute
+    ↓
+All consuming components re-render with filtered data
+```
+
+### Component Integration
+
+- **FloatingDocumentControls**: Updates atom state via `AnnotationControls`
+- **UnifiedContentFeed**: Consumes filtered data via visibility hooks
+- **PDFPage/TxtAnnotator**: Use `useVisibleAnnotations()` for rendering
+- **RelationshipList**: Uses `useVisibleRelationships()` for display
+
+This unified approach eliminates the previous disconnect between prop-based and atom-based filtering, ensuring that all UI components show consistent filtered content.
 
 ## Scroll Synchronization
 

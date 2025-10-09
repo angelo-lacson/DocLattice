@@ -91,6 +91,7 @@ interface UnifiedContentFeedTestWrapperProps {
   // Mock data configuration
   mockAnnotations?: any[];
   mockRelations?: any[];
+  selectedAnnotationIds?: string[];
   mocks?: MockedResponse[];
 }
 
@@ -120,7 +121,12 @@ const createMockNote = (id: string, title: string, content: string): Note => ({
 // Inner component to set up Jotai atoms
 const InnerWrapper: React.FC<
   UnifiedContentFeedTestWrapperProps & { children: React.ReactNode }
-> = ({ mockAnnotations = [], mockRelations = [], children }) => {
+> = ({
+  mockAnnotations = [],
+  mockRelations = [],
+  selectedAnnotationIds = [],
+  children,
+}) => {
   const setPdfAnnotations = useSetAtom(pdfAnnotationsAtom);
   const setStructuralAnnotations = useSetAtom(structuralAnnotationsAtom);
   const setTextSearchState = useSetAtom(textSearchStateAtom);
@@ -139,18 +145,23 @@ const InnerWrapper: React.FC<
   const setShowSelectedOnly = useSetAtom(showSelectedAnnotationOnlyAtom);
   const setHideLabels = useSetAtom(hideLabelsAtom);
 
-  // Initialize atoms synchronously on first render
-  const initialized = React.useRef(false);
-  if (!initialized.current) {
+  // Initialize atoms once on mount
+  React.useEffect(() => {
+    // Separate structural from regular annotations
+    const regularAnnotations = mockAnnotations.filter((ann) => !ann.structural);
+    const structuralAnns = mockAnnotations.filter((ann) => ann.structural);
+
     // Initialize atoms with proper structure
-    setPdfAnnotations(new PdfAnnotations(mockAnnotations, mockRelations, []));
-    setStructuralAnnotations([]);
+    setPdfAnnotations(
+      new PdfAnnotations(regularAnnotations, mockRelations, [])
+    );
+    setStructuralAnnotations(structuralAnns);
     setTextSearchState({
       matches: [],
       selectedIndex: 0,
     });
     setSearchText("");
-    setSelectedAnnotations([]);
+    setSelectedAnnotations(selectedAnnotationIds);
     setSelectedRelations([]);
     // Don't filter by labels - show all annotations
     setSpanLabelsToView(null);
@@ -162,9 +173,7 @@ const InnerWrapper: React.FC<
     setShowLabels(LabelDisplayBehavior.ALWAYS);
     setShowSelectedOnly(false);
     setHideLabels(false);
-
-    initialized.current = true;
-  }
+  }, []); // Run only once on mount
 
   return <>{children}</>;
 };
@@ -184,6 +193,7 @@ export const UnifiedContentFeedTestWrapper: React.FC<
   readOnly = false,
   mockAnnotations = [],
   mockRelations = [],
+  selectedAnnotationIds = [],
   mocks = [],
 }) => {
   // Debug filters
@@ -204,6 +214,7 @@ export const UnifiedContentFeedTestWrapper: React.FC<
           <InnerWrapper
             mockAnnotations={mockAnnotations}
             mockRelations={mockRelations}
+            selectedAnnotationIds={selectedAnnotationIds}
           >
             <div
               style={{
