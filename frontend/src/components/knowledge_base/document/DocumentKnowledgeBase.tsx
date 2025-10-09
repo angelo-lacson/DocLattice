@@ -723,8 +723,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         </Modal.Actions>
       </Modal>
     );
-  } else {
-    console.log("DocumentKnowledgeBase: Document ID is valid:", documentId);
   }
 
   // Chat panel width management
