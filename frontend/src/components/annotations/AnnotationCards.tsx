@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import _ from "lodash";
 import styled from "styled-components";
 import { getDocumentUrl } from "../../utils/navigationUtils";
-import { Card, Dimmer, Loader, Label, Header, Popup } from "semantic-ui-react";
+import { Card, Label, Header, Popup } from "semantic-ui-react";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 import {
   Tags,
   FileText,
@@ -341,23 +342,20 @@ export const AnnotationCards: React.FC<AnnotationCardProps> = ({
   };
 
   return (
-    <>
-      <Dimmer active={loading}>
-        <Loader content={loading_message} />
-      </Dimmer>
-      <div
-        style={{
-          flex: 1,
-          width: "100%",
-          overflowY: "auto",
-          ...style,
-        }}
-      >
-        <Card.Group stackable itemsPerRow={card_cols} style={cardGroupStyle}>
-          {renderCards()}
-        </Card.Group>
-        <FetchMoreOnVisible fetchNextPage={handleUpdate} />
-      </div>
-    </>
+    <div
+      style={{
+        flex: 1,
+        width: "100%",
+        overflowY: "auto",
+        position: "relative",
+        ...style,
+      }}
+    >
+      <LoadingOverlay active={loading} content={loading_message} />
+      <Card.Group stackable itemsPerRow={card_cols} style={cardGroupStyle}>
+        {renderCards()}
+      </Card.Group>
+      <FetchMoreOnVisible fetchNextPage={handleUpdate} />
+    </div>
   );
 };

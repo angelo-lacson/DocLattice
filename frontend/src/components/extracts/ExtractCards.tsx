@@ -1,6 +1,7 @@
-import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { Card } from "semantic-ui-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ExtractItem } from "./ExtractItem";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExtractType, CorpusType, PageInfo } from "../../types/graphql-api";
@@ -101,29 +102,26 @@ export const ExtractCards = ({
   };
 
   return (
-    <>
-      <Dimmer active={loading}>
-        <Loader content={loading_message} />
-      </Dimmer>
-      <div
-        className="ExtractCards"
-        style={{
-          width: "100%",
-          height: "100%",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          padding: "1rem",
-          paddingBottom: "6rem",
-          ...style,
-        }}
-      >
-        <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
-          {extract_items}
-        </Card.Group>
-        <FetchMoreOnVisible fetchNextPage={fetchMore} />
-      </div>
-    </>
+    <div
+      className="ExtractCards"
+      style={{
+        width: "100%",
+        height: "100%",
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        padding: "1rem",
+        paddingBottom: "6rem",
+        position: "relative",
+        ...style,
+      }}
+    >
+      <LoadingOverlay active={loading} content={loading_message} />
+      <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
+        {extract_items}
+      </Card.Group>
+      <FetchMoreOnVisible fetchNextPage={fetchMore} />
+    </div>
   );
 };

@@ -13,9 +13,9 @@ import {
   exportingCorpus,
 } from "../../graphql/cache";
 
-import { Dimmer, Loader } from "semantic-ui-react";
 import { useNavigate } from "react-router-dom";
 import { navigateToCorpus } from "../../utils/navigationUtils";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { CorpusType, PageInfo } from "../../types/graphql-api";
@@ -187,9 +187,12 @@ export const CorpusCards = ({
         ...style,
       }}
     >
-      <Dimmer active={loading} inverted>
-        <Loader size="large" content={loading_message} />
-      </Dimmer>
+      <LoadingOverlay
+        active={loading}
+        inverted
+        size="large"
+        content={loading_message}
+      />
       <div
         className="CorpusCards"
         style={{

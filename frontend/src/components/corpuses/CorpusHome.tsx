@@ -109,7 +109,7 @@ const CorpusTitle = styled.h1`
   }
 `;
 
-const AccessBadge = styled.div<{ isPublic?: boolean }>`
+const AccessBadge = styled.div<{ $isPublic?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -117,8 +117,8 @@ const AccessBadge = styled.div<{ isPublic?: boolean }>`
   border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 500;
-  background: ${(props) => (props.isPublic ? "#dcfce7" : "#fef3c7")};
-  color: ${(props) => (props.isPublic ? "#15803d" : "#92400e")};
+  background: ${(props) => (props.$isPublic ? "#dcfce7" : "#fef3c7")};
+  color: ${(props) => (props.$isPublic ? "#15803d" : "#92400e")};
   flex-shrink: 0;
 
   svg {
@@ -712,7 +712,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         <CorpusInfo id="corpus-home-corpus-info">
           <TitleRow>
             <CorpusTitle>{fullCorpus.title || "Loading..."}</CorpusTitle>
-            <AccessBadge isPublic={fullCorpus.isPublic}>
+            <AccessBadge $isPublic={fullCorpus.isPublic}>
               {fullCorpus.isPublic ? (
                 <>
                   <Globe size={12} />

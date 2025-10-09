@@ -1,5 +1,6 @@
-import { Icon, List, Dimmer, Loader, Message } from "semantic-ui-react";
+import { Icon, List, Message } from "semantic-ui-react";
 import { SemanticCOLORS } from "semantic-ui-react/dist/commonjs/generic";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 
 import {
   NOT_STARTED,
@@ -33,12 +34,18 @@ export const ContractListItem = ({
 
   return (
     <List.Item
-      style={selected ? { backgroundColor: "#e2ffdb" } : {}}
+      style={
+        selected
+          ? { backgroundColor: "#e2ffdb", position: "relative" }
+          : { position: "relative" }
+      }
       onClick={onSelect}
     >
-      <Dimmer active={status === UPLOADING} inverted>
-        <Loader inverted>Loading</Loader>
-      </Dimmer>
+      <LoadingOverlay
+        active={status === UPLOADING}
+        inverted
+        content="Loading"
+      />
       {status === NOT_STARTED ? (
         <div style={{ float: "right", cursor: "pointer" }}>
           <Icon name="trash" color="red" onClick={onRemove} />

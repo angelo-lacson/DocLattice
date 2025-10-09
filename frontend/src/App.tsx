@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 
 import { useAuth0 } from "@auth0/auth0-react";
 
@@ -116,6 +116,9 @@ export const App = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Track if we've applied mobile display settings to prevent infinite loop
+  const mobileSettingsAppliedRef = useRef(false);
+
   const {
     data: meData,
     loading: meLoading,
@@ -138,14 +141,33 @@ export const App = () => {
     }
   }, [isLoading, meData, meLoading, meError, auth_token]);
 
+  // Set mobile-friendly display settings once when narrow viewport detected
+  // CRITICAL: Don't include location/navigate in deps - causes infinite loop!
   useEffect(() => {
-    if (width <= 800) {
+    const isMobile = width <= 800;
+    const currentLabels = showAnnotationLabels();
+
+    // Only update if:
+    // 1. We're on mobile AND
+    // 2. Labels aren't already set to ALWAYS AND
+    // 3. We haven't already applied mobile settings
+    if (
+      isMobile &&
+      currentLabels !== LabelDisplayBehavior.ALWAYS &&
+      !mobileSettingsAppliedRef.current
+    ) {
       // Update display settings via URL - CentralRouteManager will set reactive vars
       updateAnnotationDisplayParams(location, navigate, {
         labelDisplay: LabelDisplayBehavior.ALWAYS,
       });
+      mobileSettingsAppliedRef.current = true;
     }
-  }, [width, location, navigate]);
+
+    // Reset flag when returning to desktop width
+    if (!isMobile) {
+      mobileSettingsAppliedRef.current = false;
+    }
+  }, [width]); // Only depend on width, not location!
 
   // Auth logic has been moved to AuthGate component to ensure it completes
   // before any components that need authentication are rendered

@@ -2,8 +2,9 @@ import { useQuery, useReactiveVar } from "@apollo/client";
 import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
-import { DropdownItemProps, DropdownProps, Label } from "semantic-ui-react";
-import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
+import { Label } from "semantic-ui-react";
+import Select, { SelectOption } from "../../common/Select";
+import { MultiValue, SingleValue } from "react-select";
 import {
   authToken,
   selectedAnalyses,
@@ -42,17 +43,21 @@ export const FilterToAnalysesSelector = ({
   ) as string[];
 
   const handleChange = (
-    event: React.SyntheticEvent<HTMLElement, Event>,
-    data: DropdownProps
+    selectedOptions: SingleValue<SelectOption> | MultiValue<SelectOption>
   ) => {
-    // console.log("Handle analysis slection", data.value);
+    // console.log("Handle analysis selection", selectedOptions);
 
     let selected_analyses: AnalysisType[] = [];
 
-    if (data.value !== undefined && Array.isArray(data.value)) {
-      for (let analysis_id of data.value) {
+    // This is a multi-select, so we know it's MultiValue (array)
+    if (
+      selectedOptions &&
+      Array.isArray(selectedOptions) &&
+      selectedOptions.length > 0
+    ) {
+      for (let option of selectedOptions) {
         let analysis_to_add = analyses_response?.analyses.edges
-          .filter((analysis_edge) => analysis_edge.node.id === analysis_id)
+          .filter((analysis_edge) => analysis_edge.node.id === option.value)
           .map((edge) => edge.node);
 
         if (analysis_to_add !== undefined) {
@@ -102,12 +107,11 @@ export const FilterToAnalysesSelector = ({
   }, [corpus]);
 
   ///////////////////////////////////////////////////////////////////////////////
-  let analysis_options: DropdownItemProps[] = [];
+  let analysis_options: SelectOption[] = [];
   if (analyses_response?.analyses?.edges) {
     analysis_options = analyses_response?.analyses?.edges.map((edge) => ({
-      key: edge.node.id,
-      text: `${edge.node.id}: ${edge.node.analyzer.analyzerId}`,
       value: edge.node.id,
+      label: `${edge.node.id}: ${edge.node.analyzer.analyzerId}`,
     }));
   }
 
@@ -140,27 +144,15 @@ export const FilterToAnalysesSelector = ({
         Created by Analysis
       </Label>
       <div style={{ position: "relative", zIndex: 10 }}>
-        <DropdownNoStrictMode
+        <Select
+          isMulti
+          isClearable
           placeholder="Select analyses..."
-          fluid
-          multiple
-          selection
-          clearable
-          upward={false}
-          selectOnBlur={false}
-          selectOnNavigation={true}
           options={analysis_options}
           onChange={handleChange}
-          value={analysis_ids_to_display}
-          style={{
-            margin: "0",
-            minWidth: "260px",
-            fontSize: "0.875rem",
-            background: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-          }}
+          value={analysis_options.filter((opt) =>
+            analysis_ids_to_display.includes(opt.value)
+          )}
         />
       </div>
     </div>

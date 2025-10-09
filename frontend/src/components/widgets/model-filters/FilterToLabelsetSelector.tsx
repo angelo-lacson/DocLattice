@@ -1,7 +1,8 @@
 import { useQuery, useReactiveVar } from "@apollo/client";
 
-import { Label, DropdownItemProps } from "semantic-ui-react";
-import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
+import { Label } from "semantic-ui-react";
+import Select, { SelectOption } from "../../common/Select";
+import { SingleValue, MultiValue } from "react-select";
 
 import _ from "lodash";
 
@@ -68,15 +69,14 @@ export const FilterToLabelsetSelector = ({
     .map((edge) => (edge?.node ? edge.node : undefined))
     .filter((item): item is LabelSetType => !!item);
 
-  let label_options: DropdownItemProps[] = [];
+  let label_options: SelectOption[] = [];
   if (labelset_items) {
     label_options = labelset_items
       .filter((item): item is LabelSetType => !!item)
       .map((label) => ({
-        key: label.id,
-        text: label?.title ? label.title : "",
         value: label.id,
-        image: { avatar: true, src: label.icon },
+        label: label?.title ? label.title : "",
+        ...(label.icon && { icon: label.icon }),
       }));
   }
 
@@ -109,37 +109,37 @@ export const FilterToLabelsetSelector = ({
         Filter by Labelset
       </Label>
       <div style={{ position: "relative", zIndex: 10 }}>
-        <DropdownNoStrictMode
-          fluid
-          loading={loading}
-          selection
-          clearable
-          search
-          upward={false}
-          selectOnBlur={false}
-          selectOnNavigation={true}
-          disabled={Boolean(fixed_labelset_id)}
+        <Select
+          isClearable
+          isSearchable
+          isLoading={loading}
+          isDisabled={Boolean(fixed_labelset_id)}
           options={label_options}
-          onChange={(e: any, { value }: { value: any }) => {
-            filterToLabelsetId(String(value));
+          onChange={(
+            selectedOption: SingleValue<SelectOption> | MultiValue<SelectOption>
+          ) => {
+            // This is a single select, so we know it's SingleValue
+            const singleValue = selectedOption as SingleValue<SelectOption>;
+            filterToLabelsetId(
+              singleValue && !Array.isArray(singleValue)
+                ? String(singleValue.value)
+                : ""
+            );
           }}
           placeholder="Select a labelset to filter..."
           value={
-            fixed_labelset_id
-              ? fixed_labelset_id
-              : filtered_to_labelset_id
-              ? filtered_to_labelset_id
-              : ""
+            fixed_labelset_id || filtered_to_labelset_id
+              ? label_options.find(
+                  (opt) =>
+                    opt.value === (fixed_labelset_id || filtered_to_labelset_id)
+                )
+              : null
           }
-          style={{
-            margin: "0",
-            minWidth: "260px",
-            fontSize: "0.875rem",
-            background: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-            opacity: fixed_labelset_id ? 0.7 : 1,
+          customStyles={{
+            control: (base) => ({
+              ...base,
+              opacity: fixed_labelset_id ? 0.7 : 1,
+            }),
           }}
         />
       </div>

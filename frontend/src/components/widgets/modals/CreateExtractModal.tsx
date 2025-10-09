@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Form, Dimmer, Loader } from "semantic-ui-react";
+import { Modal, Form } from "semantic-ui-react";
 import styled from "styled-components";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
+import { LoadingOverlay } from "../../common/LoadingOverlay";
 
 import { useReactiveVar, useQuery, useMutation } from "@apollo/client";
 import { selectedCorpus, selectedFieldset } from "../../../graphql/cache";
@@ -612,11 +613,11 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
             </ButtonGroup>
           </ModalFooter>
 
-          {isLoading && (
-            <Dimmer active inverted style={{ borderRadius: "20px" }}>
-              <Loader inverted>Creating your extract...</Loader>
-            </Dimmer>
-          )}
+          <LoadingOverlay
+            active={isLoading}
+            inverted
+            content="Creating your extract..."
+          />
         </ModalContainer>
       </ModalOverlay>
     </Modal>
