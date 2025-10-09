@@ -486,44 +486,15 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
           {(() => {
             const shouldShowAnalysisButton =
               canCreateAnalysis && !readOnly && selectedCorpus;
-            console.log(
-              "FloatingDocumentControls: Analysis button render decision",
-              {
-                canCreateAnalysis,
-                readOnly,
-                shouldShowAnalysisButton,
-                documentPermissions: documentPermissions
-                  ? [...documentPermissions]
-                  : null,
-                selectedCorpusId: selectedCorpus?.id,
-                selectedCorpusPermissions: selectedCorpus?.myPermissions,
-              }
-            );
 
             return shouldShowAnalysisButton ? (
               <ActionButton
                 $color="#10b981"
                 data-testid="create-analysis-button"
                 onClick={() => {
-                  console.log(
-                    "FloatingDocumentControls: Analysis button clicked",
-                    {
-                      selectedCorpus: selectedCorpus
-                        ? {
-                            id: selectedCorpus.id,
-                            title: selectedCorpus.title,
-                          }
-                        : null,
-                      currentOpenedCorpus: openedCorpus(),
-                    }
-                  );
-
                   // Note: openedCorpus is managed by CentralRouteManager, not set here
                   // Modal reads corpus from reactive var or component state as needed
                   if (selectedCorpus) {
-                    console.log(
-                      "FloatingDocumentControls: Opening analysis modal with corpus context"
-                    );
                     showSelectCorpusAnalyzerOrFieldsetModal(true);
                   } else {
                     console.warn(

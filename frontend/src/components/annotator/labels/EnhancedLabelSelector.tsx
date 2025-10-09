@@ -348,8 +348,8 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
     <>
       <StyledEnhancedSelector
         {...calculatePosition()}
-        isExpanded={isExpanded}
-        isReadOnly={isReadOnlyMode}
+        $isExpanded={isExpanded}
+        $isReadOnly={isReadOnlyMode}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleSelectorClick}
@@ -736,8 +736,8 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
 };
 
 interface StyledEnhancedSelectorProps {
-  isExpanded: boolean;
-  isReadOnly: boolean;
+  $isExpanded: boolean;
+  $isReadOnly: boolean;
   $bottom: string;
   $right: string;
 }
@@ -748,8 +748,8 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
   right: ${(props) => props.$right};
   z-index: 1000;
   transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
-  opacity: ${(props) => (props.isReadOnly ? 0.6 : 1)};
-  filter: ${(props) => (props.isReadOnly ? "grayscale(0.3)" : "none")};
+  opacity: ${(props) => (props.$isReadOnly ? 0.6 : 1)};
+  filter: ${(props) => (props.$isReadOnly ? "grayscale(0.3)" : "none")};
 
   @media (max-width: 768px) {
     bottom: 1rem;
@@ -768,12 +768,12 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
     padding: 0 16px;
     gap: 12px;
     flex-shrink: 0;
-    cursor: ${(props) => (props.isReadOnly ? "not-allowed" : "pointer")};
+    cursor: ${(props) => (props.$isReadOnly ? "not-allowed" : "pointer")};
     position: relative;
     transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
 
     .tag-icon {
-      color: ${(props) => (props.isReadOnly ? "#94a3b8" : "#1a75bc")};
+      color: ${(props) => (props.$isReadOnly ? "#94a3b8" : "#1a75bc")};
       stroke-width: 2.2;
       transition: all 0.3s;
     }
@@ -789,7 +789,8 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
     }
 
     &:hover {
-      transform: ${(props) => (props.isReadOnly ? "none" : "translateY(-2px)")};
+      transform: ${(props) =>
+        props.$isReadOnly ? "none" : "translateY(-2px)"};
     }
   }
 
