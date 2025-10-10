@@ -1,4 +1,4 @@
-volumes:
+Nvolumes:
   local_postgres_data: {}
   local_postgres_data_backups: {}
 
@@ -15,8 +15,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      # vector-embedder:
-      #   condition: service_started
+      vector-embedder:
+        condition: service_started
       docling-parser:
         condition: service_started
     volumes:
@@ -41,7 +41,7 @@ services:
     env_file:
       - ./.envs/.local/.postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U doadmin -d opencontractserver"]
+      test: ["CMD-SHELL", "pg_isready -U oc_user -d opencontractserver"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -66,6 +66,8 @@ services:
     container_name: vector-embedder
     environment:
       PORT: 8000
+      TRANSFORMERS_OFFLINE: 1
+      HF_DATASETS_OFFLINE: 1
 
   celeryworker:
     image: opencontractserver_local_django
