@@ -27,6 +27,7 @@ import {
   RESOLVE_DOCUMENT_BY_SLUGS_FULL,
   RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL,
 } from "../../graphql/queries";
+import { navigationCircuitBreaker } from "../../utils/navigationCircuitBreaker";
 
 // Mock navigation
 const mockNavigate = vi.fn();
@@ -51,6 +52,11 @@ describe("CentralRouteManager", () => {
 
     // Set auth status so CentralRouteManager proceeds with entity fetching
     authStatusVar("AUTHENTICATED");
+
+    // CRITICAL: Reset navigation circuit breaker to prevent test isolation issues
+    // The circuit breaker is a singleton that accumulates navigation events across tests
+    // Without reset, it can trip and block all navigation after many tests run
+    navigationCircuitBreaker.reset();
 
     // Clear mocks
     mockNavigate.mockClear();
