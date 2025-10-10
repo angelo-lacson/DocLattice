@@ -740,8 +740,9 @@ class AnnotationPrivacyScopingTestCase(TestCase):
 
         for text in should_not_see:
             self.assertNotIn(
-                text, annotation_texts,
-                f"Should not see analysis annotation without analysis_id: {text}"
+                text,
+                annotation_texts,
+                f"Should not see analysis annotation without analysis_id: {text}",
             )
 
         total_count = len(result["data"]["document"]["allAnnotations"])
