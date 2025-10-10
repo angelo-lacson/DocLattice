@@ -689,13 +689,19 @@ class AnnotationPrivacyScopingTestCase(TestCase):
     def test_admin_sees_all_annotations(self):
         """
         Admin (superuser) should see ALL annotations regardless of privacy settings.
+
+        Note: When analysis_id is not provided, allAnnotations only returns manual/user
+        annotations (analysis__isnull=True). To see analysis-created annotations,
+        the admin must query with specific analysis_id values.
         """
         logger.info("\n" + "=" * 80)
-        logger.info("TEST: Admin sees all annotations")
+        logger.info("TEST: Admin sees all manual annotations without analysis_id")
         logger.info("=" * 80)
 
         doc_id = to_global_id("DocumentType", self.doc_contract1.id)
         corpus_id = to_global_id("CorpusType", self.shared_corpus.id)
+
+        # Query without analysis_id - should only return manual annotations
         query = """
         query {{
             document(id: "{}") {{
@@ -714,22 +720,32 @@ class AnnotationPrivacyScopingTestCase(TestCase):
         annotations = result["data"]["document"]["allAnnotations"]
         annotation_texts = [ann["rawText"] for ann in annotations]
 
-        # Admin should see EVERYTHING
-        expected_annotations = [
+        # Without analysis_id, should only see manual annotations (no analysis field)
+        expected_manual_annotations = [
             "Public annotation on Contract Alpha",
-            "Team A confidential finding on Contract Alpha",
-            "Team B confidential finding on Contract Alpha",
-            "Reviewer's confidential note on Contract Alpha",
-            "Team A extract-generated annotation",
+            "Team A extract-generated annotation",  # Has created_by_extract, but no analysis
         ]
 
-        for expected_text in expected_annotations:
+        for expected_text in expected_manual_annotations:
             self.assertIn(
                 expected_text, annotation_texts, f"Admin should see: {expected_text}"
             )
 
+        # Should NOT see analysis-created annotations when no analysis_id provided
+        should_not_see = [
+            "Team A confidential finding on Contract Alpha",
+            "Team B confidential finding on Contract Alpha",
+            "Reviewer's confidential note on Contract Alpha",
+        ]
+
+        for text in should_not_see:
+            self.assertNotIn(
+                text, annotation_texts,
+                f"Should not see analysis annotation without analysis_id: {text}"
+            )
+
         total_count = len(result["data"]["document"]["allAnnotations"])
-        logger.info(f"✓ Admin sees ALL {total_count} annotations on Contract Alpha")
+        logger.info(f"✓ Admin sees {total_count} manual annotations (no analysis_id)")
 
     # =========================================================================
     # TEST 6: Granting/revoking analysis permission changes visibility
