@@ -7,6 +7,7 @@ from django.test import TestCase, TransactionTestCase
 from opencontractserver.annotations.models import TOKEN_LABEL, Annotation, Note
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
+from opencontractserver.llms.agents.core_agents import SourceNode
 from opencontractserver.llms.tools import (
     get_md_summary_token_length,
     get_notes_for_document_corpus,
@@ -29,6 +30,7 @@ from opencontractserver.llms.tools.core_tools import (
     get_document_summary_versions,
     load_document_txt_extract,
     search_document_notes,
+    search_exact_text_as_sources,
     update_corpus_description,
     update_document_note,
     update_document_summary,
@@ -500,6 +502,215 @@ class TestLLMTools(TestCase):
 
         with self.assertRaisesRegex(ValueError, "Version 5 not found"):
             get_document_summary_at_version(self.doc.id, self.corpus.id, 5)
+
+    # ------------------------------------------------------------------
+    # Tests for exact text search and SourceNode transformation
+    # ------------------------------------------------------------------
+
+    def test_search_exact_text_in_text_document(self):
+        """Test exact text search in text document returns proper SourceNode format."""
+        # Ensure document is marked as text/plain
+        self.doc.file_type = "text/plain"
+        self.doc.save()
+
+        # Search for text that exists in our txt_content
+        search_strings = ["test text"]
+
+        results = search_exact_text_as_sources(
+            document_id=self.doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        # Verify we got results
+        self.assertGreater(len(results), 0, "Should find at least one match")
+
+        # Verify results are SourceNode objects
+        for result in results:
+            self.assertIsInstance(result, SourceNode)
+            self.assertIsNotNone(result.content)
+            self.assertEqual(result.similarity_score, 1.0)  # Exact match = 1.0
+
+            # Verify metadata contains char_start and char_end (for text files)
+            self.assertIn("char_start", result.metadata)
+            self.assertIn("char_end", result.metadata)
+            self.assertIn("document_id", result.metadata)
+            self.assertEqual(result.metadata["document_id"], self.doc.id)
+            self.assertEqual(result.metadata["corpus_id"], self.corpus.id)
+
+            # Verify negative synthetic IDs
+            self.assertLess(result.annotation_id, 0)
+
+    def test_source_node_to_dict_text_format(self):
+        """Test that SourceNode.to_dict() produces correct json field for text sources."""
+        # Create a SourceNode as it would come from text document search
+        source = SourceNode(
+            annotation_id=-1,
+            content="test text extract content",
+            similarity_score=1.0,
+            metadata={
+                "document_id": self.doc.id,
+                "corpus_id": self.corpus.id,
+                "page": 0,
+                "char_start": 10,
+                "char_end": 35,
+                "search_string": "test text",
+                "match_type": "exact_text_text",
+            },
+        )
+
+        # Convert to dict (format that will be stored in DB and sent to frontend)
+        result_dict = source.to_dict()
+
+        # Verify base fields
+        self.assertEqual(result_dict["annotation_id"], -1)
+        self.assertEqual(result_dict["rawText"], "test text extract content")
+        self.assertEqual(result_dict["similarity_score"], 1.0)
+
+        # Verify json field has simple {start, end} format for text files
+        self.assertIn("json", result_dict)
+        self.assertIsInstance(result_dict["json"], dict)
+        self.assertEqual(result_dict["json"]["start"], 10)
+        self.assertEqual(result_dict["json"]["end"], 35)
+
+        # Verify metadata is flattened
+        self.assertEqual(result_dict["document_id"], self.doc.id)
+        self.assertEqual(result_dict["corpus_id"], self.corpus.id)
+        self.assertEqual(result_dict["page"], 0)
+        self.assertEqual(result_dict["char_start"], 10)
+        self.assertEqual(result_dict["char_end"], 35)
+
+    def test_source_node_to_dict_pdf_format(self):
+        """Test that SourceNode.to_dict() produces correct json field for PDF sources."""
+        # Create a mock MultipageAnnotationJson as it would come from PlasmaPDF
+        mock_annotation_json = {
+            "0": {  # Page 0
+                "bounds": {
+                    "top": 100.5,
+                    "bottom": 120.3,
+                    "left": 50.2,
+                    "right": 250.8,
+                },
+                "tokensJsons": [
+                    {"pageIndex": 0, "tokenIndex": 10},
+                    {"pageIndex": 0, "tokenIndex": 11},
+                    {"pageIndex": 0, "tokenIndex": 12},
+                ],
+                "rawText": "test text",
+            }
+        }
+
+        # Create a SourceNode as it would come from PDF document search
+        source = SourceNode(
+            annotation_id=-1,
+            content="test text",
+            similarity_score=1.0,
+            metadata={
+                "document_id": self.doc.id,
+                "corpus_id": self.corpus.id,
+                "page": 1,
+                "annotation_json": mock_annotation_json,  # Full MultipageAnnotationJson
+                "search_string": "test text",
+                "char_start": 100,
+                "char_end": 109,
+                "bounding_box": {
+                    "top": 100.5,
+                    "bottom": 120.3,
+                    "left": 50.2,
+                    "right": 250.8,
+                },
+                "match_type": "exact_text_pdf",
+            },
+        )
+
+        # Convert to dict (format that will be stored in DB and sent to frontend)
+        result_dict = source.to_dict()
+
+        # Verify base fields
+        self.assertEqual(result_dict["annotation_id"], -1)
+        self.assertEqual(result_dict["rawText"], "test text")
+        self.assertEqual(result_dict["similarity_score"], 1.0)
+
+        # Verify json field contains full MultipageAnnotationJson for PDFs
+        self.assertIn("json", result_dict)
+        self.assertIsInstance(result_dict["json"], dict)
+        self.assertIn("0", result_dict["json"])  # Page 0 data
+        self.assertIn("bounds", result_dict["json"]["0"])
+        self.assertIn("tokensJsons", result_dict["json"]["0"])
+        self.assertEqual(result_dict["json"]["0"]["rawText"], "test text")
+
+        # Verify metadata is flattened (but annotation_json should not be duplicated)
+        self.assertEqual(result_dict["document_id"], self.doc.id)
+        self.assertEqual(result_dict["corpus_id"], self.corpus.id)
+        self.assertEqual(result_dict["page"], 1)
+        self.assertNotIn("annotation_json", result_dict)  # Should be only in json field
+
+        # Other metadata should still be present
+        self.assertEqual(result_dict["char_start"], 100)
+        self.assertEqual(result_dict["char_end"], 109)
+        self.assertIn("bounding_box", result_dict)
+
+    def test_search_exact_text_with_pdf_document(self):
+        """Test exact text search with a text document (PDF with PAWLS would require extensive mocking)."""
+        # Create a document with text extract
+        text_doc = Document.objects.create(
+            creator=self.user,
+            title="Test Text Document",
+            description="Test Text",
+            file_type="text/plain",  # Use text/plain since we don't have PAWLS data
+        )
+
+        # Create mock text content
+        text_content = "This is a sample document with covenants and agreements."
+        text_doc.txt_extract_file.save(
+            "test_text_extract.txt", ContentFile(text_content.encode())
+        )
+
+        # Note: For full PDF testing with MultipageAnnotationJson, we would need to:
+        # 1. Create a mock pdf_extract_file
+        # 2. Create mock PAWLS data with token positions
+        # 3. Mock the PlasmaPDF build_translation_layer function
+        # This is complex and would require significant mocking infrastructure.
+        # For now, we verify that text-based search works correctly.
+
+        search_strings = ["covenants and agreements"]
+
+        results = search_exact_text_as_sources(
+            document_id=text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        # Should find text matches
+        self.assertGreater(len(results), 0, "Should find matches")
+
+        for result in results:
+            self.assertIsInstance(result, SourceNode)
+            self.assertIn("covenants and agreements", result.content)
+
+            # Verify metadata
+            self.assertIn("document_id", result.metadata)
+            self.assertEqual(result.metadata["document_id"], text_doc.id)
+
+            # Text documents should have char_start and char_end
+            self.assertIn("char_start", result.metadata)
+            self.assertIn("char_end", result.metadata)
+
+    def test_search_exact_text_no_matches(self):
+        """Test exact text search returns empty list when no matches found."""
+        # Ensure document is marked as text/plain
+        self.doc.file_type = "text/plain"
+        self.doc.save()
+
+        search_strings = ["ThisStringDefinitelyDoesNotExist12345"]
+
+        results = search_exact_text_as_sources(
+            document_id=self.doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        self.assertEqual(len(results), 0, "Should return empty list when no matches")
 
 
 class AsyncTestDuplicateTools(TransactionTestCase):

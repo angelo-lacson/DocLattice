@@ -68,6 +68,7 @@ from opencontractserver.llms.tools.core_tools import (
     aload_document_md_summary,
     aload_document_txt_extract,
     asearch_document_notes,
+    asearch_exact_text_as_sources,
     aupdate_corpus_description,
     aupdate_document_note,
     aupdate_document_summary,
@@ -102,10 +103,14 @@ def _to_source_node(raw: Any) -> SourceNode:
     if hasattr(raw, "model_dump"):
         raw = raw.model_dump()
 
-    # raw is now a dict coming from PydanticAIVectorSearchResponse
+    logger.info(f"[search_exact_text_tool] Raw source: {raw!r}")
+    # raw is now a dict - handle both 'content' and 'rawText' keys
+    # (SourceNode.to_dict() uses 'rawText' for frontend compatibility)
+    content = raw.get("content") or raw.get("rawText", "")
+
     return SourceNode(
         annotation_id=int(raw.get("annotation_id", 0)),
-        content=raw.get("content", ""),
+        content=content,
         metadata=raw,
         similarity_score=raw.get("similarity_score", 1.0),
     )
@@ -475,6 +480,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                     for s in raw_sources
                                                 ]
                                                 accumulated_sources.extend(new_sources)
+
                                                 # Emit a dedicated SourceEvent so the client
                                                 # can update citations in real-time.
                                                 src_ev = SourceEvent(
@@ -484,6 +490,32 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 )
                                                 builder.add(src_ev)
                                                 yield src_ev
+
+                                        # Capture exact text search results (similar to similarity_search)
+                                        elif tool_name == "search_exact_text":
+                                            raw_sources = event.result.content  # type: ignore[attr-defined]
+                                            if (
+                                                isinstance(raw_sources, list)
+                                                and raw_sources
+                                            ):
+                                                new_sources = [
+                                                    _to_source_node(s)
+                                                    for s in raw_sources
+                                                ]
+                                                accumulated_sources.extend(new_sources)
+                                                # Emit SourceEvent for real-time citation updates
+                                                src_ev = SourceEvent(
+                                                    sources=new_sources,
+                                                    user_message_id=user_msg_id,
+                                                    llm_message_id=llm_msg_id,
+                                                )
+                                                builder.add(src_ev)
+                                                yield src_ev
+                                            else:
+                                                logger.warning(
+                                                    "[search_exact_text] No sources to emit - "
+                                                    f"raw_sources is {type(raw_sources)} with value: {raw_sources!r}"
+                                                )
 
                                         # Special handling for nested document-agent responses
                                         elif tool_name == "ask_document":
@@ -1385,6 +1417,58 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         )
 
         # -----------------------------
+        # Exact text search tool
+        # -----------------------------
+        async def search_exact_text_tool(search_strings: list[str]) -> list[dict]:
+            """Search for exact text matches and return source nodes with location information."""
+            logger.info(
+                f"[search_exact_text_tool] Called with search_strings: {search_strings}"
+            )
+            sources = await asearch_exact_text_as_sources(
+                document_id=context.document.id,
+                search_strings=search_strings,
+                corpus_id=context.corpus.id if context.corpus else None,
+            )
+            logger.info(
+                f"[search_exact_text_tool] Got {len(sources)} sources from asearch_exact_text_as_sources"
+            )
+
+            # Convert SourceNode objects to dicts in the SAME format as similarity_search
+            # This ensures consistent handling by PydanticAI and our event system
+            result = []
+            for s in sources:
+                result.append(
+                    {
+                        "annotation_id": s.annotation_id,
+                        "content": s.content,  # Use 'content' not 'rawText' to match similarity_search format
+                        "similarity_score": s.similarity_score,
+                        **s.metadata,  # Flatten metadata fields to top level
+                    }
+                )
+
+            logger.info(f"[search_exact_text_tool] Returning {len(result)} dicts")
+            if result:
+                logger.info(
+                    f"[search_exact_text_tool] First dict keys: {list(result[0].keys())}"
+                )
+                logger.info(
+                    f"[search_exact_text_tool] First source content: {result[0].get('content', 'MISSING')[:50]}..."
+                )
+            return result
+
+        search_exact_text_wrapped = PydanticAIToolFactory.from_function(
+            search_exact_text_tool,
+            name="search_exact_text",
+            description=(
+                "Search for exact text matches in the document. Returns source nodes with page numbers "
+                "and bounding boxes (for PDFs). Perfect match similarity score of 1.0."
+            ),
+            parameter_descriptions={
+                "search_strings": "List of exact strings to find. All occurrences of each string will be returned.",
+            },
+        )
+
+        # -----------------------------
         # Document summary tools (new)
         # -----------------------------
         async def get_document_summary_tool(
@@ -1652,6 +1736,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             get_summary_length_tool,  # corpus-agnostic
             get_text_length_tool,  # corpus-agnostic
             load_text_tool,  # corpus-agnostic
+            search_exact_text_wrapped,  # corpus-agnostic exact text search
         ]
 
         if context.corpus is not None:

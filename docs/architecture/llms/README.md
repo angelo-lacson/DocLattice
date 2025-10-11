@@ -22,7 +22,7 @@ from opencontractserver.llms import agents
 # corpus_obj = Corpus.objects.get(id=1)
 
 # Create a document agent
-# Note: The '''corpus''' parameter is optional - use None for documents not in a corpus
+# Note: The `corpus` parameter is optional - use None for documents not in a corpus
 agent = await agents.for_document(document=123, corpus=1) # Replace 1 with your actual corpus_id or object, or use None
 
 # Chat with rich responses
@@ -128,7 +128,7 @@ from opencontractserver.llms.types import AgentFramework
 # document_obj = Document.objects.get(id=123) # Example document
 
 # Document agent with default framework (LlamaIndex)
-# The '''corpus''' parameter is optional - can be None for standalone documents
+# The `corpus` parameter is optional - can be None for standalone documents
 agent = await agents.for_document(document=123, corpus=1) # Use actual document/corpus IDs or objects
 
 # Document agent for standalone document (not in any corpus)
@@ -142,7 +142,7 @@ agent = await agents.for_corpus(
 )
 
 # With custom configuration
-# The '''corpus''' parameter is optional for document agents (use None for standalone).
+# The `corpus` parameter is optional for document agents (use None for standalone).
 agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=1,     # Use actual corpus ID or object
@@ -352,18 +352,40 @@ page_count = await agent.structured_response(
 
 #### Source Structure
 
-All sources returned by agents follow a standardized format that includes annotation metadata and similarity scores:
+All sources returned by agents follow a standardized format that includes annotation metadata, similarity scores, and coordinate information via the `json` field:
 
 ```python
-# Example source object structure
-source = {
+# Example source object structure (PDF document)
+pdf_source = {
     "annotation_id": 123,
     "rawText": "This is the annotation content",
     "similarity_score": 0.85,
     "document_id": 456,
     "corpus_id": 789,
     "page": 2,
-    "annotation_label": "Contract Clause"
+    "annotation_label": "Contract Clause",
+    "json": {  # Full MultipageAnnotationJson for PDFs
+        "0": {  # Page 0
+            "bounds": {"top": 100.5, "bottom": 120.3, "left": 50.2, "right": 250.8},
+            "tokensJsons": [
+                {"pageIndex": 0, "tokenIndex": 10},
+                {"pageIndex": 0, "tokenIndex": 11}
+            ],
+            "rawText": "annotation content"
+        }
+    }
+}
+
+# Example source object structure (text document)
+text_source = {
+    "annotation_id": -1,  # Negative ID for synthetic sources
+    "rawText": "exact text match",
+    "similarity_score": 1.0,
+    "document_id": 456,
+    "page": 1,
+    "char_start": 1234,
+    "char_end": 1250,
+    "json": {"start": 1234, "end": 1250}  # Simple format for text files
 }
 
 # Sources are consistent across all contexts:
@@ -372,13 +394,28 @@ for source in response.sources:
     print(f"Source: {source.annotation_id} (score: {source.similarity_score})")
     print(f"Content: {source.content}")
     print(f"Metadata: {source.metadata}")
+
+    # Access the source as a dictionary (for serialization/storage)
+    source_dict = source.to_dict()  # Automatically generates `json` field
 ```
+
+**Key Source Features:**
+
+- **Automatic `json` Field Generation**: `SourceNode.to_dict()` intelligently constructs the `json` field based on available metadata:
+  - **PDF Sources**: Uses `annotation_json` from metadata → full `MultipageAnnotationJson` with token positions and bounding boxes
+  - **Text Sources**: Uses `char_start`/`char_end` from metadata → simple `{start, end}` format
+  - **Legacy Sources**: Passes through existing `json` field if present
+
+- **Document Type Agnostic**: Tools store raw metadata (`annotation_json`, `char_start`, `char_end`); transformation happens automatically
+
+- **Frontend Compatibility**: The `json` field format matches frontend TypeScript interfaces (`WebSocketSources`)
 
 This format is used consistently in:
 - Database storage (ChatMessage.data['sources'])
 - WebSocket streaming (ASYNC_FINISH messages)
 - API responses (UnifiedChatResponse.sources)
 - Vector store search results
+- Exact text search results
 
 ### Conversation Management
 
@@ -388,7 +425,7 @@ The framework provides sophisticated conversation management through the `CoreCo
 
 ```python
 # Create agent with persistent conversation
-# The '''corpus''' parameter is optional for document agents (use None for standalone).
+# The `corpus` parameter is optional for document agents (use None for standalone).
 agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=1,     # Use actual corpus ID or object
@@ -410,7 +447,7 @@ print(f"Conversation has {conversation_info['message_count']} messages")
 
 ```python
 # Anonymous sessions - context maintained in memory only
-# The '''corpus''' parameter is optional; standalone works for anonymous too.
+# The `corpus` parameter is optional; standalone works for anonymous too.
 agent = await agents.for_document(document=123, corpus=None)  # No user_id
 response1 = await agent.chat("What is this document about?")
 response2 = await agent.chat("Can you elaborate on section 2?")  # Context maintained in memory
@@ -453,7 +490,7 @@ from opencontractserver.llms.tools.core_tools import (
 )
 
 # Use built-in tools by name (async versions preferred when available)
-# The '''corpus''' parameter is optional for document agents (use None for standalone).
+# The `corpus` parameter is optional for document agents (use None for standalone).
 agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=1,     # Use actual corpus ID or object
@@ -482,7 +519,7 @@ risk_tool = CoreTool.from_function(
     description="Analyze contract risk factors"
 )
 
-# The '''corpus''' parameter is optional for document agents (use None for standalone).
+# The `corpus` parameter is optional for document agents (use None for standalone).
 agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=None,
@@ -568,7 +605,7 @@ The framework automatically converts tools to the appropriate format:
 # PydanticAI: CoreTool → PydanticAIToolWrapper
 
 # Tools work seamlessly across frameworks
-# The '''corpus''' parameter is optional for document agents.
+# The `corpus` parameter is optional for document agents.
 llama_agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=None,  # Or pass a corpus ID/object when available
@@ -681,6 +718,7 @@ The approval flow introduces two new event types:
 |------------|---------|------------|--------------|
 | `ApprovalResultEvent` | Confirms decision was recorded | `decision` ("approved"/"rejected"), `pending_tool_call` | Immediately after `resume_with_approval()` |
 | `ResumeEvent` | Signals execution restart | Standard event fields | After approval, before tool execution |
+| `ErrorEvent` | Error occurred during execution | `error`, `metadata`, `is_complete` (always True) | Unrecoverable errors (e.g., rate limits, API failures) |
 
 ##### Approval Event Structure
 
@@ -721,11 +759,174 @@ async for event in agent.resume_with_approval(
 - Call additional tools (including other approval-gated tools)
 - Generate a final response incorporating all tool results
 
+##### Implementation Details
+
+###### State Validation
+
+The `resume_with_approval()` method performs strict state validation before resuming execution:
+
+```python
+# Check message state
+current_state = paused_msg.data.get("state")
+if current_state != MessageState.AWAITING_APPROVAL:
+    # Handle edge cases
+    if current_state in [MessageState.COMPLETED, MessageState.CANCELLED]:
+        # Message already processed - likely duplicate request
+        return  # Empty generator, no error
+    else:
+        raise ValueError(f"Message is not awaiting approval (state: {current_state})")
+```
+
+**Validation Steps:**
+1. Loads the paused `ChatMessage` from database by `llm_message_id`
+2. Checks `data['state']` is exactly `AWAITING_APPROVAL`
+3. Handles duplicate requests gracefully (returns empty generator if already processed)
+4. Raises `ValueError` for invalid states
+
+**Error Scenarios:**
+- Message not found → `ValueError` raised
+- Message not awaiting approval → `ValueError` raised (unless already completed/cancelled)
+- Duplicate approval request → Silently returns (idempotent behavior)
+
+###### Tool Execution Paths
+
+When approved, the framework attempts to execute the tool using two fallback paths:
+
+**Path 1: Agent Config Tools** (lines 909-945)
+```python
+# 1. Search config.tools for matching tool name
+for tool in self.config.tools or []:
+    if getattr(tool, "__name__", None) == tool_name:
+        wrapper_fn = tool
+        break
+
+# 2. Execute if found
+if wrapper_fn:
+    result = await wrapper_fn(_EmptyCtx(), **tool_args)
+    tool_executed = True
+```
+
+**Path 2: PydanticAI Registry** (fallback, lines 946-995)
+```python
+# 1. Look up tool in pydantic-ai agent's function registry
+tool_obj = self.pydantic_ai_agent._function_tools.get(tool_name)
+
+# 2. Extract underlying callable from tool object
+for attr in ("function", "_wrapped_function", "callable_function"):
+    candidate = getattr(tool_obj, attr, None)
+    if callable(candidate):
+        break
+
+# 3. Execute the callable
+result = await candidate(_EmptyCtx(), **tool_args)
+```
+
+**Empty Context Pattern:**
+The framework creates a minimal context object with:
+- `tool_call_id`: Preserved from the paused message
+- `skip_approval_gate`: Set to `True` to prevent re-triggering approval
+
+**Tool Argument Normalization:**
+The method handles various argument formats:
+```python
+# String arguments (JSON or plain)
+if isinstance(tool_args_raw, str):
+    try:
+        tool_args = json.loads(tool_args_raw)  # Try JSON parse
+    except json.JSONDecodeError:
+        # Fallback: wrap as parameter for known tools
+        if tool_name == "update_document_summary":
+            tool_args = {"new_content": tool_args_raw}
+        else:
+            tool_args = {"arg": tool_args_raw}
+
+# Dict arguments (already normalized)
+elif isinstance(tool_args_raw, dict):
+    tool_args = tool_args_raw
+```
+
+###### Continuation Prompt Mechanism
+
+After tool execution (approved path), the framework constructs a continuation prompt:
+
+```python
+# Build prompt with tool result
+continuation_prompt = (
+    f"The tool '{tool_name}' was executed with user approval and returned: "
+    f"{json.dumps(tool_result, indent=2)}. "
+    f"Please continue with your original task based on this result."
+)
+
+# Resume normal streaming
+async for ev in self._stream_core(
+    continuation_prompt,
+    force_llm_id=resumed_llm_id,      # New message for resumed run
+    force_user_msg_id=user_message_id  # Link to original user message
+):
+    yield ev
+```
+
+**Key Implementation Points:**
+1. **New LLM Message**: Creates a fresh `ChatMessage` for the resumed run (`resumed_llm_id`)
+2. **User Message Linking**: Finds the most recent `HUMAN` message in the conversation to link events properly
+3. **Tool Result Injection**: Embeds the tool execution result in the continuation prompt
+4. **History Preservation**: The tool result is also appended to message history as a `ToolReturnPart` (approved path only)
+
+###### Rejection Path
+
+When `approved=False`:
+
+```python
+# 1. Emit ApprovalResultEvent with decision="rejected"
+yield ApprovalResultEvent(decision="rejected", ...)
+
+# 2. Mark paused message as CANCELLED
+await self.complete_message(
+    paused_msg.id,
+    paused_msg.content,
+    metadata={
+        "state": MessageState.CANCELLED,
+        "approval_decision": "rejected"
+    }
+)
+
+# 3. Emit final event and stop
+yield FinalEvent(
+    accumulated_content="Tool execution rejected by user.",
+    metadata={"approval_decision": "rejected"}
+)
+return  # No further execution
+```
+
+**Rejection Characteristics:**
+- No tool execution occurs
+- Conversation turn ends immediately
+- Paused message marked as `CANCELLED` in database
+- Simple rejection message returned to caller
+
+###### Event Sequence
+
+**Approval Flow (approved=True):**
+```
+1. ApprovalResultEvent (decision="approved")
+2. ResumeEvent (signals execution restart)
+3. [Stream events from continuation...] (ThoughtEvent, ContentEvent, etc.)
+4. FinalEvent (with approval_decision in metadata)
+```
+
+**Rejection Flow (approved=False):**
+```
+1. ApprovalResultEvent (decision="rejected")
+2. FinalEvent (rejection message, conversation ends)
+```
+
 **Implementation Notes:**
 - Approval state persists across server restarts (stored in database)
 - Only PydanticAI agents support approval gating currently
 - LlamaIndex agents ignore the `requires_approval` flag
 - Code paths: `tools/pydantic_ai_tools.py` (veto-gate), `agents/pydantic_ai_agents.py` (pause/resume)
+- All events include `user_message_id` and `llm_message_id` for tracking
+- The method always returns an async generator (even for rejection) for consistent API
 ```
 
 ### Nested Agent Streaming
@@ -937,21 +1138,22 @@ async for event in agent.stream("Complex analysis"):
 
 ### Embeddings
 
-The framework provides both sync and async embeddings APIs via `opencontractserver.llms.embeddings`:
+The framework provides sync embeddings APIs via `opencontractserver.llms.embeddings`:
 
 ```python
 from opencontractserver.llms import embeddings
 
-# Async version (recommended)
-embedder_path, vector = await embeddings.agenerate("Contract analysis text")
+# Sync version (currently the only exposed API)
+embedder_path, vector = embeddings.generate("Contract analysis text")
 print(f"Using embedder: {embedder_path}")
 print(f"Vector dimension: {len(vector)}")
 print(f"Vector type: {type(vector)}")  # numpy.ndarray
 
-# Sync version (for compatibility)
-embedder_path, vector = embeddings.generate("Contract analysis text")
-
 # The embeddings integrate with the vector stores for document search
+
+# Note: For async embedding generation, use the underlying utility directly:
+from opencontractserver.utils.embeddings import generate_embeddings_from_text
+embedder_path, vector = generate_embeddings_from_text("Contract analysis text")
 ```
 
 ### Vector Stores
@@ -1046,6 +1248,16 @@ The framework follows a layered architecture that separates concerns and enables
    - `CoreTool` provides framework-agnostic tool definitions.
    - Framework-specific factories convert tools to appropriate formats.
    - Built-in tools (e.g., via `create_document_tools()`) for document analysis, note retrieval, and content access. Async versions of core tools are often available.
+
+7. **Timeline Streaming System** (`TimelineStreamMixin`):
+   - A mixin class that framework adapters can inherit to get automatic timeline construction
+   - Wraps the adapter's `_stream_core()` method and intercepts all emitted events
+   - Uses `TimelineBuilder` to incrementally build a reasoning timeline from stream events
+   - Automatically injects the complete timeline into `FinalEvent.metadata['timeline']`
+   - Persists the timeline to the database via `_finalise_llm_message()` helper
+   - Ensures every framework produces consistent timeline structure without duplicate code
+   - Timeline includes: thoughts, tool calls, tool results, source discoveries, and status markers
+   - Used by PydanticAI adapters (`PydanticAICoreAgent` inherits from `TimelineStreamMixin`)
 
 ### Framework Support
 
@@ -1152,7 +1364,7 @@ config = AgentConfig(
 # - For structured_response: Default includes verification steps to prevent hallucination
 # - Any custom system_prompt completely replaces these defaults
 
-# The '''corpus''' parameter is optional for document agents (use None for standalone).
+# The `corpus` parameter is optional for document agents (use None for standalone).
 agent = await agents.for_document(document=123, corpus=None, config=config) # Or pass a corpus ID/object when available
 ```
 
@@ -1162,7 +1374,7 @@ agent = await agents.for_document(document=123, corpus=None, config=config) # Or
 
 ```python
 # Persistent conversation for complex analysis
-# The '''corpus''' parameter is optional for document agents (use None for standalone).
+# The `corpus` parameter is optional for document agents (use None for standalone).
 agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=1,     # Use actual corpus ID or object
@@ -1184,7 +1396,7 @@ print(f"Analyzed contract in {info['message_count']} messages")
 
 ```python
 # Anonymous sessions - context maintained in memory only
-# The '''corpus''' parameter is required for document agents.
+# The `corpus` parameter is required for document agents.
 agent = await agents.for_document(document=123, corpus=1)  # No storage, use actual document/corpus IDs
 response1 = await agent.chat("What is this document about?")
 response2 = await agent.chat("What are the key risks mentioned?")
@@ -1196,7 +1408,7 @@ response3 = await agent.chat("How do these risks compare?")
 
 ```python
 # Resume a previous conversation
-# The '''corpus''' parameter is optional for document agents (use None for standalone).
+# The `corpus` parameter is optional for document agents (use None for standalone).
 agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=1,     # Use actual corpus ID or object
@@ -1250,7 +1462,7 @@ clause_tool = CoreTool(
 )
 
 # Use in agent
-# The '''corpus''' parameter is required for document agents.
+# The `corpus` parameter is required for document agents.
 agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=1,     # Use actual corpus ID or object
@@ -1273,7 +1485,7 @@ from opencontractserver.llms.tools import create_document_tools # Assuming this 
 standard_tools = create_document_tools()
 # custom_tools = [clause_tool, risk_tool, compliance_tool] # Ensure these are defined
 
-# The '''corpus''' parameter is required for document agents.
+# The `corpus` parameter is required for document agents.
 # agent = await agents.for_document(
 #     document=123, # Use actual document ID or object
 #     corpus=1,     # Use actual corpus ID or object
@@ -1350,26 +1562,95 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import Pyda
 # Typically created via opencontractserver.llms.vector_stores.create().
 ```
 
-### Configuration Management
+### Configuration Reference
+
+The framework uses `AgentConfig` for comprehensive agent configuration. All fields have sensible defaults and can be customized as needed.
+
+#### AgentConfig Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `user_id` | `Optional[int]` | `None` | User ID for conversation persistence; `None` for anonymous sessions |
+| `model_name` | `str` | `"gpt-4o-mini"` | LLM model identifier (e.g., "gpt-4", "gpt-4-turbo") |
+| `api_key` | `Optional[str]` | `None` | API key for LLM provider (defaults to Django settings) |
+| `embedder_path` | `Optional[str]` | `None` | Embedding model path; auto-detected from corpus/document if not specified |
+| `similarity_top_k` | `int` | `10` | Number of similar results to retrieve in vector searches |
+| `streaming` | `bool` | `True` | Enable/disable streaming responses |
+| `verbose` | `bool` | `True` | Enable verbose logging for debugging |
+| `system_prompt` | `Optional[str]` | `None` | Custom system prompt; replaces default if provided |
+| `temperature` | `float` | `0.7` | LLM temperature (0.0-2.0); lower = more deterministic |
+| `max_tokens` | `Optional[int]` | `None` | Maximum tokens in response; `None` uses model default |
+| `stream_update_freq` | `int` | `50` | Token interval for database updates during streaming |
+| `stream_observer` | `Optional[Callable]` | `None` | Async callback for receiving nested agent events |
+| `conversation` | `Optional[Conversation]` | `None` | Existing conversation object to resume |
+| `conversation_id` | `Optional[int]` | `None` | ID of conversation to resume |
+| `loaded_messages` | `Optional[list[ChatMessage]]` | `None` | Pre-loaded conversation messages |
+| `store_user_messages` | `bool` | `True` | Whether to persist user messages to database |
+| `store_llm_messages` | `bool` | `True` | Whether to persist LLM responses to database |
+| `tools` | `list[Any]` | `[]` | List of tools available to the agent |
+
+#### Usage Examples
 
 ```python
 from opencontractserver.llms.agents.core_agents import get_default_config, AgentConfig
 
-# Start with defaults and customize
-# For document agents, corpus_id is also relevant for context.
+# Start with defaults
 config = get_default_config(
-    user_id=123, # Optional
-    document_id=456, # Context for default settings
-    corpus_id=1 # Context for default settings
+    user_id=123,  # Optional: enables persistence
+    model_name="gpt-4-turbo",
+    temperature=0.1
 )
 
-# Override specific settings
-config.model = "gpt-4-turbo"
-config.temperature = 0.1
-config.system_prompt = "You are a specialized contract analyzer..."
+# Or create custom config from scratch
+config = AgentConfig(
+    user_id=456,
+    model_name="gpt-4",
+    temperature=0.2,
+    max_tokens=2000,
+    system_prompt="You are an expert legal analyst...",
+    embedder_path="sentence-transformers/all-MiniLM-L6-v2",
+    stream_update_freq=100,  # Update DB every 100 tokens
+    tools=["load_md_summary", "similarity_search"],
+    verbose=True
+)
 
-# The '''corpus''' parameter is required for document agents.
-agent = await agents.for_document(document=123, corpus=1, config=config) # Use actual document/corpus IDs
+# Use config with agent
+agent = await agents.for_document(document=123, corpus=1, config=config)
+
+# Per-method overrides (don't affect config)
+response = await agent.structured_response(
+    "Extract dates",
+    DateInfo,
+    model="gpt-4",  # Override just for this call
+    temperature=0.0
+)
+```
+
+#### Advanced Configuration
+
+```python
+# Anonymous agent (no persistence)
+anon_config = AgentConfig(
+    user_id=None,  # No user = anonymous
+    store_user_messages=False,
+    store_llm_messages=False
+)
+
+# Stream observer for nested visibility
+async def event_forwarder(event):
+    await websocket.send_json({"type": event.type, "data": event.content})
+
+nested_config = AgentConfig(
+    stream_observer=event_forwarder,  # Receives all nested events
+    stream_update_freq=25  # More frequent updates
+)
+
+# Resume existing conversation
+resume_config = AgentConfig(
+    user_id=123,
+    conversation_id=789,  # Resume this conversation
+    temperature=0.5
+)
 ```
 
 ## Error Handling
@@ -1383,7 +1664,7 @@ from opencontractserver.llms.agents.core_agents import AgentError
 # from opencontractserver.corpuses.models import Corpus # For Corpus.DoesNotExist
 
 try:
-    # The '''corpus''' parameter is required for document agents.
+    # The `corpus` parameter is required for document agents.
     agent = await agents.for_document(document=999999, corpus=999) # Assuming these don't exist
     # response = await agent.chat("Analyze this document")
 except Document.DoesNotExist:
@@ -1823,6 +2104,15 @@ async for event in agent.stream("Complex legal analysis"):
   - Changed `run_result.data` → `run_result.output` for accessing results
   - Framework now properly uses pydantic_ai's documented API
 
+### Source Handling Enhancements
+- **Automatic `json` Field Generation**: `SourceNode.to_dict()` now intelligently constructs coordinate information
+  - **PDF Sources**: Automatically includes full `MultipageAnnotationJson` with token positions and bounding boxes from PlasmaPDF
+  - **Text Sources**: Automatically generates simple `{start, end}` format from character positions
+  - **Tool Simplification**: Tools only need to store raw metadata (`annotation_json`, `char_start`, `char_end`); transformation happens automatically
+  - **Frontend Compatibility**: Ensures all sources have the `json` field required by frontend TypeScript interfaces
+  - **Exact Text Search**: Fixed issue where exact text search sources weren't displaying in frontend
+  - **Centralized Logic**: Single transformation point prevents duplication and ensures consistency across all source types
+
 ### Performance Optimizations
 - **Simplified Structured Extraction**: Removed 200+ lines of complex prompt engineering
   - Leverages pydantic_ai's automatic output strategy selection
@@ -1836,7 +2126,7 @@ async for event in agent.stream("Complex legal analysis"):
 - **Future-proof Design**: Will automatically benefit from pydantic_ai improvements
 
 ### Migration Notes
-If you were using the framework before these fixes, no changes are needed to your code. The improvements are internal optimizations that maintain the same public API while providing better reliability and performance.
+If you were using the framework before these fixes, no changes are needed to your code. The improvements are internal optimizations that maintain the same public API while providing better reliability and performance. Sources now automatically include properly formatted coordinate information for both PDF and text documents.
 
 ---
 
@@ -1884,7 +2174,8 @@ Notes:
 | similarity_search | Semantic vector search for relevant passages in the **current document** | No | No (document-level store) |
 | load_md_summary \| load_document_md_summary | Load markdown summary of the document | No | No |
 | get_md_summary_token_length | Approximate token length of markdown summary | No | No |
-| load_document_txt_extract | Load full or partial plain-text extract | No | No |
+| get_document_text_length | Get total character length of plain-text extract | No | No |
+| load_document_text \| load_document_txt_extract | Load full or partial plain-text extract (params: start, end, refresh) | No | No |
 | get_notes_for_document_corpus | Retrieve notes attached to document *within the active corpus* | No | Yes |
 | get_note_content_token_length | Token length of a single note | No | Yes |
 | get_partial_note_content | Slice a note's content (start/end) | No | Yes |
