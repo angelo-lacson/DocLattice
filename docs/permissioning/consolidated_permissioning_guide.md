@@ -148,27 +148,53 @@ If the Analysis creates annotations with `created_by_analysis` field set:
 
 ## Key Behaviors Summary
 
+### GraphQL Query Modes (CRITICAL)
+The `allAnnotations` field operates in **two distinct modes**:
+
+1. **Manual/User Mode** (NO `analysis_id` provided):
+   - Returns ONLY annotations where `analysis` field is NULL
+   - Even if you have permission to analyses, their annotations are excluded
+   - Extract-based annotations are included (if `analysis` field is NULL and user has extract permission)
+
+2. **Analysis-Specific Mode** (`analysis_id` provided):
+   - Returns ONLY annotations from the specified analysis
+   - User must have READ permission on the analysis object
+   - Filters by the `analysis` foreign key field
+
+**Why**: Prevents mixing manual work with analysis-generated results. Users explicitly choose which "view" they want.
+
 ### Standard Annotations (no `created_by_*` fields)
 1. Visibility determined by document + corpus permissions
 2. All annotations in a document share the same permissions
 3. Most restrictive permission wins (document vs corpus)
+4. **Query mode matters**: Manual mode excludes analysis-linked annotations even with permission
 
 ### Private Annotations (`created_by_analysis` or `created_by_extract` set)
 1. **Invisible by default**: Not shown even with document+corpus permissions
 2. **Require source permission**: Must have permission to the analysis/extract that created them
 3. **Still respect document boundaries**: Even with analysis permission, only see annotations on documents you can access
 4. **Structural exception**: Structural annotations are ALWAYS visible if document is readable
+5. **Independent from query mode**: Privacy filtering applies in BOTH manual and analysis-specific query modes
 
 ### Permission Hierarchy
 ```
+Query Mode Filtering (FIRST STEP - happens BEFORE permission checks):
+IF analysis_id is NOT provided:
+    Filter to: analysis__isnull=True (manual annotations only)
+ELSE:
+    Filter to: analysis_id=<specified> (specific analysis only)
+
+Then apply permission checks:
+
 For Standard Annotations:
 Document Permission (PRIMARY) ∩ Corpus Permission (SECONDARY) = Effective Permission
 
-For Private Annotations:
+For Private Annotations (created_by_analysis or created_by_extract):
 Source Permission (REQUIRED) ∩ Document Permission ∩ Corpus Permission = Effective Permission
 
 For Structural Annotations:
 Document READ Permission = Always Visible (READ-ONLY)
+(Privacy filtering skipped for structural items)
 
 For COMMENT Permission (Special Case):
 IF corpus.allow_comments == True:
@@ -768,21 +794,115 @@ if document_id:
 **IMPORTANT**: When querying annotations through GraphQL, you MUST:
 1. Use the `allAnnotations` field (NOT `annotations`)
 2. Include the `corpusId` parameter for proper permission filtering
+3. Understand the `analysis_id` parameter behavior (optional but important)
 
+#### The `analysis` Field vs `created_by_analysis` Field
+
+There are TWO separate fields that control annotation visibility:
+
+1. **`analysis` field** (ForeignKey): Links an annotation to an analysis for organizational purposes
+2. **`created_by_analysis` field** (ForeignKey): Marks an annotation as PRIVATE to an analysis
+
+These serve different purposes and are filtered differently!
+
+#### Query Modes: Manual vs Analysis-Specific
+
+The `allAnnotations` field has **two distinct query modes** based on the `analysis_id` parameter:
+
+**Mode 1: Manual/User Annotations Only** (NO `analysis_id` provided):
 ```graphql
-# CORRECT - Properly filtered with permissions
 query {
     document(id: "DocumentID") {
-        allAnnotations(corpusId: "CorpusID") {  # corpusId is REQUIRED
+        allAnnotations(corpusId: "CorpusID") {
+            # Returns ONLY annotations where analysis field is NULL
+            # Even if you have permission to see analysis-linked annotations,
+            # they will be excluded unless you specify analysis_id
             id
             rawText
-            annotationLabel {
-                text
-            }
         }
     }
 }
+```
 
+**Mode 2: Specific Analysis Annotations** (`analysis_id` provided):
+```graphql
+query {
+    document(id: "DocumentID") {
+        allAnnotations(corpusId: "CorpusID", analysisId: "AnalysisID") {
+            # Returns ONLY annotations from this specific analysis
+            # User must have permission to the analysis object
+            id
+            rawText
+        }
+    }
+}
+```
+
+#### Why This Design?
+
+This separation allows users to:
+- View their "manual" work without mixing in analysis-generated annotations
+- View specific analysis results by querying with that `analysis_id`
+- Avoid confusion when multiple analyses create annotations on the same document
+
+#### Privacy Filtering (Separate from Query Mode)
+
+The `created_by_analysis` and `created_by_extract` fields add an ADDITIONAL privacy layer:
+- Annotations marked as `created_by_analysis` are ONLY visible if you have permission to that analysis
+- Annotations marked as `created_by_extract` are ONLY visible if you have permission to that extract
+- This applies REGARDLESS of which query mode you're using
+
+#### Complete Examples
+
+**Example 1: User's Manual Annotations**
+```graphql
+# Query without analysis_id - sees manual annotations only
+query {
+    document(id: "DocumentID") {
+        allAnnotations(corpusId: "CorpusID") {
+            id
+            rawText
+            # Will NOT include analysis-linked annotations
+            # even if you created them or have permission
+        }
+    }
+}
+```
+
+**Example 2: Specific Analysis Results**
+```graphql
+# Query with analysis_id - sees that analysis's annotations
+query {
+    document(id: "DocumentID") {
+        allAnnotations(corpusId: "CorpusID", analysisId: "AnalysisID123") {
+            id
+            rawText
+            # Will ONLY include annotations from AnalysisID123
+            # Requires READ permission on the analysis object
+        }
+    }
+}
+```
+
+**Example 3: Extract-Based Annotations**
+```graphql
+# Extract annotations appear in manual mode if:
+# 1. They have NO analysis field set
+# 2. User has permission to the extract
+query {
+    document(id: "DocumentID") {
+        allAnnotations(corpusId: "CorpusID") {
+            id
+            rawText
+            # Includes extract annotations (if analysis field is null)
+        }
+    }
+}
+```
+
+#### Common Query Mistakes
+
+```graphql
 # WRONG - Will return empty or incorrect results
 query {
     document(id: "DocumentID") {
@@ -797,6 +917,16 @@ query {
     document(id: "DocumentID") {
         allAnnotations {  # Missing corpusId!
             ...
+        }
+    }
+}
+
+# POTENTIAL CONFUSION - This won't show analysis annotations
+query {
+    document(id: "DocumentID") {
+        allAnnotations(corpusId: "CorpusID") {
+            # Missing analysis_id means MANUAL ONLY
+            # Analysis-linked annotations will be excluded
         }
     }
 }
@@ -1285,11 +1415,39 @@ def resolve_analysis_annotations(analysis, info):
 **Problem**: Querying `allAnnotations` without `corpusId` returns empty results
 **Solution**: ALWAYS include `corpusId` parameter in annotation queries
 
-### Pitfall 2: Assuming analysis permission alone is enough for mutations
+### Pitfall 2: Not understanding analysis_id parameter behavior
+**Problem**: Expecting to see all annotations (manual + analysis) when querying without `analysis_id`
+**Reality**: Querying without `analysis_id` returns ONLY manual annotations (where `analysis` field is NULL)
+**Solution**:
+- Use NO `analysis_id` parameter to get manual/user annotations
+- Use specific `analysis_id` to get annotations from that analysis only
+- If you need to see annotations from multiple sources, make separate queries
+**Example**:
+```graphql
+# This will NOT show analysis annotations even if you have permission
+query {
+    document(id: "Doc123") {
+        allAnnotations(corpusId: "Corpus456") {
+            id  # Only manual annotations
+        }
+    }
+}
+
+# To see analysis annotations, provide analysis_id
+query {
+    document(id: "Doc123") {
+        allAnnotations(corpusId: "Corpus456", analysisId: "Analysis789") {
+            id  # Only annotations from Analysis789
+        }
+    }
+}
+```
+
+### Pitfall 3: Assuming analysis permission alone is enough for mutations
 **Problem**: Trying to delete private annotations with only analysis permission fails
 **Solution**: Ensure user has matching permission level on document AND corpus too
 
-### Pitfall 3: Not using include_group_permissions=True
+### Pitfall 4: Not using include_group_permissions=True
 **Problem**: Permission checks fail for public objects or group-based access
 **Solution**: Always use `include_group_permissions=True` in permission checks:
 ```python
@@ -1301,15 +1459,15 @@ user_has_permission_for_obj(
 )
 ```
 
-### Pitfall 4: Trying to modify structural annotations
+### Pitfall 5: Trying to modify structural annotations
 **Problem**: Structural annotations are ALWAYS read-only, updates will fail
 **Solution**: Check `annotation.structural` before attempting modifications
 
-### Pitfall 5: Using wrong field names in GraphQL
+### Pitfall 6: Using wrong field names in GraphQL
 **Problem**: Using `annotations` instead of `allAnnotations` in queries
 **Solution**: Always use `allAnnotations` field name for querying document annotations
 
-### Pitfall 6: Bypassing user_has_permission_for_obj
+### Pitfall 7: Bypassing user_has_permission_for_obj
 **Problem**: Implementing custom permission logic that doesn't handle all cases
 **Solution**: ALWAYS use `user_has_permission_for_obj` - it's the single source of truth
 
