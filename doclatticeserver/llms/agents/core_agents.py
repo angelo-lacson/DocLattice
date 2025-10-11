@@ -78,14 +78,31 @@ class SourceNode:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage in message data."""
-        # Flatten metadata to top level and include similarity_score
-        # This mirrors the WebSocket transmission format for consistency
+        # Start with base fields
         result = {
             "annotation_id": self.annotation_id,
             "rawText": self.content,  # Frontend expects rawText
             "similarity_score": self.similarity_score,
-            **self.metadata,  # Flatten all metadata fields to top level
         }
+
+        # Construct json field based on document type:
+        # - PDF sources have annotation_json (full MultipageAnnotationJson from PlasmaPDF)
+        # - Text sources have char_start/char_end (simple {start, end} format)
+        if "annotation_json" in self.metadata:
+            # PDF case: use full MultipageAnnotationJson from PlasmaPDF
+            result["json"] = self.metadata["annotation_json"]
+        elif "char_start" in self.metadata and "char_end" in self.metadata:
+            # Text case: construct simple format
+            result["json"] = {
+                "start": self.metadata["char_start"],
+                "end": self.metadata["char_end"],
+            }
+
+        # Flatten remaining metadata fields (skip annotation_json to avoid duplication)
+        for key, value in self.metadata.items():
+            if key != "annotation_json":
+                result[key] = value
+
         return result
 
 
@@ -919,17 +936,71 @@ class CoreDocumentAgentFactory:
     def get_default_system_prompt(document: Document) -> str:
         """Generate default system prompt for document agent."""
         return (
-            f"You are an expert document analysis assistant.\n"
-            f"Your sole purpose is to answer questions about the document titled '{document.title}' (ID: {document.id}).\n\n"  # noqa: E501
-            f"CRITICAL INSTRUCTIONS:\n"
-            f"1. You have access to tools to analyze this document. You do not have prior knowledge of its contents.\n"
-            f"2. To answer the user's question, you MUST first use the available tools (e.g., vector search, summary loaders, note access) to find relevant information.\n"  # noqa: E501
-            f"3. Your final answer must be based ONLY on information retrieved via tools and citations.\n"
-            f"4. If the information cannot be found using the tools, state that it could not be found in the document.\n\n"  # noqa: E501
-            f"Guidance:\n"
-            f"- Start by selecting which tool will best help answer the question.\n"
-            f"- Prefer multiple tools and cross-check where helpful.\n"
-            f"- Present findings clearly with citations when sources are available.\n"
+            f"You are analyzing the document titled '{document.title}' (ID: {document.id}).\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️  ABSOLUTE REQUIREMENTS - NO EXCEPTIONS:\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"1. You have ZERO prior knowledge of this document's contents.\n"
+            f"2. You MUST use tools to examine the document before answering ANY question.\n"
+            f"3. NEVER say you don't know what document is being discussed - you are analyzing '{document.title}'.\n"
+            f"4. NEVER refuse to answer because you 'lack context' - USE THE TOOLS to get context.\n"
+            f"5. Every answer MUST be grounded in information retrieved via tools with specific citations.\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📋 RECOMMENDED SEARCH STRATEGY:\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"For most questions, follow this workflow:\n\n"
+            f"STEP 1 - GET OVERVIEW:\n"
+            f"  • Use `load_document_summary` to understand the document's structure and main topics\n"
+            f"  • Use `get_document_text_length` to check the document size\n"
+            f"  • This helps you plan your detailed search strategy\n\n"
+            f"STEP 2 - BROAD SEARCH (Semantic Understanding):\n"
+            f"  • Use `similarity_search` (vector search) to find semantically relevant sections\n"
+            f"  • Great for: conceptual questions, themes, related ideas, paraphrased content\n"
+            f"  • Returns: annotated passages with page numbers and similarity scores\n\n"
+            f"STEP 3 - DETAILED EXAMINATION:\n"
+            f"  • Use `load_document_text` to read large sections (5K-50K chars) of relevant areas\n"
+            f"  • Identify the specific character ranges from Step 1-2, then load those sections\n"
+            f"  • Read enough context to thoroughly understand the relevant passages\n"
+            f"  ⚠️  IMPORTANT: After reading bulk text, identify the top 3 most relevant passages\n"
+            f"      for your answer, then use `search_exact_text` on key phrases from those\n"
+            f"      passages to convert them into proper source citations with page numbers.\n\n"
+            f"STEP 4 - PRECISE LOCATION (Exact Matching):\n"
+            f"  • Use `search_exact_text` to find specific terms, phrases, or quoted language\n"
+            f"  • Great for: finding exact wording, specific terminology, quoted passages, defined terms\n"
+            f"  • Returns: all occurrences with page numbers and bounding boxes (PDFs)\n"
+            f"  • Use this to provide precise citations with exact page locations\n"
+            f"  • CRITICAL: Always use this to create proper citations for passages found via bulk text loading\n\n"
+            f"STEP 5 - CROSS-REFERENCE:\n"
+            f"  • Use `get_document_notes` to check for existing analysis or annotations\n"
+            f"  • Combine findings from multiple tools to ensure completeness\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔧 TOOL SELECTION GUIDE:\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Use `similarity_search` when:\n"
+            f"  → Question asks about concepts, themes, or ideas (not exact words)\n"
+            f"  → You need to find related content even if worded differently\n"
+            f"  → Looking for passages that discuss a topic\n\n"
+            f"Use `search_exact_text` when:\n"
+            f"  → User asks about specific terms, phrases, or exact wording\n"
+            f"  → You need to verify if specific language appears in the document\n"
+            f"  → Providing citations that require exact page locations\n"
+            f"  → Finding defined terms or quoted material\n\n"
+            f"Use `load_document_text` when:\n"
+            f"  → You need to read substantial sections for full context\n"
+            f"  → Initial searches identified relevant areas to examine in detail\n"
+            f"  → Question requires understanding flow, structure, or relationships\n\n"
+            f"Use `load_document_summary` when:\n"
+            f"  → Starting your analysis (always good first step)\n"
+            f"  → Need high-level overview of document structure\n"
+            f"  → Understanding document organization before detailed search\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ RESPONSE REQUIREMENTS:\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"• Provide complete, accurate answers based on document contents\n"
+            f"• Include specific citations (page numbers, quotes) from tool results\n"
+            f"• If information isn't in the document, explicitly state: 'This information was not found in {document.title}'\n"  # noqa: E501
+            f"• Use multiple search strategies to ensure thoroughness\n"
+            f"• Present findings clearly with proper attribution to sources\n"
         )
 
     @staticmethod
@@ -1234,11 +1305,13 @@ class CoreConversationManager:
         metadata: dict[str, Any] = None,
     ) -> None:
         """Complete a message with content, sources, and metadata in one operation."""
+
         # For anonymous conversations, don't store messages
         if not self.conversation or message_id == 0:
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
+
         message.content = content
         message.state = MessageState.COMPLETED
 
@@ -1247,6 +1320,7 @@ class CoreConversationManager:
 
         if sources:
             data["sources"] = [source.to_dict() for source in sources]
+
         # Ensure a timeline key exists even if adapter didn't supply one
         if metadata:
             if "timeline" not in metadata:
