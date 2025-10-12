@@ -335,6 +335,7 @@ class DocumentAnalysisRow(BaseOCModel):
             ("remove_documentanalysisrow", "delete DocumentAnalysisRow"),
             ("publish_documentanalysisrow", "publish DocumentAnalysisRow"),
             ("permission_documentanalysisrow", "permission DocumentAnalysisRow"),
+            ("comment_documentanalysisrow", "comment DocumentAnalysisRow"),
         )
         constraints = [
             django.db.models.UniqueConstraint(
@@ -441,6 +442,7 @@ class DocumentRelationship(BaseOCModel):
             ("read_documentrelationship", "read document relationship"),
             ("update_documentrelationship", "update document relationship"),
             ("remove_documentrelationship", "delete document relationship"),
+            ("comment_documentrelationship", "comment document relationship"),
         )
         indexes = [
             django.db.models.Index(fields=["source_document"]),
