@@ -48,6 +48,7 @@ class Fieldset(BaseOCModel):
             ("read_fieldset", "read fieldset"),
             ("update_fieldset", "update fieldset"),
             ("remove_fieldset", "delete fieldset"),
+            ("comment_fieldset", "comment fieldset"),
         )
 
 
@@ -151,6 +152,7 @@ class Column(BaseOCModel):
             ("read_column", "read column"),
             ("update_column", "update column"),
             ("remove_column", "delete column"),
+            ("comment_column", "comment column"),
         )
         indexes = [
             django.db.models.Index(fields=["fieldset", "display_order"]),
