@@ -3,8 +3,11 @@
 import logging
 from datetime import datetime
 from functools import partial
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from opencontractserver.llms.agents.core_agents import SourceNode
 
 from opencontractserver.annotations.models import Note, NoteRevision
 from opencontractserver.corpuses.models import Corpus, CorpusDescriptionRevision
