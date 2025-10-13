@@ -324,6 +324,10 @@ export const PDFPage = ({
     if (!hasPdfPageRendered || !zoomLevel || !pageBounds) return [];
 
     const isVisible = (annot: ServerTokenAnnotation): boolean => {
+      // When chat sources are displayed, only show explicitly selected annotations
+      if (selectedMessage) {
+        return selectedAnnotations.includes(annot.id);
+      }
       if (showSelectedOnly) {
         return selectedAnnotations.includes(annot.id);
       }
@@ -344,6 +348,7 @@ export const PDFPage = ({
     annots_to_render,
     showSelectedOnly,
     selectedAnnotations,
+    selectedMessage,
     hasPdfPageRendered,
     zoomLevel,
     pageBounds,
@@ -517,6 +522,7 @@ export const PDFPage = ({
 
         {zoomLevel &&
           pageBounds &&
+          !selectedMessage &&
           searchResults
             .filter(
               (match): match is TextSearchTokenResult => "tokens" in match
