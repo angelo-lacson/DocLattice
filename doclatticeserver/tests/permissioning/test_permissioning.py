@@ -353,6 +353,7 @@ class PermissioningTestCase(TestCase):
                 "read_corpus",
                 "update_corpus",
                 "remove_corpus",
+                "comment_corpus",
             },
         )
         for doc in user_one_corpus_response["data"]["corpuses"]["edges"][0]["node"][
@@ -561,6 +562,7 @@ class PermissioningTestCase(TestCase):
                 "read_corpus",
                 "update_corpus",
                 "remove_corpus",
+                "comment_corpus",
             },
             set(full_permission_response["data"]["corpus"]["myPermissions"]),
         )

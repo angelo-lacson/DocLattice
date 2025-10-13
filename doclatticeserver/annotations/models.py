@@ -552,11 +552,10 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
                 }
             )
 
-        # Ensure consistency: if created_by_analysis is set, analysis should also be set
-        if self.created_by_analysis and not self.analysis:
-            self.analysis = self.created_by_analysis
-
-        # Validate that created_by_analysis matches analysis if both are set
+        # Validate consistency between analysis and created_by_analysis fields
+        # If both are set, they MUST match (Option 1: Enforce Consistency)
+        # If only created_by_analysis is set, analysis can be None (for manual mode visibility)
+        # If only analysis is set without created_by_analysis, it's a public analysis annotation
         if (
             self.created_by_analysis
             and self.analysis
@@ -564,7 +563,13 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         ):
             raise ValidationError(
                 {
-                    "created_by_analysis": "created_by_analysis must match the analysis field if both are set."
+                    "analysis": (
+                        f"The 'analysis' field must match 'created_by_analysis' when both are set. "
+                        f"Got analysis={self.analysis.id}, created_by_analysis={self.created_by_analysis.id}. "
+                        f"Valid combinations: (1) analysis=A, created_by_analysis=A for analysis mode, "
+                        f"(2) analysis=None, created_by_analysis=A for manual mode with privacy, "
+                        f"(3) analysis=None, created_by_analysis=None for public manual annotation."
+                    )
                 }
             )
 
