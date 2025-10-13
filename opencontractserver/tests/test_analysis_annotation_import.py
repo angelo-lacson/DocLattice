@@ -134,12 +134,13 @@ class AnalysisAnnotationImportTestCase(TestCase):
         other_user = User.objects.create_user(username="other", password="test")
 
         # Create an annotation with created_by_analysis
+        # analysis=None so it appears in manual mode queries, but with privacy via created_by_analysis
         private_annotation = Annotation.objects.create(
             annotation_label=self.label,
             document=self.doc,
             corpus=self.corpus,
-            analysis=self.analysis,
-            created_by_analysis=self.analysis,
+            # analysis=None (implicit) - allows visibility in manual mode
+            created_by_analysis=self.analysis,  # Privacy field
             creator=self.user,
             page=1,
             raw_text="Private annotation",

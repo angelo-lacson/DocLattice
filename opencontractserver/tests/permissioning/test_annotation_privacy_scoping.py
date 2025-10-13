@@ -443,11 +443,9 @@ class AnnotationPrivacyScopingTestCase(TestCase):
     def test_team_a_sees_only_their_annotations(self):
         """
         Team A members should see:
-        - Public annotations (2)
-        - Team A private annotations (3 from analysis + 1 from extract = 4)
-        - NOT Team B annotations
-        - NOT Reviewer annotations
-        Total: 6 annotations
+        - In manual mode: Public annotations + Team A extract annotations
+        - In Team A analysis mode: Team A analysis annotations
+        - NOT Team B or Reviewer annotations in either mode
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Team A sees only their annotations plus public ones")
@@ -455,7 +453,9 @@ class AnnotationPrivacyScopingTestCase(TestCase):
 
         doc_id = to_global_id("DocumentType", self.doc_contract1.id)
         corpus_id = to_global_id("CorpusType", self.shared_corpus.id)
-        query = """
+
+        # Manual mode query (no analysisId)
+        manual_query = """
         query {{
             document(id: "{}") {{
                 id
@@ -473,7 +473,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
             doc_id, corpus_id
         )
 
-        result = self.client_team_a_member1.execute(query)
+        result = self.client_team_a_member1.execute(manual_query)
         self.assertIsNone(
             result.get("errors"), f"Should not have errors: {result.get('errors')}"
         )
@@ -481,48 +481,69 @@ class AnnotationPrivacyScopingTestCase(TestCase):
         doc_data = result["data"]["document"]
         self.assertIsNotNone(doc_data, "Team A member should see the document")
 
-        annotations = doc_data["allAnnotations"]
-        logger.info(f"Team A member sees {len(annotations)} annotations")
-        logger.info(f"Raw annotations data: {annotations}")
-        annotation_texts = [ann["rawText"] for ann in annotations]
+        manual_annotations = doc_data["allAnnotations"]
+        manual_texts = [ann["rawText"] for ann in manual_annotations]
 
-        # Should see public annotation
+        # Manual mode: Should see public and extract annotations
         self.assertIn(
             "Public annotation on Contract Alpha",
-            annotation_texts,
-            "Should see public annotation",
-        )
-
-        # Should see Team A annotations
-        self.assertIn(
-            "Team A confidential finding on Contract Alpha",
-            annotation_texts,
-            "Should see Team A analysis annotation",
+            manual_texts,
+            "Should see public annotation in manual mode",
         )
         self.assertIn(
             "Team A extract-generated annotation",
-            annotation_texts,
-            "Should see Team A extract annotation",
+            manual_texts,
+            "Should see Team A extract annotation in manual mode",
         )
 
-        # Should NOT see Team B annotations
+        # Should NOT see analysis annotations in manual mode
+        self.assertNotIn(
+            "Team A confidential finding on Contract Alpha",
+            manual_texts,
+            "Should NOT see analysis annotations in manual mode",
+        )
+
+        # Team A analysis mode query
+        analysis_id = to_global_id("AnalysisType", self.analysis_team_a.id)
+        analysis_query = """
+        query {{
+            document(id: "{}") {{
+                allAnnotations(corpusId: "{}", analysisId: "{}") {{
+                    rawText
+                }}
+            }}
+        }}
+        """.format(
+            doc_id, corpus_id, analysis_id
+        )
+
+        result = self.client_team_a_member1.execute(analysis_query)
+        analysis_annotations = result["data"]["document"]["allAnnotations"]
+        analysis_texts = [ann["rawText"] for ann in analysis_annotations]
+
+        # Analysis mode: Should see Team A analysis annotations
+        self.assertIn(
+            "Team A confidential finding on Contract Alpha",
+            analysis_texts,
+            "Should see Team A analysis annotation in analysis mode",
+        )
+
+        # Should NOT see Team B or Reviewer annotations
         self.assertNotIn(
             "Team B confidential finding on Contract Alpha",
-            annotation_texts,
+            analysis_texts,
             "Should NOT see Team B annotations",
         )
-
-        # Should NOT see Reviewer annotations
         self.assertNotIn(
             "Reviewer's confidential note on Contract Alpha",
-            annotation_texts,
+            analysis_texts,
             "Should NOT see Reviewer annotations",
         )
 
-        logger.info(
-            f"✓ Team A member sees {len(annotations)} annotations on Contract Alpha"
-        )
-        logger.info(f"  Annotations seen: {annotation_texts}")
+        logger.info(f"✓ Manual mode: {len(manual_annotations)} annotations")
+        logger.info(f"✓ Analysis mode: {len(analysis_annotations)} annotations")
+        logger.info(f"  Manual annotations: {manual_texts}")
+        logger.info(f"  Analysis annotations: {analysis_texts}")
 
     # =========================================================================
     # TEST 2: Team B sees only their annotations plus public ones
@@ -531,10 +552,9 @@ class AnnotationPrivacyScopingTestCase(TestCase):
     def test_team_b_sees_only_their_annotations(self):
         """
         Team B members should see:
-        - Public annotations
-        - Team B private annotations
-        - NOT Team A annotations
-        - NOT Reviewer annotations
+        - In manual mode: Public annotations only (Team B has no extracts)
+        - In Team B analysis mode: Team B analysis annotations
+        - NOT Team A or Reviewer annotations in either mode
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Team B sees only their annotations plus public ones")
@@ -542,7 +562,9 @@ class AnnotationPrivacyScopingTestCase(TestCase):
 
         doc_id = to_global_id("DocumentType", self.doc_contract1.id)
         corpus_id = to_global_id("CorpusType", self.shared_corpus.id)
-        query = """
+
+        # Manual mode query (no analysisId)
+        manual_query = """
         query {{
             document(id: "{}") {{
                 allAnnotations(corpusId: "{}") {{
@@ -554,31 +576,48 @@ class AnnotationPrivacyScopingTestCase(TestCase):
             doc_id, corpus_id
         )
 
-        result = self.client_team_b_member1.execute(query)
+        result = self.client_team_b_member1.execute(manual_query)
         self.assertIsNone(result.get("errors"))
 
-        annotations = result["data"]["document"]["allAnnotations"]
-        annotation_texts = [ann["rawText"] for ann in annotations]
+        manual_annotations = result["data"]["document"]["allAnnotations"]
+        manual_texts = [ann["rawText"] for ann in manual_annotations]
 
-        # Should see public annotation
-        self.assertIn("Public annotation on Contract Alpha", annotation_texts)
+        # Manual mode: Should see only public annotation (Team B has no extracts)
+        self.assertIn("Public annotation on Contract Alpha", manual_texts)
+        self.assertNotIn("Team A extract-generated annotation", manual_texts)
 
-        # Should see Team B annotation
-        self.assertIn("Team B confidential finding on Contract Alpha", annotation_texts)
-
-        # Should NOT see Team A annotations
-        self.assertNotIn(
-            "Team A confidential finding on Contract Alpha", annotation_texts
+        # Team B analysis mode query
+        analysis_id = to_global_id("AnalysisType", self.analysis_team_b.id)
+        analysis_query = """
+        query {{
+            document(id: "{}") {{
+                allAnnotations(corpusId: "{}", analysisId: "{}") {{
+                    rawText
+                }}
+            }}
+        }}
+        """.format(
+            doc_id, corpus_id, analysis_id
         )
-        self.assertNotIn("Team A extract-generated annotation", annotation_texts)
 
-        # Should NOT see Reviewer annotations
+        result = self.client_team_b_member1.execute(analysis_query)
+        analysis_annotations = result["data"]["document"]["allAnnotations"]
+        analysis_texts = [ann["rawText"] for ann in analysis_annotations]
+
+        # Analysis mode: Should see Team B analysis annotation
+        self.assertIn("Team B confidential finding on Contract Alpha", analysis_texts)
+
+        # Should NOT see Team A or Reviewer annotations
         self.assertNotIn(
-            "Reviewer's confidential note on Contract Alpha", annotation_texts
+            "Team A confidential finding on Contract Alpha", analysis_texts
+        )
+        self.assertNotIn(
+            "Reviewer's confidential note on Contract Alpha", analysis_texts
         )
 
-        logger.info(f"✓ Team B member sees {len(annotations)} annotations")
-        logger.info(f"  Annotations seen: {annotation_texts}")
+        logger.info(f"✓ Manual mode: {len(manual_annotations)} annotations")
+        logger.info(f"✓ Analysis mode: {len(analysis_annotations)} annotations")
+        logger.info(f"  Analysis annotations: {analysis_texts}")
 
     # =========================================================================
     # TEST 3: Client user sees only public annotations
@@ -637,7 +676,10 @@ class AnnotationPrivacyScopingTestCase(TestCase):
 
     def test_reviewer_isolation(self):
         """
-        Reviewer should see public annotations and their own, but not team annotations.
+        Reviewer should see:
+        - In manual mode: Only public annotations
+        - In reviewer analysis mode: Reviewer's private annotations
+        - NOT team annotations in either mode
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Reviewer sees only their annotations plus public")
@@ -645,7 +687,9 @@ class AnnotationPrivacyScopingTestCase(TestCase):
 
         doc_id = to_global_id("DocumentType", self.doc_contract1.id)
         corpus_id = to_global_id("CorpusType", self.shared_corpus.id)
-        query = """
+
+        # Manual mode query (no analysisId)
+        manual_query = """
         query {{
             document(id: "{}") {{
                 allAnnotations(corpusId: "{}") {{
@@ -657,30 +701,50 @@ class AnnotationPrivacyScopingTestCase(TestCase):
             doc_id, corpus_id
         )
 
-        result = self.client_reviewer.execute(query)
+        result = self.client_reviewer.execute(manual_query)
         self.assertIsNone(result.get("errors"))
 
-        annotations = result["data"]["document"]["allAnnotations"]
-        annotation_texts = [ann["rawText"] for ann in annotations]
+        manual_annotations = result["data"]["document"]["allAnnotations"]
+        manual_texts = [ann["rawText"] for ann in manual_annotations]
 
-        # Should see public annotation
-        self.assertIn("Public annotation on Contract Alpha", annotation_texts)
+        # Manual mode: Should see only public annotation
+        self.assertIn("Public annotation on Contract Alpha", manual_texts)
 
-        # Should see reviewer's own annotation
-        self.assertIn(
-            "Reviewer's confidential note on Contract Alpha", annotation_texts
+        # Should NOT see reviewer's analysis annotation in manual mode
+        self.assertNotIn("Reviewer's confidential note on Contract Alpha", manual_texts)
+
+        # Reviewer analysis mode query
+        analysis_id = to_global_id("AnalysisType", self.analysis_reviewer.id)
+        analysis_query = """
+        query {{
+            document(id: "{}") {{
+                allAnnotations(corpusId: "{}", analysisId: "{}") {{
+                    rawText
+                }}
+            }}
+        }}
+        """.format(
+            doc_id, corpus_id, analysis_id
         )
+
+        result = self.client_reviewer.execute(analysis_query)
+        analysis_annotations = result["data"]["document"]["allAnnotations"]
+        analysis_texts = [ann["rawText"] for ann in analysis_annotations]
+
+        # Analysis mode: Should see reviewer's own annotation
+        self.assertIn("Reviewer's confidential note on Contract Alpha", analysis_texts)
 
         # Should NOT see team annotations
         self.assertNotIn(
-            "Team A confidential finding on Contract Alpha", annotation_texts
+            "Team A confidential finding on Contract Alpha", analysis_texts
         )
         self.assertNotIn(
-            "Team B confidential finding on Contract Alpha", annotation_texts
+            "Team B confidential finding on Contract Alpha", analysis_texts
         )
 
-        logger.info(f"✓ Reviewer sees {len(annotations)} annotations")
-        logger.info(f"  Annotations seen: {annotation_texts}")
+        logger.info(f"✓ Manual mode: {len(manual_annotations)} annotations")
+        logger.info(f"✓ Analysis mode: {len(analysis_annotations)} annotations")
+        logger.info(f"  Analysis annotations: {analysis_texts}")
 
     # =========================================================================
     # TEST 5: Admin (superuser) sees everything
@@ -788,26 +852,45 @@ class AnnotationPrivacyScopingTestCase(TestCase):
             self.client_user, self.extract_team_a, [PermissionTypes.READ]
         )
 
-        # Now query again
+        # Manual mode query - should now see extract annotations
         result = self.client_external.execute(query)
-        annotations = result["data"]["document"]["allAnnotations"]
-        annotation_texts = [ann["rawText"] for ann in annotations]
+        manual_annotations = result["data"]["document"]["allAnnotations"]
+        manual_texts = [ann["rawText"] for ann in manual_annotations]
 
-        # Should now see Team A annotations too
-        self.assertIn("Public annotation on Contract Alpha", annotation_texts)
-        self.assertIn("Team A confidential finding on Contract Alpha", annotation_texts)
-        self.assertIn("Team A extract-generated annotation", annotation_texts)
+        self.assertIn("Public annotation on Contract Alpha", manual_texts)
+        self.assertIn("Team A extract-generated annotation", manual_texts)
+
+        # Analysis mode query - should now see Team A analysis annotations
+        analysis_id = to_global_id("AnalysisType", self.analysis_team_a.id)
+        analysis_query = """
+        query {{
+            document(id: "{}") {{
+                allAnnotations(corpusId: "{}", analysisId: "{}") {{
+                    rawText
+                }}
+            }}
+        }}
+        """.format(
+            doc_id, corpus_id, analysis_id
+        )
+
+        result = self.client_external.execute(analysis_query)
+        analysis_annotations = result["data"]["document"]["allAnnotations"]
+        analysis_texts = [ann["rawText"] for ann in analysis_annotations]
+
+        self.assertIn("Team A confidential finding on Contract Alpha", analysis_texts)
 
         # But still not Team B or Reviewer annotations
         self.assertNotIn(
-            "Team B confidential finding on Contract Alpha", annotation_texts
+            "Team B confidential finding on Contract Alpha", analysis_texts
         )
         self.assertNotIn(
-            "Reviewer's confidential note on Contract Alpha", annotation_texts
+            "Reviewer's confidential note on Contract Alpha", analysis_texts
         )
 
         logger.info(
-            f"✓ After granting Team A access, client sees {len(annotations)} annotations"
+            f"✓ After granting Team A access, client sees {len(manual_annotations)} manual + "
+            f"{len(analysis_annotations)} analysis annotations"
         )
 
         # Revoke the permissions
@@ -840,37 +923,50 @@ class AnnotationPrivacyScopingTestCase(TestCase):
         logger.info("TEST: Multiple analyses create distinct annotation sets")
         logger.info("=" * 80)
 
-        # Query all annotations on Contract Beta for different users
         doc_id = to_global_id("DocumentType", self.doc_contract2.id)
         corpus_id = to_global_id("CorpusType", self.shared_corpus.id)
-        query = """
+
+        # Team A: Query in analysis mode to see their analysis annotations
+        analysis_a_id = to_global_id("AnalysisType", self.analysis_team_a.id)
+        query_a = """
         query {{
             document(id: "{}") {{
-                allAnnotations(corpusId: "{}") {{
+                allAnnotations(corpusId: "{}", analysisId: "{}") {{
                     rawText
                     page
                 }}
             }}
         }}
         """.format(
-            doc_id, corpus_id
+            doc_id, corpus_id, analysis_a_id
         )
 
-        # Team A member sees their annotations
-        result_a = self.client_team_a_member1.execute(query)
+        result_a = self.client_team_a_member1.execute(query_a)
         annotations_a = result_a["data"]["document"]["allAnnotations"]
         texts_a = [ann["rawText"] for ann in annotations_a]
 
-        self.assertIn("Public annotation on Contract Beta", texts_a)
         self.assertIn("Team A confidential finding on Contract Beta", texts_a)
         self.assertNotIn("Team B confidential finding on Contract Beta", texts_a)
 
-        # Team B member sees different annotations
-        result_b = self.client_team_b_member1.execute(query)
+        # Team B: Query in analysis mode to see their analysis annotations
+        analysis_b_id = to_global_id("AnalysisType", self.analysis_team_b.id)
+        query_b = """
+        query {{
+            document(id: "{}") {{
+                allAnnotations(corpusId: "{}", analysisId: "{}") {{
+                    rawText
+                    page
+                }}
+            }}
+        }}
+        """.format(
+            doc_id, corpus_id, analysis_b_id
+        )
+
+        result_b = self.client_team_b_member1.execute(query_b)
         annotations_b = result_b["data"]["document"]["allAnnotations"]
         texts_b = [ann["rawText"] for ann in annotations_b]
 
-        self.assertIn("Public annotation on Contract Beta", texts_b)
         self.assertIn("Team B confidential finding on Contract Beta", texts_b)
         self.assertNotIn("Team A confidential finding on Contract Beta", texts_b)
 
@@ -878,8 +974,8 @@ class AnnotationPrivacyScopingTestCase(TestCase):
         pages_a = {ann["page"] for ann in annotations_a if "Team A" in ann["rawText"]}
         pages_b = {ann["page"] for ann in annotations_b if "Team B" in ann["rawText"]}
 
-        logger.info(f"✓ Team A annotations on pages: {pages_a}")
-        logger.info(f"✓ Team B annotations on pages: {pages_b}")
+        logger.info(f"✓ Team A analysis annotations on pages: {pages_a}")
+        logger.info(f"✓ Team B analysis annotations on pages: {pages_b}")
         logger.info("  Teams have created distinct, private annotation sets")
 
     # =========================================================================
@@ -889,7 +985,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
     def test_cross_team_collaboration(self):
         """
         Test a scenario where a user gets added to multiple teams and sees
-        combined annotation sets.
+        combined annotation sets across both manual and analysis modes.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Cross-team collaboration with combined visibility")
@@ -909,10 +1005,11 @@ class AnnotationPrivacyScopingTestCase(TestCase):
             collaborator, self.doc_contract1, [PermissionTypes.READ]
         )
 
-        # Initially, collaborator sees only public annotations
         doc_id = to_global_id("DocumentType", self.doc_contract1.id)
         corpus_id = to_global_id("CorpusType", self.shared_corpus.id)
-        query = """
+
+        # Query for manual/extract annotations (no analysisId)
+        manual_query = """
         query {{
             document(id: "{}") {{
                 allAnnotations(corpusId: "{}") {{
@@ -924,7 +1021,8 @@ class AnnotationPrivacyScopingTestCase(TestCase):
             doc_id, corpus_id
         )
 
-        result = client_collaborator.execute(query)
+        # Initially, collaborator sees only public annotations in manual mode
+        result = client_collaborator.execute(manual_query)
         annotations = result["data"]["document"]["allAnnotations"]
         self.assertEqual(len(annotations), 1, "Initially sees only public")
 
@@ -936,39 +1034,78 @@ class AnnotationPrivacyScopingTestCase(TestCase):
             collaborator, self.extract_team_a, [PermissionTypes.READ]
         )
 
-        result = client_collaborator.execute(query)
-        annotations = result["data"]["document"]["allAnnotations"]
-        texts = [ann["rawText"] for ann in annotations]
+        # Check manual mode - should now see extract annotations
+        result = client_collaborator.execute(manual_query)
+        manual_annotations = result["data"]["document"]["allAnnotations"]
+        manual_texts = [ann["rawText"] for ann in manual_annotations]
 
-        # Now sees Team A annotations
-        self.assertIn("Team A confidential finding on Contract Alpha", texts)
-        team_a_count = len(annotations)
+        self.assertIn("Public annotation on Contract Alpha", manual_texts)
+        self.assertIn("Team A extract-generated annotation", manual_texts)
+
+        # Check Team A analysis mode - should see analysis annotations
+        analysis_a_id = to_global_id("AnalysisType", self.analysis_team_a.id)
+        analysis_a_query = """
+        query {{
+            document(id: "{}") {{
+                allAnnotations(corpusId: "{}", analysisId: "{}") {{
+                    rawText
+                }}
+            }}
+        }}
+        """.format(
+            doc_id, corpus_id, analysis_a_id
+        )
+
+        result = client_collaborator.execute(analysis_a_query)
+        analysis_a_annotations = result["data"]["document"]["allAnnotations"]
+        analysis_a_texts = [ann["rawText"] for ann in analysis_a_annotations]
+
+        self.assertIn("Team A confidential finding on Contract Alpha", analysis_a_texts)
 
         # Add collaborator to Team B as well
         set_permissions_for_obj_to_user(
             collaborator, self.analysis_team_b, [PermissionTypes.READ]
         )
 
-        result = client_collaborator.execute(query)
-        annotations = result["data"]["document"]["allAnnotations"]
-        texts = [ann["rawText"] for ann in annotations]
+        # Check Team B analysis mode - should now see Team B annotations
+        analysis_b_id = to_global_id("AnalysisType", self.analysis_team_b.id)
+        analysis_b_query = """
+        query {{
+            document(id: "{}") {{
+                allAnnotations(corpusId: "{}", analysisId: "{}") {{
+                    rawText
+                }}
+            }}
+        }}
+        """.format(
+            doc_id, corpus_id, analysis_b_id
+        )
 
-        # Now sees BOTH teams' annotations
-        self.assertIn("Team A confidential finding on Contract Alpha", texts)
-        self.assertIn("Team B confidential finding on Contract Alpha", texts)
-        self.assertIn("Team A extract-generated annotation", texts)
+        result = client_collaborator.execute(analysis_b_query)
+        analysis_b_annotations = result["data"]["document"]["allAnnotations"]
+        analysis_b_texts = [ann["rawText"] for ann in analysis_b_annotations]
 
-        combined_count = len(annotations)
-        self.assertGreater(
-            combined_count,
-            team_a_count,
-            "Should see more annotations after joining both teams",
+        self.assertIn("Team B confidential finding on Contract Alpha", analysis_b_texts)
+
+        # Verify separate query modes show different annotation sets
+        self.assertNotEqual(
+            set(manual_texts),
+            set(analysis_a_texts),
+            "Manual and analysis modes should show different annotations",
         )
 
         logger.info(
-            f"✓ Collaborator with both team permissions sees {combined_count} annotations"
+            f"✓ Manual mode: {len(manual_annotations)} annotations (public + extract)"
         )
-        logger.info("  Successfully demonstrates combined visibility across teams")
+        logger.info(
+            f"✓ Team A analysis mode: {len(analysis_a_annotations)} annotations"
+        )
+        logger.info(
+            f"✓ Team B analysis mode: {len(analysis_b_annotations)} annotations"
+        )
+        logger.info(
+            "  Successfully demonstrates combined visibility across teams and query modes"
+        )
 
     # =========================================================================
     # TEST 9: Extract-based privacy scoping
@@ -1029,22 +1166,29 @@ class AnnotationPrivacyScopingTestCase(TestCase):
         """
         Test the complete visibility matrix across all users and all annotations
         to ensure proper privacy enforcement.
+
+        NOTE: When querying without analysis_id, only manual/user annotations are returned.
+        Annotations linked to analyses (via the analysis field) are NOT included unless
+        a specific analysis_id is provided in the query.
         """
         logger.info("\n" + "=" * 80)
-        logger.info("TEST: Comprehensive visibility matrix")
+        logger.info("TEST: Comprehensive visibility matrix (manual annotations only)")
         logger.info("=" * 80)
 
         # Define expected visibility matrix
         # Format: (user, should_see_annotations_list)
+        # When NO analysis_id is provided, users only see:
+        # - Public/manual annotations (no analysis field set)
+        # - Extract-generated annotations (created_by_extract but no analysis field)
         visibility_matrix = [
             (
                 self.team_a_member1,
                 {
                     "Public annotation on Contract Alpha": True,
-                    "Team A confidential finding on Contract Alpha": True,
+                    "Team A confidential finding on Contract Alpha": False,  # Has analysis field set
                     "Team B confidential finding on Contract Alpha": False,
                     "Reviewer's confidential note on Contract Alpha": False,
-                    "Team A extract-generated annotation": True,
+                    "Team A extract-generated annotation": True,  # No analysis field, user has extract permission
                 },
             ),
             (
@@ -1052,9 +1196,9 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 {
                     "Public annotation on Contract Alpha": True,
                     "Team A confidential finding on Contract Alpha": False,
-                    "Team B confidential finding on Contract Alpha": True,
+                    "Team B confidential finding on Contract Alpha": False,  # Has analysis field set
                     "Reviewer's confidential note on Contract Alpha": False,
-                    "Team A extract-generated annotation": False,
+                    "Team A extract-generated annotation": False,  # No permission for this extract
                 },
             ),
             (
@@ -1063,7 +1207,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                     "Public annotation on Contract Alpha": True,
                     "Team A confidential finding on Contract Alpha": False,
                     "Team B confidential finding on Contract Alpha": False,
-                    "Reviewer's confidential note on Contract Alpha": True,
+                    "Reviewer's confidential note on Contract Alpha": False,  # Has analysis field set
                     "Team A extract-generated annotation": False,
                 },
             ),
@@ -1119,8 +1263,12 @@ class AnnotationPrivacyScopingTestCase(TestCase):
             )
 
         logger.info("\n✓ COMPREHENSIVE VISIBILITY MATRIX VALIDATED")
-        logger.info("  Successfully proved that analyses and extracts create")
-        logger.info("  private annotation subsets on shared corpuses!")
+        logger.info("  Successfully validated that without analysis_id:")
+        logger.info("  - Only manual/user annotations are visible")
+        logger.info("  - Extract-based annotations respect extract permissions")
+        logger.info(
+            "  - Analysis-linked annotations are hidden (query specific analysis_id to see them)"
+        )
 
 
 class AnnotationPrivacyMutationTestCase(TestCase):

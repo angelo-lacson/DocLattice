@@ -105,6 +105,7 @@ class Conversation(BaseOCModel):
             ("read_conversation", "read conversation"),
             ("update_conversation", "update conversation"),
             ("remove_conversation", "delete conversation"),
+            ("comment_conversation", "comment conversation"),
         )
 
     def clean(self):
@@ -135,6 +136,7 @@ class ChatMessage(BaseOCModel):
             ("read_chatmessage", "read chatmessage"),
             ("update_chatmessage", "update chatmessage"),
             ("remove_chatmessage", "delete chatmessage"),
+            ("comment_chatmessage", "comment chatmessage"),
         )
 
     TYPE_CHOICES = (
