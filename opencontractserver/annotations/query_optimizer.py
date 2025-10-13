@@ -217,11 +217,26 @@ class AnnotationQueryOptimizer:
         if analysis_id:
             # Additional filter for analysis visibility
             from opencontractserver.analyzer.models import Analysis
+            from opencontractserver.types.enums import PermissionTypes
+            from opencontractserver.utils.permissioning import (
+                user_has_permission_for_obj,
+            )
 
             try:
                 analysis = Analysis.objects.get(id=analysis_id)
                 # Check analysis visibility as additional restriction
-                if not (analysis.is_public or analysis.creator_id == user.id):
+                # User can see annotations if: analysis is public, user is creator, OR has explicit READ permission
+                has_permission = (
+                    analysis.is_public
+                    or analysis.creator_id == user.id
+                    or user_has_permission_for_obj(
+                        user,
+                        analysis,
+                        PermissionTypes.READ,
+                        include_group_permissions=True,
+                    )
+                )
+                if not has_permission:
                     return Annotation.objects.none()
             except Analysis.DoesNotExist:
                 return Annotation.objects.none()
@@ -396,10 +411,26 @@ class RelationshipQueryOptimizer:
             else:
                 # Check analysis visibility as additional restriction
                 from opencontractserver.analyzer.models import Analysis
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
 
                 try:
                     analysis = Analysis.objects.get(id=analysis_id)
-                    if not (analysis.is_public or analysis.creator_id == user.id):
+                    # User can see relationships if: analysis is public, user is creator,
+                    # OR has explicit READ permission
+                    has_permission = (
+                        analysis.is_public
+                        or analysis.creator_id == user.id
+                        or user_has_permission_for_obj(
+                            user,
+                            analysis,
+                            PermissionTypes.READ,
+                            include_group_permissions=True,
+                        )
+                    )
+                    if not has_permission:
                         return Relationship.objects.none()
                 except Analysis.DoesNotExist:
                     return Relationship.objects.none()
