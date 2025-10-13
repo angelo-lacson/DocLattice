@@ -1,6 +1,7 @@
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
-import { Button, Card, Dimmer, Icon, Label, Loader } from "semantic-ui-react";
+import { Button, Card, Icon, Label } from "semantic-ui-react";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 import {
   RequestDeleteExtractInputType,
   RequestDeleteExtractOutputType,
@@ -227,11 +228,11 @@ export const ExtractItem: React.FC<ExtractItemProps> = ({
       $compact={compact}
       onClick={onSelect && extract.finished ? onSelect : undefined}
     >
-      {!extract.finished && (
-        <Dimmer active inverted>
-          <Loader>Processing...</Loader>
-        </Dimmer>
-      )}
+      <LoadingOverlay
+        active={!extract.finished}
+        inverted
+        content="Processing..."
+      />
 
       {extract.corpusAction && (
         <ActionBadge size="tiny">

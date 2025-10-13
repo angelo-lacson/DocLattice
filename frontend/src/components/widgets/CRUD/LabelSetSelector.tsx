@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
-import { Header, Segment, Loader, Dimmer, Dropdown } from "semantic-ui-react";
+import { Header, Segment, Dropdown } from "semantic-ui-react";
 import _ from "lodash";
 import { labelsetSearchTerm } from "../../../graphql/cache";
+import { LoadingOverlay } from "../../common/LoadingOverlay";
 import {
   GetLabelsetInputs,
   GetLabelsetOutputs,
@@ -74,10 +75,8 @@ export const LabelSetSelector = ({
       <Header as="h5" attached="top">
         Label Set:
       </Header>
-      <Segment attached>
-        <Dimmer active={loading}>
-          <Loader content="Loading Label Sets..." />
-        </Dimmer>
+      <Segment attached style={{ position: "relative" }}>
+        <LoadingOverlay active={loading} content="Loading Label Sets..." />
         <Dropdown
           disabled={read_only}
           selection

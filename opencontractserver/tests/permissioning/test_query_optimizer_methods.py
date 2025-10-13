@@ -501,7 +501,8 @@ class RelationshipQueryOptimizerTestCase(TestCase):
 
     def test_get_document_relationships_owner(self):
         """
-        Owner with full permissions should see all relationships in corpus.
+        Owner with full permissions should see manual relationships in corpus.
+        When analysis_id is not provided, only manual relationships are returned.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Owner sees all relationships")
@@ -517,10 +518,11 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             use_cache=False,
         )
 
-        # Should see all 4 corpus-based relationships (not structural)
-        self.assertEqual(qs.count(), 4)
+        # Should see only manual relationships (rel1, rel2, rel3)
+        # analysis_rel is filtered out because analysis_id is not specified
+        self.assertEqual(qs.count(), 3)
 
-        logger.info("✓ Owner sees all corpus relationships")
+        logger.info("✓ Owner sees all manual corpus relationships")
 
     def test_get_document_relationships_no_permission(self):
         """
@@ -659,7 +661,8 @@ class RelationshipQueryOptimizerTestCase(TestCase):
 
     def test_get_document_relationships_superuser(self):
         """
-        Superuser should see all relationships without explicit permissions.
+        Superuser should see manual relationships without explicit permissions.
+        When analysis_id is not provided, only manual relationships are returned.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Superuser sees all relationships")
@@ -672,14 +675,18 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             use_cache=False,
         )
 
-        # Should see all corpus-based relationships
-        self.assertEqual(qs.count(), 4)
+        # Should see manual corpus-based relationships (rel1, rel2, rel3)
+        # analysis_rel is filtered out because analysis_id is not specified
+        self.assertEqual(qs.count(), 3)
 
-        logger.info("✓ Superuser sees all relationships without explicit permissions")
+        logger.info(
+            "✓ Superuser sees all manual relationships without explicit permissions"
+        )
 
     def test_get_document_relationships_structural_filter(self):
         """
         Testing explicit structural filter parameter.
+        When analysis_id is not provided, only manual relationships are returned.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Structural filter works correctly")
@@ -697,12 +704,164 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             use_cache=False,
         )
 
-        # All our corpus relationships are non-structural
-        self.assertEqual(qs.count(), 4)
+        # All our manual corpus relationships are non-structural (rel1, rel2, rel3)
+        # analysis_rel is filtered out because analysis_id is not specified
+        self.assertEqual(qs.count(), 3)
         for rel in qs:
             self.assertFalse(rel.structural)
 
         logger.info("✓ Structural filter correctly filters relationships")
+
+    def test_get_document_relationships_private_analysis(self):
+        """
+        Relationships created by a private analysis should only be visible to users
+        with access to that analysis.
+        """
+        logger.info("\n" + "=" * 80)
+        logger.info("TEST: Privacy filtering for analysis-created relationships")
+        logger.info("=" * 80)
+
+        set_permissions_for_obj_to_user(self.owner, self.doc1, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(
+            self.stranger, self.doc1, [PermissionTypes.READ]
+        )
+        set_permissions_for_obj_to_user(
+            self.stranger, self.corpus, [PermissionTypes.READ]
+        )
+
+        # Create a private analysis (not public, owned by owner)
+        from opencontractserver.analyzer.models import Analysis, Analyzer, GremlinEngine
+
+        gremlin = GremlinEngine.objects.create(
+            url="http://test-gremlin:8000", creator=self.owner
+        )
+        analyzer = Analyzer.objects.create(
+            id="TEST.PRIVATE.ANALYZER",
+            host_gremlin=gremlin,
+            creator=self.owner,
+        )
+        private_analysis = Analysis.objects.create(
+            analyzer=analyzer,
+            analyzed_corpus=self.corpus,
+            creator=self.owner,
+            is_public=False,  # Private!
+        )
+
+        # Create a relationship with created_by_analysis set
+        private_rel = Relationship.objects.create(
+            relationship_label=self.rel_label1,
+            document=self.doc1,
+            corpus=self.corpus,
+            analysis=private_analysis,
+            created_by_analysis=private_analysis,  # Mark as private
+            creator=self.owner,
+        )
+        private_rel.source_annotations.add(self.ann1)
+        private_rel.target_annotations.add(self.ann2)
+
+        # Owner should see it (they created the analysis)
+        qs_owner = RelationshipQueryOptimizer.get_document_relationships(
+            document_id=self.doc1.id,
+            user=self.owner,
+            corpus_id=self.corpus.id,
+            analysis_id=private_analysis.id,
+            use_cache=False,
+        )
+        self.assertGreater(qs_owner.count(), 0)
+
+        # Stranger should NOT see it (no access to private analysis)
+        qs_stranger = RelationshipQueryOptimizer.get_document_relationships(
+            document_id=self.doc1.id,
+            user=self.stranger,
+            corpus_id=self.corpus.id,
+            analysis_id=private_analysis.id,
+            use_cache=False,
+        )
+        self.assertEqual(qs_stranger.count(), 0)
+
+        logger.info("✓ Privacy filtering works for analysis-created relationships")
+
+    def test_get_document_relationships_private_extract(self):
+        """
+        Relationships created by a private extract should only be visible to users
+        with access to that extract.
+        """
+        logger.info("\n" + "=" * 80)
+        logger.info("TEST: Privacy filtering for extract-created relationships")
+        logger.info("=" * 80)
+
+        set_permissions_for_obj_to_user(self.owner, self.doc1, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(
+            self.stranger, self.doc1, [PermissionTypes.READ]
+        )
+        set_permissions_for_obj_to_user(
+            self.stranger, self.corpus, [PermissionTypes.READ]
+        )
+
+        # Create a private extract
+        from opencontractserver.extracts.models import Extract, Fieldset
+
+        private_fieldset = Fieldset.objects.create(
+            name="Private Fieldset", creator=self.owner
+        )
+        private_extract = Extract.objects.create(
+            name="Private Extract",
+            corpus=self.corpus,
+            fieldset=private_fieldset,
+            creator=self.owner,
+        )
+
+        # Create a relationship with created_by_extract set
+        private_rel = Relationship.objects.create(
+            relationship_label=self.rel_label1,
+            document=self.doc1,
+            corpus=self.corpus,
+            created_by_extract=private_extract,  # Mark as private
+            creator=self.owner,
+        )
+        private_rel.source_annotations.add(self.ann1)
+        private_rel.target_annotations.add(self.ann2)
+
+        # Owner should see it (they created the extract)
+        qs_owner = RelationshipQueryOptimizer.get_document_relationships(
+            document_id=self.doc1.id,
+            user=self.owner,
+            corpus_id=self.corpus.id,
+            use_cache=False,
+        )
+        # Count includes manual relationships + extract relationship
+        owner_count = qs_owner.count()
+        self.assertGreater(owner_count, 0)
+
+        # Stranger should see the 3 manual relationships but NOT the extract-created one
+        qs_stranger = RelationshipQueryOptimizer.get_document_relationships(
+            document_id=self.doc1.id,
+            user=self.stranger,
+            corpus_id=self.corpus.id,
+            use_cache=False,
+        )
+        # Should see 3 manual relationships (rel1, rel2, rel3) but NOT the extract-created one
+        stranger_count_before = qs_stranger.count()
+        self.assertEqual(stranger_count_before, 3)
+
+        # Give stranger access to extract
+        set_permissions_for_obj_to_user(
+            self.stranger, private_extract, [PermissionTypes.READ]
+        )
+
+        # Now stranger should see the extract-created relationship too
+        qs_stranger_with_access = RelationshipQueryOptimizer.get_document_relationships(
+            document_id=self.doc1.id,
+            user=self.stranger,
+            corpus_id=self.corpus.id,
+            use_cache=False,
+        )
+        # Should now see 4 relationships (3 manual + 1 extract-created)
+        self.assertEqual(qs_stranger_with_access.count(), 4)
+
+        logger.info("✓ Privacy filtering works for extract-created relationships")
 
     # =========================================================================
     # Tests for get_relationship_summary()
@@ -710,7 +869,8 @@ class RelationshipQueryOptimizerTestCase(TestCase):
 
     def test_get_relationship_summary_owner(self):
         """
-        Owner should see complete summary of all relationships by type.
+        Owner should see complete summary of all manual relationships by type.
+        The summary method does not filter by analysis_id, so it shows all relationships.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Owner sees complete relationship summary")
@@ -723,7 +883,8 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             document_id=self.doc1.id, corpus_id=self.corpus.id, user=self.owner
         )
 
-        # Should see total count
+        # Should see total count of ALL relationships (manual + analysis)
+        # rel1, rel2, rel3, analysis_rel = 4 total
         self.assertEqual(summary["total"], 4)
 
         # Should see breakdown by type
@@ -753,6 +914,7 @@ class RelationshipQueryOptimizerTestCase(TestCase):
     def test_get_relationship_summary_superuser(self):
         """
         Superuser should see complete summary without explicit permissions.
+        The summary method shows ALL relationships (manual + analysis).
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Superuser sees complete summary")
@@ -762,6 +924,7 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             document_id=self.doc1.id, corpus_id=self.corpus.id, user=self.superuser
         )
 
+        # Summary shows ALL relationships including analysis ones
         self.assertEqual(summary["total"], 4)
         self.assertEqual(summary["by_type"]["References"], 3)
         self.assertEqual(summary["by_type"]["Defines"], 1)

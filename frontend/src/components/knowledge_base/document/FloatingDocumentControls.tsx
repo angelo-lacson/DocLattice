@@ -288,91 +288,10 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
 
       // Sync permissions from document state when it loads/changes
       useEffect(() => {
-        console.log("FloatingDocumentControls: Document state changed", {
-          activeDocument: activeDocument
-            ? {
-                id: activeDocument.id,
-                title: activeDocument.title,
-                myPermissions: activeDocument.myPermissions,
-              }
-            : null,
-        });
-
         if (activeDocument?.myPermissions) {
-          console.log(
-            "FloatingDocumentControls: Setting permissions from document state",
-            {
-              rawPermissions: activeDocument.myPermissions,
-            }
-          );
           setPermissions(activeDocument.myPermissions);
         }
       }, [activeDocument, setPermissions]);
-
-      // Log component lifecycle and key dependency changes
-      useEffect(() => {
-        console.log(
-          "FloatingDocumentControls: Component mounted or key dependencies changed"
-        );
-      }, []);
-
-      useEffect(() => {
-        console.log("FloatingDocumentControls: selectedCorpus changed", {
-          previousCorpus: "logged above",
-          newCorpus: selectedCorpus
-            ? {
-                id: selectedCorpus.id,
-                title: selectedCorpus.title,
-                myPermissions: selectedCorpus.myPermissions,
-              }
-            : null,
-        });
-      }, [selectedCorpus]);
-
-      useEffect(() => {
-        console.log("FloatingDocumentControls: documentPermissions changed", {
-          documentPermissions: documentPermissions
-            ? [...documentPermissions]
-            : null,
-        });
-      }, [documentPermissions]);
-
-      useEffect(() => {
-        console.log("FloatingDocumentControls: visible prop changed", {
-          visible,
-        });
-      }, [visible]);
-
-      useEffect(() => {
-        console.log("FloatingDocumentControls: readOnly prop changed", {
-          readOnly,
-        });
-      }, [readOnly]);
-
-      useEffect(() => {
-        console.log("FloatingDocumentControls: showRightPanel prop changed", {
-          showRightPanel,
-        });
-      }, [showRightPanel]);
-
-      console.log("FloatingDocumentControls: Props and State", {
-        visible,
-        showRightPanel,
-        readOnly,
-        selectedCorpus: selectedCorpus
-          ? {
-              id: selectedCorpus.id,
-              title: selectedCorpus.title,
-              myPermissions: selectedCorpus.myPermissions,
-            }
-          : null,
-        documentPermissions: documentPermissions
-          ? [...documentPermissions]
-          : null,
-        panelOffset,
-        analysesOpen,
-        extractsOpen,
-      });
 
       const hasReadPermission = documentPermissions?.includes(
         PermissionTypes.CAN_READ
@@ -381,20 +300,6 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
         PermissionTypes.CAN_UPDATE
       );
       const canCreateAnalysis = hasReadPermission && hasUpdatePermission;
-
-      console.log("FloatingDocumentControls: Permission Analysis", {
-        hasReadPermission,
-        hasUpdatePermission,
-        canCreateAnalysis,
-        readOnly,
-        willShowAnalysisButton: canCreateAnalysis && !readOnly,
-        CAN_READ_VALUE: PermissionTypes.CAN_READ,
-        CAN_UPDATE_VALUE: PermissionTypes.CAN_UPDATE,
-        documentPermissionsArray: documentPermissions
-          ? [...documentPermissions]
-          : null,
-        corpusPermissionsArray: selectedCorpus?.myPermissions || null,
-      });
 
       // Close settings panel when right panel opens
       useEffect(() => {
@@ -412,39 +317,8 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
 
       // Add logging for early return
       if (!visible) {
-        console.log(
-          "FloatingDocumentControls: Not rendering - visible prop is false"
-        );
         return null;
       }
-
-      console.log(
-        "FloatingDocumentControls: Rendering component with final state",
-        {
-          visible,
-          showRightPanel,
-          readOnly,
-          canCreateAnalysis,
-          willRenderAnalysisButton: canCreateAnalysis && !readOnly,
-          willShowSettingsButton: !showRightPanel,
-          documentPermissionsState: documentPermissions
-            ? {
-                hasPermissions: !!documentPermissions,
-                permissionCount: documentPermissions.length || 0,
-                permissions: [...documentPermissions],
-              }
-            : "No document permissions",
-          corpusState: selectedCorpus
-            ? {
-                id: selectedCorpus.id,
-                title: selectedCorpus.title,
-                hasPermissions: !!selectedCorpus.myPermissions,
-                permissionCount: selectedCorpus.myPermissions?.length || 0,
-                permissions: selectedCorpus.myPermissions,
-              }
-            : "No corpus selected",
-        }
-      );
 
       return (
         <ControlsContainer $panelOffset={panelOffset}>
@@ -612,44 +486,15 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
           {(() => {
             const shouldShowAnalysisButton =
               canCreateAnalysis && !readOnly && selectedCorpus;
-            console.log(
-              "FloatingDocumentControls: Analysis button render decision",
-              {
-                canCreateAnalysis,
-                readOnly,
-                shouldShowAnalysisButton,
-                documentPermissions: documentPermissions
-                  ? [...documentPermissions]
-                  : null,
-                selectedCorpusId: selectedCorpus?.id,
-                selectedCorpusPermissions: selectedCorpus?.myPermissions,
-              }
-            );
 
             return shouldShowAnalysisButton ? (
               <ActionButton
                 $color="#10b981"
                 data-testid="create-analysis-button"
                 onClick={() => {
-                  console.log(
-                    "FloatingDocumentControls: Analysis button clicked",
-                    {
-                      selectedCorpus: selectedCorpus
-                        ? {
-                            id: selectedCorpus.id,
-                            title: selectedCorpus.title,
-                          }
-                        : null,
-                      currentOpenedCorpus: openedCorpus(),
-                    }
-                  );
-
-                  // Ensure corpus context is set before opening modal
+                  // Note: openedCorpus is managed by CentralRouteManager, not set here
+                  // Modal reads corpus from reactive var or component state as needed
                   if (selectedCorpus) {
-                    console.log(
-                      "FloatingDocumentControls: Setting openedCorpus and showing modal"
-                    );
-                    openedCorpus(selectedCorpus);
                     showSelectCorpusAnalyzerOrFieldsetModal(true);
                   } else {
                     console.warn(

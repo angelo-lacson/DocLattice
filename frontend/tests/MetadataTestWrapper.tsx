@@ -72,8 +72,9 @@ export const MetadataTestWrapper: React.FC<MetadataTestWrapperProps> = ({
   corpusId,
 }) => {
   // Mark authentication as done immediately for tests
+  // Component tests set reactive vars directly (pragmatic exception to The ONE PLACE TO RULE THEM ALL)
   React.useEffect(() => {
-    authStatusVar("ANONYMOUS");
+    authStatusVar("AUTHENTICATED");
   }, []);
 
   return (

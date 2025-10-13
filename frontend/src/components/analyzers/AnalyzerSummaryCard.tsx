@@ -1,6 +1,15 @@
-import { Card, Image, Button, List, Header, Dimmer } from "semantic-ui-react";
+import { Card, Button, List, Header } from "semantic-ui-react";
+import styled from "styled-components";
 import analyzer_icon from "../../assets/icons/noun-epicyclic-gearing-800132.png";
 import { AnalyzerType, CorpusType } from "../../types/graphql-api";
+import { LoadingOverlay } from "../common/LoadingOverlay";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  float: right;
+  object-fit: contain;
+`;
 
 export interface AnalyzerSummaryCardInputs {
   analyzer: AnalyzerType;
@@ -28,22 +37,27 @@ export const AnalyzerSummaryCard = ({
   return (
     <Card
       onClick={() => (onSelect && !already_used ? onSelect() : {})}
-      style={selected ? { backgroundColor: "#e2ffdb" } : {}}
+      style={
+        selected
+          ? { backgroundColor: "#e2ffdb", position: "relative" }
+          : { position: "relative" }
+      }
     >
-      {already_used ? (
-        <Dimmer active>
-          <Header inverted as="h4">
-            Analyzer Already Used...
-            <Header.Subheader>
-              Delete Analysis at the Corpus Level and Re-Rerun If Desired...
-            </Header.Subheader>
-          </Header>
-        </Dimmer>
-      ) : (
-        <></>
+      {already_used && (
+        <LoadingOverlay
+          active={true}
+          content={
+            <div style={{ textAlign: "center" }}>
+              <h4>Analyzer Already Used...</h4>
+              <div style={{ fontSize: "0.875rem", marginTop: "0.5rem" }}>
+                Delete Analysis at the Corpus Level and Re-Rerun If Desired...
+              </div>
+            </div>
+          }
+        />
       )}
       <Card.Content>
-        <Image floated="right" size="mini" src={analyzer_icon} />
+        <MiniImage src={analyzer_icon} alt="Analyzer Icon" />
         <Card.Header>
           {analyzer.manifest?.metadata?.title
             ? analyzer.manifest.metadata.title

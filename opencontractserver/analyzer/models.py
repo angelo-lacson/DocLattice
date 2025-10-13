@@ -182,9 +182,9 @@ class Analysis(BaseOCModel):
             ("read_analysis", "read Analysis"),
             ("update_analysis", "update Analysis"),
             ("remove_analysis", "delete Analysis"),
-            ("comment_analysis", "comment Analysis"),
             ("publish_analysis", "publish Analysis"),
             ("permission_analysis", "permission Analysis"),
+            ("comment_analysis", "comment Analysis"),
         )
 
     # Sharing

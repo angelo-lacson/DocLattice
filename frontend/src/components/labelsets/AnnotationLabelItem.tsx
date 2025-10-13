@@ -1,12 +1,20 @@
 import React from "react";
 import _ from "lodash";
-import { Card, Popup, Image, Icon, Statistic, Menu } from "semantic-ui-react";
+import styled from "styled-components";
+import { Card, Popup, Icon, Statistic, Menu } from "semantic-ui-react";
 
 import default_icon from "../../assets/images/defaults/default_tag.png";
 import { LabelSetType } from "../../types/graphql-api";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 import { MyPermissionsIndicator } from "../widgets/permissions/MyPermissionsIndicator";
+
+const CardImage = styled.img`
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+`;
 
 interface AnnotationLabelItemProps {
   item: LabelSetType;
@@ -141,7 +149,7 @@ const AnnotationLabelItem = ({
           }
         }}
       >
-        <Image wrapped ui={false} src={icon ? icon : default_icon} />
+        <CardImage src={icon ? icon : default_icon} alt="Label Set Icon" />
         <Card.Content>
           <Card.Header>
             <Popup

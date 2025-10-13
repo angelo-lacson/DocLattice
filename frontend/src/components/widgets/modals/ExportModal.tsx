@@ -2,9 +2,10 @@
  * A modal for viewing and searching exports, with lazy loading and infinite scroll.
  */
 import { useEffect, useRef, useState } from "react";
-import { Button, Modal, Icon, Header, Dimmer, Loader } from "semantic-ui-react";
+import { Button, Modal, Icon, Header } from "semantic-ui-react";
 import _ from "lodash";
 import { CreateAndSearchBar } from "../../layout/CreateAndSearchBar";
+import { LoadingOverlay } from "../../common/LoadingOverlay";
 import { ExportList } from "../../exports/ExportList";
 import { LooseObject } from "../../types";
 import { useLazyQuery, useReactiveVar } from "@apollo/client";
@@ -146,12 +147,12 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
           </div>
         </div>
       </Modal.Header>
-      <Modal.Content>
-        {exports_loading && (
-          <Dimmer active inverted>
-            <Loader inverted>Loading...</Loader>
-          </Dimmer>
-        )}
+      <Modal.Content style={{ position: "relative" }}>
+        <LoadingOverlay
+          active={exports_loading}
+          inverted
+          content="Loading..."
+        />
         <div
           style={{
             display: "flex",

@@ -1,75 +1,48 @@
-import { Menu, Image, Icon } from "semantic-ui-react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth0 } from "@auth0/auth0-react";
+import { Menu, Icon } from "semantic-ui-react";
 import { Link } from "react-router-dom";
-import Dropdown from "../common/DropdownNoStrictMode";
+import styled from "styled-components";
+import Dropdown from "../common/Dropdown";
 
 import logo from "../../assets/images/os_legal_128.png";
 import user_logo from "../../assets/icons/noun-person-113116-FFFFFF.png";
-import { header_menu_items } from "../../assets/configurations/menus";
-import {
-  authToken,
-  showExportModal,
-  userObj,
-  openedCorpus,
-  openedDocument,
-} from "../../graphql/cache";
-import { useReactiveVar } from "@apollo/client";
+import { showExportModal } from "../../graphql/cache";
 import "./MobileNavMenu.css";
-import { useEnv } from "../hooks/UseEnv";
+import { useNavMenu } from "./useNavMenu";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  margin-right: 1.5em;
+  object-fit: contain;
+`;
+
+const AvatarImage = styled.img`
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-block;
+  vertical-align: middle;
+`;
 
 export const MobileNavMenu = () => {
-  const { REACT_APP_USE_AUTH0, REACT_APP_AUDIENCE } = useEnv();
   const {
-    loginWithRedirect,
-    loginWithPopup,
-    logout,
-    user: auth0_user,
+    user,
     isLoading,
-  } = useAuth0();
-  const cache_user = useReactiveVar(userObj);
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
+    REACT_APP_USE_AUTH0,
+    REACT_APP_AUDIENCE,
+    public_header_items,
+    private_header_items,
+    show_export_modal,
+    pathname,
+    isActive,
+    requestLogout,
+    loginWithPopup,
+    loginWithRedirect,
+  } = useNavMenu();
 
-  const user = REACT_APP_USE_AUTH0 ? auth0_user : cache_user;
-
-  // Debug logging for authentication state (Mobile)
-  console.log("[MobileNavMenu] REACT_APP_USE_AUTH0:", REACT_APP_USE_AUTH0);
-  console.log("[MobileNavMenu] isLoading:", isLoading);
-  console.log("[MobileNavMenu] auth0_user:", auth0_user);
-  console.log("[MobileNavMenu] cache_user:", cache_user);
-  console.log("[MobileNavMenu] resolved user:", user);
-
-  const show_export_modal = useReactiveVar(showExportModal);
-
-  let public_header_items = header_menu_items.filter((item) => !item.protected);
-  let private_header_items = header_menu_items.filter((item) => item.protected);
-
-  const requestLogout = () => {
-    if (REACT_APP_USE_AUTH0) {
-      logout({
-        logoutParams: {
-          returnTo: window.location.origin,
-        },
-      });
-    } else {
-      authToken("");
-      userObj(null);
-      navigate("/");
-    }
-  };
-
-  const isActive = (route: string) => {
-    if (route === "/corpuses") {
-      return pathname === "/" || pathname.startsWith("/corpuses");
-    }
-    return pathname === route || pathname.startsWith(`${route}/`);
-  };
-
-  const clearSelections = () => {
-    openedCorpus(null);
-    openedDocument(null);
-  };
+  // Note: CentralRouteManager automatically clears openedCorpus/openedDocument when navigating
+  // No need to manually clear on menu clicks
 
   const items = public_header_items.map((item) => (
     <Dropdown.Item
@@ -78,7 +51,6 @@ export const MobileNavMenu = () => {
       name={item.title}
       active={isActive(item.route)}
       key={`${item.title}`}
-      onClick={clearSelections}
     >
       <Link to={item.route}>{item.title}</Link>
     </Dropdown.Item>
@@ -91,7 +63,6 @@ export const MobileNavMenu = () => {
       name={item.title}
       active={isActive(item.route)}
       key={`${item.title}`}
-      onClick={clearSelections}
     >
       <Link to={item.route}>{item.title}</Link>
     </Dropdown.Item>
@@ -102,21 +73,15 @@ export const MobileNavMenu = () => {
       <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
         <Menu.Menu position="left">
           <Menu.Item>
-            <Image size="mini" src={logo} style={{ marginRight: "1.5em" }} />
+            <MiniImage src={logo} alt="Open Contracts Logo" />
             <Dropdown
               id="MobileMenuDropdown"
               item
               simple
               text="Open Contracts"
-              style={{
-                background: "#1b1c1d !important",
-              }}
+              dark
             >
-              <Dropdown.Menu
-                style={{
-                  background: "#1b1c1d !important",
-                }}
-              >
+              <Dropdown.Menu>
                 {user ? [...items, ...private_items] : items}
               </Dropdown.Menu>
             </Dropdown>
@@ -127,7 +92,7 @@ export const MobileNavMenu = () => {
           {!isLoading && user ? (
             <>
               <Menu.Item>
-                <Image src={user_logo} avatar />
+                <AvatarImage src={user_logo} alt="User Avatar" />
                 <Dropdown
                   item
                   simple
@@ -135,6 +100,7 @@ export const MobileNavMenu = () => {
                   text={` ${user?.name ? user.name : user.username}`}
                   style={{ margin: "0px", padding: "0px" }}
                   header="Logout"
+                  dark
                 >
                   <Dropdown.Menu>
                     <Dropdown.Item
@@ -147,7 +113,7 @@ export const MobileNavMenu = () => {
                       onClick={() => requestLogout()}
                       icon={<Icon name="log out" />}
                     />
-                    {/* <Dropdown.Item 
+                    {/* <Dropdown.Item
                                             text='Settings'
                                             onClick={() => console.log("Do nothing yet...")}
                                             icon={<Icon name='settings'/>}
@@ -188,21 +154,15 @@ export const MobileNavMenu = () => {
       <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
         <Menu.Menu position="left">
           <Menu.Item>
-            <Image size="mini" src={logo} style={{ marginRight: "1.5em" }} />
+            <MiniImage src={logo} alt="Open Contracts Logo" />
             <Dropdown
               id="MobileMenuDropdown"
               item
               simple
               text="Open Contracts"
-              style={{
-                background: "#1b1c1d !important",
-              }}
+              dark
             >
-              <Dropdown.Menu
-                style={{
-                  background: "#1b1c1d !important",
-                }}
-              >
+              <Dropdown.Menu>
                 {user ? [...items, ...private_items] : items}
               </Dropdown.Menu>
             </Dropdown>
@@ -213,7 +173,7 @@ export const MobileNavMenu = () => {
           {user ? (
             <>
               <Menu.Item>
-                <Image src={user_logo} avatar />
+                <AvatarImage src={user_logo} alt="User Avatar" />
                 <Dropdown
                   item
                   simple
@@ -221,6 +181,7 @@ export const MobileNavMenu = () => {
                   text={` ${user?.name ? user.name : user.username}`}
                   style={{ margin: "0px", padding: "0px" }}
                   header="Logout"
+                  dark
                 >
                   <Dropdown.Menu>
                     <Dropdown.Item
@@ -233,7 +194,7 @@ export const MobileNavMenu = () => {
                       onClick={() => requestLogout()}
                       icon={<Icon name="log out" />}
                     />
-                    {/* <Dropdown.Item 
+                    {/* <Dropdown.Item
                                             text='Settings'
                                             onClick={() => console.log("Do nothing yet...")}
                                             icon={<Icon name='settings'/>}

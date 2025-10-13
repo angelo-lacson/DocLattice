@@ -1,7 +1,8 @@
 import React, { useState, useRef } from "react";
 import styled from "styled-components";
 import { Code, Check, X, Eye, Edit3, EyeOff } from "lucide-react";
-import { Dimmer, Loader } from "semantic-ui-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { LoadingOverlay } from "../../common/LoadingOverlay";
 import { CellEditor } from "./CellEditor";
 import {
   ColumnType,
@@ -34,6 +35,7 @@ import { toast } from "react-toastify";
 import { convertToServerAnnotation } from "../../../utils/transform";
 import ReactJson from "react-json-view";
 import { useAnalysisManager } from "../hooks/AnalysisHooks";
+import { updateAnnotationDisplayParams } from "../../../utils/navigationUtils";
 
 interface SingleDocumentExtractResultsProps {
   datacells: DatacellType[];
@@ -59,6 +61,9 @@ export const SingleDocumentExtractResults: React.FC<
   const cellRefs = useRef<{ [key: string]: HTMLDivElement }>({});
   const [isEditing, setIsEditing] = useState(false);
   const [editingCell, setEditingCell] = useState<DatacellType | null>(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [requestApprove] = useMutation<
     RequestApproveDatacellOutputType,
@@ -292,16 +297,13 @@ export const SingleDocumentExtractResults: React.FC<
 
   return (
     <Container>
-      <Dimmer.Dimmable
-        as={TableContainer}
-        dimmed={tryingApprove || tryingReject}
-      >
-        <Dimmer active={tryingApprove || tryingReject}>
-          <Loader>
-            {tryingApprove && "Approving..."}
-            {tryingReject && "Rejecting..."}
-          </Loader>
-        </Dimmer>
+      <TableContainer style={{ position: "relative" }}>
+        <LoadingOverlay
+          active={tryingApprove || tryingReject}
+          content={
+            tryingApprove ? "Approving..." : tryingReject ? "Rejecting..." : ""
+          }
+        />
 
         <Table>
           <thead>
@@ -383,11 +385,16 @@ export const SingleDocumentExtractResults: React.FC<
                                 onSelect={(annotationId: string) => {
                                   onlyDisplayTheseAnnotations([annotation]);
                                   displayAnnotationOnAnnotatorLoad(annotation);
-                                  showSelectedAnnotationOnly(false);
-                                  showAnnotationBoundingBoxes(true);
-                                  showStructuralAnnotations(true);
-                                  showAnnotationLabels(
-                                    LabelDisplayBehavior.ALWAYS
+                                  // Update display settings via URL - CentralRouteManager will set reactive vars
+                                  updateAnnotationDisplayParams(
+                                    location,
+                                    navigate,
+                                    {
+                                      showSelectedOnly: false,
+                                      showBoundingBoxes: true,
+                                      showStructural: true,
+                                      labelDisplay: LabelDisplayBehavior.ALWAYS,
+                                    }
                                   );
                                 }}
                               />
@@ -401,7 +408,7 @@ export const SingleDocumentExtractResults: React.FC<
             })}
           </tbody>
         </Table>
-      </Dimmer.Dimmable>
+      </TableContainer>
 
       {isModalOpen && activeCell && (
         <ModalOverlay onClick={() => setIsModalOpen(false)}>

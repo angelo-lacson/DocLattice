@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Button, Tab, Menu } from "semantic-ui-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { Tab, Menu } from "semantic-ui-react";
 import _ from "lodash";
 import { toast } from "react-toastify";
 import {
@@ -9,7 +9,7 @@ import {
   useQuery,
   useReactiveVar,
 } from "@apollo/client";
-import { useLocation, useParams, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   FileText,
   MessageSquare,
@@ -21,7 +21,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Menu as LucideMenu,
+  ChevronUp,
   Search,
 } from "lucide-react";
 import styled from "styled-components";
@@ -416,11 +416,25 @@ const CorpusQueryView = ({
   opened_corpus,
   opened_corpus_id,
   setShowDescriptionEditor,
+  stats,
+  statsLoading,
 }: {
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
   setShowDescriptionEditor: (show: boolean) => void;
+  stats: {
+    totalDocs: number;
+    totalAnnotations: number;
+    totalAnalyses: number;
+    totalExtracts: number;
+  };
+  statsLoading: boolean;
 }) => {
+  console.log("🔍🔍🔍 [CorpusQueryView] COMPONENT RENDER with props:", {
+    opened_corpus_id,
+    hasCorpus: !!opened_corpus,
+  });
+
   const [chatExpanded, setChatExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearchMode, setIsSearchMode] = useState<boolean>(true);
@@ -572,6 +586,8 @@ const CorpusQueryView = ({
             <CorpusHome
               corpus={opened_corpus as CorpusType}
               onEditDescription={() => setShowDescriptionEditor(true)}
+              stats={stats}
+              statsLoading={statsLoading}
             />
             <div
               style={{
@@ -695,88 +711,85 @@ const CorpusViewContainer = styled.div`
 const NavigationSidebar = styled(motion.div)<{ isExpanded: boolean }>`
   position: relative;
   width: ${(props) => (props.isExpanded ? "280px" : "72px")};
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.98) 0%,
-    rgba(249, 250, 251, 0.95) 100%
-  );
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 50%, #f8f9fa 100%);
   backdrop-filter: blur(10px);
-  border-right: 1px solid rgba(226, 232, 240, 0.8);
+  border-right: 1px solid #e2e8f0;
   box-shadow: ${(props) =>
     props.isExpanded
-      ? "4px 0 24px rgba(0, 0, 0, 0.04), 1px 0 0 rgba(226, 232, 240, 0.5)"
-      : "2px 0 8px rgba(0, 0, 0, 0.02), 1px 0 0 rgba(226, 232, 240, 0.5)"};
+      ? "2px 0 8px rgba(0, 0, 0, 0.06)"
+      : "2px 0 4px rgba(0, 0, 0, 0.04)"};
   z-index: 100;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
 
-  /* Subtle gradient overlay for depth */
-  &::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 120px;
-    background: linear-gradient(
-      180deg,
-      rgba(74, 144, 226, 0.03) 0%,
-      transparent 100%
-    );
-    pointer-events: none;
-    opacity: ${(props) => (props.isExpanded ? 1 : 0.5)};
-    transition: opacity 0.4s ease;
-  }
-
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     position: fixed;
-    left: 0;
-    top: 0;
-    width: ${(props) => (props.isExpanded ? "280px" : "0")};
+    left: 50%;
+    bottom: 0;
+    width: 100%;
+    max-width: 480px;
+    height: ${(props) => (props.isExpanded ? "70vh" : "0")};
+    max-height: 600px;
+    border-right: none;
+    border-top: 1px solid #e2e8f0;
+    border-radius: 24px 24px 0 0;
     box-shadow: ${(props) =>
-      props.isExpanded
-        ? "8px 0 32px rgba(0, 0, 0, 0.12), 2px 0 0 rgba(226, 232, 240, 0.5)"
-        : "none"};
-    transform: translateX(${(props) => (props.isExpanded ? "0" : "-100%")});
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      props.isExpanded ? "0 -8px 32px rgba(0, 0, 0, 0.12)" : "none"};
+    transform: translate(-50%, ${(props) => (props.isExpanded ? "0" : "100%")});
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 200;
+    background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  }
+`;
+
+// Drag handle for bottom sheet
+const BottomSheetHandle = styled.div`
+  display: none;
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    display: flex;
+    justify-content: center;
+    padding: 0.75rem 0;
+    cursor: grab;
+
+    &::after {
+      content: "";
+      width: 40px;
+      height: 4px;
+      background: #cbd5e1;
+      border-radius: 2px;
+      transition: background 0.2s ease;
+    }
+
+    &:active {
+      cursor: grabbing;
+
+      &::after {
+        background: #94a3b8;
+      }
+    }
   }
 `;
 
 const NavigationHeader = styled.div<{ isExpanded: boolean }>`
   padding: 1.5rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(249, 250, 251, 0.3) 100%
-  );
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
   display: flex;
   align-items: center;
   justify-content: ${(props) =>
     props.isExpanded ? "space-between" : "center"};
   min-height: 72px;
   position: relative;
-  z-index: 1;
+  gap: 0.75rem;
 
-  /* Add subtle shine effect */
-  &::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.5) 50%,
-      transparent 100%
-    );
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    padding: 0 1.5rem 1rem;
+    min-height: auto;
   }
 `;
 
@@ -859,6 +872,10 @@ const NavigationItems = styled.div`
   overflow-x: hidden;
   position: relative;
 
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    padding: 0.5rem 0 2rem;
+  }
+
   /* Fade effect at top and bottom */
   &::before,
   &::after {
@@ -938,6 +955,30 @@ const NavigationItems = styled.div`
   /* Firefox scrollbar support */
   scrollbar-width: thin;
   scrollbar-color: rgba(203, 213, 225, 0.8) transparent;
+`;
+
+// Badge for count display on navigation items
+const NavItemBadge = styled.span<{ isActive: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  margin-left: auto;
+  background: ${(props) =>
+    props.isActive
+      ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
+      : "#e2e8f0"};
+  color: ${(props) => (props.isActive ? "white" : "#64748b")};
+  transition: all 0.2s ease;
+  box-shadow: ${(props) =>
+    props.isActive
+      ? "0 2px 4px rgba(74, 144, 226, 0.3)"
+      : "0 1px 2px rgba(0, 0, 0, 0.05)"};
 `;
 
 const NavigationItem = styled(motion.button)<{
@@ -1105,6 +1146,7 @@ const MainContentArea = styled.div<{ sidebarExpanded: boolean }>`
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     margin-left: 0;
+    padding-bottom: 80px; /* Space for bottom handle */
   }
 `;
 
@@ -1114,196 +1156,179 @@ const MobileMenuBackdrop = styled(motion.div)`
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(0, 0, 0, 0.5) 0%,
-    rgba(15, 23, 42, 0.4) 100%
-  );
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
   z-index: 190;
   display: none;
+  -webkit-tap-highlight-color: transparent;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: block;
   }
 `;
 
-// Search bar wrapper with mobile navigation buttons
+// Unified search bar wrapper with integrated back button
 const SearchBarWithNav = styled.div`
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: stretch;
   width: 100%;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+
+  &:focus-within {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
 `;
 
-const MobileNavGroup = styled.div`
+// Integrated back button - no separate border, part of unified container
+const MobileBackButton = styled.button`
   display: none;
-  gap: 0;
-  align-items: center;
-  background: linear-gradient(
-    135deg,
-    rgba(74, 144, 226, 0.03) 0%,
-    rgba(74, 144, 226, 0.08) 50%,
-    rgba(99, 102, 241, 0.05) 100%
-  );
-  padding: 0.5rem;
-  border-radius: 14px;
-  box-shadow: 0 4px 6px rgba(74, 144, 226, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(74, 144, 226, 0.25);
-  position: relative;
-  overflow: hidden;
-  min-height: 58px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0 0.875rem;
+  min-width: auto;
+  background: transparent;
+  border: none;
+  border-right: 1px solid #e2e8f0;
+  color: #64748b;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  flex-shrink: 0;
 
-  /* Animated gradient shimmer */
-  &::before {
-    content: "";
-    position: absolute;
-    top: -2px;
-    left: -100%;
-    right: -100%;
-    height: 2px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(74, 144, 226, 0.6) 25%,
-      rgba(99, 102, 241, 0.8) 50%,
-      rgba(74, 144, 226, 0.6) 75%,
-      transparent 100%
-    );
-    animation: shimmer 3s ease-in-out infinite;
-  }
-
-  /* Glow effect on hover */
   &:hover {
-    box-shadow: 0 6px 12px rgba(74, 144, 226, 0.18),
-      0 2px 4px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    border-color: rgba(74, 144, 226, 0.35);
+    background: #f8fafc;
+    color: #475569;
   }
 
-  @keyframes shimmer {
-    0% {
-      transform: translateX(-100%);
-    }
-    100% {
-      transform: translateX(200%);
-    }
+  &:active {
+    background: #f1f5f9;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: flex;
+    align-items: center;
+    justify-content: center;
   }
 `;
 
-const MobileNavButton = styled(Button)`
-  &&& {
-    padding: 0.625rem 0.875rem;
-    min-width: auto;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.9) 0%,
-      rgba(255, 255, 255, 0.6) 100%
-    );
-    border: none;
-    border-radius: 10px;
-    color: #4a90e2;
+// Mobile bottom navigation handle - modern and sleek
+const BottomNavigationHandle = styled(motion.button)<{ isOpen?: boolean }>`
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: none;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  color: #0f172a;
+  cursor: pointer;
+  z-index: 250;
+  padding: 0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    height: 42px;
-    font-weight: 500;
-    overflow: hidden;
+    flex-direction: column;
+  }
 
-    /* Subtle inner shadow for depth */
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.05), 0 2px 4px rgba(74, 144, 226, 0.1);
+  &:active {
+    transform: scale(0.99);
+  }
+`;
 
-    /* Divider between buttons with glow */
-    &:not(:last-child)::after {
-      content: "";
-      position: absolute;
-      right: -1px;
-      top: 15%;
-      height: 70%;
-      width: 1px;
-      background: linear-gradient(
-        to bottom,
-        transparent,
-        rgba(74, 144, 226, 0.2) 30%,
-        rgba(99, 102, 241, 0.3) 50%,
-        rgba(74, 144, 226, 0.2) 70%,
-        transparent
-      );
-    }
+const BottomHandleContent = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  gap: 1rem;
+  min-height: 64px;
+  width: 100%;
+`;
 
-    /* Ripple effect base */
-    &::before {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 0;
-      height: 0;
-      border-radius: 50%;
-      background: radial-gradient(
-        circle,
-        rgba(74, 144, 226, 0.4) 0%,
-        transparent 70%
-      );
-      transform: translate(-50%, -50%);
-      transition: width 0.4s, height 0.4s;
-    }
+const BottomHandleLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+`;
 
-    &:hover {
-      background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 1) 0%,
-        rgba(237, 245, 255, 1) 100%
-      );
-      color: #3a7bc8;
-      transform: translateY(-1px) scale(1.02);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.03), 0 4px 8px rgba(74, 144, 226, 0.2);
+const BottomHandleIconWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.4);
 
-      /* Ripple on hover */
-      &::before {
-        width: 100px;
-        height: 100px;
-      }
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+`;
 
-      svg {
-        transform: rotate(-5deg) scale(1.15);
-        filter: drop-shadow(0 2px 4px rgba(74, 144, 226, 0.3));
-      }
-    }
+const BottomHandleText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
+`;
 
-    &:active {
-      background: linear-gradient(
-        135deg,
-        rgba(237, 245, 255, 1) 0%,
-        rgba(225, 239, 255, 1) 100%
-      );
-      transform: translateY(0) scale(0.98);
-      box-shadow: inset 0 2px 4px rgba(74, 144, 226, 0.2),
-        0 1px 2px rgba(74, 144, 226, 0.1);
+const BottomHandleLabel = styled.div`
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+`;
 
-      svg {
-        transform: rotate(0) scale(0.95);
-      }
-    }
+const BottomHandleTitle = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
 
-    svg {
-      width: 20px;
-      height: 20px;
-      margin: 0 !important;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 1;
-      position: relative;
-    }
+const BottomHandleChevron = styled.div<{ isOpen?: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  flex-shrink: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: rotate(${(props) => (props.isOpen ? "180deg" : "0deg")});
+
+  svg {
+    width: 20px;
+    height: 20px;
   }
 `;
 
@@ -1312,9 +1337,12 @@ const SearchBarContainer = styled.div`
   display: flex;
   min-width: 0; /* Allows flex item to shrink below its content size */
 
-  /* Override CreateAndSearchBar's internal styles */
+  /* Override CreateAndSearchBar's internal styles to remove duplicate borders */
   > div {
     width: 100%;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
 
     /* Override the SearchInputWrapper max-width on mobile */
     > div:first-child {
@@ -1366,6 +1394,7 @@ const NotificationBadge = styled.div`
 
 export const Corpuses = () => {
   const { width } = useWindowDimensions();
+
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
 
   const show_remove_docs_from_corpus_modal = useReactiveVar(
@@ -1375,7 +1404,15 @@ export const Corpuses = () => {
     selectedMetaAnnotationId
   );
 
-  const { setCorpus } = useCorpusState();
+  // CRITICAL: Only call useCorpusState ONCE to avoid infinite re-renders
+  // Calling it multiple times creates new object references each time
+  const corpusState = useCorpusState();
+  const {
+    setCorpus,
+    canUpdateCorpus,
+    myPermissions: corpusAtomPermissions,
+  } = corpusState;
+
   const selected_document_ids = useReactiveVar(selectedDocumentIds);
   const document_search_term = useReactiveVar(documentSearchTerm);
   const corpus_search_term = useReactiveVar(corpusSearchTerm);
@@ -1384,6 +1421,7 @@ export const Corpuses = () => {
   const corpus_to_edit = useReactiveVar(editingCorpus);
   const corpus_to_view = useReactiveVar(viewingCorpus);
   const opened_corpus = useReactiveVar(openedCorpus);
+
   const exporting_corpus = useReactiveVar(exportingCorpus);
   const opened_document = useReactiveVar(openedDocument);
   const filter_to_label_id = useReactiveVar(filterToLabelId);
@@ -1394,7 +1432,6 @@ export const Corpuses = () => {
   const opened_query_obj = useReactiveVar(openedQueryObj);
 
   const location = useLocation();
-  const { corpusId: routeCorpusId } = useParams();
   const navigate = useNavigate();
 
   const corpusUploadRef = useRef() as React.MutableRefObject<HTMLInputElement>;
@@ -1494,10 +1531,16 @@ export const Corpuses = () => {
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to get corpuses
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  let corpus_variables: LooseObject = {};
-  if (corpus_search_term) {
-    corpus_variables["textSearch"] = corpus_search_term;
-  }
+  // CRITICAL: Memoize corpus_variables to prevent infinite re-renders
+  // Creating new object on every render causes Apollo to refetch → cache update → re-render → new object → LOOP
+  const corpus_variables = useMemo(() => {
+    const vars: LooseObject = {};
+    if (corpus_search_term) {
+      vars["textSearch"] = corpus_search_term;
+    }
+    return vars;
+  }, [corpus_search_term]);
+
   // Now that auth is guaranteed to be ready before this component renders,
   // we can use a regular useQuery
   const {
@@ -1508,65 +1551,18 @@ export const Corpuses = () => {
     fetchMore: fetchMoreCorpusesOrig,
   } = useQuery<GetCorpusesOutputs, GetCorpusesInputs>(GET_CORPUSES, {
     variables: corpus_variables,
-    fetchPolicy: "network-only",
+    // CHANGED from "network-only" to "cache-and-network" to prevent infinite refetch loops
+    // "network-only" bypasses cache and refetches on EVERY render, causing infinite loops
+    // "cache-and-network" uses cache immediately and fetches in background for updates
+    fetchPolicy: "cache-and-network",
     notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
   });
 
   /* --------------------------------------------------------------------------------------------------
-   * Deep-link support: if the user navigates directly to `/corpuses/:id` we may not have the corpus in
-   * the paginated GET_CORPUSES response yet. We therefore lazily fetch the corpus metadata **by id**
-   * and hydrate the `openedCorpus` reactive var as soon as it arrives.
+   * Entity resolution is now handled by CentralRouteManager
+   * - When user navigates to /c/:user/:corpus → CentralRouteManager fetches and sets openedCorpus
+   * - This component just reads openedCorpus reactive var and displays appropriate view
    * -------------------------------------------------------------------------------------------------- */
-  const [
-    fetchCorpusById,
-    { data: corpusByIdData, loading: corpusByIdLoading },
-  ] = useLazyQuery<GetCorpusMetadataOutputs, GetCorpusMetadataInputs>(
-    GET_CORPUS_METADATA,
-    {
-      fetchPolicy: "network-only",
-    }
-  );
-
-  /* Trigger the lazy query when we have a route id but no opened corpus and the list query finished. */
-  useEffect(() => {
-    if (
-      routeCorpusId &&
-      !opened_corpus &&
-      !loading_corpuses &&
-      !corpusByIdLoading &&
-      !corpusByIdData
-    ) {
-      // Only fetch if we actually have a valid routeCorpusId
-      if (routeCorpusId) {
-        // Check if it's a valid GraphQL ID before fetching
-        const { id: validId, isValid } = ensureValidCorpusId({
-          id: routeCorpusId,
-        });
-        if (isValid && validId) {
-          fetchCorpusById({ variables: { metadataForCorpusId: validId } });
-        } else {
-          console.warn(
-            "Route corpus ID is not a valid GraphQL ID:",
-            routeCorpusId
-          );
-        }
-      }
-    }
-  }, [
-    routeCorpusId,
-    opened_corpus,
-    loading_corpuses,
-    fetchCorpusById,
-    corpusByIdLoading,
-    corpusByIdData,
-  ]);
-
-  /* When the single-corpus query returns, sync it with the global reactive var. */
-  useEffect(() => {
-    if (corpusByIdData?.corpus) {
-      openedCorpus(corpusByIdData.corpus);
-    }
-  }, [corpusByIdData]);
 
   if (corpus_load_error) {
     console.log("Corpuses.tsx - corpus_load_error", corpus_load_error);
@@ -1643,53 +1639,31 @@ export const Corpuses = () => {
           fetchMetadata({ variables: { metadataForCorpusId: validId } });
         }
       }
-    } else if (!auth_token) {
-      // Clear opened corpus when logged out
-      openedCorpus(null);
-      // Navigate to corpuses list if we were viewing a specific corpus
-      if (routeCorpusId) {
-        navigate("/corpuses");
-      }
     }
   }, [auth_token]); // Re-run when auth token changes
 
+  // Search term effect - needed because fetchPolicy is "network-only"
   useEffect(() => {
-    // console.log("corpus_search_term");
     refetchCorpuses();
   }, [corpus_search_term]);
 
-  // If we detech user navigated to this page, refetch
-  useEffect(() => {
-    if (location.pathname === "/corpuses") {
-      // Clear opened corpus when navigating to corpus list
-      // This ensures the list view is shown even if a corpus was previously persisted
-      if (!routeCorpusId) {
-        openedCorpus(null);
-      }
-      refetchCorpuses();
-    }
-    showQueryViewState("ASK");
-  }, [location, routeCorpusId]);
+  // REMOVED: location-based refetch - was hammering server on every navigation
+  // Component already refetches on mount and when search term changes
+
+  // Sync opened_corpus to CorpusAtom and fetch metadata when corpus selected
+  // CRITICAL: Use stable ID as dependency to avoid infinite loops
+  // Apollo reactive vars return new object references even when data unchanged
+  const openedCorpusId = opened_corpus?.id;
 
   useEffect(() => {
-    console.log("Switched opened_corpus", opened_corpus);
     if (opened_corpus) {
       const corpus_permissions = getPermissions(opened_corpus.myPermissions);
       setCorpus({
         selectedCorpus: opened_corpus,
         myPermissions: corpus_permissions,
       });
-    } else {
-      setCorpus({
-        selectedCorpus: opened_corpus,
-        myPermissions: [],
-      });
-    }
-    if (!opened_corpus || opened_corpus === null) {
-      refetchCorpuses();
-    } else if (opened_corpus?.id) {
-      console.log("Fetch metadata for corpus id: ", opened_corpus.id);
-      // Only fetch metadata if we have a valid corpus ID
+
+      // Fetch metadata when corpus is selected
       const { id: validId, isValid } = ensureValidCorpusId(opened_corpus);
       if (isValid && validId) {
         try {
@@ -1704,30 +1678,32 @@ export const Corpuses = () => {
           opened_corpus.id
         );
       }
+    } else {
+      setCorpus({
+        selectedCorpus: opened_corpus,
+        myPermissions: [],
+      });
     }
-  }, [opened_corpus]);
+    // REMOVED: refetchCorpuses on opened_corpus null - unnecessary, query already has data
+  }, [openedCorpusId]); // Only depend on ID, not full object
 
   // Update CorpusAtom when metadata is fetched
+  // IMPORTANT: Only depend on corpus ID, not the whole object, to avoid infinite loops
+  // GraphQL returns new object references on every render even if data unchanged
+  const metadataCorpusId = metadata_data?.corpus?.id;
+
   useEffect(() => {
-    if (metadata_data?.corpus) {
+    if (metadata_data?.corpus && metadataCorpusId) {
       const corpus = metadata_data.corpus;
-      console.log(
-        "Metadata fetched, updating CorpusAtom with permissions:",
-        corpus.myPermissions
-      );
       const corpus_permissions = getPermissions(corpus.myPermissions || []);
       setCorpus({
         selectedCorpus: corpus,
         myPermissions: corpus_permissions,
       });
     }
-  }, [metadata_data]);
+  }, [metadataCorpusId]); // Only depend on ID, not the full object
 
   useEffect(() => {
-    console.log(
-      "selected_metadata_id_to_filter_on changed",
-      selected_metadata_id_to_filter_on
-    );
     refetch_documents();
   }, [selected_metadata_id_to_filter_on]);
 
@@ -1744,16 +1720,28 @@ export const Corpuses = () => {
   } = useQuery(GET_CORPUS_STATS, {
     variables: { corpusId: validCorpusId || "" }, // Provide empty string as fallback
     skip: !validCorpusId, // Skip if we don't have a valid ID
-    pollInterval: 5000, // Poll every 5 seconds for real-time updates
-    fetchPolicy: "cache-and-network", // Always fetch fresh data while showing cached
+    // REMOVED pollInterval - was hammering server every 5 seconds
+    // Stats are not real-time critical and will update when corpus changes
   });
 
-  const stats = statsData?.corpusStats || {
-    totalDocs: 0,
-    totalAnnotations: 0,
-    totalAnalyses: 0,
-    totalExtracts: 0,
-  };
+  // CRITICAL: Memoize stats object to prevent new object reference on every render
+  // New object reference would cause navigationItems useMemo to re-run infinitely
+  // Depend on primitive values, not the object itself, as Apollo returns new object refs
+  const stats = useMemo(() => {
+    return (
+      statsData?.corpusStats || {
+        totalDocs: 0,
+        totalAnnotations: 0,
+        totalAnalyses: 0,
+        totalExtracts: 0,
+      }
+    );
+  }, [
+    statsData?.corpusStats?.totalDocs,
+    statsData?.corpusStats?.totalAnnotations,
+    statsData?.corpusStats?.totalAnalyses,
+    statsData?.corpusStats?.totalExtracts,
+  ]);
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to shape item data
@@ -1956,100 +1944,95 @@ export const Corpuses = () => {
     });
   }
 
-  const { canUpdateCorpus, myPermissions: corpusAtomPermissions } =
-    useCorpusState();
+  // NOTE: canUpdateCorpus and corpusAtomPermissions are already destructured above
+  // Removed duplicate useCorpusState() call that was causing infinite re-renders
 
   // Navigation items configuration
-  const navigationItems = [
-    {
-      id: "home",
-      label: "Home",
-      icon: <Brain />,
-      component: (
-        <CorpusQueryView
-          opened_corpus={opened_corpus}
-          opened_corpus_id={opened_corpus_id}
-          setShowDescriptionEditor={setShowDescriptionEditor}
-        />
-      ),
-    },
-    {
-      id: "documents",
-      label: "Documents",
-      icon: <FileText />,
-      badge: stats.totalDocs,
-      component: <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />,
-    },
-    {
-      id: "annotations",
-      label: "Annotations",
-      icon: <MessageSquare />,
-      badge: stats.totalAnnotations,
-      component: <CorpusAnnotationCards opened_corpus_id={opened_corpus_id} />,
-    },
-    {
-      id: "analyses",
-      label: "Analyses",
-      icon: <Factory />,
-      badge: stats.totalAnalyses,
-      component: <CorpusAnalysesCards />,
-    },
-    {
-      id: "extracts",
-      label: "Extracts",
-      icon: <Table />,
-      badge: stats.totalExtracts,
-      component: <CorpusExtractCards />,
-    },
-    ...(opened_corpus &&
-    (() => {
-      const legacyPermissions = getPermissions(
-        opened_corpus.myPermissions || []
-      );
-      const legacyHasUpdate = legacyPermissions.includes(
-        PermissionTypes.CAN_UPDATE
-      );
-
-      console.log("CorpusSettings Debug:", {
-        corpusId: opened_corpus.id,
-        corpusTitle: opened_corpus.title,
-        legacyRawPermissions: opened_corpus.myPermissions,
-        legacyProcessedPermissions: legacyPermissions,
-        legacyHasUpdatePermission: legacyHasUpdate,
-        corpusAtomPermissions,
-        canUpdateCorpusFromAtom: canUpdateCorpus,
-        creator: opened_corpus.creator?.email,
-        usingAtomPermissions: true,
-      });
-
-      return canUpdateCorpus;
-    })()
-      ? [
-          {
-            id: "settings",
-            label: "Settings",
-            icon: <Settings />,
-            component: opened_corpus?.title ? (
-              <CorpusSettings
-                corpus={{
-                  id: opened_corpus.id,
-                  title: opened_corpus.title,
-                  description: opened_corpus.description || "",
-                  allowComments: opened_corpus.allowComments || false,
-                  preferredEmbedder: opened_corpus.preferredEmbedder,
-                  slug: (opened_corpus as any).slug || null,
-                  creator: opened_corpus.creator,
-                  created: opened_corpus.created,
-                  modified: opened_corpus.modified,
-                  isPublic: opened_corpus.isPublic,
-                  myPermissions: corpusAtomPermissions,
-                }}
-              />
-            ) : null,
-          },
-        ]
-      : []),
-  ];
+  // Memoize to prevent recreating on every render
+  const navigationItems = useMemo(() => {
+    return [
+      {
+        id: "home",
+        label: "Home",
+        icon: <Brain />,
+        component: (
+          <CorpusQueryView
+            opened_corpus={opened_corpus}
+            opened_corpus_id={opened_corpus_id}
+            setShowDescriptionEditor={setShowDescriptionEditor}
+            stats={stats}
+            statsLoading={statsLoading}
+          />
+        ),
+      },
+      {
+        id: "documents",
+        label: "Documents",
+        icon: <FileText />,
+        badge: stats.totalDocs,
+        component: <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />,
+      },
+      {
+        id: "annotations",
+        label: "Annotations",
+        icon: <MessageSquare />,
+        badge: stats.totalAnnotations,
+        component: (
+          <CorpusAnnotationCards opened_corpus_id={opened_corpus_id} />
+        ),
+      },
+      {
+        id: "analyses",
+        label: "Analyses",
+        icon: <Factory />,
+        badge: stats.totalAnalyses,
+        component: <CorpusAnalysesCards />,
+      },
+      {
+        id: "extracts",
+        label: "Extracts",
+        icon: <Table />,
+        badge: stats.totalExtracts,
+        component: <CorpusExtractCards />,
+      },
+      ...(opened_corpus && canUpdateCorpus
+        ? [
+            {
+              id: "settings",
+              label: "Settings",
+              icon: <Settings />,
+              component: opened_corpus?.title ? (
+                <CorpusSettings
+                  corpus={{
+                    id: opened_corpus.id,
+                    title: opened_corpus.title,
+                    description: opened_corpus.description || "",
+                    allowComments: opened_corpus.allowComments || false,
+                    preferredEmbedder: opened_corpus.preferredEmbedder,
+                    slug: (opened_corpus as any).slug || null,
+                    creator: opened_corpus.creator,
+                    created: opened_corpus.created,
+                    modified: opened_corpus.modified,
+                    isPublic: opened_corpus.isPublic,
+                    myPermissions: corpusAtomPermissions,
+                  }}
+                />
+              ) : null,
+            },
+          ]
+        : []),
+    ];
+  }, [
+    openedCorpusId, // Use stable ID instead of full object
+    opened_corpus_id,
+    stats.totalDocs,
+    stats.totalAnnotations,
+    stats.totalAnalyses,
+    stats.totalExtracts,
+    canUpdateCorpus,
+    // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
+    // and is a stable boolean, so we don't need corpusAtomPermissions in deps
+  ]);
 
   const currentView = navigationItems[active_tab];
 
@@ -2086,8 +2069,8 @@ export const Corpuses = () => {
       </div>
     );
   } else if (
-    (opened_corpus !== null || opened_corpus !== undefined) &&
-    (opened_document === null || opened_document === undefined)
+    opened_corpus && // Corpus selected
+    !opened_document // No document selected
   ) {
     content = (
       <CorpusViewContainer id="corpus-view-container">
@@ -2121,29 +2104,49 @@ export const Corpuses = () => {
           }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
         >
+          <BottomSheetHandle
+            onClick={() => use_mobile_layout && setMobileSidebarOpen(false)}
+          />
           <NavigationHeader
             isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
           >
             {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-              <motion.h3
+              <motion.div
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
                 style={{
-                  margin: 0,
-                  fontSize: "1.125rem",
-                  fontWeight: 600,
-                  background:
-                    "linear-gradient(135deg, #4a90e2 0%, #6366f1 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  letterSpacing: "-0.025em",
-                  display: "inline-block",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.25rem",
+                  flex: 1,
                 }}
               >
-                Navigation
-              </motion.h3>
+                <div
+                  style={{
+                    fontSize: "0.6875rem",
+                    fontWeight: 500,
+                    color: "#94a3b8",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {opened_corpus ? "Corpus" : "Navigation"}
+                </div>
+                <div
+                  style={{
+                    fontSize: "1rem",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    letterSpacing: "-0.015em",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {opened_corpus ? opened_corpus.title : "Menu"}
+                </div>
+              </motion.div>
             )}
             {!use_mobile_layout && (
               <NavigationToggle
@@ -2195,51 +2198,10 @@ export const Corpuses = () => {
                     <span style={{ flex: "1", textAlign: "left" }}>
                       {item.label}
                     </span>
-                    {item.badge !== undefined && (
-                      <motion.span
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 15,
-                          delay: 0.1,
-                        }}
-                        style={{
-                          fontSize: "0.8rem",
-                          fontWeight: 700,
-                          padding: "2px 8px",
-                          borderRadius: "12px",
-                          background:
-                            item.badge > 0
-                              ? active_tab === index
-                                ? "linear-gradient(135deg, rgba(74, 144, 226, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%)"
-                                : "linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(203, 213, 225, 0.1) 100%)"
-                              : "transparent",
-                          border:
-                            item.badge > 0
-                              ? `1px solid ${
-                                  active_tab === index
-                                    ? "rgba(74, 144, 226, 0.2)"
-                                    : "rgba(203, 213, 225, 0.3)"
-                                }`
-                              : "1px solid transparent",
-                          color:
-                            item.badge > 0
-                              ? active_tab === index
-                                ? "#4a90e2"
-                                : "#64748b"
-                              : "#94a3b8",
-                          minWidth: "32px",
-                          textAlign: "center",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <NavItemBadge isActive={active_tab === index}>
                         {item.badge}
-                      </motion.span>
+                      </NavItemBadge>
                     )}
                   </>
                 )}
@@ -2255,6 +2217,39 @@ export const Corpuses = () => {
         >
           {currentView?.component}
         </MainContentArea>
+
+        {/* Bottom Navigation Handle - Mobile Only */}
+        <AnimatePresence>
+          {use_mobile_layout && opened_corpus && !mobileSidebarOpen && (
+            <BottomNavigationHandle
+              isOpen={mobileSidebarOpen}
+              onClick={() => setMobileSidebarOpen(true)}
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{
+                type: "spring",
+                stiffness: 300,
+                damping: 30,
+              }}
+            >
+              <BottomHandleContent>
+                <BottomHandleLeft>
+                  <BottomHandleIconWrapper>
+                    {currentView?.icon}
+                  </BottomHandleIconWrapper>
+                  <BottomHandleText>
+                    <BottomHandleLabel>Navigate</BottomHandleLabel>
+                    <BottomHandleTitle>{currentView?.label}</BottomHandleTitle>
+                  </BottomHandleText>
+                </BottomHandleLeft>
+                <BottomHandleChevron isOpen={mobileSidebarOpen}>
+                  <ChevronUp />
+                </BottomHandleChevron>
+              </BottomHandleContent>
+            </BottomNavigationHandle>
+          )}
+        </AnimatePresence>
       </CorpusViewContainer>
     );
   } else if (
@@ -2267,26 +2262,11 @@ export const Corpuses = () => {
     content = <></>;
   }
 
-  // After corpus_items derived
   /* ------------------------------------------------------------------ */
-  /* URL → open corpus                                                  */
-  useEffect(() => {
-    if (!routeCorpusId) return;
-    if (opened_corpus && opened_corpus.id === routeCorpusId) return;
-
-    // attempt to find in already fetched list
-    const match = corpus_items.find((c) => c.id === routeCorpusId);
-    if (match) {
-      openedCorpus(match);
-    } else {
-      // not in current page; best effort: trigger refetch with search param to include id? skip for now
-      // could call refetchCorpuses but we already fetch all pages lazily; leave.
-    }
-  }, [routeCorpusId, opened_corpus, corpus_items]);
-
-  /* ------------------------------------------------------------------ */
-  /* Navigation is now handled by route components (CorpusLandingRoute)  */
-  /* This prevents redirect loops                                        */
+  /* Entity resolution is now handled by CentralRouteManager            */
+  /* - /corpuses route → shows list (no entity)                         */
+  /* - /c/:user/:corpus route → CentralRouteManager sets openedCorpus   */
+  /* This component just reads openedCorpus and renders appropriately   */
   /* ------------------------------------------------------------------ */
 
   return (
@@ -2435,25 +2415,14 @@ export const Corpuses = () => {
           />
         ) : currentView?.id === "home" || currentView?.id === "documents" ? (
           <SearchBarWithNav>
-            <MobileNavGroup>
-              <MobileNavButton
-                onClick={() => {
-                  openedCorpus(null);
-                  navigate("/corpuses");
-                }}
-                title="Back to Corpuses"
-                icon
-              >
-                <ArrowLeft />
-              </MobileNavButton>
-              <MobileNavButton
-                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-                title="Open Menu"
-                icon
-              >
-                <LucideMenu />
-              </MobileNavButton>
-            </MobileNavGroup>
+            <MobileBackButton
+              onClick={() => {
+                navigate("/corpuses"); // CentralRouteManager will clear openedCorpus
+              }}
+              title="Back to Corpuses"
+            >
+              <ArrowLeft />
+            </MobileBackButton>
             <SearchBarContainer>
               <CreateAndSearchBar
                 onChange={handleDocumentSearchChange}
@@ -2509,25 +2478,14 @@ export const Corpuses = () => {
           />
         ) : currentView?.id === "analyses" || currentView?.id === "extracts" ? (
           <SearchBarWithNav>
-            <MobileNavGroup>
-              <MobileNavButton
-                onClick={() => {
-                  openedCorpus(null);
-                  navigate("/corpuses");
-                }}
-                title="Back to Corpuses"
-                icon
-              >
-                <ArrowLeft />
-              </MobileNavButton>
-              <MobileNavButton
-                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-                title="Open Menu"
-                icon
-              >
-                <LucideMenu />
-              </MobileNavButton>
-            </MobileNavGroup>
+            <MobileBackButton
+              onClick={() => {
+                navigate("/corpuses"); // CentralRouteManager will clear openedCorpus
+              }}
+              title="Back to Corpuses"
+            >
+              <ArrowLeft />
+            </MobileBackButton>
             <SearchBarContainer>
               <CreateAndSearchBar
                 onChange={handleAnalysisSearchChange}

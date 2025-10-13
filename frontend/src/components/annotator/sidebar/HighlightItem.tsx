@@ -2,9 +2,11 @@ import React from "react";
 import { Label, Button, Popup, Icon } from "semantic-ui-react";
 import styled from "styled-components";
 import { Trash2, ArrowRight, ArrowLeft } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { HorizontallyJustifiedDiv } from "./common";
 import { useAnnotationRefs } from "../hooks/useAnnotationRefs";
-import { useAnnotationSelection } from "../hooks/useAnnotationSelection";
+import { useAnnotationSelection } from "../context/UISettingsAtom";
+import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
 import { ServerTokenAnnotation } from "../types/annotations";
 import { PermissionTypes } from "../../types";
 
@@ -144,8 +146,9 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   onToggleMultiSelect,
   isMultiSelected = false,
 }) => {
-  const { selectedAnnotations, handleAnnotationSelect } =
-    useAnnotationSelection();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { selectedAnnotations } = useAnnotationSelection();
   const { annotationElementRefs } = useAnnotationRefs();
   const selected = selectedAnnotations.includes(annotation.id);
 
@@ -155,19 +158,33 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   const my_input_relationships = relations.filter((relation) =>
     relation.targetIds.includes(annotation.id)
   );
+  const handleClick = () => {
+    // Scroll to annotation in PDF
+    annotationElementRefs.current[annotation.id]?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+
+    // Update selection via URL - CentralRouteManager Phase 2 will set reactive var
+    // Toggle behavior: if already selected, deselect; otherwise select
+    const newSelection = selected ? [] : [annotation.id];
+    updateAnnotationSelectionParams(location, navigate, {
+      annotationIds: newSelection,
+    });
+
+    // Call optional onSelect callback
+    if (onSelect) {
+      onSelect(annotation.id);
+    }
+  };
+
   return (
     <HighlightContainer
       color={annotation?.annotationLabel?.color}
       selected={selected}
       className={`sidebar__annotation ${className || ""}`}
       data-annotation-id={annotation.id}
-      onClick={() => {
-        annotationElementRefs.current[annotation.id]?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-        handleAnnotationSelect(annotation.id);
-      }}
+      onClick={handleClick}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
         {onToggleMultiSelect && (

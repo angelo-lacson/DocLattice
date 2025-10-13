@@ -132,13 +132,6 @@ export const PDFPage = ({
   const lastRenderedZoom = useRef<number | null>(null);
 
   useEffect(() => {
-    setPages((prevPages) => ({
-      ...prevPages,
-      [pageInfo.page.pageNumber - 1]: updatedPageInfo,
-    }));
-  }, [updatedPageInfo]);
-
-  useEffect(() => {
     // If this is page #1, and we haven't set initial zoom yet, and containerWidth is known:
     if (!initialZoomSet && containerWidth && pageInfo.page.pageNumber === 1) {
       (async () => {
@@ -203,7 +196,15 @@ export const PDFPage = ({
       canvasRef.current.width = viewport.width;
       canvasRef.current.height = viewport.height;
 
-      rendererRef.current.rescaleAndRender(zoomLevel);
+      rendererRef.current.rescaleAndRender(zoomLevel).catch((err) => {
+        // Silently ignore cancellation errors - these are normal during zoom changes
+        if (
+          err instanceof Error &&
+          !err.message.includes("Rendering cancelled")
+        ) {
+          console.error(`Page ${pageInfo.page.pageNumber} render error:`, err);
+        }
+      });
       lastRenderedZoom.current = zoomLevel;
     }
   };
@@ -443,8 +444,10 @@ export const PDFPage = ({
       const tryScrollAnnot = () => {
         if (cancelled) return;
         try {
+          // Escape special characters in ID (e.g., '=' from base64 encoding)
+          // CSS.escape() handles all special CSS selector characters
           const el = document.querySelector(
-            `.selection_${pendingScrollId}`
+            `.selection_${CSS.escape(pendingScrollId)}`
           ) as HTMLElement | null;
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -482,7 +485,15 @@ export const PDFPage = ({
       canvasRef.current.width = viewport.width;
       canvasRef.current.height = viewport.height;
 
-      rendererRef.current.rescaleAndRender(zoomLevel);
+      rendererRef.current.rescaleAndRender(zoomLevel).catch((err) => {
+        // Silently ignore cancellation errors - these are normal during zoom changes
+        if (
+          err instanceof Error &&
+          !err.message.includes("Rendering cancelled")
+        ) {
+          console.error(`Page ${pageInfo.page.pageNumber} render error:`, err);
+        }
+      });
       lastRenderedZoom.current = zoomLevel;
     }
   }, [zoomLevel, hasPdfPageRendered, pageInfo.page]);

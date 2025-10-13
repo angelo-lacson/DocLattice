@@ -199,6 +199,25 @@ class Relationship(BaseOCModel):
         related_name="relationships",
     )
 
+    # Privacy fields - if set, relationship is only visible to those with permission to the source
+    created_by_analysis = django.db.models.ForeignKey(
+        "analyzer.Analysis",
+        null=True,
+        blank=True,
+        on_delete=django.db.models.SET_NULL,
+        related_name="created_relationships",
+        help_text="If set, this relationship is private to the analysis that created it",
+    )
+
+    created_by_extract = django.db.models.ForeignKey(
+        "extracts.Extract",
+        null=True,
+        blank=True,
+        on_delete=django.db.models.SET_NULL,
+        related_name="created_relationships",
+        help_text="If set, this relationship is private to the extract that created it",
+    )
+
     # Some relationships are structural and not corpus-specific
     structural = django.db.models.BooleanField(default=False)
 
@@ -233,14 +252,64 @@ class Relationship(BaseOCModel):
             django.db.models.Index(fields=["corpus"]),
             django.db.models.Index(fields=["document"]),
             django.db.models.Index(fields=["analyzer"]),
+            django.db.models.Index(fields=["analysis"]),
+            django.db.models.Index(fields=["created_by_analysis"]),
+            django.db.models.Index(fields=["created_by_extract"]),
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
         ]
 
+        constraints = [
+            # Ensure a relationship can't be created by both analysis AND extract
+            django.db.models.CheckConstraint(
+                check=(
+                    django.db.models.Q(created_by_analysis__isnull=True)
+                    | django.db.models.Q(created_by_extract__isnull=True)
+                ),
+                name="relationship_created_by_only_one_source",
+                violation_error_message="A relationship cannot be created by both an analysis and an extract",
+            ),
+        ]
+
+    def clean(self) -> None:
+        """Validate relationship fields, including privacy field constraints."""
+        super().clean()
+
+        # Validate mutual exclusivity of created_by fields
+        if self.created_by_analysis and self.created_by_extract:
+            raise ValidationError(
+                {
+                    "created_by_analysis": "A relationship cannot be created by both an analysis and an extract.",
+                    "created_by_extract": "A relationship cannot be created by both an analysis and an extract.",
+                }
+            )
+
+        # Validate consistency between analysis and created_by_analysis fields
+        # If both are set, they MUST match (same pattern as Annotation)
+        if (
+            self.created_by_analysis
+            and self.analysis
+            and self.created_by_analysis != self.analysis
+        ):
+            raise ValidationError(
+                {
+                    "analysis": (
+                        f"The 'analysis' field must match 'created_by_analysis' when both are set. "
+                        f"Got analysis={self.analysis.id}, created_by_analysis={self.created_by_analysis.id}. "
+                        f"Valid combinations: (1) analysis=A, created_by_analysis=A for analysis mode, "
+                        f"(2) analysis=None, created_by_analysis=A for manual mode with privacy, "
+                        f"(3) analysis=None, created_by_analysis=None for public manual relationship."
+                    )
+                }
+            )
+
     # Override save to update modified on save
     def save(self, *args, **kwargs):
-        """On save, update timestamps"""
+        """On save, update timestamps and validate constraints"""
+        # Always validate on save (consistent with Annotation model)
+        self.clean()
+
         if not self.pk:
             self.created = timezone.now()
         self.modified = timezone.now()
@@ -552,11 +621,10 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
                 }
             )
 
-        # Ensure consistency: if created_by_analysis is set, analysis should also be set
-        if self.created_by_analysis and not self.analysis:
-            self.analysis = self.created_by_analysis
-
-        # Validate that created_by_analysis matches analysis if both are set
+        # Validate consistency between analysis and created_by_analysis fields
+        # If both are set, they MUST match (Option 1: Enforce Consistency)
+        # If only created_by_analysis is set, analysis can be None (for manual mode visibility)
+        # If only analysis is set without created_by_analysis, it's a public analysis annotation
         if (
             self.created_by_analysis
             and self.analysis
@@ -564,7 +632,13 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         ):
             raise ValidationError(
                 {
-                    "created_by_analysis": "created_by_analysis must match the analysis field if both are set."
+                    "analysis": (
+                        f"The 'analysis' field must match 'created_by_analysis' when both are set. "
+                        f"Got analysis={self.analysis.id}, created_by_analysis={self.created_by_analysis.id}. "
+                        f"Valid combinations: (1) analysis=A, created_by_analysis=A for analysis mode, "
+                        f"(2) analysis=None, created_by_analysis=A for manual mode with privacy, "
+                        f"(3) analysis=None, created_by_analysis=None for public manual annotation."
+                    )
                 }
             )
 

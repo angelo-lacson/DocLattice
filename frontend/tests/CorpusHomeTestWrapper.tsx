@@ -7,7 +7,7 @@ import { CorpusType } from "../src/types/graphql-api";
 import { relayStylePagination } from "@apollo/client/utilities";
 import { mergeArrayByIdFieldPolicy } from "../src/graphql/cache";
 
-// Minimal cache identical to DocumentKnowledgeBaseTestWrapper
+// Minimal cache matching production cache configuration
 const createTestCache = () =>
   new InMemoryCache({
     typePolicies: {
@@ -17,7 +17,13 @@ const createTestCache = () =>
           documents: relayStylePagination(),
         },
       },
-      CorpusType: { keyFields: ["id"] },
+      CorpusType: {
+        keyFields: ["id"],
+        fields: {
+          // CRITICAL: Handle DocumentTypeConnection properly to prevent infinite loops
+          documents: relayStylePagination(),
+        },
+      },
     },
   });
 
@@ -27,10 +33,23 @@ interface Props {
 }
 
 export const CorpusHomeTestWrapper: React.FC<Props> = ({ mocks, corpus }) => {
+  // Default stats matching the mock data in CorpusHome.ct.tsx
+  const stats = {
+    totalDocs: 3,
+    totalAnnotations: 5,
+    totalAnalyses: 0,
+    totalExtracts: 0,
+  };
+
   return (
     <Provider>
       <MockedProvider mocks={mocks} cache={createTestCache()} addTypename>
-        <CorpusHome corpus={corpus} onEditDescription={() => {}} />
+        <CorpusHome
+          corpus={corpus}
+          onEditDescription={() => {}}
+          stats={stats}
+          statsLoading={false}
+        />
       </MockedProvider>
     </Provider>
   );

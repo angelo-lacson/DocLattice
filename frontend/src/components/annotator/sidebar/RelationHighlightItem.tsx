@@ -1,4 +1,4 @@
-import { List, Icon, Label, Button, Image } from "semantic-ui-react";
+import { List, Icon, Label, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import _ from "lodash";
 
@@ -9,6 +9,16 @@ import target_icon from "../../../assets/icons/noun-target-746597.png";
 import "./AnnotatorSidebar.css";
 import { ServerTokenAnnotation } from "../types/annotations";
 import { TruncatedText } from "../../widgets/data-display/TruncatedText";
+
+const AvatarImage = styled.img`
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.5em;
+`;
 
 interface HasColor {
   color: string;
@@ -47,9 +57,9 @@ export const RelationHighlightItem = ({
   return (
     <List.Item key={annotation.id} className={prepared_className}>
       {type === "SOURCE" ? (
-        <Image avatar src={source_icon} />
+        <AvatarImage src={source_icon} alt="Source" />
       ) : (
-        <Image avatar src={target_icon} />
+        <AvatarImage src={target_icon} alt="Target" />
       )}
       {!read_only && onRemoveAnnotationFromRelation ? (
         <Button

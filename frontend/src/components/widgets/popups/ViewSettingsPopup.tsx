@@ -11,6 +11,8 @@ import {
 import { ViewLabelSelector } from "../../annotator/labels/view_labels_selector/ViewLabelSelector";
 import { LabelDisplayBehavior } from "../../../types/graphql-api";
 import { useAnnotationDisplay } from "../../annotator/context/UISettingsAtom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { updateAnnotationDisplayParams } from "../../../utils/navigationUtils";
 
 interface ViewSettingsPopupProps {
   label_display_options: DropdownItemProps[];
@@ -30,6 +32,9 @@ export const ViewSettingsPopup: React.FC<ViewSettingsPopupProps> = ({
     setShowBoundingBoxes,
   } = useAnnotationDisplay();
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [localShowSelected, setLocalShowSelected] = useState(showSelectedOnly);
   const [localShowStructural, setLocalShowStructural] =
     useState(showStructural);
@@ -37,12 +42,13 @@ export const ViewSettingsPopup: React.FC<ViewSettingsPopupProps> = ({
     useState(showBoundingBoxes);
   const [localLabelBehavior, setLocalLabelBehavior] = useState(showLabels);
 
-  // useEffect(() => {
-  //   setShowSelectedOnly(showSelectedOnly);
-  //   setShowStructural(showStructural);
-  //   setShowBoundingBoxes(showBoundingBoxes);
-  //   setShowLabels(showLabels);
-  // }, [showLabels, showStructural, showBoundingBoxes, showSelectedOnly]);
+  // Sync local state when reactive vars change (from CentralRouteManager Phase 2)
+  useEffect(() => {
+    setLocalShowSelected(showSelectedOnly);
+    setLocalShowStructural(showStructural);
+    setLocalShowBoundingBoxes(showBoundingBoxes);
+    setLocalLabelBehavior(showLabels);
+  }, [showLabels, showStructural, showBoundingBoxes, showSelectedOnly]);
 
   const handleShowSelectedChange = (checked: boolean) => {
     setLocalShowSelected(checked);
@@ -52,12 +58,17 @@ export const ViewSettingsPopup: React.FC<ViewSettingsPopupProps> = ({
   const handleShowStructuralChange = () => {
     const newStructuralValue = !localShowStructural;
     setLocalShowStructural(newStructuralValue);
-    setShowStructural(newStructuralValue);
 
-    // If enabling structural view, force "show selected only" to be true
+    // Use navigationUtils helper to batch URL updates atomically
+    // When enabling structural, force "show selected only" to be true
+    updateAnnotationDisplayParams(location, navigate, {
+      showStructural: newStructuralValue,
+      showSelectedOnly: newStructuralValue ? true : undefined,
+    });
+
+    // Update local state for immediate UI feedback
     if (newStructuralValue) {
       setLocalShowSelected(true);
-      setShowSelectedOnly(true);
     }
   };
 

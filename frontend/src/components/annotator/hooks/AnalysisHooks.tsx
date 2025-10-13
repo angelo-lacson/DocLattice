@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useCallback } from "react";
-import { useQuery, useLazyQuery } from "@apollo/client";
+import { useEffect, useMemo, useCallback, useRef } from "react";
+import { useQuery, useLazyQuery, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 import _ from "lodash";
 import { useAtom, useAtomValue } from "jotai";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import {
   AnalysisType,
@@ -31,11 +32,6 @@ import {
   selectedExtractAtom,
   allowUserInputAtom,
 } from "../context/AnalysisAtoms";
-import {
-  showAnnotationBoundingBoxesAtom,
-  showAnnotationLabelsAtom,
-  showSelectedAnnotationOnlyAtom,
-} from "../context/UISettingsAtom";
 import { useInitialAnnotations, usePdfAnnotations } from "./AnnotationHooks";
 import { useCorpusState } from "../context/CorpusAtom";
 import {
@@ -51,12 +47,23 @@ import {
   ServerSpanAnnotation,
 } from "../types/annotations";
 import { selectedDocumentAtom } from "../context/DocumentAtom";
+import {
+  selectedAnalysesIds,
+  selectedExtractIds,
+} from "../../../graphql/cache";
+import {
+  updateAnnotationSelectionParams,
+  updateAnnotationDisplayParams,
+} from "../../../utils/navigationUtils";
 
 /**
  * Custom hook to manage analysis and extract data using Jotai atoms.
  * @returns An object containing analysis and extract data and related functions.
  */
 export const useAnalysisManager = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // Get document and corpus from atoms instead of props
   const selectedDocument = useAtomValue(selectedDocumentAtom);
   const { selectedCorpus } = useCorpusState();
@@ -73,13 +80,6 @@ export const useAnalysisManager = () => {
   const [selected_extract, setSelectedExtract] = useAtom(selectedExtractAtom);
 
   const [, setAllowUserInput] = useAtom(allowUserInputAtom);
-  const [, setShowAnnotationBoundingBoxes] = useAtom(
-    showAnnotationBoundingBoxesAtom
-  );
-  const [, setShowAnnotationLabels] = useAtom(showAnnotationLabelsAtom);
-  const [, setShowSelectedAnnotationOnly] = useAtom(
-    showSelectedAnnotationOnlyAtom
-  );
 
   const { replaceDocTypeAnnotations, replaceAnnotations, replaceRelations } =
     usePdfAnnotations();
@@ -127,6 +127,11 @@ export const useAnalysisManager = () => {
   // Access initial annotations and relations
   const { initialAnnotations, initialRelations } = useInitialAnnotations();
 
+  // Navigation throttling: prevent rapid-fire navigate() calls that trigger browser rate limiting
+  // Track last navigation timestamp to enforce minimum 100ms between calls
+  const lastNavigationTimestamp = useRef<number>(0);
+  const NAVIGATION_THROTTLE_MS = 100;
+
   /**
    * Resets the analysis, data cell, and column states.
    */
@@ -164,17 +169,68 @@ export const useAnalysisManager = () => {
       const { analysisRows, extracts } = analysesData.documentCorpusActions;
       setAnalysisRows(analysisRows);
       setExtracts(extracts);
-      setAnalyses(
-        analysisRows
-          .map((row) => row.analysis)
-          .filter((a): a is AnalysisType => a !== null && a !== undefined)
-      );
+      const fetchedAnalyses = analysisRows
+        .map((row) => row.analysis)
+        .filter((a): a is AnalysisType => a !== null && a !== undefined);
+      setAnalyses(fetchedAnalyses);
     }
   }, [analysesData]);
 
+  // Reactively read ID selections from reactive vars (set by CentralRouteManager)
+  const analysis_ids_from_reactive_var = useReactiveVar(selectedAnalysesIds);
+  const extract_ids_from_reactive_var = useReactiveVar(selectedExtractIds);
+
+  // Sync reactive var IDs → Jotai atoms (find full objects in fetched lists)
+  // CentralRouteManager sets IDs, we resolve them to full objects for UI
+  useEffect(() => {
+    if (analyses.length === 0 && extracts.length === 0) {
+      return; // Wait for data to load
+    }
+
+    // Sync analysis: ID → full object
+    if (analysis_ids_from_reactive_var.length > 0) {
+      const analysisId = analysis_ids_from_reactive_var[0];
+      if (!selected_analysis || selected_analysis.id !== analysisId) {
+        const matchingAnalysis = analyses.find((a) => a.id === analysisId);
+        if (matchingAnalysis) {
+          setSelectedAnalysis(matchingAnalysis);
+        } else {
+          console.warn("[AnalysisHooks] ❌ Analysis not found:", analysisId);
+        }
+      }
+    } else if (selected_analysis) {
+      // Clear selection if reactive var is empty
+      setSelectedAnalysis(null);
+    }
+
+    // Sync extract: ID → full object
+    if (extract_ids_from_reactive_var.length > 0) {
+      const extractId = extract_ids_from_reactive_var[0];
+      if (!selected_extract || selected_extract.id !== extractId) {
+        const matchingExtract = extracts.find((e) => e.id === extractId);
+        if (matchingExtract) {
+          setSelectedExtract(matchingExtract);
+        } else {
+          console.warn("[AnalysisHooks] ❌ Extract not found:", extractId);
+        }
+      }
+    } else if (selected_extract) {
+      // Clear selection if reactive var is empty
+      setSelectedExtract(null);
+    }
+  }, [
+    analyses,
+    extracts,
+    analysis_ids_from_reactive_var,
+    extract_ids_from_reactive_var,
+    selected_analysis,
+    selected_extract,
+    setSelectedAnalysis,
+    setSelectedExtract,
+  ]);
+
   // Fetch analyses and extracts only when we have a valid document
   useEffect(() => {
-    console.log("selectedDocument", selectedDocument);
     if (selectedDocument?.id) {
       fetchDocumentAnalysesAndExtracts();
     }
@@ -248,8 +304,6 @@ export const useAnalysisManager = () => {
       replaceDocTypeAnnotations([]);
       setDataCells([]);
 
-      console.log("Annotations data retrieved!", annotationsData);
-
       // Process span annotations
       const rawSpanAnnotations =
         annotationsData.analysis.fullAnnotationList.filter(
@@ -298,10 +352,6 @@ export const useAnalysisManager = () => {
   // Fetch data cells for the selected extract.
   useEffect(() => {
     if (selected_extract) {
-      console.log(
-        "selected_extract changed in AnalysisHooks",
-        selected_extract
-      );
       setAllowUserInput(false);
       setSelectedAnalysis(null);
 
@@ -370,36 +420,96 @@ export const useAnalysisManager = () => {
 
   /**
    * Handles selection of an analysis.
+   * CRITICAL: Only updates URL - does NOT set Jotai atoms directly.
+   * Flow: URL change → CentralRouteManager Phase 2 → reactive var → sync effect → Jotai atoms
+   * This ensures deep linking works correctly (URL is source of truth).
    *
    * @param analysis The analysis to select.
    */
   const onSelectAnalysis = useCallback(
     (analysis: AnalysisType | null) => {
-      // When a new analysis is loaded, reset the view behaviors
-      setShowAnnotationBoundingBoxes(true);
-      setShowAnnotationLabels(LabelDisplayBehavior.ON_HOVER);
-      setShowSelectedAnnotationOnly(false);
-      setSelectedAnalysis(analysis);
-      setSelectedExtract(null);
+      // Throttle navigation to prevent browser rate limiting in mobile view
+      const now = Date.now();
+      if (now - lastNavigationTimestamp.current < NAVIGATION_THROTTLE_MS) {
+        console.warn(
+          "[AnalysisHooks] Throttling onSelectAnalysis - too many navigation calls"
+        );
+        return;
+      }
+      lastNavigationTimestamp.current = now;
+
+      // DON'T set Jotai atoms directly - let sync effect handle it!
+      // setSelectedAnalysis(analysis);  ❌ VIOLATION - breaks deep linking
+      // setSelectedExtract(null);        ❌ VIOLATION - breaks deep linking
+
+      // ONLY update URL - CentralRouteManager Phase 2 will set reactive vars,
+      // then sync effect (lines 196-245) will set Jotai atoms
+      const searchParams = new URLSearchParams(location.search);
+
+      // Clear annotation selection
+      searchParams.delete("ann");
+
+      // Set analysis selection
+      if (analysis) {
+        searchParams.set("analysis", analysis.id);
+      } else {
+        searchParams.delete("analysis");
+      }
+
+      // Clear extract selection (exclusive: can't have both analysis and extract selected)
+      searchParams.delete("extract");
+
+      // Reset visualization settings for analysis view
+      searchParams.set("boundingBoxes", "true");
+      searchParams.delete("labels"); // ON_HOVER is default, don't add to URL
+      searchParams.delete("selectedOnly"); // false is default
+      searchParams.delete("structural"); // false is default
+
+      // Single navigate() call with all changes
+      // Flow: navigate → CentralRouteManager Phase 2 → selectedAnalysesIds reactive var →
+      //       sync effect → setSelectedAnalysis Jotai atom → component re-renders
+      navigate({ search: searchParams.toString() }, { replace: true });
     },
-    [
-      setShowAnnotationBoundingBoxes,
-      setShowAnnotationLabels,
-      setShowSelectedAnnotationOnly,
-      setSelectedAnalysis,
-      setSelectedExtract,
-    ]
+    [location, navigate]
   );
 
   /**
    * Handles selection of an extract.
+   * CRITICAL: Only updates URL - does NOT set Jotai atoms directly.
+   * Flow: URL change → CentralRouteManager Phase 2 → reactive var → sync effect → Jotai atoms
+   * This ensures deep linking works correctly (URL is source of truth).
    *
    * @param extract The extract to select.
    */
-  const onSelectExtract = (extract: ExtractType | null) => {
-    setSelectedExtract(extract);
-    setSelectedAnalysis(null);
-  };
+  const onSelectExtract = useCallback(
+    (extract: ExtractType | null) => {
+      // Throttle navigation to prevent browser rate limiting in mobile view
+      const now = Date.now();
+      if (now - lastNavigationTimestamp.current < NAVIGATION_THROTTLE_MS) {
+        console.warn(
+          "[AnalysisHooks] Throttling onSelectExtract - too many navigation calls"
+        );
+        return;
+      }
+      lastNavigationTimestamp.current = now;
+
+      // DON'T set Jotai atoms directly - let sync effect handle it!
+      // setSelectedExtract(extract);   ❌ VIOLATION - breaks deep linking
+      // setSelectedAnalysis(null);     ❌ VIOLATION - breaks deep linking
+
+      // ONLY update URL - CentralRouteManager Phase 2 will set reactive vars,
+      // then sync effect (lines 196-245) will set Jotai atoms
+      updateAnnotationSelectionParams(location, navigate, {
+        extractIds: extract ? [extract.id] : [],
+        analysisIds: [], // Clear analysis selection (exclusive)
+      });
+
+      // Flow: updateAnnotationSelectionParams → navigate → CentralRouteManager Phase 2 →
+      //       selectedExtractIds reactive var → sync effect → setSelectedExtract Jotai atom →
+      //       component re-renders
+    },
+    [location, navigate]
+  );
 
   return {
     analysisRows,

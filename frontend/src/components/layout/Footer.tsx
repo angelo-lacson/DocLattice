@@ -3,14 +3,23 @@ import {
   Container,
   Grid,
   Divider,
-  Image,
   List,
   Header,
 } from "semantic-ui-react";
+import styled from "styled-components";
 import { Link } from "react-router-dom";
 
 import logo from "../../assets/images/os_legal_128.png";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
+
+const CenteredImage = styled.img<{ $small?: boolean }>`
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+  width: ${(props) => (props.$small ? "auto" : "150px")};
+  ${(props) => props.$small && "height: 50px;"}
+`;
 
 export function Footer() {
   const { width } = useWindowDimensions();
@@ -19,15 +28,10 @@ export function Footer() {
     return (
       <Segment inverted vertical style={{ width: "100%", padding: "1em" }}>
         <Container textAlign="center">
-          <Image
-            centered
-            size="small"
+          <CenteredImage
             src={logo}
-            style={
-              width <= 400
-                ? { width: "auto", height: "50px", fontSize: ".9rem" }
-                : {}
-            }
+            alt="Open Contracts Logo"
+            $small={width <= 400}
           />
           <List horizontal inverted divided link size="small">
             <List.Item>
@@ -120,7 +124,7 @@ export function Footer() {
             </Grid.Column>
           </Grid>
           <Divider inverted section />
-          <Image centered size="small" src={logo} />
+          <CenteredImage src={logo} alt="Open Contracts Logo" />
           <List horizontal inverted divided link size="small">
             <List.Item>
               <Link to="/">Site Map</Link>

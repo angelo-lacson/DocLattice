@@ -87,10 +87,10 @@ export const SearchResult: React.FC<SearchResultProps> = ({
             <SelectionInfoContainer>
               <VerticallyJustifiedEndDiv>
                 <LabelTagContainer
-                  hidden={false}
-                  hovered={hovered}
-                  color={color}
-                  display_behavior={showLabels}
+                  $hidden={false}
+                  $hovered={hovered}
+                  $color={color}
+                  $display_behavior={showLabels}
                 >
                   <div style={{ whiteSpace: "nowrap", overflowX: "visible" }}>
                     <span>

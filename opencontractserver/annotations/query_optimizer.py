@@ -217,11 +217,26 @@ class AnnotationQueryOptimizer:
         if analysis_id:
             # Additional filter for analysis visibility
             from opencontractserver.analyzer.models import Analysis
+            from opencontractserver.types.enums import PermissionTypes
+            from opencontractserver.utils.permissioning import (
+                user_has_permission_for_obj,
+            )
 
             try:
                 analysis = Analysis.objects.get(id=analysis_id)
                 # Check analysis visibility as additional restriction
-                if not (analysis.is_public or analysis.creator_id == user.id):
+                # User can see annotations if: analysis is public, user is creator, OR has explicit READ permission
+                has_permission = (
+                    analysis.is_public
+                    or analysis.creator_id == user.id
+                    or user_has_permission_for_obj(
+                        user,
+                        analysis,
+                        PermissionTypes.READ,
+                        include_group_permissions=True,
+                    )
+                )
+                if not has_permission:
                     return Annotation.objects.none()
             except Analysis.DoesNotExist:
                 return Annotation.objects.none()
@@ -383,6 +398,57 @@ class RelationshipQueryOptimizer:
         # Build query
         qs = Relationship.objects.filter(document_id=document_id)
 
+        # Apply privacy filtering for created_by_* fields (same pattern as Annotations)
+        if not user.is_superuser:
+            # Get analyses user can access
+            from opencontractserver.analyzer.models import (
+                Analysis,
+                AnalysisUserObjectPermission,
+            )
+            from opencontractserver.extracts.models import Extract
+
+            # Base query for visible analyses
+            visible_analyses = Analysis.objects.filter(
+                Q(is_public=True) | Q(creator=user)
+            )
+
+            # Add analyses with explicit permissions
+            analyses_with_permission = AnalysisUserObjectPermission.objects.filter(
+                user=user
+            ).values_list("content_object_id", flat=True)
+
+            visible_analyses = visible_analyses | Analysis.objects.filter(
+                id__in=analyses_with_permission
+            )
+
+            # Get extracts user can access
+            from opencontractserver.extracts.models import ExtractUserObjectPermission
+
+            visible_extracts = Extract.objects.filter(Q(creator=user))
+
+            # Add extracts with explicit permissions
+            extracts_with_permission = ExtractUserObjectPermission.objects.filter(
+                user=user
+            ).values_list("content_object_id", flat=True)
+
+            visible_extracts = visible_extracts | Extract.objects.filter(
+                id__in=extracts_with_permission
+            )
+
+            # Filter relationships: exclude private ones unless user has access
+            # BUT always include structural relationships (they're always visible)
+            qs = qs.exclude(
+                # Exclude non-structural analysis-created relationships user can't see
+                Q(created_by_analysis__isnull=False)
+                & Q(structural=False)  # Only apply privacy to non-structural
+                & ~Q(created_by_analysis__in=visible_analyses)
+            ).exclude(
+                # Exclude non-structural extract-created relationships user can't see
+                Q(created_by_extract__isnull=False)
+                & Q(structural=False)  # Only apply privacy to non-structural
+                & ~Q(created_by_extract__in=visible_extracts)
+            )
+
         if corpus_id:
             # Filter by corpus (permissions already checked)
             qs = qs.filter(corpus_id=corpus_id)
@@ -396,10 +462,26 @@ class RelationshipQueryOptimizer:
             else:
                 # Check analysis visibility as additional restriction
                 from opencontractserver.analyzer.models import Analysis
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
 
                 try:
                     analysis = Analysis.objects.get(id=analysis_id)
-                    if not (analysis.is_public or analysis.creator_id == user.id):
+                    # User can see relationships if: analysis is public, user is creator,
+                    # OR has explicit READ permission
+                    has_permission = (
+                        analysis.is_public
+                        or analysis.creator_id == user.id
+                        or user_has_permission_for_obj(
+                            user,
+                            analysis,
+                            PermissionTypes.READ,
+                            include_group_permissions=True,
+                        )
+                    )
+                    if not has_permission:
                         return Relationship.objects.none()
                 except Analysis.DoesNotExist:
                     return Relationship.objects.none()

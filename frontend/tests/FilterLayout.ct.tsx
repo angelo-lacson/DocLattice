@@ -1,6 +1,6 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
-import { MockedProvider } from "@apollo/client/testing";
+import { FilterLayoutTestWrapper } from "./FilterLayoutTestWrapper";
 import { CreateAndSearchBar } from "../src/components/layout/CreateAndSearchBar";
 import { FilterToLabelSelector } from "../src/components/widgets/model-filters/FilterToLabelSelector";
 import { FilterToAnalysesSelector } from "../src/components/widgets/model-filters/FilterToAnalysesSelector";
@@ -137,9 +137,8 @@ test.describe("Filter Layout", () => {
     page,
   }) => {
     const component = await mount(
-      <MockedProvider
+      <FilterLayoutTestWrapper
         mocks={[mockLabels, mockLabelsets, mockCorpuses]}
-        addTypename={false}
       >
         <CreateAndSearchBar
           actions={[]}
@@ -154,7 +153,7 @@ test.describe("Filter Layout", () => {
             </>
           }
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Check that the filter button is visible
@@ -190,7 +189,7 @@ test.describe("Filter Layout", () => {
 
   test("filter popup has glassmorphic styling", async ({ mount, page }) => {
     const component = await mount(
-      <MockedProvider mocks={[mockLabels]} addTypename={false}>
+      <FilterLayoutTestWrapper mocks={[mockLabels]}>
         <CreateAndSearchBar
           actions={[]}
           placeholder="Search..."
@@ -198,7 +197,7 @@ test.describe("Filter Layout", () => {
           onChange={() => {}}
           filters={<FilterToLabelSelector />}
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -221,9 +220,8 @@ test.describe("Filter Layout", () => {
   }) => {
     // Mount all filter components in a single container to avoid React root issues
     const component = await mount(
-      <MockedProvider
+      <FilterLayoutTestWrapper
         mocks={[mockLabels, mockAnalyses, mockLabelsets, mockCorpuses]}
-        addTypename={false}
       >
         <div
           style={{
@@ -240,7 +238,7 @@ test.describe("Filter Layout", () => {
           <FilterToCorpusSelector />
           <FilterToStructuralAnnotationsSelector />
         </div>
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Check that all filter components render with their labels
@@ -267,7 +265,7 @@ test.describe("Filter Layout", () => {
     page,
   }) => {
     const component = await mount(
-      <MockedProvider mocks={[mockLabels, mockLabelsets]} addTypename={false}>
+      <FilterLayoutTestWrapper mocks={[mockLabels, mockLabelsets]}>
         <CreateAndSearchBar
           actions={[]}
           placeholder="Search..."
@@ -280,7 +278,7 @@ test.describe("Filter Layout", () => {
             </>
           }
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -291,13 +289,13 @@ test.describe("Filter Layout", () => {
       timeout: 5000,
     });
 
-    // Click on the first dropdown to expand it - target the dropdown div
-    const firstDropdown = page.locator(".ui.dropdown").first();
+    // Click on the first react-select dropdown to expand it
+    const firstDropdown = page.locator(".react-select__control").first();
     await firstDropdown.click();
 
     // Check that dropdown menu is visible and not clipped
     // The dropdown menu should be visible even though it may extend beyond the popup
-    const dropdownMenu = page.locator(".ui.dropdown.visible .menu.visible");
+    const dropdownMenu = page.locator(".react-select__menu");
 
     // Give it a moment to render
     await page.waitForTimeout(500);
@@ -314,9 +312,8 @@ test.describe("Filter Layout", () => {
     page,
   }) => {
     const component = await mount(
-      <MockedProvider
+      <FilterLayoutTestWrapper
         mocks={[mockLabels, mockLabelsets, mockCorpuses]}
-        addTypename={false}
       >
         <CreateAndSearchBar
           actions={[]}
@@ -332,7 +329,7 @@ test.describe("Filter Layout", () => {
             </>
           }
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -364,7 +361,7 @@ test.describe("Filter Layout", () => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     const component = await mount(
-      <MockedProvider mocks={[mockLabels]} addTypename={false}>
+      <FilterLayoutTestWrapper mocks={[mockLabels]}>
         <CreateAndSearchBar
           actions={[]}
           placeholder="Search..."
@@ -372,7 +369,7 @@ test.describe("Filter Layout", () => {
           onChange={() => {}}
           filters={<FilterToLabelSelector />}
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Check that the filter button is still accessible on mobile
@@ -396,9 +393,8 @@ test.describe("Filter Layout", () => {
     page,
   }) => {
     const component = await mount(
-      <MockedProvider
+      <FilterLayoutTestWrapper
         mocks={[mockLabels, mockLabelsets, mockCorpuses]}
-        addTypename={false}
       >
         <CreateAndSearchBar
           actions={[]}
@@ -413,7 +409,7 @@ test.describe("Filter Layout", () => {
             </>
           }
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -424,50 +420,42 @@ test.describe("Filter Layout", () => {
       timeout: 5000,
     });
 
-    // Test Label dropdown entries
-    const labelDropdown = page
-      .locator(".ui.dropdown")
-      .filter({ hasText: "Select a label to filter..." })
+    // Test Label dropdown entries - find the react-select control with the placeholder
+    const labelDropdownControl = page
+      .locator(".react-select__control")
+      .filter({ has: page.locator('text="Select a label to filter..."') })
       .first();
-    await labelDropdown.click();
+    await labelDropdownControl.click();
 
     // Wait for dropdown menu to appear
     await page.waitForTimeout(500);
 
     // Check that the mock label entries are rendered in the visible menu
-    const visibleLabelMenu = page
-      .locator(".ui.dropdown.visible .menu.visible")
-      .first();
-    await expect(
-      visibleLabelMenu.filter({ hasText: "Contract" })
-    ).toBeVisible();
-    await expect(
-      visibleLabelMenu.filter({ hasText: "Agreement" })
-    ).toBeVisible();
+    const visibleLabelMenu = page.locator(".react-select__menu").first();
+    await expect(visibleLabelMenu.locator('text="Contract"')).toBeVisible();
+    await expect(visibleLabelMenu.locator('text="Agreement"')).toBeVisible();
 
     // Close this dropdown by clicking elsewhere
     await page.locator('text="Filter by Labelset"').click();
     await page.waitForTimeout(300);
 
     // Test Labelset dropdown entries
-    const labelsetDropdown = page
-      .locator(".ui.dropdown")
-      .filter({ hasText: "Select a labelset to filter..." })
+    const labelsetDropdownControl = page
+      .locator(".react-select__control")
+      .filter({ has: page.locator('text="Select a labelset to filter..."') })
       .first();
-    await labelsetDropdown.click();
+    await labelsetDropdownControl.click();
 
     // Wait for dropdown menu to appear
     await page.waitForTimeout(500);
 
     // Check that the mock labelset entries are rendered in the visible menu
-    const visibleLabelsetMenu = page
-      .locator(".ui.dropdown.visible .menu.visible")
-      .first();
+    const visibleLabelsetMenu = page.locator(".react-select__menu").first();
     await expect(
-      visibleLabelsetMenu.filter({ hasText: "Legal Labels" })
+      visibleLabelsetMenu.locator('text="Legal Labels"')
     ).toBeVisible();
     await expect(
-      visibleLabelsetMenu.filter({ hasText: "Business Labels" })
+      visibleLabelsetMenu.locator('text="Business Labels"')
     ).toBeVisible();
 
     // Close this dropdown
@@ -475,30 +463,28 @@ test.describe("Filter Layout", () => {
     await page.waitForTimeout(300);
 
     // Test Corpus dropdown entries
-    const corpusDropdown = page
-      .locator(".ui.dropdown")
-      .filter({ hasText: "Select a corpus to filter..." })
+    const corpusDropdownControl = page
+      .locator(".react-select__control")
+      .filter({ has: page.locator('text="Select a corpus to filter..."') })
       .first();
-    await corpusDropdown.click();
+    await corpusDropdownControl.click();
 
     // Wait for dropdown menu to appear
     await page.waitForTimeout(500);
 
     // Check that the mock corpus entries are rendered in the visible menu
-    const visibleCorpusMenu = page
-      .locator(".ui.dropdown.visible .menu.visible")
-      .first();
+    const visibleCorpusMenu = page.locator(".react-select__menu").first();
     await expect(
-      visibleCorpusMenu.filter({ hasText: "Legal Documents" })
+      visibleCorpusMenu.locator('text="Legal Documents"')
     ).toBeVisible();
     await expect(
-      visibleCorpusMenu.filter({ hasText: "Contracts 2024" })
+      visibleCorpusMenu.locator('text="Contracts 2024"')
     ).toBeVisible();
   });
 
   test("dropdown selection updates filter state", async ({ mount, page }) => {
     const component = await mount(
-      <MockedProvider mocks={[mockLabels]} addTypename={false}>
+      <FilterLayoutTestWrapper mocks={[mockLabels]}>
         <CreateAndSearchBar
           actions={[]}
           placeholder="Search..."
@@ -506,7 +492,7 @@ test.describe("Filter Layout", () => {
           onChange={() => {}}
           filters={<FilterToLabelSelector />}
         />
-      </MockedProvider>
+      </FilterLayoutTestWrapper>
     );
 
     // Open the filter popup
@@ -517,8 +503,8 @@ test.describe("Filter Layout", () => {
       timeout: 5000,
     });
 
-    // Click on the dropdown to expand it
-    const dropdown = page.locator(".ui.dropdown").first();
+    // Click on the react-select dropdown to expand it
+    const dropdown = page.locator(".react-select__control").first();
     await dropdown.click();
 
     // Wait for dropdown menu to appear
@@ -526,7 +512,7 @@ test.describe("Filter Layout", () => {
 
     // Select "Contract" option from the visible menu
     const contractOption = page
-      .locator(".ui.dropdown.visible .menu.visible .item")
+      .locator(".react-select__option")
       .filter({ hasText: "Contract" })
       .first();
     await contractOption.click();
@@ -534,12 +520,16 @@ test.describe("Filter Layout", () => {
     // Wait for the selection to take effect
     await page.waitForTimeout(300);
 
-    // Verify the dropdown now shows the selected value
-    const updatedDropdown = page.locator(".ui.dropdown").first();
-    await expect(updatedDropdown).toContainText("Contract");
+    // Verify the dropdown now shows the selected value in the single-value display
+    const updatedDropdown = page.locator(".react-select__control").first();
+    await expect(
+      updatedDropdown.locator(".react-select__single-value")
+    ).toContainText("Contract");
 
-    // The placeholder text should no longer be visible in the dropdown text
-    const dropdownText = await updatedDropdown.textContent();
-    expect(dropdownText).not.toContain("Select a label to filter...");
+    // The placeholder text should no longer be visible
+    const placeholderCount = await page
+      .locator('text="Select a label to filter..."')
+      .count();
+    expect(placeholderCount).toBe(0);
   });
 });

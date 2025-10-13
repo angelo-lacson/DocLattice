@@ -13,9 +13,9 @@ import {
   exportingCorpus,
 } from "../../graphql/cache";
 
-import { Dimmer, Loader } from "semantic-ui-react";
 import { useNavigate } from "react-router-dom";
 import { navigateToCorpus } from "../../utils/navigationUtils";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { CorpusType, PageInfo } from "../../types/graphql-api";
@@ -29,40 +29,42 @@ import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisibl
 
 const ResponsiveCardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
   width: 100%;
   min-height: 100%;
-  padding: 16px;
+  padding: 24px;
   align-content: start;
   background: transparent;
 
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
-    padding: 12px;
-    gap: 12px;
+    padding: 16px;
+    gap: 16px;
   }
 
   @media (min-width: 641px) and (max-width: 900px) {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    padding: 14px;
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    padding: 20px;
+    gap: 20px;
   }
 
   @media (min-width: 901px) and (max-width: 1200px) {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 22px;
   }
 
   @media (min-width: 1201px) and (max-width: 1600px) {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 18px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
   }
 
   @media (min-width: 1601px) {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 20px;
-    max-width: 2000px;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 28px;
+    max-width: 2200px;
     margin: 0 auto;
+    padding: 32px;
   }
 `;
 
@@ -181,15 +183,18 @@ export const CorpusCards = ({
         position: "relative",
         display: "flex",
         flexDirection: "column",
-        background: "#f8fafc",
+        background: "linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%)",
         width: "100%",
         minHeight: 0,
         ...style,
       }}
     >
-      <Dimmer active={loading} inverted>
-        <Loader size="large" content={loading_message} />
-      </Dimmer>
+      <LoadingOverlay
+        active={loading}
+        inverted
+        size="large"
+        content={loading_message}
+      />
       <div
         className="CorpusCards"
         style={{
@@ -198,6 +203,7 @@ export const CorpusCards = ({
           overflowY: "auto",
           overflowX: "hidden",
           minHeight: 0,
+          WebkitOverflowScrolling: "touch",
         }}
       >
         <ResponsiveCardGrid>{cards}</ResponsiveCardGrid>

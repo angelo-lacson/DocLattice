@@ -1,7 +1,7 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
 import { useLocation } from "react-router-dom";
-import { CorpusType, DocumentType } from "../../types/graphql-api";
+import { CorpusType, DocumentType, ExtractType } from "../../types/graphql-api";
 
 // Note: You'll need to install react-helmet-async:
 // yarn add react-helmet-async
@@ -11,8 +11,8 @@ interface MetaTagsProps {
   title?: string;
   description?: string;
   canonicalPath?: string;
-  entity?: CorpusType | DocumentType | null;
-  entityType?: "corpus" | "document";
+  entity?: CorpusType | DocumentType | ExtractType | null;
+  entityType?: "corpus" | "document" | "extract";
 }
 
 /**
@@ -30,13 +30,24 @@ export const MetaTags: React.FC<MetaTagsProps> = ({
   const baseUrl = window.location.origin;
 
   // Derive meta values from entity if not explicitly provided
-  const pageTitle = title || entity?.title || "OpenContracts";
-  const pageDescription =
-    description || entity?.description || "Legal document analysis platform";
+  let pageTitle = title || "OpenContracts";
+  let pageDescription = description || "Legal document analysis platform";
+
+  if (!title && entity) {
+    if ("title" in entity) {
+      pageTitle = entity.title || pageTitle;
+    } else if ("name" in entity) {
+      pageTitle = entity.name || pageTitle;
+    }
+  }
+
+  if (!description && entity && "description" in entity) {
+    pageDescription = entity.description || pageDescription;
+  }
 
   // Build canonical URL
   let canonical = canonicalPath;
-  if (!canonical && entity && "creator" in entity) {
+  if (!canonical && entity && "creator" in entity && "slug" in entity) {
     const userSlug = entity.creator?.slug;
     const entitySlug = entity.slug;
     if (userSlug && entitySlug) {
@@ -76,7 +87,7 @@ export const MetaTags: React.FC<MetaTagsProps> = ({
       {entity && (
         <>
           <meta name="author" content={entity.creator?.username || "Unknown"} />
-          {entity.isPublic === false && (
+          {"isPublic" in entity && entity.isPublic === false && (
             <meta name="robots" content="noindex, nofollow" />
           )}
         </>

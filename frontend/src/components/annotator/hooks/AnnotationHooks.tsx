@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue } from "jotai";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import {
@@ -211,12 +211,22 @@ export function useInitialAnnotations() {
     initialAnnotationsAtom
   );
   const [initialRelations, setInitialRelations] = useAtom(initialRelationsAtom);
-  return {
-    initialAnnotations,
-    setInitialAnnotations,
-    initialRelations,
-    setInitialRelations,
-  };
+
+  // Memoize return object to prevent new object on every render
+  return useMemo(
+    () => ({
+      initialAnnotations,
+      setInitialAnnotations,
+      initialRelations,
+      setInitialRelations,
+    }),
+    [
+      initialAnnotations,
+      setInitialAnnotations,
+      initialRelations,
+      setInitialRelations,
+    ]
+  );
 }
 
 /**
@@ -226,11 +236,6 @@ export function useCreateAnnotation() {
   const { addMultipleAnnotations } = usePdfAnnotations();
   const selectedDocument = useAtomValue(selectedDocumentAtom);
   const { selectedCorpus } = useCorpusState();
-
-  console.log("[useCreateAnnotation] Hook initialized", {
-    selectedDocumentId: selectedDocument?.id,
-    selectedCorpusId: selectedCorpus?.id,
-  });
 
   const [createAnnotation] = useMutation<
     NewAnnotationOutputType,
