@@ -1402,6 +1402,15 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             - Tool call limit is 50, so plan your chunking strategy accordingly
             - For a 500K char document, use ~10-20 chunks of 25-50K chars each
 
+            🔴 CRITICAL - CITATION REQUIREMENT:
+            After reading text with this tool, you MUST:
+            1. Identify 3-5 most relevant exact quotes/passages (5-50 words each)
+            2. Call search_exact_text with those EXACT strings
+            3. This creates proper citations with page numbers
+
+            WHY: This tool returns raw text WITHOUT sources. Only search_exact_text
+            creates citations. Skip this and your answer will have NO SOURCES!
+
             Example: For a 200,000 character document:
             - Good: Load in 4-8 chunks of 25,000-50,000 chars each
             - Bad: Load 100 chars at a time (would need 2000 tool calls!)
@@ -1444,7 +1453,12 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         load_text_tool = PydanticAIToolFactory.from_function(
             load_document_text_tool,
             name="load_document_text",
-            description="Load the document's plain-text extract. ALWAYS use get_document_text_length first! Load in chunks of 5K-50K chars to avoid context overflow or tool call limits.",  # noqa: E501
+            description=(
+                "Load the document's plain-text extract. ALWAYS use get_document_text_length first! "
+                "Load in chunks of 5K-50K chars to avoid context overflow or tool call limits. "
+                "🔴 CRITICAL: After reading, you MUST call search_exact_text on 3-5 key passages (5-50 words each) "
+                "to create proper citations with page numbers. Without this step, your answer will have NO SOURCES."
+            ),
             parameter_descriptions={
                 "start": "Inclusive start character index (default 0)",
                 "end": "Exclusive end character index (defaults to end of file)",
