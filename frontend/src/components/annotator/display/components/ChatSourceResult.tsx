@@ -9,6 +9,7 @@ import { PDFPageInfo } from "../../types/pdf";
 import { useAnnotationDisplay } from "../../context/UISettingsAtom";
 import { BoundingBox } from "../../../types";
 import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
+import { LabelDisplayBehavior } from "../../../../types/graphql-api";
 
 /**
  * Props for rendering a chat message source on a PDF page.
@@ -100,7 +101,7 @@ export const ChatSourceResult = ({
                   $hidden={false}
                   $hovered={hovered}
                   $color={color}
-                  $display_behavior={!!showLabels}
+                  $display_behavior={showLabels}
                 >
                   <div style={{ whiteSpace: "nowrap", overflowX: "visible" }}>
                     <span>
@@ -171,12 +172,18 @@ const LabelTagContainer = styled.div<{
   $hidden: boolean;
   $hovered: boolean;
   $color: string;
-  $display_behavior: boolean;
+  $display_behavior: LabelDisplayBehavior;
 }>`
+  display: ${(props) => {
+    if (props.$hidden) return "none";
+    if (props.$display_behavior === LabelDisplayBehavior.HIDE) return "none";
+    if (props.$display_behavior === LabelDisplayBehavior.ON_HOVER)
+      return props.$hovered ? "flex" : "none";
+    return "flex";
+  }};
+  align-items: center;
   padding: 2px 4px;
   background-color: ${({ $color }) => $color};
   color: #000;
   border-radius: 4px;
-  opacity: ${({ $hidden, $hovered, $display_behavior }) =>
-    $hidden || !$display_behavior ? 0.5 : 1};
 `;
