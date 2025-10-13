@@ -9,7 +9,6 @@ from uuid import uuid4
 from doclatticeserver.annotations.models import Note, NoteRevision
 from doclatticeserver.corpuses.models import Corpus, CorpusDescriptionRevision
 from doclatticeserver.documents.models import Document
-from doclatticeserver.llms.agents.core_agents import SourceNode
 
 logger = logging.getLogger(__name__)
 

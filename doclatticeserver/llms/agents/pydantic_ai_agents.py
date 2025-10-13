@@ -1027,12 +1027,38 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             tool_result = {"result": result}
             status_str = "approved"
+
+            # Detect empty or failed results and build appropriate guidance
+            tool_succeeded = True
+            failure_message = None
+
+            # Check for annotation tools returning empty results
+            if tool_name in ["add_exact_string_annotations", "duplicate_annotations"]:
+                if isinstance(result, dict) and "annotation_ids" in result:
+                    if not result["annotation_ids"]:
+                        tool_succeeded = False
+                        failure_message = (
+                            "The exact text strings were not found in the document. "
+                            "Please inform the user that no matching text was found and "
+                            "suggest verifying the exact text or trying a different search approach."
+                        )
+            # Check for note creation failures
+            elif tool_name == "add_document_note":
+                if result is None or (isinstance(result, dict) and not result.get("note_id")):
+                    tool_succeeded = False
+                    failure_message = "Failed to create the note. Please inform the user and ask if they'd like to try again."
+
         else:
             tool_result = {
                 "status": "rejected",
                 "reason": "User did not approve execution.",
             }
             status_str = "rejected"
+            tool_succeeded = False  # Rejected = not successful
+            failure_message = (
+                "The user rejected this tool execution. "
+                "Please inform the user and ask if they would like to try a different approach."
+            )
 
         # Append tool_return part to history only when *approved*; for rejected we
         # simply finish the message lifecycle and emit a final event.
@@ -1128,12 +1154,22 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             accumulated_content = ""
 
-            # Create a continuation prompt that includes the tool result
-            continuation_prompt = (
-                f"The tool '{tool_name}' was executed with user approval and returned: "
-                f"{json.dumps(tool_result, indent=2)}. "
-                f"Please continue with your original task based on this result."
-            )
+            # Create a continuation prompt that includes the tool result and
+            # provides clear guidance if the tool failed
+            if tool_succeeded:
+                continuation_prompt = (
+                    f"The tool '{tool_name}' was executed with user approval and returned: "
+                    f"{json.dumps(tool_result, indent=2)}. "
+                    f"Please continue with your original task based on this result."
+                )
+            else:
+                continuation_prompt = (
+                    f"The tool '{tool_name}' was executed with user approval but did not succeed. "
+                    f"Result: {json.dumps(tool_result, indent=2)}. "
+                    f"\n\n{failure_message}\n\n"
+                    f"IMPORTANT: Do NOT retry the same tool call. Instead, inform the user "
+                    f"about what happened and wait for their guidance."
+                )
 
             logger.info(f"Resuming with continuation prompt: {continuation_prompt}")
 
