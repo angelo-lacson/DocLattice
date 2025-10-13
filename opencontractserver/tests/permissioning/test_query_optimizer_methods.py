@@ -501,7 +501,8 @@ class RelationshipQueryOptimizerTestCase(TestCase):
 
     def test_get_document_relationships_owner(self):
         """
-        Owner with full permissions should see all relationships in corpus.
+        Owner with full permissions should see manual relationships in corpus.
+        When analysis_id is not provided, only manual relationships are returned.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Owner sees all relationships")
@@ -517,10 +518,11 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             use_cache=False,
         )
 
-        # Should see all 4 corpus-based relationships (not structural)
-        self.assertEqual(qs.count(), 4)
+        # Should see only manual relationships (rel1, rel2, rel3)
+        # analysis_rel is filtered out because analysis_id is not specified
+        self.assertEqual(qs.count(), 3)
 
-        logger.info("✓ Owner sees all corpus relationships")
+        logger.info("✓ Owner sees all manual corpus relationships")
 
     def test_get_document_relationships_no_permission(self):
         """
@@ -659,7 +661,8 @@ class RelationshipQueryOptimizerTestCase(TestCase):
 
     def test_get_document_relationships_superuser(self):
         """
-        Superuser should see all relationships without explicit permissions.
+        Superuser should see manual relationships without explicit permissions.
+        When analysis_id is not provided, only manual relationships are returned.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Superuser sees all relationships")
@@ -672,14 +675,16 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             use_cache=False,
         )
 
-        # Should see all corpus-based relationships
-        self.assertEqual(qs.count(), 4)
+        # Should see manual corpus-based relationships (rel1, rel2, rel3)
+        # analysis_rel is filtered out because analysis_id is not specified
+        self.assertEqual(qs.count(), 3)
 
-        logger.info("✓ Superuser sees all relationships without explicit permissions")
+        logger.info("✓ Superuser sees all manual relationships without explicit permissions")
 
     def test_get_document_relationships_structural_filter(self):
         """
         Testing explicit structural filter parameter.
+        When analysis_id is not provided, only manual relationships are returned.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Structural filter works correctly")
@@ -697,8 +702,9 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             use_cache=False,
         )
 
-        # All our corpus relationships are non-structural
-        self.assertEqual(qs.count(), 4)
+        # All our manual corpus relationships are non-structural (rel1, rel2, rel3)
+        # analysis_rel is filtered out because analysis_id is not specified
+        self.assertEqual(qs.count(), 3)
         for rel in qs:
             self.assertFalse(rel.structural)
 
@@ -710,7 +716,8 @@ class RelationshipQueryOptimizerTestCase(TestCase):
 
     def test_get_relationship_summary_owner(self):
         """
-        Owner should see complete summary of all relationships by type.
+        Owner should see complete summary of all manual relationships by type.
+        The summary method does not filter by analysis_id, so it shows all relationships.
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Owner sees complete relationship summary")
@@ -723,7 +730,8 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             document_id=self.doc1.id, corpus_id=self.corpus.id, user=self.owner
         )
 
-        # Should see total count
+        # Should see total count of ALL relationships (manual + analysis)
+        # rel1, rel2, rel3, analysis_rel = 4 total
         self.assertEqual(summary["total"], 4)
 
         # Should see breakdown by type
@@ -753,6 +761,7 @@ class RelationshipQueryOptimizerTestCase(TestCase):
     def test_get_relationship_summary_superuser(self):
         """
         Superuser should see complete summary without explicit permissions.
+        The summary method shows ALL relationships (manual + analysis).
         """
         logger.info("\n" + "=" * 80)
         logger.info("TEST: Superuser sees complete summary")
@@ -762,6 +771,7 @@ class RelationshipQueryOptimizerTestCase(TestCase):
             document_id=self.doc1.id, corpus_id=self.corpus.id, user=self.superuser
         )
 
+        # Summary shows ALL relationships including analysis ones
         self.assertEqual(summary["total"], 4)
         self.assertEqual(summary["by_type"]["References"], 3)
         self.assertEqual(summary["by_type"]["Defines"], 1)
