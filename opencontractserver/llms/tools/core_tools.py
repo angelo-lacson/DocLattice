@@ -9,7 +9,6 @@ from uuid import uuid4
 from opencontractserver.annotations.models import Note, NoteRevision
 from opencontractserver.corpuses.models import Corpus, CorpusDescriptionRevision
 from opencontractserver.documents.models import Document
-from opencontractserver.llms.agents.core_agents import SourceNode
 
 logger = logging.getLogger(__name__)
 

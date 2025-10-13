@@ -551,6 +551,12 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
   // Add ref for messages container
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
+  // Check if assistant is currently responding (streaming)
+  const isAssistantResponding = useMemo(() => {
+    const lastMessage = combinedMessages[combinedMessages.length - 1];
+    return lastMessage?.isAssistant && !lastMessage?.isComplete;
+  }, [combinedMessages]);
+
   // Add scroll helper function
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
@@ -1830,11 +1836,13 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                       setTimeout(adjustTextareaHeight, 0);
                     }}
                     placeholder={
-                      wsReady
-                        ? "Type your message..."
-                        : "Waiting for connection..."
+                      !wsReady
+                        ? "Waiting for connection..."
+                        : isAssistantResponding
+                        ? "Assistant is responding..."
+                        : "Type your message..."
                     }
-                    disabled={!wsReady}
+                    disabled={!wsReady || isAssistantResponding}
                     onKeyDown={(
                       e: React.KeyboardEvent<HTMLTextAreaElement>
                     ) => {
@@ -1857,12 +1865,16 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                 </ChatInputWrapper>
                 <SendButton
                   $hasText={!!newMessage.trim()}
-                  disabled={!wsReady || !newMessage.trim()}
+                  disabled={
+                    !wsReady || !newMessage.trim() || isAssistantResponding
+                  }
                   onClick={sendMessageOverSocket}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   animate={
-                    wsReady && newMessage.trim() ? { y: [0, -2, 0] } : {}
+                    wsReady && newMessage.trim() && !isAssistantResponding
+                      ? { y: [0, -2, 0] }
+                      : {}
                   }
                   transition={{ duration: 0.2 }}
                 >
