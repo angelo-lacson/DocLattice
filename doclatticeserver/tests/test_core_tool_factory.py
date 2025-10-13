@@ -157,6 +157,7 @@ class TestCreateDocumentTools(SimpleTestCase):
     def test_create_document_tools_names(self):
         tools = create_document_tools()
         expected_names = {
+            "asearch_exact_text_as_sources",
             "load_document_md_summary",
             "get_md_summary_token_length",
             "get_notes_for_document_corpus",

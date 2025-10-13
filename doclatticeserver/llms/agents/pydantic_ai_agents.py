@@ -1044,9 +1044,14 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         )
             # Check for note creation failures
             elif tool_name == "add_document_note":
-                if result is None or (isinstance(result, dict) and not result.get("note_id")):
+                if result is None or (
+                    isinstance(result, dict) and not result.get("note_id")
+                ):
                     tool_succeeded = False
-                    failure_message = "Failed to create the note. Please inform the user and ask if they'd like to try again."
+                    failure_message = (
+                        "Failed to create the note. Please inform the "
+                        "user and ask if they'd like to try again."
+                    )
 
         else:
             tool_result = {
