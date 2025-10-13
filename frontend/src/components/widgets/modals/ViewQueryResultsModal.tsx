@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Modal, Grid, Dimmer, Loader, Button } from "semantic-ui-react";
+import { Modal, Grid, Button } from "semantic-ui-react";
 import QueryResultsViewer from "../../queries/QueryResultsViewer";
+import { LoadingOverlay } from "../../common/LoadingOverlay";
 import { useQuery } from "@apollo/client";
 import {
   GET_CORPUS_QUERY_DETAILS,
@@ -59,20 +60,22 @@ export const ViewQueryResultsModal = ({
         {loadedQueryDetails?.query.substring(0, 64)}
       </Modal.Header>
       <Modal.Content
-        style={{ flex: 1, overflowY: "scroll", minHeight: "30vh" }}
+        style={{
+          flex: 1,
+          overflowY: "scroll",
+          minHeight: "30vh",
+          position: "relative",
+        }}
       >
         <Grid centered divided>
           <Grid.Column>
             <Grid.Row>
-              {loading && !data ? (
-                <Dimmer>
-                  <Loader>Loading...</Loader>
-                </Dimmer>
-              ) : loadedQueryDetails === null ? (
+              <LoadingOverlay active={loading && !data} content="Loading..." />
+              {loadedQueryDetails === null && data ? (
                 <p>ERROR!</p>
-              ) : (
+              ) : loadedQueryDetails ? (
                 <QueryResultsViewer query_obj={loadedQueryDetails} />
-              )}
+              ) : null}
             </Grid.Row>
           </Grid.Column>
         </Grid>

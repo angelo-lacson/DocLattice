@@ -1,8 +1,14 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 
 import { useAuth0 } from "@auth0/auth0-react";
 
-import { Routes, Route, Navigate } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 
 import _ from "lodash";
 
@@ -62,10 +68,12 @@ import { SelectAnalyzerOrFieldsetModal } from "./components/widgets/modals/Selec
 import { DocumentUploadModal } from "./components/widgets/modals/DocumentUploadModal";
 import { FileUploadPackageProps } from "./components/widgets/modals/DocumentUploadModal";
 import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
-import { useRouteStateSync } from "./hooks/RouteStateSync";
+import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
+import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
+import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
 import {
   editDocForm_Schema,
   editDocForm_Ui_Schema,
@@ -105,6 +113,12 @@ export const App = () => {
   const { width } = useWindowDimensions();
   const show_mobile_menu = width <= 1000;
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Track if we've applied mobile display settings to prevent infinite loop
+  const mobileSettingsAppliedRef = useRef(false);
+
   const {
     data: meData,
     loading: meLoading,
@@ -127,11 +141,33 @@ export const App = () => {
     }
   }, [isLoading, meData, meLoading, meError, auth_token]);
 
+  // Set mobile-friendly display settings once when narrow viewport detected
+  // CRITICAL: Don't include location/navigate in deps - causes infinite loop!
   useEffect(() => {
-    if (width <= 800) {
-      showAnnotationLabels(LabelDisplayBehavior.ALWAYS);
+    const isMobile = width <= 800;
+    const currentLabels = showAnnotationLabels();
+
+    // Only update if:
+    // 1. We're on mobile AND
+    // 2. Labels aren't already set to ALWAYS AND
+    // 3. We haven't already applied mobile settings
+    if (
+      isMobile &&
+      currentLabels !== LabelDisplayBehavior.ALWAYS &&
+      !mobileSettingsAppliedRef.current
+    ) {
+      // Update display settings via URL - CentralRouteManager will set reactive vars
+      updateAnnotationDisplayParams(location, navigate, {
+        labelDisplay: LabelDisplayBehavior.ALWAYS,
+      });
+      mobileSettingsAppliedRef.current = true;
     }
-  }, [width]);
+
+    // Reset flag when returning to desktop width
+    if (!isMobile) {
+      mobileSettingsAppliedRef.current = false;
+    }
+  }, [width]); // Only depend on width, not location!
 
   // Auth logic has been moved to AuthGate component to ensure it completes
   // before any components that need authentication are rendered
@@ -151,9 +187,6 @@ export const App = () => {
     showUploadNewDocumentsModal(true);
     uploadModalPreloadedFiles(filePackages);
   }, []);
-
-  // Central bidirectional sync between Router <-> reactive vars
-  useRouteStateSync();
 
   /* ---------------------------------------------------------------------- */
   /* Cookie consent initialization                                          */
@@ -294,6 +327,9 @@ export const App = () => {
                 fileLabel="PDF File"
                 fileIsImage={false}
               />
+              {/* Central routing state manager - handles ALL URL ↔ State sync */}
+              <CentralRouteManager />
+
               <AuthGate
                 useAuth0={REACT_APP_USE_AUTH0}
                 audience={REACT_APP_AUDIENCE}
@@ -321,6 +357,12 @@ export const App = () => {
                   <Route
                     path="/c/:userIdent/:corpusIdent"
                     element={<CorpusLandingRoute />}
+                  />
+
+                  {/* Extract routes */}
+                  <Route
+                    path="/e/:userIdent/:extractIdent"
+                    element={<ExtractLandingRoute />}
                   />
 
                   {/* List views */}

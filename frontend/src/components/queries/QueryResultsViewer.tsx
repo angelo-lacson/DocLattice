@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   Grid,
   Card,
-  Image,
   Header,
   Segment,
   Placeholder,
@@ -11,6 +10,7 @@ import {
   Divider,
   Popup,
 } from "semantic-ui-react";
+import styled from "styled-components";
 import ReactMarkdown from "react-markdown";
 import { CorpusQueryType, ServerAnnotationType } from "../../types/graphql-api";
 import {
@@ -26,6 +26,15 @@ import { vs } from "react-syntax-highlighter/dist/esm/styles/prism";
 const SyntaxHighlighter = SyntaxHighlighterBase as any;
 import { useNavigate } from "react-router-dom";
 import { getDocumentUrl } from "../../utils/navigationUtils";
+
+const AvatarImage = styled.img`
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-block;
+  vertical-align: middle;
+`;
 
 interface QueryResultsViewerProps {
   query_obj: CorpusQueryType;
@@ -88,7 +97,7 @@ const QueryResultsViewer: React.FC<QueryResultsViewerProps> = ({
           <Grid.Column width={12}>
             <Segment>
               <Header as="h3">Waiting for next available agent...</Header>
-              <Image avatar src={wait_icon} />
+              <AvatarImage src={wait_icon} alt="Waiting" />
             </Segment>
           </Grid.Column>
         </Grid>

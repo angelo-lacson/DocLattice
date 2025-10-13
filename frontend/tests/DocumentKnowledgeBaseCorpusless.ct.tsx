@@ -5,6 +5,7 @@ import { DocumentKnowledgeBaseCorpuslessTestWrapper } from "./DocumentKnowledgeB
 import {
   GET_DOCUMENT_ONLY,
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
+  GET_DOCUMENT_ANNOTATIONS_ONLY,
   GET_MY_CORPUSES,
   ADD_DOCUMENT_TO_CORPUS,
   GET_CONVERSATIONS,
@@ -278,6 +279,50 @@ const getConversationsMock: MockedResponse = {
           startCursor: null,
           endCursor: null,
         },
+      },
+    },
+  },
+};
+
+// Mock for GET_DOCUMENT_ANNOTATIONS_ONLY with annotations
+// This is needed because DocumentKnowledgeBase refetches annotations when analysis/extract changes
+const documentAnnotationsOnlyMock: MockedResponse = {
+  request: {
+    query: GET_DOCUMENT_ANNOTATIONS_ONLY,
+    variables: {
+      documentId: "doc-123",
+      corpusId: "corpus-1",
+      analysisId: null,
+    },
+  },
+  result: {
+    data: {
+      document: {
+        id: "doc-123",
+        allStructuralAnnotations: [],
+        allAnnotations: [
+          {
+            id: "annotation-1",
+            page: 1,
+            rawText: "Test annotation",
+            annotationLabel: {
+              id: "label-1",
+              text: "Test Label",
+              color: "blue",
+              icon: "tag",
+              description: "Test label description",
+              labelType: "TokenLabel",
+            },
+            annotationType: "TokenAnnotation",
+            json: "{}",
+            myPermissions: ["read", "write", "delete"],
+            userFeedback: {
+              edges: [],
+              totalCount: 0,
+            },
+          },
+        ],
+        allRelationships: [],
       },
     },
   },
@@ -608,7 +653,11 @@ test.describe("DocumentKnowledgeBase - Corpus-less Mode", () => {
   }) => {
     await mount(
       <DocumentKnowledgeBaseCorpuslessTestWrapper
-        mocks={[documentWithCorpusMock, getConversationsMock]}
+        mocks={[
+          documentWithCorpusMock,
+          getConversationsMock,
+          documentAnnotationsOnlyMock,
+        ]}
         documentId="doc-123"
         corpusId="corpus-1"
       />

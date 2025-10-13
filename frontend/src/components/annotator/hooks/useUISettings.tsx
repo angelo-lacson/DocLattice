@@ -83,7 +83,14 @@ export function useUISettings(props?: UseUISettingsProps) {
 
   const [chatTrayState, setChatTrayState] = useAtom(chatTrayStateAtom);
 
-  // Memoize the returned object
+  // Memoize the helper function separately to prevent recreation
+  const shouldShowChatTray = useCallback(
+    (page: "document" | "corpus") =>
+      page === "document" && chatTrayState.isOpen,
+    [chatTrayState.isOpen]
+  );
+
+  // Memoize the returned object - IMPORTANT: only include primitive values and stable functions
   const uiSettings = useMemo(
     () => ({
       // Zoom controls
@@ -126,9 +133,8 @@ export function useUISettings(props?: UseUISettingsProps) {
       chatTrayState,
       setChatTrayState,
 
-      // helper inside the returned object
-      shouldShowChatTray: (page: "document" | "corpus") =>
-        page === "document" && chatTrayState.isOpen,
+      // Memoized helper function
+      shouldShowChatTray,
     }),
     [
       zoomLevel,
@@ -159,6 +165,7 @@ export function useUISettings(props?: UseUISettingsProps) {
       setTopbarVisible,
       chatTrayState,
       setChatTrayState,
+      shouldShowChatTray,
     ]
   );
 

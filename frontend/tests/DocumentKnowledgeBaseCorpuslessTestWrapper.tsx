@@ -10,7 +10,14 @@ import { mergeArrayByIdFieldPolicy } from "../src/graphql/cache";
 import { Provider } from "jotai";
 import { MemoryRouter } from "react-router-dom";
 import DocumentKnowledgeBase from "../src/components/knowledge_base/document/DocumentKnowledgeBase";
-import { authStatusVar, authToken, userObj } from "../src/graphql/cache";
+import {
+  authStatusVar,
+  authToken,
+  userObj,
+  openedDocument,
+  openedCorpus,
+} from "../src/graphql/cache";
+import { GET_DOCUMENT_ANNOTATIONS_ONLY } from "../src/graphql/queries";
 
 // Create test cache
 const createTestCache = () =>
@@ -82,14 +89,60 @@ export const DocumentKnowledgeBaseCorpuslessTestWrapper: React.FC<
   showSuccessMessage,
   showCorpusInfo,
 }) => {
-  // Set up auth state
-  authStatusVar("authenticated");
-  authToken("mock-token");
-  userObj({
-    id: "user-123",
-    email: "test@example.com",
-    permissions: ["read", "write"],
-  });
+  // Component tests set reactive vars directly (pragmatic exception to The ONE PLACE TO RULE THEM ALL)
+  React.useEffect(() => {
+    authStatusVar("AUTHENTICATED");
+    authToken("mock-token");
+    userObj({
+      id: "user-123",
+      email: "test@example.com",
+      permissions: ["read", "write"],
+    });
+
+    // Set document reactive var
+    openedDocument({
+      id: documentId,
+      slug: "test-document",
+      title: "Test Document",
+      creator: { id: "user-123", slug: "testuser", username: "testuser" },
+    } as any);
+
+    // Set corpus reactive var if provided
+    if (corpusId) {
+      openedCorpus({
+        id: corpusId,
+        slug: "test-corpus",
+        title: "Test Corpus",
+        creator: { id: "user-123", slug: "testuser", username: "testuser" },
+      } as any);
+    } else {
+      openedCorpus(null);
+    }
+  }, [documentId, corpusId]);
+
+  // Add default annotations mock
+  const defaultAnnotationsMock = {
+    request: {
+      query: GET_DOCUMENT_ANNOTATIONS_ONLY,
+      variables: {
+        documentId,
+        corpusId: corpusId || null,
+        analysisId: null,
+      },
+    },
+    result: {
+      data: {
+        document: {
+          id: documentId,
+          allStructuralAnnotations: [],
+          allAnnotations: [],
+          allRelationships: [],
+        },
+      },
+    },
+  };
+
+  const allMocks = [...mocks, defaultAnnotationsMock];
 
   // Create custom link that handles requests
   const link = new ApolloLink((operation, forward) => {
@@ -98,7 +151,7 @@ export const DocumentKnowledgeBaseCorpuslessTestWrapper: React.FC<
       console.log(`[GraphQL Request] ${operationName}`, operation.variables);
 
       // Find matching mock
-      const mock = mocks.find((m) => {
+      const mock = allMocks.find((m) => {
         const mockDef = m.request.query.definitions[0] as any;
         return mockDef.name?.value === operationName;
       });
@@ -124,7 +177,7 @@ export const DocumentKnowledgeBaseCorpuslessTestWrapper: React.FC<
   return (
     <MemoryRouter>
       <MockedProvider
-        mocks={mocks}
+        mocks={allMocks}
         cache={createTestCache()}
         link={link}
         addTypename={false}

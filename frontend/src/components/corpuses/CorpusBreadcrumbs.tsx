@@ -8,7 +8,7 @@ import { VerticallyCenteredDiv } from "../layout/Wrappers";
 
 import { openedCorpus, openedDocument } from "../../graphql/cache";
 import { useNavigate } from "react-router-dom";
-import { navigateToCorpus } from "../../utils/navigationUtils";
+import { getCorpusUrl } from "../../utils/navigationUtils";
 
 export const CorpusBreadcrumbs = () => {
   const opened_corpus = useReactiveVar(openedCorpus);
@@ -16,14 +16,16 @@ export const CorpusBreadcrumbs = () => {
 
   const navigate = useNavigate();
 
+  // Note: CentralRouteManager automatically clears openedCorpus/openedDocument when navigating
   const gotoHome = () => {
-    openedCorpus(null);
-    openedDocument(null);
     navigate("/corpuses");
   };
   const gotoCorpus = () => {
     if (opened_corpus) {
-      navigateToCorpus(opened_corpus, navigate, window.location.pathname);
+      const url = getCorpusUrl(opened_corpus);
+      if (url !== "#") {
+        navigate(url);
+      }
     }
   };
 

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Dimmer, Loader } from "semantic-ui-react";
 import { useDropzone } from "react-dropzone";
 import styled from "styled-components";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 
 import { DocumentItem } from "./DocumentItem";
+import { ModernDocumentItem } from "./ModernDocumentItem";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { DocumentType, PageInfo } from "../../types/graphql-api";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
@@ -44,6 +45,61 @@ const ResponsiveCardGrid = styled.div`
     gap: 20px;
     max-width: 2000px;
     margin: 0 auto;
+  }
+`;
+
+const ModernCardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  width: 100%;
+  min-height: 100%;
+  padding: 16px;
+  align-content: start;
+  background: transparent;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  @media (min-width: 641px) and (max-width: 900px) {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    padding: 14px;
+    gap: 12px;
+  }
+
+  @media (min-width: 901px) and (max-width: 1200px) {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  @media (min-width: 1201px) and (max-width: 1600px) {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+
+  @media (min-width: 1601px) {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 18px;
+    max-width: 2000px;
+    margin: 0 auto;
+  }
+`;
+
+const ModernListContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+
+  @media (max-width: 640px) {
+    padding: 8px;
+    gap: 6px;
   }
 `;
 
@@ -119,6 +175,7 @@ interface DocumentCardProps {
   removeFromCorpus?: (doc_ids: string[]) => void | any;
   fetchMore: (args?: any) => void | any;
   onDrop: (acceptedFiles: File[]) => void;
+  viewMode?: "classic" | "modern-card" | "modern-list";
 }
 
 export const DocumentCards = ({
@@ -133,6 +190,7 @@ export const DocumentCards = ({
   removeFromCorpus,
   fetchMore,
   onDrop,
+  viewMode = "modern-card",
 }: DocumentCardProps) => {
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
 
@@ -162,19 +220,36 @@ export const DocumentCards = ({
   ];
 
   if (items && items.length > 0) {
-    cards = items.map((node, index: number) => {
-      return (
-        <DocumentItem
-          key={node?.id ? node.id : `doc_item_${index}`}
-          item={node}
-          onClick={onClick}
-          onShiftClick={onShiftClick}
-          contextMenuOpen={contextMenuOpen}
-          setContextMenuOpen={setContextMenuOpen}
-          removeFromCorpus={removeFromCorpus}
-        />
-      );
-    });
+    if (viewMode === "classic") {
+      // Use the original DocumentItem for backward compatibility
+      cards = items.map((node, index: number) => {
+        return (
+          <DocumentItem
+            key={node?.id ? node.id : `doc_item_${index}`}
+            item={node}
+            onClick={onClick}
+            onShiftClick={onShiftClick}
+            contextMenuOpen={contextMenuOpen}
+            setContextMenuOpen={setContextMenuOpen}
+            removeFromCorpus={removeFromCorpus}
+          />
+        );
+      });
+    } else {
+      // Use the new ModernDocumentItem
+      cards = items.map((node, index: number) => {
+        return (
+          <ModernDocumentItem
+            key={node?.id ? node.id : `doc_item_${index}`}
+            item={node}
+            viewMode={viewMode === "modern-list" ? "list" : "card"}
+            onClick={onClick}
+            onShiftClick={onShiftClick}
+            removeFromCorpus={removeFromCorpus}
+          />
+        );
+      });
+    }
   }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -182,6 +257,14 @@ export const DocumentCards = ({
     noClick: true,
     noKeyboard: true,
   });
+
+  // Choose the appropriate container based on view mode
+  const GridContainer =
+    viewMode === "classic"
+      ? ResponsiveCardGrid
+      : viewMode === "modern-list"
+      ? ModernListContainer
+      : ModernCardGrid;
 
   return (
     <div
@@ -205,9 +288,12 @@ export const DocumentCards = ({
           </DropZoneContent>
         </DropZoneOverlay>
       )}
-      <Dimmer active={loading} inverted>
-        <Loader size="large" content={loading_message} />
-      </Dimmer>
+      <LoadingOverlay
+        active={loading}
+        inverted
+        size="large"
+        content={loading_message}
+      />
       <div
         className="DocumentCards"
         style={{
@@ -219,7 +305,7 @@ export const DocumentCards = ({
           ...style,
         }}
       >
-        <ResponsiveCardGrid>{cards}</ResponsiveCardGrid>
+        <GridContainer>{cards}</GridContainer>
         <FetchMoreOnVisible fetchNextPage={handleUpdate} />
       </div>
     </div>

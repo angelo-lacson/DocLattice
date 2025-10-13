@@ -1,5 +1,7 @@
-import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { Card } from "semantic-ui-react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ExtractItem } from "./ExtractItem";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExtractType, CorpusType, PageInfo } from "../../types/graphql-api";
@@ -8,6 +10,7 @@ import { openedExtract, selectedExtractIds } from "../../graphql/cache";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { determineCardColCount } from "../../utils/layout";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { updateAnnotationSelectionParams } from "../../utils/navigationUtils";
 
 interface ExtractCardsProps {
   style?: Record<string, any>;
@@ -29,23 +32,38 @@ export const ExtractCards = ({
   loading,
   fetchMore,
 }: ExtractCardsProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const { width } = useWindowDimensions();
   const card_cols = determineCardColCount(width);
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
 
-  //   const selected_extract_ids = useReactiveVar(selectedExtractIds);
+  // Use selectedExtractIds (URL-driven state) for multi-select
+  const selected_extract_ids = useReactiveVar(selectedExtractIds);
   const opened_extract = useReactiveVar(openedExtract);
 
-  //   const toggleExtract = (selected_extract: ExtractType) => {
-  //     if (selected_extract_ids.includes(selected_extract.id)) {
-  //       const cleaned_extracts = selected_extract_ids.filter(
-  //         (extract) => extract !== selected_extract.id
-  //       );
-  //       selectedExtractIds(cleaned_extracts);
-  //     } else {
-  //       selectedExtractIds([...selected_extract_ids, selected_extract.id]);
-  //     }
-  //   };
+  const toggleExtract = (selected_extract: ExtractType) => {
+    if (selected_extract_ids.includes(selected_extract.id)) {
+      // Remove from selection
+      const cleaned_ids = selected_extract_ids.filter(
+        (id) => id !== selected_extract.id
+      );
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        extractIds: cleaned_ids,
+      });
+    } else {
+      // Add to selection
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        extractIds: [...selected_extract_ids, selected_extract.id],
+      });
+    }
+
+    // Also update openedExtract for backward compatibility
+    openedExtract(selected_extract);
+  };
 
   const extract_items =
     extracts.length > 0 && opened_corpus ? (
@@ -54,9 +72,9 @@ export const ExtractCards = ({
           key={extract.id}
           extract={extract}
           corpus={opened_corpus}
-          selected={opened_extract?.id === extract.id}
+          selected={selected_extract_ids.includes(extract.id)}
           read_only={read_only}
-          onSelect={() => openedExtract(extract)}
+          onSelect={() => toggleExtract(extract)}
         />
       ))
     ) : (
@@ -84,29 +102,26 @@ export const ExtractCards = ({
   };
 
   return (
-    <>
-      <Dimmer active={loading}>
-        <Loader content={loading_message} />
-      </Dimmer>
-      <div
-        className="ExtractCards"
-        style={{
-          width: "100%",
-          height: "100%",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          padding: "1rem",
-          paddingBottom: "6rem",
-          ...style,
-        }}
-      >
-        <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
-          {extract_items}
-        </Card.Group>
-        <FetchMoreOnVisible fetchNextPage={fetchMore} />
-      </div>
-    </>
+    <div
+      className="ExtractCards"
+      style={{
+        width: "100%",
+        height: "100%",
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        padding: "1rem",
+        paddingBottom: "6rem",
+        position: "relative",
+        ...style,
+      }}
+    >
+      <LoadingOverlay active={loading} content={loading_message} />
+      <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
+        {extract_items}
+      </Card.Group>
+      <FetchMoreOnVisible fetchNextPage={fetchMore} />
+    </div>
   );
 };

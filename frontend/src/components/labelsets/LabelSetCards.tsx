@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { Card } from "semantic-ui-react";
 import { useReactiveVar } from "@apollo/client";
 import _ from "lodash";
 
 import AnnotationLabelItem from "./AnnotationLabelItem";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import {
   deletingLabelset,
@@ -101,22 +102,19 @@ export const LabelsetCards = ({
   }
 
   return (
-    <>
-      <Dimmer active={loading}>
-        <Loader content={loading_message} />
-      </Dimmer>
-      <div
-        style={{
-          flex: 1,
-          width: "100%",
-          overflow: "hidden",
-        }}
-      >
-        <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
-          {cards}
-        </Card.Group>
-        <FetchMoreOnVisible fetchNextPage={handleUpdate} />
-      </div>
-    </>
+    <div
+      style={{
+        flex: 1,
+        width: "100%",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      <LoadingOverlay active={loading} content={loading_message} />
+      <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
+        {cards}
+      </Card.Group>
+      <FetchMoreOnVisible fetchNextPage={handleUpdate} />
+    </div>
   );
 };

@@ -22,8 +22,11 @@ import {
   ServerAnnotationType,
   LabelDisplayBehavior,
 } from "../../../types/graphql-api";
-import { useNavigate } from "react-router-dom";
-import { getDocumentUrl } from "../../../utils/navigationUtils";
+import { useNavigate, useLocation } from "react-router-dom";
+import {
+  getDocumentUrl,
+  updateAnnotationDisplayParams,
+} from "../../../utils/navigationUtils";
 
 const StatusDot = styled.div<{ statusColor: string }>`
   width: 12px;
@@ -220,6 +223,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
   const [cellWidth, setCellWidth] = useState<number>(0);
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (cellRef.current) {
@@ -294,12 +298,15 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
     if (viewSourceAnnotations !== null) {
       onlyDisplayTheseAnnotations(viewSourceAnnotations);
       displayAnnotationOnAnnotatorLoad(viewSourceAnnotations[0]);
-      showSelectedAnnotationOnly(false);
-      showAnnotationBoundingBoxes(true);
-      showStructuralAnnotations(true);
-      showAnnotationLabels(LabelDisplayBehavior.ALWAYS);
+      // Update display settings via URL - CentralRouteManager will set reactive vars
+      updateAnnotationDisplayParams(location, navigate, {
+        showSelectedOnly: false,
+        showBoundingBoxes: true,
+        showStructural: true,
+        labelDisplay: LabelDisplayBehavior.ALWAYS,
+      });
     }
-  }, [viewSourceAnnotations]);
+  }, [viewSourceAnnotations, location, navigate]);
 
   useEffect(() => {
     if (

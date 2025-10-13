@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { Segment, Image, Icon } from "semantic-ui-react";
+import { Segment, Icon } from "semantic-ui-react";
 import styled from "styled-components";
 
 import default_image from "../../../assets/images/defaults/default_image.png";
@@ -42,15 +42,14 @@ const UploadContainer = styled(Segment)<{ $isReadOnly: boolean }>`
   }
 `;
 
-const ImagePreview = styled(Image)`
-  &&& {
-    width: 100%;
-    height: 300px;
-    object-fit: contain;
-    background: #fff;
-    margin: 0;
-    padding: 1rem;
-  }
+const ImagePreview = styled.img`
+  width: 100%;
+  height: 300px;
+  object-fit: contain;
+  background: #fff;
+  margin: 0;
+  padding: 1rem;
+  display: block;
 `;
 
 const FilePreview = styled.div`
@@ -180,7 +179,9 @@ export const FilePreviewAndUpload = ({
       {isImage ? (
         <>
           <ImagePreview
-            src={displayedFile ? displayedFile : default_image}
+            src={
+              typeof displayedFile === "string" ? displayedFile : default_image
+            }
             alt="Preview"
           />
           {!readOnly && !disabled && (

@@ -1,8 +1,10 @@
-import { Card, Dimmer, Loader } from "semantic-ui-react";
+import { Card } from "semantic-ui-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import _ from "lodash";
 
 import { AnalysisItem } from "./AnalysisItem";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { AnalysisType, CorpusType, PageInfo } from "../../types/graphql-api";
@@ -11,6 +13,7 @@ import { selectedAnalyses, selectedAnalysesIds } from "../../graphql/cache";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { determineCardColCount } from "../../utils/layout";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { updateAnnotationSelectionParams } from "../../utils/navigationUtils";
 
 interface AnalysesCardsProps {
   style?: Record<string, any>;
@@ -33,7 +36,8 @@ export const AnalysesCards = ({
   loading,
   fetchMore,
 }: AnalysesCardsProps) => {
-  console.log("AnalysesCards - ");
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Let's figure out the viewport so we can size the cards appropriately.
   const { width } = useWindowDimensions();
@@ -42,26 +46,37 @@ export const AnalysesCards = ({
 
   //////////////////////////////////////////////////////////////////////
   // Global State Vars in Apollo Cache
-  const analyses_to_display = useReactiveVar(selectedAnalyses);
-  const analysis_ids_to_display = analyses_to_display.map(
-    (analysis) => analysis.id
-  );
+  // Use selectedAnalysesIds (URL-driven state) instead of selectedAnalyses
+  const analysis_ids_to_display = useReactiveVar(selectedAnalysesIds);
 
   //////////////////////////////////////////////////////////////////////
   const toggleAnalysis = (selected_analysis: AnalysisType) => {
     if (analysis_ids_to_display.includes(selected_analysis.id)) {
-      let cleaned_analyses = analyses_to_display.filter(
-        (analysis) => analysis.id !== selected_analysis.id
+      // Remove from selection
+      const cleaned_ids = analysis_ids_to_display.filter(
+        (id) => id !== selected_analysis.id
       );
-      selectedAnalysesIds(cleaned_analyses.map((analysis) => analysis.id));
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        analysisIds: cleaned_ids,
+      });
+
+      // Also update legacy selectedAnalyses for backward compatibility
+      const cleaned_analyses = analyses.filter((a) =>
+        cleaned_ids.includes(a.id)
+      );
       selectedAnalyses(cleaned_analyses);
     } else {
-      selectedAnalysesIds(
-        [...analyses_to_display, selected_analysis].map(
-          (analysis) => analysis.id
-        )
-      );
-      selectedAnalyses([...analyses_to_display, selected_analysis]);
+      // Add to selection
+      const new_ids = [...analysis_ids_to_display, selected_analysis.id];
+      // Update URL - CentralRouteManager will set reactive var
+      updateAnnotationSelectionParams(location, navigate, {
+        analysisIds: new_ids,
+      });
+
+      // Also update legacy selectedAnalyses for backward compatibility
+      const new_analyses = analyses.filter((a) => new_ids.includes(a.id));
+      selectedAnalyses(new_analyses);
     }
   };
 
@@ -114,27 +129,24 @@ export const AnalysesCards = ({
   };
 
   return (
-    <>
-      <Dimmer active={loading}>
-        <Loader content={loading_message} />
-      </Dimmer>
-      <div
-        className="AnalysisCards"
-        style={{
-          width: "100%",
-          height: "100%",
-          overflowY: "scroll",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          ...style,
-        }}
-      >
-        <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
-          {analysis_items}
-        </Card.Group>
-        <FetchMoreOnVisible fetchNextPage={handleUpdate} />
-      </div>
-    </>
+    <div
+      className="AnalysisCards"
+      style={{
+        width: "100%",
+        height: "100%",
+        overflowY: "scroll",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        position: "relative",
+        ...style,
+      }}
+    >
+      <LoadingOverlay active={loading} content={loading_message} />
+      <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
+        {analysis_items}
+      </Card.Group>
+      <FetchMoreOnVisible fetchNextPage={handleUpdate} />
+    </div>
   );
 };

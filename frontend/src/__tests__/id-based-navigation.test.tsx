@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { MockedProvider } from "@apollo/client/testing";
 import { HelmetProvider } from "react-helmet-async";
+import { CentralRouteManager } from "../routing/CentralRouteManager";
 import { DocumentLandingRoute } from "../components/routes/DocumentLandingRoute";
 import { CorpusLandingRoute } from "../components/routes/CorpusLandingRoute";
 import {
@@ -13,7 +14,7 @@ import {
   RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL,
   GET_DOCUMENT_ANNOTATIONS_ONLY,
 } from "../graphql/queries";
-import { openedCorpus, openedDocument } from "../graphql/cache";
+import { openedCorpus, openedDocument, authStatusVar } from "../graphql/cache";
 import { isValidGraphQLId, getIdentifierType } from "../utils/idValidation";
 import { vi } from "vitest";
 
@@ -32,15 +33,18 @@ const renderWithProviders = (ui: React.ReactElement) => {
   return render(<HelmetProvider>{ui}</HelmetProvider>);
 };
 
-// Mock data with all required fields
+// Mock data with all required fields (complete for RESOLVE_CORPUS_BY_SLUGS_FULL)
 const mockCorpus = {
   id: "1234",
   slug: "test-corpus",
   title: "Test Corpus",
   description: "A test corpus",
+  mdDescription: "Test MD description",
   isPublic: true,
   myPermissions: ["read", "write"],
   labelSet: null,
+  documents: { totalCount: 10 },
+  analyses: { totalCount: 5 },
   created: "2024-01-01T00:00:00Z",
   modified: "2024-01-01T00:00:00Z",
   allowComments: false,
@@ -77,6 +81,8 @@ describe("ID-based Navigation", () => {
     // Reset reactive vars
     openedCorpus(null);
     openedDocument(null);
+    // Set auth status so CentralRouteManager proceeds with entity fetching
+    authStatusVar("AUTHENTICATED");
     // Clear mock calls
     vi.clearAllMocks();
   });
@@ -109,6 +115,22 @@ describe("ID-based Navigation", () => {
   describe("Corpus ID Navigation", () => {
     it("should redirect from corpus ID to slug-based URL", async () => {
       const mocks = [
+        // Phase 1: CentralRouteManager tries slug resolution first (fails)
+        {
+          request: {
+            query: RESOLVE_CORPUS_BY_SLUGS_FULL,
+            variables: {
+              userSlug: "john",
+              corpusSlug: "1234",
+            },
+          },
+          result: {
+            data: {
+              corpusBySlugs: null, // Not found by slug
+            },
+          },
+        },
+        // Phase 1b: CentralRouteManager detects ID and tries ID resolution (succeeds)
         {
           request: {
             query: GET_CORPUS_BY_ID_FOR_REDIRECT,
@@ -125,6 +147,8 @@ describe("ID-based Navigation", () => {
       renderWithProviders(
         <MockedProvider mocks={mocks} addTypename={false}>
           <MemoryRouter initialEntries={["/c/john/1234"]}>
+            {/* CentralRouteManager handles ID resolution and redirect */}
+            <CentralRouteManager />
             <Routes>
               <Route
                 path="/c/:userIdent/:corpusIdent"
@@ -135,8 +159,8 @@ describe("ID-based Navigation", () => {
         </MockedProvider>
       );
 
+      // CentralRouteManager detects ID, resolves it, and navigates to canonical URL
       await waitFor(() => {
-        // Should redirect to /c/john-doe/test-corpus
         expect(mockNavigate).toHaveBeenCalledWith("/c/john-doe/test-corpus", {
           replace: true,
         });
@@ -147,6 +171,22 @@ describe("ID-based Navigation", () => {
   describe("Document ID Navigation", () => {
     it("should redirect from document ID to slug-based URL", async () => {
       const mocks = [
+        // Phase 1: Try slug resolution first (fails)
+        {
+          request: {
+            query: RESOLVE_DOCUMENT_BY_SLUGS_FULL,
+            variables: {
+              userSlug: "john",
+              documentSlug: "7890",
+            },
+          },
+          result: {
+            data: {
+              documentBySlugs: null, // Not found by slug
+            },
+          },
+        },
+        // Phase 1b: Try ID resolution (succeeds)
         {
           request: {
             query: GET_DOCUMENT_BY_ID_FOR_REDIRECT,
@@ -163,6 +203,8 @@ describe("ID-based Navigation", () => {
       renderWithProviders(
         <MockedProvider mocks={mocks} addTypename={false}>
           <MemoryRouter initialEntries={["/d/john/7890"]}>
+            {/* CentralRouteManager handles ID resolution */}
+            <CentralRouteManager />
             <Routes>
               <Route
                 path="/d/:userIdent/:docIdent"
@@ -183,7 +225,7 @@ describe("ID-based Navigation", () => {
 
     it("should preserve query parameters when redirecting", async () => {
       const mocks = [
-        // First mock for slug resolution attempt (will fail)
+        // Phase 1: Slug resolution fails
         {
           request: {
             query: RESOLVE_DOCUMENT_BY_SLUGS_FULL,
@@ -198,7 +240,7 @@ describe("ID-based Navigation", () => {
             },
           },
         },
-        // Then mock for ID resolution (should succeed)
+        // Phase 1b: ID resolution succeeds
         {
           request: {
             query: GET_DOCUMENT_BY_ID_FOR_REDIRECT,
@@ -215,6 +257,8 @@ describe("ID-based Navigation", () => {
       renderWithProviders(
         <MockedProvider mocks={mocks} addTypename={false}>
           <MemoryRouter initialEntries={["/d/john/7890?ann=123,456"]}>
+            {/* CentralRouteManager handles ID resolution and preserves query params */}
+            <CentralRouteManager />
             <Routes>
               <Route
                 path="/d/:userIdent/:docIdent"
@@ -226,11 +270,16 @@ describe("ID-based Navigation", () => {
       );
 
       await waitFor(() => {
-        // Should redirect with query params preserved (comma is URL-encoded)
-        expect(mockNavigate).toHaveBeenCalledWith(
-          "/d/john-doe/test-document?ann=123%2C456",
-          { replace: true }
+        // Phase 3 canonical redirect preserves query params from location.search
+        // The actual call includes the path with query string
+        const canonicalCall = mockNavigate.mock.calls.find(
+          (call) =>
+            typeof call[0] === "string" &&
+            call[0].includes("/d/john-doe/test-document")
         );
+        expect(canonicalCall).toBeDefined();
+        expect(canonicalCall![0]).toContain("ann=123");
+        expect(canonicalCall![0]).toContain("456");
       });
     });
   });
@@ -238,6 +287,24 @@ describe("ID-based Navigation", () => {
   describe("Mixed ID and Slug Navigation", () => {
     it("should handle document ID within corpus slug context", async () => {
       const mocks = [
+        // Phase 1: Try document in corpus slug resolution (fails - 7890 is ID not slug)
+        {
+          request: {
+            query: RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL,
+            variables: {
+              userSlug: "john",
+              corpusSlug: "test-corpus",
+              documentSlug: "7890",
+            },
+          },
+          result: {
+            data: {
+              corpusBySlugs: null,
+              documentInCorpusBySlugs: null,
+            },
+          },
+        },
+        // Phase 1b: Try ID resolution (succeeds)
         {
           request: {
             query: GET_DOCUMENT_BY_ID_FOR_REDIRECT,
@@ -254,6 +321,8 @@ describe("ID-based Navigation", () => {
       renderWithProviders(
         <MockedProvider mocks={mocks} addTypename={false}>
           <MemoryRouter initialEntries={["/d/john/test-corpus/7890"]}>
+            {/* CentralRouteManager handles mixed slug/ID resolution */}
+            <CentralRouteManager />
             <Routes>
               <Route
                 path="/d/:userIdent/:corpusIdent/:docIdent"
@@ -277,6 +346,22 @@ describe("ID-based Navigation", () => {
   describe("Fallback Behavior", () => {
     it("should show 404 when ID cannot be resolved", async () => {
       const mocks = [
+        // Phase 1: Try slug resolution first (fails)
+        {
+          request: {
+            query: RESOLVE_DOCUMENT_BY_SLUGS_FULL,
+            variables: {
+              userSlug: "john",
+              documentSlug: "9999",
+            },
+          },
+          result: {
+            data: {
+              documentBySlugs: null,
+            },
+          },
+        },
+        // Phase 1b: Try ID resolution (also fails - ID doesn't exist)
         {
           request: {
             query: GET_DOCUMENT_BY_ID_FOR_REDIRECT,
@@ -288,22 +373,13 @@ describe("ID-based Navigation", () => {
             },
           },
         },
-        {
-          request: {
-            query: GET_CORPUS_BY_ID_FOR_REDIRECT,
-            variables: { id: "9999" },
-          },
-          result: {
-            data: {
-              corpus: null,
-            },
-          },
-        },
       ];
 
       renderWithProviders(
         <MockedProvider mocks={mocks} addTypename={false}>
           <MemoryRouter initialEntries={["/d/john/9999"]}>
+            {/* CentralRouteManager handles resolution failures and navigates to 404 */}
+            <CentralRouteManager />
             <Routes>
               <Route
                 path="/d/:userIdent/:docIdent"

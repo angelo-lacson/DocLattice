@@ -72,8 +72,9 @@ export const CorpusesTestWrapper: React.FC<WrapperProps> = ({
   initialCorpus = null,
 }) => {
   // Mark authentication as done immediately for tests
+  // Component tests set reactive vars directly (pragmatic exception to The ONE PLACE TO RULE THEM ALL)
   React.useEffect(() => {
-    authStatusVar("ANONYMOUS");
+    authStatusVar("AUTHENTICATED");
   }, []);
 
   // Ensure the openedCorpus reactive var is initialised **in the browser runtime**

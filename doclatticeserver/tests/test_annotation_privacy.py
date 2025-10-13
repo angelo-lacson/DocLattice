@@ -143,12 +143,14 @@ class AnnotationPrivacyTestCase(TestCase):
     def test_analysis_created_annotation_is_private(self):
         """Test that annotations created by analysis are private to that analysis."""
         # Create an annotation created by the analysis
+        # Note: analysis field is None so it appears in manual mode queries
+        # Only created_by_analysis is set for privacy enforcement
         private_annotation = Annotation.objects.create(
             annotation_label=self.label,
             document=self.doc,
             corpus=self.corpus,
-            analysis=self.analysis,
-            created_by_analysis=self.analysis,  # Mark as created by analysis
+            # analysis=None (implicit) - allows visibility in manual mode
+            created_by_analysis=self.analysis,  # Mark as created by analysis for privacy
             creator=self.owner,
             page=1,
             raw_text="Private analysis annotation",
@@ -212,13 +214,13 @@ class AnnotationPrivacyTestCase(TestCase):
 
     def test_granting_analysis_permission_reveals_annotations(self):
         """Test that granting analysis permission reveals its private annotations."""
-        # Create private annotation
+        # Create private annotation (analysis=None for manual mode visibility)
         private_annotation = Annotation.objects.create(
             annotation_label=self.label,
             document=self.doc,
             corpus=self.corpus,
-            analysis=self.analysis,
-            created_by_analysis=self.analysis,
+            # analysis=None (implicit) - allows visibility in manual mode
+            created_by_analysis=self.analysis,  # Privacy field
             creator=self.owner,
             page=1,
             raw_text="Private analysis annotation",
@@ -244,13 +246,14 @@ class AnnotationPrivacyTestCase(TestCase):
     def test_structural_annotations_always_visible(self):
         """Test that structural annotations are always visible regardless of created_by."""
         # Create a structural annotation created by analysis
+        # analysis=None so it appears in manual mode, but has privacy via created_by_analysis
         structural_annotation = Annotation.objects.create(
             annotation_label=self.label,
             document=self.doc,
             corpus=self.corpus,
-            analysis=self.analysis,
-            created_by_analysis=self.analysis,
-            structural=True,  # Mark as structural
+            # analysis=None (implicit) - allows visibility in manual mode
+            created_by_analysis=self.analysis,  # Privacy field (but structural trumps this)
+            structural=True,  # Mark as structural - makes it visible regardless of privacy
             creator=self.owner,
             page=1,
             raw_text="Structural annotation",

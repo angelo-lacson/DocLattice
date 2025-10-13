@@ -92,6 +92,16 @@ export const cache = new InMemoryCache({
             return openedDocument() && openedDocument()?.id === readField("id");
           },
         },
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        // Without these, Apollo creates new object references on every query,
+        // triggering cache updates and infinite re-renders
+        assignmentSet: relayStylePagination(),
+        corpusSet: relayStylePagination(),
+        annotationSet: relayStylePagination(),
+        docLabelAnnotations: relayStylePagination(),
+        metadataAnnotations: relayStylePagination(),
+        conversations: relayStylePagination(),
+        chatMessages: relayStylePagination(),
       },
     },
     CorpusType: {
@@ -108,6 +118,15 @@ export const cache = new InMemoryCache({
             return openedCorpus() && openedCorpus()?.id === readField("id");
           },
         },
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        // Without these, Apollo creates new object references on every query,
+        // triggering cache updates and infinite re-renders
+        documents: relayStylePagination(),
+        assignmentSet: relayStylePagination(),
+        relationshipSet: relayStylePagination(),
+        annotations: relayStylePagination(),
+        analyses: relayStylePagination(),
+        conversations: relayStylePagination(),
       },
     },
     LabelSetType: {
@@ -126,9 +145,76 @@ export const cache = new InMemoryCache({
         },
       },
     },
+    AnalysisType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        analyzedDocuments: relayStylePagination(),
+        annotations: relayStylePagination(),
+      },
+    },
     ServerAnnotationType: {
       fields: {
         userFeedback: mergeArrayByIdFieldPolicy,
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        created_by_analyses: relayStylePagination(),
+        assignmentSet: relayStylePagination(),
+        sourceNodeInRelationships: relayStylePagination(),
+        targetNodeInRelationships: relayStylePagination(),
+        chatMessages: relayStylePagination(),
+        createdByChatMessage: relayStylePagination(),
+      },
+    },
+    RelationshipLabelType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        sourceAnnotations: relayStylePagination(),
+        targetAnnotations: relayStylePagination(),
+        assignmentSet: relayStylePagination(),
+      },
+    },
+    UserType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        createdAssignments: relayStylePagination(),
+        myAssignments: relayStylePagination(),
+        userexportSet: relayStylePagination(),
+        userimportSet: relayStylePagination(),
+        editingDocuments: relayStylePagination(),
+        documentSet: relayStylePagination(),
+        corpusSet: relayStylePagination(),
+        editingCorpuses: relayStylePagination(),
+        labelSet: relayStylePagination(),
+        relationshipSet: relayStylePagination(),
+        annotationSet: relayStylePagination(),
+        labelsetSet: relayStylePagination(),
+      },
+    },
+    FieldsetType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        annotationlabelSet: relayStylePagination(),
+        relationshipSet: relayStylePagination(),
+        labelsetSet: relayStylePagination(),
+        analysisSet: relayStylePagination(),
+      },
+    },
+    ExtractType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        extractedDatacells: relayStylePagination(),
+      },
+    },
+    ConversationType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        chatMessages: relayStylePagination(),
+      },
+    },
+    ChatMessageType: {
+      fields: {
+        // CRITICAL: Handle all Connection types properly to prevent infinite loops
+        sourceAnnotations: relayStylePagination(),
+        createdAnnotations: relayStylePagination(),
       },
     },
     UserFeedbackType: {
@@ -190,6 +276,12 @@ export const cache = new InMemoryCache({
 /**
  * Global GUI State / Variables
  */
+/**
+ * Routing state - managed by CentralRouteManager
+ */
+export const routeLoading = makeVar<boolean>(false);
+export const routeError = makeVar<Error | null>(null);
+
 // Cookie consent modal reactive variable.
 // Initialized to `false`; the App component decides at runtime whether to
 // show the modal based on the browser's localStorage state.
@@ -236,20 +328,33 @@ export const allowUserInput = makeVar<boolean>(false);
  *  Document-related global variables.
  */
 export const documentSearchTerm = makeVar<string>("");
-export const openedDocument = persistentVar<DocumentType | null>(
-  "oc_openedDocument",
-  null
-);
+export const openedDocument = makeVar<DocumentType | null>(null);
 export const selectedDocumentIds = makeVar<string[]>([]);
 export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
 
 /**
  * Extract-related global variables
+ *
+ * ENTITY STATE (set by CentralRouteManager Phase 1):
+ *   openedExtract - Extract resolved from /e/:user/:extractId route
+ *
+ * URL-DRIVEN STATE (set by CentralRouteManager Phase 2):
+ *   selectedExtractIds - Controlled by URL query parameter ?extract=
+ *
+ * CRITICAL: ONLY CentralRouteManager is allowed to SET openedExtract and selectedExtractIds
+ * All other components must:
+ *   - ONLY READ via useReactiveVar()
+ *   - UPDATE STATE via navigateToExtract() or updateAnnotationSelectionParams()
+ *
+ * Examples:
+ *   /e/user/extract-123               → openedExtract(extractObj)
+ *   /c/user/corpus?extract=456        → selectedExtractIds(["456"])
+ *   /d/user/doc?extract=456,789       → selectedExtractIds(["456", "789"])
  */
-export const selectedExtractIds = makeVar<string[]>([]);
-export const selectedExtract = makeVar<ExtractType | null>(null);
-export const openedExtract = makeVar<ExtractType | null>(null);
+export const openedExtract = makeVar<ExtractType | null>(null); // ENTITY STATE - set by CentralRouteManager Phase 1
+export const selectedExtractIds = makeVar<string[]>([]); // URL-DRIVEN - set by CentralRouteManager Phase 2
+export const selectedExtract = makeVar<ExtractType | null>(null); // Legacy - kept for backward compatibility
 export const extractSearchTerm = makeVar<string>("");
 
 /**
@@ -258,10 +363,7 @@ export const extractSearchTerm = makeVar<string>("");
 export const corpusSearchTerm = makeVar<string>("");
 export const filterToCorpus = makeVar<CorpusType | null>(null);
 export const selectedCorpus = makeVar<CorpusType | null>(null);
-export const openedCorpus = persistentVar<CorpusType | null>(
-  "oc_openedCorpus",
-  null
-);
+export const openedCorpus = makeVar<CorpusType | null>(null);
 export const viewingCorpus = makeVar<CorpusType | null>(null);
 export const deletingCorpus = makeVar<CorpusType | null>(null);
 export const editingCorpus = makeVar<CorpusType | null>(null);
@@ -309,10 +411,15 @@ export const analyzerSearchTerm = makeVar<string | null>(null);
 
 /**
  * Analysis-related global variables
+ *
+ * URL-DRIVEN STATE: selectedAnalysesIds is controlled by URL query parameter ?analysis=
+ * Examples:
+ *   /c/user/corpus?analysis=123       → selectedAnalysesIds(["123"])
+ *   /d/user/doc?analysis=123,456      → selectedAnalysesIds(["123", "456"])
  */
-export const selectedAnalysis = makeVar<AnalysisType | null>(null);
-export const selectedAnalyses = makeVar<AnalysisType[]>([]);
-export const selectedAnalysesIds = makeVar<(string | number)[]>([]);
+export const selectedAnalysesIds = makeVar<string[]>([]); // PRIMARY - URL-driven
+export const selectedAnalysis = makeVar<AnalysisType | null>(null); // Legacy - kept for backward compatibility
+export const selectedAnalyses = makeVar<AnalysisType[]>([]); // Legacy - kept for backward compatibility
 export const analysisSearchTerm = makeVar<string>("");
 
 /**

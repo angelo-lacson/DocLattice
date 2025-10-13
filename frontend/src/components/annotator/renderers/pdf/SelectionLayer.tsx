@@ -12,11 +12,12 @@ import { ServerTokenAnnotation } from "../../types/annotations";
 import { SelectionBoundary } from "../../display/components/SelectionBoundary";
 import { SelectionTokenGroup } from "../../display/components/SelectionTokenGroup";
 import { useCorpusState } from "../../context/CorpusAtom";
-import { useAnnotationSelection } from "../../hooks/useAnnotationSelection";
-import { useAtom } from "jotai";
+import { useAnnotationSelection } from "../../context/UISettingsAtom";
+import { useAtom, useAtomValue } from "jotai";
 import { isCreatingAnnotationAtom } from "../../context/UISettingsAtom";
 import styled from "styled-components";
 import { Copy, Tag, X, AlertCircle, Settings } from "lucide-react";
+import { scrollContainerRefAtom } from "../../context/DocumentAtom";
 
 interface SelectionLayerProps {
   pageInfo: PDFPageInfo;
@@ -34,6 +35,7 @@ const SelectionLayer = ({
   pageNumber,
 }: SelectionLayerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useAtomValue(scrollContainerRefAtom);
   const {
     canUpdateCorpus,
     myPermissions,
@@ -42,12 +44,6 @@ const SelectionLayer = ({
     humanTokenLabels,
   } = useCorpusState();
 
-  // Debug logging
-  console.log("[SelectionLayer] Component state:");
-  console.log("  - read_only prop:", read_only);
-  console.log("  - canUpdateCorpus:", canUpdateCorpus);
-  console.log("  - myPermissions from corpus:", myPermissions);
-  console.log("  - selectedCorpus:", selectedCorpus?.id);
   const { setSelectedAnnotations } = useAnnotationSelection();
   const [, setIsCreatingAnnotation] = useAtom(isCreatingAnnotationAtom);
   const [localPageSelection, setLocalPageSelection] = useState<
@@ -75,6 +71,10 @@ const SelectionLayer = ({
   } | null>(null);
   const LONG_PRESS_DURATION = 500; // 500ms for long press
   const TOUCH_MOVE_THRESHOLD = 10; // pixels of movement to cancel long press
+
+  // Prevent new selection immediately after menu interaction
+  const lastMenuInteractionTime = useRef<number>(0);
+  const MENU_INTERACTION_COOLDOWN = 300; // 300ms cooldown after menu interaction
 
   // Check if corpus has labelset
   const hasLabelset = Boolean(selectedCorpus?.labelSet);
@@ -129,9 +129,6 @@ const SelectionLayer = ({
         !selections ||
         Object.keys(selections).length === 0
       ) {
-        console.log(
-          "handleCreateMultiPageAnnotation - no active label or multiSelections"
-        );
         return;
       }
 
@@ -165,11 +162,6 @@ const SelectionLayer = ({
         false
       );
 
-      console.log(
-        "handleCreateMultiPageAnnotation - annotation",
-        JSON.stringify(annotation, null, 2)
-      );
-
       await createAnnotation(annotation);
       setMultiSelections({});
     },
@@ -197,8 +189,10 @@ const SelectionLayer = ({
 
     if (combinedText.trim()) {
       navigator.clipboard.writeText(combinedText.trim());
-      console.log("[SelectionLayer] Text copied to clipboard");
     }
+
+    // Mark menu interaction time
+    lastMenuInteractionTime.current = Date.now();
 
     // Clear states
     setShowActionMenu(false);
@@ -213,6 +207,10 @@ const SelectionLayer = ({
     if (activeSpanLabel) {
       handleCreateMultiPageAnnotation(pendingSelections);
     }
+
+    // Mark menu interaction time
+    lastMenuInteractionTime.current = Date.now();
+
     setShowActionMenu(false);
     setPendingSelections({});
   }, [activeSpanLabel, pendingSelections, handleCreateMultiPageAnnotation]);
@@ -221,10 +219,12 @@ const SelectionLayer = ({
    * Handles canceling the selection without any action.
    */
   const handleCancel = useCallback(() => {
+    // Mark menu interaction time
+    lastMenuInteractionTime.current = Date.now();
+
     setShowActionMenu(false);
     setPendingSelections({});
     setMultiSelections({});
-    console.log("[SelectionLayer] Selection cancelled by user");
   }, []);
 
   /**
@@ -233,10 +233,6 @@ const SelectionLayer = ({
   const handleMouseUp = useCallback(
     (event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
       if (localPageSelection) {
-        console.log(
-          "onMouseUp - localPageSelection",
-          JSON.stringify(localPageSelection, null, 2)
-        );
         const pageNum = pageNumber;
 
         setMultiSelections((prev) => {
@@ -257,8 +253,6 @@ const SelectionLayer = ({
 
           return updatedSelections;
         });
-      } else {
-        console.log("onMouseUp - localPageSelection", localPageSelection);
       }
     },
     [localPageSelection, pageNumber, setIsCreatingAnnotation]
@@ -273,9 +267,16 @@ const SelectionLayer = ({
         throw new Error("No Container");
       }
 
-      // Log the exact state of variables when mouse down occurs
-      console.log("[MouseDown] canUpdateCorpus:", canUpdateCorpus);
-      console.log("[MouseDown] read_only:", read_only);
+      // Don't start selection if menu is visible or in cooldown
+      if (showActionMenu) {
+        return;
+      }
+
+      const timeSinceMenuInteraction =
+        Date.now() - lastMenuInteractionTime.current;
+      if (timeSinceMenuInteraction < MENU_INTERACTION_COOLDOWN) {
+        return;
+      }
 
       // Allow selection for copying even in read-only mode
       if (!localPageSelection && event.buttons === 1) {
@@ -312,6 +313,7 @@ const SelectionLayer = ({
       pageInfo,
       setSelectedAnnotations,
       setIsCreatingAnnotation,
+      showActionMenu,
     ]
   );
 
@@ -322,6 +324,24 @@ const SelectionLayer = ({
     (event: React.TouchEvent<HTMLDivElement>) => {
       if (containerRef.current === null) {
         throw new Error("No Container");
+      }
+
+      // Don't start a new selection if the action menu is visible
+      if (showActionMenu) {
+        return;
+      }
+
+      // Check if we're in the cooldown period after a menu interaction
+      const timeSinceMenuInteraction =
+        Date.now() - lastMenuInteractionTime.current;
+      if (timeSinceMenuInteraction < MENU_INTERACTION_COOLDOWN) {
+        return;
+      }
+
+      // Check if touch target is within the action menu
+      const target = event.target as HTMLElement;
+      if (target.closest(".selection-action-menu")) {
+        return;
       }
 
       // Only proceed if we're not already selecting
@@ -376,6 +396,7 @@ const SelectionLayer = ({
       pageNumber,
       setSelectedAnnotations,
       setIsCreatingAnnotation,
+      showActionMenu,
     ]
   );
 
@@ -404,6 +425,10 @@ const SelectionLayer = ({
 
       // If long press is active and we have a selection, update it
       if (isLongPressActive && localPageSelection && containerRef.current) {
+        // Prevent default touch behavior (scrolling/panning) during selection
+        event.preventDefault();
+        event.stopPropagation();
+
         const canvasElement = containerRef.current
           .previousSibling as HTMLCanvasElement;
         if (!canvasElement) return;
@@ -568,7 +593,6 @@ const SelectionLayer = ({
           clearTimeout(longPressTimer);
           setLongPressTimer(null);
         }
-        console.log("[SelectionLayer] Selection cancelled with ESC");
       }
     };
 
@@ -588,6 +612,28 @@ const SelectionLayer = ({
       }
     };
   }, [longPressTimer]);
+
+  // Disable scrolling on the scroll container when selection is active
+  useEffect(() => {
+    if (!scrollContainerRef?.current) return;
+
+    if (isLongPressActive) {
+      const container = scrollContainerRef.current;
+      // Store original values
+      const originalOverflow = container.style.overflow;
+      const originalTouchAction = container.style.touchAction;
+
+      // Disable scrolling
+      container.style.overflow = "hidden";
+      container.style.touchAction = "none";
+
+      return () => {
+        // Restore original values
+        container.style.overflow = originalOverflow;
+        container.style.touchAction = originalTouchAction;
+      };
+    }
+  }, [isLongPressActive, scrollContainerRef]);
 
   // Handle clicks outside the action menu and keyboard shortcuts
   useEffect(() => {
@@ -650,6 +696,7 @@ const SelectionLayer = ({
         width: "100%",
         height: "100%",
         zIndex: 1,
+        touchAction: isLongPressActive ? "none" : "auto",
       }}
     >
       {localPageSelection?.pageNumber === pageNumber
@@ -680,6 +727,10 @@ const SelectionLayer = ({
         <SelectionActionMenu
           className="selection-action-menu"
           data-testid="selection-action-menu"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           style={{
             position: "fixed",
             left: `${actionMenuPosition.x}px`,
@@ -688,7 +739,14 @@ const SelectionLayer = ({
           }}
         >
           <ActionMenuItem
-            onClick={handleCopyText}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopyText();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              lastMenuInteractionTime.current = Date.now();
+            }}
             data-testid="copy-text-button"
           >
             <Copy size={16} />
@@ -702,7 +760,14 @@ const SelectionLayer = ({
               <MenuDivider />
               {activeSpanLabel ? (
                 <ActionMenuItem
-                  onClick={handleApplyLabel}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleApplyLabel();
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    lastMenuInteractionTime.current = Date.now();
+                  }}
                   data-testid="apply-label-button"
                 >
                   <Tag size={16} />
@@ -760,7 +825,17 @@ const SelectionLayer = ({
           )}
 
           <MenuDivider />
-          <ActionMenuItem onClick={handleCancel} data-testid="cancel-button">
+          <ActionMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCancel();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              lastMenuInteractionTime.current = Date.now();
+            }}
+            data-testid="cancel-button"
+          >
             <X size={16} />
             <span>Cancel</span>
             <ShortcutHint>ESC</ShortcutHint>

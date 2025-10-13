@@ -1,41 +1,29 @@
 import React from "react";
-import { useParams } from "react-router-dom";
+import { useReactiveVar } from "@apollo/client";
 import { Corpuses } from "../../views/Corpuses";
 import { MetaTags } from "../seo/MetaTags";
-import {
-  useSlugResolver,
-  useCanonicalRedirect,
-} from "../../hooks/useSlugResolver";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { ErrorBoundary } from "../widgets/ErrorBoundary";
+import { openedCorpus, routeLoading, routeError } from "../../graphql/cache";
 
 /**
  * CorpusLandingRoute - Handles corpus routes with explicit /c/ prefix
  *
  * Route pattern:
  * - /c/:userIdent/:corpusIdent
+ *
+ * Query parameters (URL-driven state) - managed by CentralRouteManager:
+ * - ?analysis=id1,id2 - Comma-separated analysis IDs to filter/display
+ * - ?extract=id1,id2 - Comma-separated extract IDs to filter/display
+ *
+ * This component is now a DUMB CONSUMER - it just reads state set by CentralRouteManager.
  */
 export const CorpusLandingRoute: React.FC = () => {
-  const { userIdent, corpusIdent } = useParams();
-
-  // Simple resolver parameters - only one pattern to handle!
-  const resolverParams = React.useMemo(() => {
-    if (userIdent && corpusIdent) {
-      return {
-        userIdent,
-        corpusIdent,
-      };
-    }
-    // Invalid route - shouldn't happen with proper routing
-    return {};
-  }, [userIdent, corpusIdent]);
-
-  // Use unified slug resolver
-  const { loading, error, corpus } = useSlugResolver(resolverParams);
-
-  // Handle canonical redirects
-  useCanonicalRedirect(corpus, "corpus");
+  // Read state from reactive vars (set by CentralRouteManager)
+  const corpus = useReactiveVar(openedCorpus);
+  const loading = useReactiveVar(routeLoading);
+  const error = useReactiveVar(routeError);
 
   if (loading) {
     return <ModernLoadingDisplay type="corpus" size="large" />;

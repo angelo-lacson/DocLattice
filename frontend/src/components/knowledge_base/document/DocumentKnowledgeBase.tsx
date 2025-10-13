@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery } from "@apollo/client";
+import { useQuery, useReactiveVar } from "@apollo/client";
+import { unstable_batchedUpdates } from "react-dom";
 import { Button, Header, Modal, Loader, Message } from "semantic-ui-react";
 import {
   MessageSquare,
@@ -13,6 +14,8 @@ import {
   Plus,
   Layers,
   PanelRightOpen,
+  Database,
+  BarChart3,
 } from "lucide-react";
 import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
@@ -82,6 +85,12 @@ import {
   useAnnotationControls,
   selectedRelationsAtom,
 } from "../../annotator/context/UISettingsAtom";
+import { useNavigate, useLocation } from "react-router-dom";
+import {
+  clearAnnotationSelection,
+  updateAnnotationSelectionParams,
+} from "../../../utils/navigationUtils";
+import { routingLogger } from "../../../utils/routingLogger";
 
 import {
   ContentArea,
@@ -94,6 +103,8 @@ import {
   ChatIndicator,
   SidebarTabsContainer,
   SidebarTab,
+  MobileTabBar,
+  MobileTab,
 } from "./StyledContainers";
 import { NoteModal } from "./StickyNotes";
 
@@ -106,7 +117,7 @@ import {
 import { FullScreenModal } from "./LayoutComponents";
 import { ChatTray } from "./right_tray/ChatTray";
 import { SafeMarkdown } from "../markdown/SafeMarkdown";
-import { useAnnotationSelection } from "../../annotator/hooks/useAnnotationSelection";
+import { useAnnotationSelection } from "../../annotator/context/UISettingsAtom";
 import styled from "styled-components";
 import { Icon } from "semantic-ui-react";
 import { useChatSourceState } from "../../annotator/context/ChatSourceAtom";
@@ -115,14 +126,19 @@ import { useScrollContainerRef } from "../../annotator/context/DocumentAtom";
 import { useChatPanelWidth } from "../../annotator/context/UISettingsAtom";
 import { NoteEditor } from "./NoteEditor";
 import { NewNoteModal } from "./NewNoteModal";
-import { useUrlAnnotationSync } from "../../../hooks/useUrlAnnotationSync";
 import { FloatingSummaryPreview } from "./floating_summary_preview/FloatingSummaryPreview";
 import { ZoomControls } from "./ZoomControls";
 
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
-import { openedDocument, openedCorpus } from "../../../graphql/cache";
-import { selectedAnnotationIds } from "../../../graphql/cache";
+import {
+  openedDocument,
+  selectedAnnotationIds,
+  selectedAnalysesIds,
+  showStructuralAnnotations,
+  showSelectedAnnotationOnly,
+  showAnnotationBoundingBoxes,
+} from "../../../graphql/cache";
 import { useAuthReady } from "../../../hooks/useAuthReady";
 
 // New imports for unified feed
@@ -140,6 +156,7 @@ import { FloatingExtractsPanel } from "./FloatingExtractsPanel";
 import UnifiedKnowledgeLayer from "./layers/UnifiedKnowledgeLayer";
 import { AddToCorpusModal } from "../../modals/AddToCorpusModal";
 import { FeatureUnavailable } from "../../common/FeatureUnavailable";
+import { SingleDocumentExtractResults } from "../../annotator/sidebar/SingleDocumentExtractResults";
 
 // Setting worker path to worker bundle.
 GlobalWorkerOptions.workerSrc = workerSrc;
@@ -268,6 +285,294 @@ const ZoomIndicator = styled.div`
   transition: opacity 0.2s ease-in-out;
 `;
 
+const ContextBar = styled.div`
+  background: linear-gradient(
+    90deg,
+    rgba(102, 126, 234, 0.95) 0%,
+    rgba(118, 75, 162, 0.95) 100%
+  );
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
+
+const ContextBarContent = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+`;
+
+const ContextBarBadge = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+
+  svg,
+  i {
+    width: 16px;
+    height: 16px;
+    margin: 0 !important;
+  }
+`;
+
+const ContextBarLabel = styled.div`
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.95;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ContextBarStats = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  margin-right: 12px;
+`;
+
+const StatPill = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+
+  svg,
+  i {
+    width: 14px;
+    height: 14px;
+    opacity: 0.9;
+    margin: 0 !important;
+  }
+`;
+
+const CloseButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+
+const SidebarHeader = styled.div`
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+`;
+
+const SidebarHeaderContent = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const SidebarHeaderTitle = styled.div`
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1e293b;
+  max-height: 8.4rem; /* ~6 lines at 1.4 line-height */
+  overflow-y: auto;
+  line-height: 1.4;
+
+  /* Pretty scrollbar */
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 2px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Clean markdown rendering */
+  p {
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  strong,
+  b {
+    font-weight: 700;
+  }
+
+  em,
+  i {
+    font-style: italic;
+  }
+
+  code {
+    background: #e2e8f0;
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-size: 0.875rem;
+    font-family: monospace;
+  }
+
+  /* Don't let markdown break the layout */
+  ul,
+  ol,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    display: none;
+  }
+`;
+
+const SidebarHeaderSubtitle = styled.div`
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.125rem;
+`;
+
+const CompactAnnotationFeed = styled.div`
+  height: 100%;
+  overflow: hidden;
+
+  /* Compact annotation cards for analysis view */
+  .highlight-item {
+    margin-bottom: 0.75rem !important;
+    border-radius: 10px !important;
+    background: white !important;
+  }
+
+  /* Clean up markdown in annotation cards */
+  .annotation-content {
+    p {
+      margin: 0.25rem 0 !important;
+      line-height: 1.5 !important;
+    }
+
+    ul,
+    ol {
+      margin: 0.5rem 0 !important;
+      padding-left: 1.5rem !important;
+    }
+
+    li {
+      margin: 0.25rem 0 !important;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      margin: 0.5rem 0 0.25rem 0 !important;
+      font-size: 0.95rem !important;
+      font-weight: 600 !important;
+    }
+
+    code {
+      background: #f1f5f9 !important;
+      padding: 0.125rem 0.375rem !important;
+      border-radius: 3px !important;
+      font-size: 0.875rem !important;
+    }
+
+    pre {
+      background: #f8fafc !important;
+      padding: 0.75rem !important;
+      border-radius: 6px !important;
+      overflow-x: auto !important;
+      margin: 0.5rem 0 !important;
+    }
+
+    blockquote {
+      border-left: 3px solid #e2e8f0 !important;
+      padding-left: 1rem !important;
+      margin: 0.5rem 0 !important;
+      color: #64748b !important;
+    }
+
+    /* Compact spacing for analysis results */
+    & > *:first-child {
+      margin-top: 0 !important;
+    }
+
+    & > *:last-child {
+      margin-bottom: 0 !important;
+    }
+  }
+
+  /* Hide unnecessary metadata in compact view */
+  .annotation-metadata {
+    font-size: 0.8125rem !important;
+    color: #94a3b8 !important;
+  }
+
+  /* Better page headers */
+  .page-header {
+    background: linear-gradient(to right, #fef3c7 0%, #fef9e7 100%) !important;
+    border-left: 3px solid #f59e0b !important;
+  }
+`;
+
 interface DocumentKnowledgeBaseProps {
   documentId: string;
   corpusId?: string; // Now optional
@@ -277,6 +582,11 @@ interface DocumentKnowledgeBaseProps {
    * the usual scroll-to-annotation behaviour in the PDF/TXT viewers.
    */
   initialAnnotationIds?: string[];
+  /**
+   * Optional close handler for programmatic modal usage.
+   * If not provided, uses navigate(-1) to go back in browser history.
+   * @deprecated Prefer routing-based navigation over programmatic modals
+   */
   onClose?: () => void;
   /**
    * When true, disables all editing capabilities and shows only view-only features.
@@ -301,6 +611,92 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   showCorpusInfo,
   showSuccessMessage,
 }) => {
+  routingLogger.debug("[DocumentKnowledgeBase] 🎬 Component render", {
+    documentId,
+    corpusId,
+    hasOnClose: !!onClose,
+    timestamp: Date.now(),
+  });
+
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const { isFeatureAvailable, getFeatureStatus, hasCorpus } =
+    useFeatureAvailability(corpusId);
+
+  // Memoize UI settings config to prevent creating new object reference on every render
+  const uiSettingsConfig = React.useMemo(() => ({ width }), [width]);
+  const { setProgress, zoomLevel, setShiftDown, setZoomLevel } =
+    useUISettings(uiSettingsConfig);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Track component lifecycle
+  useEffect(() => {
+    routingLogger.debug("[DocumentKnowledgeBase] 🟢 Component MOUNTED", {
+      documentId,
+      corpusId,
+      pathname: location.pathname,
+      search: location.search,
+    });
+
+    return () => {
+      routingLogger.debug("[DocumentKnowledgeBase] 🔴 Component UNMOUNTING", {
+        documentId,
+        corpusId,
+        pathname: location.pathname,
+        search: location.search,
+      });
+    };
+  }, []); // Empty deps - only log on actual mount/unmount
+
+  // Handle close: use provided onClose callback or fallback to /documents
+  // Following routing mantra: route components should provide onClose to make navigation decisions
+  // This component should NOT read openedCorpus() to decide navigation - that causes race conditions
+  const handleClose = useCallback(() => {
+    try {
+      const timestamp = new Date().toISOString();
+      routingLogger.debug(
+        `🚪 [DocumentKnowledgeBase] ════════ handleClose START ════════`
+      );
+      routingLogger.debug("[DocumentKnowledgeBase] Timestamp:", timestamp);
+      routingLogger.debug(
+        "[DocumentKnowledgeBase] Call stack:",
+        new Error().stack?.split("\n").slice(2, 8).join("\n")
+      );
+      routingLogger.debug("[DocumentKnowledgeBase] Current state:", {
+        hasOnClose: !!onClose,
+        documentId,
+        corpusId,
+        currentUrl: window.location.pathname + window.location.search,
+      });
+
+      if (onClose) {
+        routingLogger.debug(
+          "[DocumentKnowledgeBase] ✅ Decision: Calling provided onClose callback"
+        );
+        onClose();
+      } else {
+        console.warn(
+          "[DocumentKnowledgeBase] ⚠️  Decision: No onClose callback - fallback to /documents"
+        );
+        console.warn(
+          "Route components should pass explicit onClose callbacks to avoid race conditions."
+        );
+        navigate("/documents");
+      }
+
+      routingLogger.debug(
+        "[DocumentKnowledgeBase] ════════ handleClose END ════════"
+      );
+    } catch (error) {
+      console.error("[DocumentKnowledgeBase] ❌ ERROR in handleClose:", error);
+      console.error("Stack trace:", error);
+      // Fallback navigation on error
+      navigate("/documents");
+    }
+  }, [onClose, navigate, documentId, corpusId]);
+
   // Validate documentId - must be non-empty
   if (!documentId || documentId === "") {
     console.error(
@@ -308,7 +704,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       documentId
     );
     return (
-      <Modal open onClose={onClose}>
+      <Modal open onClose={handleClose}>
         <Modal.Content>
           <Message error>
             <Message.Header>Invalid Document</Message.Header>
@@ -316,22 +712,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           </Message>
         </Modal.Content>
         <Modal.Actions>
-          <Button onClick={onClose}>Close</Button>
+          <Button onClick={handleClose}>Close</Button>
         </Modal.Actions>
       </Modal>
     );
-  } else {
-    console.log("DocumentKnowledgeBase: Document ID is valid:", documentId);
   }
-
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  const { isFeatureAvailable, getFeatureStatus, hasCorpus } =
-    useFeatureAvailability(corpusId);
-
-  const { setProgress, zoomLevel, setShiftDown, setZoomLevel } = useUISettings({
-    width,
-  });
 
   // Chat panel width management
   const { mode, customWidth, setMode, setCustomWidth, minimize, restore } =
@@ -356,7 +741,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       default:
         width = 50;
     }
-    console.log("Panel width calculation - mode:", mode, "width:", width);
+    routingLogger.debug(
+      "Panel width calculation - mode:",
+      mode,
+      "width:",
+      width
+    );
     return width;
   };
 
@@ -383,8 +773,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const isAdjustingZoomRef = useRef<boolean>(false);
   const justToggledAutoZoomRef = useRef<boolean>(false);
 
-  // Calculate floating controls offset and visibility
-  const calculateFloatingControlsState = () => {
+  // Calculate floating controls offset and visibility - MEMOIZED to prevent new object on every render
+  const floatingControlsState = React.useMemo(() => {
     if (isMobile || !showRightPanel || activeLayer !== "document") {
       return { offset: 0, visible: true };
     }
@@ -402,9 +792,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       offset: shouldHide ? 0 : panelWidthPx,
       visible: !shouldHide,
     };
-  };
-
-  const floatingControlsState = calculateFloatingControlsState();
+  }, [isMobile, showRightPanel, activeLayer, mode, customWidth, width]); // Dependencies: all values that affect calculation
 
   const { setDocumentType } = useDocumentType();
   const { setDocument } = useDocumentState();
@@ -414,9 +802,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     setPageTokenTextMaps: setPageTextMaps,
   } = usePageTokenTextMaps();
   const { setPages } = usePages();
-  const [_, setPdfAnnotations] = useAtom(pdfAnnotationsAtom);
+
+  const [pdfAnnotations, setPdfAnnotations] = useAtom(pdfAnnotationsAtom);
   const [, setStructuralAnnotations] = useAtom(structuralAnnotationsAtom);
-  const { setCorpus } = useCorpusState();
+
+  const {
+    setCorpus,
+    canUpdateCorpus,
+    myPermissions: corpusPermissions,
+  } = useCorpusState();
+
   const { setInitialAnnotations, setInitialRelations } =
     useInitialAnnotations();
   const { searchText, setSearchText } = useSearchText();
@@ -425,8 +820,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const { activeSpanLabel, setActiveSpanLabel } = useAnnotationControls();
   const { setChatSourceState } = useChatSourceState();
   const { setPdfDoc } = usePdfDoc();
-  const { canUpdateCorpus, myPermissions: corpusPermissions } =
-    useCorpusState();
 
   // Determine if user can edit based on permissions and corpus context
   const canEdit = React.useMemo(() => {
@@ -483,19 +876,33 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   useTextSearch();
 
+  // Initialize search state on mount only - DO NOT include setters in dependencies as they're unstable!
   useEffect(() => {
-    setSearchText("");
-    setTextSearchState({
-      matches: [],
-      selectedIndex: 0,
+    // Batch updates to prevent multiple re-renders
+    unstable_batchedUpdates(() => {
+      setSearchText("");
+      setTextSearchState({
+        matches: [],
+        selectedIndex: 0,
+      });
     });
-  }, [setTextSearchState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps = run once on mount
 
-  useEffect(() => {
-    // Reset or set the default selections.
-    onSelectAnalysis(null);
-    onSelectExtract(null);
-  }, []);
+  /**
+   * REMOVED: useEffect that cleared analysis/extract selections on mount.
+   *
+   * This was causing deep link params to be stripped because:
+   * 1. CentralRouteManager Phase 2 correctly sets reactive vars from URL
+   * 2. DocumentKnowledgeBase mounts
+   * 3. This effect called onSelectAnalysis(null) which now updates URL
+   * 4. URL params get stripped!
+   *
+   * The routing system handles initialization:
+   * - URL → CentralRouteManager Phase 2 → reactive vars
+   * - Reactive vars → AnalysisHooks sync effect → Jotai atoms
+   * - No manual clearing needed
+   */
 
   /**
    * If analysis or annotation is selected, switch to document view.
@@ -505,6 +912,40 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       setActiveLayer("document");
     }
   }, [selectedAnalysis, selectedAnnotations]);
+
+  /**
+   * Auto-switch to extract tab when extract is selected
+   * Following routing principles: only READ selectedExtract from hook
+   */
+  useEffect(() => {
+    if (selectedExtract) {
+      // Batch updates to prevent cascade of re-renders (especially in mobile)
+      unstable_batchedUpdates(() => {
+        setActiveLayer("document");
+        setShowRightPanel(true);
+        setSidebarViewMode("extract");
+        // Close floating extracts panel since results now show in sidebar
+        setShowExtractsPanel(false);
+      });
+    }
+  }, [selectedExtract]);
+
+  /**
+   * Auto-switch to analysis tab when analysis is selected
+   * Following routing principles: only READ selectedAnalysis from hook
+   */
+  useEffect(() => {
+    if (selectedAnalysis) {
+      // Batch updates to prevent cascade of re-renders (especially in mobile)
+      unstable_batchedUpdates(() => {
+        setActiveLayer("document");
+        setShowRightPanel(true);
+        setSidebarViewMode("analysis");
+        // Close floating analyses panel since results now show in sidebar
+        setShowAnalysesPanel(false);
+      });
+    }
+  }, [selectedAnalysis]);
 
   /**
    * processAnnotationsData
@@ -519,15 +960,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const processAnnotationsData = (
     data: GetDocumentKnowledgeAndAnnotationsOutput
   ) => {
-    console.log("[processAnnotationsData] Received data:", data); // Log received data
-    console.log(
-      "[processAnnotationsData] Received data.corpus:",
-      JSON.stringify(data?.corpus, null, 2)
-    ); // Log corpus part specifically
-    console.log(
-      "[processAnnotationsData] Received data.corpus.myPermissions:",
-      data?.corpus?.myPermissions
-    ); // Log corpus part specifically
     if (data?.document) {
       // Backend now filters out analysis annotations when analysisId is not provided
       const processedAnnotations =
@@ -570,10 +1002,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       }
 
       // Process relationships - backend now filters out analysis relationships
-      console.log(
-        "[processAnnotationsData] Processing relationships:",
-        data.document.allRelationships
-      );
       const processedRelationships = data.document.allRelationships?.map(
         (rel) =>
           new RelationGroup(
@@ -587,11 +1015,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             rel.id,
             rel.structural
           )
-      );
-
-      console.log(
-        "[processAnnotationsData] Processed relationships:",
-        processedRelationships
       );
 
       // Store the initial relations
@@ -619,7 +1042,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       // Process labels if labelSet is available
       if (data.corpus?.labelSet) {
-        console.log("[processAnnotationsData] Processing labelSet...");
         const allLabels = data.corpus.labelSet.allAnnotationLabels ?? [];
         // Filter labels by type
         corpusUpdatePayload.spanLabels = allLabels.filter(
@@ -645,21 +1067,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       // Update corpus state using the constructed payload
       if (Object.keys(corpusUpdatePayload).length > 0) {
-        console.log(
-          "[processAnnotationsData] Corpus update payload:",
-          JSON.stringify(corpusUpdatePayload, null, 2) // Log the final payload
-        );
-        console.log("[processAnnotationsData] Calling setCorpus...");
         setCorpus(corpusUpdatePayload); // Pass the complete payload
-        console.log("[processAnnotationsData] setCorpus called.");
       }
 
-      // Keep global navigation vars in sync so router & other components know
-      openedDocument(data.document as any);
-      if (data.corpus) {
-        // Don't transform permissions - openedCorpus expects raw string[] permissions
-        openedCorpus(data.corpus as CorpusType);
-      }
+      // Note: openedDocument and openedCorpus are managed by CentralRouteManager
+      // Components should only READ these reactive vars, not SET them
       setPermissions(getPermissions(data.document.myPermissions));
     }
   };
@@ -722,7 +1134,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       // Capture current zoom as the new base, don't adjust yet
       baseZoomRef.current = zoomLevel;
       justToggledAutoZoomRef.current = true;
-      console.log(
+      routingLogger.debug(
         "Auto-zoom toggled ON - setting base zoom to current:",
         zoomLevel
       );
@@ -750,7 +1162,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
     // If we're currently auto-adjusting, skip to prevent loops
     if (isAdjustingZoomRef.current) {
-      isAdjustingZoomRef.current = false;
       return;
     }
 
@@ -774,6 +1185,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       if (Math.abs(zoomLevel - clampedZoom) > 0.01) {
         isAdjustingZoomRef.current = true;
         setZoomLevel(clampedZoom);
+        // Reset flag after state update completes
+        setTimeout(() => {
+          isAdjustingZoomRef.current = false;
+        }, 0);
       }
     } else {
       // Sidebar closed - restore base zoom
@@ -783,6 +1198,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       ) {
         isAdjustingZoomRef.current = true;
         setZoomLevel(baseZoomRef.current);
+        // Reset flag after state update completes
+        setTimeout(() => {
+          isAdjustingZoomRef.current = false;
+        }, 0);
       }
     }
   }, [
@@ -792,7 +1211,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     customWidth,
     isMobile,
     activeLayer,
-    zoomLevel,
+    // NOTE: Do NOT include zoomLevel here - it causes auto-zoom to override manual zoom changes
     setZoomLevel,
   ]);
 
@@ -1031,24 +1450,29 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         toast.error("Failed to load document details.");
         return;
       }
-      setDocumentType(data.document.fileType ?? "");
-      let processedDocData = {
-        ...data.document,
-        // Keep permissions as raw strings for consistency
-        myPermissions: data.document.myPermissions ?? [],
-      };
-      setDocument(processedDocData as any);
-      setPermissions(getPermissions(data.document.myPermissions));
-      processAnnotationsData(data);
+
+      // Batch initial state updates to prevent cascading re-renders
+      routingLogger.debug("[onCompleted] 🔄 Batching initial state updates");
+      unstable_batchedUpdates(() => {
+        setDocumentType(data.document.fileType ?? "");
+        let processedDocData = {
+          ...data.document,
+          // Keep permissions as raw strings for consistency
+          myPermissions: data.document.myPermissions ?? [],
+        };
+        setDocument(processedDocData as any);
+        setPermissions(getPermissions(data.document.myPermissions));
+        processAnnotationsData(data);
+      });
 
       if (
         data.document.fileType === "application/pdf" &&
         data.document.pdfFile
       ) {
-        console.log("\n=== DOCUMENT LOAD START ===");
-        console.log("Type: PDF");
-        console.log("Document ID:", data.document.id);
-        console.log("Hash:", data.document.pdfFileHash || "no hash");
+        routingLogger.debug("\n=== DOCUMENT LOAD START ===");
+        routingLogger.debug("Type: PDF");
+        routingLogger.debug("Document ID:", data.document.id);
+        routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
         setViewState(ViewState.LOADING); // Set loading state
 
         const pawlsPath = data.document.pawlsParseFile || "";
@@ -1122,21 +1546,27 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             return Promise.all(loadPagesPromises);
           })
           .then((loadedPages) => {
-            setPages(loadedPages);
-            const { doc_text, string_index_token_map } =
-              createTokenStringSearch(loadedPages);
-            setPageTextMaps({
-              ...string_index_token_map,
-              ...pageTextMaps,
+            // Batch PDF completion state updates to prevent cascading re-renders
+            routingLogger.debug(
+              "[PDF Load] 🔄 Batching PDF completion state updates"
+            );
+            unstable_batchedUpdates(() => {
+              setPages(loadedPages);
+              const { doc_text, string_index_token_map } =
+                createTokenStringSearch(loadedPages);
+              setPageTextMaps({
+                ...string_index_token_map,
+                ...pageTextMaps,
+              });
+              setDocText(doc_text);
+              setViewState(ViewState.LOADED); // Set loaded state only after everything is done
             });
-            setDocText(doc_text);
-            setViewState(ViewState.LOADED); // Set loaded state only after everything is done
-            console.log("=== DOCUMENT LOAD COMPLETE ===");
+            routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
             // Log the specific error causing the catch
             console.error("Error during PDF/PAWLS loading Promise.all:", err);
-            console.log("=== DOCUMENT LOAD FAILED ===");
+            routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
             setViewState(ViewState.ERROR);
             toast.error(
               `Error loading PDF details: ${
@@ -1149,11 +1579,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           data.document.fileType === "text/plain") &&
         data.document.txtExtractFile
       ) {
-        console.log("\n=== DOCUMENT LOAD START ===");
-        console.log("Type: TEXT");
-        console.log("Document ID:", data.document.id);
-        console.log("Hash:", data.document.pdfFileHash || "no hash");
-        console.log("File URL:", data.document.txtExtractFile);
+        routingLogger.debug("\n=== DOCUMENT LOAD START ===");
+        routingLogger.debug("Type: TEXT");
+        routingLogger.debug("Document ID:", data.document.id);
+        routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
+        routingLogger.debug("File URL:", data.document.txtExtractFile);
         setViewState(ViewState.LOADING); // Set loading state
         const docId = data.document.id;
         const textHash = data.document.pdfFileHash; // Can use same hash field for text files
@@ -1163,13 +1593,19 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           textHash ?? undefined
         )
           .then((txt) => {
-            setDocText(txt);
-            setViewState(ViewState.LOADED);
-            console.log("=== DOCUMENT LOAD COMPLETE ===");
+            // Batch text file completion state updates
+            routingLogger.debug(
+              "[Text Load] 🔄 Batching text completion state updates"
+            );
+            unstable_batchedUpdates(() => {
+              setDocText(txt);
+              setViewState(ViewState.LOADED);
+            });
+            routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
           })
           .catch((err) => {
             setViewState(ViewState.ERROR);
-            console.log("=== DOCUMENT LOAD FAILED ===");
+            routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
             toast.error(
               `Error loading text content: ${
                 err instanceof Error ? err.message : String(err)
@@ -1211,6 +1647,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   });
 
   // Query for document with structure but without corpus
+  routingLogger.debug(
+    "[GraphQL] 🔵 DocumentKnowledgeBase: GET_DOCUMENT_WITH_STRUCTURE query state",
+    {
+      skip: !authReady || !documentId || Boolean(corpusId),
+      authReady,
+      documentId,
+      corpusId,
+    }
+  );
+
   const {
     data: documentOnlyData,
     loading: documentLoading,
@@ -1224,20 +1670,36 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         documentId,
       },
       onCompleted: (data) => {
+        routingLogger.debug(
+          "[GraphQL] ✅ DocumentKnowledgeBase: GET_DOCUMENT_WITH_STRUCTURE completed",
+          {
+            documentId,
+            hasDocument: !!data?.document,
+            hasStructuralAnnotations:
+              data?.document?.allStructuralAnnotations?.length ?? 0,
+          }
+        );
         if (!data?.document) {
           console.error("onCompleted: No document data received.");
           setViewState(ViewState.ERROR);
           toast.error("Failed to load document details.");
           return;
         }
-        setDocumentType(data.document.fileType ?? "");
-        let processedDocData = {
-          ...data.document,
-          // Keep permissions as raw strings for consistency
-          myPermissions: data.document.myPermissions ?? [],
-        };
-        setDocument(processedDocData as any);
-        setPermissions(getPermissions(data.document.myPermissions));
+
+        // Batch initial state updates to prevent cascading re-renders
+        routingLogger.debug(
+          "[onCompleted] 🔄 Batching initial state updates (document-only)"
+        );
+        unstable_batchedUpdates(() => {
+          setDocumentType(data.document.fileType ?? "");
+          let processedDocData = {
+            ...data.document,
+            // Keep permissions as raw strings for consistency
+            myPermissions: data.document.myPermissions ?? [],
+          };
+          setDocument(processedDocData as any);
+          setPermissions(getPermissions(data.document.myPermissions));
+        });
 
         // Load PDF/TXT content
         if (
@@ -1307,19 +1769,25 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               return Promise.all(loadPagesPromises);
             })
             .then((loadedPages) => {
-              setPages(loadedPages);
-              const { doc_text, string_index_token_map } =
-                createTokenStringSearch(loadedPages);
-              setPageTextMaps({
-                ...string_index_token_map,
-                ...pageTextMaps,
+              // Batch PDF completion state updates (document-only)
+              routingLogger.debug(
+                "[PDF Load] 🔄 Batching PDF completion state updates (document-only)"
+              );
+              unstable_batchedUpdates(() => {
+                setPages(loadedPages);
+                const { doc_text, string_index_token_map } =
+                  createTokenStringSearch(loadedPages);
+                setPageTextMaps({
+                  ...string_index_token_map,
+                  ...pageTextMaps,
+                });
+                setDocText(doc_text);
+                setViewState(ViewState.LOADED);
               });
-              setDocText(doc_text);
-              setViewState(ViewState.LOADED);
             })
             .catch((err) => {
               console.error("Error during PDF/PAWLS loading Promise.all:", err);
-              console.log("=== DOCUMENT LOAD FAILED ===");
+              routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
               setViewState(ViewState.ERROR);
               toast.error(
                 `Error loading PDF details: ${
@@ -1332,21 +1800,27 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             data.document.fileType === "text/plain") &&
           data.document.txtExtractFile
         ) {
-          console.log("\n=== DOCUMENT LOAD START ===");
-          console.log("Type: TEXT");
-          console.log("Document ID:", data.document.id);
-          console.log("Hash:", data.document.pdfFileHash || "no hash");
-          console.log("File URL:", data.document.txtExtractFile);
+          routingLogger.debug("\n=== DOCUMENT LOAD START ===");
+          routingLogger.debug("Type: TEXT");
+          routingLogger.debug("Document ID:", data.document.id);
+          routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
+          routingLogger.debug("File URL:", data.document.txtExtractFile);
           setViewState(ViewState.LOADING);
           getDocumentRawText(data.document.txtExtractFile)
             .then((txt) => {
-              setDocText(txt);
-              setViewState(ViewState.LOADED);
-              console.log("=== DOCUMENT LOAD COMPLETE ===");
+              // Batch text file completion state updates (document-only)
+              routingLogger.debug(
+                "[Text Load] 🔄 Batching text completion state updates (document-only)"
+              );
+              unstable_batchedUpdates(() => {
+                setDocText(txt);
+                setViewState(ViewState.LOADED);
+              });
+              routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
             })
             .catch((err) => {
               setViewState(ViewState.ERROR);
-              console.log("=== DOCUMENT LOAD FAILED ===");
+              routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
               toast.error(
                 `Error loading text content: ${
                   err instanceof Error ? err.message : String(err)
@@ -1361,39 +1835,44 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           setViewState(ViewState.ERROR);
         }
 
-        // Keep global navigation vars in sync
-        openedDocument(data.document as any);
+        // Note: openedDocument is managed by CentralRouteManager, not set here
 
-        // Process structural annotations even without corpus
-        if (data.document.allStructuralAnnotations) {
-          const structuralAnns = data.document.allStructuralAnnotations.map(
-            (ann) => convertToServerAnnotation(ann)
+        // Batch structural annotation updates (document-only)
+        routingLogger.debug(
+          "[onCompleted] 🔄 Batching structural annotation updates (document-only)"
+        );
+        unstable_batchedUpdates(() => {
+          // Process structural annotations even without corpus
+          if (data.document.allStructuralAnnotations) {
+            const structuralAnns = data.document.allStructuralAnnotations.map(
+              (ann) => convertToServerAnnotation(ann)
+            );
+            setStructuralAnnotations(structuralAnns);
+          } else {
+            setStructuralAnnotations([]);
+          }
+
+          // Process structural relationships even without corpus
+          const processedRelationships = data.document.allRelationships?.map(
+            (rel) =>
+              new RelationGroup(
+                rel.sourceAnnotations.edges
+                  .map((edge) => edge?.node?.id)
+                  .filter((id): id is string => id !== undefined),
+                rel.targetAnnotations.edges
+                  .map((edge) => edge?.node?.id)
+                  .filter((id): id is string => id !== undefined),
+                rel.relationshipLabel,
+                rel.id,
+                rel.structural
+              )
           );
-          setStructuralAnnotations(structuralAnns);
-        } else {
-          setStructuralAnnotations([]);
-        }
 
-        // Process structural relationships even without corpus
-        const processedRelationships = data.document.allRelationships?.map(
-          (rel) =>
-            new RelationGroup(
-              rel.sourceAnnotations.edges
-                .map((edge) => edge?.node?.id)
-                .filter((id): id is string => id !== undefined),
-              rel.targetAnnotations.edges
-                .map((edge) => edge?.node?.id)
-                .filter((id): id is string => id !== undefined),
-              rel.relationshipLabel,
-              rel.id,
-              rel.structural
-            )
-        );
-
-        // Set annotations with structural relationships (no regular annotations without corpus)
-        setPdfAnnotations(
-          new PdfAnnotations([], processedRelationships || [], [], true)
-        );
+          // Set annotations with structural relationships (no regular annotations without corpus)
+          setPdfAnnotations(
+            new PdfAnnotations([], processedRelationships || [], [], true)
+          );
+        });
       },
       onError: (error) => {
         console.error("GraphQL Query Error fetching document data:", error);
@@ -1714,6 +2193,100 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       />
     );
 
+    // Handle extract mode - show extract results
+    if (sidebarViewMode === "extract" && selectedExtract) {
+      return (
+        <div
+          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+        >
+          <div
+            style={{
+              padding: "1rem 1.5rem",
+              borderBottom: "1px solid #e2e8f0",
+              background: "#f8fafc",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+            }}
+          >
+            <Database size={20} style={{ color: "#8b5cf6" }} />
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: "1rem",
+                  color: "#1e293b",
+                }}
+              >
+                {selectedExtract.name}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.875rem",
+                  color: "#64748b",
+                }}
+              >
+                Data Extract Results
+              </div>
+            </div>
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <SingleDocumentExtractResults
+              datacells={dataCells}
+              columns={columns}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // Handle analysis mode - show analysis annotations
+    if (sidebarViewMode === "analysis" && selectedAnalysis) {
+      const annotationCount = selectedAnalysis.annotations?.totalCount || 0;
+      return (
+        <div
+          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+        >
+          <SidebarHeader>
+            <BarChart3 size={20} style={{ color: "#f59e0b" }} />
+            <SidebarHeaderContent>
+              <SidebarHeaderTitle>
+                <SafeMarkdown>
+                  {selectedAnalysis.analyzer.description ||
+                    selectedAnalysis.analyzer.id}
+                </SafeMarkdown>
+              </SidebarHeaderTitle>
+              <SidebarHeaderSubtitle>
+                {annotationCount} annotation
+                {annotationCount !== 1 ? "s" : ""} • Analysis Results
+              </SidebarHeaderSubtitle>
+            </SidebarHeaderContent>
+          </SidebarHeader>
+          <CompactAnnotationFeed>
+            <UnifiedContentFeed
+              notes={notes}
+              filters={{
+                contentTypes: new Set(["annotation", "relationship"]),
+              }}
+              sortBy="page"
+              isLoading={loading}
+              readOnly={readOnly}
+              documentId={documentId}
+              onItemSelect={(item) => {
+                // Annotations from analysis
+                if (
+                  item.type === "annotation" ||
+                  item.type === "relationship"
+                ) {
+                  // Already in document view, annotations will scroll into view
+                }
+              }}
+            />
+          </CompactAnnotationFeed>
+        </div>
+      );
+    }
+
     // Handle unified feed mode
     if (sidebarViewMode === "feed") {
       return (
@@ -1859,13 +2432,17 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   // Set initial state - ensure chat panel starts with proper width
   useEffect(() => {
-    setShowRightPanel(false);
-    setActiveLayer("document");
-    // Force initial width to half
-    if (mode !== "half") {
-      setMode("half");
-    }
-  }, []);
+    // Batch updates to prevent multiple re-renders
+    unstable_batchedUpdates(() => {
+      setShowRightPanel(false);
+      setActiveLayer("document");
+      // Force initial width to half
+      if (mode !== "half") {
+        setMode("half");
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps = run once on mount
 
   // Auto-show right panel with feed view when annotations are available
   // TEMPORARILY DISABLED: This auto-open behavior breaks tests that expect manual sidebar opening
@@ -1881,31 +2458,45 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   // }, [corpusId, combinedData?.document?.allAnnotations, setSidebarViewMode]);
 
   /* ------------------------------------------------------------------ */
-  /* Seed selection atom once if the caller provided initial ids         */
-  useEffect(() => {
-    if (initialAnnotationIds && initialAnnotationIds.length > 0) {
-      setSelectedAnnotations(initialAnnotationIds);
-    }
-  }, [initialAnnotationIds, setSelectedAnnotations]);
+  /* NOTE: Initial annotation seeding removed - incompatible with router-based state
+   *
+   * With router-based architecture, annotation selection is controlled by URL params.
+   * For route-based usage: URL already contains ?ann=... via CentralRouteManager
+   * For modal usage: This needs refactoring - calling setSelectedAnnotations navigates
+   * the URL which is wrong for modals. Future fix should use a different approach for
+   * modal contexts (e.g., navigate to URL when opening modal, restore on close).
+   *
+   * TODO: Implement proper modal annotation seeding that doesn't conflict with routing
+   */
 
-  // keep URL ↔ selection in sync
-  useUrlAnnotationSync();
+  /* ------------------------------------------------------------------ */
+  /* NOTE: useUrlAnnotationSync removed - redundant with CentralRouteManager
+   *
+   * CentralRouteManager handles ALL URL ↔ State synchronization:
+   * - Phase 2: URL query params → reactive vars (selectedAnnotationIds, etc.)
+   * - Phase 4: Reactive vars → URL updates
+   *
+   * useUrlAnnotationSync created competing sync loops causing infinite navigation cycles.
+   * See routing_system.md for architecture details.
+   */
 
   /* ------------------------------------------------------ */
-  /*  Cleanup on unmount – clear document + annotation sel  */
+  /*  Cleanup on unmount                                    */
   /* ------------------------------------------------------ */
   useEffect(() => {
     return () => {
-      openedDocument(null); // leave corpus intact
-      setSelectedAnnotations([]);
-      setSelectedRelations([]); // Clear selected relationships
-      selectedAnnotationIds([]);
+      // DO NOT call setSelectedAnnotations([]) - it navigates the URL during unmount!
+      // CentralRouteManager handles clearing state when routes change.
+
+      // Clear selected relationships (local Jotai atom, not URL-driven)
+      setSelectedRelations([]);
+
       // Clean up zoom indicator timer
       if (zoomIndicatorTimer.current) {
         clearTimeout(zoomIndicatorTimer.current);
       }
     };
-  }, [setSelectedAnnotations, setSelectedRelations]);
+  }, [setSelectedRelations]);
 
   const [selectedSummaryContent, setSelectedSummaryContent] = useState<
     string | null
@@ -1913,8 +2504,26 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   const [showAddToCorpusModal, setShowAddToCorpusModal] = useState(false);
 
+  // Handler to clear analysis/extract selection via URL update
+  // Following routing system principles: Component → URL → CentralRouteManager → Reactive Var
+  const handleClearAnalysisExtractSelection = useCallback(() => {
+    updateAnnotationSelectionParams(location, navigate, {
+      analysisIds: [],
+      extractIds: [],
+    });
+    // CentralRouteManager Phase 2 will detect URL change and clear selectedAnalysesIds/selectedExtractIds
+
+    // Close sidebar and switch back to feed view when clearing
+    setShowRightPanel(false);
+    setSidebarViewMode("feed");
+  }, [location, navigate]);
+
   return (
-    <FullScreenModal id="knowledge-base-modal" open={true} onClose={onClose}>
+    <FullScreenModal
+      id="knowledge-base-modal"
+      open={true}
+      onClose={handleClose}
+    >
       <HeaderContainer>
         <div
           style={{
@@ -1963,11 +2572,82 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               Add to Corpus
             </HeaderButton>
           )}
-          <HeaderButton onClick={onClose}>
-            <X />
+          <HeaderButton
+            onClick={(e) => {
+              routingLogger.debug(
+                `🖱️  [DocumentKnowledgeBase] ════════ BACK BUTTON CLICKED ════════`
+              );
+              routingLogger.debug(
+                "[DocumentKnowledgeBase] Button click event:",
+                {
+                  timestamp: new Date().toISOString(),
+                  button: e.button,
+                  currentTarget: e.currentTarget,
+                  target: e.target,
+                  currentUrl: window.location.pathname + window.location.search,
+                }
+              );
+              handleClose();
+            }}
+            title="Go back"
+            data-testid="back-button"
+          >
+            <ArrowLeft />
           </HeaderButton>
         </HeaderButtonGroup>
       </HeaderContainer>
+
+      {/* Context Bar - shows when analysis or extract is selected */}
+      {(selectedAnalysis || selectedExtract) && (
+        <ContextBar data-testid="context-bar">
+          <ContextBarContent>
+            <ContextBarBadge>
+              {selectedAnalysis ? (
+                <>
+                  <Icon name="chart line" />
+                  ANALYSIS
+                </>
+              ) : (
+                <>
+                  <Icon name="table" />
+                  EXTRACT
+                </>
+              )}
+            </ContextBarBadge>
+            <ContextBarLabel>
+              {selectedAnalysis
+                ? selectedAnalysis.analyzer.description ||
+                  selectedAnalysis.analyzer.id
+                : selectedExtract?.fieldset?.name || "Data Extract"}
+            </ContextBarLabel>
+            <ContextBarStats>
+              <StatPill title="Annotations visible">
+                <Icon name="tag" />
+                {pdfAnnotations?.annotations?.length || 0}
+              </StatPill>
+              {selectedAnalysis && (
+                <StatPill title="Total analyses available">
+                  <Icon name="chart line" />
+                  {analyses.length}
+                </StatPill>
+              )}
+              {selectedExtract && (
+                <StatPill title="Total extracts available">
+                  <Icon name="table" />
+                  {extracts.length}
+                </StatPill>
+              )}
+            </ContextBarStats>
+          </ContextBarContent>
+          <CloseButton
+            onClick={handleClearAnalysisExtractSelection}
+            data-testid="clear-analysis-extract-button"
+            title="Clear filter"
+          >
+            <X />
+          </CloseButton>
+        </ContextBar>
+      )}
 
       {/* Error message for GraphQL failures - show prominently and prevent other content */}
       {queryError ? (
@@ -2114,10 +2794,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 onAutoZoomChange={setAutoZoomEnabled}
               />
 
-              {/* Floating Analyses Panel - only show with corpus */}
+              {/* Floating Analyses Panel - only show with corpus and when no analysis selected (results now in sidebar) */}
               {corpusId && (
                 <FloatingAnalysesPanel
-                  visible={showAnalysesPanel && activeLayer === "document"}
+                  visible={
+                    showAnalysesPanel &&
+                    activeLayer === "document" &&
+                    !selectedAnalysis
+                  }
                   analyses={analyses}
                   onClose={() => setShowAnalysesPanel(false)}
                   panelOffset={floatingControlsState.offset}
@@ -2125,10 +2809,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 />
               )}
 
-              {/* Floating Extracts Panel - only show with corpus */}
+              {/* Floating Extracts Panel - only show with corpus and when no extract selected (results now in sidebar) */}
               {corpusId && (
                 <FloatingExtractsPanel
-                  visible={showExtractsPanel && activeLayer === "document"}
+                  visible={
+                    showExtractsPanel &&
+                    activeLayer === "document" &&
+                    !selectedExtract
+                  }
                   extracts={extracts}
                   onClose={() => setShowExtractsPanel(false)}
                   panelOffset={floatingControlsState.offset}
@@ -2167,6 +2855,40 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                     <Layers />
                     <span className="tab-label">Feed</span>
                   </SidebarTab>
+                  {/* Extract tab - only visible when extract is selected */}
+                  {selectedExtract && (
+                    <SidebarTab
+                      $isActive={sidebarViewMode === "extract"}
+                      $panelOpen={false}
+                      onClick={() => {
+                        setSidebarViewMode("extract");
+                        setShowRightPanel(true);
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      data-testid="view-mode-extract"
+                    >
+                      <Database />
+                      <span className="tab-label">Extract</span>
+                    </SidebarTab>
+                  )}
+                  {/* Analysis tab - only visible when analysis is selected */}
+                  {selectedAnalysis && (
+                    <SidebarTab
+                      $isActive={sidebarViewMode === "analysis"}
+                      $panelOpen={false}
+                      onClick={() => {
+                        setSidebarViewMode("analysis");
+                        setShowRightPanel(true);
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      data-testid="view-mode-analysis"
+                    >
+                      <BarChart3 />
+                      <span className="tab-label">Analysis</span>
+                    </SidebarTab>
+                  )}
                 </SidebarTabsContainer>
               )}
 
@@ -2192,7 +2914,71 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                       whileHover={{ scale: 1.02 }}
                     />
 
-                    {/* Tabs when panel is open - positioned on left edge of panel */}
+                    {/* Mobile Tab Bar - horizontal tabs at top for mobile */}
+                    <MobileTabBar>
+                      <MobileTab
+                        $active={sidebarViewMode === "chat"}
+                        onClick={() => {
+                          if (sidebarViewMode === "chat") {
+                            setShowRightPanel(false);
+                          } else {
+                            setSidebarViewMode("chat");
+                          }
+                        }}
+                        data-testid="mobile-view-mode-chat"
+                      >
+                        <MessageSquare />
+                        <span>Chat</span>
+                      </MobileTab>
+                      <MobileTab
+                        $active={sidebarViewMode === "feed"}
+                        onClick={() => {
+                          if (sidebarViewMode === "feed") {
+                            setShowRightPanel(false);
+                          } else {
+                            setSidebarViewMode("feed");
+                          }
+                        }}
+                        data-testid="mobile-view-mode-feed"
+                      >
+                        <Layers />
+                        <span>Feed</span>
+                      </MobileTab>
+                      {selectedExtract && (
+                        <MobileTab
+                          $active={sidebarViewMode === "extract"}
+                          onClick={() => {
+                            if (sidebarViewMode === "extract") {
+                              setShowRightPanel(false);
+                            } else {
+                              setSidebarViewMode("extract");
+                            }
+                          }}
+                          data-testid="mobile-view-mode-extract"
+                        >
+                          <Database />
+                          <span>Extract</span>
+                        </MobileTab>
+                      )}
+                      {selectedAnalysis && (
+                        <MobileTab
+                          $active={sidebarViewMode === "analysis"}
+                          onClick={() => {
+                            if (sidebarViewMode === "analysis") {
+                              setShowRightPanel(false);
+                            } else {
+                              setSidebarViewMode("analysis");
+                            }
+                          }}
+                          data-testid="mobile-view-mode-analysis"
+                        >
+                          <BarChart3 />
+                          <span>Analysis</span>
+                        </MobileTab>
+                      )}
+                    </MobileTabBar>
+
+                    {/* Tabs when panel is open - positioned on left edge of panel (desktop only) */}
                     <SidebarTabsContainer $panelOpen={true}>
                       <SidebarTab
                         $isActive={sidebarViewMode === "chat"}
@@ -2232,6 +3018,50 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                         <Layers />
                         <span className="tab-label">Feed</span>
                       </SidebarTab>
+                      {/* Extract tab - only visible when extract is selected */}
+                      {selectedExtract && (
+                        <SidebarTab
+                          $isActive={sidebarViewMode === "extract"}
+                          $panelOpen={true}
+                          onClick={() => {
+                            if (sidebarViewMode === "extract") {
+                              // Clicking active tab closes the panel
+                              setShowRightPanel(false);
+                            } else {
+                              // Switch to extract mode
+                              setSidebarViewMode("extract");
+                            }
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          data-testid="view-mode-extract"
+                        >
+                          <Database />
+                          <span className="tab-label">Extract</span>
+                        </SidebarTab>
+                      )}
+                      {/* Analysis tab - only visible when analysis is selected */}
+                      {selectedAnalysis && (
+                        <SidebarTab
+                          $isActive={sidebarViewMode === "analysis"}
+                          $panelOpen={true}
+                          onClick={() => {
+                            if (sidebarViewMode === "analysis") {
+                              // Clicking active tab closes the panel
+                              setShowRightPanel(false);
+                            } else {
+                              // Switch to analysis mode
+                              setSidebarViewMode("analysis");
+                            }
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          data-testid="view-mode-analysis"
+                        >
+                          <BarChart3 />
+                          <span className="tab-label">Analysis</span>
+                        </SidebarTab>
+                      )}
                     </SidebarTabsContainer>
 
                     {rightPanelContent}
@@ -2351,4 +3181,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   );
 };
 
+// REMOVED React.memo - was preventing proper unmounting during route transitions
+// When navigating away, we need the component to unmount immediately, but React.memo
+// was keeping stale instances alive briefly, causing flickering during state changes
 export default DocumentKnowledgeBase;

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { useMutation } from "@apollo/client";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   Button,
@@ -25,6 +26,7 @@ import { getPermissions } from "../../utils/transform";
 import { selectedAnalyses, selectedAnalysesIds } from "../../graphql/cache";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { updateAnnotationSelectionParams } from "../../utils/navigationUtils";
 
 interface AnalysisItemProps {
   analysis: AnalysisType;
@@ -135,6 +137,9 @@ export const AnalysisItem = ({
   compact,
   corpus: selectedCorpus,
 }: AnalysisItemProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const { width } = useWindowDimensions();
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
   const descriptionRef = useRef<HTMLDivElement>(null);
@@ -196,7 +201,10 @@ export const AnalysisItem = ({
       return;
     }
     selectedAnalyses([]);
-    selectedAnalysesIds([]);
+    // Update URL - CentralRouteManager will set reactive var
+    updateAnnotationSelectionParams(location, navigate, {
+      analysisIds: [],
+    });
     requestDeleteAnalysis();
   };
 

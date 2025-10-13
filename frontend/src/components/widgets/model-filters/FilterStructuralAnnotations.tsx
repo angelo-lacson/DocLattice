@@ -1,7 +1,8 @@
 import { useReactiveVar } from "@apollo/client";
-import { Label, DropdownItemProps } from "semantic-ui-react";
-import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
+import { Label } from "semantic-ui-react";
+import Select, { SelectOption } from "../../common/Select";
 import { filterToStructuralAnnotations } from "../../../graphql/cache";
+import { SingleValue, MultiValue } from "react-select";
 
 interface FilterToStructuralAnnotationsSelectorProps {
   style?: Record<string, any>;
@@ -14,10 +15,10 @@ export const FilterToStructuralAnnotationsSelector = ({
   const structural_filter = useReactiveVar(filterToStructuralAnnotations);
 
   // Options for the dropdown
-  const structuralOptions: DropdownItemProps[] = [
-    { key: "ONLY", text: "Only Structural", value: "ONLY" },
-    { key: "EXCLUDE", text: "Exclude Structural", value: "EXCLUDE" },
-    { key: "INCLUDE", text: "Include Structural", value: "INCLUDE" },
+  const structuralOptions: SelectOption[] = [
+    { value: "ONLY", label: "Only Structural" },
+    { value: "EXCLUDE", label: "Exclude Structural" },
+    { value: "INCLUDE", label: "Include Structural" },
   ];
 
   return (
@@ -49,32 +50,28 @@ export const FilterToStructuralAnnotationsSelector = ({
         Structural Annotations
       </Label>
       <div style={{ position: "relative", zIndex: 10 }}>
-        <DropdownNoStrictMode
-          fluid
-          selection
-          upward={false}
-          selectOnBlur={false}
-          selectOnNavigation={true}
+        <Select
           options={structuralOptions}
-          onChange={(e: any, { value }: { value: any }) => {
+          onChange={(
+            selectedOption: SingleValue<SelectOption> | MultiValue<SelectOption>
+          ) => {
             // Update the reactive variable when a selection is made
-            if (value !== undefined) {
+            // This is a single select, so we know it's SingleValue
+            const singleValue = selectedOption as SingleValue<SelectOption>;
+            if (singleValue && !Array.isArray(singleValue)) {
               filterToStructuralAnnotations(
-                value as "ONLY" | "INCLUDE" | "EXCLUDE" | undefined
+                singleValue.value as "ONLY" | "INCLUDE" | "EXCLUDE"
               );
+            } else {
+              filterToStructuralAnnotations(undefined);
             }
           }}
           placeholder="Filter structural annotations..."
-          value={structural_filter}
-          style={{
-            margin: "0",
-            minWidth: "260px",
-            fontSize: "0.875rem",
-            background: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-          }}
+          value={
+            structural_filter
+              ? structuralOptions.find((opt) => opt.value === structural_filter)
+              : null
+          }
         />
       </div>
     </div>

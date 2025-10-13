@@ -24,7 +24,7 @@ import {
   GetCorpusLabelsetAndLabelsInputs,
   GetCorpusLabelsetAndLabelsOutputs,
   GET_ANNOTATIONS,
-  GET_CORPUSES,
+  GET_CORPUS_LABELSET_AND_LABELS,
 } from "../graphql/queries";
 import { FilterToLabelsetSelector } from "../components/widgets/model-filters/FilterToLabelsetSelector";
 import { FilterToLabelSelector } from "../components/widgets/model-filters/FilterToLabelSelector";
@@ -49,6 +49,8 @@ export const Annotations = () => {
   );
 
   const location = useLocation();
+
+  // URL query parameters (?ann=123) are now synced by CentralRouteManager
 
   const [searchCache, setSearchCache] = useState<string>("");
 
@@ -93,8 +95,11 @@ export const Annotations = () => {
   } = useQuery<
     GetCorpusLabelsetAndLabelsOutputs,
     GetCorpusLabelsetAndLabelsInputs
-  >(GET_CORPUSES, {
-    variables: annotation_variables,
+  >(GET_CORPUS_LABELSET_AND_LABELS, {
+    variables: {
+      corpusId: filtered_to_corpus?.id || opened_corpus?.id || "",
+    },
+    skip: !filtered_to_corpus?.id && !opened_corpus?.id,
     notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
   });
 

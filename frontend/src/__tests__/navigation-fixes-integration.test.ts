@@ -122,9 +122,7 @@ describe("Navigation System Integration Tests", () => {
 
       navigateToCorpus(corpusWithSlugs, mockNavigate, currentPath);
 
-      expect(mockNavigate).toHaveBeenCalledWith("/c/john/my-corpus", {
-        replace: true,
-      });
+      expect(mockNavigate).toHaveBeenCalledWith("/c/john/my-corpus");
     });
 
     it("should handle document navigation with corpus context", () => {
@@ -139,10 +137,7 @@ describe("Navigation System Integration Tests", () => {
       );
 
       expect(mockNavigate).toHaveBeenCalledWith(
-        "/d/john/my-corpus/my-document",
-        {
-          replace: true,
-        }
+        "/d/john/my-corpus/my-document"
       );
     });
   });
@@ -274,9 +269,7 @@ describe("Navigation System Integration Tests", () => {
       navigateToCorpus(corpusWithSlugs, mockNavigate, currentPath);
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockNavigate).toHaveBeenCalledWith("/c/john/my-corpus", {
-        replace: true,
-      });
+      expect(mockNavigate).toHaveBeenCalledWith("/c/john/my-corpus");
 
       // Simulate arriving at new URL
       const newPath = "/c/john/my-corpus";

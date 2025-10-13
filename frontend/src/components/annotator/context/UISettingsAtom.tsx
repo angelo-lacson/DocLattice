@@ -1,10 +1,15 @@
 /**
  * Atom-based state management for UI settings, annotation selection,
  * and display settings using Jotai.
+ *
+ * Note: Annotation display settings (showStructural, showBoundingBoxes, etc.)
+ * have been moved to Apollo reactive vars in cache.ts for URL synchronization.
  */
 
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useReactiveVar } from "@apollo/client";
+import { useNavigate, useLocation } from "react-router-dom";
 import { RelationGroup } from "../types/annotations";
 import { LabelDisplayBehavior } from "../../../types/graphql-api";
 import {
@@ -16,6 +21,13 @@ import {
 } from "./AnnotationControlAtoms";
 import { useCorpusState } from "./CorpusAtom";
 import { useSelectedDocument } from "./DocumentAtom";
+import {
+  showStructuralAnnotations,
+  showSelectedAnnotationOnly,
+  showAnnotationBoundingBoxes,
+  showAnnotationLabels,
+  selectedAnnotationIds,
+} from "../../../graphql/cache";
 
 /**
  * Types for query loading states and errors.
@@ -68,14 +80,16 @@ export const hoveredAnnotationIdAtom = atom<string | null>(null);
 
 /**
  * Annotation Display Atoms
+ *
+ * DEPRECATED: These atoms are deprecated in favor of Apollo reactive vars in cache.ts
+ * for proper URL synchronization. Kept as exports for backward compatibility.
+ * DO NOT USE - Use useAnnotationDisplay() hook instead.
  */
-export const showAnnotationBoundingBoxesAtom = atom<boolean>(true);
-export const showAnnotationLabelsAtom = atom<LabelDisplayBehavior>(
-  LabelDisplayBehavior.ON_HOVER
-);
-export const showStructuralAnnotationsAtom = atom<boolean>(false);
-export const showSelectedAnnotationOnlyAtom = atom<boolean>(false);
-export const hideLabelsAtom = atom<boolean>(false);
+export const showAnnotationBoundingBoxesAtom = atom<boolean>(true); // DEPRECATED - use reactive var
+export const showAnnotationLabelsAtom = atom<any>("ON_HOVER"); // DEPRECATED - use reactive var
+export const showStructuralAnnotationsAtom = atom<boolean>(false); // DEPRECATED - use reactive var
+export const showSelectedAnnotationOnlyAtom = atom<boolean>(false); // DEPRECATED - use reactive var
+export const hideLabelsAtom = atom<boolean>(false); // Still used locally
 
 /**
  * Relationship Display Atoms
@@ -308,49 +322,103 @@ export function useAnnotationControls() {
     setUseFreeFormAnnotations((prev) => !prev);
   }, [setUseFreeFormAnnotations]);
 
-  return {
-    activeSpanLabel,
-    setActiveSpanLabel,
-    spanLabelsToView,
-    setSpanLabelsToView,
-    activeRelationLabel,
-    setActiveRelationLabel,
-    useFreeFormAnnotations,
-    toggleUseFreeFormAnnotations,
-    relationModalVisible,
-    setRelationModalVisible,
-  };
+  // Memoize return object to prevent new object on every render
+  return useMemo(
+    () => ({
+      activeSpanLabel,
+      setActiveSpanLabel,
+      spanLabelsToView,
+      setSpanLabelsToView,
+      activeRelationLabel,
+      setActiveRelationLabel,
+      useFreeFormAnnotations,
+      toggleUseFreeFormAnnotations,
+      relationModalVisible,
+      setRelationModalVisible,
+    }),
+    [
+      activeSpanLabel,
+      setActiveSpanLabel,
+      spanLabelsToView,
+      setSpanLabelsToView,
+      activeRelationLabel,
+      setActiveRelationLabel,
+      useFreeFormAnnotations,
+      toggleUseFreeFormAnnotations,
+      relationModalVisible,
+      setRelationModalVisible,
+    ]
+  );
 }
 
 /**
  * Custom hook for managing annotation display settings
- * @returns Object containing annotation display states and their setters
+ * Now uses Apollo reactive vars from cache.ts for URL synchronization
+ *
+ * ⚠️ ARCHITECTURE: Components should NOT use the setter functions from this hook!
+ * Instead use updateAnnotationDisplayParams() from navigationUtils.ts
+ *
+ * The setters are kept ONLY for component tests that don't have CentralRouteManager.
+ * In production, CentralRouteManager is the ONLY component that sets reactive vars.
+ *
+ * @returns Object containing annotation display states (read-only in production)
  */
 export function useAnnotationDisplay() {
-  const [showBoundingBoxes, setShowBoundingBoxes] = useAtom(
-    showAnnotationBoundingBoxesAtom
-  );
+  // Use Apollo reactive vars for URL-synchronized state (READ-ONLY)
+  const showBoundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
+  const showLabels = useReactiveVar(showAnnotationLabels);
+  const showStructural = useReactiveVar(showStructuralAnnotations);
+  const showSelectedOnly = useReactiveVar(showSelectedAnnotationOnly);
+
+  // Local Jotai state for non-URL-synchronized settings
   const [showStructuralRelationships, setShowStructuralRelationships] = useAtom(
     showStructuralRelationshipsAtom
   );
-  const [showLabels, setShowLabels] = useAtom(showAnnotationLabelsAtom);
-  const [showStructural, setShowStructural] = useAtom(
-    showStructuralAnnotationsAtom
-  );
-  const [showSelectedOnly, setShowSelectedOnly] = useAtom(
-    showSelectedAnnotationOnlyAtom
-  );
   const [hideLabels, setHideLabels] = useAtom(hideLabelsAtom);
 
+  // ⚠️ DEPRECATED SETTERS - DO NOT USE IN COMPONENTS
+  // These exist ONLY for component tests without CentralRouteManager
+  // Production code should use updateAnnotationDisplayParams() utility
+  const setShowBoundingBoxes = useCallback((value: boolean) => {
+    console.warn(
+      "[useAnnotationDisplay] setShowBoundingBoxes is deprecated. Use updateAnnotationDisplayParams() instead."
+    );
+    showAnnotationBoundingBoxes(value);
+  }, []);
+
+  const setShowLabels = useCallback((value: LabelDisplayBehavior) => {
+    console.warn(
+      "[useAnnotationDisplay] setShowLabels is deprecated. Use updateAnnotationDisplayParams() instead."
+    );
+    showAnnotationLabels(value);
+  }, []);
+
+  const setShowStructural = useCallback((value: boolean) => {
+    console.warn(
+      "[useAnnotationDisplay] setShowStructural is deprecated. Use updateAnnotationDisplayParams() instead."
+    );
+    showStructuralAnnotations(value);
+  }, []);
+
+  const setShowSelectedOnly = useCallback((value: boolean) => {
+    console.warn(
+      "[useAnnotationDisplay] setShowSelectedOnly is deprecated. Use updateAnnotationDisplayParams() instead."
+    );
+    showSelectedAnnotationOnly(value);
+  }, []);
+
   return {
+    // Read-only reactive var values
     showBoundingBoxes,
-    setShowBoundingBoxes,
     showLabels,
-    setShowLabels,
     showStructural,
-    setShowStructural,
     showSelectedOnly,
+    // Deprecated setters (test-only)
+    setShowBoundingBoxes,
+    setShowLabels,
+    setShowStructural,
     setShowSelectedOnly,
+    // Local Jotai state (still valid)
     hideLabels,
     setHideLabels,
     showStructuralRelationships,
@@ -360,17 +428,38 @@ export function useAnnotationDisplay() {
 
 /**
  * Custom hook for managing annotation selection and hover states
+ * Now uses Apollo reactive var for annotation IDs (URL-synchronized)
+ * FOLLOWS THE ONE OLACE TO RULE THEM ALL: Components update URL,
+ * CentralRouteManager sets reactive vars
  * @returns Object containing selection and hover states and their setters
  */
 export function useAnnotationSelection() {
-  const [selectedAnnotations, setSelectedAnnotations] = useAtom(
-    selectedAnnotationsAtom
-  );
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Use Apollo reactive var for URL-synchronized annotation selection
+  const selectedAnnotations = useReactiveVar(selectedAnnotationIds);
+
+  // Local Jotai state for non-URL-synchronized selection
   const [selectedRelations, setSelectedRelations] = useAtom(
     selectedRelationsAtom
   );
   const [hoveredAnnotationId, setHoveredAnnotationId] = useAtom(
     hoveredAnnotationIdAtom
+  );
+
+  // Setter that updates URL - CentralRouteManager Phase 2 handles reactive var
+  const setSelectedAnnotations = useCallback(
+    (ids: string[]) => {
+      const searchParams = new URLSearchParams(location.search);
+      if (ids.length > 0) {
+        searchParams.set("ann", ids.join(","));
+      } else {
+        searchParams.delete("ann");
+      }
+      navigate({ search: searchParams.toString() }, { replace: true });
+    },
+    [navigate, location.search]
   );
 
   return {

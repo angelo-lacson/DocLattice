@@ -1,7 +1,8 @@
 import { useQuery, useReactiveVar } from "@apollo/client";
 
-import { Label, DropdownItemProps } from "semantic-ui-react";
-import DropdownNoStrictMode from "../../common/DropdownNoStrictMode";
+import { Label } from "semantic-ui-react";
+import Select, { SelectOption } from "../../common/Select";
+import { SingleValue, MultiValue } from "react-select";
 
 import _ from "lodash";
 
@@ -58,15 +59,14 @@ export const FilterToCorpusSelector = ({
     .map((edge) => (edge?.node ? edge.node : undefined))
     .filter((item): item is CorpusType => !!item);
 
-  let label_options: DropdownItemProps[] = [];
+  let label_options: SelectOption[] = [];
   if (corpus_items) {
     label_options = corpus_items
       .filter((item): item is CorpusType => !!item)
       .map((label) => ({
-        key: label.id,
-        text: label?.title ? label.title : "",
         value: label.id,
-        image: { avatar: true, src: label.icon },
+        label: label?.title ? label.title : "",
+        ...(label.icon && { icon: label.icon }),
       }));
   }
 
@@ -99,22 +99,21 @@ export const FilterToCorpusSelector = ({
         Filter by Corpus
       </Label>
       <div style={{ position: "relative", zIndex: 10 }}>
-        <DropdownNoStrictMode
-          fluid
-          selection
-          clearable
-          search
-          upward={false}
-          selectOnBlur={false}
-          selectOnNavigation={true}
-          loading={loading}
+        <Select
+          isClearable
+          isSearchable
+          isLoading={loading}
           options={label_options}
-          onChange={(e: any, { value }: { value: any }) => {
-            if (value === "") {
+          onChange={(
+            selectedOption: SingleValue<SelectOption> | MultiValue<SelectOption>
+          ) => {
+            // This is a single select, so we know it's SingleValue
+            const singleValue = selectedOption as SingleValue<SelectOption>;
+            if (!singleValue || Array.isArray(singleValue)) {
               filterToCorpus(null);
             } else {
               let matching_corpuses = corpus_items.filter(
-                (item) => item.id === value
+                (item) => item.id === singleValue.value
               );
               if (matching_corpuses.length === 1) {
                 filterToCorpus(matching_corpuses[0]);
@@ -122,16 +121,11 @@ export const FilterToCorpusSelector = ({
             }
           }}
           placeholder="Select a corpus to filter..."
-          value={filtered_to_corpus ? filtered_to_corpus.id : ""}
-          style={{
-            margin: "0",
-            minWidth: "260px",
-            fontSize: "0.875rem",
-            background: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-          }}
+          value={
+            filtered_to_corpus
+              ? label_options.find((opt) => opt.value === filtered_to_corpus.id)
+              : null
+          }
         />
       </div>
     </div>

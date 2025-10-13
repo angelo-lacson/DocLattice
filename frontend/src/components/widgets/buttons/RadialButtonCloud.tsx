@@ -24,13 +24,13 @@ const pulse = keyframes`
 `;
 
 interface PulsingDotProps {
-  backgroundColor: string;
+  $backgroundColor: string;
 }
 
 const PulsingDot = styled.div<PulsingDotProps>`
   width: 12px;
   height: 12px;
-  background-color: ${(props) => props.backgroundColor};
+  background-color: ${(props) => props.$backgroundColor};
   border-radius: 50%;
   animation: ${pulse} 2s infinite;
   cursor: pointer;
@@ -93,8 +93,8 @@ function calculateButtonPositions(
 }
 
 interface CloudButtonProps extends ButtonProps {
-  delay: number;
-  position: ButtonPosition;
+  $delay: number;
+  $position: ButtonPosition;
 }
 
 const moveOut = (props: CloudButtonProps) => keyframes`
@@ -105,8 +105,8 @@ const moveOut = (props: CloudButtonProps) => keyframes`
     to {
       opacity: 1;
       transform: translate(
-        ${props.position.x}px,
-        ${props.position.y}px
+        ${props.$position.x}px,
+        ${props.$position.y}px
       );
     }
   `;
@@ -115,7 +115,7 @@ const CloudButton = styled(Button)<CloudButtonProps>`
   position: absolute;
   opacity: 0;
   animation: ${moveOut} 0.5s forwards;
-  animation-delay: ${(props) => props.delay}s;
+  animation-delay: ${(props) => props.$delay}s;
 `;
 
 const GlobalStyle = createGlobalStyle`
@@ -287,7 +287,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
       <PulsingDot
         className="pulsing-dot"
         onMouseEnter={() => setCloudVisible(true)}
-        backgroundColor={dotColor}
+        $backgroundColor={dotColor}
       />
       <GlobalStyle />
       {cloudVisible && (
@@ -304,8 +304,8 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
                 handleButtonClick(btn);
               }}
               title={btn.tooltip}
-              delay={index * 0.1}
-              position={buttonPositions[index]}
+              $delay={index * 0.1}
+              $position={buttonPositions[index]}
             >
               <Icon name={btn.name} />
             </CloudButton>

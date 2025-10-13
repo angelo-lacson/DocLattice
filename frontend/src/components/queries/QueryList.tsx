@@ -1,5 +1,6 @@
-import { Table, Dimmer, Loader } from "semantic-ui-react";
+import { Table } from "semantic-ui-react";
 import { FetchMoreOnVisible } from "../../components/widgets/infinite_scroll/FetchMoreOnVisible";
+import { LoadingOverlay } from "../common/LoadingOverlay";
 import {
   CorpusQueryType,
   ExtractType,
@@ -54,16 +55,15 @@ export function QueryList({
         flex: 1,
         width: "100%",
         overflowY: "auto",
+        position: "relative",
       }}
     >
+      <LoadingOverlay active={loading} content="Loading Queries..." />
       <Table
         celled
         padded
         style={{ minHeight: "20vh", ...(style ? style : {}) }}
       >
-        <Dimmer active={loading}>
-          <Loader content="Loading Queries..." />
-        </Dimmer>
         <Table.Header>
           <Table.Row>
             <Table.HeaderCell textAlign="left">Query</Table.HeaderCell>

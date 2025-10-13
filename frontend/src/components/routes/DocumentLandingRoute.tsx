@@ -1,15 +1,19 @@
-import React from "react";
-import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useCallback } from "react";
+import { useReactiveVar } from "@apollo/client";
+import { useNavigate, useLocation } from "react-router-dom";
 import { DocumentKnowledgeBase } from "../knowledge_base";
 import { MetaTags } from "../seo/MetaTags";
-import {
-  useSlugResolver,
-  useCanonicalRedirect,
-} from "../../hooks/useSlugResolver";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { ErrorBoundary } from "../widgets/ErrorBoundary";
-import { performanceMonitor } from "../../utils/performance";
+import {
+  openedDocument,
+  openedCorpus,
+  routeLoading,
+  routeError,
+} from "../../graphql/cache";
+import { navigationCircuitBreaker } from "../../utils/navigationCircuitBreaker";
+import { routingLogger } from "../../utils/routingLogger";
 
 /**
  * DocumentLandingRoute - Handles all document routes with explicit /d/ prefix
@@ -18,78 +22,120 @@ import { performanceMonitor } from "../../utils/performance";
  * - /d/:userIdent/:corpusIdent/:docIdent (document within a corpus)
  * - /d/:userIdent/:docIdent (standalone document)
  *
- * Query parameters:
+ * Query parameters (URL-driven state) - managed by CentralRouteManager:
  * - ?ann=id1,id2,id3 - Comma-separated annotation IDs to select/highlight
+ * - ?analysis=id1,id2 - Comma-separated analysis IDs to filter/display
+ * - ?extract=id1,id2 - Comma-separated extract IDs to filter/display
  *
- * Example URLs:
- * - /d/john/my-document - Opens document
- * - /d/john/my-document?ann=123 - Opens document with annotation 123 selected
- * - /d/john/corpus/doc?ann=123,456 - Opens document in corpus with multiple annotations
+ * This component is now a DUMB CONSUMER - it just reads state set by CentralRouteManager.
  */
 export const DocumentLandingRoute: React.FC = () => {
-  const { userIdent, corpusIdent, docIdent } = useParams();
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const baseNavigate = useNavigate();
+  const location = useLocation();
 
-  // Extract annotation IDs from query params
-  const annParam = searchParams.get("ann");
-  const annotationIds = annParam ? annParam.split(",").filter(Boolean) : [];
+  // Wrapped navigate with circuit breaker
+  const navigate = useCallback(
+    (to: string) => {
+      const source = "DocumentLandingRoute";
+      routingLogger.debug(`🧭 [${source}] navigate() called:`, {
+        to,
+        currentUrl: location.pathname + location.search,
+        timestamp: new Date().toISOString(),
+        stack: new Error().stack?.split("\n").slice(2, 5).join("\n"),
+      });
 
-  // Build resolver parameters - much simpler now!
-  const resolverParams = React.useMemo(() => {
-    if (userIdent && corpusIdent && docIdent) {
-      // Document within a corpus
-      return {
-        userIdent,
-        corpusIdent,
-        documentIdent: docIdent,
-        annotationIds,
-      };
-    } else if (userIdent && docIdent && !corpusIdent) {
-      // Standalone document
-      return {
-        userIdent,
-        documentIdent: docIdent,
-        annotationIds,
-      };
-    } else {
-      // Invalid route - shouldn't happen with proper routing
-      return {
-        annotationIds,
-      };
-    }
-  }, [userIdent, corpusIdent, docIdent, annotationIds]);
+      if (!navigationCircuitBreaker.recordNavigation(to, source)) {
+        console.error(`❌ [${source}] Navigation BLOCKED by circuit breaker!`);
+        return;
+      }
 
-  // Track navigation performance
-  React.useEffect(() => {
-    performanceMonitor.startMetric("document-navigation", {
-      route: window.location.pathname,
-      hasCorpus: !!corpusIdent,
+      baseNavigate(to);
+    },
+    [baseNavigate, location]
+  );
+
+  // Read state from reactive vars (set by CentralRouteManager)
+  const document = useReactiveVar(openedDocument);
+  const corpus = useReactiveVar(openedCorpus);
+  const loading = useReactiveVar(routeLoading);
+  const error = useReactiveVar(routeError);
+
+  routingLogger.debug("[DocumentLandingRoute] 🔄 Render triggered", {
+    hasDocument: !!document,
+    documentId: document?.id,
+    documentSlug: document?.slug,
+    hasCorpus: !!corpus,
+    corpusId: corpus?.id,
+    corpusSlug: corpus?.slug,
+    loading,
+    hasError: !!error,
+    timestamp: Date.now(),
+  });
+
+  // Track reactive var changes
+  useEffect(() => {
+    routingLogger.debug("[DocumentLandingRoute] 📡 openedDocument changed", {
+      hasDocument: !!document,
+      documentId: document?.id,
+      documentSlug: document?.slug,
     });
-    return () => {
-      performanceMonitor.endMetric("document-navigation");
-    };
-  }, [corpusIdent]);
+  }, [document]);
 
-  // Use unified slug resolver
-  const { loading, error, corpus, document } = useSlugResolver(resolverParams);
+  useEffect(() => {
+    routingLogger.debug("[DocumentLandingRoute] 📡 openedCorpus changed", {
+      hasCorpus: !!corpus,
+      corpusId: corpus?.id,
+      corpusSlug: corpus?.slug,
+    });
+  }, [corpus]);
 
-  // Handle canonical redirects for documents (with corpus context)
-  useCanonicalRedirect(document, "document", corpus);
+  useEffect(() => {
+    routingLogger.debug("[DocumentLandingRoute] 📡 routeLoading changed", {
+      loading,
+    });
+  }, [loading]);
 
-  // Handle close navigation
-  const handleClose = React.useCallback(() => {
-    // Navigate back to corpus if we have one, otherwise to documents list
-    if (corpus && corpus.creator?.slug && corpus.slug) {
-      const canonicalCorpusPath = `/c/${corpus.creator.slug}/${corpus.slug}`;
-      navigate(canonicalCorpusPath);
+  // Close handler: Route component owns navigation decision
+  // Following routing mantra: route components make navigation decisions based on their reactive var reads
+  const handleClose = useCallback(() => {
+    const timestamp = new Date().toISOString();
+    routingLogger.debug(
+      `🚪 [DocumentLandingRoute] ════════ handleClose START ════════`
+    );
+    routingLogger.debug("[DocumentLandingRoute] Timestamp:", timestamp);
+    routingLogger.debug(
+      "[DocumentLandingRoute] Call stack:",
+      new Error().stack?.split("\n").slice(2, 8).join("\n")
+    );
+    routingLogger.debug("[DocumentLandingRoute] Current state:", {
+      currentUrl: location.pathname + location.search,
+      hasCorpus: !!corpus,
+      corpusId: corpus?.id,
+      corpusSlug: corpus?.slug,
+      corpusCreatorSlug: corpus?.creator?.slug,
+      hasDocument: !!document,
+      documentId: document?.id,
+      documentSlug: document?.slug,
+    });
+
+    if (corpus?.creator?.slug && corpus?.slug) {
+      const targetUrl = `/c/${corpus.creator.slug}/${corpus.slug}`;
+      routingLogger.debug(
+        `[DocumentLandingRoute] ✅ Decision: Navigate to corpus`
+      );
+      routingLogger.debug(`[DocumentLandingRoute] Target URL: "${targetUrl}"`);
+      navigate(targetUrl);
     } else {
+      routingLogger.debug(
+        "[DocumentLandingRoute] ⚠️  Decision: No corpus, navigate to /documents"
+      );
       navigate("/documents");
     }
-  }, [corpus, navigate]);
 
-  // Note: We now let DocumentKnowledgeBase determine read-only status
-  // based on the actual permissions available in the component tree
+    routingLogger.debug(
+      `[DocumentLandingRoute] ════════ handleClose END ════════`
+    );
+  }, [corpus, document, navigate, location]);
 
   if (loading) {
     return <ModernLoadingDisplay type="document" size="large" />;
@@ -115,7 +161,6 @@ export const DocumentLandingRoute: React.FC = () => {
       <DocumentKnowledgeBase
         documentId={document.id}
         corpusId={corpus?.id}
-        initialAnnotationIds={annotationIds}
         onClose={handleClose}
       />
     </ErrorBoundary>

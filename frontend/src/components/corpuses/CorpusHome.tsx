@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -43,7 +43,6 @@ import {
 import { formatDistanceToNow } from "date-fns";
 
 import {
-  GET_CORPUS_STATS,
   GET_CORPUS_WITH_HISTORY,
   GetCorpusWithHistoryQuery,
   GetCorpusWithHistoryQueryVariables,
@@ -110,7 +109,7 @@ const CorpusTitle = styled.h1`
   }
 `;
 
-const AccessBadge = styled.div<{ isPublic?: boolean }>`
+const AccessBadge = styled.div<{ $isPublic?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -118,8 +117,8 @@ const AccessBadge = styled.div<{ isPublic?: boolean }>`
   border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 500;
-  background: ${(props) => (props.isPublic ? "#dcfce7" : "#fef3c7")};
-  color: ${(props) => (props.isPublic ? "#15803d" : "#92400e")};
+  background: ${(props) => (props.$isPublic ? "#dcfce7" : "#fef3c7")};
+  color: ${(props) => (props.$isPublic ? "#15803d" : "#92400e")};
   flex-shrink: 0;
 
   svg {
@@ -600,28 +599,41 @@ const LoadingPlaceholder = styled.div`
 interface CorpusHomeProps {
   corpus: CorpusType;
   onEditDescription: () => void;
+  stats: {
+    totalDocs: number;
+    totalAnnotations: number;
+    totalAnalyses: number;
+    totalExtracts: number;
+  };
+  statsLoading: boolean;
 }
 
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
   onEditDescription,
+  stats,
+  statsLoading,
 }) => {
   const [mdContent, setMdContent] = useState<string | null>(null);
 
-  // Fetch corpus stats
-  const { data: statsData, loading: statsLoading } = useQuery(
-    GET_CORPUS_STATS,
-    {
-      variables: { corpusId: corpus.id },
-    }
-  );
+  // CRITICAL: Memoize corpus ID to prevent infinite query loops
+  // Parent passes new corpus object reference on every render (reactive var issue)
+  // Apollo refetches queries when variables object changes, so we must stabilize it
+  const corpusId = useMemo(() => corpus.id, [corpus.id]);
+
+  // Stats are now passed as props from parent (Corpuses.tsx) to avoid duplicate queries
+  // causing infinite Apollo cache ping-pong
+
+  // CRITICAL: Memoize variables object to prevent Apollo refetch on every render
+  // Even though corpusId is memoized, { id: corpusId } creates a NEW object every time
+  const historyVariables = useMemo(() => ({ id: corpusId }), [corpusId]);
 
   // Fetch corpus with description history
   const { data: corpusData, loading: corpusLoading } = useQuery<
     GetCorpusWithHistoryQuery,
     GetCorpusWithHistoryQueryVariables
   >(GET_CORPUS_WITH_HISTORY, {
-    variables: { id: corpus.id },
+    variables: historyVariables,
   });
 
   // Fetch markdown content from URL
@@ -636,13 +648,6 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         });
     }
   }, [corpusData]);
-
-  const stats = statsData?.corpusStats || {
-    totalDocs: 0,
-    totalAnnotations: 0,
-    totalAnalyses: 0,
-    totalExtracts: 0,
-  };
 
   // Use the fetched corpus data instead of the prop
   const fullCorpus = corpusData?.corpus || corpus;
@@ -707,7 +712,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         <CorpusInfo id="corpus-home-corpus-info">
           <TitleRow>
             <CorpusTitle>{fullCorpus.title || "Loading..."}</CorpusTitle>
-            <AccessBadge isPublic={fullCorpus.isPublic}>
+            <AccessBadge $isPublic={fullCorpus.isPublic}>
               {fullCorpus.isPublic ? (
                 <>
                   <Globe size={12} />

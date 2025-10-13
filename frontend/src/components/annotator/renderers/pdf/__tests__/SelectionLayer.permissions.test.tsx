@@ -6,6 +6,7 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Provider as JotaiProvider } from "jotai";
+import { MemoryRouter } from "react-router-dom";
 import SelectionLayer from "../SelectionLayer";
 import { PDFPageInfo } from "../../../types/pdf";
 import { AnnotationLabelType } from "../../../../../types/graphql-api";
@@ -74,15 +75,17 @@ describe("SelectionLayer Permission Logic", () => {
       });
 
       const { container } = render(
-        <JotaiProvider>
-          <SelectionLayer
-            pageInfo={mockPageInfo}
-            read_only={true} // Explicitly read-only
-            activeSpanLabel={mockActiveLabel}
-            createAnnotation={mockCreateAnnotation}
-            pageNumber={0}
-          />
-        </JotaiProvider>
+        <MemoryRouter>
+          <JotaiProvider>
+            <SelectionLayer
+              pageInfo={mockPageInfo}
+              read_only={true} // Explicitly read-only
+              activeSpanLabel={mockActiveLabel}
+              createAnnotation={mockCreateAnnotation}
+              pageNumber={0}
+            />
+          </JotaiProvider>
+        </MemoryRouter>
       );
 
       // Component should render without errors
@@ -105,15 +108,17 @@ describe("SelectionLayer Permission Logic", () => {
       });
 
       const { container } = render(
-        <JotaiProvider>
-          <SelectionLayer
-            pageInfo={mockPageInfo}
-            read_only={false} // Not explicitly read-only
-            activeSpanLabel={mockActiveLabel}
-            createAnnotation={mockCreateAnnotation}
-            pageNumber={0}
-          />
-        </JotaiProvider>
+        <MemoryRouter>
+          <JotaiProvider>
+            <SelectionLayer
+              pageInfo={mockPageInfo}
+              read_only={false} // Not explicitly read-only
+              activeSpanLabel={mockActiveLabel}
+              createAnnotation={mockCreateAnnotation}
+              pageNumber={0}
+            />
+          </JotaiProvider>
+        </MemoryRouter>
       );
 
       // Component should render without errors
@@ -134,15 +139,17 @@ describe("SelectionLayer Permission Logic", () => {
       });
 
       const { container } = render(
-        <JotaiProvider>
-          <SelectionLayer
-            pageInfo={mockPageInfo}
-            read_only={false} // Not read-only
-            activeSpanLabel={mockActiveLabel}
-            createAnnotation={mockCreateAnnotation}
-            pageNumber={0}
-          />
-        </JotaiProvider>
+        <MemoryRouter>
+          <JotaiProvider>
+            <SelectionLayer
+              pageInfo={mockPageInfo}
+              read_only={false} // Not read-only
+              activeSpanLabel={mockActiveLabel}
+              createAnnotation={mockCreateAnnotation}
+              pageNumber={0}
+            />
+          </JotaiProvider>
+        </MemoryRouter>
       );
 
       // Component should render without errors
@@ -163,15 +170,17 @@ describe("SelectionLayer Permission Logic", () => {
       });
 
       const { container } = render(
-        <JotaiProvider>
-          <SelectionLayer
-            pageInfo={mockPageInfo}
-            read_only={false}
-            activeSpanLabel={null} // No label
-            createAnnotation={mockCreateAnnotation}
-            pageNumber={0}
-          />
-        </JotaiProvider>
+        <MemoryRouter>
+          <JotaiProvider>
+            <SelectionLayer
+              pageInfo={mockPageInfo}
+              read_only={false}
+              activeSpanLabel={null} // No label
+              createAnnotation={mockCreateAnnotation}
+              pageNumber={0}
+            />
+          </JotaiProvider>
+        </MemoryRouter>
       );
 
       // Component should render without errors even without corpus
@@ -190,15 +199,17 @@ describe("SelectionLayer Permission Logic", () => {
       });
 
       const { container } = render(
-        <JotaiProvider>
-          <SelectionLayer
-            pageInfo={mockPageInfo}
-            read_only={false}
-            activeSpanLabel={null} // No active label
-            createAnnotation={mockCreateAnnotation}
-            pageNumber={0}
-          />
-        </JotaiProvider>
+        <MemoryRouter>
+          <JotaiProvider>
+            <SelectionLayer
+              pageInfo={mockPageInfo}
+              read_only={false}
+              activeSpanLabel={null} // No active label
+              createAnnotation={mockCreateAnnotation}
+              pageNumber={0}
+            />
+          </JotaiProvider>
+        </MemoryRouter>
       );
 
       // Component should render without errors even without active label
@@ -219,15 +230,17 @@ describe("SelectionLayer Permission Logic", () => {
       });
 
       const { container } = render(
-        <JotaiProvider>
-          <SelectionLayer
-            pageInfo={mockPageInfo}
-            read_only={false}
-            activeSpanLabel={mockActiveLabel}
-            createAnnotation={mockCreateAnnotation}
-            pageNumber={0}
-          />
-        </JotaiProvider>
+        <MemoryRouter>
+          <JotaiProvider>
+            <SelectionLayer
+              pageInfo={mockPageInfo}
+              read_only={false}
+              activeSpanLabel={mockActiveLabel}
+              createAnnotation={mockCreateAnnotation}
+              pageNumber={0}
+            />
+          </JotaiProvider>
+        </MemoryRouter>
       );
 
       const selectionLayer = container.querySelector("#selection-layer");

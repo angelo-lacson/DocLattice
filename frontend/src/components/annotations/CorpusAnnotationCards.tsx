@@ -12,7 +12,7 @@ import {
   annotationContentSearchTerm,
   filterToLabelsetId,
   filterToLabelId,
-  selectedAnalyses,
+  selectedAnalysesIds,
   showCorpusActionOutputs,
   filterToAnnotationType,
 } from "../../graphql/cache";
@@ -39,7 +39,7 @@ export const CorpusAnnotationCards = ({
   const annotation_search_term = useReactiveVar(annotationContentSearchTerm);
   const filter_to_labelset_id = useReactiveVar(filterToLabelsetId);
   const filter_to_label_id = useReactiveVar(filterToLabelId);
-  const selected_analyses = useReactiveVar(selectedAnalyses);
+  const selected_analysis_ids = useReactiveVar(selectedAnalysesIds); // URL-driven
   const show_action_annotations = useReactiveVar(showCorpusActionOutputs);
   const filter_to_annotation_type = useReactiveVar(filterToAnnotationType);
   const location = useLocation();
@@ -48,9 +48,8 @@ export const CorpusAnnotationCards = ({
   // Query to get annotations
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  const selected_analysis_id_string = selected_analyses
-    .map((analysis) => analysis.id)
-    .join();
+  // Convert array of IDs to comma-separated string for GraphQL query
+  const selected_analysis_id_string = selected_analysis_ids.join(",");
 
   const {
     refetch: refetchAnnotations,
@@ -61,6 +60,7 @@ export const CorpusAnnotationCards = ({
   } = useQuery<GetAnnotationsOutputs, GetAnnotationsInputs>(GET_ANNOTATIONS, {
     fetchPolicy: "network-only",
     notifyOnNetworkStatusChange: true, // necessary in order to trigger loading signal on fetchMore
+    skip: !opened_corpus_id, // CRITICAL: Don't query when no corpus selected!
     variables: {
       createdByAnalysisIds: selected_analysis_id_string,
       analysis_Isnull: !show_action_annotations,
@@ -116,7 +116,7 @@ export const CorpusAnnotationCards = ({
 
   useEffect(() => {
     refetchAnnotations();
-  }, [selected_analyses]);
+  }, [selected_analysis_ids]);
 
   useEffect(() => {
     refetchAnnotations();

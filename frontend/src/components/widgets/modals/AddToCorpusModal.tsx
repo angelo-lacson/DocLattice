@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Button,
   Modal,
@@ -9,12 +9,19 @@ import {
   Header,
   Icon,
   Card,
-  Image,
   Label,
   List,
   Message,
 } from "semantic-ui-react";
+import styled from "styled-components";
 import _ from "lodash";
+
+const MiniImage = styled.img`
+  width: 35px;
+  height: 35px;
+  float: right;
+  object-fit: contain;
+`;
 import {
   LinkDocumentsToCorpusInputs,
   LinkDocumentsToCorpusOutputs,
@@ -83,7 +90,7 @@ function CorpusItem({ corpus, selected, onClick }: AddToCorpusModalCorpusItem) {
       onClick={() => onClick(corpus)}
     >
       <Card.Content>
-        <Image floated="right" size="mini" src={corpus?.icon} />
+        <MiniImage src={corpus?.icon || undefined} alt="Corpus Icon" />
         <Card.Header>{corpus?.title}</Card.Header>
         <Card.Meta>
           <em>Author: </em>
@@ -178,9 +185,14 @@ export function AddToCorpusModal({
     }
   );
 
-  let corpus_variables = {
-    textSearch: search_term,
-  };
+  // Memoize to prevent new object on every render causing Apollo refetch
+  const corpus_variables = useMemo(
+    () => ({
+      textSearch: search_term,
+    }),
+    [search_term]
+  );
+
   const {
     refetch: refetch_corpuses,
     loading: corpus_loading,
@@ -189,6 +201,7 @@ export function AddToCorpusModal({
   } = useQuery<GetCorpusesOutputs, GetCorpusesInputs>(GET_CORPUSES, {
     variables: corpus_variables,
     notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
+    skip: !open, // CRITICAL: Only fetch when modal is open to prevent cache conflicts
   });
 
   useEffect(() => {

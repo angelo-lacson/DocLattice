@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Modal, Icon, Header, Loader, Dimmer } from "semantic-ui-react";
+import { Button, Modal, Icon, Header } from "semantic-ui-react";
 import _ from "lodash";
 import { CRUDWidget } from "./CRUDWidget";
+import { LoadingOverlay } from "../../common/LoadingOverlay";
 import { CRUDProps, LooseObject, PropertyWidgets } from "../../types";
 import {
   HorizontallyCenteredDiv,
@@ -140,13 +141,9 @@ export function CRUDModal({
           </div>
         </HorizontallyCenteredDiv>
       </Modal.Header>
-      <Modal.Content scrolling>
+      <Modal.Content scrolling style={{ position: "relative" }}>
         {/* Overlay while the mutation is running */}
-        {loading && (
-          <Dimmer active inverted>
-            <Loader>Saving&hellip;</Loader>
-          </Dimmer>
-        )}
+        <LoadingOverlay active={loading} inverted content="Saving..." />
         <CRUDWidget
           mode={mode}
           instance={instanceObj}

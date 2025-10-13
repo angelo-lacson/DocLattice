@@ -253,6 +253,47 @@ export const RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL = gql`
   }
 `;
 
+export interface ResolveExtractByIdInput {
+  extractId: string;
+}
+
+export interface ResolveExtractByIdOutput {
+  extract: ExtractType | null;
+}
+
+export const RESOLVE_EXTRACT_BY_ID = gql`
+  query ResolveExtractById($extractId: ID!) {
+    extract(id: $extractId) {
+      id
+      name
+      created
+      started
+      finished
+      error
+      myPermissions
+      creator {
+        id
+        username
+        slug
+      }
+      corpus {
+        id
+        slug
+        title
+        creator {
+          id
+          slug
+        }
+      }
+      fieldset {
+        id
+        name
+        description
+      }
+    }
+  }
+`;
+
 export const SEARCH_DOCUMENTS = gql`
   query (
     $inCorpusWithId: String
@@ -893,14 +934,21 @@ export const GET_ANNOTATIONS = gql`
           page
           corpus {
             id
+            slug
             icon
             title
             description
             preferredEmbedder
+            creator {
+              id
+              slug
+              __typename
+            }
             __typename
           }
           document {
             id
+            slug
             title
             description
             backendLock
@@ -909,6 +957,11 @@ export const GET_ANNOTATIONS = gql`
             pawlsParseFile
             icon
             fileType
+            creator {
+              id
+              slug
+              __typename
+            }
             __typename
           }
           analysis {
@@ -1621,6 +1674,7 @@ export const GET_EXTRACTS = gql`
           creator {
             id
             username
+            slug
           }
           created
           started
@@ -2264,6 +2318,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
       title
       fileType
       creator {
+        id
         email
       }
       created
@@ -2279,6 +2334,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
         content
         created
         creator {
+          id
           email
         }
       }
@@ -2538,6 +2594,7 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
       title
       fileType
       creator {
+        id
         email
       }
       created
@@ -2599,6 +2656,7 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
         title
         content
         creator {
+          id
           email
         }
         created
@@ -2954,6 +3012,7 @@ export const GET_CORPUS_BY_ID_FOR_REDIRECT = gql`
         id
         slug
         username
+        email
       }
     }
   }
@@ -2972,6 +3031,7 @@ export interface GetCorpusByIdForRedirectOutput {
       id: string;
       slug: string;
       username: string;
+      email: string;
     };
   } | null;
 }
@@ -2986,6 +3046,7 @@ export const GET_DOCUMENT_BY_ID_FOR_REDIRECT = gql`
         id
         slug
         username
+        email
       }
       corpus {
         id
@@ -2995,6 +3056,7 @@ export const GET_DOCUMENT_BY_ID_FOR_REDIRECT = gql`
           id
           slug
           username
+          email
         }
       }
     }
@@ -3014,6 +3076,7 @@ export interface GetDocumentByIdForRedirectOutput {
       id: string;
       slug: string;
       username: string;
+      email: string;
     };
     corpus: {
       id: string;
@@ -3023,6 +3086,7 @@ export interface GetDocumentByIdForRedirectOutput {
         id: string;
         slug: string;
         username: string;
+        email: string;
       };
     } | null;
   } | null;

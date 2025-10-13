@@ -7,31 +7,32 @@ import { TokenId } from "../../types/annotations";
 
 // Add interface for the custom props
 interface SelectionBoxProps {
-  isSelected?: boolean;
-  highOpacity?: boolean;
-  color?: string;
-  left?: number;
-  right?: number;
-  top?: number;
-  bottom?: number;
-  pointerEvents?: string;
+  $isSelected?: boolean;
+  $highOpacity?: boolean;
+  $color?: string;
+  $left?: number;
+  $right?: number;
+  $top?: number;
+  $bottom?: number;
+  $hidden?: boolean;
 }
 
 // Update the styled component definition to include the custom props
 const SelectionBox = styled.span.attrs<SelectionBoxProps>((props) => ({
   style: {
-    left: `${props.left}px`,
-    top: `${props.top}px`,
-    width: `${props.right && props.left ? props.right - props.left : 0}px`,
-    height: `${props.bottom && props.top ? props.bottom - props.top : 0}px`,
-    backgroundColor: props.color || "yellow",
-    opacity: props.highOpacity ? 0.5 : 0.3,
+    left: `${props.$left}px`,
+    top: `${props.$top}px`,
+    width: `${props.$right && props.$left ? props.$right - props.$left : 0}px`,
+    height: `${props.$bottom && props.$top ? props.$bottom - props.$top : 0}px`,
+    backgroundColor: props.$color || "yellow",
+    opacity: props.$highOpacity ? 0.5 : 0.3,
+    display: props.$hidden ? "none" : "block",
   },
 }))<SelectionBoxProps>`
   position: absolute;
   pointer-events: none;
   ${(props) =>
-    props.isSelected &&
+    props.$isSelected &&
     `
     border: 2px solid blue;
   `}
@@ -82,17 +83,16 @@ export const SelectionTokenGroup = ({
           return (
             <SelectionBox
               id={`${uniqueId()}`}
-              hidden={hidden}
+              $hidden={hidden}
               key={i}
               className={className}
-              isSelected={true}
-              highOpacity={highOpacity}
-              color={color ? color : undefined}
-              left={b.left}
-              right={b.right}
-              top={b.top}
-              bottom={b.bottom}
-              pointerEvents="none"
+              $isSelected={true}
+              $highOpacity={highOpacity}
+              $color={color ? color : undefined}
+              $left={b.left}
+              $right={b.right}
+              $top={b.top}
+              $bottom={b.bottom}
             />
           );
         })

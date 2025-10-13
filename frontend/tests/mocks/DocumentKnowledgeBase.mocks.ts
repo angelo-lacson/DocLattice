@@ -5,6 +5,9 @@ import {
   GET_DOCUMENT_ANALYSES_AND_EXTRACTS,
   GET_CHAT_MESSAGES,
   GET_CORPUSES,
+  GET_ANNOTATIONS_FOR_ANALYSIS,
+  GET_DATACELLS_FOR_EXTRACT,
+  GET_DOCUMENT_ANNOTATIONS_ONLY,
 } from "../../src/graphql/queries";
 import { SMART_LABEL_SEARCH_OR_CREATE } from "../../src/graphql/mutations";
 
@@ -47,6 +50,512 @@ export const createPageInfo = (
   hasPreviousPage: hasPrev,
   startCursor: start,
   endCursor: end,
+});
+
+// ============================================================================
+// Mock Analyses and Extracts
+// ============================================================================
+
+export const mockAnalysis1 = {
+  id: "analysis-1",
+  analysisName: "Entity Recognition Analysis",
+  analysisCompleted: true,
+  analysisStatus: "COMPLETE",
+  analysisStarted: "2025-01-01T10:00:00Z",
+  analyzer: {
+    id: "analyzer-1",
+    description:
+      "**Entity Recognition Analyzer**\n\nIdentifies and extracts named entities such as persons, organizations, and locations from documents.",
+    taskName: "entity_recognition",
+    disabled: false,
+    created: "2024-12-01T10:00:00Z",
+    modified: "2024-12-15T10:00:00Z",
+    creator: {
+      id: "user-1",
+      email: "test@example.com",
+      username: "testuser",
+      __typename: "UserType",
+    },
+    hostGremlin: {
+      id: "gremlin-1",
+      __typename: "GremlinEngineType_Write",
+    },
+    __typename: "AnalyzerType",
+  },
+  annotations: {
+    totalCount: 2,
+    edges: [],
+    pageInfo: createPageInfo(),
+    __typename: "AnnotationTypeConnection",
+  },
+  corpusAction: null,
+  __typename: "AnalysisType",
+};
+
+export const mockAnalysis2 = {
+  id: "analysis-2",
+  analysisName: "Sentiment Analysis",
+  analysisCompleted: true,
+  analysisStatus: "COMPLETE",
+  analysisStarted: "2025-01-02T10:00:00Z",
+  analyzer: {
+    id: "analyzer-2",
+    description: "Analyzes document sentiment and tone",
+    taskName: "sentiment_analysis",
+    disabled: false,
+    created: "2024-12-01T10:00:00Z",
+    modified: "2024-12-15T10:00:00Z",
+    creator: {
+      id: "user-1",
+      email: "test@example.com",
+      username: "testuser",
+      __typename: "UserType",
+    },
+    hostGremlin: {
+      id: "gremlin-1",
+      __typename: "GremlinEngineType_Write",
+    },
+    __typename: "AnalyzerType",
+  },
+  annotations: {
+    totalCount: 8,
+    edges: [],
+    pageInfo: createPageInfo(),
+    __typename: "AnnotationTypeConnection",
+  },
+  corpusAction: null,
+  __typename: "AnalysisType",
+};
+
+export const mockExtract1 = {
+  id: "extract-1",
+  name: "Contract Parties Extract",
+  created: "2025-01-01T10:00:00Z",
+  modified: "2025-01-01T10:00:00Z",
+  started: "2025-01-01T10:00:00Z",
+  finished: "2025-01-01T10:05:00Z",
+  isPublic: false,
+  error: null,
+  fieldset: {
+    id: "fieldset-1",
+    name: "Contract Parties",
+    description: "Extracts party information from contracts",
+    __typename: "FieldsetType",
+  },
+  corpusAction: null,
+  creator: {
+    id: "user-1",
+    email: "test@example.com",
+    username: "testuser",
+    __typename: "UserType",
+  },
+  corpus: {
+    id: CORPUS_ID,
+    title: "Test Corpus",
+    __typename: "CorpusType",
+  },
+  __typename: "ExtractType",
+};
+
+export const mockExtract2 = {
+  id: "extract-2",
+  name: "Financial Data Extract",
+  created: "2025-01-02T10:00:00Z",
+  modified: "2025-01-02T10:00:00Z",
+  started: "2025-01-02T10:00:00Z",
+  finished: "2025-01-02T10:08:00Z",
+  isPublic: false,
+  error: null,
+  fieldset: {
+    id: "fieldset-2",
+    name: "Financial Data",
+    description: "Extracts financial information",
+    __typename: "FieldsetType",
+  },
+  corpusAction: null,
+  creator: {
+    id: "user-1",
+    email: "test@example.com",
+    username: "testuser",
+    __typename: "UserType",
+  },
+  corpus: {
+    id: CORPUS_ID,
+    title: "Test Corpus",
+    __typename: "CorpusType",
+  },
+  __typename: "ExtractType",
+};
+
+// Helper to create analysisRow structure expected by GraphQL query
+const createAnalysisRow = (analysis: typeof mockAnalysis1) => ({
+  id: `row-${analysis.id}`,
+  analysis,
+  data: {
+    edges: [],
+    __typename: "DatacellTypeConnection",
+  },
+  __typename: "DocumentAnalysisRowType",
+});
+
+// ============================================================================
+// Mock Annotations for Analysis
+// ============================================================================
+
+export const mockAnalysisAnnotation1 = {
+  id: "analysis-annotation-1",
+  page: 0,
+  parent: null,
+  analysis: {
+    id: "analysis-1",
+    __typename: "AnalysisType",
+  },
+  annotationLabel: {
+    id: "analysis-label-1",
+    text: "PERSON",
+    color: "#3b82f6",
+    icon: "user",
+    description: "Person entity",
+    labelType: LabelType.TokenLabel,
+    __typename: "AnnotationLabelType",
+  },
+  annotationType: LabelType.TokenLabel,
+  rawText: "John Smith",
+  json: {
+    "0": {
+      bounds: {
+        top: 100,
+        left: 50,
+        right: 200,
+        bottom: 120,
+      },
+      rawText: "John Smith",
+      tokensJsons: [
+        { pageIndex: 0, tokenIndex: 10 },
+        { pageIndex: 0, tokenIndex: 11 },
+      ],
+    },
+  },
+  isPublic: false,
+  myPermissions: [
+    "update_annotation",
+    "create_annotation",
+    "remove_annotation",
+    "publish_annotation",
+    "read_annotation",
+  ],
+  structural: false,
+  userFeedback: {
+    edges: [],
+    totalCount: 0,
+    __typename: "UserFeedbackTypeConnection",
+  },
+  allSourceNodeInRelationship: [],
+  allTargetNodeInRelationship: [],
+  __typename: "AnnotationType",
+};
+
+export const mockAnalysisAnnotation2 = {
+  id: "analysis-annotation-2",
+  page: 0,
+  parent: null,
+  analysis: {
+    id: "analysis-1",
+    __typename: "AnalysisType",
+  },
+  annotationLabel: {
+    id: "analysis-label-2",
+    text: "ORGANIZATION",
+    color: "#10b981",
+    icon: "building",
+    description: "Organization entity",
+    labelType: LabelType.TokenLabel,
+    __typename: "AnnotationLabelType",
+  },
+  annotationType: LabelType.TokenLabel,
+  rawText: "Acme Corporation",
+  json: {
+    "0": {
+      bounds: {
+        top: 150,
+        left: 50,
+        right: 250,
+        bottom: 170,
+      },
+      rawText: "Acme Corporation",
+      tokensJsons: [
+        { pageIndex: 0, tokenIndex: 25 },
+        { pageIndex: 0, tokenIndex: 26 },
+      ],
+    },
+  },
+  isPublic: false,
+  myPermissions: [
+    "update_annotation",
+    "create_annotation",
+    "remove_annotation",
+    "publish_annotation",
+    "read_annotation",
+  ],
+  structural: false,
+  userFeedback: {
+    edges: [],
+    totalCount: 0,
+    __typename: "UserFeedbackTypeConnection",
+  },
+  allSourceNodeInRelationship: [],
+  allTargetNodeInRelationship: [],
+  __typename: "AnnotationType",
+};
+
+// ============================================================================
+// Mock Columns and Datacells for Extract
+// ============================================================================
+
+export const mockColumn1 = {
+  id: "column-1",
+  name: "Party Name",
+  query: "Extract the name of the contracting party",
+  outputType: "str",
+  limitToLabel: null,
+  instructions: "Find and extract party names",
+  extractIsList: false,
+  taskName: "extract_party_name",
+  __typename: "ColumnType",
+};
+
+export const mockColumn2 = {
+  id: "column-2",
+  name: "Party Role",
+  query: "Extract the role of the party (e.g., buyer, seller)",
+  outputType: "str",
+  limitToLabel: null,
+  instructions: "Identify party role",
+  extractIsList: false,
+  taskName: "extract_party_role",
+  __typename: "ColumnType",
+};
+
+export const mockDatacell1 = {
+  id: "datacell-1",
+  column: {
+    id: mockColumn1.id,
+    name: mockColumn1.name,
+    __typename: "ColumnType",
+  },
+  document: {
+    id: PDF_DOC_ID,
+    title: "Test PDF Document",
+    __typename: "DocumentType",
+  },
+  data: JSON.stringify({ value: "Acme Corporation" }),
+  dataDefinition: "Party name extracted from contract",
+  started: "2025-01-01T10:00:00Z",
+  completed: "2025-01-01T10:00:05Z",
+  failed: false,
+  correctedData: null,
+  stacktrace: null,
+  approvedBy: null,
+  rejectedBy: null,
+  fullSourceList: [
+    {
+      id: "datacell-source-1",
+      annotationLabel: {
+        id: "label-org",
+        text: "ORGANIZATION",
+        color: "#10b981",
+        icon: "building",
+        labelType: LabelType.SpanLabel,
+        description: "Organization entity",
+        __typename: "AnnotationLabelType",
+      },
+      boundingBox: JSON.stringify({
+        top: 150,
+        bottom: 170,
+        left: 50,
+        right: 250,
+        page: 0,
+      }),
+      page: 0,
+      rawText: "Acme Corporation",
+      tokensJsons: JSON.stringify([
+        { pageIndex: 0, tokenIndex: 25 },
+        { pageIndex: 0, tokenIndex: 26 },
+      ]),
+      json: JSON.stringify({
+        "0": {
+          bounds: { top: 150, bottom: 170, left: 50, right: 250 },
+          rawText: "Acme Corporation",
+          tokensJsons: [
+            { pageIndex: 0, tokenIndex: 25 },
+            { pageIndex: 0, tokenIndex: 26 },
+          ],
+        },
+      }),
+      __typename: "AnnotationType",
+    },
+  ],
+  __typename: "DatacellType",
+};
+
+export const mockDatacell2 = {
+  id: "datacell-2",
+  column: {
+    id: mockColumn2.id,
+    name: mockColumn2.name,
+    __typename: "ColumnType",
+  },
+  document: {
+    id: PDF_DOC_ID,
+    title: "Test PDF Document",
+    __typename: "DocumentType",
+  },
+  data: JSON.stringify({ value: "Buyer" }),
+  dataDefinition: "Party role extracted from contract",
+  started: "2025-01-01T10:00:00Z",
+  completed: "2025-01-01T10:00:05Z",
+  failed: false,
+  correctedData: null,
+  stacktrace: null,
+  approvedBy: null,
+  rejectedBy: null,
+  fullSourceList: [],
+  __typename: "DatacellType",
+};
+
+// ============================================================================
+// GraphQL Mock Response Creators
+// ============================================================================
+
+/**
+ * Creates a mock response for GET_ANNOTATIONS_FOR_ANALYSIS query
+ */
+export const createAnnotationsForAnalysisMock = (
+  analysisId: string,
+  documentId: string
+) => ({
+  request: {
+    query: GET_ANNOTATIONS_FOR_ANALYSIS,
+    variables: { analysisId, documentId },
+  },
+  result: {
+    data: {
+      analysis: {
+        ...mockAnalysis1,
+        id: analysisId,
+        analyzer: {
+          ...mockAnalysis1.analyzer,
+          analyzerId: mockAnalysis1.analyzer.id,
+          fullLabelList: [
+            {
+              id: "analysis-label-1",
+              text: "PERSON",
+              color: "#3b82f6",
+              icon: "user",
+              description: "Person entity",
+              labelType: LabelType.TokenLabel,
+              __typename: "AnnotationLabelType",
+            },
+            {
+              id: "analysis-label-2",
+              text: "ORGANIZATION",
+              color: "#10b981",
+              icon: "building",
+              description: "Organization entity",
+              labelType: LabelType.TokenLabel,
+              __typename: "AnnotationLabelType",
+            },
+          ],
+        },
+        fullAnnotationList: [mockAnalysisAnnotation1, mockAnalysisAnnotation2],
+        __typename: "AnalysisType",
+      },
+    },
+  },
+});
+
+/**
+ * Creates a mock response for GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS with analysis annotations included
+ */
+export const createDocumentKnowledgeMockWithAnalysisAnnotations = (
+  documentId: string,
+  corpusId: string,
+  analysisId?: string
+) => ({
+  request: {
+    query: GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
+    variables: {
+      documentId,
+      corpusId,
+      analysisId,
+    },
+  },
+  result: {
+    data: {
+      document: {
+        ...mockPdfDocument,
+        allAnnotations: [mockAnalysisAnnotation1, mockAnalysisAnnotation2],
+        allNotes: [mockNote1, mockNote2],
+      },
+      corpus: mockCorpusData,
+    },
+  },
+});
+
+/**
+ * Creates a mock response for GET_DOCUMENT_ANNOTATIONS_ONLY with analysis annotations
+ * This is what the PDF renderer queries for when displaying annotations
+ */
+export const createDocumentAnnotationsOnlyMock = (
+  documentId: string,
+  corpusId: string,
+  analysisId: string
+) => ({
+  request: {
+    query: GET_DOCUMENT_ANNOTATIONS_ONLY,
+    variables: {
+      documentId,
+      corpusId,
+      analysisId,
+    },
+  },
+  result: {
+    data: {
+      document: {
+        id: documentId,
+        allStructuralAnnotations: [],
+        allAnnotations: [mockAnalysisAnnotation1, mockAnalysisAnnotation2],
+        allRelationships: [],
+        __typename: "DocumentType",
+      },
+    },
+  },
+});
+
+/**
+ * Creates a mock response for GET_DATACELLS_FOR_EXTRACT query
+ */
+export const createDatacellsForExtractMock = (extractId: string) => ({
+  request: {
+    query: GET_DATACELLS_FOR_EXTRACT,
+    variables: { extractId },
+  },
+  result: {
+    data: {
+      extract: {
+        ...mockExtract1,
+        id: extractId,
+        fieldset: {
+          ...mockExtract1.fieldset,
+          inUse: true,
+          fullColumnList: [mockColumn1, mockColumn2],
+          __typename: "FieldsetType",
+        },
+        fullDatacellList: [mockDatacell1, mockDatacell2],
+        __typename: "ExtractType",
+      },
+    },
+  },
 });
 
 export const mockPdfDocument: RawDocumentType = {
@@ -572,8 +1081,11 @@ export const graphqlMocks: ReadonlyArray<MockedResponse> = [
         documentCorpusActions: {
           __typename: "DocumentCorpusActionsType",
           corpusActions: [],
-          extracts: [],
-          analysisRows: [],
+          extracts: [mockExtract1, mockExtract2],
+          analysisRows: [
+            createAnalysisRow(mockAnalysis1),
+            createAnalysisRow(mockAnalysis2),
+          ],
         },
       },
     },

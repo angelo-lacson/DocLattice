@@ -149,13 +149,18 @@ export const PDF: React.FC<PDFProps> = ({
   const allAnnotations = useAllAnnotations();
 
   /* ---------- build index & heights ---------------------------------- */
-  const pageInfos = useMemo(
-    () =>
-      Object.values(pages).sort(
-        (a, b) => a.page.pageNumber - b.page.pageNumber
-      ),
-    [pages]
-  );
+  const pageInfos = useMemo(() => {
+    const result = Object.values(pages).sort(
+      (a, b) => a.page.pageNumber - b.page.pageNumber
+    );
+    return result;
+  }, [pages]);
+
+  // Store pageInfos in a ref to avoid recreating requestPageRender callback
+  const pageInfosRef = useRef(pageInfos);
+  useEffect(() => {
+    pageInfosRef.current = pageInfos;
+  }, [pageInfos]);
 
   /**
    * Returns the zero-based page index of the first selected annotation, or undefined if
@@ -407,7 +412,7 @@ export const PDF: React.FC<PDFProps> = ({
           if (!request.renderer || !request.canvas) return;
 
           try {
-            const viewport = pageInfos[
+            const viewport = pageInfosRef.current[
               request.pageNumber - 1
             ]?.page.getViewport({ scale: zoomLevel });
             if (viewport) {
@@ -434,14 +439,15 @@ export const PDF: React.FC<PDFProps> = ({
         renderQueueRef.current.clear();
       }, 100); // Single shared debounce delay
     },
-    [zoomLevel, pageInfos]
+    [zoomLevel] // ✅ Removed pageInfos - using pageInfosRef.current instead
   );
 
   /**
    * Scroll to the selected annotation's page whenever:
    * 1. A new annotation is selected, OR
    * 2. The page heights become available, OR
-   * 3. The zoom level changes (which affects page positions)
+   * 3. The zoom level changes (which affects page positions), OR
+   * 4. Annotations finish loading (critical for deep links)
    *
    * This effect handles the first part of the scroll-to-annotation process:
    * - Scroll the container so the correct PAGE is visible
@@ -468,6 +474,7 @@ export const PDF: React.FC<PDFProps> = ({
     zoomLevel,
     getScrollElement,
     setPendingScrollId,
+    allAnnotations, // ✅ CRITICAL: Re-run when annotations load (fixes deep link race condition)
   ]);
 
   /* 2. scroll container & notify pages (mirrors annotation logic) */
