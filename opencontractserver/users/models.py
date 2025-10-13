@@ -193,6 +193,7 @@ class Assignment(django.db.models.Model):
             ("read_assignment", "read assignment"),
             ("update_assignment", "update assignment"),
             ("remove_assignment", "delete assignment"),
+            ("comment_assignment", "comment assignment"),
         )
 
     # Override save to update modified on save
@@ -278,6 +279,7 @@ class UserExport(BaseOCModel):
             ("read_userexport", "read user export"),
             ("update_userexport", "update user export"),
             ("remove_userexport", "delete user export"),
+            ("comment_userexport", "comment user export"),
         )
 
     # Override save to update modified on save
@@ -337,6 +339,7 @@ class UserImport(BaseOCModel):
             ("read_userimport", "read user import"),
             ("update_userimport", "update user import"),
             ("remove_userimport", "delete user import"),
+            ("comment_userimport", "comment user import"),
         )
 
     # Override save to update modified on save
