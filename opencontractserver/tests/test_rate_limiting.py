@@ -175,7 +175,8 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def test_actual_rate_limiting_on_queries(self):
+    @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
+    def test_actual_rate_limiting_on_queries(self, mock_visible_to_user):
         """Test that queries are actually rate limited after multiple requests."""
         query = """
             query GetCorpuses {
@@ -189,6 +190,9 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
                 }
             }
         """
+
+        mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
 
         # The rate limit for READ_LIGHT is 100/m base, 200/m for authenticated users
         # Make requests rapidly to ensure they fall within the same minute window
@@ -260,10 +264,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
     @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
     def test_superuser_gets_higher_rate_limits(self, mock_visible_to_user):
         """Test that superusers get higher rate limits than regular users."""
-        # Mock the visible_to_user to return a minimal queryset quickly
-        # This avoids the database overhead while still testing rate limiting
-        from opencontractserver.corpuses.models import Corpus
-
         mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
         mock_visible_to_user.return_value = mock_queryset
 
@@ -349,8 +349,12 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
 
         self.fail("Did not hit grouped rate limit after expected number of requests")
 
-    def test_anonymous_user_rate_limiting(self):
+    @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
+    def test_anonymous_user_rate_limiting(self, mock_visible_to_user):
         """Test that anonymous users get rate limited by IP."""
+        mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         # Log out to test as anonymous
         anon_client = DjangoClient()
 
@@ -385,8 +389,12 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         # Anonymous might not have permission to query, which is also fine
         # The important thing is that rate limiting is checked
 
-    def test_different_users_have_separate_rate_limits(self):
+    @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
+    def test_different_users_have_separate_rate_limits(self, mock_visible_to_user):
         """Test that different users have independent rate limit buckets."""
+        mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         # Create another user
         other_user = User.objects.create_user(
             username=f"other_user_{self.test_id}", password="test123"
@@ -438,8 +446,14 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         other_user.delete()
 
     @patch("time.time")
-    def test_different_operations_have_different_limits(self, mock_time):
+    @patch("opencontractserver.corpuses.models.Corpus.objects.visible_to_user")
+    def test_different_operations_have_different_limits(
+        self, mock_visible_to_user, mock_time
+    ):
         """Test that different operations have appropriate rate limits."""
+        mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
+        mock_visible_to_user.return_value = mock_queryset
+
         # Freeze time to keep all requests within one window
         mock_time.return_value = 1000000.0
         cache.clear()
@@ -541,10 +555,6 @@ class GraphQLRateLimitIntegrationTestCase(TestCase):
         """Test that corpuses query is rate limited."""
         # Freeze time to ensure all requests fall within the same rate limit window
         mock_time.return_value = 1000000.0
-
-        # Mock the visible_to_user to return a minimal queryset quickly
-        # This avoids the database overhead while still testing rate limiting
-        from opencontractserver.corpuses.models import Corpus
 
         mock_queryset = Corpus.objects.none()  # Empty queryset, fast to process
         mock_visible_to_user.return_value = mock_queryset
