@@ -169,12 +169,21 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
         """
         from opencontractserver.annotations.models import Embedding
 
-        embedder_qs = Embedding.objects.filter(
-            annotation__document=self.document,
-            annotation__structural=True,
-        ).values_list("embedder_path", flat=True)
+        def get_embedder_paths():
+            """
+            Construct AND evaluate queryset in same DB connection to avoid
+            transaction isolation issues with database_sync_to_async.
+            """
+            return list(
+                Embedding.objects.filter(
+                    annotation__document=self.document,
+                    annotation__structural=True,
+                )
+                .values_list("embedder_path", flat=True)
+                .distinct()
+            )
 
-        paths = await database_sync_to_async(list)(embedder_qs.distinct())
+        paths = await database_sync_to_async(get_embedder_paths)()
 
         if paths:
             logger.info(
