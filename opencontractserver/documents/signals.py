@@ -20,6 +20,9 @@ from opencontractserver.tasks.embeddings_task import (
 
 logger = logging.getLogger(__name__)
 
+# Static dispatch UID for document creation signal
+DOC_CREATE_UID = "process_doc_on_create_atomic"
+
 
 # Kicks off document processing pipeline - including thumbnail extraction, ingestion,
 # and unlocking the document

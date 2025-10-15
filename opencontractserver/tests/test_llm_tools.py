@@ -20,6 +20,7 @@ from opencontractserver.llms.tools.core_tools import (
     aget_corpus_description,
     aload_document_txt_extract,
     asearch_document_notes,
+    asearch_exact_text_as_sources,
     aupdate_corpus_description,
     aupdate_document_note,
     duplicate_annotations_with_label,
@@ -1551,3 +1552,302 @@ class AsyncTestDocumentSummary(TransactionTestCase):
             self.doc.id, self.corpus.id, version=1
         )
         self.assertEqual(result, "Version 1 specific content")
+
+
+class AsyncTestSearchExactTextAsSources(TransactionTestCase):
+    """Async tests for search_exact_text_as_sources function."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Disconnect document processing signals to avoid triggering ingestion."""
+        from django.db.models.signals import post_save
+
+        from opencontractserver.documents.signals import (
+            DOC_CREATE_UID,
+            process_doc_on_create_atomic,
+        )
+
+        # Disconnect signals BEFORE calling super().setUpClass()
+        # Document is already imported at module level
+        post_save.disconnect(
+            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
+        )
+
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Reconnect document processing signals."""
+        try:
+            super().tearDownClass()
+        finally:
+            from django.db.models.signals import post_save
+
+            from opencontractserver.documents.signals import (
+                DOC_CREATE_UID,
+                process_doc_on_create_atomic,
+            )
+
+            # Reconnect signals in finally block to ensure it happens even if teardown fails
+            # Document is already imported at module level
+            post_save.connect(
+                process_doc_on_create_atomic,
+                sender=Document,
+                dispatch_uid=DOC_CREATE_UID,
+            )
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username="async_search_text_user", password="pw"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Async Search Text Corpus",
+            creator=self.user,
+        )
+
+        # Create text document
+        self.text_doc = Document.objects.create(
+            creator=self.user,
+            title="Async Text Document",
+            description="Test Text",
+            file_type="text/plain",
+        )
+
+        # Create mock text content with multiple search targets
+        self.text_content = (
+            "This is a sample document with covenants and agreements. "
+            "The covenants are important legal terms. "
+            "Multiple agreements exist in this document."
+        )
+        self.text_doc.txt_extract_file.save(
+            "async_text_extract.txt", ContentFile(self.text_content.encode())
+        )
+
+        self.corpus.documents.add(self.text_doc)
+
+        # Create document with unsupported file type (for testing error handling)
+        self.unsupported_doc = Document.objects.create(
+            creator=self.user,
+            title="Unsupported Document",
+            description="Test",
+            file_type="application/unsupported",
+        )
+
+        # Create document without txt_extract_file (for testing error handling)
+        self.no_extract_doc = Document.objects.create(
+            creator=self.user,
+            title="No Extract Document",
+            description="Test",
+            file_type="text/plain",
+        )
+
+    async def test_asearch_exact_text_single_match(self):
+        """Test async search with a single search string."""
+        search_strings = ["covenants and agreements"]
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        # Should find exactly one match
+        self.assertEqual(len(results), 1)
+
+        # Verify SourceNode structure
+        result = results[0]
+        self.assertIsInstance(result, SourceNode)
+        self.assertEqual(result.content, "covenants and agreements")
+        self.assertEqual(result.similarity_score, 1.0)
+
+        # Verify metadata
+        self.assertEqual(result.metadata["document_id"], self.text_doc.id)
+        self.assertEqual(result.metadata["corpus_id"], self.corpus.id)
+        self.assertEqual(result.metadata["page"], 1)
+        self.assertEqual(result.metadata["search_string"], "covenants and agreements")
+        self.assertEqual(result.metadata["match_type"], "exact_text_plain")
+        self.assertIn("char_start", result.metadata)
+        self.assertIn("char_end", result.metadata)
+
+        # Verify synthetic negative ID
+        self.assertLess(result.annotation_id, 0)
+
+    async def test_asearch_exact_text_multiple_occurrences(self):
+        """Test async search finding multiple occurrences of same string."""
+        # "covenants" appears twice in our text content
+        search_strings = ["covenants"]
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        # Should find two matches
+        self.assertEqual(len(results), 2)
+
+        # All should be SourceNode objects with same content
+        for result in results:
+            self.assertIsInstance(result, SourceNode)
+            self.assertEqual(result.content, "covenants")
+            self.assertEqual(result.similarity_score, 1.0)
+
+        # Each should have unique char_start position
+        char_starts = [r.metadata["char_start"] for r in results]
+        self.assertEqual(len(set(char_starts)), 2)  # All unique
+
+    async def test_asearch_exact_text_multiple_strings(self):
+        """Test async search with multiple different search strings."""
+        search_strings = ["covenants", "agreements", "legal"]
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        # Should find: 2 covenants + 2 agreements + 1 legal = 5 total
+        self.assertEqual(len(results), 5)
+
+        # Verify we got results for each search string
+        found_strings = {r.metadata["search_string"] for r in results}
+        self.assertEqual(found_strings, {"covenants", "agreements", "legal"})
+
+    async def test_asearch_exact_text_no_matches(self):
+        """Test async search with no matches."""
+        search_strings = ["NonexistentString12345"]
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        self.assertEqual(len(results), 0)
+
+    async def test_asearch_exact_text_empty_search_list(self):
+        """Test async search with empty search string list."""
+        search_strings = []
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        self.assertEqual(len(results), 0)
+
+    async def test_asearch_exact_text_case_sensitive(self):
+        """Test that search is case-sensitive (finds exact matches only)."""
+        # Our text has "covenants" (lowercase)
+        search_strings = ["Covenants"]  # Capital C
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        # Should find no matches because it's case-sensitive
+        self.assertEqual(len(results), 0)
+
+    async def test_asearch_exact_text_invalid_document(self):
+        """Test async search with non-existent document."""
+        with self.assertRaisesRegex(ValueError, "Document id=999999 does not exist"):
+            await asearch_exact_text_as_sources(
+                document_id=999999,
+                search_strings=["test"],
+                corpus_id=self.corpus.id,
+            )
+
+    async def test_asearch_exact_text_unsupported_file_type(self):
+        """Test async search with unsupported file type."""
+        # Use the unsupported_doc created in setUp
+        with self.assertRaisesRegex(
+            ValueError, "Unsupported file_type .* for document"
+        ):
+            await asearch_exact_text_as_sources(
+                document_id=self.unsupported_doc.id,
+                search_strings=["test"],
+                corpus_id=self.corpus.id,
+            )
+
+    async def test_asearch_exact_text_text_document_no_extract_file(self):
+        """Test async search with text document that has no txt_extract_file."""
+        # Use the no_extract_doc created in setUp (which has no txt_extract_file)
+        with self.assertRaisesRegex(
+            ValueError, "lacks txt_extract_file; cannot search"
+        ):
+            await asearch_exact_text_as_sources(
+                document_id=self.no_extract_doc.id,
+                search_strings=["test"],
+                corpus_id=self.corpus.id,
+            )
+
+    async def test_asearch_exact_text_without_corpus_id(self):
+        """Test async search without providing corpus_id."""
+        search_strings = ["sample"]
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=None,  # No corpus provided
+        )
+
+        # Should still work, just without corpus_id in metadata
+        self.assertGreater(len(results), 0)
+        self.assertIsNone(results[0].metadata["corpus_id"])
+
+    async def test_asearch_exact_text_source_node_format(self):
+        """Test that async search returns properly formatted SourceNode objects."""
+        search_strings = ["document"]
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        self.assertGreater(len(results), 0)
+
+        result = results[0]
+        # Test SourceNode fields
+        self.assertIsInstance(result.annotation_id, int)
+        self.assertLess(result.annotation_id, 0)  # Synthetic negative ID
+        self.assertIsInstance(result.content, str)
+        self.assertIsInstance(result.similarity_score, float)
+        self.assertEqual(result.similarity_score, 1.0)
+        self.assertIsInstance(result.metadata, dict)
+
+        # Test metadata fields for text documents
+        required_keys = {
+            "document_id",
+            "corpus_id",
+            "page",
+            "search_string",
+            "char_start",
+            "char_end",
+            "match_type",
+        }
+        self.assertTrue(required_keys.issubset(result.metadata.keys()))
+
+    async def test_asearch_exact_text_unique_annotation_ids(self):
+        """Test that each match gets a unique synthetic annotation_id."""
+        # Search for string that appears multiple times
+        search_strings = ["covenants", "agreements"]
+
+        results = await asearch_exact_text_as_sources(
+            document_id=self.text_doc.id,
+            search_strings=search_strings,
+            corpus_id=self.corpus.id,
+        )
+
+        # Get all annotation IDs
+        annotation_ids = [r.annotation_id for r in results]
+
+        # All should be unique
+        self.assertEqual(len(annotation_ids), len(set(annotation_ids)))
+
+        # All should be negative
+        self.assertTrue(all(aid < 0 for aid in annotation_ids))

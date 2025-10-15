@@ -24,7 +24,10 @@ from opencontractserver.annotations.signals import (
 )
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
-from opencontractserver.documents.signals import process_doc_on_create_atomic
+from opencontractserver.documents.signals import (
+    DOC_CREATE_UID,
+    process_doc_on_create_atomic,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -92,7 +95,9 @@ class BaseFixtureTestCase(TransactionTestCase):
         os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
 
         # Disconnect signals before loading fixtures
-        post_save.disconnect(process_doc_on_create_atomic, sender=Document)
+        post_save.disconnect(
+            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
+        )
         post_save.disconnect(
             process_annot_on_create_atomic,
             sender=Annotation,
@@ -159,7 +164,11 @@ class BaseFixtureTestCase(TransactionTestCase):
                     raise
         finally:
             # Reconnect signals and clean up the filesystem
-            post_save.connect(process_doc_on_create_atomic, sender=Document)
+            post_save.connect(
+                process_doc_on_create_atomic,
+                sender=Document,
+                dispatch_uid=DOC_CREATE_UID,
+            )
             post_save.connect(
                 process_annot_on_create_atomic,
                 sender=Annotation,
