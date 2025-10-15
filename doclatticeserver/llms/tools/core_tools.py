@@ -1546,10 +1546,7 @@ async def aadd_annotations_from_exact_strings(
     creator_id: int,
 ):
     """Async wrapper around :func:`add_annotations_from_exact_strings`."""
-
-    from channels.db import database_sync_to_async
-
-    return await database_sync_to_async(add_annotations_from_exact_strings)(
+    return await _db_sync_to_async(add_annotations_from_exact_strings)(
         items, creator_id=creator_id
     )
 
