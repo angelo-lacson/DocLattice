@@ -73,7 +73,10 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
         )
 
         # Create a document with actual text content
-        doc1_text = "Test contract with payment terms: Party A agrees to pay Party B $10,000 within 30 days. Payment shall be made by wire transfer."
+        doc1_text = (
+            "Test contract with payment terms: Party A agrees to pay Party B $10,000 within "
+            "30 days. Payment shall be made by wire transfer."
+        )
         self.doc1 = Document.objects.create(
             title="Payment Terms Contract",
             description="Contract with payment terms for testing",
@@ -85,7 +88,9 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
             "payment_contract.txt", ContentFile(doc1_text.encode("utf-8")), save=True
         )
 
-        doc2_text = "This service agreement specifies the scope of work and deliverables."
+        doc2_text = (
+            "This service agreement specifies the scope of work and deliverables."
+        )
         self.doc2 = Document.objects.create(
             title="Service Agreement",
             description="Service agreement document",
@@ -173,7 +178,9 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
 
         # Ask a question that should trigger the update_document_summary tool
         # which requires approval
-        question = "Please update the document summary to include all payment terms you find"
+        question = (
+            "Please update the document summary to include all payment terms you find"
+        )
 
         events = []
         async for event in agent.stream(question):
@@ -350,9 +357,7 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
 
         # Verify we got thought events from the nested ask_document call
         # Note: The exact format may vary between LLM providers
-        ask_doc_thoughts = [
-            e for e in thought_events if "[ask_document]" in e.thought
-        ]
+        ask_doc_thoughts = [e for e in thought_events if "[ask_document]" in e.thought]
 
         # If we didn't get the expected thought events, that's OK - different LLMs
         # may structure their responses differently. The important thing is that
@@ -364,16 +369,27 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
         # Verify we completed successfully with a final answer
         final_events = [e for e in events if hasattr(e, "type") and e.type == "final"]
         self.assertGreater(
-            len(final_events),
-            0,
-            "Should have completed with a final event"
+            len(final_events), 0, "Should have completed with a final event"
         )
 
         # The final event should contain relevant information about payment terms
-        final_content = final_events[0].content.lower()
+        final_event = final_events[0]
+
+        # Check both content and accumulated_content
+        final_content = getattr(final_event, "content", "")
+        final_accumulated_content = getattr(final_event, "accumulated_content", "")
+
+        # Use whichever is populated
+        actual_content = (
+            final_accumulated_content if final_accumulated_content else final_content
+        )
+        actual_content_lower = actual_content.lower()
+
         self.assertTrue(
-            "payment" in final_content or "$" in final_content or "pay" in final_content,
-            f"Final content should mention payment terms, got: {final_content[:200]}"
+            "payment" in actual_content_lower
+            or "$" in actual_content
+            or "pay" in actual_content_lower,
+            f"Final content should mention payment terms, got: {actual_content[:500]}",
         )
 
     # ========================================================================

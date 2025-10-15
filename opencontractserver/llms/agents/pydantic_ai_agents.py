@@ -2044,6 +2044,10 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
 
             # Guard against cross-corpus leakage
             if document_id not in {d.id for d in context.documents}:
+                logger.warning(
+                    f"[ask_document] Document {document_id} not found in corpus documents. "
+                    f"Available document IDs: {[d.id for d in context.documents]}"
+                )
                 raise ValueError("Document does not belong to current corpus")
 
             doc_agent = await _agents_api.for_document(
