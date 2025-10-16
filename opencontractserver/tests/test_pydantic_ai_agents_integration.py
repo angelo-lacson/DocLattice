@@ -11,6 +11,8 @@ VCR.py records HTTP interactions the first time tests run, then replays them
 for fast, deterministic tests without needing API keys in CI/CD.
 """
 
+import re
+
 import vcr
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -37,6 +39,114 @@ User = get_user_model()
 def constant_vector(dimension: int = 384, value: float = 0.5) -> list[float]:
     """Generate a constant vector for testing."""
     return [value] * dimension
+
+
+def create_vcr_with_id_normalization(
+    cassette_path: str, id_mapping: dict[int, int]  # noqa: ARG001
+) -> vcr.VCR:
+    """Create a VCR instance that normalizes document IDs in requests/responses.
+
+    This solves the test isolation problem where document IDs differ between
+    running tests in isolation (IDs 1, 2, 3) vs in a full suite (IDs 5000+).
+
+    Args:
+        cassette_path: Path to the VCR cassette file (for documentation only)
+        id_mapping: Mapping from actual document IDs to normalized IDs
+                    e.g., {5001: 1, 5002: 2}
+
+    Returns:
+        Configured VCR instance
+    """
+
+    def normalize_ids_in_text(text: str, mapping: dict[int, int]) -> str:
+        """Replace document IDs in text according to mapping."""
+        if not text:
+            return text
+
+        # Sort by ID length (descending) to avoid partial replacements
+        for actual_id, normalized_id in sorted(
+            mapping.items(), key=lambda x: len(str(x[0])), reverse=True
+        ):
+            # Replace in JSON contexts: "document_id": 5001 -> "document_id": 1
+            text = re.sub(
+                rf'"document_id"\s*:\s*{actual_id}\b',
+                f'"document_id": {normalized_id}',
+                text,
+            )
+            # Replace in function calls: ask_document(5001, ...) -> ask_document(1, ...)
+            text = re.sub(
+                rf'\bask_document\(["\']?{actual_id}["\']?',
+                f"ask_document({normalized_id}",
+                text,
+            )
+            # Replace in lists: [5001, 5002] -> [1, 2]
+            text = re.sub(rf"\b{actual_id}\b(?=[,\]\s])", str(normalized_id), text)
+
+        return text
+
+    def before_record_request(request):
+        """Normalize document IDs before recording request."""
+        if hasattr(request, "body") and request.body:
+            try:
+                body_text = (
+                    request.body.decode("utf-8")
+                    if isinstance(request.body, bytes)
+                    else str(request.body)
+                )
+                normalized = normalize_ids_in_text(body_text, id_mapping)
+                request.body = normalized.encode("utf-8")
+            except (UnicodeDecodeError, AttributeError):
+                pass
+        return request
+
+    def before_record_response(response):
+        """Normalize document IDs before recording response."""
+        if isinstance(response, dict) and "body" in response:
+            body = response["body"]
+            try:
+                if isinstance(body, bytes):
+                    body_text = body.decode("utf-8")
+                    normalized = normalize_ids_in_text(body_text, id_mapping)
+                    response["body"] = normalized.encode("utf-8")
+                elif isinstance(body, str):
+                    response["body"] = normalize_ids_in_text(body, id_mapping)
+            except (UnicodeDecodeError, AttributeError):
+                pass
+        return response
+
+    def before_playback_response(response):
+        """Denormalize IDs in cassette response back to actual IDs during playback."""
+        # Create reverse mapping (normalized -> actual)
+        reverse_mapping = {v: k for k, v in id_mapping.items()}
+
+        if isinstance(response, dict) and "body" in response:
+            body = response["body"]
+            try:
+                if isinstance(body, bytes):
+                    body_text = body.decode("utf-8")
+                    # Replace normalized IDs with actual IDs
+                    denormalized = normalize_ids_in_text(body_text, reverse_mapping)
+                    response["body"] = denormalized.encode("utf-8")
+                elif isinstance(body, str):
+                    response["body"] = normalize_ids_in_text(body, reverse_mapping)
+            except (UnicodeDecodeError, AttributeError):
+                pass
+        return response
+
+    # Create VCR instance with ID normalization
+    my_vcr = vcr.VCR(
+        cassette_library_dir="fixtures/vcr_cassettes",
+        record_mode="once",
+        filter_headers=["authorization", "x-api-key"],
+        match_on=["method", "scheme", "host", "port", "path", "query", "body"],
+        before_record_request=before_record_request,
+        before_record_response=before_record_response,
+    )
+
+    # Add response callback for playback (denormalize IDs back)
+    my_vcr.before_playback_response = before_playback_response
+
+    return my_vcr
 
 
 class TestPydanticAIAgentsIntegration(TransactionTestCase):
@@ -103,6 +213,16 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
         )
 
         self.corpus.documents.add(self.doc1, self.doc2)
+
+        # Create ID mapping for VCR cassette normalization
+        # Cassettes expect doc1=2, doc2=3, corpus=2
+        self.doc_id_mapping = {
+            self.doc1.id: 2,
+            self.doc2.id: 3,
+        }
+        self.corpus_id_mapping = {
+            self.corpus.id: 2,
+        }
 
         # Create annotation labels
         self.payment_label = AnnotationLabel.objects.create(
@@ -309,12 +429,6 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
     # Test 3: ask_document Tool Integration (lines 520-625)
     # ========================================================================
 
-    @vcr.use_cassette(
-        "fixtures/vcr_cassettes/pydantic_ai_ask_document_tool.yaml",
-        record_mode="once",
-        filter_headers=["authorization", "x-api-key"],
-        match_on=["method", "scheme", "host", "port", "path", "query"],
-    )
     async def test_ask_document_tool_nested_agent(self) -> None:
         """
         Integration test for ask_document tool with nested document agents.
@@ -326,71 +440,94 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
         - Answer is incorporated into parent agent's response
 
         This requires a real corpus-level agent making nested document queries.
+
+        NOTE: This test uses VCR cassettes with ID normalization to handle
+        test isolation. The cassette was recorded with docs at IDs 2 and 3,
+        but in a full test suite, actual IDs may be much higher. The VCR hooks:
+        1. Normalize outgoing requests (actual IDs -> cassette IDs)
+        2. Denormalize incoming responses (cassette IDs -> actual IDs)
         """
-        config = AgentConfig(
-            user_id=self.user.id,
-            model_name=settings.OPENAI_MODEL,
-            store_user_messages=False,
-            store_llm_messages=False,
+        # Use custom VCR with ID normalization to handle test isolation issues
+        my_vcr = create_vcr_with_id_normalization(
+            "pydantic_ai_ask_document_tool.yaml",
+            {**self.doc_id_mapping, **self.corpus_id_mapping},
         )
 
-        # Create corpus agent which has access to ask_document tool
-        corpus_agent = await PydanticAICorpusAgent.create(
-            corpus=self.corpus,
-            config=config,
-        )
+        with my_vcr.use_cassette("pydantic_ai_ask_document_tool.yaml"):
+            config = AgentConfig(
+                user_id=self.user.id,
+                model_name=settings.OPENAI_MODEL,
+                store_user_messages=False,
+                store_llm_messages=False,
+            )
 
-        # Ask a question that requires querying specific documents
-        question = "What are the payment terms in the Payment Terms Contract document?"
+            # Create corpus agent which has access to ask_document tool
+            corpus_agent = await PydanticAICorpusAgent.create(
+                corpus=self.corpus,
+                config=config,
+            )
 
-        events = []
-        thought_events = []
-        source_events = []
+            # Ask a question that requires querying specific documents
+            question = (
+                "What are the payment terms in the Payment Terms Contract document?"
+            )
 
-        async for event in corpus_agent.stream(question):
-            events.append(event)
-            if hasattr(event, "type"):
-                if event.type == "thought":
-                    thought_events.append(event)
-                elif event.type == "sources":
-                    source_events.append(event)
+            events = []
+            thought_events = []
+            source_events = []
 
-        # Verify we got thought events from the nested ask_document call
-        # Note: The exact format may vary between LLM providers
-        ask_doc_thoughts = [e for e in thought_events if "[ask_document]" in e.thought]
+            async for event in corpus_agent.stream(question):
+                events.append(event)
+                if hasattr(event, "type"):
+                    if event.type == "thought":
+                        thought_events.append(event)
+                    elif event.type == "sources":
+                        source_events.append(event)
 
-        # If we didn't get the expected thought events, that's OK - different LLMs
-        # may structure their responses differently. The important thing is that
-        # we get a final answer.
-        if len(ask_doc_thoughts) > 0:
-            # Great! We got the nested thought events
-            pass
+            # Verify we got thought events from the nested ask_document call
+            # Note: The exact format may vary between LLM providers
+            ask_doc_thoughts = [
+                e for e in thought_events if "[ask_document]" in e.thought
+            ]
 
-        # Verify we completed successfully with a final answer
-        final_events = [e for e in events if hasattr(e, "type") and e.type == "final"]
-        self.assertGreater(
-            len(final_events), 0, "Should have completed with a final event"
-        )
+            # If we didn't get the expected thought events, that's OK - different LLMs
+            # may structure their responses differently. The important thing is that
+            # we get a final answer.
+            if len(ask_doc_thoughts) > 0:
+                # Great! We got the nested thought events
+                pass
 
-        # The final event should contain relevant information about payment terms
-        final_event = final_events[0]
+            # Verify we completed successfully with a final answer
+            final_events = [
+                e for e in events if hasattr(e, "type") and e.type == "final"
+            ]
+            self.assertGreater(
+                len(final_events), 0, "Should have completed with a final event"
+            )
 
-        # Check both content and accumulated_content
-        final_content = getattr(final_event, "content", "")
-        final_accumulated_content = getattr(final_event, "accumulated_content", "")
+            # The final event should contain relevant information about payment terms
+            final_event = final_events[0]
 
-        # Use whichever is populated
-        actual_content = (
-            final_accumulated_content if final_accumulated_content else final_content
-        )
-        actual_content_lower = actual_content.lower()
+            # Check both content and accumulated_content
+            final_content = getattr(final_event, "content", "")
+            final_accumulated_content = getattr(final_event, "accumulated_content", "")
 
-        self.assertTrue(
-            "payment" in actual_content_lower
-            or "$" in actual_content
-            or "pay" in actual_content_lower,
-            f"Final content should mention payment terms, got: {actual_content[:500]}",
-        )
+            # Use whichever is populated
+            actual_content = (
+                final_accumulated_content
+                if final_accumulated_content
+                else final_content
+            )
+
+            print(f"Actual content: {actual_content}")
+            actual_content_lower = actual_content.lower()
+
+            self.assertTrue(
+                "payment" in actual_content_lower
+                or "$" in actual_content
+                or "pay" in actual_content_lower,
+                f"Final content should mention payment terms, got: {actual_content[:500]}",
+            )
 
     # ========================================================================
     # Test 4: Tool Result Validation - Empty Annotations (lines 1037-1044)
