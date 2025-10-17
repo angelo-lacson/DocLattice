@@ -134,11 +134,14 @@ def create_vcr_with_id_normalization(
         return response
 
     # Create VCR instance with ID normalization
+    # Note: We exclude "body" from match_on because request bodies contain
+    # document/corpus IDs that vary between test runs. Matching on
+    # method+path+query is sufficient to identify the correct cassette entry.
     my_vcr = vcr.VCR(
         cassette_library_dir="fixtures/vcr_cassettes",
         record_mode="once",
         filter_headers=["authorization", "x-api-key"],
-        match_on=["method", "scheme", "host", "port", "path", "query", "body"],
+        match_on=["method", "scheme", "host", "port", "path", "query"],
         before_record_request=before_record_request,
         before_record_response=before_record_response,
     )
