@@ -30,6 +30,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
     isAuthenticated,
     user,
     getAccessTokenSilently,
+    loginWithRedirect,
   } = useAuth0();
 
   // Handle Auth0 authentication
@@ -86,11 +87,41 @@ export const AuthGate: React.FC<AuthGateProps> = ({
         })
         .catch((error) => {
           console.error("[AuthGate] Error getting access token:", error);
-          authToken("");
-          userObj(null);
-          authStatusVar("ANONYMOUS");
-          setAuthInitialized(true);
-          toast.error("Authentication failed: " + error.message);
+
+          // Check if this is a "login required" or "consent required" error
+          const errorCode = error.error;
+          const needsInteraction =
+            errorCode === "login_required" ||
+            errorCode === "consent_required" ||
+            errorCode === "interaction_required" ||
+            error.message?.toLowerCase().includes("login required");
+
+          if (needsInteraction) {
+            // User needs to re-authenticate - redirect to Auth0 login
+            console.log(
+              "[AuthGate] User interaction required, redirecting to login..."
+            );
+            toast.info("Please log in to continue.", {
+              autoClose: 2000,
+            });
+
+            // Redirect to Auth0 login
+            loginWithRedirect({
+              authorizationParams: {
+                audience: audience || undefined,
+                scope: "openid profile email",
+                redirect_uri: window.location.origin,
+              },
+            });
+          } else {
+            // Other error - fall back to anonymous mode
+            console.error("[AuthGate] Auth error, falling back to anonymous");
+            authToken("");
+            userObj(null);
+            authStatusVar("ANONYMOUS");
+            setAuthInitialized(true);
+            toast.error("Authentication failed: " + error.message);
+          }
         });
     } else {
       // Not authenticated

@@ -178,6 +178,8 @@ class PydanticAIToolWrapper:
             # Attach reference to the wrapper for approval checking
             async_wrapper._pydantic_ai_wrapper = self
             async_wrapper.core_tool = self.core_tool
+            # Attach requires_approval directly for easy access by _check_tool_requires_approval
+            async_wrapper.requires_approval = self.core_tool.requires_approval
             return async_wrapper
         else:
             # Convert sync function to async
@@ -206,6 +208,8 @@ class PydanticAIToolWrapper:
             # Attach reference to the wrapper for approval checking
             sync_to_async_wrapper._pydantic_ai_wrapper = self
             sync_to_async_wrapper.core_tool = self.core_tool
+            # Attach requires_approval directly for easy access by _check_tool_requires_approval
+            sync_to_async_wrapper.requires_approval = self.core_tool.requires_approval
 
             return sync_to_async_wrapper
 
