@@ -49,6 +49,10 @@ def create_vcr_with_id_normalization(
     This solves the test isolation problem where document IDs differ between
     running tests in isolation (IDs 1, 2, 3) vs in a full suite (IDs 5000+).
 
+    The key insight: We MUST match on body to distinguish multi-turn conversations,
+    but we need to normalize IDs BEFORE matching. We use a custom body matcher
+    that normalizes both the request and cassette bodies before comparing.
+
     Args:
         cassette_path: Path to the VCR cassette file (for documentation only)
         id_mapping: Mapping from actual document IDs to normalized IDs
@@ -63,14 +67,21 @@ def create_vcr_with_id_normalization(
         if not text:
             return text
 
-        # Sort by ID length (descending) to avoid partial replacements
+        # Sort by actual_id value (descending) to avoid replacing normalized IDs
+        # For example, if we have {1: 2, 2: 3}, process 2->3 first, then 1->2
         for actual_id, normalized_id in sorted(
-            mapping.items(), key=lambda x: len(str(x[0])), reverse=True
+            mapping.items(), key=lambda x: x[0], reverse=True
         ):
             # Replace in JSON contexts: "document_id": 5001 -> "document_id": 1
             text = re.sub(
                 rf'"document_id"\s*:\s*{actual_id}\b',
                 f'"document_id": {normalized_id}',
+                text,
+            )
+            # Replace in corpus_id contexts as well
+            text = re.sub(
+                rf'"corpus_id"\s*:\s*{actual_id}\b',
+                f'"corpus_id": {normalized_id}',
                 text,
             )
             # Replace in function calls: ask_document(5001, ...) -> ask_document(1, ...)
@@ -79,10 +90,157 @@ def create_vcr_with_id_normalization(
                 f"ask_document({normalized_id}",
                 text,
             )
+            # Replace in system prompts: (ID: 5001) -> (ID: 1)
+            text = re.sub(
+                rf"\(ID:\s*{actual_id}\)",
+                f"(ID: {normalized_id})",
+                text,
+            )
             # Replace in lists: [5001, 5002] -> [1, 2]
             text = re.sub(rf"\b{actual_id}\b(?=[,\]\s])", str(normalized_id), text)
 
         return text
+
+    def custom_body_matcher(r1, r2):
+        """Custom matcher that normalizes IDs and does intelligent conversation matching.
+
+        This allows VCR to match requests even when document/corpus IDs differ
+        between test runs. It uses a lenient matching strategy that handles
+        multi-turn conversations by comparing conversation structure rather than
+        exact string equality.
+        """
+        # Get bodies - handle both request objects and dict structures
+        try:
+            # r1 is the incoming request
+            if hasattr(r1, "body"):
+                body1 = r1.body
+            elif isinstance(r1, dict) and "body" in r1:
+                body1 = r1["body"]
+            else:
+                print(
+                    f"DEBUG: r1 type={type(r1)}, has body={hasattr(r1, 'body')}, "
+                    f"is dict={'body' in r1 if isinstance(r1, dict) else 'N/A'}"
+                )
+                return False
+
+            # r2 is the cassette request (might be dict or object)
+            if hasattr(r2, "body"):
+                body2 = r2.body
+            elif isinstance(r2, dict) and "body" in r2:
+                body2 = r2["body"]
+            else:
+                print(
+                    f"DEBUG: r2 type={type(r2)}, has body={hasattr(r2, 'body')}, is"
+                    f" dict={'body' in r2 if isinstance(r2, dict) else 'N/A'}"
+                )
+                return False
+
+            # Handle None bodies
+            if body1 is None and body2 is None:
+                return True
+            if body1 is None or body2 is None:
+                print(
+                    f"DEBUG: body1 is None={body1 is None}, body2 is None={body2 is None}"
+                )
+                return False
+
+            # Convert to strings
+            body1_text = (
+                body1.decode("utf-8") if isinstance(body1, bytes) else str(body1)
+            )
+            body2_text = (
+                body2.decode("utf-8") if isinstance(body2, bytes) else str(body2)
+            )
+
+            # Normalize IDs in both bodies
+            normalized1 = normalize_ids_in_text(body1_text, id_mapping)
+            normalized2 = normalize_ids_in_text(body2_text, id_mapping)
+
+            # Try exact match first (fastest)
+            if normalized1 == normalized2:
+                return True
+
+            # If exact match fails, try smarter conversation matching
+            # Parse as JSON to compare conversation structure
+            import json
+
+            try:
+                req1 = json.loads(normalized1)
+                req2 = json.loads(normalized2)
+
+                # Both must be OpenAI chat completion requests
+                if "messages" not in req1 or "messages" not in req2:
+                    return False
+
+                msgs1 = req1["messages"]
+                msgs2 = req2["messages"]
+
+                # Match based on conversation structure:
+                # 1. Same number of messages (or body1 has more - replay includes more history)
+                # 2. System prompts should match (identifies corpus vs document agent)
+                # 3. First user message should match (the original question)
+
+                if len(msgs1) == 0 or len(msgs2) == 0:
+                    return False
+
+                # Compare system prompts
+                sys1 = (
+                    msgs1[0].get("content", "")
+                    if msgs1[0].get("role") == "system"
+                    else ""
+                )
+                sys2 = (
+                    msgs2[0].get("content", "")
+                    if msgs2[0].get("role") == "system"
+                    else ""
+                )
+
+                # System prompts should be very similar (allowing for minor diffs)
+                # Check key phrases
+                is_corpus1 = "collection of documents" in sys1
+                is_corpus2 = "collection of documents" in sys2
+                is_doc1 = "analyzing the document titled" in sys1
+                is_doc2 = "analyzing the document titled" in sys2
+
+                if (is_corpus1 != is_corpus2) or (is_doc1 != is_doc2):
+                    return False  # Different agent types
+
+                # If both are document agents, check they're for the same document title
+                if is_doc1 and is_doc2:
+                    import re as re_module
+
+                    title1 = re_module.search(
+                        r"analyzing the document titled '([^']+)'", sys1
+                    )
+                    title2 = re_module.search(
+                        r"analyzing the document titled '([^']+)'", sys2
+                    )
+                    if title1 and title2 and title1.group(1) != title2.group(1):
+                        return False  # Different documents
+
+                # Compare first user message
+                user_msgs1 = [m for m in msgs1 if m.get("role") == "user"]
+                user_msgs2 = [m for m in msgs2 if m.get("role") == "user"]
+
+                if len(user_msgs1) > 0 and len(user_msgs2) > 0:
+                    if user_msgs1[0].get("content") != user_msgs2[0].get("content"):
+                        return False
+
+                # Match on conversation length - body2 should have <= messages than body1
+                # (cassette might have earlier state, incoming request has more history)
+                if len(msgs2) > len(msgs1):
+                    return False
+
+                # If we get here, it's a reasonable match
+                return True
+
+            except (json.JSONDecodeError, KeyError, IndexError):
+                # If we can't parse as JSON or compare structure, fall back to exact match
+                return False
+
+        except Exception:
+            # If anything goes wrong, don't match
+            return False
 
     def before_record_request(request):
         """Normalize document IDs before recording request."""
@@ -133,18 +291,30 @@ def create_vcr_with_id_normalization(
                 pass
         return response
 
-    # Create VCR instance with ID normalization
-    # Note: We exclude "body" from match_on because request bodies contain
-    # document/corpus IDs that vary between test runs. Matching on
-    # method+path+query is sufficient to identify the correct cassette entry.
+    # Create VCR instance with custom body matcher
+    # The custom matcher normalizes IDs in BOTH the incoming request and cassette
+    # entries before comparing, so matches succeed even when actual IDs differ.
     my_vcr = vcr.VCR(
         cassette_library_dir="fixtures/vcr_cassettes",
         record_mode="once",
         filter_headers=["authorization", "x-api-key"],
-        match_on=["method", "scheme", "host", "port", "path", "query"],
         before_record_request=before_record_request,
         before_record_response=before_record_response,
     )
+
+    # Register custom body matcher
+    my_vcr.register_matcher("body_with_id_normalization", custom_body_matcher)
+
+    # Set match_on to use custom matcher
+    my_vcr.match_on = [
+        "method",
+        "scheme",
+        "host",
+        "port",
+        "path",
+        "query",
+        "body_with_id_normalization",
+    ]
 
     # Add response callback for playback (denormalize IDs back)
     my_vcr.before_playback_response = before_playback_response
