@@ -41,11 +41,10 @@ services:
     env_file:
       - ./.envs/.local/.postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U oc_user -d opencontractserver"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 10s
 
   redis:
     image: redis:6

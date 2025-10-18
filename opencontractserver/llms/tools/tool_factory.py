@@ -264,6 +264,7 @@ def _extract_parameter_descriptions_from_docstring(func: Callable) -> dict[str, 
 def create_document_tools() -> list[CoreTool]:
     """Create standard document-related tools."""
     from opencontractserver.llms.tools.core_tools import (
+        asearch_exact_text_as_sources,
         get_md_summary_token_length,
         get_note_content_token_length,
         get_notes_for_document_corpus,
@@ -272,6 +273,13 @@ def create_document_tools() -> list[CoreTool]:
     )
 
     return [
+        CoreTool.from_function(
+            asearch_exact_text_as_sources,
+            description=(
+                "Search for exact text matches in a "
+                "document and return them as source nodes with page numbers and bounding boxes."
+            ),
+        ),
         CoreTool.from_function(
             load_document_md_summary,
             description="Load markdown summary of a document, optionally truncated.",

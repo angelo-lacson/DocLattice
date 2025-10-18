@@ -80,7 +80,7 @@ export const PDFPage = ({
   const [hasPdfPageRendered, setPdfPageRendered] = useState(false);
   const [initialZoomSet, setInitialZoomSet] = useState(false);
 
-  const { showSelectedOnly } = useAnnotationDisplay();
+  const { showSelectedOnly, showBoundingBoxes } = useAnnotationDisplay();
   const { zoomLevel, setZoomLevel } = useZoomLevel();
   const { selectedAnnotations, selectedRelations } = useAnnotationSelection();
 
@@ -324,6 +324,10 @@ export const PDFPage = ({
     if (!hasPdfPageRendered || !zoomLevel || !pageBounds) return [];
 
     const isVisible = (annot: ServerTokenAnnotation): boolean => {
+      // When chat sources are displayed, only show explicitly selected annotations
+      if (selectedMessage) {
+        return selectedAnnotations.includes(annot.id);
+      }
       if (showSelectedOnly) {
         return selectedAnnotations.includes(annot.id);
       }
@@ -344,6 +348,7 @@ export const PDFPage = ({
     annots_to_render,
     showSelectedOnly,
     selectedAnnotations,
+    selectedMessage,
     hasPdfPageRendered,
     zoomLevel,
     pageBounds,
@@ -517,6 +522,7 @@ export const PDFPage = ({
 
         {zoomLevel &&
           pageBounds &&
+          !selectedMessage &&
           searchResults
             .filter(
               (match): match is TextSearchTokenResult => "tokens" in match
@@ -546,7 +552,7 @@ export const PDFPage = ({
               refKey={`${selectedMessage.messageId}.${index}`}
               key={source.id}
               total_results={selectedMessage.sources.length}
-              showBoundingBox={true}
+              showBoundingBox={showBoundingBoxes}
               hidden={
                 selectedSourceIndex !== null && selectedSourceIndex !== index
               }

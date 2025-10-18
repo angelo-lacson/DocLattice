@@ -484,9 +484,14 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
       const hoveredSpan = spans[hoveredSpanIndex];
       if (!hoveredSpan) return;
 
-      // If there is a user selection, only show the hovered labels if selected
+      // When chat sources are displayed, only show labels for explicitly selected annotations
+      // Otherwise, show hovered labels based on selection state
       const annToRender =
-        selectedAnnotations.length > 0
+        chatSources.length > 0
+          ? hoveredSpan.annotations.filter((ann) =>
+              selectedAnnotations.includes(ann.id)
+            )
+          : selectedAnnotations.length > 0
           ? hoveredSpan.annotations.filter((ann) =>
               selectedAnnotations.includes(ann.id)
             )
@@ -558,7 +563,13 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     };
 
     calculateLabelPositions();
-  }, [hoveredSpanIndex, spans, selectedAnnotations, showStructuralAnnotations]);
+  }, [
+    hoveredSpanIndex,
+    spans,
+    selectedAnnotations,
+    showStructuralAnnotations,
+    chatSources.length,
+  ]);
 
   /**
    * Auto-scroll to the earliest selected annotation when selectedAnnotations changes.
@@ -713,8 +724,13 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
           // Determine which of these spanAnnotations are relevant for highlighting,
           // respecting structural toggles.
+          // When chat sources are displayed, only show explicitly selected annotations
           const usedAnn =
-            selectedAnnotations.length > 0
+            chatSources.length > 0
+              ? spanAnnotations.filter((ann) =>
+                  selectedAnnotations.includes(ann.id)
+                )
+              : selectedAnnotations.length > 0
               ? spanAnnotations.filter((ann) =>
                   selectedAnnotations.includes(ann.id)
                 )
@@ -748,8 +764,8 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
             }
           }
 
-          // If we have a search highlight
-          if (isSearchResult) {
+          // If we have a search highlight (but not when chat sources are displayed)
+          if (isSearchResult && chatSources.length === 0) {
             highlightColors.push(
               isSelectedSearchResult ? "#FFFF00" : "#FFFF99"
             );

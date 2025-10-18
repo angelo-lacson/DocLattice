@@ -68,6 +68,7 @@ from opencontractserver.llms.tools.core_tools import (
     aload_document_md_summary,
     aload_document_txt_extract,
     asearch_document_notes,
+    asearch_exact_text_as_sources,
     aupdate_corpus_description,
     aupdate_document_note,
     aupdate_document_summary,
@@ -102,10 +103,14 @@ def _to_source_node(raw: Any) -> SourceNode:
     if hasattr(raw, "model_dump"):
         raw = raw.model_dump()
 
-    # raw is now a dict coming from PydanticAIVectorSearchResponse
+    logger.info(f"[search_exact_text_tool] Raw source: {raw!r}")
+    # raw is now a dict - handle both 'content' and 'rawText' keys
+    # (SourceNode.to_dict() uses 'rawText' for frontend compatibility)
+    content = raw.get("content") or raw.get("rawText", "")
+
     return SourceNode(
         annotation_id=int(raw.get("annotation_id", 0)),
-        content=raw.get("content", ""),
+        content=content,
         metadata=raw,
         similarity_score=raw.get("similarity_score", 1.0),
     )
@@ -475,6 +480,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                     for s in raw_sources
                                                 ]
                                                 accumulated_sources.extend(new_sources)
+
                                                 # Emit a dedicated SourceEvent so the client
                                                 # can update citations in real-time.
                                                 src_ev = SourceEvent(
@@ -484,6 +490,32 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 )
                                                 builder.add(src_ev)
                                                 yield src_ev
+
+                                        # Capture exact text search results (similar to similarity_search)
+                                        elif tool_name == "search_exact_text":
+                                            raw_sources = event.result.content  # type: ignore[attr-defined]
+                                            if (
+                                                isinstance(raw_sources, list)
+                                                and raw_sources
+                                            ):
+                                                new_sources = [
+                                                    _to_source_node(s)
+                                                    for s in raw_sources
+                                                ]
+                                                accumulated_sources.extend(new_sources)
+                                                # Emit SourceEvent for real-time citation updates
+                                                src_ev = SourceEvent(
+                                                    sources=new_sources,
+                                                    user_message_id=user_msg_id,
+                                                    llm_message_id=llm_msg_id,
+                                                )
+                                                builder.add(src_ev)
+                                                yield src_ev
+                                            else:
+                                                logger.warning(
+                                                    "[search_exact_text] No sources to emit - "
+                                                    f"raw_sources is {type(raw_sources)} with value: {raw_sources!r}"
+                                                )
 
                                         # Special handling for nested document-agent responses
                                         elif tool_name == "ask_document":
@@ -995,12 +1027,43 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             tool_result = {"result": result}
             status_str = "approved"
+
+            # Detect empty or failed results and build appropriate guidance
+            tool_succeeded = True
+            failure_message = None
+
+            # Check for annotation tools returning empty results
+            if tool_name in ["add_exact_string_annotations", "duplicate_annotations"]:
+                if isinstance(result, dict) and "annotation_ids" in result:
+                    if not result["annotation_ids"]:
+                        tool_succeeded = False
+                        failure_message = (
+                            "The exact text strings were not found in the document. "
+                            "Please inform the user that no matching text was found and "
+                            "suggest verifying the exact text or trying a different search approach."
+                        )
+            # Check for note creation failures
+            elif tool_name == "add_document_note":
+                if result is None or (
+                    isinstance(result, dict) and not result.get("note_id")
+                ):
+                    tool_succeeded = False
+                    failure_message = (
+                        "Failed to create the note. Please inform the "
+                        "user and ask if they'd like to try again."
+                    )
+
         else:
             tool_result = {
                 "status": "rejected",
                 "reason": "User did not approve execution.",
             }
             status_str = "rejected"
+            tool_succeeded = False  # Rejected = not successful
+            failure_message = (
+                "The user rejected this tool execution. "
+                "Please inform the user and ask if they would like to try a different approach."
+            )
 
         # Append tool_return part to history only when *approved*; for rejected we
         # simply finish the message lifecycle and emit a final event.
@@ -1096,12 +1159,22 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             accumulated_content = ""
 
-            # Create a continuation prompt that includes the tool result
-            continuation_prompt = (
-                f"The tool '{tool_name}' was executed with user approval and returned: "
-                f"{json.dumps(tool_result, indent=2)}. "
-                f"Please continue with your original task based on this result."
-            )
+            # Create a continuation prompt that includes the tool result and
+            # provides clear guidance if the tool failed
+            if tool_succeeded:
+                continuation_prompt = (
+                    f"The tool '{tool_name}' was executed with user approval and returned: "
+                    f"{json.dumps(tool_result, indent=2)}. "
+                    f"Please continue with your original task based on this result."
+                )
+            else:
+                continuation_prompt = (
+                    f"The tool '{tool_name}' was executed with user approval but did not succeed. "
+                    f"Result: {json.dumps(tool_result, indent=2)}. "
+                    f"\n\n{failure_message}\n\n"
+                    f"IMPORTANT: Do NOT retry the same tool call. Instead, inform the user "
+                    f"about what happened and wait for their guidance."
+                )
 
             logger.info(f"Resuming with continuation prompt: {continuation_prompt}")
 
@@ -1334,6 +1407,15 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             - Tool call limit is 50, so plan your chunking strategy accordingly
             - For a 500K char document, use ~10-20 chunks of 25-50K chars each
 
+            🔴 CRITICAL - CITATION REQUIREMENT:
+            After reading text with this tool, you MUST:
+            1. Identify 3-5 most relevant exact quotes/passages (5-50 words each)
+            2. Call search_exact_text with those EXACT strings
+            3. This creates proper citations with page numbers
+
+            WHY: This tool returns raw text WITHOUT sources. Only search_exact_text
+            creates citations. Skip this and your answer will have NO SOURCES!
+
             Example: For a 200,000 character document:
             - Good: Load in 4-8 chunks of 25,000-50,000 chars each
             - Bad: Load 100 chars at a time (would need 2000 tool calls!)
@@ -1376,11 +1458,68 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         load_text_tool = PydanticAIToolFactory.from_function(
             load_document_text_tool,
             name="load_document_text",
-            description="Load the document's plain-text extract. ALWAYS use get_document_text_length first! Load in chunks of 5K-50K chars to avoid context overflow or tool call limits.",  # noqa: E501
+            description=(
+                "Load the document's plain-text extract. ALWAYS use get_document_text_length first! "
+                "Load in chunks of 5K-50K chars to avoid context overflow or tool call limits. "
+                "🔴 CRITICAL: After reading, you MUST call search_exact_text on 3-5 key passages (5-50 words each) "
+                "to create proper citations with page numbers. Without this step, your answer will have NO SOURCES."
+            ),
             parameter_descriptions={
                 "start": "Inclusive start character index (default 0)",
                 "end": "Exclusive end character index (defaults to end of file)",
                 "refresh": "If true, refresh the cached content from disk",
+            },
+        )
+
+        # -----------------------------
+        # Exact text search tool
+        # -----------------------------
+        async def search_exact_text_tool(search_strings: list[str]) -> list[dict]:
+            """Search for exact text matches and return source nodes with location information."""
+            logger.info(
+                f"[search_exact_text_tool] Called with search_strings: {search_strings}"
+            )
+            sources = await asearch_exact_text_as_sources(
+                document_id=context.document.id,
+                search_strings=search_strings,
+                corpus_id=context.corpus.id if context.corpus else None,
+            )
+            logger.info(
+                f"[search_exact_text_tool] Got {len(sources)} sources from asearch_exact_text_as_sources"
+            )
+
+            # Convert SourceNode objects to dicts in the SAME format as similarity_search
+            # This ensures consistent handling by PydanticAI and our event system
+            result = []
+            for s in sources:
+                result.append(
+                    {
+                        "annotation_id": s.annotation_id,
+                        "content": s.content,  # Use 'content' not 'rawText' to match similarity_search format
+                        "similarity_score": s.similarity_score,
+                        **s.metadata,  # Flatten metadata fields to top level
+                    }
+                )
+
+            logger.info(f"[search_exact_text_tool] Returning {len(result)} dicts")
+            if result:
+                logger.info(
+                    f"[search_exact_text_tool] First dict keys: {list(result[0].keys())}"
+                )
+                logger.info(
+                    f"[search_exact_text_tool] First source content: {result[0].get('content', 'MISSING')[:50]}..."
+                )
+            return result
+
+        search_exact_text_wrapped = PydanticAIToolFactory.from_function(
+            search_exact_text_tool,
+            name="search_exact_text",
+            description=(
+                "Search for exact text matches in the document. Returns source nodes with page numbers "
+                "and bounding boxes (for PDFs). Perfect match similarity score of 1.0."
+            ),
+            parameter_descriptions={
+                "search_strings": "List of exact strings to find. All occurrences of each string will be returned.",
             },
         )
 
@@ -1652,6 +1791,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             get_summary_length_tool,  # corpus-agnostic
             get_text_length_tool,  # corpus-agnostic
             load_text_tool,  # corpus-agnostic
+            search_exact_text_wrapped,  # corpus-agnostic exact text search
         ]
 
         if context.corpus is not None:
@@ -1904,6 +2044,10 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
 
             # Guard against cross-corpus leakage
             if document_id not in {d.id for d in context.documents}:
+                logger.warning(
+                    f"[ask_document] Document {document_id} not found in corpus documents. "
+                    f"Available document IDs: {[d.id for d in context.documents]}"
+                )
                 raise ValueError("Document does not belong to current corpus")
 
             doc_agent = await _agents_api.for_document(

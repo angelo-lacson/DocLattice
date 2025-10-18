@@ -654,3 +654,507 @@ class TestPydanticAIAgents(TestCase):
 
         self.assertIsNone(embedding_request.query_text)
         self.assertEqual(len(embedding_request.query_embedding), 384)
+
+
+class TestPydanticAIAgentsCoverage(TestCase):
+    """Additional tests to improve coverage of pydantic_ai_agents.py"""
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        """Create test data."""
+        with transaction.atomic():
+            cls.user = User.objects.create_user(
+                username="coverageuser",
+                password="testpass",
+            )
+            cls.corpus = Corpus.objects.create(
+                title="Coverage Test Corpus",
+                description="Test corpus for coverage",
+                creator=cls.user,
+                is_public=True,
+            )
+            cls.doc1 = Document.objects.create(
+                title="Coverage Document",
+                description="Test document for coverage",
+                creator=cls.user,
+                is_public=True,
+            )
+            cls.corpus.documents.add(cls.doc1)
+
+    # ========================================================================
+    # Group 1: Helper function tests (_to_source_node)
+    # ========================================================================
+
+    def test_to_source_node_with_source_node_input(self) -> None:
+        """Test _to_source_node with SourceNode input (passthrough)."""
+        from opencontractserver.llms.agents.core_agents import SourceNode
+        from opencontractserver.llms.agents.pydantic_ai_agents import _to_source_node
+
+        source = SourceNode(
+            annotation_id=123,
+            content="test content",
+            metadata={"page": 5},
+            similarity_score=0.95,
+        )
+
+        result = _to_source_node(source)
+        self.assertIs(result, source)
+        self.assertEqual(result.annotation_id, 123)
+        self.assertEqual(result.content, "test content")
+
+    def test_to_source_node_with_dict_content_key(self) -> None:
+        """Test _to_source_node with dict containing 'content' key."""
+        from opencontractserver.llms.agents.pydantic_ai_agents import _to_source_node
+
+        raw_dict = {
+            "annotation_id": 456,
+            "content": "dict content",
+            "similarity_score": 0.85,
+            "page": 3,
+        }
+
+        result = _to_source_node(raw_dict)
+        self.assertEqual(result.annotation_id, 456)
+        self.assertEqual(result.content, "dict content")
+        self.assertEqual(result.similarity_score, 0.85)
+        self.assertEqual(result.metadata["page"], 3)
+
+    def test_to_source_node_with_dict_rawtext_key(self) -> None:
+        """Test _to_source_node with dict containing 'rawText' key."""
+        from opencontractserver.llms.agents.pydantic_ai_agents import _to_source_node
+
+        raw_dict = {
+            "annotation_id": 789,
+            "rawText": "raw text content",
+            "similarity_score": 0.75,
+        }
+
+        result = _to_source_node(raw_dict)
+        self.assertEqual(result.annotation_id, 789)
+        self.assertEqual(result.content, "raw text content")
+
+    def test_to_source_node_with_pydantic_model(self) -> None:
+        """Test _to_source_node with Pydantic model that has model_dump."""
+        from pydantic import BaseModel
+
+        from opencontractserver.llms.agents.pydantic_ai_agents import _to_source_node
+
+        class TestSource(BaseModel):
+            annotation_id: int
+            content: str
+            similarity_score: float = 1.0
+
+        model = TestSource(annotation_id=111, content="pydantic content")
+        result = _to_source_node(model)
+
+        self.assertEqual(result.annotation_id, 111)
+        self.assertEqual(result.content, "pydantic content")
+
+    # ========================================================================
+    # Group 2: _check_tool_requires_approval tests
+    # ========================================================================
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    def test_check_tool_requires_approval_via_config_tools(
+        self, mock_agent_cls: MagicMock
+    ) -> None:
+        """Test _check_tool_requires_approval finds approval requirement in config.tools."""
+        from opencontractserver.llms.agents.core_agents import AgentConfig
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+        from opencontractserver.llms.tools.tool_factory import CoreTool
+
+        # Create a tool with requires_approval
+        def test_tool():
+            """Test tool."""
+            pass
+
+        core_tool = CoreTool.from_function(test_tool)
+        core_tool.requires_approval = True
+
+        # Create a mock wrapper
+        mock_tool = MagicMock()
+        mock_tool.__name__ = "test_tool"
+        mock_tool.core_tool = core_tool
+
+        config = AgentConfig(user_id=self.user.id, tools=[mock_tool])
+
+        mock_pydantic_agent = MagicMock()
+        mock_pydantic_agent._function_tools = {}
+        mock_agent_cls.return_value = mock_pydantic_agent
+
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=MagicMock(),
+            pydantic_ai_agent=mock_pydantic_agent,
+            agent_deps=MagicMock(),
+        )
+
+        result = agent._check_tool_requires_approval("test_tool")
+        self.assertTrue(result)
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    def test_check_tool_requires_approval_default_false(
+        self, mock_agent_cls: MagicMock
+    ) -> None:
+        """Test _check_tool_requires_approval returns False by default."""
+        from opencontractserver.llms.agents.core_agents import AgentConfig
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        config = AgentConfig(user_id=self.user.id)
+
+        mock_pydantic_agent = MagicMock()
+        mock_pydantic_agent._function_tools = {}
+        mock_agent_cls.return_value = mock_pydantic_agent
+
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=MagicMock(),
+            pydantic_ai_agent=mock_pydantic_agent,
+            agent_deps=MagicMock(),
+        )
+
+        result = agent._check_tool_requires_approval("nonexistent_tool")
+        self.assertFalse(result)
+
+    # ========================================================================
+    # Group 3: Message initialization tests
+    # ========================================================================
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_initialise_llm_message_with_existing_human(
+        self, mock_agent_cls: MagicMock
+    ) -> None:
+        """Test _initialise_llm_message reuses existing HUMAN message."""
+        from opencontractserver.conversations.models import ChatMessage, Conversation
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Create conversation and message
+        conversation = await Conversation.objects.acreate(
+            title="Test Conversation",
+            creator=self.user,
+        )
+
+        human_msg = await ChatMessage.objects.acreate(
+            conversation=conversation,
+            content="test message",
+            msg_type="HUMAN",
+            creator=self.user,
+        )
+
+        config = AgentConfig(user_id=self.user.id, conversation=conversation)
+        conv_mgr = await CoreConversationManager.create_for_document(
+            corpus=self.corpus,
+            document=self.doc1,
+            user_id=self.user.id,
+            config=config,
+            override_conversation=conversation,
+        )
+
+        mock_pydantic_agent = MagicMock()
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=mock_pydantic_agent,
+            agent_deps=MagicMock(),
+        )
+
+        user_id, llm_id = await agent._initialise_llm_message("test")
+
+        # Should reuse the existing HUMAN message
+        self.assertEqual(user_id, human_msg.id)
+        self.assertIsInstance(llm_id, int)
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_initialise_llm_message_fallback_creates_new(
+        self, mock_agent_cls: MagicMock
+    ) -> None:
+        """Test _initialise_llm_message creates new message when no HUMAN exists."""
+        from opencontractserver.conversations.models import Conversation
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Create conversation without messages
+        conversation = await Conversation.objects.acreate(
+            title="Empty Conversation",
+            creator=self.user,
+        )
+
+        config = AgentConfig(user_id=self.user.id, conversation=conversation)
+        conv_mgr = await CoreConversationManager.create_for_document(
+            corpus=self.corpus,
+            document=self.doc1,
+            user_id=self.user.id,
+            config=config,
+            override_conversation=conversation,
+        )
+
+        mock_pydantic_agent = MagicMock()
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=mock_pydantic_agent,
+            agent_deps=MagicMock(),
+        )
+
+        # Mock store_user_message since fallback will create one
+        agent.store_user_message = AsyncMock(return_value=999)
+
+        user_id, llm_id = await agent._initialise_llm_message("test")
+
+        # Should create new user message via fallback
+        self.assertEqual(user_id, 999)
+        agent.store_user_message.assert_called_once_with("test")
+
+    # ========================================================================
+    # Group 4: resume_with_approval tests
+    # ========================================================================
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_resume_with_approval_approved_success(
+        self, mock_agent_cls: MagicMock
+    ) -> None:
+        """Test resume_with_approval with approved tool execution that succeeds."""
+        from opencontractserver.conversations.models import ChatMessage, Conversation
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+            MessageState,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Create conversation and paused message
+        conversation = await Conversation.objects.acreate(
+            title="Approval Test",
+            creator=self.user,
+        )
+
+        paused_msg = await ChatMessage.objects.acreate(
+            conversation=conversation,
+            content="Awaiting approval",
+            msg_type="LLM",
+            creator=self.user,
+            data={
+                "state": MessageState.AWAITING_APPROVAL,
+                "pending_tool_call": {
+                    "name": "test_tool",
+                    "arguments": {"arg1": "value1"},
+                    "tool_call_id": "call-123",
+                },
+            },
+        )
+
+        config = AgentConfig(user_id=self.user.id, conversation=conversation)
+        conv_mgr = await CoreConversationManager.create_for_document(
+            corpus=self.corpus,
+            document=self.doc1,
+            user_id=self.user.id,
+            config=config,
+            override_conversation=conversation,
+        )
+
+        mock_pydantic_agent = MagicMock()
+        mock_pydantic_agent._function_tools = {}
+
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=mock_pydantic_agent,
+            agent_deps=MagicMock(),
+        )
+
+        # Mock the tool function
+        def mock_tool_function(ctx, arg1):
+            return {"status": "success", "value": arg1}
+
+        # Mock _stream_core to yield a simple final event
+        from opencontractserver.llms.agents.core_agents import FinalEvent
+
+        async def mock_stream_core(*args, **kwargs):
+            yield FinalEvent(
+                content="Tool executed successfully",
+                accumulated_content="Tool executed successfully",
+            )
+
+        agent._stream_core = mock_stream_core
+        agent.create_placeholder_message = AsyncMock(return_value=999)
+
+        # Add tool to config
+        mock_tool_wrapper = MagicMock()
+        mock_tool_wrapper.__name__ = "test_tool"
+        mock_tool_wrapper.return_value = {"status": "success", "value": "value1"}
+        config.tools = [mock_tool_wrapper]
+
+        events = []
+        async for event in agent.resume_with_approval(paused_msg.id, approved=True):
+            events.append(event)
+
+        # Should have approval result and final events
+        self.assertTrue(len(events) > 0)
+        self.assertTrue(
+            any(e.type == "approval_result" for e in events if hasattr(e, "type"))
+        )
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_resume_with_approval_rejected(
+        self, mock_agent_cls: MagicMock
+    ) -> None:
+        """Test resume_with_approval with rejected tool execution."""
+        from opencontractserver.conversations.models import ChatMessage, Conversation
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+            MessageState,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Create conversation and paused message
+        conversation = await Conversation.objects.acreate(
+            title="Rejection Test",
+            creator=self.user,
+        )
+
+        paused_msg = await ChatMessage.objects.acreate(
+            conversation=conversation,
+            content="Awaiting approval",
+            msg_type="LLM",
+            creator=self.user,
+            data={
+                "state": MessageState.AWAITING_APPROVAL,
+                "pending_tool_call": {
+                    "name": "dangerous_tool",
+                    "arguments": {"action": "delete"},
+                    "tool_call_id": "call-456",
+                },
+            },
+        )
+
+        config = AgentConfig(user_id=self.user.id, conversation=conversation)
+        conv_mgr = await CoreConversationManager.create_for_document(
+            corpus=self.corpus,
+            document=self.doc1,
+            user_id=self.user.id,
+            config=config,
+            override_conversation=conversation,
+        )
+
+        mock_pydantic_agent = MagicMock()
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=mock_pydantic_agent,
+            agent_deps=MagicMock(),
+        )
+
+        events = []
+        async for event in agent.resume_with_approval(paused_msg.id, approved=False):
+            events.append(event)
+
+        # Should emit approval_result (rejected) and final events
+        self.assertTrue(len(events) > 0)
+        approval_events = [
+            e for e in events if hasattr(e, "type") and e.type == "approval_result"
+        ]
+        self.assertTrue(len(approval_events) > 0)
+        self.assertEqual(approval_events[0].decision, "rejected")
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_resume_with_approval_parses_json_string_args(
+        self, mock_agent_cls: MagicMock
+    ) -> None:
+        """Test resume_with_approval parses JSON string arguments correctly."""
+        import json
+
+        from opencontractserver.conversations.models import ChatMessage, Conversation
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+            MessageState,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Create conversation with JSON string arguments
+        conversation = await Conversation.objects.acreate(
+            title="JSON Args Test",
+            creator=self.user,
+        )
+
+        tool_args = {"key": "value", "number": 42}
+        paused_msg = await ChatMessage.objects.acreate(
+            conversation=conversation,
+            content="Awaiting approval",
+            msg_type="LLM",
+            creator=self.user,
+            data={
+                "state": MessageState.AWAITING_APPROVAL,
+                "pending_tool_call": {
+                    "name": "json_tool",
+                    "arguments": json.dumps(tool_args),  # JSON string
+                    "tool_call_id": "call-789",
+                },
+            },
+        )
+
+        config = AgentConfig(user_id=self.user.id, conversation=conversation)
+        conv_mgr = await CoreConversationManager.create_for_document(
+            corpus=self.corpus,
+            document=self.doc1,
+            user_id=self.user.id,
+            config=config,
+            override_conversation=conversation,
+        )
+
+        mock_pydantic_agent = MagicMock()
+        mock_pydantic_agent._function_tools = {}
+
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=mock_pydantic_agent,
+            agent_deps=MagicMock(),
+        )
+
+        # Mock tool
+        mock_tool = MagicMock()
+        mock_tool.__name__ = "json_tool"
+
+        async def tool_impl(ctx, **kwargs):
+            return kwargs
+
+        mock_tool.return_value = tool_args
+        config.tools = [mock_tool]
+
+        # Mock _stream_core
+        from opencontractserver.llms.agents.core_agents import FinalEvent
+
+        async def mock_stream_core(*args, **kwargs):
+            yield FinalEvent(content="Done", accumulated_content="Done")
+
+        agent._stream_core = mock_stream_core
+        agent.create_placeholder_message = AsyncMock(return_value=888)
+
+        events = []
+        async for event in agent.resume_with_approval(paused_msg.id, approved=True):
+            events.append(event)
+
+        self.assertTrue(len(events) > 0)
