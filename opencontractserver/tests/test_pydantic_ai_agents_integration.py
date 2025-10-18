@@ -11,8 +11,6 @@ VCR.py records HTTP interactions the first time tests run, then replays them
 for fast, deterministic tests without needing API keys in CI/CD.
 """
 
-import re
-
 import vcr
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -41,285 +39,21 @@ def constant_vector(dimension: int = 384, value: float = 0.5) -> list[float]:
     return [value] * dimension
 
 
-def create_vcr_with_id_normalization(
-    cassette_path: str, id_mapping: dict[int, int]  # noqa: ARG001
-) -> vcr.VCR:
-    """Create a VCR instance that normalizes document IDs in requests/responses.
-
-    This solves the test isolation problem where document IDs differ between
-    running tests in isolation (IDs 1, 2, 3) vs in a full suite (IDs 5000+).
-
-    The key insight: We MUST match on body to distinguish multi-turn conversations,
-    but we need to normalize IDs BEFORE matching. We use a custom body matcher
-    that normalizes both the request and cassette bodies before comparing.
-
-    Args:
-        cassette_path: Path to the VCR cassette file (for documentation only)
-        id_mapping: Mapping from actual document IDs to normalized IDs
-                    e.g., {5001: 1, 5002: 2}
-
-    Returns:
-        Configured VCR instance
-    """
-
-    def normalize_ids_in_text(text: str, mapping: dict[int, int]) -> str:
-        """Replace document IDs in text according to mapping."""
-        if not text:
-            return text
-
-        # Sort by actual_id value (descending) to avoid replacing normalized IDs
-        # For example, if we have {1: 2, 2: 3}, process 2->3 first, then 1->2
-        for actual_id, normalized_id in sorted(
-            mapping.items(), key=lambda x: x[0], reverse=True
-        ):
-            # Replace in JSON contexts: "document_id": 5001 -> "document_id": 1
-            text = re.sub(
-                rf'"document_id"\s*:\s*{actual_id}\b',
-                f'"document_id": {normalized_id}',
-                text,
-            )
-            # Replace in corpus_id contexts as well
-            text = re.sub(
-                rf'"corpus_id"\s*:\s*{actual_id}\b',
-                f'"corpus_id": {normalized_id}',
-                text,
-            )
-            # Replace in function calls: ask_document(5001, ...) -> ask_document(1, ...)
-            text = re.sub(
-                rf'\bask_document\(["\']?{actual_id}["\']?',
-                f"ask_document({normalized_id}",
-                text,
-            )
-            # Replace in system prompts: (ID: 5001) -> (ID: 1)
-            text = re.sub(
-                rf"\(ID:\s*{actual_id}\)",
-                f"(ID: {normalized_id})",
-                text,
-            )
-            # Replace in lists: [5001, 5002] -> [1, 2]
-            text = re.sub(rf"\b{actual_id}\b(?=[,\]\s])", str(normalized_id), text)
-
-        return text
-
-    def custom_body_matcher(r1, r2):
-        """Custom matcher that normalizes IDs and does intelligent conversation matching.
-
-        This allows VCR to match requests even when document/corpus IDs differ
-        between test runs. It uses a lenient matching strategy that handles
-        multi-turn conversations by comparing conversation structure rather than
-        exact string equality.
-        """
-        # Get bodies - handle both request objects and dict structures
-        try:
-            # r1 is the incoming request
-            if hasattr(r1, "body"):
-                body1 = r1.body
-            elif isinstance(r1, dict) and "body" in r1:
-                body1 = r1["body"]
-            else:
-                print(
-                    f"DEBUG: r1 type={type(r1)}, has body={hasattr(r1, 'body')}, "
-                    f"is dict={'body' in r1 if isinstance(r1, dict) else 'N/A'}"
-                )
-                return False
-
-            # r2 is the cassette request (might be dict or object)
-            if hasattr(r2, "body"):
-                body2 = r2.body
-            elif isinstance(r2, dict) and "body" in r2:
-                body2 = r2["body"]
-            else:
-                print(
-                    f"DEBUG: r2 type={type(r2)}, has body={hasattr(r2, 'body')}, is"
-                    f" dict={'body' in r2 if isinstance(r2, dict) else 'N/A'}"
-                )
-                return False
-
-            # Handle None bodies
-            if body1 is None and body2 is None:
-                return True
-            if body1 is None or body2 is None:
-                print(
-                    f"DEBUG: body1 is None={body1 is None}, body2 is None={body2 is None}"
-                )
-                return False
-
-            # Convert to strings
-            body1_text = (
-                body1.decode("utf-8") if isinstance(body1, bytes) else str(body1)
-            )
-            body2_text = (
-                body2.decode("utf-8") if isinstance(body2, bytes) else str(body2)
-            )
-
-            # Normalize IDs in both bodies
-            normalized1 = normalize_ids_in_text(body1_text, id_mapping)
-            normalized2 = normalize_ids_in_text(body2_text, id_mapping)
-
-            # Try exact match first (fastest)
-            if normalized1 == normalized2:
-                return True
-
-            # If exact match fails, try smarter conversation matching
-            # Parse as JSON to compare conversation structure
-            import json
-
-            try:
-                req1 = json.loads(normalized1)
-                req2 = json.loads(normalized2)
-
-                # Both must be OpenAI chat completion requests
-                if "messages" not in req1 or "messages" not in req2:
-                    return False
-
-                msgs1 = req1["messages"]
-                msgs2 = req2["messages"]
-
-                # Match based on conversation structure:
-                # 1. Same number of messages (or body1 has more - replay includes more history)
-                # 2. System prompts should match (identifies corpus vs document agent)
-                # 3. First user message should match (the original question)
-
-                if len(msgs1) == 0 or len(msgs2) == 0:
-                    return False
-
-                # Compare system prompts
-                sys1 = (
-                    msgs1[0].get("content", "")
-                    if msgs1[0].get("role") == "system"
-                    else ""
-                )
-                sys2 = (
-                    msgs2[0].get("content", "")
-                    if msgs2[0].get("role") == "system"
-                    else ""
-                )
-
-                # System prompts should be very similar (allowing for minor diffs)
-                # Check key phrases
-                is_corpus1 = "collection of documents" in sys1
-                is_corpus2 = "collection of documents" in sys2
-                is_doc1 = "analyzing the document titled" in sys1
-                is_doc2 = "analyzing the document titled" in sys2
-
-                if (is_corpus1 != is_corpus2) or (is_doc1 != is_doc2):
-                    return False  # Different agent types
-
-                # If both are document agents, check they're for the same document title
-                if is_doc1 and is_doc2:
-                    import re as re_module
-
-                    title1 = re_module.search(
-                        r"analyzing the document titled '([^']+)'", sys1
-                    )
-                    title2 = re_module.search(
-                        r"analyzing the document titled '([^']+)'", sys2
-                    )
-                    if title1 and title2 and title1.group(1) != title2.group(1):
-                        return False  # Different documents
-
-                # Compare first user message
-                user_msgs1 = [m for m in msgs1 if m.get("role") == "user"]
-                user_msgs2 = [m for m in msgs2 if m.get("role") == "user"]
-
-                if len(user_msgs1) > 0 and len(user_msgs2) > 0:
-                    if user_msgs1[0].get("content") != user_msgs2[0].get("content"):
-                        return False
-
-                # Match on conversation length - body2 should have <= messages than body1
-                # (cassette might have earlier state, incoming request has more history)
-                if len(msgs2) > len(msgs1):
-                    return False
-
-                # If we get here, it's a reasonable match
-                return True
-
-            except (json.JSONDecodeError, KeyError, IndexError):
-                # If we can't parse as JSON or compare structure, fall back to exact match
-                return False
-
-        except Exception:
-            # If anything goes wrong, don't match
-            return False
-
-    def before_record_request(request):
-        """Normalize document IDs before recording request."""
-        if hasattr(request, "body") and request.body:
-            try:
-                body_text = (
-                    request.body.decode("utf-8")
-                    if isinstance(request.body, bytes)
-                    else str(request.body)
-                )
-                normalized = normalize_ids_in_text(body_text, id_mapping)
-                request.body = normalized.encode("utf-8")
-            except (UnicodeDecodeError, AttributeError):
-                pass
-        return request
-
-    def before_record_response(response):
-        """Normalize document IDs before recording response."""
-        if isinstance(response, dict) and "body" in response:
-            body = response["body"]
-            try:
-                if isinstance(body, bytes):
-                    body_text = body.decode("utf-8")
-                    normalized = normalize_ids_in_text(body_text, id_mapping)
-                    response["body"] = normalized.encode("utf-8")
-                elif isinstance(body, str):
-                    response["body"] = normalize_ids_in_text(body, id_mapping)
-            except (UnicodeDecodeError, AttributeError):
-                pass
-        return response
-
-    def before_playback_response(response):
-        """Denormalize IDs in cassette response back to actual IDs during playback."""
-        # Create reverse mapping (normalized -> actual)
-        reverse_mapping = {v: k for k, v in id_mapping.items()}
-
-        if isinstance(response, dict) and "body" in response:
-            body = response["body"]
-            try:
-                if isinstance(body, bytes):
-                    body_text = body.decode("utf-8")
-                    # Replace normalized IDs with actual IDs
-                    denormalized = normalize_ids_in_text(body_text, reverse_mapping)
-                    response["body"] = denormalized.encode("utf-8")
-                elif isinstance(body, str):
-                    response["body"] = normalize_ids_in_text(body, reverse_mapping)
-            except (UnicodeDecodeError, AttributeError):
-                pass
-        return response
-
-    # Create VCR instance with custom body matcher
-    # The custom matcher normalizes IDs in BOTH the incoming request and cassette
-    # entries before comparing, so matches succeed even when actual IDs differ.
-    my_vcr = vcr.VCR(
-        cassette_library_dir="fixtures/vcr_cassettes",
-        record_mode="once",
-        filter_headers=["authorization", "x-api-key"],
-        before_record_request=before_record_request,
-        before_record_response=before_record_response,
-    )
-
-    # Register custom body matcher
-    my_vcr.register_matcher("body_with_id_normalization", custom_body_matcher)
-
-    # Set match_on to use custom matcher
-    my_vcr.match_on = [
-        "method",
-        "scheme",
-        "host",
-        "port",
-        "path",
-        "query",
-        "body_with_id_normalization",
-    ]
-
-    # Add response callback for playback (denormalize IDs back)
-    my_vcr.before_playback_response = before_playback_response
-
-    return my_vcr
+# REMOVED: create_vcr_with_id_normalization function
+#
+# This complex 300+ line function for ID normalization in VCR cassettes has been
+# removed as it's no longer needed. It was only used by test_ask_document_tool_nested_agent
+# which has been replaced with a TestModel-based version.
+#
+# The function attempted to solve test isolation issues where document IDs differ
+# between running tests in isolation vs in a full suite, but this approach was:
+# - Too complex (regex replacements, custom body matching, conversation analysis)
+# - Brittle (failed in CI/CD with silent cassette matching issues)
+# - Unnecessary (TestModel provides better testing without these issues)
+#
+# For the new testing approach, see:
+# - opencontractserver/tests/test_pydantic_ai_integration_testmodel.py
+# - opencontractserver/tests/TESTING_PATTERNS.md
 
 
 class TestPydanticAIAgentsIntegration(TransactionTestCase):
@@ -386,16 +120,6 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
         )
 
         self.corpus.documents.add(self.doc1, self.doc2)
-
-        # Create ID mapping for VCR cassette normalization
-        # Cassettes expect doc1=2, doc2=3, corpus=2
-        self.doc_id_mapping = {
-            self.doc1.id: 2,
-            self.doc2.id: 3,
-        }
-        self.corpus_id_mapping = {
-            self.corpus.id: 2,
-        }
 
         # Create annotation labels
         self.payment_label = AnnotationLabel.objects.create(
@@ -601,106 +325,22 @@ class TestPydanticAIAgentsIntegration(TransactionTestCase):
     # ========================================================================
     # Test 3: ask_document Tool Integration (lines 520-625)
     # ========================================================================
-
-    async def test_ask_document_tool_nested_agent(self) -> None:
-        """
-        Integration test for ask_document tool with nested document agents.
-
-        Tests coverage for lines 520-625 where:
-        - Corpus agent calls ask_document tool
-        - Nested document agent is created and executed
-        - Child sources and timeline are extracted
-        - Answer is incorporated into parent agent's response
-
-        This requires a real corpus-level agent making nested document queries.
-
-        NOTE: This test uses VCR cassettes with ID normalization to handle
-        test isolation. The cassette was recorded with docs at IDs 2 and 3,
-        but in a full test suite, actual IDs may be much higher. The VCR hooks:
-        1. Normalize outgoing requests (actual IDs -> cassette IDs)
-        2. Denormalize incoming responses (cassette IDs -> actual IDs)
-        """
-        # Use custom VCR with ID normalization to handle test isolation issues
-        my_vcr = create_vcr_with_id_normalization(
-            "pydantic_ai_ask_document_tool.yaml",
-            {**self.doc_id_mapping, **self.corpus_id_mapping},
-        )
-
-        with my_vcr.use_cassette("pydantic_ai_ask_document_tool.yaml"):
-            config = AgentConfig(
-                user_id=self.user.id,
-                model_name=settings.OPENAI_MODEL,
-                store_user_messages=False,
-                store_llm_messages=False,
-            )
-
-            # Create corpus agent which has access to ask_document tool
-            corpus_agent = await PydanticAICorpusAgent.create(
-                corpus=self.corpus,
-                config=config,
-            )
-
-            # Ask a question that requires querying specific documents
-            question = (
-                "What are the payment terms in the Payment Terms Contract document?"
-            )
-
-            events = []
-            thought_events = []
-            source_events = []
-
-            async for event in corpus_agent.stream(question):
-                events.append(event)
-                if hasattr(event, "type"):
-                    if event.type == "thought":
-                        thought_events.append(event)
-                    elif event.type == "sources":
-                        source_events.append(event)
-
-            # Verify we got thought events from the nested ask_document call
-            # Note: The exact format may vary between LLM providers
-            ask_doc_thoughts = [
-                e for e in thought_events if "[ask_document]" in e.thought
-            ]
-
-            # If we didn't get the expected thought events, that's OK - different LLMs
-            # may structure their responses differently. The important thing is that
-            # we get a final answer.
-            if len(ask_doc_thoughts) > 0:
-                # Great! We got the nested thought events
-                pass
-
-            # Verify we completed successfully with a final answer
-            final_events = [
-                e for e in events if hasattr(e, "type") and e.type == "final"
-            ]
-            self.assertGreater(
-                len(final_events), 0, "Should have completed with a final event"
-            )
-
-            # The final event should contain relevant information about payment terms
-            final_event = final_events[0]
-
-            # Check both content and accumulated_content
-            final_content = getattr(final_event, "content", "")
-            final_accumulated_content = getattr(final_event, "accumulated_content", "")
-
-            # Use whichever is populated
-            actual_content = (
-                final_accumulated_content
-                if final_accumulated_content
-                else final_content
-            )
-
-            print(f"Actual content: {actual_content}")
-            actual_content_lower = actual_content.lower()
-
-            self.assertTrue(
-                "payment" in actual_content_lower
-                or "$" in actual_content
-                or "pay" in actual_content_lower,
-                f"Final content should mention payment terms, got: {actual_content[:500]}",
-            )
+    #
+    # REMOVED: test_ask_document_tool_nested_agent (VCR-based test)
+    #
+    # This test was replaced with a TestModel-based version for better reliability.
+    # The VCR approach with ID normalization was too brittle and failed in CI/CD.
+    #
+    # See: opencontractserver/tests/test_pydantic_ai_integration_testmodel.py
+    #      -> test_ask_document_tool_nested_agent_testmodel
+    #
+    # Migration notes:
+    # - TestModel provides deterministic behavior without API calls
+    # - No need for complex ID normalization (300+ lines of code)
+    # - Tests run faster (<100ms vs 1-5s)
+    # - Works identically in local and CI environments
+    #
+    # For testing patterns, see: opencontractserver/tests/TESTING_PATTERNS.md
 
     # ========================================================================
     # Test 4: Tool Result Validation - Empty Annotations (lines 1037-1044)
