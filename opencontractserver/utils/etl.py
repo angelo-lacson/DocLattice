@@ -145,10 +145,9 @@ def build_document_export(
     dict[str | int, AnnotationLabelPythonType],
 ]:
     """
-    Fairly complex function to burn in the annotations for a given corpus on a given doc. This will alter the PDF
-    and add highlight and labels. It's still a bit ugly, but it works.
-
-    TODO - this makes assumptions that only work for PDF files and fails on all others, preventing export.
+    Build an export for a given corpus on a given doc. For PDF files, this will burn in annotations
+    by adding highlights and labels to the PDF. For non-PDF files, this will still export the
+    annotation data in JSON format but skip the PDF processing.
 
     Additional args:
         analysis_ids: Optional list of analysis PKs to include in annotation selection
@@ -158,22 +157,19 @@ def build_document_export(
 
     logger.info(f"burn_doc_annotations - label_lookups: {label_lookups}")
 
-    from PyPDF2 import PdfReader, PdfWriter
-
-    from opencontractserver.utils.files import (
-        add_highlight_to_new_page,
-        createHighlight,
-    )
-
     try:
 
         text_labels = label_lookups["text_labels"]
         doc_labels = label_lookups["doc_labels"]
 
         doc = Document.objects.get(pk=doc_id)
-        doc_name: str = os.path.basename(doc.pdf_file.name)
+        doc_name: str = os.path.basename(doc.pdf_file.name) if doc.pdf_file else "document"
 
         corpus = Corpus.objects.get(pk=corpus_id)
+
+        # Check if document is a PDF
+        is_pdf = doc.file_type == "application/pdf"
+        logger.info(f"Document {doc_id} file_type: {doc.file_type}, is_pdf: {is_pdf}")
 
         extracted_document_content_json = ""
         try:
@@ -182,9 +178,10 @@ def build_document_export(
         except Exception as e:
             logger.warning(f"Could not export doc text for doc {doc_id}: {e}")
 
+        pawls_tokens: list[PawlsPagePythonType] = []
         try:
             with default_storage.open(doc.pawls_parse_file.name) as pawls_file:
-                pawls_tokens: list[PawlsPagePythonType] = json.loads(
+                pawls_tokens = json.loads(
                     pawls_file.read().decode("utf-8")
                 )
         except Exception as e:
@@ -235,20 +232,7 @@ def build_document_export(
                 f"Invalid annotation_filter_mode: {annotation_filter_mode}"
             )
 
-        # PDF Code:
-        try:
-            pdf_input = PdfReader(doc.pdf_file.open(mode="rb"))
-        except Exception as e:
-            logger.error(f"Could not load input pdf due to error: {e}")
-            return "", "", None, {}, {}
-
-        # logger.info("Original pdf loaded")
-
-        pdf_output = PdfWriter()
-        # logger.info("New PDFFileWriter created")
-
-        page_highlights = {}
-
+        # Initialize document annotation JSON structure (used for both PDF and non-PDF)
         doc_annotation_json: OpenContractDocExport = {
             "doc_labels": [],
             "labelled_text": [],
@@ -259,10 +243,14 @@ def build_document_export(
             "page_count": doc.page_count,
         }
 
-        page_sizes = {
-            pawls_page["page"]["index"]: pawls_page["page"]
-            for pawls_page in pawls_tokens
-        }
+        page_highlights = {}
+        page_sizes = {}
+
+        if pawls_tokens:
+            page_sizes = {
+                pawls_page["page"]["index"]: pawls_page["page"]
+                for pawls_page in pawls_tokens
+            }
 
         labelled_text = []
         labels_for_doc = []
@@ -313,49 +301,71 @@ def build_document_export(
         doc_annotation_json["doc_labels"] = labels_for_doc
         doc_annotation_json["labelled_text"] = labelled_text
 
-        total_page_count = len(pdf_input.pages)
+        # PDF-specific processing: burn annotations into PDF
+        base64_encoded_message = ""
+        if is_pdf and doc.pdf_file:
+            logger.info(f"Processing as PDF document: {doc_id}")
 
-        print(f"Page_highlights: {page_highlights}")
-        print(f"Page_sizes: {page_sizes}")
+            from PyPDF2 import PdfReader, PdfWriter
+            from opencontractserver.utils.files import (
+                add_highlight_to_new_page,
+                createHighlight,
+            )
 
-        for i in range(0, total_page_count):
-            page = pdf_input.pages[i]
-            page_box = page.mediabox
+            try:
+                pdf_input = PdfReader(doc.pdf_file.open(mode="rb"))
+                pdf_output = PdfWriter()
 
-            page_height = page_box.upper_left[1]
-            page_width = page_box.lower_right[0]
+                total_page_count = len(pdf_input.pages)
 
-            if f"{i + 1}" in page_highlights:
-                data_height = page_sizes[i + 1]["height"]
-                data_width = page_sizes[i + 1]["width"]
+                print(f"Page_highlights: {page_highlights}")
+                print(f"Page_sizes: {page_sizes}")
 
-                y_scale = float(page_height) / float(data_height)
-                x_scale = float(page_width) / float(data_width)
+                for i in range(0, total_page_count):
+                    page = pdf_input.pages[i]
+                    page_box = page.mediabox
 
-                for label_id in page_highlights[f"{i + 1}"]:
+                    page_height = page_box.upper_left[1]
+                    page_width = page_box.lower_right[0]
 
-                    label = text_labels[f"{label_id}"]
+                    if f"{i + 1}" in page_highlights:
+                        data_height = page_sizes[i + 1]["height"]
+                        data_width = page_sizes[i + 1]["width"]
 
-                    for rect in page_highlights[f"{i + 1}"][label_id]:
-                        highlight = createHighlight(
-                            round(x_scale * rect["left"]),
-                            round(float(page_height) - y_scale * rect["top"]),
-                            round(x_scale * rect["right"]),
-                            round(float(page_height) - y_scale * rect["bottom"]),
-                            {"author": "Label:", "contents": label["text"]},
-                            color=tuple(
-                                int(label["color"].lstrip("#")[i : i + 2], 16) / 256
-                                for i in (0, 2, 4)
-                            ),
-                        )
+                        y_scale = float(page_height) / float(data_height)
+                        x_scale = float(page_width) / float(data_width)
 
-                        add_highlight_to_new_page(highlight, page, pdf_output)
+                        for label_id in page_highlights[f"{i + 1}"]:
 
-            pdf_output.add_page(page)
+                            label = text_labels[f"{label_id}"]
 
-        pdf_output.write(annotated_pdf_bytes)
-        base64_encoded_data = base64.b64encode(annotated_pdf_bytes.getvalue())
-        base64_encoded_message: str = base64_encoded_data.decode("utf-8")
+                            for rect in page_highlights[f"{i + 1}"][label_id]:
+                                highlight = createHighlight(
+                                    round(x_scale * rect["left"]),
+                                    round(float(page_height) - y_scale * rect["top"]),
+                                    round(x_scale * rect["right"]),
+                                    round(float(page_height) - y_scale * rect["bottom"]),
+                                    {"author": "Label:", "contents": label["text"]},
+                                    color=tuple(
+                                        int(label["color"].lstrip("#")[i : i + 2], 16) / 256
+                                        for i in (0, 2, 4)
+                                    ),
+                                )
+
+                                add_highlight_to_new_page(highlight, page, pdf_output)
+
+                    pdf_output.add_page(page)
+
+                pdf_output.write(annotated_pdf_bytes)
+                base64_encoded_data = base64.b64encode(annotated_pdf_bytes.getvalue())
+                base64_encoded_message = base64_encoded_data.decode("utf-8")
+
+            except Exception as e:
+                logger.error(f"Could not process PDF due to error: {e}")
+                logger.error(f"Stack trace: {traceback.format_exc()}")
+                # Continue with empty PDF bytes for non-PDF or failed PDF processing
+        else:
+            logger.info(f"Skipping PDF processing for non-PDF document: {doc_id} (file_type: {doc.file_type})")
 
         return (
             doc_name,
