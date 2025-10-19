@@ -23,7 +23,9 @@ class PageImagingToolTestCase(TestCase):
     fixtures_path = pathlib.Path(__file__).parent / "fixtures"
 
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.user = User.objects.create_user(
+            username="testuser", password="testpass123"
+        )
 
     def create_pdf_document(self, pdf_filename="TestDocument.pdf"):
         """Helper to create a document with a real PDF file from fixtures"""
@@ -32,17 +34,14 @@ class PageImagingToolTestCase(TestCase):
             description="Test document for page imaging",
             creator=self.user,
             file_type="application/pdf",
-            page_count=2  # Assuming test PDF has 2 pages
+            page_count=2,  # Assuming test PDF has 2 pages
         )
 
         # Load a real PDF from fixtures
         pdf_path = self.fixtures_path / pdf_filename
         if pdf_path.exists():
             with open(pdf_path, "rb") as pdf_file:
-                doc.pdf_file.save(
-                    pdf_filename,
-                    ContentFile(pdf_file.read())
-                )
+                doc.pdf_file.save(pdf_filename, ContentFile(pdf_file.read()))
         else:
             # Create a minimal valid PDF if fixture doesn't exist
             # This is a minimal PDF with 1 blank page
@@ -55,10 +54,7 @@ class PageImagingToolTestCase(TestCase):
                 b"0000000058 00000 n\n0000000115 00000 n\ntrailer\n"
                 b"<</Size 4/Root 1 0 R>>\nstartxref\n206\n%%EOF"
             )
-            doc.pdf_file.save(
-                "minimal.pdf",
-                ContentFile(minimal_pdf)
-            )
+            doc.pdf_file.save("minimal.pdf", ContentFile(minimal_pdf))
             doc.page_count = 1
 
         doc.save()
@@ -72,14 +68,11 @@ class PageImagingToolTestCase(TestCase):
             description="Non-PDF document",
             creator=self.user,
             file_type="text/plain",
-            page_count=1
+            page_count=1,
         )
 
         content = b"Test content"
-        doc.pdf_file.save(
-            f"test_doc.txt",
-            ContentFile(content)
-        )
+        doc.pdf_file.save("test_doc.txt", ContentFile(content))
 
         doc.save()
         return doc
@@ -95,7 +88,7 @@ class PageImagingToolTestCase(TestCase):
             document_id=pdf_doc.id,
             page_number=1,
             image_format="jpeg",
-            dpi=72  # Low DPI for faster tests
+            dpi=72,  # Low DPI for faster tests
         )
 
         print(f"Got base64 image, length: {len(base64_image)}")
@@ -110,6 +103,7 @@ class PageImagingToolTestCase(TestCase):
 
         # Verify it's a valid JPEG
         import io
+
         image = Image.open(io.BytesIO(image_bytes))
         assert image.format == "JPEG"
         print(f"Image dimensions: {image.size}")
@@ -124,15 +118,13 @@ class PageImagingToolTestCase(TestCase):
 
         # Get the first page as PNG
         base64_image = get_page_image(
-            document_id=pdf_doc.id,
-            page_number=1,
-            image_format="png",
-            dpi=72
+            document_id=pdf_doc.id, page_number=1, image_format="png", dpi=72
         )
 
         # Verify it's a valid PNG
         image_bytes = base64.b64decode(base64_image)
         import io
+
         image = Image.open(io.BytesIO(image_bytes))
         assert image.format == "PNG"
 
@@ -145,18 +137,10 @@ class PageImagingToolTestCase(TestCase):
         pdf_doc = self.create_pdf_document()
 
         # Test with low DPI
-        low_dpi_image = get_page_image(
-            document_id=pdf_doc.id,
-            page_number=1,
-            dpi=50
-        )
+        low_dpi_image = get_page_image(document_id=pdf_doc.id, page_number=1, dpi=50)
 
         # Test with higher DPI
-        high_dpi_image = get_page_image(
-            document_id=pdf_doc.id,
-            page_number=1,
-            dpi=150
-        )
+        high_dpi_image = get_page_image(document_id=pdf_doc.id, page_number=1, dpi=150)
 
         # Higher DPI should generally produce larger images
         print(f"Low DPI image size: {len(low_dpi_image)}")
@@ -172,10 +156,7 @@ class PageImagingToolTestCase(TestCase):
         print("\n# TEST GET PAGE IMAGE INVALID DOCUMENT ##")
 
         with pytest.raises(ValueError, match="does not exist"):
-            get_page_image(
-                document_id=99999,
-                page_number=1
-            )
+            get_page_image(document_id=99999, page_number=1)
 
         print("\t\tSUCCESS - Raises error for non-existent document")
 
@@ -186,10 +167,7 @@ class PageImagingToolTestCase(TestCase):
         text_doc = self.create_non_pdf_document()
 
         with pytest.raises(ValueError, match="is not a PDF"):
-            get_page_image(
-                document_id=text_doc.id,
-                page_number=1
-            )
+            get_page_image(document_id=text_doc.id, page_number=1)
 
         print("\t\tSUCCESS - Raises error for non-PDF document")
 
@@ -201,17 +179,11 @@ class PageImagingToolTestCase(TestCase):
 
         # Test page number less than 1
         with pytest.raises(ValueError, match="Page numbers start at 1"):
-            get_page_image(
-                document_id=pdf_doc.id,
-                page_number=0
-            )
+            get_page_image(document_id=pdf_doc.id, page_number=0)
 
         # Test page number greater than page count
         with pytest.raises(ValueError, match="exceeds document page count"):
-            get_page_image(
-                document_id=pdf_doc.id,
-                page_number=999
-            )
+            get_page_image(document_id=pdf_doc.id, page_number=999)
 
         print("\t\tSUCCESS - Raises error for invalid page numbers")
 
@@ -225,7 +197,7 @@ class PageImagingToolTestCase(TestCase):
             get_page_image(
                 document_id=pdf_doc.id,
                 page_number=1,
-                image_format="bmp"  # Unsupported format
+                image_format="bmp",  # Unsupported format
             )
 
         print("\t\tSUCCESS - Raises error for unsupported format")
@@ -238,13 +210,10 @@ class PageImagingToolTestCase(TestCase):
             title="Document Without PDF",
             creator=self.user,
             file_type="application/pdf",
-            page_count=1
+            page_count=1,
         )
 
         with pytest.raises(ValueError, match="has no PDF file attached"):
-            get_page_image(
-                document_id=doc.id,
-                page_number=1
-            )
+            get_page_image(document_id=doc.id, page_number=1)
 
         print("\t\tSUCCESS - Raises error for documents without PDF file")

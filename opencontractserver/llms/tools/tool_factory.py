@@ -305,7 +305,8 @@ def create_document_tools() -> list[CoreTool]:
             aget_page_image,
             description=(
                 "Get a visual image of a specific page from a PDF document. "
-                "Useful for inspecting diagrams, tables, images, and other visual content that may not be captured in text."
+                "Useful for inspecting diagrams, tables, images, and other "
+                "visual content that may not be captured in text."
             ),
         ),
     ]
