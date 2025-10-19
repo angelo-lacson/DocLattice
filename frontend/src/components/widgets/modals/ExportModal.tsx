@@ -8,12 +8,17 @@ import { CreateAndSearchBar } from "../../layout/CreateAndSearchBar";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
 import { ExportList } from "../../exports/ExportList";
 import { LooseObject } from "../../types";
-import { useLazyQuery, useReactiveVar } from "@apollo/client";
+import { useLazyQuery, useMutation, useReactiveVar } from "@apollo/client";
 import {
   GetExportsInputs, // Placeholder - do not guess shape
   GetExportsOutputs, // Placeholder - do not guess shape
   GET_EXPORTS,
 } from "../../../graphql/queries";
+import {
+  DELETE_EXPORT,
+  DeleteExportInputs,
+  DeleteExportOutputs,
+} from "../../../graphql/mutations";
 import { ExportObject } from "../../../types/graphql-api";
 import { exportSearchTerm, showExportModal } from "../../../graphql/cache";
 import { toast } from "react-toastify";
@@ -93,9 +98,32 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
     notifyOnNetworkStatusChange: true, // Mirroring usage in Extracts
   });
 
+  const [deleteExport, { loading: deleting }] = useMutation<
+    DeleteExportOutputs,
+    DeleteExportInputs
+  >(DELETE_EXPORT, {
+    onCompleted: (data) => {
+      if (data.deleteExport.ok) {
+        toast.success("Export deleted successfully");
+        refetchExports && refetchExports();
+      } else {
+        toast.error(`Failed to delete export: ${data.deleteExport.message}`);
+      }
+    },
+    onError: (error) => {
+      toast.error(`Error deleting export: ${error.message}`);
+    },
+  });
+
   if (exports_error) {
     toast.error("ERROR!\nUnable to get export list.");
   }
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this export?")) {
+      deleteExport({ variables: { id } });
+    }
+  };
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Effects to refetch on user input changes
@@ -173,9 +201,9 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
         <ExportList
           items={export_items}
           pageInfo={exports_response?.userexports?.pageInfo}
-          loading={exports_loading}
+          loading={exports_loading || deleting}
           fetchMore={fetchMoreExports}
-          onDelete={(id: string) => console.log("Delete", id)}
+          onDelete={handleDelete}
         />
       </Modal.Content>
       <Modal.Actions>
