@@ -271,6 +271,26 @@ export const START_EXPORT_CORPUS = gql`
   }
 `;
 
+export interface DeleteExportInputs {
+  id: string;
+}
+
+export interface DeleteExportOutputs {
+  deleteExport: {
+    ok?: boolean;
+    message?: string;
+  };
+}
+
+export const DELETE_EXPORT = gql`
+  mutation ($id: String!) {
+    deleteExport(id: $id) {
+      ok
+      message
+    }
+  }
+`;
+
 export interface StartImportCorpusInputs {
   base64FileString: string;
 }
