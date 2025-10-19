@@ -694,17 +694,15 @@ class AcceptCookieConsent(graphene.Mutation):
             user = info.context.user
             user.cookie_consent_accepted = True
             user.cookie_consent_date = timezone.now()
-            user.save(update_fields=['cookie_consent_accepted', 'cookie_consent_date'])
+            user.save(update_fields=["cookie_consent_accepted", "cookie_consent_date"])
 
             return AcceptCookieConsent(
-                ok=True,
-                message="Cookie consent recorded successfully"
+                ok=True, message="Cookie consent recorded successfully"
             )
         except Exception as e:
             logger.error(f"Error recording cookie consent: {e}")
             return AcceptCookieConsent(
-                ok=False,
-                message=f"Failed to record cookie consent: {str(e)}"
+                ok=False, message=f"Failed to record cookie consent: {str(e)}"
             )
 
 
