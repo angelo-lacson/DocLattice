@@ -271,6 +271,24 @@ export const START_EXPORT_CORPUS = gql`
   }
 `;
 
+export interface AcceptCookieConsentInputs {}
+
+export interface AcceptCookieConsentOutputs {
+  acceptCookieConsent: {
+    ok?: boolean;
+    message?: string;
+  };
+}
+
+export const ACCEPT_COOKIE_CONSENT = gql`
+  mutation {
+    acceptCookieConsent {
+      ok
+      message
+    }
+  }
+`;
+
 export interface StartImportCorpusInputs {
   base64FileString: string;
 }
