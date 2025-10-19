@@ -676,6 +676,36 @@ class DeleteExport(DRFDeletion):
         id = graphene.String(required=True)
 
 
+class AcceptCookieConsent(graphene.Mutation):
+    """
+    Mutation to record when an authenticated user accepts cookie consent.
+    For anonymous users, this is handled via localStorage in the frontend.
+    """
+
+    class Arguments:
+        pass
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(root, info):
+        try:
+            user = info.context.user
+            user.cookie_consent_accepted = True
+            user.cookie_consent_date = timezone.now()
+            user.save(update_fields=["cookie_consent_accepted", "cookie_consent_date"])
+
+            return AcceptCookieConsent(
+                ok=True, message="Cookie consent recorded successfully"
+            )
+        except Exception as e:
+            logger.error(f"Error recording cookie consent: {e}")
+            return AcceptCookieConsent(
+                ok=False, message=f"Failed to record cookie consent: {str(e)}"
+            )
+
+
 class AddDocumentsToCorpus(graphene.Mutation):
     class Arguments:
         corpus_id = graphene.String(
@@ -3700,6 +3730,9 @@ class Mutation(graphene.ObjectType):
     # EXPORT MUTATIONS #########################################################
     export_corpus = StartCorpusExport.Field()  # Limited by user.is_usage_capped
     delete_export = DeleteExport.Field()
+
+    # USER PREFERENCE MUTATIONS #################################################
+    accept_cookie_consent = AcceptCookieConsent.Field()
 
     # ANALYSIS MUTATIONS #########################################################
     start_analysis_on_doc = StartDocumentAnalysisMutation.Field()
