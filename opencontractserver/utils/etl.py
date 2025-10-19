@@ -163,7 +163,9 @@ def build_document_export(
         doc_labels = label_lookups["doc_labels"]
 
         doc = Document.objects.get(pk=doc_id)
-        doc_name: str = os.path.basename(doc.pdf_file.name) if doc.pdf_file else "document"
+        doc_name: str = (
+            os.path.basename(doc.pdf_file.name) if doc.pdf_file else "document"
+        )
 
         corpus = Corpus.objects.get(pk=corpus_id)
 
@@ -181,9 +183,7 @@ def build_document_export(
         pawls_tokens: list[PawlsPagePythonType] = []
         try:
             with default_storage.open(doc.pawls_parse_file.name) as pawls_file:
-                pawls_tokens = json.loads(
-                    pawls_file.read().decode("utf-8")
-                )
+                pawls_tokens = json.loads(pawls_file.read().decode("utf-8"))
         except Exception as e:
             logger.warning(f"Could not export pawls tokens for doc {doc_id}: {e}")
 
@@ -307,6 +307,7 @@ def build_document_export(
             logger.info(f"Processing as PDF document: {doc_id}")
 
             from PyPDF2 import PdfReader, PdfWriter
+
             from opencontractserver.utils.files import (
                 add_highlight_to_new_page,
                 createHighlight,
@@ -344,10 +345,13 @@ def build_document_export(
                                     round(x_scale * rect["left"]),
                                     round(float(page_height) - y_scale * rect["top"]),
                                     round(x_scale * rect["right"]),
-                                    round(float(page_height) - y_scale * rect["bottom"]),
+                                    round(
+                                        float(page_height) - y_scale * rect["bottom"]
+                                    ),
                                     {"author": "Label:", "contents": label["text"]},
                                     color=tuple(
-                                        int(label["color"].lstrip("#")[i : i + 2], 16) / 256
+                                        int(label["color"].lstrip("#")[i : i + 2], 16)
+                                        / 256
                                         for i in (0, 2, 4)
                                     ),
                                 )
@@ -365,7 +369,9 @@ def build_document_export(
                 logger.error(f"Stack trace: {traceback.format_exc()}")
                 # Continue with empty PDF bytes for non-PDF or failed PDF processing
         else:
-            logger.info(f"Skipping PDF processing for non-PDF document: {doc_id} (file_type: {doc.file_type})")
+            logger.info(
+                f"Skipping PDF processing for non-PDF document: {doc_id} (file_type: {doc.file_type})"
+            )
 
         return (
             doc_name,
