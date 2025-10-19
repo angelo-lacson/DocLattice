@@ -163,6 +163,7 @@ class TestCreateDocumentTools(SimpleTestCase):
             "get_notes_for_document_corpus",
             "get_note_content_token_length",
             "get_partial_note_content",
+            "aget_page_image",
         }
         self.assertEqual({tool.name for tool in tools}, expected_names)
         # Ensure all returned objects are CoreTool instances
