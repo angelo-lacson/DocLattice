@@ -1,12 +1,14 @@
 import { onError } from "@apollo/client/link/error";
 import { toast } from "react-toastify";
+import { authToken, authStatusVar, userObj } from "./cache";
 
 /**
  * Apollo error link that handles authentication errors and network errors.
  *
  * For 401/403 errors:
- * - Shows a toast notification
- * - Triggers a page reload to force re-authentication through AuthGate
+ * - Switches to ANONYMOUS mode (allows browsing public content)
+ * - Shows a toast notification with option to log back in
+ * - Clears auth token and user object
  *
  * For other GraphQL errors:
  * - Logs to console for debugging
@@ -36,17 +38,20 @@ export const errorLink = onError(
             err
           );
 
-          // Show user-friendly message
-          toast.error("Your session has expired. Please log in again.", {
-            toastId: "auth-error", // Prevent duplicate toasts
-            autoClose: 5000,
-          });
+          // Switch to anonymous mode - allows user to browse public content
+          // without forcing an immediate re-login
+          authToken("");
+          userObj(null);
+          authStatusVar("ANONYMOUS");
 
-          // Reload page to trigger re-authentication through AuthGate
-          // This will cause Auth0 to prompt for login if needed
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
+          // Show user-friendly message with guidance
+          toast.warning(
+            "Your session has expired. Please log in again to access protected content.",
+            {
+              toastId: "auth-error", // Prevent duplicate toasts
+              autoClose: 8000,
+            }
+          );
 
           return;
         }
@@ -68,14 +73,18 @@ export const errorLink = onError(
       if (netErr.statusCode === 401 || netErr.statusCode === 403) {
         console.error("[Apollo Error Link] Network auth error:", networkError);
 
-        toast.error("Your session has expired. Please log in again.", {
-          toastId: "auth-error",
-          autoClose: 5000,
-        });
+        // Switch to anonymous mode - allows user to browse public content
+        authToken("");
+        userObj(null);
+        authStatusVar("ANONYMOUS");
 
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
+        toast.warning(
+          "Your session has expired. Please log in again to access protected content.",
+          {
+            toastId: "auth-error",
+            autoClose: 8000,
+          }
+        );
 
         return;
       }
