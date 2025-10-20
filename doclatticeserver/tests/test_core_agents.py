@@ -291,7 +291,7 @@ class TestCoreAgentFactoriesDefaults(TestCoreAgentComponentsSetup):
             self.doc1, self.corpus1, config
         )
 
-        mock_get_prompt.assert_called_once_with(self.doc1)
+        mock_get_prompt.assert_called_once_with(self.doc1, self.corpus1)
         self.assertEqual(context.config.system_prompt, "Mocked default prompt")
 
     async def test_create_document_context_uses_override_prompt(self):
