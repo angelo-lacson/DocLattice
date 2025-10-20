@@ -72,6 +72,19 @@ class User(AbstractUser):
         ),
     )
 
+    # Cookie consent tracking
+    cookie_consent_accepted = django.db.models.BooleanField(
+        "Cookie Consent Accepted",
+        default=False,
+        help_text="Whether the user has accepted cookie consent",
+    )
+    cookie_consent_date = django.db.models.DateTimeField(
+        "Cookie Consent Date",
+        blank=True,
+        null=True,
+        help_text="When the user accepted cookie consent",
+    )
+
     def __str__(self):
         return f"{self.username}: {self.email}"
 

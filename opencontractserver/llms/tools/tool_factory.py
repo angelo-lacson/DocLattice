@@ -264,6 +264,7 @@ def _extract_parameter_descriptions_from_docstring(func: Callable) -> dict[str, 
 def create_document_tools() -> list[CoreTool]:
     """Create standard document-related tools."""
     from opencontractserver.llms.tools.core_tools import (
+        aget_page_image,
         asearch_exact_text_as_sources,
         get_md_summary_token_length,
         get_note_content_token_length,
@@ -299,5 +300,13 @@ def create_document_tools() -> list[CoreTool]:
         CoreTool.from_function(
             get_partial_note_content,
             description="Get a substring of a note's content by start/end indices.",
+        ),
+        CoreTool.from_function(
+            aget_page_image,
+            description=(
+                "Get a visual image of a specific page from a PDF document. "
+                "Useful for inspecting diagrams, tables, images, and other "
+                "visual content that may not be captured in text."
+            ),
         ),
     ]
