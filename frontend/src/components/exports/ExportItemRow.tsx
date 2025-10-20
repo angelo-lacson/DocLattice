@@ -64,7 +64,7 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
             size="mini"
             icon="trash"
             color="red"
-            onClick={onDelete}
+            onClick={() => onDelete(item.id)}
           />
           {item.finished ? (
             <Button
