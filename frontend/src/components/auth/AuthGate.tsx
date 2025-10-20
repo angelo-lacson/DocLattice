@@ -105,12 +105,15 @@ export const AuthGate: React.FC<AuthGateProps> = ({
               autoClose: 2000,
             });
 
-            // Redirect to Auth0 login
+            // Redirect to Auth0 login, preserving current path
             loginWithRedirect({
               authorizationParams: {
                 audience: audience || undefined,
                 scope: "openid profile email",
                 redirect_uri: window.location.origin,
+              },
+              appState: {
+                returnTo: window.location.pathname + window.location.search,
               },
             });
           } else {
