@@ -289,6 +289,26 @@ export const ACCEPT_COOKIE_CONSENT = gql`
   }
 `;
 
+export interface DeleteExportInputs {
+  id: string;
+}
+
+export interface DeleteExportOutputs {
+  deleteExport: {
+    ok?: boolean;
+    message?: string;
+  };
+}
+
+export const DELETE_EXPORT = gql`
+  mutation ($id: String!) {
+    deleteExport(id: $id) {
+      ok
+      message
+    }
+  }
+`;
+
 export interface StartImportCorpusInputs {
   base64FileString: string;
 }
