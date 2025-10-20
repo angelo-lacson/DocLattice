@@ -1,9 +1,55 @@
 import { List, Modal, Header, Icon, Button } from "semantic-ui-react";
+import { useMutation, useReactiveVar } from "@apollo/client";
+import { toast } from "react-toastify";
 
 import inverted_cookie_icon from "../../assets/icons/noun-cookie-2123093-FFFFFF.png";
-import { showCookieAcceptModal } from "../../graphql/cache";
+import { showCookieAcceptModal, authToken } from "../../graphql/cache";
+import {
+  ACCEPT_COOKIE_CONSENT,
+  AcceptCookieConsentInputs,
+  AcceptCookieConsentOutputs,
+} from "../../graphql/mutations";
 
 export const CookieConsentDialog = () => {
+  const auth_token = useReactiveVar(authToken);
+  const isAuthenticated = Boolean(auth_token);
+
+  const [acceptCookieConsent, { loading }] = useMutation<
+    AcceptCookieConsentOutputs,
+    AcceptCookieConsentInputs
+  >(ACCEPT_COOKIE_CONSENT, {
+    onCompleted: (data) => {
+      if (data.acceptCookieConsent.ok) {
+        toast.success("Cookie consent recorded");
+        showCookieAcceptModal(false);
+      } else {
+        toast.error(
+          `Failed to record consent: ${data.acceptCookieConsent.message}`
+        );
+        // Still close the modal and set localStorage as fallback
+        localStorage.setItem("oc_cookieAccepted", "true");
+        showCookieAcceptModal(false);
+      }
+    },
+    onError: (error) => {
+      toast.error(`Error recording consent: ${error.message}`);
+      // Still close the modal and set localStorage as fallback
+      localStorage.setItem("oc_cookieAccepted", "true");
+      showCookieAcceptModal(false);
+    },
+  });
+
+  const handleAccept = () => {
+    if (isAuthenticated) {
+      // For authenticated users, call the mutation
+      acceptCookieConsent();
+    } else {
+      // For anonymous users, use localStorage only
+      localStorage.setItem("oc_cookieAccepted", "true");
+      showCookieAcceptModal(false);
+    }
+  };
+
   return (
     <Modal basic size="small" open>
       <Header icon>
@@ -91,10 +137,9 @@ export const CookieConsentDialog = () => {
         <Button
           color="green"
           inverted
-          onClick={() => {
-            localStorage.setItem("oc_cookieAccepted", "true");
-            showCookieAcceptModal(false);
-          }}
+          loading={loading}
+          disabled={loading}
+          onClick={handleAccept}
         >
           <Icon name="checkmark" /> Accept
         </Button>
