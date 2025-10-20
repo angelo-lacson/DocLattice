@@ -933,85 +933,26 @@ class CoreDocumentAgentFactory:
     """Factory for creating document agents with framework-agnostic configuration."""
 
     @staticmethod
-    def get_default_system_prompt(document: Document) -> str:
-        """Generate default system prompt for document agent."""
+    def get_default_system_prompt(
+        document: Document, corpus: Optional[Corpus] = None
+    ) -> str:
+        """Generate default system prompt for document agent.
+
+        Uses custom instructions from corpus if available, otherwise falls back to
+        DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS from settings.
+        """
+        from django.conf import settings
+
+        # Check for custom instructions on the corpus
+        if corpus and corpus.document_agent_instructions:
+            base_instructions = corpus.document_agent_instructions
+        else:
+            base_instructions = settings.DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS
+
+        # Prepend document context to the instructions
         return (
             f"You are analyzing the document titled '{document.title}' (ID: {document.id}).\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⚠️  ABSOLUTE REQUIREMENTS - NO EXCEPTIONS:\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"1. You have ZERO prior knowledge of this document's contents.\n"
-            f"2. You MUST use tools to examine the document before answering ANY question.\n"
-            f"3. NEVER say you don't know what document is being discussed - you are analyzing '{document.title}'.\n"
-            f"4. NEVER refuse to answer because you 'lack context' - USE THE TOOLS to get context.\n"
-            f"5. Every answer MUST be grounded in information retrieved via tools with specific citations.\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📋 RECOMMENDED SEARCH STRATEGY:\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"For most questions, follow this workflow:\n\n"
-            f"STEP 1 - GET OVERVIEW:\n"
-            f"  • Use `load_document_summary` to understand the document's structure and main topics\n"
-            f"  • Use `get_document_text_length` to check the document size\n"
-            f"  • This helps you plan your detailed search strategy\n\n"
-            f"STEP 2 - BROAD SEARCH (Semantic Understanding):\n"
-            f"  • Use `similarity_search` (vector search) to find semantically relevant sections\n"
-            f"  • Great for: conceptual questions, themes, related ideas, paraphrased content\n"
-            f"  • Returns: annotated passages with page numbers and similarity scores\n\n"
-            f"STEP 3 - DETAILED EXAMINATION:\n"
-            f"  • Use `load_document_text` to read large sections (5K-50K chars) of relevant areas\n"
-            f"  • Identify the specific character ranges from Step 1-2, then load those sections\n"
-            f"  • Read enough context to thoroughly understand the relevant passages\n"
-            f"  \n"
-            f"  🔴 MANDATORY CITATION STEP - DO NOT SKIP:\n"
-            f"  After reading ANY bulk text with `load_document_text`, you MUST:\n"
-            f"  1. Identify the 3-5 most relevant exact quotes/passages for your answer\n"
-            f"  2. Extract the EXACT text of each key passage (5-50 words each)\n"
-            f"  3. Call `search_exact_text` with these exact strings to create proper citations\n"
-            f"  4. This converts raw text into citable sources with page numbers\n"
-            f"  \n"
-            f"  WHY THIS MATTERS: `load_document_text` returns raw text WITHOUT creating sources.\n"
-            f"  Only `search_exact_text` creates proper citations. Without this step, your answer\n"
-            f"  will have NO SOURCES even though you read the document!\n\n"
-            f"STEP 4 - PRECISE LOCATION (Exact Matching):\n"
-            f"  • Use `search_exact_text` to find specific terms, phrases, or quoted language\n"
-            f"  • Great for: finding exact wording, specific terminology, quoted passages, defined terms\n"
-            f"  • Returns: all occurrences with page numbers and bounding boxes (PDFs)\n"
-            f"  • Use this to provide precise citations with exact page locations\n"
-            f"  • CRITICAL: Always use this AFTER bulk text loading to create proper source citations\n\n"
-            f"STEP 5 - CROSS-REFERENCE:\n"
-            f"  • Use `get_document_notes` to check for existing analysis or annotations\n"
-            f"  • Combine findings from multiple tools to ensure completeness\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔧 TOOL SELECTION GUIDE:\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"Use `similarity_search` when:\n"
-            f"  → Question asks about concepts, themes, or ideas (not exact words)\n"
-            f"  → You need to find related content even if worded differently\n"
-            f"  → Looking for passages that discuss a topic\n\n"
-            f"Use `search_exact_text` when:\n"
-            f"  → User asks about specific terms, phrases, or exact wording\n"
-            f"  → You need to verify if specific language appears in the document\n"
-            f"  → Providing citations that require exact page locations\n"
-            f"  → Finding defined terms or quoted material\n\n"
-            f"Use `load_document_text` when:\n"
-            f"  → You need to read substantial sections for full context\n"
-            f"  → Initial searches identified relevant areas to examine in detail\n"
-            f"  → Question requires understanding flow, structure, or relationships\n"
-            f"  ⚠️  ALWAYS follow with `search_exact_text` on key passages to create citations!\n\n"
-            f"Use `load_document_summary` when:\n"
-            f"  → Starting your analysis (always good first step)\n"
-            f"  → Need high-level overview of document structure\n"
-            f"  → Understanding document organization before detailed search\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✅ RESPONSE REQUIREMENTS:\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"• Provide complete, accurate answers based on document contents\n"
-            f"• Include specific citations (page numbers, quotes) from tool results\n"
-            f"• 🔴 CRITICAL: If you used `load_document_text`, you MUST use `search_exact_text`\n"
-            f"  on key passages to generate proper citations. Otherwise your answer will have NO SOURCES.\n"
-            f"• If information isn't in the document, explicitly state: 'This information was not found in {document.title}'\n"  # noqa: E501
-            f"• Use multiple search strategies to ensure thoroughness\n"
-            f"• Present findings clearly with proper attribution to sources\n"
+            f"{base_instructions}"
         )
 
     @staticmethod
@@ -1055,7 +996,7 @@ class CoreDocumentAgentFactory:
         # Set default system prompt if not provided
         if config.system_prompt is None:
             config.system_prompt = CoreDocumentAgentFactory.get_default_system_prompt(
-                document
+                document, corpus_obj
             )
 
         return DocumentAgentContext(corpus=corpus_obj, document=document, config=config)
@@ -1066,34 +1007,23 @@ class CoreCorpusAgentFactory:
 
     @staticmethod
     def get_default_system_prompt(corpus: Corpus) -> str:
-        """Generate default system prompt for corpus agent."""
+        """Generate default system prompt for corpus agent.
+
+        Uses custom instructions from corpus if available, otherwise falls back to
+        DEFAULT_CORPUS_AGENT_INSTRUCTIONS from settings.
+        """
+        from django.conf import settings
+
+        # Check for custom instructions on the corpus
+        if corpus.corpus_agent_instructions:
+            base_instructions = corpus.corpus_agent_instructions
+        else:
+            base_instructions = settings.DEFAULT_CORPUS_AGENT_INSTRUCTIONS
+
+        # Prepend corpus context to the instructions
         return (
-            f"You are an expert assistant designed to analyze and answer queries about a collection of documents "
-            f"called '{corpus.title}'.\n\n"
-            f"**Available Tools:**\n"
-            f"You have access to comprehensive tools for analyzing documents in this corpus:\n\n"
-            f"1. **Document-Specific Tools** – available *per* document via the `ask_document` helper:\n"
-            f"   - Vector search inside that document\n"
-            f"   - Summary & note access\n"
-            f"   - Annotation manipulation (subject to approval)\n"
-            f"   - Token length calculations for context management\n"
-            f"2. **Corpus-Level Coordination Tools** – orchestrate multi-document reasoning:\n"
-            f"   - `list_documents()` → returns `[{{document_id, title, description}}]` for discovery\n"
-            f"   - `ask_document(document_id, question)` → runs a **document agent** and yields a rich object:\n"
-            f"       • `answer` str – the assistant's final answer\n"
-            f"       • `sources` list – flattened citation objects (annotation_id, page, rawText …)\n"
-            f"       • `timeline` list – detailed reasoning & tool calls from the sub-agent run\n"
-            f"   Use these keys to compile thorough, well-cited corpus-level answers.\n"
-            f"3. **Cross-Document Vector Search** – semantic search across the entire corpus for broad context\n\n"
-            f"**Important**: Always check what tools are available to you, as additional specialized tools may be provided dynamically "  # noqa: E501
-            f"beyond the core set. The exact tools available will depend on the documents in this corpus.\n\n"
-            f"**Guidelines:**\n"
-            f"- Always use the provided tools to gather information before answering\n"
-            f"- Do not rely on prior knowledge about the documents\n"
-            f"- When appropriate, search across multiple documents for comprehensive answers\n"
-            f"- Cite specific documents and sources when presenting information\n"
-            f"- Prefer using `sources` returned by `ask_document` or vector search to justify claims\n"
-            f"- Present your findings in clear, well-structured markdown format, using footnote-style citations"
+            f"You are analyzing the corpus titled '{corpus.title}' (ID: {corpus.id}).\n\n"
+            f"{base_instructions}"
         )
 
     @staticmethod
