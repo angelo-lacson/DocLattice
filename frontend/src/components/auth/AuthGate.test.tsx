@@ -18,6 +18,7 @@ vi.mock("@auth0/auth0-react");
 vi.mock("react-toastify", () => ({
   toast: {
     error: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -169,6 +170,65 @@ describe("AuthGate", () => {
       expect(authToken()).toBe("");
       expect(authStatusVar()).toBe("ANONYMOUS");
       expect(userObj()).toBeNull();
+    });
+
+    it("preserves current path when redirecting to login on login_required error", async () => {
+      const mockUser = { email: "test@example.com", sub: "user123" };
+      const mockLoginWithRedirect = vi.fn();
+      const mockGetAccessTokenSilently = vi.fn().mockRejectedValue({
+        error: "login_required",
+        message: "Login required",
+      });
+
+      // Mock window.location
+      const originalLocation = window.location;
+      delete (window as any).location;
+      window.location = {
+        ...originalLocation,
+        pathname: "/corpus/123/document/456",
+        search: "?page=2",
+        origin: "http://localhost:3000",
+      } as any;
+
+      const mockUseAuth0 = useAuth0 as MockedFunction<typeof useAuth0>;
+      mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: mockUser,
+        getAccessTokenSilently: mockGetAccessTokenSilently,
+        loginWithRedirect: mockLoginWithRedirect,
+        logout: vi.fn(),
+        getIdTokenClaims: vi.fn(),
+        loginWithPopup: vi.fn(),
+        getAccessTokenWithPopup: vi.fn(),
+        handleRedirectCallback: vi.fn(),
+      });
+
+      render(
+        <AuthGate useAuth0={true} audience="test-audience">
+          <div>Protected Content</div>
+        </AuthGate>
+      );
+
+      // Wait for loginWithRedirect to be called
+      await waitFor(() => {
+        expect(mockLoginWithRedirect).toHaveBeenCalled();
+      });
+
+      // Verify loginWithRedirect was called with appState containing current path
+      expect(mockLoginWithRedirect).toHaveBeenCalledWith({
+        authorizationParams: {
+          audience: "test-audience",
+          scope: "openid profile email",
+          redirect_uri: "http://localhost:3000",
+        },
+        appState: {
+          returnTo: "/corpus/123/document/456?page=2",
+        },
+      });
+
+      // Restore window.location
+      window.location = originalLocation;
     });
   });
 
