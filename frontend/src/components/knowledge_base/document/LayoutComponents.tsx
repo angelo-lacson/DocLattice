@@ -5,16 +5,16 @@ import styled from "styled-components";
 export const FullScreenModal = styled(Modal)`
   &&& {
     position: fixed !important;
-    margin: 1rem 1rem 1.5rem 1rem !important;
+    margin: 0 !important;
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    width: calc(100% - 2rem) !important;
-    height: calc(100% - 2.5rem) !important;
+    width: 100% !important;
+    height: 100% !important;
     max-width: none !important;
     max-height: none !important;
-    border-radius: 0.5rem !important;
+    border-radius: 0 !important;
     background: #f8f9fa;
     display: flex !important;
     flex-direction: column !important;

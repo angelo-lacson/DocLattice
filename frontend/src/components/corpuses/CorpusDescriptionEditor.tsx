@@ -65,6 +65,14 @@ const StyledModal = styled(Modal)`
       padding: 0;
       max-height: none;
     }
+
+    @media (max-width: 768px) {
+      width: 100vw;
+      height: 100vh !important;
+      max-height: 100vh !important;
+      margin: 0;
+      border-radius: 0;
+    }
   }
 `;
 
@@ -79,6 +87,14 @@ const ModalHeader = styled(Modal.Header)`
     flex-shrink: 0;
     min-height: 60px;
     max-height: 60px;
+
+    @media (max-width: 768px) {
+      padding: 1rem !important;
+      min-height: auto;
+      max-height: none;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
   }
 `;
 
@@ -93,6 +109,12 @@ const ModalContent = styled(Modal.Content)`
     max-height: calc(85vh - 60px - 70px) !important;
     position: relative;
     height: 100%;
+
+    @media (max-width: 768px) {
+      max-height: none !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+    }
   }
 `;
 
@@ -103,6 +125,13 @@ const ContentWrapper = styled.div`
   max-height: calc(85vh - 60px - 70px);
   overflow: hidden;
   position: relative;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
 `;
 
 const EditorContainer = styled.div`
@@ -118,6 +147,14 @@ const EditorContainer = styled.div`
   min-height: 0;
   max-height: 100%;
   flex-shrink: 1;
+
+  @media (max-width: 768px) {
+    margin: 0.5rem;
+    border-radius: 0;
+    overflow: visible;
+    max-height: none;
+    flex: none;
+  }
 `;
 
 const EditorHeader = styled.div`
@@ -149,6 +186,19 @@ const EditorHeader = styled.div`
       gap: 0.375rem;
     }
   }
+
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+
+    h3 {
+      font-size: 1.125rem;
+    }
+
+    .meta {
+      gap: 0.75rem;
+      font-size: 0.75rem;
+    }
+  }
 `;
 
 const EditorWrapper = styled.div`
@@ -160,6 +210,15 @@ const EditorWrapper = styled.div`
   min-height: 0;
   max-height: 100%;
   min-width: 0;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    padding: 0.75rem;
+    gap: 0.75rem;
+    overflow: visible;
+    flex: none;
+    max-height: none;
+  }
 `;
 
 const Editor = styled.textarea`
@@ -189,6 +248,15 @@ const Editor = styled.textarea`
   &::placeholder {
     color: #94a3b8;
   }
+
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+    font-size: 0.8125rem;
+    min-height: 200px;
+    max-height: 300px;
+    resize: none;
+    flex: none;
+  }
 `;
 
 const Preview = styled.div`
@@ -204,6 +272,13 @@ const Preview = styled.div`
 
   word-wrap: break-word;
   overflow-wrap: break-word;
+
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+    min-height: 200px;
+    max-height: 300px;
+    flex: none;
+  }
 `;
 
 const HistoryPanel = styled(motion.div)`
@@ -215,6 +290,20 @@ const HistoryPanel = styled(motion.div)`
   overflow: hidden;
   min-width: 0;
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 1001;
+    border-left: none;
+    border-top: none;
+    max-height: none;
+  }
 `;
 
 const HistoryHeader = styled.div`
@@ -222,6 +311,7 @@ const HistoryHeader = styled.div`
   border-bottom: 1px solid #e2e8f0;
   background: linear-gradient(to right, #f8fafc, #f1f5f9);
   flex-shrink: 0;
+  position: relative;
 
   h4 {
     margin: 0;
@@ -236,6 +326,72 @@ const HistoryHeader = styled.div`
     margin-top: 0.375rem;
     font-size: 0.875rem;
     color: #64748b;
+  }
+
+  .header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .header-info {
+    flex: 1;
+  }
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+
+    h4 {
+      font-size: 1rem;
+    }
+
+    .version-count {
+      font-size: 0.75rem;
+    }
+  }
+`;
+
+const MobileHistoryCloseButton = styled.button`
+  display: none;
+
+  @media (max-width: 768px) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #64748b;
+    transition: all 0.2s;
+    flex-shrink: 0;
+
+    &:hover {
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+`;
+
+const HistoryBackdrop = styled(motion.div)`
+  display: none;
+
+  @media (max-width: 768px) {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
   }
 `;
 
@@ -292,6 +448,25 @@ const VersionDetails = styled(motion.div)`
     gap: 0.5rem;
     margin-top: 0.75rem;
     flex-wrap: wrap;
+  }
+
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+    margin: 0.25rem;
+
+    .version-content {
+      padding: 0.5rem;
+      font-size: 0.8125rem;
+      max-height: 150px;
+    }
+
+    .version-actions {
+      flex-direction: column;
+
+      button {
+        width: 100%;
+      }
+    }
   }
 `;
 
@@ -360,6 +535,25 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
       gap: 0.375rem;
     }
   }
+
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+
+    .version-header {
+      .version-number {
+        font-size: 0.875rem;
+      }
+
+      .version-badge {
+        font-size: 0.6875rem;
+        padding: 0.125rem 0.375rem;
+      }
+    }
+
+    .version-meta {
+      font-size: 0.75rem;
+    }
+  }
 `;
 
 const ActionBar = styled.div`
@@ -372,6 +566,17 @@ const ActionBar = styled.div`
   flex-shrink: 0;
   min-width: 0;
   gap: 1rem;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.75rem;
+    gap: 0.75rem;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  }
 `;
 
 const ActionGroup = styled.div`
@@ -380,6 +585,11 @@ const ActionGroup = styled.div`
   flex-wrap: wrap;
   min-width: 0;
   flex-shrink: 1;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: center;
+  }
 `;
 
 interface StyledButtonProps {
@@ -447,6 +657,14 @@ const StyledButton = styled(Button)<StyledButtonProps>`
         border-color: #f87171;
       }
     `}
+
+    @media (max-width: 768px) {
+      flex: 1;
+      justify-content: center;
+      min-width: auto;
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.75rem;
+    }
   }
 `;
 
@@ -468,6 +686,13 @@ const EditingIndicator = styled(motion.div)`
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 200px;
+
+  @media (max-width: 768px) {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    margin-left: 0.25rem;
+    max-width: 150px;
+  }
 `;
 
 interface CorpusDescriptionEditorProps {
@@ -757,157 +982,205 @@ export const CorpusDescriptionEditor: React.FC<
 
           <AnimatePresence>
             {showHistory && (
-              <HistoryPanel
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: "min(400px, 40vw)", opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              >
-                <HistoryHeader>
-                  <h4>
-                    <History size={18} />
-                    Version History
-                  </h4>
-                  <div className="version-count">
-                    {revisions.length} version
-                    {revisions.length !== 1 ? "s" : ""}
-                  </div>
-                </HistoryHeader>
+              <>
+                <HistoryBackdrop
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => setShowHistory(false)}
+                />
+                <HistoryPanel
+                  initial={{
+                    x:
+                      typeof window !== "undefined" && window.innerWidth <= 768
+                        ? "100%"
+                        : 0,
+                    width:
+                      typeof window !== "undefined" && window.innerWidth <= 768
+                        ? "100%"
+                        : 0,
+                    opacity: 0,
+                  }}
+                  animate={{
+                    x: 0,
+                    width:
+                      typeof window !== "undefined" && window.innerWidth <= 768
+                        ? "100%"
+                        : "min(400px, 40vw)",
+                    opacity: 1,
+                  }}
+                  exit={{
+                    x:
+                      typeof window !== "undefined" && window.innerWidth <= 768
+                        ? "100%"
+                        : 0,
+                    width:
+                      typeof window !== "undefined" && window.innerWidth <= 768
+                        ? "100%"
+                        : 0,
+                    opacity: 0,
+                  }}
+                  transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                >
+                  <HistoryHeader>
+                    <div className="header-content">
+                      <div className="header-info">
+                        <h4>
+                          <History size={18} />
+                          Version History
+                        </h4>
+                        <div className="version-count">
+                          {revisions.length} version
+                          {revisions.length !== 1 ? "s" : ""}
+                        </div>
+                      </div>
+                      <MobileHistoryCloseButton
+                        onClick={() => setShowHistory(false)}
+                        aria-label="Close history"
+                      >
+                        <X size={20} />
+                      </MobileHistoryCloseButton>
+                    </div>
+                  </HistoryHeader>
 
-                <HistoryList>
-                  {sortedRevisions.map(
-                    (revision: CorpusRevision, index: number) => (
-                      <div key={revision.id}>
-                        <VersionItem
-                          $isActive={revision.version === currentVersion}
-                          $isViewing={
-                            revision.version === viewingVersion?.version
-                          }
-                          onClick={() => handleVersionClick(revision)}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <div className="version-header">
-                            <div className="version-number">
-                              Version {revision.version}
-                              {revision.version === currentVersion && (
-                                <span className="version-badge">Current</span>
-                              )}
-                              {index === 0 &&
-                                revision.version !== currentVersion && (
-                                  <span className="version-badge">Latest</span>
+                  <HistoryList>
+                    {sortedRevisions.map(
+                      (revision: CorpusRevision, index: number) => (
+                        <div key={revision.id}>
+                          <VersionItem
+                            $isActive={revision.version === currentVersion}
+                            $isViewing={
+                              revision.version === viewingVersion?.version
+                            }
+                            onClick={() => handleVersionClick(revision)}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <div className="version-header">
+                              <div className="version-number">
+                                Version {revision.version}
+                                {revision.version === currentVersion && (
+                                  <span className="version-badge">Current</span>
                                 )}
-                            </div>
-                          </div>
-                          <div className="version-meta">
-                            <div className="meta-row">
-                              <User size={12} />
-                              {revision.author.email}
-                            </div>
-                            <div className="meta-row">
-                              <Clock size={12} />
-                              {format(
-                                new Date(revision.created),
-                                "MMM d, yyyy 'at' h:mm a"
-                              )}
-                            </div>
-                          </div>
-                        </VersionItem>
-
-                        <AnimatePresence>
-                          {viewingVersion?.version === revision.version && (
-                            <VersionDetails
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.2 }}
-                            >
-                              <div
-                                style={{
-                                  fontSize: "0.875rem",
-                                  color: "#64748b",
-                                  marginBottom: "0.5rem",
-                                }}
-                              >
-                                <Eye
-                                  size={14}
-                                  style={{
-                                    display: "inline",
-                                    marginRight: "0.25rem",
-                                  }}
-                                />
-                                Version {revision.version} snapshot
+                                {index === 0 &&
+                                  revision.version !== currentVersion && (
+                                    <span className="version-badge">
+                                      Latest
+                                    </span>
+                                  )}
                               </div>
-                              {revision.snapshot ? (
-                                <>
-                                  <div className="version-content">
-                                    <SafeMarkdown>
-                                      {revision.snapshot}
-                                    </SafeMarkdown>
-                                  </div>
-                                  <div className="version-actions">
-                                    <StyledButton
-                                      $variant="success"
-                                      $size="small"
-                                      onClick={() =>
-                                        handleReapplyVersion(revision)
-                                      }
-                                      disabled={updating}
-                                    >
-                                      <Copy size={14} />
-                                      Reapply as New Version
-                                    </StyledButton>
-                                    <StyledButton
-                                      $variant="primary"
-                                      $size="small"
-                                      onClick={() =>
-                                        handleEditFromVersion(revision)
-                                      }
-                                      disabled={updating || hasChanges}
-                                    >
-                                      <Edit size={14} />
-                                      Edit from This Version
-                                    </StyledButton>
-                                    {hasChanges && (
-                                      <div
-                                        style={{
-                                          fontSize: "0.75rem",
-                                          color: "#ef4444",
-                                          width: "100%",
-                                          marginTop: "0.5rem",
-                                        }}
-                                      >
-                                        Save current changes first
-                                      </div>
-                                    )}
-                                  </div>
-                                </>
-                              ) : (
+                            </div>
+                            <div className="version-meta">
+                              <div className="meta-row">
+                                <User size={12} />
+                                {revision.author.email}
+                              </div>
+                              <div className="meta-row">
+                                <Clock size={12} />
+                                {format(
+                                  new Date(revision.created),
+                                  "MMM d, yyyy 'at' h:mm a"
+                                )}
+                              </div>
+                            </div>
+                          </VersionItem>
+
+                          <AnimatePresence>
+                            {viewingVersion?.version === revision.version && (
+                              <VersionDetails
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
+                              >
                                 <div
                                   style={{
-                                    padding: "1rem",
-                                    background: "#fef2f2",
-                                    borderRadius: "6px",
-                                    color: "#991b1b",
                                     fontSize: "0.875rem",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
+                                    color: "#64748b",
+                                    marginBottom: "0.5rem",
                                   }}
                                 >
-                                  <AlertCircle size={16} />
-                                  This version does not have a snapshot
-                                  available
+                                  <Eye
+                                    size={14}
+                                    style={{
+                                      display: "inline",
+                                      marginRight: "0.25rem",
+                                    }}
+                                  />
+                                  Version {revision.version} snapshot
                                 </div>
-                              )}
-                            </VersionDetails>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )
-                  )}
-                </HistoryList>
-              </HistoryPanel>
+                                {revision.snapshot ? (
+                                  <>
+                                    <div className="version-content">
+                                      <SafeMarkdown>
+                                        {revision.snapshot}
+                                      </SafeMarkdown>
+                                    </div>
+                                    <div className="version-actions">
+                                      <StyledButton
+                                        $variant="success"
+                                        $size="small"
+                                        onClick={() =>
+                                          handleReapplyVersion(revision)
+                                        }
+                                        disabled={updating}
+                                      >
+                                        <Copy size={14} />
+                                        Reapply as New Version
+                                      </StyledButton>
+                                      <StyledButton
+                                        $variant="primary"
+                                        $size="small"
+                                        onClick={() =>
+                                          handleEditFromVersion(revision)
+                                        }
+                                        disabled={updating || hasChanges}
+                                      >
+                                        <Edit size={14} />
+                                        Edit from This Version
+                                      </StyledButton>
+                                      {hasChanges && (
+                                        <div
+                                          style={{
+                                            fontSize: "0.75rem",
+                                            color: "#ef4444",
+                                            width: "100%",
+                                            marginTop: "0.5rem",
+                                          }}
+                                        >
+                                          Save current changes first
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div
+                                    style={{
+                                      padding: "1rem",
+                                      background: "#fef2f2",
+                                      borderRadius: "6px",
+                                      color: "#991b1b",
+                                      fontSize: "0.875rem",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "0.5rem",
+                                    }}
+                                  >
+                                    <AlertCircle size={16} />
+                                    This version does not have a snapshot
+                                    available
+                                  </div>
+                                )}
+                              </VersionDetails>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )
+                    )}
+                  </HistoryList>
+                </HistoryPanel>
+              </>
             )}
           </AnimatePresence>
         </ContentWrapper>
