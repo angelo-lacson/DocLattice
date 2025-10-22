@@ -356,12 +356,10 @@ const ChatContainer = styled.div`
   min-height: 0; /* Important for flex children */
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10;
+    /* Removed position: fixed to prevent covering parent navigation and bottom nav */
+    /* Container now works as a normal flex child */
+    height: 100%; /* Fill parent container */
+    max-height: 100%; /* Don't exceed parent's height */
   }
 `;
 
@@ -374,6 +372,11 @@ const ConversationIndicator = styled.div`
   position: relative;
   min-height: 0; /* Important for flex children to properly overflow */
   flex: 1;
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    height: 100%; /* Fill parent container */
+    max-height: 100%; /* Don't exceed parent's height */
+  }
 `;
 
 // Add a styled component for the input wrapper
@@ -384,6 +387,16 @@ const ChatInputWrapper = styled.div`
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04);
+  position: sticky;
+  bottom: 0;
+  z-index: 50; /* Ensure it's above other content */
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    position: sticky;
+    bottom: 0; /* Back to bottom - FAB is now compact and out of the way */
+    /* Ensure it stays at bottom even when keyboard appears */
+    transform: translateZ(0); /* Force GPU acceleration */
+  }
 `;
 
 // Add new styled component for processing indicator
@@ -622,7 +635,7 @@ const MessageWrapper = styled(motion.div)<{ isLatest?: boolean }>`
   `}
 `;
 
-// Add a styled component for the chat navigation header
+// Mobile navigation header styled components
 const ChatNavigationHeader = styled.div`
   display: flex;
   align-items: center;
@@ -632,10 +645,16 @@ const ChatNavigationHeader = styled.div`
   border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 100; /* High z-index to ensure it's always visible */
+  flex-shrink: 0; /* Prevent compression */
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    position: -webkit-sticky; /* For Safari */
+    position: sticky;
+    padding: 0.75rem 1rem;
+  }
 `;
 
-// Add a styled component for the back button
 const BackButton = styled(motion.button)`
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -652,7 +671,6 @@ const BackButton = styled(motion.button)`
   }
 `;
 
-// Add a styled component for the navigation title
 const NavigationTitle = styled.span`
   flex: 1;
   font-size: 1.125rem;
@@ -898,17 +916,6 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         const messageData: MessageData = JSON.parse(event.data);
         if (!messageData) return;
         const { type: msgType, content, data } = messageData;
-
-        console.log("[CorpusChat WebSocket] Received message:", {
-          type: msgType,
-          content,
-          hasContent: !!content,
-          hasSources: !!data?.sources,
-          sourceCount: data?.sources?.length,
-          hasTimeline: !!data?.timeline,
-          timelineCount: data?.timeline?.length,
-          message_id: data?.message_id,
-        });
 
         switch (msgType) {
           case "ASYNC_START":
@@ -1443,24 +1450,32 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   return (
     <ChatContainer id="corpus-chat-container">
       <ConversationIndicator id="conversation-indicator">
-        {/* Mobile navigation header */}
+        {/* Mobile navigation header for conversation view
+            Always render on mobile when in conversation mode */}
         {use_mobile_layout && isConversation && (
           <ChatNavigationHeader>
             <BackButton
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log("Back button clicked", {
+                  selectedConversationId,
+                  isNewChat,
+                });
                 if (selectedConversationId || !isNewChat) {
-                  // Go back to conversation list
+                  // Go back to conversation list (internal navigation)
                   setSelectedConversationId(undefined);
                   setIsNewChat(false);
                   setChat([]);
                   setServerMessages([]);
-                } else {
-                  // Go back to corpus home
-                  showQueryViewState("ASK");
+                } else if (onClose) {
+                  // Go back to corpus home (use parent callback)
+                  onClose();
                 }
               }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              style={{ cursor: "pointer" }}
             >
               <ArrowLeft size={20} />
             </BackButton>
@@ -1468,9 +1483,17 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               {selectedConversationId ? "Conversation" : "New Chat"}
             </NavigationTitle>
             <IconButton
-              onClick={() => showQueryViewState("ASK")}
+              onClick={(e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log("Home button clicked");
+                if (onClose) {
+                  onClose();
+                }
+              }}
               title="Return to Dashboard"
               whileTap={{ scale: 0.95 }}
+              style={{ cursor: "pointer" }}
             >
               <Home size={20} />
             </IconButton>
@@ -1491,6 +1514,9 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                 overflow: "hidden",
                 minHeight: 0,
                 flex: 1,
+                ...(use_mobile_layout
+                  ? { height: "100%", maxHeight: "100%" }
+                  : {}), // Lock to parent height on mobile
               }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1681,9 +1707,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               style={{
                 width: "100%",
                 height: "100%",
+                maxHeight: "100%",
                 display: "flex",
                 flexDirection: "column",
                 overflowY: "auto",
+                flex: 1,
               }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

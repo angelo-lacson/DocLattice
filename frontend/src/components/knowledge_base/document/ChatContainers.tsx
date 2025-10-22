@@ -82,6 +82,9 @@ export const ChatInputContainer = styled(motion.div)<{ $isTyping?: boolean }>`
   min-height: auto;
   max-height: 40vh; /* Limit maximum expansion */
 
+  /* Fix Issue #2: Prevent compression when mobile keyboard opens */
+  flex-shrink: 0;
+
   &:focus-within {
     box-shadow: 0 -4px 24px rgba(66, 153, 225, 0.12);
     border-top-color: rgba(102, 126, 234, 0.25);

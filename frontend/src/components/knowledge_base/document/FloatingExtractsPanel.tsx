@@ -42,10 +42,26 @@ const FloatingContainer = styled(motion.div)<{
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: 768px) {
-    right: 1rem;
-    top: 40%;
-    width: ${(props) => (props.$isExpanded ? "calc(100vw - 2rem)" : "56px")};
-    height: ${(props) => (props.$isExpanded ? "50vh" : "56px")};
+    top: 4rem;
+    right: 0;
+    left: 0;
+    transform: none;
+    width: ${(props) => (props.$isExpanded ? "100%" : "56px")};
+    height: ${(props) => (props.$isExpanded ? "calc(100vh - 5rem)" : "56px")};
+    max-height: none;
+    padding: ${(props) => (props.$isExpanded ? "0.5rem" : "0")};
+    box-sizing: border-box;
+    /* When collapsed, position in bottom right like speed dial */
+    ${(props) =>
+      !props.$isExpanded &&
+      `
+      width: 56px;
+      height: 56px;
+      top: auto;
+      bottom: calc(1rem + 56px + 1rem);
+      right: 1rem;
+      left: auto;
+    `}
   }
 `;
 

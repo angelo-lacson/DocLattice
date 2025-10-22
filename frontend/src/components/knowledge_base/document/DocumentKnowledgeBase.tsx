@@ -256,7 +256,7 @@ const FloatingInputWrapper = styled.div<{ $panelOffset: number }>`
   z-index: 850;
 
   @media (max-width: 768px) {
-    /* On mobile, position below zoom controls */
+    /* On mobile, position below zoom controls with higher z-index to prevent covering */
     position: absolute;
     top: 80px; /* Below zoom controls */
     left: 1rem;
@@ -266,6 +266,8 @@ const FloatingInputWrapper = styled.div<{ $panelOffset: number }>`
     display: block;
     pointer-events: none;
     box-sizing: border-box;
+    /* Fix Issue #1: Increase z-index above zoom controls (900) to prevent mobile tray from covering input */
+    z-index: 950;
   }
 `;
 
@@ -2197,7 +2199,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     if (sidebarViewMode === "extract" && selectedExtract) {
       return (
         <div
-          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+          }}
         >
           <div
             style={{
@@ -2245,7 +2253,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       const annotationCount = selectedAnalysis.annotations?.totalCount || 0;
       return (
         <div
-          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+          }}
         >
           <SidebarHeader>
             <BarChart3 size={20} style={{ color: "#f59e0b" }} />
@@ -2291,7 +2305,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     if (sidebarViewMode === "feed") {
       return (
         <div
-          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+          }}
         >
           {controlBar}
           <UnifiedContentFeed
@@ -2318,7 +2338,15 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
     // Handle chat mode (default behavior)
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
         {controlBar}
         <ChatTray
           setShowLoad={setShowLoad}
@@ -2733,6 +2761,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                   isVisible={true}
                   isInKnowledgeLayer={activeLayer === "knowledge"}
                   readOnly={readOnly}
+                  isMobile={isMobile}
                   onSwitchToKnowledge={(content?: string) => {
                     setActiveLayer("knowledge");
                     setShowRightPanel(false);
@@ -2784,6 +2813,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                     setShowExtractsPanel(!showExtractsPanel);
                   }
                 }}
+                onSummaryClick={() => {
+                  setActiveLayer("knowledge");
+                  setShowRightPanel(false);
+                  setSelectedSummaryContent(null);
+                  setChatSourceState((prev) => ({
+                    ...prev,
+                    selectedMessageId: null,
+                    selectedSourceIndex: null,
+                  }));
+                }}
                 analysesOpen={showAnalysesPanel}
                 extractsOpen={showExtractsPanel}
                 panelOffset={floatingControlsState.offset}
@@ -2792,6 +2831,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 onPanelWidthChange={setMode}
                 autoZoomEnabled={autoZoomEnabled}
                 onAutoZoomChange={setAutoZoomEnabled}
+                isMobile={isMobile}
               />
 
               {/* Floating Analyses Panel - only show with corpus and when no analysis selected (results now in sidebar) */}

@@ -22,6 +22,7 @@ interface FloatingSummaryPreviewProps {
   onBackToDocument?: () => void;
   isInKnowledgeLayer?: boolean;
   readOnly?: boolean;
+  isMobile?: boolean;
 }
 
 const FloatingContainer = styled(motion.div)`
@@ -540,7 +541,13 @@ export const FloatingSummaryPreview: React.FC<FloatingSummaryPreviewProps> = ({
   onBackToDocument,
   isInKnowledgeLayer = false,
   readOnly = false,
+  isMobile = false,
 }) => {
+  // Hide on mobile - summary button moves to speed dial
+  if (isMobile) {
+    return null;
+  }
+
   const [showTooltip, setShowTooltip] = useState(false);
   const { state, setExpanded, setStackFanned, setHovered } =
     useSummaryAnimation();

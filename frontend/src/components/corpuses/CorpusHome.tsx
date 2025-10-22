@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Button,
   Icon,
   Loader,
   Popup,
@@ -39,6 +38,7 @@ import {
   X,
   MessageCircle,
   Menu,
+  Settings,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -78,6 +78,43 @@ const TopBar = styled.div`
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
+  }
+`;
+
+const BackButton = styled.button`
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  padding: 0;
+
+  &:hover {
+    background: white;
+    border-color: #4a90e2;
+    color: #4a90e2;
+    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.15);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
+  }
+
+  @media (max-width: 768px) {
+    display: flex;
   }
 `;
 
@@ -178,50 +215,78 @@ const StatsRow = styled.div`
   gap: 1.5rem;
   flex-shrink: 0;
 
-  > *:not(:last-child)::after {
-    content: "";
-    position: absolute;
-    right: -0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1px;
-    height: 20px;
-    background: #e2e8f0;
-  }
+  .stats-group {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
 
-  > * {
-    position: relative;
-  }
+    > *:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: -0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1px;
+      height: 20px;
+      background: #e2e8f0;
+    }
 
-  @media (max-width: 1024px) {
-    gap: 1.25rem;
+    > * {
+      position: relative;
+    }
+
+    @media (max-width: 1024px) {
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 768px) {
+      flex: 1;
+      justify-content: space-around;
+      gap: 0.25rem;
+
+      > *:not(:last-child)::after {
+        display: none;
+      }
+    }
   }
 
   @media (max-width: 768px) {
     width: 100%;
-    justify-content: space-around;
-    gap: 0.25rem;
+    justify-content: space-between;
+    gap: 0.5rem;
     padding: 0.5rem 0;
     background: #f8fafc;
     margin: -0.25rem -0.75rem 0;
     padding-left: 0.75rem;
     padding-right: 0.75rem;
-
-    > *:not(:last-child)::after {
-      display: none;
-    }
   }
 `;
 
-const StatItem = styled.div`
+const StatItem = styled.button`
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.375rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(74, 144, 226, 0.08);
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
 
   @media (max-width: 768px) {
     flex: 1;
     min-width: 0;
+    padding: 0.375rem;
   }
 `;
 
@@ -333,41 +398,50 @@ const ActionButtons = styled.div`
   align-items: center;
 `;
 
-const HeaderHistoryButton = styled(Button)`
-  &&& {
-    background: transparent;
-    color: #64748b;
-    border: none;
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+const HeaderHistoryButton = styled.button`
+  background: transparent;
+  color: #64748b;
+  border: none;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
 
-    &:hover {
-      background: #f8fafc;
-      color: #4a90e2;
-    }
+  &:hover {
+    background: #f8fafc;
+    color: #4a90e2;
+  }
+
+  &:active {
+    transform: scale(0.98);
   }
 `;
 
-const HeaderEditButton = styled(Button)`
-  &&& {
-    background: #4a90e2;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+const HeaderEditButton = styled.button`
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
 
-    &:hover {
-      background: #357abd;
-    }
+  &:hover {
+    background: #357abd;
+  }
+
+  &:active {
+    transform: scale(0.98);
   }
 `;
 
@@ -516,24 +590,28 @@ const DescriptionContent = styled.div`
   }
 `;
 
-const AddDescriptionButton = styled(Button)`
-  &&& {
-    background: white;
-    color: #4a90e2;
-    border: 2px dashed #cbd5e1;
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
-    font-weight: 500;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
+const AddDescriptionButton = styled.button`
+  background: white;
+  color: #4a90e2;
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  font-weight: 500;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 
-    &:hover {
-      border-color: #4a90e2;
-      background: #f0f7ff;
-      transform: translateY(-1px);
-    }
+  &:hover {
+    border-color: #4a90e2;
+    background: #f0f7ff;
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 `;
 
@@ -599,6 +677,9 @@ const LoadingPlaceholder = styled.div`
 interface CorpusHomeProps {
   corpus: CorpusType;
   onEditDescription: () => void;
+  onNavigate?: (tabIndex: number) => void;
+  onBack?: () => void;
+  canUpdate?: boolean;
   stats: {
     totalDocs: number;
     totalAnnotations: number;
@@ -611,6 +692,9 @@ interface CorpusHomeProps {
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
   onEditDescription,
+  onNavigate,
+  onBack,
+  canUpdate,
   stats,
   statsLoading,
 }) => {
@@ -657,10 +741,20 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   );
 
   const statItems = [
-    { label: "Docs", value: stats.totalDocs },
-    { label: "Notes", value: stats.totalAnnotations },
-    { label: "Analyses", value: stats.totalAnalyses },
-    { label: "Extracts", value: stats.totalExtracts },
+    { label: "Docs", value: stats.totalDocs, navIndex: 1 }, // documents tab
+    { label: "Notes", value: stats.totalAnnotations, navIndex: 2 }, // annotations tab
+    { label: "Analyses", value: stats.totalAnalyses, navIndex: 3 }, // analyses tab
+    { label: "Extracts", value: stats.totalExtracts, navIndex: 4 }, // extracts tab
+    ...(canUpdate
+      ? [
+          {
+            label: "Settings",
+            value: null,
+            navIndex: 5,
+            icon: <Settings size={20} />,
+          },
+        ]
+      : []),
   ];
 
   // Show loading state while corpus data is being fetched
@@ -711,6 +805,11 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       <TopBar id="corpus-home-top-bar">
         <CorpusInfo id="corpus-home-corpus-info">
           <TitleRow>
+            {onBack && (
+              <BackButton onClick={onBack} title="Back to Corpuses">
+                <ArrowLeft />
+              </BackButton>
+            )}
             <CorpusTitle>{fullCorpus.title || "Loading..."}</CorpusTitle>
             <AccessBadge $isPublic={fullCorpus.isPublic}>
               {fullCorpus.isPublic ? (
@@ -758,14 +857,24 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         </CorpusInfo>
 
         <StatsRow>
-          {statItems.map((stat) => (
-            <StatItem key={stat.label}>
-              <StatValue>
-                {statsLoading ? "-" : stat.value.toLocaleString()}
-              </StatValue>
-              <StatLabel>{stat.label}</StatLabel>
-            </StatItem>
-          ))}
+          <div className="stats-group">
+            {statItems.map((stat) => (
+              <StatItem
+                key={stat.label}
+                onClick={() => onNavigate?.(stat.navIndex)}
+                title={`View ${stat.label}`}
+              >
+                {stat.icon ? (
+                  stat.icon
+                ) : (
+                  <StatValue>
+                    {statsLoading ? "-" : (stat.value ?? 0).toLocaleString()}
+                  </StatValue>
+                )}
+                <StatLabel>{stat.label}</StatLabel>
+              </StatItem>
+            ))}
+          </div>
         </StatsRow>
       </TopBar>
 

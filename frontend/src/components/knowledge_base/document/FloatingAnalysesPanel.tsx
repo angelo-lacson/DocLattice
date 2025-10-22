@@ -32,10 +32,15 @@ const FloatingContainer = styled(motion.div)<{ $panelOffset?: number }>`
   }
 
   @media (max-width: 768px) {
-    right: 1rem;
-    width: calc(100vw - 2rem);
-    height: 70vh;
-    max-height: 600px;
+    top: 4rem;
+    right: 0;
+    left: 0;
+    transform: none;
+    width: 100%;
+    height: calc(100vh - 5rem);
+    max-height: none;
+    padding: 0.5rem;
+    box-sizing: border-box;
   }
 `;
 
