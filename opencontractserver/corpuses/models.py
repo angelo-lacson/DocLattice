@@ -115,6 +115,24 @@ class Corpus(TreeNode):
         help_text="Fully qualified Python path to the embedder class to use for this corpus",
     )
 
+    # Agent instructions
+    corpus_agent_instructions = django.db.models.TextField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Custom system instructions for the corpus-level agent. "
+            "If not set, uses DEFAULT_CORPUS_AGENT_INSTRUCTIONS from settings."
+        ),
+    )
+    document_agent_instructions = django.db.models.TextField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Custom system instructions for document-level agents in this corpus. "
+            "If not set, uses DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS from settings."
+        ),
+    )
+
     # Sharing
     allow_comments = django.db.models.BooleanField(default=False)
     is_public = django.db.models.BooleanField(default=False)

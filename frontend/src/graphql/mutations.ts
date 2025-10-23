@@ -95,6 +95,8 @@ export interface UpdateCorpusInputs {
   labelSet?: string;
   slug?: string;
   isPublic?: boolean;
+  corpusAgentInstructions?: string;
+  documentAgentInstructions?: string;
 }
 
 export interface UpdateCorpusOutputs {
@@ -121,6 +123,8 @@ export const UPDATE_CORPUS = gql`
     $preferredEmbedder: String
     $slug: String
     $isPublic: Boolean
+    $corpusAgentInstructions: String
+    $documentAgentInstructions: String
   ) {
     updateCorpus(
       id: $id
@@ -131,6 +135,8 @@ export const UPDATE_CORPUS = gql`
       preferredEmbedder: $preferredEmbedder
       slug: $slug
       isPublic: $isPublic
+      corpusAgentInstructions: $corpusAgentInstructions
+      documentAgentInstructions: $documentAgentInstructions
     ) {
       ok
       message
