@@ -277,6 +277,44 @@ class TestCoreAgentFactoriesDefaults(TestCoreAgentComponentsSetup):
         prompt = CoreCorpusAgentFactory.get_default_system_prompt(self.corpus1)
         self.assertIn(self.corpus1.title, prompt)
 
+    @override_settings(DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS="Default doc instructions")
+    def test_document_agent_uses_default_instructions_when_corpus_has_none(self):
+        """Test that default settings are used when corpus has no custom document_agent_instructions."""
+        prompt = CoreDocumentAgentFactory.get_default_system_prompt(
+            self.doc1, self.corpus1
+        )
+        self.assertIn("Default doc instructions", prompt)
+        self.assertIn(self.doc1.title, prompt)
+
+    @override_settings(DEFAULT_CORPUS_AGENT_INSTRUCTIONS="Default corpus instructions")
+    def test_corpus_agent_uses_default_instructions_when_corpus_has_none(self):
+        """Test that default settings are used when corpus has no custom corpus_agent_instructions."""
+        prompt = CoreCorpusAgentFactory.get_default_system_prompt(self.corpus1)
+        self.assertIn("Default corpus instructions", prompt)
+        self.assertIn(self.corpus1.title, prompt)
+
+    def test_document_agent_uses_custom_instructions_when_corpus_has_them(self):
+        """Test that custom document_agent_instructions from corpus are used when available."""
+        self.corpus1.document_agent_instructions = (
+            "Custom document instructions for this corpus"
+        )
+        self.corpus1.save()
+        prompt = CoreDocumentAgentFactory.get_default_system_prompt(
+            self.doc1, self.corpus1
+        )
+        self.assertIn("Custom document instructions for this corpus", prompt)
+        self.assertIn(self.doc1.title, prompt)
+
+    def test_corpus_agent_uses_custom_instructions_when_corpus_has_them(self):
+        """Test that custom corpus_agent_instructions from corpus are used when available."""
+        self.corpus1.corpus_agent_instructions = (
+            "Custom corpus instructions for this corpus"
+        )
+        self.corpus1.save()
+        prompt = CoreCorpusAgentFactory.get_default_system_prompt(self.corpus1)
+        self.assertIn("Custom corpus instructions for this corpus", prompt)
+        self.assertIn(self.corpus1.title, prompt)
+
     @patch(
         f"{CoreDocumentAgentFactory.__module__}.CoreDocumentAgentFactory.get_default_system_prompt"
     )
@@ -291,7 +329,7 @@ class TestCoreAgentFactoriesDefaults(TestCoreAgentComponentsSetup):
             self.doc1, self.corpus1, config
         )
 
-        mock_get_prompt.assert_called_once_with(self.doc1)
+        mock_get_prompt.assert_called_once_with(self.doc1, self.corpus1)
         self.assertEqual(context.config.system_prompt, "Mocked default prompt")
 
     async def test_create_document_context_uses_override_prompt(self):
