@@ -478,6 +478,8 @@ const EnhancedChatInputContainer = styled(ChatInputContainer)<{
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(0, 0, 0, 0.05);
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+  flex-direction: column;
+  align-items: stretch;
 
   /* When disabled (i.e. assistant is processing) */
   ${(props) =>
@@ -545,6 +547,14 @@ const MessagesArea = styled.div<{ $isProcessing?: boolean }>`
   }
 `;
 
+// Input row wrapper to keep input and send button together
+const InputRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+`;
+
 // Enhance the chat input for better mobile experience
 const EnhancedChatInput = styled(ChatInput)`
   background: #f8fafc;
@@ -553,6 +563,8 @@ const EnhancedChatInput = styled(ChatInput)`
   padding: 0.875rem 1.25rem;
   font-size: 0.9375rem;
   transition: all 0.2s ease;
+  flex: 1;
+  min-height: 48px;
 
   &:focus {
     background: white;
@@ -568,6 +580,19 @@ const EnhancedChatInput = styled(ChatInput)`
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     font-size: 0.875rem;
     padding: 0.75rem 1rem;
+    min-height: 44px;
+  }
+`;
+
+// Enhanced send button that matches input height
+const EnhancedSendButton = styled(SendButton)`
+  width: 48px;
+  height: 48px;
+  align-self: center; /* Override the flex-end from base component */
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    width: 44px;
+    height: 44px;
   }
 `;
 
@@ -1638,65 +1663,75 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   $isTyping={isNewChat}
                   $disabled={isProcessing}
                 >
-                  {wsError ? (
-                    <ErrorMessage>
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: "spring", damping: 20 }}
-                      >
-                        {wsError}
-                        <Button
-                          size="small"
-                          onClick={() => window.location.reload()}
-                          style={{
-                            marginLeft: "0.75rem",
-                            background: "#dc3545",
-                            color: "white",
-                            border: "none",
-                            boxShadow: "0 2px 4px rgba(220,53,69,0.2)",
-                          }}
+                  <AnimatePresence>
+                    {wsError ? (
+                      <ErrorMessage key="error">
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          transition={{ type: "spring", damping: 20 }}
                         >
-                          Reconnect
-                        </Button>
-                      </motion.div>
-                    </ErrorMessage>
-                  ) : (
-                    <ConnectionStatus
-                      connected={wsReady}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    />
-                  )}
-                  <EnhancedChatInput
-                    value={newMessage}
-                    onChange={(e: {
-                      target: { value: SetStateAction<string> };
-                    }) => setNewMessage(e.target.value)}
-                    placeholder={
-                      wsReady
-                        ? isProcessing
-                          ? "Assistant is thinking..."
-                          : "Type your corpus query..."
-                        : "Waiting for connection..."
-                    }
-                    disabled={!wsReady || isProcessing}
-                    onKeyPress={(e: { key: string }) => {
-                      if (e.key === "Enter") {
-                        sendMessageOverSocket();
+                          {wsError}
+                          <Button
+                            size="small"
+                            onClick={() => window.location.reload()}
+                            style={{
+                              marginLeft: "0.75rem",
+                              background: "#dc3545",
+                              color: "white",
+                              border: "none",
+                              boxShadow: "0 2px 4px rgba(220,53,69,0.2)",
+                            }}
+                          >
+                            Reconnect
+                          </Button>
+                        </motion.div>
+                      </ErrorMessage>
+                    ) : (
+                      !wsReady && (
+                        <ConnectionStatus
+                          key="status"
+                          connected={wsReady}
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      )
+                    )}
+                  </AnimatePresence>
+                  <InputRow>
+                    <EnhancedChatInput
+                      value={newMessage}
+                      onChange={(e: {
+                        target: { value: SetStateAction<string> };
+                      }) => setNewMessage(e.target.value)}
+                      placeholder={
+                        wsReady
+                          ? isProcessing
+                            ? "Assistant is thinking..."
+                            : "Type your corpus query..."
+                          : "Waiting for connection..."
                       }
-                    }}
-                  />
-                  <SendButton
-                    disabled={!wsReady || !newMessage.trim() || isProcessing}
-                    onClick={sendMessageOverSocket}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    animate={wsReady ? { y: [0, -2, 0] } : {}}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Send size={18} />
-                  </SendButton>
+                      disabled={!wsReady || isProcessing}
+                      onKeyPress={(e: { key: string }) => {
+                        if (e.key === "Enter") {
+                          sendMessageOverSocket();
+                        }
+                      }}
+                    />
+                    <EnhancedSendButton
+                      disabled={!wsReady || !newMessage.trim() || isProcessing}
+                      onClick={sendMessageOverSocket}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      animate={wsReady ? { y: [0, -2, 0] } : {}}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Send size={20} />
+                    </EnhancedSendButton>
+                  </InputRow>
                 </EnhancedChatInputContainer>
               </ChatInputWrapper>
             </motion.div>

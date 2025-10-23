@@ -24,6 +24,8 @@ import {
   ChevronUp,
   Search,
   AlignJustify,
+  Send,
+  History,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -228,8 +230,9 @@ const FloatingSearchContainer = styled(motion.div)`
   z-index: 100;
   display: flex;
   align-items: center;
-  padding: 0.125rem;
-  width: 82px;
+  justify-content: center;
+  padding: 0.375rem;
+  width: 100px;
   max-width: 720px;
   min-height: 42px;
   height: auto;
@@ -238,37 +241,45 @@ const FloatingSearchContainer = styled(motion.div)`
 
   /* Add gap to form children only when expanded */
   & > form {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     gap: 0;
-    transition: gap 0.35s ease;
+    transition: gap 0.35s ease, justify-content 0.35s ease;
+    width: 100%;
   }
 
   &:hover,
   &:focus-within {
-    width: 100%;
+    width: min(720px, 90%);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     border-color: #cbd5e1;
     align-items: flex-start;
-    padding: 0.5rem;
+    justify-content: flex-start;
+    padding: 0.75rem;
 
     & > form {
       gap: 0.75rem;
+      justify-content: flex-start;
     }
   }
 
   @media (max-width: 768px) {
-    width: 80px;
+    width: 96px;
     max-width: calc(100vw - 2rem);
     min-height: 40px;
-    padding: 0.125rem;
+    padding: 0.375rem;
 
     &:active,
     &:hover,
     &:focus-within {
-      width: 100%;
-      padding: 0.375rem;
+      width: 85%;
+      max-width: 320px;
+      padding: 0.5rem;
 
       & > form {
         gap: 0.5rem;
+        justify-content: flex-start;
       }
     }
   }
@@ -317,7 +328,7 @@ const EnhancedSearchInput = styled.textarea`
 
   ${FloatingSearchContainer}:hover &,
   ${FloatingSearchContainer}:focus-within & {
-    width: calc(100% - 2rem); /* account for container padding */
+    width: 100%;
     opacity: 1;
     padding: 0.75rem 1rem;
     min-height: 40px;
@@ -330,7 +341,7 @@ const EnhancedSearchInput = styled.textarea`
     ${FloatingSearchContainer}:hover &,
     ${FloatingSearchContainer}:focus-within & {
       padding: 0.625rem 0.875rem;
-      width: calc(100% - 1.5rem); /* less padding on mobile */
+      width: 100%;
     }
   }
 `;
@@ -338,8 +349,12 @@ const EnhancedSearchInput = styled.textarea`
 const SearchActionsContainer = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    gap: 0.375rem;
+  }
 `;
 
 const ActionButton = styled(motion.button)`
@@ -354,6 +369,7 @@ const ActionButton = styled(motion.button)`
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 
   &:hover:not(:disabled) {
     background: #e2e8f0;
@@ -373,6 +389,16 @@ const ActionButton = styled(motion.button)`
     &:hover:not(:disabled) {
       background: #357abd;
       border-color: #357abd;
+    }
+  }
+
+  @media (max-width: 768px) {
+    width: 36px;
+    height: 36px;
+
+    svg {
+      width: 16px;
+      height: 16px;
     }
   }
 `;
@@ -540,7 +566,7 @@ const CorpusQueryView = ({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <MessageSquare size={18} />
+                <History size={18} />
               </ActionButton>
             )}
             <ActionButton
@@ -573,8 +599,8 @@ const CorpusQueryView = ({
             minHeight: 0,
             ...(!isDesktop
               ? {
-                  height: "calc(100vh - 153px)", // Lock to viewport minus mobile nav
-                  maxHeight: "calc(100vh - 153px)",
+                  height: "calc(100vh - 100px)", // Lock to viewport minus mobile nav
+                  maxHeight: "calc(100vh - 100px)",
                 }
               : {}),
           }}
@@ -650,14 +676,7 @@ const CorpusQueryView = ({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
               >
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    width: "100%",
-                  }}
-                >
+                <form onSubmit={handleSearchSubmit}>
                   <EnhancedSearchInput
                     ref={inputRef}
                     placeholder="Ask a question about this corpus..."
@@ -685,7 +704,7 @@ const CorpusQueryView = ({
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      <MessageSquare size={18} />
+                      <History size={18} />
                     </ActionButton>
                     <ActionButton
                       type="submit"
@@ -694,7 +713,7 @@ const CorpusQueryView = ({
                       whileHover={searchQuery.trim() ? { scale: 1.05 } : {}}
                       whileTap={searchQuery.trim() ? { scale: 0.95 } : {}}
                     >
-                      <Search size={18} />
+                      <Send size={18} />
                     </ActionButton>
                   </SearchActionsContainer>
                 </form>

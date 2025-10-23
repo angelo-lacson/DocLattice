@@ -321,12 +321,21 @@ const MainContent = styled.div`
   overflow-x: hidden;
   padding: 1rem 0.25rem;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   min-height: 0;
+
   @media (max-width: 768px) {
     padding: 0.75rem 0.5rem;
-    padding-bottom: 100px;
   }
+`;
+
+const StretchWrapper = styled.div`
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  min-height: 100%;
 `;
 
 const ContentWrapper = styled.div`
@@ -334,9 +343,7 @@ const ContentWrapper = styled.div`
   max-width: 1200px;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-  min-height: 0;
-  flex: 1;
+  min-height: 100%;
 `;
 
 const DescriptionCard = styled(motion.div)`
@@ -350,6 +357,7 @@ const DescriptionCard = styled(motion.div)`
   position: relative;
   flex: 1;
   min-height: 0;
+  height: 100%;
 `;
 
 const DescriptionHeader = styled.div`
@@ -447,6 +455,7 @@ const HeaderEditButton = styled.button`
 
 const DescriptionContent = styled.div`
   padding: 2rem;
+  padding-bottom: 8rem;
   color: #334155;
   line-height: 1.75;
   font-size: 0.9375rem;
@@ -459,6 +468,7 @@ const DescriptionContent = styled.div`
 
   @media (max-width: 768px) {
     padding: 1rem;
+    padding-bottom: 10rem;
     font-size: 0.875rem;
     line-height: 1.6;
   }
@@ -776,25 +786,27 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
           </CorpusInfo>
         </TopBar>
         <MainContent id="corpus-home-main-content">
-          <ContentWrapper id="corpus-home-content">
-            <DescriptionCard>
-              <DescriptionHeader>
-                <DescriptionTitle>
-                  <BookOpen size={20} />
-                  About this Corpus
-                </DescriptionTitle>
-              </DescriptionHeader>
-              <DescriptionContent>
-                <LoadingPlaceholder>
-                  <div className="paragraph-skeleton">
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton medium"></div>
-                  </div>
-                </LoadingPlaceholder>
-              </DescriptionContent>
-            </DescriptionCard>
-          </ContentWrapper>
+          <StretchWrapper>
+            <ContentWrapper id="corpus-home-content">
+              <DescriptionCard>
+                <DescriptionHeader>
+                  <DescriptionTitle>
+                    <BookOpen size={20} />
+                    About this Corpus
+                  </DescriptionTitle>
+                </DescriptionHeader>
+                <DescriptionContent>
+                  <LoadingPlaceholder>
+                    <div className="paragraph-skeleton">
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton medium"></div>
+                    </div>
+                  </LoadingPlaceholder>
+                </DescriptionContent>
+              </DescriptionCard>
+            </ContentWrapper>
+          </StretchWrapper>
         </MainContent>
       </Container>
     );
@@ -879,98 +891,100 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       </TopBar>
 
       <MainContent id="corpus-home-main-content">
-        <ContentWrapper id="corpus-home-content">
-          <DescriptionCard
-            key="description-card"
-            id="corpus-home-description-card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            style={{ minHeight: 0 }}
-          >
-            <DescriptionHeader>
-              <DescriptionTitle>
-                <BookOpen size={20} />
-                About this Corpus
-              </DescriptionTitle>
-              <ActionButtons>
-                {(mdContent || fullCorpus.description) && (
-                  <HeaderHistoryButton onClick={onEditDescription}>
-                    <Activity size={14} />
-                    Version History
-                  </HeaderHistoryButton>
-                )}
-                {canEdit && (
-                  <HeaderEditButton onClick={onEditDescription}>
-                    {mdContent || fullCorpus.description ? (
-                      <>
-                        <Edit size={14} />
-                        Edit Description
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={14} />
-                        Add Description
-                      </>
-                    )}
-                  </HeaderEditButton>
-                )}
-              </ActionButtons>
-            </DescriptionHeader>
-
-            <DescriptionContent
-              className={!mdContent && !fullCorpus.description ? "empty" : ""}
+        <StretchWrapper>
+          <ContentWrapper id="corpus-home-content">
+            <DescriptionCard
+              key="description-card"
+              id="corpus-home-description-card"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              style={{ minHeight: 0 }}
             >
-              {corpusLoading ? (
-                <LoadingPlaceholder>
-                  <div className="title-skeleton"></div>
-                  <div className="paragraph-skeleton">
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton medium"></div>
-                  </div>
-                  <div className="paragraph-skeleton">
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton short"></div>
-                  </div>
-                  <div className="paragraph-skeleton">
-                    <div className="line-skeleton medium"></div>
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton medium"></div>
-                    <div className="line-skeleton short"></div>
-                  </div>
-                </LoadingPlaceholder>
-              ) : mdContent ? (
-                <SafeMarkdown>{mdContent}</SafeMarkdown>
-              ) : fullCorpus.description ? (
-                <p>{fullCorpus.description}</p>
-              ) : (
-                <>
-                  <Sparkles
-                    size={48}
-                    style={{ marginBottom: "1rem", color: "#cbd5e1" }}
-                  />
-                  <p
-                    style={{
-                      fontSize: "1.125rem",
-                      color: "#64748b",
-                      marginBottom: "1.5rem",
-                    }}
-                  >
-                    No description yet. Help others understand what this corpus
-                    contains.
-                  </p>
-                  {canEdit && (
-                    <AddDescriptionButton onClick={onEditDescription}>
-                      <Plus size={18} />
-                      Add Description
-                    </AddDescriptionButton>
+              <DescriptionHeader>
+                <DescriptionTitle>
+                  <BookOpen size={20} />
+                  About this Corpus
+                </DescriptionTitle>
+                <ActionButtons>
+                  {(mdContent || fullCorpus.description) && (
+                    <HeaderHistoryButton onClick={onEditDescription}>
+                      <Activity size={14} />
+                      Version History
+                    </HeaderHistoryButton>
                   )}
-                </>
-              )}
-            </DescriptionContent>
-          </DescriptionCard>
-        </ContentWrapper>
+                  {canEdit && (
+                    <HeaderEditButton onClick={onEditDescription}>
+                      {mdContent || fullCorpus.description ? (
+                        <>
+                          <Edit size={14} />
+                          Edit Description
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={14} />
+                          Add Description
+                        </>
+                      )}
+                    </HeaderEditButton>
+                  )}
+                </ActionButtons>
+              </DescriptionHeader>
+
+              <DescriptionContent
+                className={!mdContent && !fullCorpus.description ? "empty" : ""}
+              >
+                {corpusLoading ? (
+                  <LoadingPlaceholder>
+                    <div className="title-skeleton"></div>
+                    <div className="paragraph-skeleton">
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton medium"></div>
+                    </div>
+                    <div className="paragraph-skeleton">
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton short"></div>
+                    </div>
+                    <div className="paragraph-skeleton">
+                      <div className="line-skeleton medium"></div>
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton medium"></div>
+                      <div className="line-skeleton short"></div>
+                    </div>
+                  </LoadingPlaceholder>
+                ) : mdContent ? (
+                  <SafeMarkdown>{mdContent}</SafeMarkdown>
+                ) : fullCorpus.description ? (
+                  <p>{fullCorpus.description}</p>
+                ) : (
+                  <>
+                    <Sparkles
+                      size={48}
+                      style={{ marginBottom: "1rem", color: "#cbd5e1" }}
+                    />
+                    <p
+                      style={{
+                        fontSize: "1.125rem",
+                        color: "#64748b",
+                        marginBottom: "1.5rem",
+                      }}
+                    >
+                      No description yet. Help others understand what this
+                      corpus contains.
+                    </p>
+                    {canEdit && (
+                      <AddDescriptionButton onClick={onEditDescription}>
+                        <Plus size={18} />
+                        Add Description
+                      </AddDescriptionButton>
+                    )}
+                  </>
+                )}
+              </DescriptionContent>
+            </DescriptionCard>
+          </ContentWrapper>
+        </StretchWrapper>
       </MainContent>
     </Container>
   );
