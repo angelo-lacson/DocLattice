@@ -443,21 +443,54 @@ interface ConnectionStatusProps {
 }
 
 export const ConnectionStatus = styled(motion.div)<ConnectionStatusProps>`
-  position: absolute;
-  top: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  background: ${(props) => (props.connected ? "#48BB78" : "#F56565")};
-  color: white;
-  opacity: 0.9;
-  transition: all 0.2s ease;
+  display: ${(props) => (props.connected ? "none" : "flex")};
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: ${(props) =>
+    props.connected
+      ? "rgba(72, 187, 120, 0.1)"
+      : "linear-gradient(135deg, #FEF5E7 0%, #FFF4E6 100%)"};
+  color: ${(props) => (props.connected ? "#2F855A" : "#C05621")};
+  border: 1px solid
+    ${(props) => (props.connected ? "#9AE6B4" : "rgba(237, 137, 54, 0.3)")};
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 0.75rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  font-weight: 500;
 
   &:before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: ${(props) => (props.connected ? "#48BB78" : "#ED8936")};
+    box-shadow: 0 0 8px
+      ${(props) =>
+        props.connected
+          ? "rgba(72, 187, 120, 0.4)"
+          : "rgba(237, 137, 54, 0.4)"};
+    animation: ${(props) =>
+      props.connected ? "none" : "pulse-warning 2s ease-in-out infinite"};
+  }
+
+  &:after {
     content: "${(props) =>
-      props.connected ? "🟢 Connected" : "🔴 Disconnected"}";
+      props.connected ? "Connected" : "Reconnecting..."}";
+  }
+
+  @keyframes pulse-warning {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(1.2);
+    }
   }
 `;
 
