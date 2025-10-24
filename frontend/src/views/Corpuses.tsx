@@ -269,7 +269,7 @@ const FloatingSearchContainer = styled(motion.div)`
   }
 
   @media (max-width: 768px) {
-    width: 96px;
+    width: clamp(80px, 20vw, 96px);
     max-width: calc(100vw - 2rem);
     min-height: 40px;
     padding: 0.375rem;
@@ -802,9 +802,9 @@ const NavigationSidebar = styled(motion.div)<{ $isExpanded: boolean }>`
     left: 50%;
     bottom: 0;
     width: 100%;
-    max-width: 480px;
+    max-width: min(480px, 95vw);
     height: ${(props) => (props.$isExpanded ? "70vh" : "0")};
-    max-height: 600px;
+    max-height: min(600px, 70vh);
     border-right: none;
     border-top: 1px solid #e2e8f0;
     border-radius: 24px 24px 0 0;
