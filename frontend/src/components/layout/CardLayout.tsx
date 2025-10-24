@@ -166,24 +166,24 @@ const CardContainer = styled.div<CardContainerArgs>(({ width }) => {
       ${baseStyling}
       max-height: 100vh;
       height: 100%;
-      padding: 8px;
-      padding-bottom: 10px;
+      padding: clamp(0.5rem, 1.5vw, 0.75rem);
+      padding-bottom: clamp(0.625rem, 2vh, 0.875rem);
     `;
   } else if (width <= 1000) {
     return `
       ${baseStyling}
       max-height: 100vh;
       height: 100%;
-      padding: 12px;
-      padding-bottom: 14px;
+      padding: clamp(0.75rem, 2vw, 1rem);
+      padding-bottom: clamp(0.875rem, 2.5vh, 1.125rem);
     `;
   } else {
     return `
       ${baseStyling}
       max-height: 100vh;
       height: 100%;
-      padding: 20px;
-      padding-bottom: 22px;
+      padding: clamp(1.25rem, 2.5vw, 1.5rem);
+      padding-bottom: clamp(1.375rem, 3vh, 1.625rem);
     `;
   }
 });

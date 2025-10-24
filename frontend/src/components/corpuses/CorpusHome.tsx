@@ -76,7 +76,7 @@ const TopBar = styled.div`
   flex-shrink: 0;
 
   @media (max-width: 768px) {
-    padding: 0.875rem 0.75rem;
+    padding: clamp(0.75rem, 2vh, 1rem) clamp(0.75rem, 3vw, 1rem);
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
@@ -328,7 +328,7 @@ const MainContent = styled.div`
   max-height: 100%; /* Never exceed parent's height */
 
   @media (max-width: 768px) {
-    padding: 0.75rem 0.5rem;
+    padding: clamp(0.5rem, 1.5vh, 0.75rem) clamp(0.5rem, 2vw, 0.75rem);
   }
 `;
 
@@ -378,7 +378,7 @@ const DescriptionHeader = styled.div`
   flex-shrink: 0;
 
   @media (max-width: 768px) {
-    padding: 1rem 1rem;
+    padding: clamp(0.75rem, 2vh, 1rem) clamp(0.75rem, 3vw, 1rem);
   }
 `;
 
@@ -463,7 +463,7 @@ const HeaderEditButton = styled.button`
 
 const DescriptionContent = styled.div`
   padding: 2rem;
-  padding-bottom: 8rem;
+  padding-bottom: 12vh;
   color: #334155;
   line-height: 1.75;
   font-size: 0.9375rem;
@@ -475,8 +475,8 @@ const DescriptionContent = styled.div`
   max-height: 100%;
 
   @media (max-width: 768px) {
-    padding: 1rem;
-    padding-bottom: 10rem;
+    padding: clamp(0.75rem, 2.5vw, 1rem);
+    padding-bottom: 15vh;
     font-size: 0.875rem;
     line-height: 1.6;
   }
