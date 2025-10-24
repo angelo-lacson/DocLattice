@@ -354,6 +354,7 @@ const ChatContainer = styled.div`
   border-radius: 0;
   flex: 1;
   min-height: 0; /* Important for flex children */
+  max-height: 100%; /* Never exceed parent's height */
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     /* Removed position: fixed to prevent covering parent navigation and bottom nav */
@@ -372,6 +373,7 @@ const ConversationIndicator = styled.div`
   position: relative;
   min-height: 0; /* Important for flex children to properly overflow */
   flex: 1;
+  max-height: 100%; /* Never exceed parent's height */
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     height: 100%; /* Fill parent container */
@@ -502,6 +504,7 @@ const MessagesArea = styled.div<{ $isProcessing?: boolean }>`
   padding: 1.5rem;
   background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
   min-height: 0;
+  max-height: 100%;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1539,9 +1542,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                 overflow: "hidden",
                 minHeight: 0,
                 flex: 1,
-                ...(use_mobile_layout
-                  ? { height: "100%", maxHeight: "100%" }
-                  : {}), // Lock to parent height on mobile
+                height: "100%",
+                maxHeight: "100%",
               }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

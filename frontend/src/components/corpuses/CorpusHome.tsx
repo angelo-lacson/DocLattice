@@ -61,6 +61,8 @@ const Container = styled.div`
   overflow: hidden;
   position: relative;
   height: 100%;
+  max-height: 100%; /* Never exceed parent's height */
+  min-height: 0;
 `;
 
 const TopBar = styled.div`
@@ -323,6 +325,7 @@ const MainContent = styled.div`
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
 
   @media (max-width: 768px) {
     padding: 0.75rem 0.5rem;
@@ -335,7 +338,9 @@ const StretchWrapper = styled.div`
   justify-content: center;
   align-items: stretch;
   width: 100%;
-  min-height: 100%;
+  min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
+  overflow: hidden;
 `;
 
 const ContentWrapper = styled.div`
@@ -343,7 +348,9 @@ const ContentWrapper = styled.div`
   max-width: 1200px;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
+  overflow: hidden;
 `;
 
 const DescriptionCard = styled(motion.div)`
@@ -358,6 +365,7 @@ const DescriptionCard = styled(motion.div)`
   flex: 1;
   min-height: 0;
   height: 100%;
+  max-height: 100%; /* Never exceed parent's height */
 `;
 
 const DescriptionHeader = styled.div`
