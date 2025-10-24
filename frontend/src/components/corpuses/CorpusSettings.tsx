@@ -25,6 +25,7 @@ import {
 } from "../../graphql/mutations";
 import { CreateCorpusActionModal } from "./CreateCorpusActionModal";
 import { CorpusMetadataSettings } from "./CorpusMetadataSettings";
+import { CorpusAgentSettings } from "./CorpusAgentSettings";
 import {
   UPDATE_CORPUS,
   UpdateCorpusInputs,
@@ -809,6 +810,22 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
           </SectionHeader>
           <MetadataContent>
             <CorpusMetadataSettings corpusId={corpus.id} />
+          </MetadataContent>
+        </InfoSection>
+
+        <InfoSection>
+          <SectionHeader>
+            <SectionTitle>Agent Instructions</SectionTitle>
+          </SectionHeader>
+          <MetadataContent>
+            <CorpusAgentSettings
+              corpusId={corpus.id}
+              corpusAgentInstructions={(corpus as any).corpusAgentInstructions}
+              documentAgentInstructions={
+                (corpus as any).documentAgentInstructions
+              }
+              canUpdate={canUpdate}
+            />
           </MetadataContent>
         </InfoSection>
 

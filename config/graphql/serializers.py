@@ -45,6 +45,8 @@ class CorpusSerializer(serializers.ModelSerializer):
             "creator",
             "creator_id",
             "preferred_embedder",
+            "corpus_agent_instructions",
+            "document_agent_instructions",
         ]
         read_only_fields = ["id"]
 
