@@ -60,6 +60,8 @@ const ScrollableSegment = styled(StyledSegment)`
   &.ui.segment {
     flex: 1;
     min-height: 0;
+    max-height: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -154,24 +156,32 @@ const CardContainer = styled.div<CardContainerArgs>(({ width }) => {
     overflow: hidden;
     background-color: #f0f2f5;
     min-height: 0;
+    max-height: 100vh;
+    height: 100%;
     box-sizing: border-box;
   `;
 
   if (width <= 400) {
     return `
       ${baseStyling}
+      max-height: 100vh;
+      height: 100%;
       padding: 8px;
       padding-bottom: 10px;
     `;
   } else if (width <= 1000) {
     return `
       ${baseStyling}
+      max-height: 100vh;
+      height: 100%;
       padding: 12px;
       padding-bottom: 14px;
     `;
   } else {
     return `
       ${baseStyling}
+      max-height: 100vh;
+      height: 100%;
       padding: 20px;
       padding-bottom: 22px;
     `;

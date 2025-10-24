@@ -131,6 +131,8 @@ const DashboardContainer = styled.div`
   padding: 0;
   width: 100%;
   min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
+  height: 100%;
 `;
 
 const ContentWrapper = styled.div`
@@ -142,6 +144,8 @@ const ContentWrapper = styled.div`
   padding: 0;
   overflow: hidden;
   min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
+  height: 100%;
   position: relative;
 `;
 
@@ -597,12 +601,8 @@ const CorpusQueryView = ({
             flexDirection: "column",
             overflow: "hidden",
             minHeight: 0,
-            ...(!isDesktop
-              ? {
-                  height: "calc(100vh - 100px)", // Lock to viewport minus mobile nav
-                  maxHeight: "calc(100vh - 100px)",
-                }
-              : {}),
+            maxHeight: "99vh", // Never exceed 99vh regardless of content
+            height: "100%",
           }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -632,6 +632,8 @@ const CorpusQueryView = ({
           flexDirection: "column",
           overflow: "hidden",
           minHeight: 0,
+          maxHeight: "99vh", // Never exceed 99vh regardless of content
+          height: "100%",
           width: "100%",
         }}
         initial={{ opacity: 0 }}
@@ -731,12 +733,8 @@ const CorpusQueryView = ({
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
-          ...(!isDesktop
-            ? {
-                height: "calc(100vh - 153px)", // Lock to viewport minus mobile nav
-                maxHeight: "calc(100vh - 153px)",
-              }
-            : {}),
+          maxHeight: "99vh", // Never exceed 99vh regardless of content
+          height: "100%",
         }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -745,7 +743,17 @@ const CorpusQueryView = ({
       >
         {renderNavigationHeader()}
 
-        <div style={{ flex: 1, overflow: "hidden" }}>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            minHeight: 0,
+            maxHeight: "100%",
+            height: "100%",
+          }}
+        >
           <CorpusChat
             corpusId={opened_corpus.id}
             showLoad={true}
@@ -768,6 +776,8 @@ const CorpusViewContainer = styled.div`
   flex: 1;
   align-items: stretch;
   min-height: 0;
+  max-height: 100vh;
+  height: 100%;
 `;
 
 const NavigationSidebar = styled(motion.div)<{ $isExpanded: boolean }>`
@@ -1208,6 +1218,8 @@ const MainContentArea = styled.div<{ $sidebarExpanded: boolean }>`
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  max-height: 100%;
+  height: 100%;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     margin-left: 0;

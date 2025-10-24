@@ -249,8 +249,11 @@ export const App = () => {
           <div
             style={{
               minHeight: "100vh",
+              maxHeight: "100vh",
+              height: "100vh",
               display: "flex",
               flexDirection: "column",
+              overflow: "hidden",
             }}
           >
             {show_mobile_menu ? <MobileNavMenu /> : <NavMenu />}
