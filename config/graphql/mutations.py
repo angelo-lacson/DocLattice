@@ -2405,6 +2405,8 @@ class UpdateCorpusMutation(DRFMutation):
         preferred_embedder = graphene.String(required=False)
         slug = graphene.String(required=False)
         is_public = graphene.Boolean(required=False)
+        corpus_agent_instructions = graphene.String(required=False)
+        document_agent_instructions = graphene.String(required=False)
 
 
 class UpdateMe(graphene.Mutation):

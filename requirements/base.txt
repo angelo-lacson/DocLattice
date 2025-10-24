@@ -12,7 +12,7 @@ cryptography==45.0.6  # https://github.com/pyca/cryptography
 pydantic==2.*
 typing-extensions==4.*  # https://github.com/python/typing_extensions
 requests==2.*  # https://requests.readthedocs.io/en/latest/
-tokenizers>=0.21,<0.22  # Pin to prevent conflicts with transformers
+tokenizers>=0.21,<0.23  # Pin to prevent conflicts with transformers
 
 
 # Django
@@ -38,7 +38,7 @@ Twisted[tls,http2]
 # Django REST Framework
 # ------------------------------------------------------------------------------
 djangorestframework==3.16.1  # https://github.com/encode/django-rest-framework
-django-cors-headers==4.7.0  # https://github.com/adamchainz/django-cors-headers
+django-cors-headers==4.9.0  # https://github.com/adamchainz/django-cors-headers
 drf-extra-fields==3.7.0  # https://github.com/Hipo/drf-extra-fields
 
 # Doc Analysis (NLP dependencies, placeholder) - WARNING, these are all in same environment... not ideal.

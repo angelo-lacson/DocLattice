@@ -169,6 +169,9 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
         """
         from opencontractserver.annotations.models import Embedding
 
+        # Extract document ID in async context before passing to sync function
+        document_id = self.document.id
+
         def get_embedder_paths():
             """
             Construct AND evaluate queryset in same DB connection to avoid
@@ -176,7 +179,7 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
             """
             return list(
                 Embedding.objects.filter(
-                    annotation__document=self.document,
+                    annotation__document_id=document_id,
                     annotation__structural=True,
                 )
                 .values_list("embedder_path", flat=True)
