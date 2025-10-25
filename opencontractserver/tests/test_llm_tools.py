@@ -9,14 +9,22 @@ from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.llms.agents.core_agents import SourceNode
 from opencontractserver.llms.tools import (
+    generate_annotation_hyperlink,
+    generate_corpus_hyperlink,
+    generate_document_hyperlink,
     get_md_summary_token_length,
     get_notes_for_document_corpus,
     load_document_md_summary,
 )
 from opencontractserver.llms.tools.core_tools import (
+    _build_query_params,
+    _get_user_slug,
     _token_count,
     add_document_note,
     aduplicate_annotations_with_label,
+    agenerate_annotation_hyperlink,
+    agenerate_corpus_hyperlink,
+    agenerate_document_hyperlink,
     aget_corpus_description,
     aload_document_txt_extract,
     asearch_document_notes,
@@ -24,6 +32,9 @@ from opencontractserver.llms.tools.core_tools import (
     aupdate_corpus_description,
     aupdate_document_note,
     duplicate_annotations_with_label,
+    generate_annotation_link,
+    generate_corpus_link,
+    generate_document_link,
     get_corpus_description,
     get_document_summary,
     get_document_summary_at_version,
@@ -1851,3 +1862,573 @@ class AsyncTestSearchExactTextAsSources(TransactionTestCase):
 
         # All should be negative
         self.assertTrue(all(aid < 0 for aid in annotation_ids))
+
+
+# ==============================================================================
+# Tests for Hyperlink Generation Tools
+# ==============================================================================
+
+
+class TestHyperlinkGenerationHelpers(TestCase):
+    """Test helper functions for hyperlink generation."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(username="testuser", password="12345")
+
+    def test_get_user_slug_with_slug(self):
+        """Test getting user slug when slug field exists."""
+        # Create user with slug attribute (if User model has it)
+        if hasattr(self.user, "slug"):
+            self.user.slug = "test-user-slug"
+            self.user.save()
+            result = _get_user_slug(self.user)
+            self.assertEqual(result, "test-user-slug")
+        else:
+            # Fallback to username if no slug
+            result = _get_user_slug(self.user)
+            self.assertEqual(result, "testuser")
+
+    def test_get_user_slug_with_username_fallback(self):
+        """Test fallback to username when slug doesn't exist or is empty."""
+        result = _get_user_slug(self.user)
+        self.assertEqual(result, "testuser")
+
+    def test_build_query_params_empty(self):
+        """Test building query params with no parameters."""
+        result = _build_query_params()
+        self.assertEqual(result, "")
+
+    def test_build_query_params_annotation_ids(self):
+        """Test building query params with annotation IDs."""
+        result = _build_query_params(annotation_ids=[1, 2, 3])
+        self.assertEqual(result, "?ann=1,2,3")
+
+    def test_build_query_params_multiple_selection_params(self):
+        """Test building query params with multiple selection parameters."""
+        result = _build_query_params(
+            annotation_ids=[10, 20], analysis_ids=[30], extract_ids=[40, 50]
+        )
+        self.assertIn("ann=10,20", result)
+        self.assertIn("analysis=30", result)
+        self.assertIn("extract=40,50", result)
+        self.assertTrue(result.startswith("?"))
+        # Check all params are connected with &
+        params = result[1:].split("&")
+        self.assertEqual(len(params), 3)
+
+    def test_build_query_params_visualization_defaults(self):
+        """Test that default visualization params are not included."""
+        result = _build_query_params(
+            structural=False,
+            selected_only=False,
+            bounding_boxes=False,
+            labels="ON_HOVER",
+        )
+        self.assertEqual(result, "")
+
+    def test_build_query_params_visualization_non_defaults(self):
+        """Test that non-default visualization params are included."""
+        result = _build_query_params(
+            structural=True,
+            selected_only=True,
+            bounding_boxes=True,
+            labels="ALWAYS",
+        )
+        self.assertIn("structural=true", result)
+        self.assertIn("selectedOnly=true", result)
+        self.assertIn("boundingBoxes=true", result)
+        self.assertIn("labels=ALWAYS", result)
+
+    def test_build_query_params_labels_hide(self):
+        """Test labels parameter with HIDE value."""
+        result = _build_query_params(labels="HIDE")
+        self.assertEqual(result, "?labels=HIDE")
+
+    def test_build_query_params_combined(self):
+        """Test building query params with both selection and visualization params."""
+        result = _build_query_params(
+            annotation_ids=[1, 2], structural=True, labels="ALWAYS"
+        )
+        self.assertIn("ann=1,2", result)
+        self.assertIn("structural=true", result)
+        self.assertIn("labels=ALWAYS", result)
+
+
+class TestDocumentLinkGeneration(TestCase):
+    """Test document URL generation functions."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(username="testuser", password="12345")
+
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.user, slug="test-corpus"
+        )
+
+        self.doc = Document.objects.create(
+            creator=self.user,
+            title="Test Document",
+            description="Test Description",
+            slug="test-document",
+        )
+
+    def test_generate_document_link_standalone(self):
+        """Test generating link for standalone document."""
+        url = generate_document_link(self.doc.id)
+
+        # Should follow pattern: /d/{user}/{doc}
+        self.assertIn("/d/testuser/test-document", url)
+        self.assertTrue(url.startswith("http://localhost:3000"))
+
+    def test_generate_document_link_with_corpus(self):
+        """Test generating link for document in corpus."""
+        url = generate_document_link(self.doc.id, corpus_id=self.corpus.id)
+
+        # Should follow pattern: /d/{user}/{corpus}/{doc}
+        self.assertIn("/d/testuser/test-corpus/test-document", url)
+
+    def test_generate_document_link_with_annotation_ids(self):
+        """Test generating link with annotation query parameters."""
+        url = generate_document_link(
+            self.doc.id, corpus_id=self.corpus.id, annotation_ids=[10, 20, 30]
+        )
+
+        self.assertIn("?ann=10,20,30", url)
+
+    def test_generate_document_link_with_visualization_params(self):
+        """Test generating link with visualization parameters."""
+        url = generate_document_link(
+            self.doc.id,
+            structural=True,
+            selected_only=True,
+            bounding_boxes=True,
+            labels="ALWAYS",
+        )
+
+        self.assertIn("structural=true", url)
+        self.assertIn("selectedOnly=true", url)
+        self.assertIn("boundingBoxes=true", url)
+        self.assertIn("labels=ALWAYS", url)
+
+    def test_generate_document_link_with_custom_base_url(self):
+        """Test generating link with custom base URL."""
+        custom_base = "https://example.com"
+        url = generate_document_link(self.doc.id, base_url=custom_base)
+
+        self.assertTrue(url.startswith(custom_base))
+        self.assertIn("/d/testuser/test-document", url)
+
+    def test_generate_document_link_nonexistent_document(self):
+        """Test error handling for non-existent document."""
+        with self.assertRaisesRegex(
+            ValueError, "Document with id=999999 does not exist"
+        ):
+            generate_document_link(999999)
+
+    def test_generate_document_link_nonexistent_corpus(self):
+        """Test error handling for non-existent corpus."""
+        with self.assertRaisesRegex(ValueError, "Corpus with id=999999 does not exist"):
+            generate_document_link(self.doc.id, corpus_id=999999)
+
+    def test_generate_document_link_document_without_slug(self):
+        """Test error handling for document without slug."""
+        doc_no_slug = Document.objects.create(creator=self.user, title="No Slug Doc")
+        # Bypass auto-slug generation by directly updating the database
+        Document.objects.filter(pk=doc_no_slug.id).update(slug="")
+
+        with self.assertRaisesRegex(
+            ValueError, f"Document {doc_no_slug.id} lacks slug"
+        ):
+            generate_document_link(doc_no_slug.id)
+
+    def test_generate_document_link_corpus_without_slug(self):
+        """Test error handling for corpus without slug."""
+        corpus_no_slug = Corpus.objects.create(
+            title="No Slug Corpus", creator=self.user
+        )
+        # Bypass auto-slug generation by directly updating the database
+        Corpus.objects.filter(pk=corpus_no_slug.id).update(slug="")
+
+        with self.assertRaisesRegex(
+            ValueError, f"Corpus {corpus_no_slug.id} lacks slug"
+        ):
+            generate_document_link(self.doc.id, corpus_id=corpus_no_slug.id)
+
+
+class TestAnnotationLinkGeneration(TestCase):
+    """Test annotation URL generation functions."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(username="testuser", password="12345")
+
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.user, slug="test-corpus"
+        )
+
+        self.doc = Document.objects.create(
+            creator=self.user,
+            title="Test Document",
+            description="Test Description",
+            slug="test-document",
+        )
+
+        self.annotation = Annotation.objects.create(
+            page=1,
+            raw_text="Test annotation text",
+            document=self.doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+    def test_generate_annotation_link_basic(self):
+        """Test generating link for annotation."""
+        url = generate_annotation_link(self.annotation.id)
+
+        # Should link to document with annotation selected
+        self.assertIn("/d/testuser/test-corpus/test-document", url)
+        self.assertIn(f"?ann={self.annotation.id}", url)
+
+    def test_generate_annotation_link_defaults(self):
+        """Test that annotation links use sensible defaults."""
+        url = generate_annotation_link(self.annotation.id)
+
+        # Should enable structural annotations and always show labels by default
+        self.assertIn("structural=true", url)
+        self.assertIn("labels=ALWAYS", url)
+
+    def test_generate_annotation_link_with_additional_annotations(self):
+        """Test generating link with multiple annotations selected."""
+        annotation2 = Annotation.objects.create(
+            page=1,
+            raw_text="Second annotation",
+            document=self.doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+        url = generate_annotation_link(
+            self.annotation.id, additional_annotation_ids=[annotation2.id]
+        )
+
+        self.assertIn(f"ann={self.annotation.id},{annotation2.id}", url)
+
+    def test_generate_annotation_link_uses_annotation_corpus(self):
+        """Test that annotation's corpus is used if not explicitly specified."""
+        url = generate_annotation_link(self.annotation.id)
+
+        # Should use annotation's corpus
+        self.assertIn("test-corpus", url)
+
+    def test_generate_annotation_link_corpus_override(self):
+        """Test explicitly overriding annotation's corpus."""
+        corpus2 = Corpus.objects.create(
+            title="Other Corpus", creator=self.user, slug="other-corpus"
+        )
+
+        url = generate_annotation_link(self.annotation.id, corpus_id=corpus2.id)
+
+        # Should use specified corpus
+        self.assertIn("other-corpus", url)
+
+    def test_generate_annotation_link_without_corpus(self):
+        """Test annotation link when annotation has no corpus."""
+        annotation_no_corpus = Annotation.objects.create(
+            page=1,
+            raw_text="No corpus annotation",
+            document=self.doc,
+            corpus=None,
+            creator=self.user,
+        )
+
+        url = generate_annotation_link(annotation_no_corpus.id)
+
+        # Should generate standalone document link
+        self.assertIn("/d/testuser/test-document", url)
+        self.assertNotIn("test-corpus", url)
+
+    def test_generate_annotation_link_nonexistent(self):
+        """Test error handling for non-existent annotation."""
+        with self.assertRaisesRegex(
+            ValueError, "Annotation with id=999999 does not exist"
+        ):
+            generate_annotation_link(999999)
+
+
+class TestCorpusLinkGeneration(TestCase):
+    """Test corpus URL generation functions."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(username="testuser", password="12345")
+
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.user, slug="test-corpus"
+        )
+
+    def test_generate_corpus_link_basic(self):
+        """Test generating link for corpus."""
+        url = generate_corpus_link(self.corpus.id)
+
+        # Should follow pattern: /c/{user}/{corpus}
+        self.assertIn("/c/testuser/test-corpus", url)
+        self.assertTrue(url.startswith("http://localhost:3000"))
+
+    def test_generate_corpus_link_with_analysis_ids(self):
+        """Test generating link with analysis query parameters."""
+        url = generate_corpus_link(self.corpus.id, analysis_ids=[10, 20])
+
+        self.assertIn("?analysis=10,20", url)
+
+    def test_generate_corpus_link_with_extract_ids(self):
+        """Test generating link with extract query parameters."""
+        url = generate_corpus_link(self.corpus.id, extract_ids=[30, 40])
+
+        self.assertIn("?extract=30,40", url)
+
+    def test_generate_corpus_link_with_both_params(self):
+        """Test generating link with both analysis and extract parameters."""
+        url = generate_corpus_link(
+            self.corpus.id, analysis_ids=[10], extract_ids=[20, 30]
+        )
+
+        self.assertIn("analysis=10", url)
+        self.assertIn("extract=20,30", url)
+
+    def test_generate_corpus_link_nonexistent(self):
+        """Test error handling for non-existent corpus."""
+        with self.assertRaisesRegex(ValueError, "Corpus with id=999999 does not exist"):
+            generate_corpus_link(999999)
+
+    def test_generate_corpus_link_without_slug(self):
+        """Test error handling for corpus without slug."""
+        corpus_no_slug = Corpus.objects.create(
+            title="No Slug Corpus", creator=self.user
+        )
+        # Bypass auto-slug generation by directly updating the database
+        Corpus.objects.filter(pk=corpus_no_slug.id).update(slug="")
+
+        with self.assertRaisesRegex(
+            ValueError, f"Corpus {corpus_no_slug.id} lacks slug"
+        ):
+            generate_corpus_link(corpus_no_slug.id)
+
+
+class TestMarkdownHyperlinkGeneration(TestCase):
+    """Test markdown hyperlink wrapper functions."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(username="testuser", password="12345")
+
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.user, slug="test-corpus"
+        )
+
+        self.doc = Document.objects.create(
+            creator=self.user,
+            title="Test Document",
+            description="Test Description",
+            slug="test-document",
+        )
+
+        self.annotation = Annotation.objects.create(
+            page=1,
+            raw_text="This is a test annotation with some content",
+            document=self.doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+    def test_generate_document_hyperlink_basic(self):
+        """Test generating markdown hyperlink for document."""
+        result = generate_document_hyperlink(self.doc.id)
+
+        # Should be markdown format: [title](url)
+        self.assertTrue(result.startswith("["))
+        self.assertIn("](", result)
+        self.assertTrue(result.endswith(")"))
+
+        # Should contain document title
+        self.assertIn("Test Document", result)
+
+        # Should contain proper URL
+        self.assertIn("/d/testuser/test-document", result)
+
+    def test_generate_document_hyperlink_with_corpus(self):
+        """Test generating markdown hyperlink for document in corpus."""
+        result = generate_document_hyperlink(self.doc.id, corpus_id=self.corpus.id)
+
+        self.assertIn("Test Document", result)
+        self.assertIn("/d/testuser/test-corpus/test-document", result)
+
+    def test_generate_document_hyperlink_custom_text(self):
+        """Test generating markdown hyperlink with custom link text."""
+        result = generate_document_hyperlink(self.doc.id, link_text="Custom Link Text")
+
+        self.assertIn("[Custom Link Text]", result)
+        self.assertNotIn("Test Document", result)
+
+    def test_generate_document_hyperlink_no_title(self):
+        """Test hyperlink generation when document has no title."""
+        doc_no_title = Document.objects.create(
+            creator=self.user, title="", slug="no-title-doc"
+        )
+
+        result = generate_document_hyperlink(doc_no_title.id)
+
+        # Should use fallback text
+        self.assertIn(f"Document #{doc_no_title.id}", result)
+
+    def test_generate_annotation_hyperlink_basic(self):
+        """Test generating markdown hyperlink for annotation."""
+        result = generate_annotation_hyperlink(self.annotation.id)
+
+        # Should be markdown format
+        self.assertTrue(result.startswith("["))
+        self.assertIn("](", result)
+        self.assertTrue(result.endswith(")"))
+
+        # Should contain truncated annotation text
+        self.assertIn("This is a test annotation", result)
+
+        # Should contain proper URL with annotation selected
+        self.assertIn(f"?ann={self.annotation.id}", result)
+        self.assertIn("structural=true", result)
+        self.assertIn("labels=ALWAYS", result)
+
+    def test_generate_annotation_hyperlink_long_text_truncation(self):
+        """Test that long annotation text is truncated."""
+        long_annotation = Annotation.objects.create(
+            page=1,
+            raw_text="X" * 100,  # Very long text
+            document=self.doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+        result = generate_annotation_hyperlink(long_annotation.id)
+
+        # Should be truncated with ellipsis
+        self.assertIn("...", result)
+        # Link text should be around 50 chars + ellipsis
+        link_text = result.split("](")[0][1:]  # Extract text between [ and ](
+        self.assertLessEqual(len(link_text), 60)
+
+    def test_generate_annotation_hyperlink_custom_text(self):
+        """Test generating annotation hyperlink with custom text."""
+        result = generate_annotation_hyperlink(
+            self.annotation.id, link_text="See this clause"
+        )
+
+        self.assertIn("[See this clause]", result)
+        self.assertNotIn("This is a test annotation", result)
+
+    def test_generate_annotation_hyperlink_no_text(self):
+        """Test annotation hyperlink when annotation has no text."""
+        annotation_no_text = Annotation.objects.create(
+            page=1,
+            raw_text="",
+            document=self.doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+        result = generate_annotation_hyperlink(annotation_no_text.id)
+
+        # Should use fallback text
+        self.assertIn(f"Annotation #{annotation_no_text.id}", result)
+
+    def test_generate_corpus_hyperlink_basic(self):
+        """Test generating markdown hyperlink for corpus."""
+        result = generate_corpus_hyperlink(self.corpus.id)
+
+        # Should be markdown format
+        self.assertTrue(result.startswith("["))
+        self.assertIn("](", result)
+        self.assertTrue(result.endswith(")"))
+
+        # Should contain corpus title
+        self.assertIn("Test Corpus", result)
+
+        # Should contain proper URL
+        self.assertIn("/c/testuser/test-corpus", result)
+
+    def test_generate_corpus_hyperlink_custom_text(self):
+        """Test generating corpus hyperlink with custom text."""
+        result = generate_corpus_hyperlink(self.corpus.id, link_text="View Corpus")
+
+        self.assertIn("[View Corpus]", result)
+        self.assertNotIn("Test Corpus", result)
+
+    def test_generate_corpus_hyperlink_no_title(self):
+        """Test corpus hyperlink when corpus has no title."""
+        corpus_no_title = Corpus.objects.create(
+            title="", creator=self.user, slug="no-title-corpus"
+        )
+
+        result = generate_corpus_hyperlink(corpus_no_title.id)
+
+        # Should use fallback text
+        self.assertIn(f"Corpus #{corpus_no_title.id}", result)
+
+
+class AsyncTestHyperlinkGeneration(TransactionTestCase):
+    """Async tests for hyperlink generation functions."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(username="asyncuser", password="12345")
+
+        self.corpus = Corpus.objects.create(
+            title="Async Corpus", creator=self.user, slug="async-corpus"
+        )
+
+        self.doc = Document.objects.create(
+            creator=self.user,
+            title="Async Document",
+            description="Test Description",
+            slug="async-document",
+        )
+
+        self.annotation = Annotation.objects.create(
+            page=1,
+            raw_text="Async annotation text",
+            document=self.doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+    async def test_agenerate_document_hyperlink(self):
+        """Test async document hyperlink generation."""
+        result = await agenerate_document_hyperlink(
+            self.doc.id, corpus_id=self.corpus.id
+        )
+
+        self.assertIn("[Async Document]", result)
+        self.assertIn("/d/asyncuser/async-corpus/async-document", result)
+
+    async def test_agenerate_annotation_hyperlink(self):
+        """Test async annotation hyperlink generation."""
+        result = await agenerate_annotation_hyperlink(self.annotation.id)
+
+        self.assertIn("Async annotation text", result)
+        self.assertIn(f"?ann={self.annotation.id}", result)
+        self.assertIn("structural=true", result)
+
+    async def test_agenerate_corpus_hyperlink(self):
+        """Test async corpus hyperlink generation."""
+        result = await agenerate_corpus_hyperlink(self.corpus.id)
+
+        self.assertIn("[Async Corpus]", result)
+        self.assertIn("/c/asyncuser/async-corpus", result)
+
+    async def test_agenerate_hyperlink_with_custom_text(self):
+        """Test async hyperlink generation with custom text."""
+        result = await agenerate_document_hyperlink(
+            self.doc.id, link_text="Custom Async Link"
+        )
+
+        self.assertIn("[Custom Async Link]", result)
+        self.assertNotIn("Async Document", result)
