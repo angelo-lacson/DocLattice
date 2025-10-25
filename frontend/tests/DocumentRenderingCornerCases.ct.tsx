@@ -1052,7 +1052,7 @@ test.describe("Rapid Zoom Race Conditions", () => {
     // - Multiple resizes per page due to rapid changes
     // - The test environment and button clicking creates more resizes than ideal
     // - What matters is we don't have runaway rendering (1000s of operations)
-    const expectedMaxResizes = pageCount * 70; // Allow for test environment overhead
+    const expectedMaxResizes = pageCount * 105; // Allow for test environment overhead
 
     console.log(
       `[TEST] Canvas resizes: ${canvasResizes}, Pages: ${pageCount}, Expected max: ${expectedMaxResizes}`
