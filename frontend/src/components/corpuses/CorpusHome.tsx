@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Button,
   Icon,
   Loader,
   Popup,
@@ -39,6 +38,7 @@ import {
   X,
   MessageCircle,
   Menu,
+  Settings,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -61,6 +61,8 @@ const Container = styled.div`
   overflow: hidden;
   position: relative;
   height: 100%;
+  max-height: 100%; /* Never exceed parent's height */
+  min-height: 0;
 `;
 
 const TopBar = styled.div`
@@ -74,10 +76,47 @@ const TopBar = styled.div`
   flex-shrink: 0;
 
   @media (max-width: 768px) {
-    padding: 0.875rem 0.75rem;
+    padding: clamp(0.75rem, 2vh, 1rem) clamp(0.75rem, 3vw, 1rem);
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
+  }
+`;
+
+const BackButton = styled.button`
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  padding: 0;
+
+  &:hover {
+    background: white;
+    border-color: #4a90e2;
+    color: #4a90e2;
+    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.15);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
+  }
+
+  @media (max-width: 768px) {
+    display: flex;
   }
 `;
 
@@ -178,50 +217,78 @@ const StatsRow = styled.div`
   gap: 1.5rem;
   flex-shrink: 0;
 
-  > *:not(:last-child)::after {
-    content: "";
-    position: absolute;
-    right: -0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1px;
-    height: 20px;
-    background: #e2e8f0;
-  }
+  .stats-group {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
 
-  > * {
-    position: relative;
-  }
+    > *:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: -0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1px;
+      height: 20px;
+      background: #e2e8f0;
+    }
 
-  @media (max-width: 1024px) {
-    gap: 1.25rem;
+    > * {
+      position: relative;
+    }
+
+    @media (max-width: 1024px) {
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 768px) {
+      flex: 1;
+      justify-content: space-around;
+      gap: 0.25rem;
+
+      > *:not(:last-child)::after {
+        display: none;
+      }
+    }
   }
 
   @media (max-width: 768px) {
     width: 100%;
-    justify-content: space-around;
-    gap: 0.25rem;
+    justify-content: space-between;
+    gap: 0.5rem;
     padding: 0.5rem 0;
     background: #f8fafc;
     margin: -0.25rem -0.75rem 0;
     padding-left: 0.75rem;
     padding-right: 0.75rem;
-
-    > *:not(:last-child)::after {
-      display: none;
-    }
   }
 `;
 
-const StatItem = styled.div`
+const StatItem = styled.button`
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.375rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(74, 144, 226, 0.08);
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
 
   @media (max-width: 768px) {
     flex: 1;
     min-width: 0;
+    padding: 0.375rem;
   }
 `;
 
@@ -256,12 +323,24 @@ const MainContent = styled.div`
   overflow-x: hidden;
   padding: 1rem 0.25rem;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
+
   @media (max-width: 768px) {
-    padding: 0.75rem 0.5rem;
-    padding-bottom: 100px;
+    padding: clamp(0.5rem, 1.5vh, 0.75rem) clamp(0.5rem, 2vw, 0.75rem);
   }
+`;
+
+const StretchWrapper = styled.div`
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
+  overflow: hidden;
 `;
 
 const ContentWrapper = styled.div`
@@ -269,9 +348,9 @@ const ContentWrapper = styled.div`
   max-width: 1200px;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
   min-height: 0;
-  flex: 1;
+  max-height: 100%; /* Never exceed parent's height */
+  overflow: hidden;
 `;
 
 const DescriptionCard = styled(motion.div)`
@@ -285,6 +364,8 @@ const DescriptionCard = styled(motion.div)`
   position: relative;
   flex: 1;
   min-height: 0;
+  height: 100%;
+  max-height: 100%; /* Never exceed parent's height */
 `;
 
 const DescriptionHeader = styled.div`
@@ -297,7 +378,7 @@ const DescriptionHeader = styled.div`
   flex-shrink: 0;
 
   @media (max-width: 768px) {
-    padding: 1rem 1rem;
+    padding: clamp(0.75rem, 2vh, 1rem) clamp(0.75rem, 3vw, 1rem);
   }
 `;
 
@@ -333,46 +414,56 @@ const ActionButtons = styled.div`
   align-items: center;
 `;
 
-const HeaderHistoryButton = styled(Button)`
-  &&& {
-    background: transparent;
-    color: #64748b;
-    border: none;
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+const HeaderHistoryButton = styled.button`
+  background: transparent;
+  color: #64748b;
+  border: none;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
 
-    &:hover {
-      background: #f8fafc;
-      color: #4a90e2;
-    }
+  &:hover {
+    background: #f8fafc;
+    color: #4a90e2;
+  }
+
+  &:active {
+    transform: scale(0.98);
   }
 `;
 
-const HeaderEditButton = styled(Button)`
-  &&& {
-    background: #4a90e2;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+const HeaderEditButton = styled.button`
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
 
-    &:hover {
-      background: #357abd;
-    }
+  &:hover {
+    background: #357abd;
+  }
+
+  &:active {
+    transform: scale(0.98);
   }
 `;
 
 const DescriptionContent = styled.div`
   padding: 2rem;
+  padding-bottom: 12vh;
   color: #334155;
   line-height: 1.75;
   font-size: 0.9375rem;
@@ -384,7 +475,8 @@ const DescriptionContent = styled.div`
   max-height: 100%;
 
   @media (max-width: 768px) {
-    padding: 1rem;
+    padding: clamp(0.75rem, 2.5vw, 1rem);
+    padding-bottom: 15vh;
     font-size: 0.875rem;
     line-height: 1.6;
   }
@@ -516,24 +608,28 @@ const DescriptionContent = styled.div`
   }
 `;
 
-const AddDescriptionButton = styled(Button)`
-  &&& {
-    background: white;
-    color: #4a90e2;
-    border: 2px dashed #cbd5e1;
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
-    font-weight: 500;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
+const AddDescriptionButton = styled.button`
+  background: white;
+  color: #4a90e2;
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  font-weight: 500;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 
-    &:hover {
-      border-color: #4a90e2;
-      background: #f0f7ff;
-      transform: translateY(-1px);
-    }
+  &:hover {
+    border-color: #4a90e2;
+    background: #f0f7ff;
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 `;
 
@@ -599,6 +695,9 @@ const LoadingPlaceholder = styled.div`
 interface CorpusHomeProps {
   corpus: CorpusType;
   onEditDescription: () => void;
+  onNavigate?: (tabIndex: number) => void;
+  onBack?: () => void;
+  canUpdate?: boolean;
   stats: {
     totalDocs: number;
     totalAnnotations: number;
@@ -611,6 +710,9 @@ interface CorpusHomeProps {
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
   onEditDescription,
+  onNavigate,
+  onBack,
+  canUpdate,
   stats,
   statsLoading,
 }) => {
@@ -657,10 +759,20 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   );
 
   const statItems = [
-    { label: "Docs", value: stats.totalDocs },
-    { label: "Notes", value: stats.totalAnnotations },
-    { label: "Analyses", value: stats.totalAnalyses },
-    { label: "Extracts", value: stats.totalExtracts },
+    { label: "Docs", value: stats.totalDocs, navIndex: 1 }, // documents tab
+    { label: "Notes", value: stats.totalAnnotations, navIndex: 2 }, // annotations tab
+    { label: "Analyses", value: stats.totalAnalyses, navIndex: 3 }, // analyses tab
+    { label: "Extracts", value: stats.totalExtracts, navIndex: 4 }, // extracts tab
+    ...(canUpdate
+      ? [
+          {
+            label: "Settings",
+            value: null,
+            navIndex: 5,
+            icon: <Settings size={20} />,
+          },
+        ]
+      : []),
   ];
 
   // Show loading state while corpus data is being fetched
@@ -682,25 +794,27 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
           </CorpusInfo>
         </TopBar>
         <MainContent id="corpus-home-main-content">
-          <ContentWrapper id="corpus-home-content">
-            <DescriptionCard>
-              <DescriptionHeader>
-                <DescriptionTitle>
-                  <BookOpen size={20} />
-                  About this Corpus
-                </DescriptionTitle>
-              </DescriptionHeader>
-              <DescriptionContent>
-                <LoadingPlaceholder>
-                  <div className="paragraph-skeleton">
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton medium"></div>
-                  </div>
-                </LoadingPlaceholder>
-              </DescriptionContent>
-            </DescriptionCard>
-          </ContentWrapper>
+          <StretchWrapper>
+            <ContentWrapper id="corpus-home-content">
+              <DescriptionCard>
+                <DescriptionHeader>
+                  <DescriptionTitle>
+                    <BookOpen size={20} />
+                    About this Corpus
+                  </DescriptionTitle>
+                </DescriptionHeader>
+                <DescriptionContent>
+                  <LoadingPlaceholder>
+                    <div className="paragraph-skeleton">
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton medium"></div>
+                    </div>
+                  </LoadingPlaceholder>
+                </DescriptionContent>
+              </DescriptionCard>
+            </ContentWrapper>
+          </StretchWrapper>
         </MainContent>
       </Container>
     );
@@ -711,6 +825,11 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       <TopBar id="corpus-home-top-bar">
         <CorpusInfo id="corpus-home-corpus-info">
           <TitleRow>
+            {onBack && (
+              <BackButton onClick={onBack} title="Back to Corpuses">
+                <ArrowLeft />
+              </BackButton>
+            )}
             <CorpusTitle>{fullCorpus.title || "Loading..."}</CorpusTitle>
             <AccessBadge $isPublic={fullCorpus.isPublic}>
               {fullCorpus.isPublic ? (
@@ -758,110 +877,122 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         </CorpusInfo>
 
         <StatsRow>
-          {statItems.map((stat) => (
-            <StatItem key={stat.label}>
-              <StatValue>
-                {statsLoading ? "-" : stat.value.toLocaleString()}
-              </StatValue>
-              <StatLabel>{stat.label}</StatLabel>
-            </StatItem>
-          ))}
+          <div className="stats-group">
+            {statItems.map((stat) => (
+              <StatItem
+                key={stat.label}
+                onClick={() => onNavigate?.(stat.navIndex)}
+                title={`View ${stat.label}`}
+              >
+                {stat.icon ? (
+                  stat.icon
+                ) : (
+                  <StatValue>
+                    {statsLoading ? "-" : (stat.value ?? 0).toLocaleString()}
+                  </StatValue>
+                )}
+                <StatLabel>{stat.label}</StatLabel>
+              </StatItem>
+            ))}
+          </div>
         </StatsRow>
       </TopBar>
 
       <MainContent id="corpus-home-main-content">
-        <ContentWrapper id="corpus-home-content">
-          <DescriptionCard
-            key="description-card"
-            id="corpus-home-description-card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            style={{ minHeight: 0 }}
-          >
-            <DescriptionHeader>
-              <DescriptionTitle>
-                <BookOpen size={20} />
-                About this Corpus
-              </DescriptionTitle>
-              <ActionButtons>
-                {(mdContent || fullCorpus.description) && (
-                  <HeaderHistoryButton onClick={onEditDescription}>
-                    <Activity size={14} />
-                    Version History
-                  </HeaderHistoryButton>
-                )}
-                {canEdit && (
-                  <HeaderEditButton onClick={onEditDescription}>
-                    {mdContent || fullCorpus.description ? (
-                      <>
-                        <Edit size={14} />
-                        Edit Description
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={14} />
-                        Add Description
-                      </>
-                    )}
-                  </HeaderEditButton>
-                )}
-              </ActionButtons>
-            </DescriptionHeader>
-
-            <DescriptionContent
-              className={!mdContent && !fullCorpus.description ? "empty" : ""}
+        <StretchWrapper>
+          <ContentWrapper id="corpus-home-content">
+            <DescriptionCard
+              key="description-card"
+              id="corpus-home-description-card"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              style={{ minHeight: 0 }}
             >
-              {corpusLoading ? (
-                <LoadingPlaceholder>
-                  <div className="title-skeleton"></div>
-                  <div className="paragraph-skeleton">
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton medium"></div>
-                  </div>
-                  <div className="paragraph-skeleton">
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton short"></div>
-                  </div>
-                  <div className="paragraph-skeleton">
-                    <div className="line-skeleton medium"></div>
-                    <div className="line-skeleton long"></div>
-                    <div className="line-skeleton medium"></div>
-                    <div className="line-skeleton short"></div>
-                  </div>
-                </LoadingPlaceholder>
-              ) : mdContent ? (
-                <SafeMarkdown>{mdContent}</SafeMarkdown>
-              ) : fullCorpus.description ? (
-                <p>{fullCorpus.description}</p>
-              ) : (
-                <>
-                  <Sparkles
-                    size={48}
-                    style={{ marginBottom: "1rem", color: "#cbd5e1" }}
-                  />
-                  <p
-                    style={{
-                      fontSize: "1.125rem",
-                      color: "#64748b",
-                      marginBottom: "1.5rem",
-                    }}
-                  >
-                    No description yet. Help others understand what this corpus
-                    contains.
-                  </p>
-                  {canEdit && (
-                    <AddDescriptionButton onClick={onEditDescription}>
-                      <Plus size={18} />
-                      Add Description
-                    </AddDescriptionButton>
+              <DescriptionHeader>
+                <DescriptionTitle>
+                  <BookOpen size={20} />
+                  About this Corpus
+                </DescriptionTitle>
+                <ActionButtons>
+                  {(mdContent || fullCorpus.description) && (
+                    <HeaderHistoryButton onClick={onEditDescription}>
+                      <Activity size={14} />
+                      Version History
+                    </HeaderHistoryButton>
                   )}
-                </>
-              )}
-            </DescriptionContent>
-          </DescriptionCard>
-        </ContentWrapper>
+                  {canEdit && (
+                    <HeaderEditButton onClick={onEditDescription}>
+                      {mdContent || fullCorpus.description ? (
+                        <>
+                          <Edit size={14} />
+                          Edit Description
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={14} />
+                          Add Description
+                        </>
+                      )}
+                    </HeaderEditButton>
+                  )}
+                </ActionButtons>
+              </DescriptionHeader>
+
+              <DescriptionContent
+                className={!mdContent && !fullCorpus.description ? "empty" : ""}
+              >
+                {corpusLoading ? (
+                  <LoadingPlaceholder>
+                    <div className="title-skeleton"></div>
+                    <div className="paragraph-skeleton">
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton medium"></div>
+                    </div>
+                    <div className="paragraph-skeleton">
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton short"></div>
+                    </div>
+                    <div className="paragraph-skeleton">
+                      <div className="line-skeleton medium"></div>
+                      <div className="line-skeleton long"></div>
+                      <div className="line-skeleton medium"></div>
+                      <div className="line-skeleton short"></div>
+                    </div>
+                  </LoadingPlaceholder>
+                ) : mdContent ? (
+                  <SafeMarkdown>{mdContent}</SafeMarkdown>
+                ) : fullCorpus.description ? (
+                  <p>{fullCorpus.description}</p>
+                ) : (
+                  <>
+                    <Sparkles
+                      size={48}
+                      style={{ marginBottom: "1rem", color: "#cbd5e1" }}
+                    />
+                    <p
+                      style={{
+                        fontSize: "1.125rem",
+                        color: "#64748b",
+                        marginBottom: "1.5rem",
+                      }}
+                    >
+                      No description yet. Help others understand what this
+                      corpus contains.
+                    </p>
+                    {canEdit && (
+                      <AddDescriptionButton onClick={onEditDescription}>
+                        <Plus size={18} />
+                        Add Description
+                      </AddDescriptionButton>
+                    )}
+                  </>
+                )}
+              </DescriptionContent>
+            </DescriptionCard>
+          </ContentWrapper>
+        </StretchWrapper>
       </MainContent>
     </Container>
   );

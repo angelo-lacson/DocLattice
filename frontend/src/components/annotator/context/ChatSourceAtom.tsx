@@ -165,9 +165,5 @@ export function mapWebSocketSourcesToChatMessageSources(
     })
     .filter((source): source is NonNullable<typeof source> => source !== null);
 
-  console.log(
-    "[mapWebSocketSourcesToChatMessageSources] Final output:",
-    mappedSources
-  );
   return mappedSources;
 }

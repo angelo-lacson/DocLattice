@@ -60,6 +60,8 @@ const ScrollableSegment = styled(StyledSegment)`
   &.ui.segment {
     flex: 1;
     min-height: 0;
+    max-height: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -154,26 +156,34 @@ const CardContainer = styled.div<CardContainerArgs>(({ width }) => {
     overflow: hidden;
     background-color: #f0f2f5;
     min-height: 0;
+    max-height: 100vh;
+    height: 100%;
     box-sizing: border-box;
   `;
 
   if (width <= 400) {
     return `
       ${baseStyling}
-      padding: 8px;
-      padding-bottom: 10px;
+      max-height: 100vh;
+      height: 100%;
+      padding: clamp(0.5rem, 1.5vw, 0.75rem);
+      padding-bottom: clamp(0.625rem, 2vh, 0.875rem);
     `;
   } else if (width <= 1000) {
     return `
       ${baseStyling}
-      padding: 12px;
-      padding-bottom: 14px;
+      max-height: 100vh;
+      height: 100%;
+      padding: clamp(0.75rem, 2vw, 1rem);
+      padding-bottom: clamp(0.875rem, 2.5vh, 1.125rem);
     `;
   } else {
     return `
       ${baseStyling}
-      padding: 20px;
-      padding-bottom: 22px;
+      max-height: 100vh;
+      height: 100%;
+      padding: clamp(1.25rem, 2.5vw, 1.5rem);
+      padding-bottom: clamp(1.375rem, 3vh, 1.625rem);
     `;
   }
 });

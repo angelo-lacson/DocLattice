@@ -85,6 +85,24 @@ const ActionCard = styled.div`
     height: 3px;
     background: #d1d1d1;
   }
+
+  /* Fix Issue #7: Mobile responsive action cards */
+  @media (max-width: 768px) {
+    padding: 1rem;
+    margin: 0.75rem 0;
+
+    &::before {
+      display: none; /* Hide connector line on mobile */
+    }
+
+    /* Disable hover transform on touch devices */
+    @media (hover: none) {
+      &:hover {
+        transform: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.12);
+      }
+    }
+  }
 `;
 
 const TriggerBadge = styled.span<{ trigger: "add_document" | "edit_document" }>`
@@ -133,6 +151,11 @@ const PageContainer = styled(Container)`
       background: #cbd5e1;
     }
   }
+
+  /* Fix Issue #7: Mobile responsive styles */
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
 `;
 
 const CorpusHeader = styled.div`
@@ -142,6 +165,14 @@ const CorpusHeader = styled.div`
   margin-bottom: 2.5rem;
   padding-bottom: 1.5rem;
   border-bottom: 1px solid #f1f5f9;
+
+  /* Fix Issue #7: Stack header on mobile */
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+  }
 `;
 
 const TitleArea = styled.div`
@@ -154,6 +185,11 @@ const CorpusTitle = styled.h1`
   color: #1a202c;
   margin: 0 0 0.5rem 0;
   letter-spacing: -0.02em;
+
+  /* Fix Issue #7: Smaller title on mobile */
+  @media (max-width: 768px) {
+    font-size: 1.5rem;
+  }
 `;
 
 const CorpusDescription = styled.p`
@@ -184,6 +220,13 @@ const EditButton = styled(Button)`
     .icon {
       margin-right: 0.5rem !important;
       opacity: 0.8;
+    }
+
+    /* Fix Issue #7: Full width button on mobile */
+    @media (max-width: 768px) {
+      margin-left: 0;
+      width: 100%;
+      justify-content: center;
     }
   }
 `;

@@ -23,6 +23,9 @@ import {
   ChevronRight,
   ChevronUp,
   Search,
+  AlignJustify,
+  Send,
+  History,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -128,6 +131,8 @@ const DashboardContainer = styled.div`
   padding: 0;
   width: 100%;
   min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
+  height: 100%;
 `;
 
 const ContentWrapper = styled.div`
@@ -139,38 +144,41 @@ const ContentWrapper = styled.div`
   padding: 0;
   overflow: hidden;
   min-height: 0;
+  max-height: 100%; /* Never exceed parent's height */
+  height: 100%;
   position: relative;
 `;
 
 const ChatTransitionContainer = styled.div<{
-  isExpanded: boolean;
-  isSearchTransform?: boolean;
+  $isExpanded: boolean;
+  $isSearchTransform?: boolean;
 }>`
   display: flex;
   flex-direction: column;
   height: ${(props) =>
-    props.isSearchTransform ? (props.isExpanded ? "100%" : "auto") : "100%"};
+    props.$isSearchTransform ? (props.$isExpanded ? "100%" : "auto") : "100%"};
   transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   background: white;
-  border-radius: ${(props) => (props.isExpanded ? "0" : "16px")};
+  border-radius: ${(props) => (props.$isExpanded ? "0" : "16px")};
   box-shadow: ${(props) =>
-    props.isExpanded ? "none" : "0 8px 24px rgba(0,0,0,0.12)"};
+    props.$isExpanded ? "none" : "0 8px 24px rgba(0,0,0,0.12)"};
   overflow: hidden;
   position: relative;
-  z-index: ${(props) => (props.isExpanded ? "10" : "1")};
+  z-index: ${(props) => (props.$isExpanded ? "10" : "1")};
 `;
 
-const SearchToConversationInput = styled.div<{ isExpanded: boolean }>`
+const SearchToConversationInput = styled.div<{ $isExpanded: boolean }>`
   display: flex;
   align-items: center;
-  padding: ${(props) => (props.isExpanded ? "1.25rem 1.5rem" : "1rem 1.25rem")};
+  padding: ${(props) =>
+    props.$isExpanded ? "1.25rem 1.5rem" : "1rem 1.25rem"};
   border-bottom: ${(props) =>
-    props.isExpanded ? "1px solid rgba(226, 232, 240, 0.8)" : "none"};
+    props.$isExpanded ? "1px solid rgba(226, 232, 240, 0.8)" : "none"};
   background: ${(props) =>
-    props.isExpanded ? "rgba(255, 255, 255, 0.98)" : "transparent"};
-  backdrop-filter: ${(props) => (props.isExpanded ? "blur(12px)" : "none")};
+    props.$isExpanded ? "rgba(255, 255, 255, 0.98)" : "transparent"};
+  backdrop-filter: ${(props) => (props.$isExpanded ? "blur(12px)" : "none")};
   box-shadow: ${(props) =>
-    props.isExpanded ? "0 2px 8px rgba(0, 0, 0, 0.04)" : "none"};
+    props.$isExpanded ? "0 2px 8px rgba(0, 0, 0, 0.04)" : "none"};
 
   input {
     flex: 1;
@@ -226,34 +234,57 @@ const FloatingSearchContainer = styled(motion.div)`
   z-index: 100;
   display: flex;
   align-items: center;
-  padding-left: 0.5rem;
-  width: 96px;
+  justify-content: center;
+  padding: 0.375rem;
+  width: 100px;
   max-width: 720px;
-  min-height: 44px;
+  min-height: 42px;
   height: auto;
   transition: all 0.35s ease;
   margin: 0 auto;
 
+  /* Add gap to form children only when expanded */
+  & > form {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    transition: gap 0.35s ease, justify-content 0.35s ease;
+    width: 100%;
+  }
+
   &:hover,
   &:focus-within {
-    width: 100%;
+    width: min(720px, 90%);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     border-color: #cbd5e1;
     align-items: flex-start;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-    padding-right: 0.5rem;
+    justify-content: flex-start;
+    padding: 0.75rem;
+
+    & > form {
+      gap: 0.75rem;
+      justify-content: flex-start;
+    }
   }
 
   @media (max-width: 768px) {
-    width: 88px;
+    width: clamp(80px, 20vw, 96px);
     max-width: calc(100vw - 2rem);
-    min-height: 42px;
+    min-height: 40px;
+    padding: 0.375rem;
 
     &:active,
     &:hover,
     &:focus-within {
-      width: 100%;
+      width: 85%;
+      max-width: 320px;
+      padding: 0.5rem;
+
+      & > form {
+        gap: 0.5rem;
+        justify-content: flex-start;
+      }
     }
   }
 `;
@@ -301,7 +332,7 @@ const EnhancedSearchInput = styled.textarea`
 
   ${FloatingSearchContainer}:hover &,
   ${FloatingSearchContainer}:focus-within & {
-    width: calc(100% - 2rem); /* account for container padding */
+    width: 100%;
     opacity: 1;
     padding: 0.75rem 1rem;
     min-height: 40px;
@@ -314,7 +345,7 @@ const EnhancedSearchInput = styled.textarea`
     ${FloatingSearchContainer}:hover &,
     ${FloatingSearchContainer}:focus-within & {
       padding: 0.625rem 0.875rem;
-      width: calc(100% - 1.5rem); /* less padding on mobile */
+      width: 100%;
     }
   }
 `;
@@ -322,14 +353,17 @@ const EnhancedSearchInput = styled.textarea`
 const SearchActionsContainer = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.375rem; /* tighter gap */
-  padding-right: 0.375rem; /* less padding */
-  flex-shrink: 0; /* prevent icons from shrinking */
+  gap: 0.5rem;
+  flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    gap: 0.375rem;
+  }
 `;
 
 const ActionButton = styled(motion.button)`
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 8px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -339,6 +373,7 @@ const ActionButton = styled(motion.button)`
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 
   &:hover:not(:disabled) {
     background: #e2e8f0;
@@ -358,6 +393,16 @@ const ActionButton = styled(motion.button)`
     &:hover:not(:disabled) {
       background: #357abd;
       border-color: #357abd;
+    }
+  }
+
+  @media (max-width: 768px) {
+    width: 36px;
+    height: 36px;
+
+    svg {
+      width: 16px;
+      height: 16px;
     }
   }
 `;
@@ -416,12 +461,18 @@ const CorpusQueryView = ({
   opened_corpus,
   opened_corpus_id,
   setShowDescriptionEditor,
+  onNavigate,
+  onBack,
+  canUpdate,
   stats,
   statsLoading,
 }: {
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
   setShowDescriptionEditor: (show: boolean) => void;
+  onNavigate?: (tabIndex: number) => void;
+  onBack?: () => void;
+  canUpdate?: boolean;
   stats: {
     totalDocs: number;
     totalAnnotations: number;
@@ -430,11 +481,6 @@ const CorpusQueryView = ({
   };
   statsLoading: boolean;
 }) => {
-  console.log("🔍🔍🔍 [CorpusQueryView] COMPONENT RENDER with props:", {
-    opened_corpus_id,
-    hasCorpus: !!opened_corpus,
-  });
-
   const [chatExpanded, setChatExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearchMode, setIsSearchMode] = useState<boolean>(true);
@@ -443,12 +489,20 @@ const CorpusQueryView = ({
   const { width } = useWindowDimensions();
   const isDesktop = width > MOBILE_VIEW_BREAKPOINT;
 
-  // Focus the input when component mounts or when returning to search mode
+  // Focus the input on initial mount (desktop only to avoid mobile keyboard issues)
   useEffect(() => {
-    if (isSearchMode && inputRef.current) {
+    if (isDesktop && inputRef.current) {
+      // Use longer timeout on mount to ensure DOM is ready
+      setTimeout(() => inputRef.current?.focus(), 150);
+    }
+  }, []); // Empty deps = run only on mount
+
+  // Focus the input when returning to search mode
+  useEffect(() => {
+    if (isSearchMode && inputRef.current && isDesktop) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [isSearchMode]);
+  }, [isSearchMode, isDesktop]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -482,6 +536,11 @@ const CorpusQueryView = ({
   // Render the navigation header consistently across all states
   const renderNavigationHeader = () => {
     if (chatExpanded || show_query_view_state === "VIEW") {
+      // On mobile, CorpusChat renders its own header, so skip rendering here
+      if (!isDesktop) {
+        return null;
+      }
+
       return (
         <ChatNavigationHeader>
           <BackButton
@@ -511,7 +570,7 @@ const CorpusQueryView = ({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <MessageSquare size={18} />
+                <History size={18} />
               </ActionButton>
             )}
             <ActionButton
@@ -542,6 +601,8 @@ const CorpusQueryView = ({
             flexDirection: "column",
             overflow: "hidden",
             minHeight: 0,
+            maxHeight: "99vh", // Never exceed 99vh regardless of content
+            height: "100%",
           }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -571,6 +632,8 @@ const CorpusQueryView = ({
           flexDirection: "column",
           overflow: "hidden",
           minHeight: 0,
+          maxHeight: "99vh", // Never exceed 99vh regardless of content
+          height: "100%",
           width: "100%",
         }}
         initial={{ opacity: 0 }}
@@ -586,6 +649,9 @@ const CorpusQueryView = ({
             <CorpusHome
               corpus={opened_corpus as CorpusType}
               onEditDescription={() => setShowDescriptionEditor(true)}
+              onNavigate={onNavigate}
+              onBack={onBack}
+              canUpdate={canUpdate}
               stats={stats}
               statsLoading={statsLoading}
             />
@@ -608,25 +674,17 @@ const CorpusQueryView = ({
               }}
             >
               <FloatingSearchContainer
-                style={{ padding: "0px" }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
               >
-                <form
-                  onSubmit={handleSearchSubmit}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    width: "100%",
-                    gap: "0.5rem",
-                  }}
-                >
+                <form onSubmit={handleSearchSubmit}>
                   <EnhancedSearchInput
                     ref={inputRef}
                     placeholder="Ask a question about this corpus..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    autoFocus={isDesktop} // Auto-focus on desktop only to avoid mobile keyboard popup issues
                     onKeyDown={(e) => {
                       // Submit on Enter without Shift
                       if (
@@ -648,7 +706,7 @@ const CorpusQueryView = ({
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      <MessageSquare size={18} />
+                      <History size={18} />
                     </ActionButton>
                     <ActionButton
                       type="submit"
@@ -657,7 +715,7 @@ const CorpusQueryView = ({
                       whileHover={searchQuery.trim() ? { scale: 1.05 } : {}}
                       whileTap={searchQuery.trim() ? { scale: 0.95 } : {}}
                     >
-                      <Search size={18} />
+                      <Send size={18} />
                     </ActionButton>
                   </SearchActionsContainer>
                 </form>
@@ -675,6 +733,8 @@ const CorpusQueryView = ({
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
+          maxHeight: "99vh", // Never exceed 99vh regardless of content
+          height: "100%",
         }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -683,7 +743,17 @@ const CorpusQueryView = ({
       >
         {renderNavigationHeader()}
 
-        <div style={{ flex: 1, overflow: "hidden" }}>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            minHeight: 0,
+            maxHeight: "100%",
+            height: "100%",
+          }}
+        >
           <CorpusChat
             corpusId={opened_corpus.id}
             showLoad={true}
@@ -706,16 +776,18 @@ const CorpusViewContainer = styled.div`
   flex: 1;
   align-items: stretch;
   min-height: 0;
+  max-height: 100vh;
+  height: 100%;
 `;
 
-const NavigationSidebar = styled(motion.div)<{ isExpanded: boolean }>`
+const NavigationSidebar = styled(motion.div)<{ $isExpanded: boolean }>`
   position: relative;
-  width: ${(props) => (props.isExpanded ? "280px" : "72px")};
+  width: ${(props) => (props.$isExpanded ? "280px" : "72px")};
   background: linear-gradient(180deg, #ffffff 0%, #fafbfc 50%, #f8f9fa 100%);
   backdrop-filter: blur(10px);
   border-right: 1px solid #e2e8f0;
   box-shadow: ${(props) =>
-    props.isExpanded
+    props.$isExpanded
       ? "2px 0 8px rgba(0, 0, 0, 0.06)"
       : "2px 0 4px rgba(0, 0, 0, 0.04)"};
   z-index: 100;
@@ -730,15 +802,18 @@ const NavigationSidebar = styled(motion.div)<{ isExpanded: boolean }>`
     left: 50%;
     bottom: 0;
     width: 100%;
-    max-width: 480px;
-    height: ${(props) => (props.isExpanded ? "70vh" : "0")};
-    max-height: 600px;
+    max-width: min(480px, 95vw);
+    height: ${(props) => (props.$isExpanded ? "70vh" : "0")};
+    max-height: min(600px, 70vh);
     border-right: none;
     border-top: 1px solid #e2e8f0;
     border-radius: 24px 24px 0 0;
     box-shadow: ${(props) =>
-      props.isExpanded ? "0 -8px 32px rgba(0, 0, 0, 0.12)" : "none"};
-    transform: translate(-50%, ${(props) => (props.isExpanded ? "0" : "100%")});
+      props.$isExpanded ? "0 -8px 32px rgba(0, 0, 0, 0.12)" : "none"};
+    transform: translate(
+      -50%,
+      ${(props) => (props.$isExpanded ? "0" : "100%")}
+    );
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
       height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 200;
@@ -775,14 +850,14 @@ const BottomSheetHandle = styled.div`
   }
 `;
 
-const NavigationHeader = styled.div<{ isExpanded: boolean }>`
+const NavigationHeader = styled.div<{ $isExpanded: boolean }>`
   padding: 1.5rem;
   border-bottom: 1px solid #e2e8f0;
   background: white;
   display: flex;
   align-items: center;
   justify-content: ${(props) =>
-    props.isExpanded ? "space-between" : "center"};
+    props.$isExpanded ? "space-between" : "center"};
   min-height: 72px;
   position: relative;
   gap: 0.75rem;
@@ -983,18 +1058,18 @@ const NavItemBadge = styled.span<{ isActive: boolean }>`
 
 const NavigationItem = styled(motion.button)<{
   isActive: boolean;
-  isExpanded: boolean;
+  $isExpanded: boolean;
 }>`
   width: 100%;
   display: flex;
   align-items: center;
-  gap: ${(props) => (props.isExpanded ? "0.75rem" : "0")};
+  gap: ${(props) => (props.$isExpanded ? "0.75rem" : "0")};
   padding: ${(props) =>
-    props.isExpanded ? "0.875rem 1rem 0.875rem 1.5rem" : "0.875rem"};
-  margin: ${(props) => (props.isExpanded ? "0 0.5rem" : "0 0.25rem")};
+    props.$isExpanded ? "0.875rem 1rem 0.875rem 1.5rem" : "0.875rem"};
+  margin: ${(props) => (props.$isExpanded ? "0 0.5rem" : "0 0.25rem")};
   width: ${(props) =>
-    props.isExpanded ? "calc(100% - 1rem)" : "calc(100% - 0.5rem)"};
-  border-radius: ${(props) => (props.isExpanded ? "12px" : "10px")};
+    props.$isExpanded ? "calc(100% - 1rem)" : "calc(100% - 0.5rem)"};
+  border-radius: ${(props) => (props.$isExpanded ? "12px" : "10px")};
   background: ${(props) => {
     if (props.isActive) {
       return `linear-gradient(
@@ -1013,26 +1088,26 @@ const NavigationItem = styled(motion.button)<{
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  justify-content: ${(props) => (props.isExpanded ? "flex-start" : "center")};
+  justify-content: ${(props) => (props.$isExpanded ? "flex-start" : "center")};
   overflow: hidden;
-  min-height: ${(props) => (props.isExpanded ? "48px" : "44px")};
+  min-height: ${(props) => (props.$isExpanded ? "48px" : "44px")};
 
   /* Active indicator bar */
   &::before {
     content: "";
     position: absolute;
-    left: ${(props) => (props.isExpanded ? "-0.5rem" : "50%")};
-    top: ${(props) => (props.isExpanded ? "50%" : "0")};
-    width: ${(props) => (props.isExpanded ? "4px" : "60%")};
-    height: ${(props) => (props.isExpanded ? "60%" : "2px")};
+    left: ${(props) => (props.$isExpanded ? "-0.5rem" : "50%")};
+    top: ${(props) => (props.$isExpanded ? "50%" : "0")};
+    width: ${(props) => (props.$isExpanded ? "4px" : "60%")};
+    height: ${(props) => (props.$isExpanded ? "60%" : "2px")};
     background: linear-gradient(
-      ${(props) => (props.isExpanded ? "180deg" : "90deg")},
+      ${(props) => (props.$isExpanded ? "180deg" : "90deg")},
       #4a90e2 0%,
       #6366f1 100%
     );
     opacity: ${(props) => (props.isActive ? "1" : "0")};
     transform: ${(props) =>
-      props.isExpanded ? "translateY(-50%)" : "translateX(-50%)"};
+      props.$isExpanded ? "translateY(-50%)" : "translateX(-50%)"};
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 2px;
     box-shadow: ${(props) =>
@@ -1076,7 +1151,7 @@ const NavigationItem = styled(motion.button)<{
       props.isActive ? "rgba(74, 144, 226, 0.3)" : "rgba(226, 232, 240, 0.5)"};
     color: ${(props) => (props.isActive ? "#4a90e2" : "#475569")};
     transform: ${(props) =>
-      props.isExpanded ? "translateX(2px)" : "scale(1.05)"};
+      props.$isExpanded ? "translateX(2px)" : "scale(1.05)"};
 
     &::after {
       opacity: 1;
@@ -1094,7 +1169,7 @@ const NavigationItem = styled(motion.button)<{
 
   &:active {
     transform: ${(props) =>
-      props.isExpanded ? "translateX(0)" : "scale(0.98)"};
+      props.$isExpanded ? "translateX(0)" : "scale(0.98)"};
   }
 
   svg {
@@ -1107,8 +1182,8 @@ const NavigationItem = styled(motion.button)<{
 
   span {
     white-space: nowrap;
-    opacity: ${(props) => (props.isExpanded ? "1" : "0")};
-    width: ${(props) => (props.isExpanded ? "auto" : "0")};
+    opacity: ${(props) => (props.$isExpanded ? "1" : "0")};
+    width: ${(props) => (props.$isExpanded ? "auto" : "0")};
     overflow: hidden;
     transition: opacity 0.3s ease, width 0.3s ease;
     z-index: 1;
@@ -1135,7 +1210,7 @@ const NavigationItem = styled(motion.button)<{
   }
 `;
 
-const MainContentArea = styled.div<{ sidebarExpanded: boolean }>`
+const MainContentArea = styled.div<{ $sidebarExpanded: boolean }>`
   flex: 1;
   overflow: hidden;
   position: relative;
@@ -1143,10 +1218,12 @@ const MainContentArea = styled.div<{ sidebarExpanded: boolean }>`
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  max-height: 100%;
+  height: 100%;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     margin-left: 0;
-    padding-bottom: 80px; /* Space for bottom handle */
+    /* No extra padding needed - FAB is compact and positioned absolutely */
   }
 `;
 
@@ -1219,116 +1296,120 @@ const MobileBackButton = styled.button`
   }
 `;
 
-// Mobile bottom navigation handle - modern and sleek
+// Mobile bottom navigation FAB - ultra sleek and compact
 const BottomNavigationHandle = styled(motion.button)<{ isOpen?: boolean }>`
   display: none;
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  bottom: 16px;
+  right: 16px; /* Moved to bottom-right */
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
   border: none;
-  border-top: 1px solid rgba(226, 232, 240, 0.8);
-  color: #0f172a;
+  border-radius: 16px;
   cursor: pointer;
-  z-index: 250;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(74, 144, 226, 0.4), 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+  align-items: center;
+  justify-content: center;
+  color: white;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: flex;
-    flex-direction: column;
   }
 
   &:active {
-    transform: scale(0.99);
+    transform: scale(0.95);
+  }
+
+  &:hover {
+    box-shadow: 0 12px 32px rgba(74, 144, 226, 0.5),
+      0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  svg {
+    width: 28px;
+    height: 28px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
   }
 `;
 
-const BottomHandleContent = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.5rem;
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
-  gap: 1rem;
-  min-height: 64px;
-  width: 100%;
-`;
+// Removed unused bottom handle components - now using simple FAB design
 
-const BottomHandleLeft = styled.div`
+// Back navigation header for non-home tabs - CRISPY VERSION
+const TabNavigationHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  flex: 1;
-  min-width: 0;
-`;
-
-const BottomHandleIconWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-  color: white;
+  padding: 0.875rem 1.25rem;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.4);
+  min-height: 56px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
-  svg {
-    width: 20px;
-    height: 20px;
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    padding: 0.625rem 1rem;
+    min-height: 48px;
   }
 `;
 
-const BottomHandleText = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  flex: 1;
-  min-width: 0;
-`;
-
-const BottomHandleLabel = styled.div`
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  line-height: 1.2;
-`;
-
-const BottomHandleTitle = styled.div`
-  font-size: 1rem;
-  font-weight: 600;
-  color: #0f172a;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const BottomHandleChevron = styled.div<{ isOpen?: boolean }>`
+const BackNavButton = styled(motion.button)`
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: #f8fafc;
-  color: #64748b;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  transform: rotate(${(props) => (props.isOpen ? "180deg" : "0deg")});
+
+  &:hover {
+    background: white;
+    border-color: #4a90e2;
+    color: #4a90e2;
+    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.15);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
 
   svg {
     width: 20px;
     height: 20px;
+    stroke-width: 2.5;
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    width: 32px;
+    height: 32px;
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+`;
+
+const TabTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  flex: 1;
+  letter-spacing: -0.025em;
+  line-height: 1;
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    font-size: 1.25rem;
   }
 `;
 
@@ -1708,14 +1789,15 @@ export const Corpuses = () => {
   }, [selected_metadata_id_to_filter_on]);
 
   // Fetch corpus stats - with proper ID validation
-  const validCorpusId =
-    opened_corpus?.id && typeof opened_corpus.id === "string"
-      ? opened_corpus.id
-      : undefined;
+  // Handle both string and number IDs, convert to string for GraphQL
+  const validCorpusId = opened_corpus?.id
+    ? String(opened_corpus.id)
+    : undefined;
 
   const {
     data: statsData,
     loading: statsLoading,
+    error: statsError,
     refetch: refetchStats,
   } = useQuery(GET_CORPUS_STATS, {
     variables: { corpusId: validCorpusId || "" }, // Provide empty string as fallback
@@ -1723,6 +1805,13 @@ export const Corpuses = () => {
     // REMOVED pollInterval - was hammering server every 5 seconds
     // Stats are not real-time critical and will update when corpus changes
   });
+
+  // Log stats errors for debugging
+  useEffect(() => {
+    if (statsError) {
+      console.error("Error fetching corpus stats:", statsError);
+    }
+  }, [statsError]);
 
   // CRITICAL: Memoize stats object to prevent new object reference on every render
   // New object reference would cause navigationItems useMemo to re-run infinitely
@@ -1741,6 +1830,30 @@ export const Corpuses = () => {
     statsData?.corpusStats?.totalAnnotations,
     statsData?.corpusStats?.totalAnalyses,
     statsData?.corpusStats?.totalExtracts,
+  ]);
+
+  // When query is skipped (no valid corpus ID), treat as not loading
+  const effectiveStatsLoading = validCorpusId ? statsLoading : false;
+
+  // Debug logging for stats issues
+  useEffect(() => {
+    if (opened_corpus) {
+      console.log("Corpus Stats Debug:", {
+        corpusId: opened_corpus.id,
+        validCorpusId,
+        statsLoading,
+        effectiveStatsLoading,
+        hasStatsData: !!statsData?.corpusStats,
+        stats,
+      });
+    }
+  }, [
+    opened_corpus?.id,
+    validCorpusId,
+    statsLoading,
+    effectiveStatsLoading,
+    statsData,
+    stats,
   ]);
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1960,8 +2073,11 @@ export const Corpuses = () => {
             opened_corpus={opened_corpus}
             opened_corpus_id={opened_corpus_id}
             setShowDescriptionEditor={setShowDescriptionEditor}
+            onNavigate={(tabIndex) => setActiveTab(tabIndex)}
+            onBack={() => navigate("/corpuses")}
+            canUpdate={canUpdateCorpus}
             stats={stats}
-            statsLoading={statsLoading}
+            statsLoading={effectiveStatsLoading}
           />
         ),
       },
@@ -1970,7 +2086,26 @@ export const Corpuses = () => {
         label: "Documents",
         icon: <FileText />,
         badge: stats.totalDocs,
-        component: <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />,
+        component: (
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Documents</TabTitle>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />
+            </div>
+          </div>
+        ),
       },
       {
         id: "annotations",
@@ -1978,7 +2113,24 @@ export const Corpuses = () => {
         icon: <MessageSquare />,
         badge: stats.totalAnnotations,
         component: (
-          <CorpusAnnotationCards opened_corpus_id={opened_corpus_id} />
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Annotations</TabTitle>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusAnnotationCards opened_corpus_id={opened_corpus_id} />
+            </div>
+          </div>
         ),
       },
       {
@@ -1986,14 +2138,52 @@ export const Corpuses = () => {
         label: "Analyses",
         icon: <Factory />,
         badge: stats.totalAnalyses,
-        component: <CorpusAnalysesCards />,
+        component: (
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Analyses</TabTitle>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusAnalysesCards />
+            </div>
+          </div>
+        ),
       },
       {
         id: "extracts",
         label: "Extracts",
         icon: <Table />,
         badge: stats.totalExtracts,
-        component: <CorpusExtractCards />,
+        component: (
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Extracts</TabTitle>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusExtractCards />
+            </div>
+          </div>
+        ),
       },
       ...(opened_corpus && canUpdateCorpus
         ? [
@@ -2002,21 +2192,42 @@ export const Corpuses = () => {
               label: "Settings",
               icon: <Settings />,
               component: opened_corpus?.title ? (
-                <CorpusSettings
-                  corpus={{
-                    id: opened_corpus.id,
-                    title: opened_corpus.title,
-                    description: opened_corpus.description || "",
-                    allowComments: opened_corpus.allowComments || false,
-                    preferredEmbedder: opened_corpus.preferredEmbedder,
-                    slug: (opened_corpus as any).slug || null,
-                    creator: opened_corpus.creator,
-                    created: opened_corpus.created,
-                    modified: opened_corpus.modified,
-                    isPublic: opened_corpus.isPublic,
-                    myPermissions: corpusAtomPermissions,
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
                   }}
-                />
+                >
+                  <TabNavigationHeader>
+                    <BackNavButton
+                      onClick={() => setActiveTab(0)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      title="Back to Home"
+                    >
+                      <ArrowLeft />
+                    </BackNavButton>
+                    <TabTitle>Settings</TabTitle>
+                  </TabNavigationHeader>
+                  <div style={{ flex: 1, overflow: "hidden" }}>
+                    <CorpusSettings
+                      corpus={{
+                        id: opened_corpus.id,
+                        title: opened_corpus.title,
+                        description: opened_corpus.description || "",
+                        allowComments: opened_corpus.allowComments || false,
+                        preferredEmbedder: opened_corpus.preferredEmbedder,
+                        slug: (opened_corpus as any).slug || null,
+                        creator: opened_corpus.creator,
+                        created: opened_corpus.created,
+                        modified: opened_corpus.modified,
+                        isPublic: opened_corpus.isPublic,
+                        myPermissions: corpusAtomPermissions,
+                      }}
+                    />
+                  </div>
+                </div>
               ) : null,
             },
           ]
@@ -2089,7 +2300,7 @@ export const Corpuses = () => {
         {/* Navigation Sidebar */}
         <NavigationSidebar
           data-testid="navigation-sidebar"
-          isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
+          $isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
           initial={{
             width: use_mobile_layout ? "0" : sidebarExpanded ? "280px" : "72px",
           }}
@@ -2108,7 +2319,9 @@ export const Corpuses = () => {
             onClick={() => use_mobile_layout && setMobileSidebarOpen(false)}
           />
           <NavigationHeader
-            isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
+            $isExpanded={
+              use_mobile_layout ? mobileSidebarOpen : sidebarExpanded
+            }
           >
             {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
               <motion.div
@@ -2170,7 +2383,7 @@ export const Corpuses = () => {
                 data-item-id={item.id}
                 key={item.id}
                 isActive={active_tab === index}
-                isExpanded={
+                $isExpanded={
                   use_mobile_layout ? mobileSidebarOpen : sidebarExpanded
                 }
                 onClick={() => {
@@ -2213,42 +2426,34 @@ export const Corpuses = () => {
         {/* Main content area */}
         <MainContentArea
           id="main-corpus-content-area"
-          sidebarExpanded={!use_mobile_layout && sidebarExpanded}
+          $sidebarExpanded={!use_mobile_layout && sidebarExpanded}
         >
           {currentView?.component}
         </MainContentArea>
 
-        {/* Bottom Navigation Handle - Mobile Only */}
+        {/* Bottom Navigation FAB - Mobile Only (hidden on home page) */}
         <AnimatePresence>
-          {use_mobile_layout && opened_corpus && !mobileSidebarOpen && (
-            <BottomNavigationHandle
-              isOpen={mobileSidebarOpen}
-              onClick={() => setMobileSidebarOpen(true)}
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              transition={{
-                type: "spring",
-                stiffness: 300,
-                damping: 30,
-              }}
-            >
-              <BottomHandleContent>
-                <BottomHandleLeft>
-                  <BottomHandleIconWrapper>
-                    {currentView?.icon}
-                  </BottomHandleIconWrapper>
-                  <BottomHandleText>
-                    <BottomHandleLabel>Navigate</BottomHandleLabel>
-                    <BottomHandleTitle>{currentView?.label}</BottomHandleTitle>
-                  </BottomHandleText>
-                </BottomHandleLeft>
-                <BottomHandleChevron isOpen={mobileSidebarOpen}>
-                  <ChevronUp />
-                </BottomHandleChevron>
-              </BottomHandleContent>
-            </BottomNavigationHandle>
-          )}
+          {use_mobile_layout &&
+            opened_corpus &&
+            !mobileSidebarOpen &&
+            active_tab !== 0 && ( // Hide on home page (tab 0)
+              <BottomNavigationHandle
+                isOpen={mobileSidebarOpen}
+                onClick={() => setMobileSidebarOpen(true)}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 25,
+                }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <AlignJustify />
+              </BottomNavigationHandle>
+            )}
         </AnimatePresence>
       </CorpusViewContainer>
     );
@@ -2413,7 +2618,10 @@ export const Corpuses = () => {
             placeholder="Search for corpus..."
             value={corpusSearchCache}
           />
-        ) : currentView?.id === "home" || currentView?.id === "documents" ? (
+        ) : currentView?.id === "home" ? (
+          // Home view uses floating chat search, no top search bar needed
+          <></>
+        ) : currentView?.id === "documents" ? (
           <SearchBarWithNav>
             <MobileBackButton
               onClick={() => {

@@ -142,6 +142,7 @@ export const CorpusDocumentCards = ({
       ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
       ...(document_search_term ? { textSearch: document_search_term } : {}),
     },
+    fetchPolicy: "cache-and-network", // Ensure fresh results when search term changes
     notifyOnNetworkStatusChange: true, // necessary in order to trigger loading signal on fetchMore
   });
   if (documents_error) {

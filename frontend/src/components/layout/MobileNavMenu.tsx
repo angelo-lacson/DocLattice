@@ -70,7 +70,17 @@ export const MobileNavMenu = () => {
 
   if (REACT_APP_USE_AUTH0) {
     return (
-      <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
+      <Menu
+        fluid
+        inverted
+        attached
+        style={{
+          marginBottom: "0px",
+          position: "sticky",
+          top: 0,
+          zIndex: 1000, // Above all other content including ChatContainer (z-index: 10) and ChatNavigationHeader (z-index: 100)
+        }}
+      >
         <Menu.Menu position="left">
           <Menu.Item>
             <MiniImage src={logo} alt="Open Contracts Logo" />
@@ -151,7 +161,17 @@ export const MobileNavMenu = () => {
     );
   } else {
     return (
-      <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
+      <Menu
+        fluid
+        inverted
+        attached
+        style={{
+          marginBottom: "0px",
+          position: "sticky",
+          top: 0,
+          zIndex: 1000, // Above all other content including ChatContainer (z-index: 10) and ChatNavigationHeader (z-index: 100)
+        }}
+      >
         <Menu.Menu position="left">
           <Menu.Item>
             <MiniImage src={logo} alt="Open Contracts Logo" />

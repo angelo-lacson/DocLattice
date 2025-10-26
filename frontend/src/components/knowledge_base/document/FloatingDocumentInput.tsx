@@ -110,8 +110,8 @@ const FloatingContainer = styled(motion.div)<{
     /* Smooth expansion */
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* Ensure it's above other elements but below zoom controls (z-index: 900) */
-    z-index: 850;
+    /* Fix Issue #1: Increase z-index above zoom controls (900) to prevent mobile tray from covering input */
+    z-index: 950;
   }
 `;
 
