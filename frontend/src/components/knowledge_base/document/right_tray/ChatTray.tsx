@@ -263,16 +263,9 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
    */
   const updateMessageApprovalStatus = useCallback(
     (messageId: string, status: "approved" | "rejected") => {
-      console.log(
-        `[ChatTray] Updating message ${messageId} approval status to: ${status}`
-      );
-
       // Clear pendingApproval if this is the message being updated
       setPendingApproval((current) => {
         if (current?.messageId === messageId) {
-          console.log(
-            `[ChatTray] Clearing pendingApproval for message ${messageId}`
-          );
           return null;
         }
         return current;
@@ -282,9 +275,6 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       setServerMessages((prev) =>
         prev.map((msg) => {
           if (msg.messageId === messageId) {
-            console.log(
-              `[ChatTray] Found server message to update: ${messageId}`
-            );
             return { ...msg, approvalStatus: status, isComplete: true };
           }
           return msg;
@@ -295,9 +285,6 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       setChat((prev) =>
         prev.map((msg) => {
           if (msg.messageId === messageId) {
-            console.log(
-              `[ChatTray] Found chat message to update: ${messageId}`
-            );
             return { ...msg, approvalStatus: status, isComplete: true };
           }
           return msg;
@@ -350,22 +337,10 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
    * also store any 'sources' in the chatSourcesAtom (so pins and selection work).
    */
   useEffect(() => {
-    console.log("[ChatTray] GET_CHAT_MESSAGES useLazyQuery state:", {
-      loading: loadingMessages,
-      error: messagesError,
-      data: JSON.stringify(msgData),
-    });
     if (!msgData?.chatMessages) {
-      if (msgData) {
-        console.log(
-          "[ChatTray] msgData is present but msgData.chatMessages is not:",
-          msgData
-        );
-      }
       return;
     }
     const messages = msgData.chatMessages;
-    console.log("[ChatTray] msgData.chatMessages received:", messages);
 
     // First, register them in our chatSourcesAtom if they have sources
     messages.forEach((srvMsg) => {
@@ -1064,10 +1039,6 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     setServerMessages([]);
     setPendingApproval(null);
 
-    console.log("[ChatTray] Calling fetchChatMessages with variables:", {
-      conversationId,
-      limit: 10,
-    });
     // Fetch messages with proper variables
     fetchChatMessages({
       variables: {
@@ -1196,12 +1167,6 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
           approval_decision: approved,
           llm_message_id: pendingApproval.messageId,
         };
-
-        console.log(
-          `[ChatTray] Sending approval decision: ${
-            approved ? "APPROVED" : "REJECTED"
-          } for message ${pendingApproval.messageId}`
-        );
 
         socketRef.current.send(JSON.stringify(messageData));
 
@@ -1667,9 +1632,12 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               style={{
                 display: "flex",
                 flexDirection: "column",
+                // Fill parent container - parent already constrains height
                 height: "100%",
                 width: "100%",
                 position: "relative",
+                // Prevent the container from overflowing
+                overflow: "hidden",
               }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1682,8 +1650,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                   borderBottom: "1px solid rgba(0,0,0,0.1)",
                   background: "rgba(255, 255, 255, 0.95)",
                   zIndex: 2,
-                  position: "sticky",
-                  top: 0,
+                  flexShrink: 0, // Prevent header from shrinking
                 }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -1711,14 +1678,15 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               {/* Scrollable Messages Container */}
               <motion.div
                 style={{
-                  flex: "1 1 auto",
+                  flex: "1 1 0", // Changed from "1 1 auto" to "1 1 0" to prevent overflow
                   overflowY: "auto",
-                  minHeight: 0,
+                  overflowX: "hidden",
+                  minHeight: 0, // Critical for flex children with overflow
                   padding: "1rem",
                   display: "flex",
                   flexDirection: "column",
                   gap: "1rem",
-                  paddingBottom: "6rem",
+                  paddingBottom: "1rem", // Reduced from 6rem
                 }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -1789,6 +1757,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                   background: "rgba(255, 255, 255, 0.95)",
                   backdropFilter: "blur(10px)",
                   borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+                  flexShrink: 0, // Prevent input from being compressed
                 }}
               >
                 {wsError ? (

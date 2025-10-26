@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { Header, Segment, Dropdown } from "semantic-ui-react";
+import styled from "styled-components";
 import _ from "lodash";
 import { labelsetSearchTerm } from "../../../graphql/cache";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
@@ -10,6 +11,37 @@ import {
   GET_LABELSETS,
 } from "../../../graphql/queries";
 import { LabelSetType } from "../../../types/graphql-api";
+
+// Mobile-responsive wrapper for LabelSetSelector
+const MobileFriendlyWrapper = styled.div`
+  width: 100%;
+
+  /* Fix Issue #5: Mobile responsive styles */
+  @media (max-width: 768px) {
+    /* Ensure dropdown has adequate touch target size */
+    .ui.dropdown {
+      min-height: 44px; /* iOS minimum touch target */
+      font-size: 16px; /* Prevents iOS zoom on focus */
+    }
+
+    /* Make header text readable on mobile */
+    h5.ui.header {
+      font-size: 1rem;
+      padding: 0.75rem 1rem;
+    }
+
+    /* Add padding to segment for better mobile spacing */
+    .ui.segment {
+      padding: 1rem;
+    }
+
+    /* Ensure dropdown options are large enough to tap */
+    .ui.dropdown .menu > .item {
+      padding: 0.875rem 1rem !important;
+      min-height: 44px;
+    }
+  }
+`;
 
 interface LabelSetSelectorProps {
   read_only?: boolean;
@@ -71,7 +103,7 @@ export const LabelSetSelector = ({
   });
 
   return (
-    <div style={{ width: "100%" }}>
+    <MobileFriendlyWrapper>
       <Header as="h5" attached="top">
         Label Set:
       </Header>
@@ -89,6 +121,6 @@ export const LabelSetSelector = ({
           value={labelSet?.id}
         />
       </Segment>
-    </div>
+    </MobileFriendlyWrapper>
   );
 };

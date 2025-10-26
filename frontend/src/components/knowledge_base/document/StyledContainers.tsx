@@ -1768,7 +1768,45 @@ export const EditModeToolbar = styled(motion.div)`
 
   .toolbar-actions {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
+  }
+`;
+
+export const EditToolbarCloseButton = styled.button`
+  display: none; /* Hidden on desktop */
+
+  @media (max-width: 768px) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    svg {
+      width: 16px;
+      height: 16px;
+      color: #64748b;
+    }
+
+    &:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+
+      svg {
+        color: #475569;
+      }
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
   }
 `;
 

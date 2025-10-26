@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   AlertCircle,
   EditIcon,
+  X,
 } from "lucide-react";
 import { Button, Icon } from "semantic-ui-react";
 import { format } from "date-fns";
@@ -24,6 +25,7 @@ import {
   KnowledgeHeader,
   KnowledgeBody,
   EditModeToolbar,
+  EditToolbarCloseButton,
   MobileTabBar,
   MobileTab,
   MobileBackButton,
@@ -271,6 +273,13 @@ const UnifiedKnowledgeLayer: React.FC<Props> = ({
                 <span style={{ fontSize: "0.875rem", color: "#64748b" }}>
                   {editedSummaryContent.length} characters
                 </span>
+                <EditToolbarCloseButton
+                  onClick={handleCancelEdit}
+                  title="Close editor"
+                  data-testid="close-editor-button"
+                >
+                  <X />
+                </EditToolbarCloseButton>
               </div>
             </EditModeToolbar>
           )}

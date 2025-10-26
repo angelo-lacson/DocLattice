@@ -10,6 +10,9 @@ import {
   Plus,
   Columns,
   Maximize2,
+  Sparkles,
+  X,
+  BookOpen,
 } from "lucide-react";
 import { useCorpusState } from "../../annotator/context/CorpusAtom";
 import {
@@ -178,6 +181,46 @@ const PanelHeader = styled.div`
   }
 `;
 
+const PanelHeaderTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+`;
+
+const CloseButton = styled(motion.button)`
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    color: #64748b;
+  }
+
+  &:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+
+    svg {
+      color: #475569;
+    }
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+`;
+
 const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
   width: 100%;
   padding: 0.75rem 1rem;
@@ -234,6 +277,78 @@ const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
   }
 `;
 
+/* Mobile Speed Dial Components */
+const SpeedDialContainer = styled.div`
+  position: fixed;
+  bottom: calc(
+    1rem + 40px + max(10px, 2rem)
+  ); /* Above label selector on mobile */
+  right: 1rem;
+  z-index: 2001;
+`;
+
+const SpeedDialBackdrop = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  backdrop-filter: blur(2px);
+`;
+
+const MainFAB = styled(motion.button)<{ $expanded: boolean }>`
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+  position: relative;
+  z-index: 2002;
+
+  svg {
+    width: 24px;
+    height: 24px;
+    color: white;
+    transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    transform: ${(props) =>
+      props.$expanded ? "rotate(180deg) scale(1.1)" : "rotate(0deg) scale(1)"};
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+`;
+
+const OrbitButton = styled(motion.button)<{ $color?: string }>`
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: ${(props) => props.$color || "white"};
+  border: 2px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: absolute;
+  bottom: 0;
+  right: 0;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: ${(props) => (props.$color ? "white" : "#64748b")};
+  }
+
+  &:active {
+    transform: scale(0.9);
+  }
+`;
+
 interface FloatingDocumentControlsProps {
   /** Whether to show the controls (e.g., only in document layer) */
   visible?: boolean;
@@ -243,6 +358,8 @@ interface FloatingDocumentControlsProps {
   onAnalysesClick?: () => void;
   /** Callback when extracts button is clicked */
   onExtractsClick?: () => void;
+  /** Callback when summary button is clicked */
+  onSummaryClick?: () => void;
   /** Whether analyses panel is open */
   analysesOpen?: boolean;
   /** Whether extracts panel is open */
@@ -259,6 +376,8 @@ interface FloatingDocumentControlsProps {
   autoZoomEnabled?: boolean;
   /** Callback when auto-zoom toggle changes */
   onAutoZoomChange?: (enabled: boolean) => void;
+  /** Whether to use mobile speed dial layout */
+  isMobile?: boolean;
 }
 
 export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
@@ -268,6 +387,7 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
       showRightPanel = false,
       onAnalysesClick,
       onExtractsClick,
+      onSummaryClick,
       analysesOpen = false,
       extractsOpen = false,
       panelOffset = 0,
@@ -276,9 +396,11 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
       onPanelWidthChange,
       autoZoomEnabled = true,
       onAutoZoomChange,
+      isMobile = false,
     }) => {
       const [expandedSettings, setExpandedSettings] = useState(false);
       const [expandedWidthMenu, setExpandedWidthMenu] = useState(false);
+      const [speedDialExpanded, setSpeedDialExpanded] = useState(false);
 
       // Get document permissions to check if user can create analyses (not corpus permissions!)
       const { permissions: documentPermissions, setPermissions } =
@@ -320,6 +442,236 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
         return null;
       }
 
+      // Helper function to calculate orbital positions for mobile speed dial
+      // Arranges buttons in an arc above the main FAB
+      const getOrbitPosition = (index: number, total: number) => {
+        const radius = 100; // Distance from center in pixels
+        const arcAngle = 90; // Total arc span in degrees
+        const startAngle = 180 - arcAngle / 2; // Start from upper-left
+
+        // Calculate angle for this button in the arc
+        const angle = startAngle + (arcAngle / (total - 1)) * index;
+        const radian = (angle * Math.PI) / 180;
+
+        return {
+          x: Math.cos(radian) * radius,
+          y: Math.sin(radian) * radius,
+        };
+      };
+
+      // Mobile Speed Dial Rendering
+      if (isMobile) {
+        // Collect all buttons that should appear in the speed dial
+        const speedDialButtons: Array<{
+          icon: JSX.Element;
+          color?: string;
+          onClick: () => void;
+          title: string;
+          testId: string;
+        }> = [];
+
+        // Settings button
+        speedDialButtons.push({
+          icon: <Settings />,
+          onClick: () => {
+            setExpandedSettings(!expandedSettings);
+            setSpeedDialExpanded(false);
+          },
+          title: "Annotation Filters",
+          testId: "settings-button",
+        });
+
+        // Summary button (if callback provided)
+        if (onSummaryClick) {
+          speedDialButtons.push({
+            icon: <BookOpen />,
+            color: "#3b82f6",
+            onClick: () => {
+              onSummaryClick();
+              setSpeedDialExpanded(false);
+            },
+            title: "View Summary",
+            testId: "summary-button",
+          });
+        }
+
+        // Analyses button
+        speedDialButtons.push({
+          icon: <BarChart3 />,
+          color: "#f59e0b",
+          onClick: () => {
+            if (!analysesOpen && extractsOpen && onExtractsClick) {
+              onExtractsClick();
+            }
+            if (onAnalysesClick) onAnalysesClick();
+            setSpeedDialExpanded(false);
+          },
+          title: "View Analyses",
+          testId: "analyses-button",
+        });
+
+        // Extracts button
+        speedDialButtons.push({
+          icon: <Database />,
+          color: "#8b5cf6",
+          onClick: () => {
+            if (!extractsOpen && analysesOpen && onAnalysesClick) {
+              onAnalysesClick();
+            }
+            if (onExtractsClick) onExtractsClick();
+            setSpeedDialExpanded(false);
+          },
+          title: "View Extracts",
+          testId: "extracts-button",
+        });
+
+        // Create analysis button (if user has permissions)
+        if (canCreateAnalysis && !readOnly && selectedCorpus) {
+          speedDialButtons.push({
+            icon: <Plus />,
+            color: "#10b981",
+            onClick: () => {
+              if (selectedCorpus) {
+                showSelectCorpusAnalyzerOrFieldsetModal(true);
+              }
+              setSpeedDialExpanded(false);
+            },
+            title: "Start New Analysis",
+            testId: "create-analysis-button",
+          });
+        }
+
+        return (
+          <>
+            {/* Backdrop - closes speed dial when tapped */}
+            <AnimatePresence>
+              {speedDialExpanded && (
+                <SpeedDialBackdrop
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setSpeedDialExpanded(false)}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Settings panel - show outside speed dial container */}
+            <AnimatePresence>
+              {expandedSettings && (
+                <ControlPanel
+                  data-testid="settings-panel"
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  transition={{ duration: 0.2 }}
+                  style={{
+                    position: "fixed",
+                    bottom: "calc(1rem + 56px + 1rem)",
+                    right: "1rem",
+                    zIndex: 2003,
+                  }}
+                >
+                  <PanelHeader>
+                    <PanelHeaderTitle>
+                      <Eye />
+                      Annotation Filters
+                    </PanelHeaderTitle>
+                    <CloseButton
+                      onClick={() => setExpandedSettings(false)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      title="Close"
+                      data-testid="close-settings-button"
+                    >
+                      <X />
+                    </CloseButton>
+                  </PanelHeader>
+                  <AnnotationControls
+                    variant="floating"
+                    showLabelFilters
+                    compact
+                  />
+
+                  <Divider />
+
+                  <ControlItem>
+                    <ControlLabel>
+                      <Maximize2 />
+                      Auto-Zoom Sidebar
+                    </ControlLabel>
+                    <StyledCheckbox
+                      toggle
+                      checked={autoZoomEnabled}
+                      onChange={() => onAutoZoomChange?.(!autoZoomEnabled)}
+                    />
+                  </ControlItem>
+                </ControlPanel>
+              )}
+            </AnimatePresence>
+
+            {/* Speed Dial Container */}
+            <SpeedDialContainer>
+              {/* Orbital Buttons */}
+              <AnimatePresence>
+                {speedDialExpanded &&
+                  speedDialButtons.map((button, index) => {
+                    const position = getOrbitPosition(
+                      index,
+                      speedDialButtons.length
+                    );
+                    return (
+                      <OrbitButton
+                        key={button.testId}
+                        $color={button.color}
+                        data-testid={button.testId}
+                        onClick={button.onClick}
+                        title={button.title}
+                        initial={{
+                          opacity: 0,
+                          scale: 0,
+                          x: 0,
+                          y: 0,
+                        }}
+                        animate={{
+                          opacity: 1,
+                          scale: 1,
+                          x: position.x,
+                          y: position.y,
+                        }}
+                        exit={{
+                          opacity: 0,
+                          scale: 0,
+                          x: 0,
+                          y: 0,
+                        }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 500,
+                          damping: 30,
+                          delay: index * 0.03, // Stagger animation
+                        }}
+                      >
+                        {button.icon}
+                      </OrbitButton>
+                    );
+                  })}
+              </AnimatePresence>
+
+              {/* Main FAB */}
+              <MainFAB
+                $expanded={speedDialExpanded}
+                onClick={() => setSpeedDialExpanded(!speedDialExpanded)}
+                data-testid="speed-dial-main-fab"
+                whileTap={{ scale: 0.9 }}
+              >
+                <Sparkles />
+              </MainFAB>
+            </SpeedDialContainer>
+          </>
+        );
+      }
+
+      // Desktop Layout (original implementation)
       return (
         <ControlsContainer $panelOffset={panelOffset}>
           <AnimatePresence>
@@ -382,8 +734,19 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
                 transition={{ duration: 0.2 }}
               >
                 <PanelHeader>
-                  <Eye />
-                  Annotation Filters
+                  <PanelHeaderTitle>
+                    <Eye />
+                    Annotation Filters
+                  </PanelHeaderTitle>
+                  <CloseButton
+                    onClick={() => setExpandedSettings(false)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="Close"
+                    data-testid="close-settings-button"
+                  >
+                    <X />
+                  </CloseButton>
                 </PanelHeader>
                 <AnnotationControls
                   variant="floating"

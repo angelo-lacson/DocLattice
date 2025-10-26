@@ -42,9 +42,13 @@ const HighlightContainer = styled.div<HighlightContainerProps>`
   }
 `;
 
-const AnnotationLabel = styled(Label)`
+interface AnnotationLabelProps {
+  $labelColor?: string;
+}
+
+const AnnotationLabel = styled(Label)<AnnotationLabelProps>`
   &&& {
-    background-color: #${(props) => props.color || "e0e1e2"};
+    background-color: ${(props) => props.$labelColor || "#e0e1e2"};
     color: white;
     margin: 0 0.5rem 0.5rem 0;
     padding: 0.5em 1em;
@@ -201,7 +205,7 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
             }}
           />
         )}
-        <AnnotationLabel color={annotation.annotationLabel.color}>
+        <AnnotationLabel $labelColor={annotation.annotationLabel.color}>
           {annotation.annotationLabel.icon && (
             <Icon name={annotation.annotationLabel.icon} />
           )}

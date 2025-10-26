@@ -354,14 +354,13 @@ const ChatContainer = styled.div`
   border-radius: 0;
   flex: 1;
   min-height: 0; /* Important for flex children */
+  max-height: 100%; /* Never exceed parent's height */
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10;
+    /* Removed position: fixed to prevent covering parent navigation and bottom nav */
+    /* Container now works as a normal flex child */
+    height: 100%; /* Fill parent container */
+    max-height: 100%; /* Don't exceed parent's height */
   }
 `;
 
@@ -374,6 +373,12 @@ const ConversationIndicator = styled.div`
   position: relative;
   min-height: 0; /* Important for flex children to properly overflow */
   flex: 1;
+  max-height: 100%; /* Never exceed parent's height */
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    height: 100%; /* Fill parent container */
+    max-height: 100%; /* Don't exceed parent's height */
+  }
 `;
 
 // Add a styled component for the input wrapper
@@ -384,6 +389,16 @@ const ChatInputWrapper = styled.div`
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04);
+  position: sticky;
+  bottom: 0;
+  z-index: 50; /* Ensure it's above other content */
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    position: sticky;
+    bottom: 0; /* Back to bottom - FAB is now compact and out of the way */
+    /* Ensure it stays at bottom even when keyboard appears */
+    transform: translateZ(0); /* Force GPU acceleration */
+  }
 `;
 
 // Add new styled component for processing indicator
@@ -465,6 +480,8 @@ const EnhancedChatInputContainer = styled(ChatInputContainer)<{
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(0, 0, 0, 0.05);
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+  flex-direction: column;
+  align-items: stretch;
 
   /* When disabled (i.e. assistant is processing) */
   ${(props) =>
@@ -487,6 +504,7 @@ const MessagesArea = styled.div<{ $isProcessing?: boolean }>`
   padding: 1.5rem;
   background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
   min-height: 0;
+  max-height: 100%;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -532,6 +550,14 @@ const MessagesArea = styled.div<{ $isProcessing?: boolean }>`
   }
 `;
 
+// Input row wrapper to keep input and send button together
+const InputRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+`;
+
 // Enhance the chat input for better mobile experience
 const EnhancedChatInput = styled(ChatInput)`
   background: #f8fafc;
@@ -540,6 +566,8 @@ const EnhancedChatInput = styled(ChatInput)`
   padding: 0.875rem 1.25rem;
   font-size: 0.9375rem;
   transition: all 0.2s ease;
+  flex: 1;
+  min-height: 48px;
 
   &:focus {
     background: white;
@@ -555,6 +583,19 @@ const EnhancedChatInput = styled(ChatInput)`
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     font-size: 0.875rem;
     padding: 0.75rem 1rem;
+    min-height: 44px;
+  }
+`;
+
+// Enhanced send button that matches input height
+const EnhancedSendButton = styled(SendButton)`
+  width: 48px;
+  height: 48px;
+  align-self: center; /* Override the flex-end from base component */
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    width: 44px;
+    height: 44px;
   }
 `;
 
@@ -622,7 +663,7 @@ const MessageWrapper = styled(motion.div)<{ isLatest?: boolean }>`
   `}
 `;
 
-// Add a styled component for the chat navigation header
+// Mobile navigation header styled components
 const ChatNavigationHeader = styled.div`
   display: flex;
   align-items: center;
@@ -632,10 +673,16 @@ const ChatNavigationHeader = styled.div`
   border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 100; /* High z-index to ensure it's always visible */
+  flex-shrink: 0; /* Prevent compression */
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    position: -webkit-sticky; /* For Safari */
+    position: sticky;
+    padding: 0.75rem 1rem;
+  }
 `;
 
-// Add a styled component for the back button
 const BackButton = styled(motion.button)`
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -652,7 +699,6 @@ const BackButton = styled(motion.button)`
   }
 `;
 
-// Add a styled component for the navigation title
 const NavigationTitle = styled.span`
   flex: 1;
   font-size: 1.125rem;
@@ -898,17 +944,6 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         const messageData: MessageData = JSON.parse(event.data);
         if (!messageData) return;
         const { type: msgType, content, data } = messageData;
-
-        console.log("[CorpusChat WebSocket] Received message:", {
-          type: msgType,
-          content,
-          hasContent: !!content,
-          hasSources: !!data?.sources,
-          sourceCount: data?.sources?.length,
-          hasTimeline: !!data?.timeline,
-          timelineCount: data?.timeline?.length,
-          message_id: data?.message_id,
-        });
 
         switch (msgType) {
           case "ASYNC_START":
@@ -1443,24 +1478,32 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   return (
     <ChatContainer id="corpus-chat-container">
       <ConversationIndicator id="conversation-indicator">
-        {/* Mobile navigation header */}
+        {/* Mobile navigation header for conversation view
+            Always render on mobile when in conversation mode */}
         {use_mobile_layout && isConversation && (
           <ChatNavigationHeader>
             <BackButton
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log("Back button clicked", {
+                  selectedConversationId,
+                  isNewChat,
+                });
                 if (selectedConversationId || !isNewChat) {
-                  // Go back to conversation list
+                  // Go back to conversation list (internal navigation)
                   setSelectedConversationId(undefined);
                   setIsNewChat(false);
                   setChat([]);
                   setServerMessages([]);
-                } else {
-                  // Go back to corpus home
-                  showQueryViewState("ASK");
+                } else if (onClose) {
+                  // Go back to corpus home (use parent callback)
+                  onClose();
                 }
               }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              style={{ cursor: "pointer" }}
             >
               <ArrowLeft size={20} />
             </BackButton>
@@ -1468,9 +1511,17 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               {selectedConversationId ? "Conversation" : "New Chat"}
             </NavigationTitle>
             <IconButton
-              onClick={() => showQueryViewState("ASK")}
+              onClick={(e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log("Home button clicked");
+                if (onClose) {
+                  onClose();
+                }
+              }}
               title="Return to Dashboard"
               whileTap={{ scale: 0.95 }}
+              style={{ cursor: "pointer" }}
             >
               <Home size={20} />
             </IconButton>
@@ -1491,6 +1542,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                 overflow: "hidden",
                 minHeight: 0,
                 flex: 1,
+                height: "100%",
+                maxHeight: "100%",
               }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1612,65 +1665,75 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   $isTyping={isNewChat}
                   $disabled={isProcessing}
                 >
-                  {wsError ? (
-                    <ErrorMessage>
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: "spring", damping: 20 }}
-                      >
-                        {wsError}
-                        <Button
-                          size="small"
-                          onClick={() => window.location.reload()}
-                          style={{
-                            marginLeft: "0.75rem",
-                            background: "#dc3545",
-                            color: "white",
-                            border: "none",
-                            boxShadow: "0 2px 4px rgba(220,53,69,0.2)",
-                          }}
+                  <AnimatePresence>
+                    {wsError ? (
+                      <ErrorMessage key="error">
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          transition={{ type: "spring", damping: 20 }}
                         >
-                          Reconnect
-                        </Button>
-                      </motion.div>
-                    </ErrorMessage>
-                  ) : (
-                    <ConnectionStatus
-                      connected={wsReady}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    />
-                  )}
-                  <EnhancedChatInput
-                    value={newMessage}
-                    onChange={(e: {
-                      target: { value: SetStateAction<string> };
-                    }) => setNewMessage(e.target.value)}
-                    placeholder={
-                      wsReady
-                        ? isProcessing
-                          ? "Assistant is thinking..."
-                          : "Type your corpus query..."
-                        : "Waiting for connection..."
-                    }
-                    disabled={!wsReady || isProcessing}
-                    onKeyPress={(e: { key: string }) => {
-                      if (e.key === "Enter") {
-                        sendMessageOverSocket();
+                          {wsError}
+                          <Button
+                            size="small"
+                            onClick={() => window.location.reload()}
+                            style={{
+                              marginLeft: "0.75rem",
+                              background: "#dc3545",
+                              color: "white",
+                              border: "none",
+                              boxShadow: "0 2px 4px rgba(220,53,69,0.2)",
+                            }}
+                          >
+                            Reconnect
+                          </Button>
+                        </motion.div>
+                      </ErrorMessage>
+                    ) : (
+                      !wsReady && (
+                        <ConnectionStatus
+                          key="status"
+                          connected={wsReady}
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      )
+                    )}
+                  </AnimatePresence>
+                  <InputRow>
+                    <EnhancedChatInput
+                      value={newMessage}
+                      onChange={(e: {
+                        target: { value: SetStateAction<string> };
+                      }) => setNewMessage(e.target.value)}
+                      placeholder={
+                        wsReady
+                          ? isProcessing
+                            ? "Assistant is thinking..."
+                            : "Type your corpus query..."
+                          : "Waiting for connection..."
                       }
-                    }}
-                  />
-                  <SendButton
-                    disabled={!wsReady || !newMessage.trim() || isProcessing}
-                    onClick={sendMessageOverSocket}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    animate={wsReady ? { y: [0, -2, 0] } : {}}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Send size={18} />
-                  </SendButton>
+                      disabled={!wsReady || isProcessing}
+                      onKeyPress={(e: { key: string }) => {
+                        if (e.key === "Enter") {
+                          sendMessageOverSocket();
+                        }
+                      }}
+                    />
+                    <EnhancedSendButton
+                      disabled={!wsReady || !newMessage.trim() || isProcessing}
+                      onClick={sendMessageOverSocket}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      animate={wsReady ? { y: [0, -2, 0] } : {}}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Send size={20} />
+                    </EnhancedSendButton>
+                  </InputRow>
                 </EnhancedChatInputContainer>
               </ChatInputWrapper>
             </motion.div>
@@ -1681,9 +1744,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               style={{
                 width: "100%",
                 height: "100%",
+                maxHeight: "100%",
                 display: "flex",
                 flexDirection: "column",
                 overflowY: "auto",
+                flex: 1,
               }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
