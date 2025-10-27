@@ -107,6 +107,43 @@ class Conversation(BaseOCModel):
         blank=True,
         help_text="Timestamp when the conversation was soft-deleted",
     )
+
+    # Moderation fields
+    is_locked = models.BooleanField(
+        default=False,
+        help_text="Whether the thread is locked (prevents new messages)",
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the thread was locked",
+    )
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="locked_conversations",
+        null=True,
+        blank=True,
+        help_text="Moderator who locked the thread",
+    )
+    is_pinned = models.BooleanField(
+        default=False,
+        help_text="Whether the thread is pinned (appears at top of list)",
+    )
+    pinned_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the thread was pinned",
+    )
+    pinned_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="pinned_conversations",
+        null=True,
+        blank=True,
+        help_text="Moderator who pinned the thread",
+    )
+
     chat_with_corpus = models.ForeignKey(
         Corpus,
         on_delete=models.SET_NULL,
@@ -154,6 +191,175 @@ class Conversation(BaseOCModel):
             raise ValidationError(
                 "Only one of chat_with_corpus or chat_with_document can be set."
             )
+
+    def can_moderate(self, user) -> bool:
+        """
+        Check if a user can moderate this conversation.
+        Corpus owners and designated moderators have moderation permissions.
+        """
+        # If this is a corpus conversation
+        if self.chat_with_corpus:
+            # Check if user is the corpus owner
+            if self.chat_with_corpus.creator == user:
+                return True
+
+            # Check if user is a designated moderator
+            try:
+                moderator = CorpusModerator.objects.get(
+                    corpus=self.chat_with_corpus, user=user
+                )
+                return bool(moderator.permissions)
+            except CorpusModerator.DoesNotExist:
+                return False
+
+        # For non-corpus conversations, only creator can moderate
+        return self.creator == user
+
+    def lock(self, moderator, reason: str = ""):
+        """
+        Lock the conversation to prevent new messages.
+        Creates a moderation action log.
+        """
+        from django.utils import timezone
+
+        if not self.can_moderate(moderator):
+            raise PermissionError(
+                f"User {moderator.username} does not have permission to lock this conversation"
+            )
+
+        self.is_locked = True
+        self.locked_at = timezone.now()
+        self.locked_by = moderator
+        self.save(update_fields=["is_locked", "locked_at", "locked_by"])
+
+        # Create moderation action log
+        ModerationAction.objects.create(
+            conversation=self,
+            action_type=ModerationActionType.LOCK_THREAD,
+            moderator=moderator,
+            reason=reason,
+            creator=moderator,
+        )
+
+    def unlock(self, moderator, reason: str = ""):
+        """
+        Unlock the conversation to allow new messages.
+        Creates a moderation action log.
+        """
+        if not self.can_moderate(moderator):
+            raise PermissionError(
+                f"User {moderator.username} does not have permission to unlock this conversation"
+            )
+
+        self.is_locked = False
+        self.locked_at = None
+        self.locked_by = None
+        self.save(update_fields=["is_locked", "locked_at", "locked_by"])
+
+        # Create moderation action log
+        ModerationAction.objects.create(
+            conversation=self,
+            action_type=ModerationActionType.UNLOCK_THREAD,
+            moderator=moderator,
+            reason=reason,
+            creator=moderator,
+        )
+
+    def pin(self, moderator, reason: str = ""):
+        """
+        Pin the conversation to appear at top of list.
+        Creates a moderation action log.
+        """
+        from django.utils import timezone
+
+        if not self.can_moderate(moderator):
+            raise PermissionError(
+                f"User {moderator.username} does not have permission to pin this conversation"
+            )
+
+        self.is_pinned = True
+        self.pinned_at = timezone.now()
+        self.pinned_by = moderator
+        self.save(update_fields=["is_pinned", "pinned_at", "pinned_by"])
+
+        # Create moderation action log
+        ModerationAction.objects.create(
+            conversation=self,
+            action_type=ModerationActionType.PIN_THREAD,
+            moderator=moderator,
+            reason=reason,
+            creator=moderator,
+        )
+
+    def unpin(self, moderator, reason: str = ""):
+        """
+        Unpin the conversation.
+        Creates a moderation action log.
+        """
+        if not self.can_moderate(moderator):
+            raise PermissionError(
+                f"User {moderator.username} does not have permission to unpin this conversation"
+            )
+
+        self.is_pinned = False
+        self.pinned_at = None
+        self.pinned_by = None
+        self.save(update_fields=["is_pinned", "pinned_at", "pinned_by"])
+
+        # Create moderation action log
+        ModerationAction.objects.create(
+            conversation=self,
+            action_type=ModerationActionType.UNPIN_THREAD,
+            moderator=moderator,
+            reason=reason,
+            creator=moderator,
+        )
+
+    def soft_delete_thread(self, moderator, reason: str = ""):
+        """
+        Soft delete this conversation (for moderation).
+        Creates a moderation action log.
+        """
+        from django.utils import timezone
+
+        if not self.can_moderate(moderator):
+            raise PermissionError(
+                f"User {moderator.username} does not have permission to delete this conversation"
+            )
+
+        self.deleted_at = timezone.now()
+        self.save(update_fields=["deleted_at"])
+
+        # Create moderation action log
+        ModerationAction.objects.create(
+            conversation=self,
+            action_type=ModerationActionType.DELETE_THREAD,
+            moderator=moderator,
+            reason=reason,
+            creator=moderator,
+        )
+
+    def restore_thread(self, moderator, reason: str = ""):
+        """
+        Restore a soft-deleted conversation.
+        Creates a moderation action log.
+        """
+        if not self.can_moderate(moderator):
+            raise PermissionError(
+                f"User {moderator.username} does not have permission to restore this conversation"
+            )
+
+        self.deleted_at = None
+        self.save(update_fields=["deleted_at"])
+
+        # Create moderation action log
+        ModerationAction.objects.create(
+            conversation=self,
+            action_type=ModerationActionType.RESTORE_THREAD,
+            moderator=moderator,
+            reason=reason,
+            creator=moderator,
+        )
 
     def __str__(self) -> str:
         return f"Conversation {self.pk} - {self.title if self.title else 'Untitled'}"
@@ -269,6 +475,54 @@ class ChatMessage(BaseOCModel):
     # Managers
     objects = SoftDeleteManager()  # Default manager excludes soft-deleted
     all_objects = models.Manager()  # Access all objects including soft-deleted
+
+    def soft_delete_message(self, moderator, reason: str = ""):
+        """
+        Soft delete this message (for moderation).
+        Creates a moderation action log.
+        """
+        from django.utils import timezone
+
+        if not self.conversation.can_moderate(moderator):
+            raise PermissionError(
+                f"User {moderator.username} does not have permission to delete this message"
+            )
+
+        self.deleted_at = timezone.now()
+        self.save(update_fields=["deleted_at"])
+
+        # Create moderation action log
+        ModerationAction.objects.create(
+            message=self,
+            conversation=self.conversation,
+            action_type=ModerationActionType.DELETE_MESSAGE,
+            moderator=moderator,
+            reason=reason,
+            creator=moderator,
+        )
+
+    def restore_message(self, moderator, reason: str = ""):
+        """
+        Restore a soft-deleted message.
+        Creates a moderation action log.
+        """
+        if not self.conversation.can_moderate(moderator):
+            raise PermissionError(
+                f"User {moderator.username} does not have permission to restore this message"
+            )
+
+        self.deleted_at = None
+        self.save(update_fields=["deleted_at"])
+
+        # Create moderation action log
+        ModerationAction.objects.create(
+            message=self,
+            conversation=self.conversation,
+            action_type=ModerationActionType.RESTORE_MESSAGE,
+            moderator=moderator,
+            reason=reason,
+            creator=moderator,
+        )
 
     def __str__(self) -> str:
         return (
@@ -454,6 +708,195 @@ class UserReputationGroupObjectPermission(GroupObjectPermissionBase):
 
     content_object = django.db.models.ForeignKey(
         "UserReputation", on_delete=django.db.models.CASCADE
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Moderation System Models
+# --------------------------------------------------------------------------- #
+
+
+class ModeratorPermissionChoices(models.TextChoices):
+    """Permission levels for corpus moderators."""
+
+    LOCK_THREADS = "lock_threads", "Can Lock Threads"
+    PIN_THREADS = "pin_threads", "Can Pin Threads"
+    DELETE_MESSAGES = "delete_messages", "Can Delete Messages"
+    DELETE_THREADS = "delete_threads", "Can Delete Threads"
+
+
+class CorpusModerator(BaseOCModel):
+    """
+    Tracks designated moderators for a corpus with specific permissions.
+    Corpus owners have all permissions by default.
+    """
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["corpus", "user"],
+                name="one_moderator_per_user_per_corpus",
+            )
+        ]
+        permissions = (
+            ("permission_corpusmoderator", "permission corpusmoderator"),
+            ("create_corpusmoderator", "create corpusmoderator"),
+            ("read_corpusmoderator", "read corpusmoderator"),
+            ("update_corpusmoderator", "update corpusmoderator"),
+            ("remove_corpusmoderator", "delete corpusmoderator"),
+        )
+        indexes = [
+            models.Index(fields=["corpus", "user"]),
+            models.Index(fields=["user"]),
+        ]
+
+    corpus = models.ForeignKey(
+        Corpus,
+        on_delete=models.CASCADE,
+        related_name="moderators",
+        help_text="The corpus being moderated",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="moderated_corpuses",
+        help_text="The user who is a moderator",
+    )
+    permissions = models.JSONField(
+        default=list,
+        help_text="List of permission strings (e.g., ['lock_threads', 'pin_threads'])",
+    )
+    assigned_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When moderator permissions were assigned",
+    )
+    assigned_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="assigned_moderators",
+        null=True,
+        blank=True,
+        help_text="Who assigned these moderator permissions",
+    )
+
+    def has_permission(self, permission: str) -> bool:
+        """Check if moderator has a specific permission."""
+        return permission in self.permissions
+
+    def __str__(self) -> str:
+        return f"{self.user.username} - Moderator of {self.corpus.title}"
+
+
+class CorpusModeratorUserObjectPermission(UserObjectPermissionBase):
+    """Permissions for CorpusModerator objects at the user level."""
+
+    content_object = django.db.models.ForeignKey(
+        "CorpusModerator", on_delete=django.db.models.CASCADE
+    )
+
+
+class CorpusModeratorGroupObjectPermission(GroupObjectPermissionBase):
+    """Permissions for CorpusModerator objects at the group level."""
+
+    content_object = django.db.models.ForeignKey(
+        "CorpusModerator", on_delete=django.db.models.CASCADE
+    )
+
+
+class ModerationActionType(models.TextChoices):
+    """Types of moderation actions."""
+
+    LOCK_THREAD = "lock_thread", "Lock Thread"
+    UNLOCK_THREAD = "unlock_thread", "Unlock Thread"
+    PIN_THREAD = "pin_thread", "Pin Thread"
+    UNPIN_THREAD = "unpin_thread", "Unpin Thread"
+    DELETE_THREAD = "delete_thread", "Delete Thread"
+    RESTORE_THREAD = "restore_thread", "Restore Thread"
+    DELETE_MESSAGE = "delete_message", "Delete Message"
+    RESTORE_MESSAGE = "restore_message", "Restore Message"
+
+
+class ModerationAction(BaseOCModel):
+    """
+    Tracks all moderation actions for auditing purposes.
+    Creates an immutable log of what was done, when, and by whom.
+    """
+
+    class Meta:
+        permissions = (
+            ("permission_moderationaction", "permission moderationaction"),
+            ("create_moderationaction", "create moderationaction"),
+            ("read_moderationaction", "read moderationaction"),
+        )
+        indexes = [
+            models.Index(fields=["conversation"]),
+            models.Index(fields=["message"]),
+            models.Index(fields=["moderator"]),
+            models.Index(fields=["action_type"]),
+            models.Index(fields=["created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="moderation_actions",
+        null=True,
+        blank=True,
+        help_text="The conversation that was moderated",
+    )
+    message = models.ForeignKey(
+        ChatMessage,
+        on_delete=models.CASCADE,
+        related_name="moderation_actions",
+        null=True,
+        blank=True,
+        help_text="The message that was moderated",
+    )
+    action_type = models.CharField(
+        max_length=32,
+        choices=ModerationActionType.choices,
+        help_text="Type of moderation action taken",
+    )
+    moderator = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="moderation_actions_taken",
+        null=True,
+        help_text="Moderator who took this action",
+    )
+    reason = models.TextField(
+        blank=True,
+        help_text="Optional reason for the moderation action",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the action was taken",
+    )
+
+    def __str__(self) -> str:
+        target = (
+            f"conversation {self.conversation.pk}"
+            if self.conversation
+            else f"message {self.message.pk}"
+        )
+        moderator_name = self.moderator.username if self.moderator else "Unknown"
+        return f"{self.action_type} on {target} by {moderator_name}"
+
+
+class ModerationActionUserObjectPermission(UserObjectPermissionBase):
+    """Permissions for ModerationAction objects at the user level."""
+
+    content_object = django.db.models.ForeignKey(
+        "ModerationAction", on_delete=django.db.models.CASCADE
+    )
+
+
+class ModerationActionGroupObjectPermission(GroupObjectPermissionBase):
+    """Permissions for ModerationAction objects at the group level."""
+
+    content_object = django.db.models.ForeignKey(
+        "ModerationAction", on_delete=django.db.models.CASCADE
     )
 
 
