@@ -11,6 +11,7 @@ from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.shared.defaults import jsonfield_default_value
 from opencontractserver.shared.fields import NullableJSONField
+from opencontractserver.shared.Managers import BaseVisibilityManager
 from opencontractserver.shared.Models import BaseOCModel
 
 User = get_user_model()
@@ -42,9 +43,10 @@ class AgentTypeChoices(models.TextChoices):
 
 
 # Custom manager for soft delete functionality
-class SoftDeleteManager(models.Manager):
+class SoftDeleteManager(BaseVisibilityManager):
     """
-    Manager that filters out soft-deleted objects by default.
+    Manager that filters out soft-deleted objects by default and implements
+    user visibility permissions via BaseVisibilityManager.
     Use Model.all_objects to access soft-deleted objects.
     """
 
