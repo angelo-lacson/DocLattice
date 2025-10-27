@@ -103,3 +103,7 @@ CACHES = {
 # Disable rate limiting by default in tests for performance
 # Individual tests can enable it with @override_settings(RATELIMIT_DISABLE=False)
 RATELIMIT_DISABLE = True
+
+# Telemetry
+# ------------------------------------------------------------------------------
+MODE = "TEST"
