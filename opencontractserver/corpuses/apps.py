@@ -10,12 +10,7 @@ class CorpusesConfig(AppConfig):
 
     def ready(self):
         try:
-            from django.db.models.signals import post_save
-
-            from opencontractserver.corpuses.models import CorpusQuery
-            from opencontractserver.corpuses.signals import run_query_on_create
-
-            post_save.connect(run_query_on_create, sender=CorpusQuery)
+            pass
 
         except ImportError:
             pass
