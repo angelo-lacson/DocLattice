@@ -26,6 +26,7 @@ class TelemetryTestCase(TestCase):
         """Test successful event recording with all conditions met"""
 
         with override_settings(
+            MODE="DEV",
             TELEMETRY_ENABLED=True,
             POSTHOG_API_KEY="test-key",
             POSTHOG_HOST="https://test.host",
@@ -72,7 +73,7 @@ class TelemetryTestCase(TestCase):
         """Test when PostHog client raises an error"""
         self.mock_posthog.capture.side_effect = Exception("PostHog Error")
 
-        with override_settings(TELEMETRY_ENABLED=True):
+        with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
             result = record_event("test_event")
 
         self.assertFalse(result)
@@ -80,7 +81,7 @@ class TelemetryTestCase(TestCase):
     def test_record_event_without_properties(self):
         """Test event recording without additional properties"""
 
-        with override_settings(TELEMETRY_ENABLED=True):
+        with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
             result = record_event("test_event")
 
         self.assertTrue(result)
