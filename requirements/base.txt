@@ -68,6 +68,10 @@ graphene-django==3.2.2  # TODO - upgrade at some point. Will require some refact
 django-graphql-jwt==0.4.0
 django-ratelimit==4.1.0  # https://github.com/jsocol/django-ratelimit
 
+# Telemetry
+# ------------------------------------------------------------------------------
+posthog==3.8.3  # https://github.com/posthog/posthog-python
+
 # JSON Schema
 # ------------------------------------------------------------------------------
 jsonschema==4.25.1
