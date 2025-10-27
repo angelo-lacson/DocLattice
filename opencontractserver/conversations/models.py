@@ -29,6 +29,29 @@ class MessageStateChoices(models.TextChoices):
     AWAITING_APPROVAL = "awaiting_approval", "Awaiting Approval"
 
 
+# Conversation types for distinguishing between agent chats and discussion threads
+class ConversationTypeChoices(models.TextChoices):
+    CHAT = "chat", "Chat"  # Default for agent-based conversations
+    THREAD = "thread", "Thread"  # For discussion threads
+
+
+# Agent types for multi-agent conversation support
+class AgentTypeChoices(models.TextChoices):
+    DOCUMENT_AGENT = "document_agent", "Document Agent"
+    CORPUS_AGENT = "corpus_agent", "Corpus Agent"
+
+
+# Custom manager for soft delete functionality
+class SoftDeleteManager(models.Manager):
+    """
+    Manager that filters out soft-deleted objects by default.
+    Use Model.all_objects to access soft-deleted objects.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
 class ConversationUserObjectPermission(UserObjectPermissionBase):
     """
     Permissions for Conversation objects at the user level.
@@ -73,6 +96,17 @@ class Conversation(BaseOCModel):
         auto_now=True,
         help_text="Timestamp when the conversation was last updated",
     )
+    conversation_type = models.CharField(
+        max_length=32,
+        choices=ConversationTypeChoices.choices,
+        default=ConversationTypeChoices.CHAT,
+        help_text="Type of conversation: chat (agent-based) or thread (discussion)",
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the conversation was soft-deleted",
+    )
     chat_with_corpus = models.ForeignKey(
         Corpus,
         on_delete=models.SET_NULL,
@@ -89,6 +123,10 @@ class Conversation(BaseOCModel):
         blank=True,
         null=True,
     )
+
+    # Managers
+    objects = SoftDeleteManager()  # Default manager excludes soft-deleted
+    all_objects = models.Manager()  # Access all objects including soft-deleted
 
     class Meta:
         constraints = [
@@ -156,6 +194,21 @@ class ChatMessage(BaseOCModel):
         choices=TYPE_CHOICES,
         help_text="The type of message (SYSTEM, HUMAN, or LLM)",
     )
+    agent_type = models.CharField(
+        max_length=32,
+        choices=AgentTypeChoices.choices,
+        blank=True,
+        null=True,
+        help_text="The specific agent type that generated this message (for LLM messages)",
+    )
+    parent_message = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        related_name="replies",
+        blank=True,
+        null=True,
+        help_text="Parent message for threaded replies",
+    )
     content = models.TextField(
         help_text="The textual content of the chat message",
     )
@@ -168,6 +221,11 @@ class ChatMessage(BaseOCModel):
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp when the chat message was created",
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the message was soft-deleted",
     )
 
     source_document = models.ForeignKey(
@@ -197,6 +255,10 @@ class ChatMessage(BaseOCModel):
         default=MessageStateChoices.COMPLETED,
         help_text="Lifecycle state of the message for quick filtering",
     )
+
+    # Managers
+    objects = SoftDeleteManager()  # Default manager excludes soft-deleted
+    all_objects = models.Manager()  # Access all objects including soft-deleted
 
     def __str__(self) -> str:
         return (
