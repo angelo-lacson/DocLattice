@@ -508,10 +508,7 @@ class ModerationActionModelTest(TestCase):
             creator=self.owner,
         )
 
-        expected = (
-            f"lock_thread on conversation {self.conversation.pk} "
-            f"by {self.owner.username}"
-        )
+        expected = f"lock_thread on conversation {self.conversation.pk} by {self.owner.username}"
         self.assertEqual(str(action), expected)
 
     def test_moderation_action_ordering(self):
