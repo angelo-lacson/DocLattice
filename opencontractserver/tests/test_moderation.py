@@ -76,8 +76,12 @@ class CorpusModeratorModelTest(TestCase):
             creator=self.owner,
         )
 
-        self.assertTrue(moderator.has_permission(ModeratorPermissionChoices.LOCK_THREADS))
-        self.assertTrue(moderator.has_permission(ModeratorPermissionChoices.PIN_THREADS))
+        self.assertTrue(
+            moderator.has_permission(ModeratorPermissionChoices.LOCK_THREADS)
+        )
+        self.assertTrue(
+            moderator.has_permission(ModeratorPermissionChoices.PIN_THREADS)
+        )
         self.assertFalse(
             moderator.has_permission(ModeratorPermissionChoices.DELETE_MESSAGES)
         )
@@ -461,7 +465,9 @@ class ChatMessageModerationTest(TestCase):
         self.assertIsNotNone(self.message.deleted_at)
 
     def test_corpus_owner_can_delete_messages(self):
-        """Test that corpus owner can delete messages even without CorpusModerator record."""
+        """
+        Test that corpus owner can delete messages even without CorpusModerator record.
+        """
         self.message.soft_delete_message(self.owner, reason="Owner moderation")
 
         self.message.refresh_from_db()
@@ -500,7 +506,10 @@ class ModerationActionModelTest(TestCase):
             creator=self.owner,
         )
 
-        expected = f"lock_thread on conversation {self.conversation.pk} by {self.owner.username}"
+        expected = (
+            f"lock_thread on conversation {self.conversation.pk} "
+            f"by {self.owner.username}"
+        )
         self.assertEqual(str(action), expected)
 
     def test_moderation_action_ordering(self):
