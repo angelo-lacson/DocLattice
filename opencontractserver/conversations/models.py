@@ -42,6 +42,55 @@ class AgentTypeChoices(models.TextChoices):
     CORPUS_AGENT = "corpus_agent", "Corpus Agent"
 
 
+# Custom QuerySet for soft delete functionality
+class SoftDeleteQuerySet(models.QuerySet):
+    """
+    QuerySet that filters soft-deleted objects and implements user visibility.
+    """
+
+    def visible_to_user(self, user=None):
+        """
+        Returns queryset filtered to objects visible to the user.
+        Maintains soft-delete filtering from the base queryset.
+        """
+        from django.contrib.auth.models import AnonymousUser
+        from django.apps import apps
+        from django.db.models import Q
+
+        # Handle None user as anonymous
+        if user is None:
+            user = AnonymousUser()
+
+        # Start with current queryset (already has soft-delete filtering)
+        queryset = self
+
+        # Superusers see everything
+        if hasattr(user, "is_superuser") and user.is_superuser:
+            return queryset.order_by("created")
+
+        # Anonymous users only see public items
+        if user.is_anonymous:
+            return queryset.filter(is_public=True)
+
+        # Authenticated users: public, created by them, or explicitly shared
+        model_name = self.model._meta.model_name
+        app_label = self.model._meta.app_label
+
+        try:
+            permission_model_name = f"{model_name}userobjectpermission"
+            permission_model_type = apps.get_model(app_label, permission_model_name)
+            permitted_ids = permission_model_type.objects.filter(
+                permission__codename=f"read_{model_name}", user_id=user.id
+            ).values_list("content_object_id", flat=True)
+
+            return queryset.filter(
+                Q(creator_id=user.id) | Q(is_public=True) | Q(id__in=permitted_ids)
+            )
+        except LookupError:
+            # Fallback if permission model doesn't exist
+            return queryset.filter(Q(creator_id=user.id) | Q(is_public=True))
+
+
 # Custom manager for soft delete functionality
 class SoftDeleteManager(BaseVisibilityManager):
     """
@@ -51,7 +100,10 @@ class SoftDeleteManager(BaseVisibilityManager):
     """
 
     def get_queryset(self):
-        return super().get_queryset().filter(deleted_at__isnull=True)
+        # Return our custom queryset, filtered for non-deleted objects
+        return SoftDeleteQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=True
+        )
 
 
 class ConversationUserObjectPermission(UserObjectPermissionBase):
