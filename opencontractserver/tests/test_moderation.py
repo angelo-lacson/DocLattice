@@ -469,9 +469,7 @@ class ChatMessageModerationTest(TestCase):
         self.assertIsNotNone(self.message.deleted_at)
 
     def test_corpus_owner_can_delete_messages(self):
-        """
-        Test that corpus owner can delete messages even without CorpusModerator record.
-        """
+        """Test that corpus owner can delete messages even without CorpusModerator record."""
         self.message.soft_delete_message(self.owner, reason="Owner moderation")
 
         self.message.refresh_from_db()
