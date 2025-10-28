@@ -11,7 +11,6 @@ Tests cover:
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from django.utils import timezone
 
 from opencontractserver.conversations.models import (
     ChatMessage,
@@ -528,7 +527,7 @@ class ModerationActionModelTest(TestCase):
 
     def test_moderation_action_audit_trail_immutable(self):
         """Test that moderation actions serve as immutable audit trail."""
-        action = ModerationAction.objects.create(
+        ModerationAction.objects.create(
             conversation=self.conversation,
             action_type=ModerationActionType.LOCK_THREAD,
             moderator=self.owner,

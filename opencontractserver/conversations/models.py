@@ -11,6 +11,7 @@ from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.shared.defaults import jsonfield_default_value
 from opencontractserver.shared.fields import NullableJSONField
+from opencontractserver.shared.Managers import BaseVisibilityManager
 from opencontractserver.shared.Models import BaseOCModel
 
 User = get_user_model()
@@ -42,14 +43,27 @@ class AgentTypeChoices(models.TextChoices):
 
 
 # Custom manager for soft delete functionality
-class SoftDeleteManager(models.Manager):
+class SoftDeleteManager(BaseVisibilityManager):
     """
     Manager that filters out soft-deleted objects by default.
     Use Model.all_objects to access soft-deleted objects.
+
+    Inherits from BaseVisibilityManager to provide the visible_to_user() method
+    required by GraphQL queries.
     """
 
     def get_queryset(self):
+        # First get the base queryset, then filter out soft-deleted objects
         return super().get_queryset().filter(deleted_at__isnull=True)
+
+    def visible_to_user(self, user=None):
+        """
+        Override to apply soft-delete filtering on top of visibility filtering.
+        """
+        # Get the visibility-filtered queryset from parent
+        queryset = super().visible_to_user(user)
+        # Then filter out soft-deleted objects
+        return queryset.filter(deleted_at__isnull=True)
 
 
 class ConversationUserObjectPermission(UserObjectPermissionBase):
