@@ -2,8 +2,8 @@ from typing import Literal
 
 import django
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import models
-from django.forms import ValidationError
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
 from opencontractserver.annotations.models import Annotation
