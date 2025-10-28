@@ -53,8 +53,8 @@ class SoftDeleteQuerySet(models.QuerySet):
         Returns queryset filtered to objects visible to the user.
         Maintains soft-delete filtering from the base queryset.
         """
-        from django.contrib.auth.models import AnonymousUser
         from django.apps import apps
+        from django.contrib.auth.models import AnonymousUser
         from django.db.models import Q
 
         # Handle None user as anonymous
