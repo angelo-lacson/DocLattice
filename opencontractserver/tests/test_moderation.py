@@ -179,7 +179,9 @@ class ConversationModerationTest(TestCase):
         self.assertIsNone(self.conversation.locked_at)
         self.assertIsNone(self.conversation.locked_by)
 
-        self.conversation.lock(self.moderator_user, reason="Violates community guidelines")
+        self.conversation.lock(
+            self.moderator_user, reason="Violates community guidelines"
+        )
 
         self.conversation.refresh_from_db()
         self.assertTrue(self.conversation.is_locked)
@@ -231,7 +233,9 @@ class ConversationModerationTest(TestCase):
         self.assertIsNone(self.conversation.pinned_at)
         self.assertIsNone(self.conversation.pinned_by)
 
-        self.conversation.pin(self.moderator_user, reason="Important announcement")
+        self.conversation.pin(
+            self.moderator_user, reason="Important announcement"
+        )
 
         self.conversation.refresh_from_db()
         self.assertTrue(self.conversation.is_pinned)
