@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+import posthog
 from django.conf import settings
-from posthog import Posthog
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +46,8 @@ def record_event(event_type: str, properties: dict | None = None) -> bool:
         return False
 
     try:
-        client = Posthog(
-            project_api_key=settings.POSTHOG_API_KEY, host=settings.POSTHOG_HOST
-        )
-
-        client.capture(
+        # Use the globally configured posthog module (initialized in UsersConfig.ready())
+        posthog.capture(
             distinct_id=installation_id,
             event=f"opencontracts.{event_type}",
             properties={
