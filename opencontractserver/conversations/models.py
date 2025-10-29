@@ -94,8 +94,8 @@ class SoftDeleteQuerySet(models.QuerySet):
 # Custom manager for soft delete functionality
 class SoftDeleteManager(BaseVisibilityManager):
     """
-    Manager that filters out soft-deleted objects by default and implements
-    user visibility permissions via BaseVisibilityManager.
+    Manager that combines visibility filtering with soft-delete filtering.
+    Filters out soft-deleted objects by default while respecting user permissions.
     Use Model.all_objects to access soft-deleted objects.
     """
 
@@ -310,6 +310,16 @@ class ChatMessage(BaseOCModel):
         help_text="Lifecycle state of the message for quick filtering",
     )
 
+    # Voting denormalized counts for performance
+    upvote_count = models.IntegerField(
+        default=0,
+        help_text="Cached count of upvotes for this message",
+    )
+    downvote_count = models.IntegerField(
+        default=0,
+        help_text="Cached count of downvotes for this message",
+    )
+
     # Managers
     objects = SoftDeleteManager()  # Default manager excludes soft-deleted
     all_objects = models.Manager()  # Access all objects including soft-deleted
@@ -340,6 +350,164 @@ class ChatMessageGroupObjectPermission(GroupObjectPermissionBase):
 
     content_object = django.db.models.ForeignKey(
         "ChatMessage", on_delete=django.db.models.CASCADE
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Voting System Models
+# --------------------------------------------------------------------------- #
+
+
+class VoteType(models.TextChoices):
+    """Vote type choices for upvote/downvote functionality."""
+
+    UPVOTE = "upvote", "Upvote"
+    DOWNVOTE = "downvote", "Downvote"
+
+
+class MessageVote(BaseOCModel):
+    """
+    Tracks individual votes on chat messages.
+    Users can upvote or downvote messages in discussion threads.
+    One vote per user per message (can be changed from upvote to downvote).
+    """
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "creator"],
+                name="one_vote_per_user_per_message",
+            )
+        ]
+        permissions = (
+            ("permission_messagevote", "permission messagevote"),
+            ("create_messagevote", "create messagevote"),
+            ("read_messagevote", "read messagevote"),
+            ("update_messagevote", "update messagevote"),
+            ("remove_messagevote", "delete messagevote"),
+        )
+        indexes = [
+            models.Index(fields=["message", "vote_type"]),
+            models.Index(fields=["creator"]),
+        ]
+
+    message = models.ForeignKey(
+        ChatMessage,
+        on_delete=models.CASCADE,
+        related_name="votes",
+        help_text="The message being voted on",
+    )
+    vote_type = models.CharField(
+        max_length=16,
+        choices=VoteType.choices,
+        help_text="Type of vote (upvote or downvote)",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the vote was cast",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when the vote was last changed",
+    )
+
+    def __str__(self) -> str:
+        return (
+            f"{self.vote_type} by {self.creator.username} "
+            f"on message {self.message.pk}"
+        )
+
+
+class MessageVoteUserObjectPermission(UserObjectPermissionBase):
+    """Permissions for MessageVote objects at the user level."""
+
+    content_object = django.db.models.ForeignKey(
+        "MessageVote", on_delete=django.db.models.CASCADE
+    )
+
+
+class MessageVoteGroupObjectPermission(GroupObjectPermissionBase):
+    """Permissions for MessageVote objects at the group level."""
+
+    content_object = django.db.models.ForeignKey(
+        "MessageVote", on_delete=django.db.models.CASCADE
+    )
+
+
+class UserReputation(BaseOCModel):
+    """
+    Tracks user reputation scores globally and per-corpus.
+    Reputation is calculated based on upvotes/downvotes received on messages.
+    """
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "corpus"],
+                name="one_reputation_per_user_per_corpus",
+            )
+        ]
+        permissions = (
+            ("permission_userreputation", "permission userreputation"),
+            ("create_userreputation", "create userreputation"),
+            ("read_userreputation", "read userreputation"),
+            ("update_userreputation", "update userreputation"),
+            ("remove_userreputation", "delete userreputation"),
+        )
+        indexes = [
+            models.Index(fields=["user", "corpus"]),
+            models.Index(fields=["reputation_score"]),
+        ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="reputation_scores",
+        help_text="The user whose reputation is being tracked",
+    )
+    corpus = models.ForeignKey(
+        Corpus,
+        on_delete=models.CASCADE,
+        related_name="user_reputations",
+        blank=True,
+        null=True,
+        help_text="The corpus for which reputation is tracked (null = global)",
+    )
+    reputation_score = models.IntegerField(
+        default=0,
+        help_text="Current reputation score (upvotes - downvotes)",
+    )
+    total_upvotes_received = models.IntegerField(
+        default=0,
+        help_text="Total upvotes received across all messages",
+    )
+    total_downvotes_received = models.IntegerField(
+        default=0,
+        help_text="Total downvotes received across all messages",
+    )
+    last_calculated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when reputation was last calculated",
+    )
+
+    def __str__(self) -> str:
+        corpus_name = self.corpus.title if self.corpus else "Global"
+        return f"{self.user.username} - {corpus_name}: {self.reputation_score}"
+
+
+class UserReputationUserObjectPermission(UserObjectPermissionBase):
+    """Permissions for UserReputation objects at the user level."""
+
+    content_object = django.db.models.ForeignKey(
+        "UserReputation", on_delete=django.db.models.CASCADE
+    )
+
+
+class UserReputationGroupObjectPermission(GroupObjectPermissionBase):
+    """Permissions for UserReputation objects at the group level."""
+
+    content_object = django.db.models.ForeignKey(
+        "UserReputation", on_delete=django.db.models.CASCADE
     )
 
 
