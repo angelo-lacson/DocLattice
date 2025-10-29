@@ -8,6 +8,7 @@ from django.db.models import Exists, OuterRef
 from django.db.models.signals import m2m_changed
 from django.utils import timezone
 
+from config.telemetry import record_event
 from opencontractserver.tasks.doc_tasks import (
     extract_thumbnail,
     ingest_doc,
@@ -65,6 +66,10 @@ def process_doc_on_create_atomic(sender, instance, created, **kwargs):
 
         # Send tasks to Celery for asynchronous execution
         transaction.on_commit(lambda: chain(*ingest_tasks).apply_async())
+
+        record_event(
+            "document_uploaded", {"user_id": instance.creator.id, "env": settings.MODE}
+        )
 
 
 def process_doc_on_corpus_add(sender, instance, action, pk_set, **kwargs):
