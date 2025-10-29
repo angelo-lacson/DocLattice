@@ -31,9 +31,7 @@ class CorpusModeratorModelTest(TestCase):
 
     def setUp(self):
         """Create test users and corpus."""
-        self.owner = User.objects.create_user(
-            username="owner", password="testpass123"
-        )
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
         self.moderator_user = User.objects.create_user(
             username="moderator", password="testpass123"
         )
@@ -125,9 +123,7 @@ class ConversationModerationTest(TestCase):
 
     def setUp(self):
         """Create test users, corpus, and conversation."""
-        self.owner = User.objects.create_user(
-            username="owner", password="testpass123"
-        )
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
         self.moderator_user = User.objects.create_user(
             username="moderator", password="testpass123"
         )
@@ -233,9 +229,7 @@ class ConversationModerationTest(TestCase):
         self.assertIsNone(self.conversation.pinned_at)
         self.assertIsNone(self.conversation.pinned_by)
 
-        self.conversation.pin(
-            self.moderator_user, reason="Important announcement"
-        )
+        self.conversation.pin(self.moderator_user, reason="Important announcement")
 
         self.conversation.refresh_from_db()
         self.assertTrue(self.conversation.is_pinned)
@@ -282,9 +276,7 @@ class ConversationModerationTest(TestCase):
         """Test soft-deleting a conversation."""
         self.assertIsNone(self.conversation.deleted_at)
 
-        self.conversation.soft_delete_thread(
-            self.moderator_user, reason="Spam content"
-        )
+        self.conversation.soft_delete_thread(self.moderator_user, reason="Spam content")
 
         self.conversation.refresh_from_db()
         self.assertIsNotNone(self.conversation.deleted_at)
@@ -296,9 +288,7 @@ class ConversationModerationTest(TestCase):
         self.assertEqual(action.reason, "Spam content")
 
         # Conversation should not appear in default queryset
-        self.assertFalse(
-            Conversation.objects.filter(pk=self.conversation.pk).exists()
-        )
+        self.assertFalse(Conversation.objects.filter(pk=self.conversation.pk).exists())
         # But should appear in all_objects queryset
         self.assertTrue(
             Conversation.all_objects.filter(pk=self.conversation.pk).exists()
@@ -326,9 +316,7 @@ class ConversationModerationTest(TestCase):
         self.assertEqual(actions[1].reason, "False positive")
 
         # Conversation should appear in default queryset again
-        self.assertTrue(
-            Conversation.objects.filter(pk=self.conversation.pk).exists()
-        )
+        self.assertTrue(Conversation.objects.filter(pk=self.conversation.pk).exists())
 
     def test_delete_thread_permission_denied(self):
         """Test that non-moderators cannot delete conversations."""
@@ -359,9 +347,7 @@ class ChatMessageModerationTest(TestCase):
 
     def setUp(self):
         """Create test users, corpus, conversation, and message."""
-        self.owner = User.objects.create_user(
-            username="owner", password="testpass123"
-        )
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
         self.moderator_user = User.objects.create_user(
             username="moderator", password="testpass123"
         )
@@ -420,9 +406,7 @@ class ChatMessageModerationTest(TestCase):
         # Message should not appear in default queryset
         self.assertFalse(ChatMessage.objects.filter(pk=self.message.pk).exists())
         # But should appear in all_objects queryset
-        self.assertTrue(
-            ChatMessage.all_objects.filter(pk=self.message.pk).exists()
-        )
+        self.assertTrue(ChatMessage.all_objects.filter(pk=self.message.pk).exists())
 
     def test_restore_message(self):
         """Test restoring a soft-deleted message."""
@@ -485,12 +469,8 @@ class ModerationActionModelTest(TestCase):
 
     def setUp(self):
         """Create test users, corpus, and conversation."""
-        self.owner = User.objects.create_user(
-            username="owner", password="testpass123"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus", creator=self.owner
-        )
+        self.owner = User.objects.create_user(username="owner", password="testpass123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.owner)
         self.conversation = Conversation.objects.create(
             title="Test Thread",
             conversation_type=ConversationTypeChoices.THREAD,
