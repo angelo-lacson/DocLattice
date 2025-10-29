@@ -15,6 +15,21 @@
 
 OpenContracts is a **GPL-3.0** enterprise document analytics tool. It supports multiple formats - including PDF and txt-based formats (with more on the way). It also supports multiple document ingestion pipelines with a [pluggable architecture](docs/pipelines/pipeline_overview.md) designed to make supporting new formats and ingestion engines easy - see our [Docling Integration](docs/pipelines/docling_parser.md) for an example. Writing your own custom document analytics tools where the results get displayed beautifully over the original document [is easy](docs/walkthrough/advanced/register-doc-analyzer.md). We also support mass document [data extraction](docs/extract_and_retrieval/data_extraction.md) with our custom [LLM framework](docs/architecture/llms/README.md) built on PydanticAI.
 
+## Telemetry (as of v3.0.0-alpha2)
+
+OpenContracts collects anonymous usage data to help improve the platform. We only collect:
+- Installation events (unique installation ID per first DB initialization)
+- Feature usage statistics (e.g., analyzer activations, post-processor runs)
+- **Aggregate** usage (documents uploaded, total queries, total extracts, users served, etc.)
+
+We **never** collect:
+- Document contents
+- Extracted data
+- Identifiable user information
+- Query contents
+
+This data helps us understand which features are most valuable and prioritize development. Telemetry can be disabled by setting `TELEMETRY_ENABLED=False` in your settings.
+
 ### PDF-Annotation and Analysis:
 
 ![PDF Processing](/docs/assets/images/gifs/PDF%20Annotation%20Flow.gif)

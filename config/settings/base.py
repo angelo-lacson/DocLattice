@@ -966,3 +966,16 @@ LLM_CLIENT_MAX_TOKENS = env.int("LLM_CLIENT_MAX_TOKENS", default=None)
 # ------------------------------------------------------------------------------
 # Import rate limiting settings
 from config.settings.ratelimit import *  # noqa: F401, F403, E402
+
+# Telemetry Configuration
+# ------------------------------------------------------------------------------
+# Please check out the telemtry package or its usage if you want more details.
+# You absolutely can disable this. We are collecting frequence of high-level action
+# per installation (identified by a UUID with no PII) to help improve the application.
+TELEMETRY_ENABLED = env.bool("TELEMETRY_ENABLED", default=True)
+# IF you wanted to use your own telemetry, use your API key and host here.
+POSTHOG_API_KEY = env.str(
+    "POSTHOG_API_KEY", default="phc_wsTXvOFv6QLDMOA3yLl16awF4DTgILi4MSVLwhwyDeJ"
+)
+POSTHOG_HOST = env.str("POSTHOG_HOST", default="https://us.i.posthog.com")
+MODE = "LOCAL"
