@@ -185,3 +185,7 @@ CORS_ALLOWED_ORIGINS = [
     origin.strip() for origin in CORS_ALLOWED_ORIGINS_STR.split(",")
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# Telemetry
+# ------------------------------------------------------------------------------
+MODE = "PRODUCTION"
