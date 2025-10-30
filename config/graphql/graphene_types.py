@@ -323,6 +323,20 @@ class LabelTypeEnum(graphene.Enum):
     SPAN_LABEL = "SPAN_LABEL"
 
 
+class ConversationTypeEnum(graphene.Enum):
+    """Enum for conversation types."""
+
+    CHAT = "chat"
+    THREAD = "thread"
+
+
+class AgentTypeEnum(graphene.Enum):
+    """Enum for agent types in messages."""
+
+    DOCUMENT_AGENT = "document_agent"
+    CORPUS_AGENT = "corpus_agent"
+
+
 class DocumentRelationshipType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for DocumentRelationship model."""
 
@@ -1382,6 +1396,15 @@ class CorpusStatsType(graphene.ObjectType):
 class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     data = GenericScalar()
+    agent_type = graphene.Field(
+        AgentTypeEnum, description="Type of agent that generated this message"
+    )
+
+    def resolve_agent_type(self, info):
+        """Convert string agent_type from model to enum."""
+        if self.agent_type:
+            return AgentTypeEnum.get(self.agent_type)
+        return None
 
     class Meta:
         model = ChatMessage
@@ -1392,9 +1415,18 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     all_messages = graphene.List(MessageType)
+    conversation_type = graphene.Field(
+        ConversationTypeEnum, description="Type of conversation (chat or thread)"
+    )
 
     def resolve_all_messages(self, info):
         return self.chat_messages.all()
+
+    def resolve_conversation_type(self, info):
+        """Convert string conversation_type from model to enum."""
+        if self.conversation_type:
+            return ConversationTypeEnum.get(self.conversation_type)
+        return None
 
     class Meta:
         model = Conversation

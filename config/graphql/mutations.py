@@ -20,6 +20,15 @@ from graphql_relay import from_global_id, to_global_id
 
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
 from config.graphql.base import DRFDeletion, DRFMutation
+
+# Import conversation mutations
+from config.graphql.conversation_mutations import (
+    CreateThreadMessageMutation,
+    CreateThreadMutation,
+    DeleteConversationMutation,
+    DeleteMessageMutation,
+    ReplyToMessageMutation,
+)
 from config.graphql.graphene_types import (
     AnalysisType,
     AnnotationLabelType,
@@ -3831,6 +3840,13 @@ class Mutation(graphene.ObjectType):
     set_metadata_value = SetMetadataValue.Field()
     delete_metadata_value = DeleteMetadataValue.Field()
 
+    # CONVERSATION/THREAD MUTATIONS ##############################################
+    create_thread = CreateThreadMutation.Field()
+    create_thread_message = CreateThreadMessageMutation.Field()
+    reply_to_message = ReplyToMessageMutation.Field()
+    delete_conversation = DeleteConversationMutation.Field()
+    delete_message = DeleteMessageMutation.Field()
+
     # MODERATION MUTATIONS #######################################################
     lock_thread = LockThreadMutation.Field()
     unlock_thread = UnlockThreadMutation.Field()
@@ -3839,7 +3855,7 @@ class Mutation(graphene.ObjectType):
     add_moderator = AddModeratorMutation.Field()
     remove_moderator = RemoveModeratorMutation.Field()
     update_moderator_permissions = UpdateModeratorPermissionsMutation.Field()
-    
+
     # VOTING MUTATIONS ###########################################################
     vote_message = VoteMessageMutation.Field()
     remove_vote = RemoveVoteMutation.Field()
