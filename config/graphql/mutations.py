@@ -19,6 +19,15 @@ from graphql_jwt.decorators import login_required, user_passes_test
 from graphql_relay import from_global_id, to_global_id
 
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
+
+# Import badge mutations
+from config.graphql.badge_mutations import (
+    AwardBadgeMutation,
+    CreateBadgeMutation,
+    DeleteBadgeMutation,
+    RevokeBadgeMutation,
+    UpdateBadgeMutation,
+)
 from config.graphql.base import DRFDeletion, DRFMutation
 from config.graphql.graphene_types import (
     AnalysisType,
@@ -3816,3 +3825,10 @@ class Mutation(graphene.ObjectType):
     update_metadata_column = UpdateMetadataColumn.Field()
     set_metadata_value = SetMetadataValue.Field()
     delete_metadata_value = DeleteMetadataValue.Field()
+
+    # BADGE MUTATIONS #############################################################
+    create_badge = CreateBadgeMutation.Field()
+    update_badge = UpdateBadgeMutation.Field()
+    delete_badge = DeleteBadgeMutation.Field()
+    award_badge = AwardBadgeMutation.Field()
+    revoke_badge = RevokeBadgeMutation.Field()
