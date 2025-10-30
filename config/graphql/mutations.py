@@ -72,6 +72,15 @@ from config.graphql.smart_label_mutations import (
 
 # Import voting mutations
 from config.graphql.voting_mutations import RemoveVoteMutation, VoteMessageMutation
+
+# Import conversation mutations
+from config.graphql.conversation_mutations import (
+    CreateThreadMutation,
+    CreateThreadMessageMutation,
+    DeleteConversationMutation,
+    DeleteMessageMutation,
+    ReplyToMessageMutation,
+)
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import (
@@ -3831,6 +3840,13 @@ class Mutation(graphene.ObjectType):
     set_metadata_value = SetMetadataValue.Field()
     delete_metadata_value = DeleteMetadataValue.Field()
 
+    # CONVERSATION/THREAD MUTATIONS ##############################################
+    create_thread = CreateThreadMutation.Field()
+    create_thread_message = CreateThreadMessageMutation.Field()
+    reply_to_message = ReplyToMessageMutation.Field()
+    delete_conversation = DeleteConversationMutation.Field()
+    delete_message = DeleteMessageMutation.Field()
+
     # MODERATION MUTATIONS #######################################################
     lock_thread = LockThreadMutation.Field()
     unlock_thread = UnlockThreadMutation.Field()
@@ -3839,7 +3855,7 @@ class Mutation(graphene.ObjectType):
     add_moderator = AddModeratorMutation.Field()
     remove_moderator = RemoveModeratorMutation.Field()
     update_moderator_permissions = UpdateModeratorPermissionsMutation.Field()
-    
+
     # VOTING MUTATIONS ###########################################################
     vote_message = VoteMessageMutation.Field()
     remove_vote = RemoveVoteMutation.Field()
