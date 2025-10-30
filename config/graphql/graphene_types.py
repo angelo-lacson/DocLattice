@@ -1514,3 +1514,49 @@ class DocumentSummaryRevisionType(AnnotatePermissionsForReadMixin, DjangoObjectT
         model = DocumentSummaryRevision
         interfaces = [relay.Node]
         connection_class = CountableConnection
+
+
+# ---------------- Badge System Types ----------------
+class BadgeType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for badges."""
+
+    class Meta:
+        from opencontractserver.badges.models import Badge
+
+        model = Badge
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+        fields = (
+            "id",
+            "name",
+            "description",
+            "icon",
+            "badge_type",
+            "color",
+            "corpus",
+            "is_auto_awarded",
+            "criteria_config",
+            "creator",
+            "is_public",
+            "created",
+            "modified",
+        )
+
+
+class UserBadgeType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for user badge awards."""
+
+    class Meta:
+        from opencontractserver.badges.models import UserBadge
+
+        model = UserBadge
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+        fields = (
+            "id",
+            "user",
+            "badge",
+            "awarded_at",
+            "awarded_by",
+            "corpus",
+        )
