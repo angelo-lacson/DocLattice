@@ -40,6 +40,17 @@ from config.graphql.graphene_types import (
     UserFeedbackType,
     UserType,
 )
+
+# Import moderation mutations
+from config.graphql.moderation_mutations import (
+    AddModeratorMutation,
+    LockThreadMutation,
+    PinThreadMutation,
+    RemoveModeratorMutation,
+    UnlockThreadMutation,
+    UnpinThreadMutation,
+    UpdateModeratorPermissionsMutation,
+)
 from config.graphql.ratelimits import (
     RateLimits,
     get_user_tier_rate,
@@ -3820,6 +3831,15 @@ class Mutation(graphene.ObjectType):
     set_metadata_value = SetMetadataValue.Field()
     delete_metadata_value = DeleteMetadataValue.Field()
 
+    # MODERATION MUTATIONS #######################################################
+    lock_thread = LockThreadMutation.Field()
+    unlock_thread = UnlockThreadMutation.Field()
+    pin_thread = PinThreadMutation.Field()
+    unpin_thread = UnpinThreadMutation.Field()
+    add_moderator = AddModeratorMutation.Field()
+    remove_moderator = RemoveModeratorMutation.Field()
+    update_moderator_permissions = UpdateModeratorPermissionsMutation.Field()
+    
     # VOTING MUTATIONS ###########################################################
     vote_message = VoteMessageMutation.Field()
     remove_vote = RemoveVoteMutation.Field()
