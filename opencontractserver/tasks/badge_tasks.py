@@ -1,11 +1,11 @@
 """
 Celery tasks for badge auto-awarding and management.
 """
+
 import logging
 from typing import Optional
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q
 
 from config import celery_app
 from opencontractserver.badges.models import Badge, BadgeTypeChoices, UserBadge
@@ -116,7 +116,6 @@ def _check_badge_criteria(
 
     criteria_type = badge.criteria_config.get("type")
     value = badge.criteria_config.get("value")
-    scope = badge.criteria_config.get("scope", "global")
 
     if not criteria_type or value is None:
         logger.warning(f"Badge {badge.name} has incomplete criteria config")
@@ -168,9 +167,7 @@ def _check_badge_criteria(
             # Count documents uploaded to corpus
             from opencontractserver.documents.models import Document
 
-            doc_count = Document.objects.filter(
-                creator=user, corpus=corpus
-            ).count()
+            doc_count = Document.objects.filter(creator=user, corpus=corpus).count()
 
             # Count annotations in corpus
             from opencontractserver.annotations.models import Annotation

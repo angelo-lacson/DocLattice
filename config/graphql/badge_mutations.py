@@ -1,13 +1,14 @@
 """
 GraphQL mutations for the badge system.
 """
+
 import logging
 
 import graphene
 from django.contrib.auth import get_user_model
 from graphql import GraphQLError
 from graphql_jwt.decorators import login_required
-from graphql_relay import from_global_id, to_global_id
+from graphql_relay import from_global_id
 
 from config.graphql.graphene_types import BadgeType, UserBadgeType
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
@@ -85,9 +86,7 @@ class CreateBadgeMutation(graphene.Mutation):
                         "You must be a corpus owner to create corpus-specific badges."
                     )
             elif not user.is_superuser:
-                raise GraphQLError(
-                    "You must be a superuser to create global badges."
-                )
+                raise GraphQLError("You must be a superuser to create global badges.")
 
             # Create the badge
             badge = Badge.objects.create(
@@ -166,9 +165,7 @@ class UpdateBadgeMutation(graphene.Mutation):
             if not user.is_superuser and not user_has_permission_for_obj(
                 user, badge, PermissionTypes.CRUD
             ):
-                raise GraphQLError(
-                    "You do not have permission to update this badge."
-                )
+                raise GraphQLError("You do not have permission to update this badge.")
 
             # Update fields
             if name is not None:
@@ -229,9 +226,7 @@ class DeleteBadgeMutation(graphene.Mutation):
             if not user.is_superuser and not user_has_permission_for_obj(
                 user, badge, PermissionTypes.CRUD
             ):
-                raise GraphQLError(
-                    "You do not have permission to delete this badge."
-                )
+                raise GraphQLError("You do not have permission to delete this badge.")
 
             badge.delete()
 
@@ -352,9 +347,7 @@ class RevokeBadgeMutation(graphene.Mutation):
     """Revoke a badge from a user."""
 
     class Arguments:
-        user_badge_id = graphene.ID(
-            required=True, description="UserBadge ID to revoke"
-        )
+        user_badge_id = graphene.ID(required=True, description="UserBadge ID to revoke")
 
     ok = graphene.Boolean()
     message = graphene.String()
@@ -366,9 +359,7 @@ class RevokeBadgeMutation(graphene.Mutation):
 
         try:
             user_badge_pk = from_global_id(user_badge_id)[1]
-            user_badge = UserBadge.objects.select_related("badge").get(
-                pk=user_badge_pk
-            )
+            user_badge = UserBadge.objects.select_related("badge").get(pk=user_badge_pk)
 
             # Permission check
             badge = user_badge.badge

@@ -390,9 +390,7 @@ class TestBadgeGraphQLMutations(TransactionTestCase):
         self.assertEqual(
             result["data"]["createBadge"]["badge"]["name"], "Test Global Badge"
         )
-        self.assertEqual(
-            result["data"]["createBadge"]["badge"]["badgeType"], "GLOBAL"
-        )
+        self.assertEqual(result["data"]["createBadge"]["badge"]["badgeType"], "GLOBAL")
 
     def test_create_corpus_badge_as_corpus_owner(self):
         """Test creating a corpus badge as corpus owner."""
@@ -706,7 +704,7 @@ class TestBadgeAutoAwardTasks(TestCase):
                 creator=self.user,
             )
 
-        result = check_auto_badges(self.user.id)
+        check_auto_badges(self.user.id)
         self.assertEqual(
             UserBadge.objects.filter(user=self.user, badge=badge).count(), 0
         )
@@ -719,7 +717,7 @@ class TestBadgeAutoAwardTasks(TestCase):
             creator=self.user,
         )
 
-        result = check_auto_badges(self.user.id)
+        check_auto_badges(self.user.id)
         self.assertEqual(
             UserBadge.objects.filter(user=self.user, badge=badge).count(), 1
         )
