@@ -3091,3 +3091,195 @@ export interface GetDocumentByIdForRedirectOutput {
     } | null;
   } | null;
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// BADGE-RELATED QUERIES
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const GET_BADGES = gql`
+  query GetBadges(
+    $badgeType: String
+    $corpusId: ID
+    $isAutoAwarded: Boolean
+    $limit: Int
+    $cursor: String
+  ) {
+    badges(
+      badgeType: $badgeType
+      corpusId: $corpusId
+      isAutoAwarded: $isAutoAwarded
+      first: $limit
+      after: $cursor
+    ) {
+      edges {
+        node {
+          id
+          name
+          description
+          icon
+          badgeType
+          color
+          isAutoAwarded
+          criteriaConfig
+          corpus {
+            id
+            title
+          }
+          creator {
+            id
+            username
+          }
+          created
+        }
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+    }
+  }
+`;
+
+export interface GetBadgesInput {
+  badgeType?: "GLOBAL" | "CORPUS";
+  corpusId?: string;
+  isAutoAwarded?: boolean;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface BadgeNode {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  badgeType: string;
+  color: string;
+  isAutoAwarded: boolean;
+  criteriaConfig: any;
+  corpus?: {
+    id: string;
+    title: string;
+  };
+  creator: {
+    id: string;
+    username: string;
+  };
+  created: string;
+}
+
+export interface GetBadgesOutput {
+  badges: {
+    edges: Array<{
+      node: BadgeNode;
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string;
+      endCursor: string;
+    };
+  };
+}
+
+export const GET_USER_BADGES = gql`
+  query GetUserBadges(
+    $userId: ID
+    $badgeId: ID
+    $corpusId: ID
+    $limit: Int
+    $cursor: String
+  ) {
+    userBadges(
+      userId: $userId
+      badgeId: $badgeId
+      corpusId: $corpusId
+      first: $limit
+      after: $cursor
+    ) {
+      edges {
+        node {
+          id
+          awardedAt
+          user {
+            id
+            username
+            email
+          }
+          badge {
+            id
+            name
+            description
+            icon
+            color
+            badgeType
+          }
+          awardedBy {
+            id
+            username
+          }
+          corpus {
+            id
+            title
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+    }
+  }
+`;
+
+export interface GetUserBadgesInput {
+  userId?: string;
+  badgeId?: string;
+  corpusId?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface UserBadgeNode {
+  id: string;
+  awardedAt: string;
+  user: {
+    id: string;
+    username: string;
+    email: string;
+  };
+  badge: {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    color: string;
+    badgeType: string;
+  };
+  awardedBy?: {
+    id: string;
+    username: string;
+  };
+  corpus?: {
+    id: string;
+    title: string;
+  };
+}
+
+export interface GetUserBadgesOutput {
+  userBadges: {
+    edges: Array<{
+      node: UserBadgeNode;
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string;
+      endCursor: string;
+    };
+  };
+}
