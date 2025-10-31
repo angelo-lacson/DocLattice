@@ -67,6 +67,9 @@ from config.graphql.smart_label_mutations import (
     SmartLabelListMutation,
     SmartLabelSearchOrCreateMutation,
 )
+
+# Import voting mutations
+from config.graphql.voting_mutations import RemoveVoteMutation, VoteMessageMutation
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import (
@@ -3832,3 +3835,7 @@ class Mutation(graphene.ObjectType):
     delete_badge = DeleteBadgeMutation.Field()
     award_badge = AwardBadgeMutation.Field()
     revoke_badge = RevokeBadgeMutation.Field()
+    
+    # VOTING MUTATIONS ###########################################################
+    vote_message = VoteMessageMutation.Field()
+    remove_vote = RemoveVoteMutation.Field()
