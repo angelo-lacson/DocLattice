@@ -720,3 +720,243 @@ class TestBadgeAutoAwardTasks(TestCase):
         self.assertEqual(
             UserBadge.objects.filter(user=self.user, badge=badge).count(), 1
         )
+
+    def test_corpus_contribution_criteria(self):
+        """Test corpus contribution badge criteria."""
+        from opencontractserver.documents.models import Document
+
+        # Create badge for 3 corpus contributions
+        badge = Badge.objects.create(
+            name="Corpus Contributor",
+            description="Made 3 contributions to corpus",
+            icon="Users",
+            badge_type=BadgeTypeChoices.CORPUS,
+            corpus=self.corpus,
+            is_auto_awarded=True,
+            criteria_config={
+                "type": "corpus_contribution",
+                "value": 3,
+            },
+            creator=self.admin_user,
+            is_public=True,
+        )
+
+        # Add 2 documents to corpus - should not award
+        for i in range(2):
+            Document.objects.create(
+                title=f"Doc {i}",
+                description="Test",
+                creator=self.user,
+                corpus=self.corpus,
+            )
+
+        check_auto_badges(self.user.id, self.corpus.id)
+        self.assertEqual(
+            UserBadge.objects.filter(user=self.user, badge=badge).count(), 0
+        )
+
+        # Add one more document (total 3) - should award
+        Document.objects.create(
+            title="Doc 3",
+            description="Test",
+            creator=self.user,
+            corpus=self.corpus,
+        )
+
+        check_auto_badges(self.user.id, self.corpus.id)
+        self.assertEqual(
+            UserBadge.objects.filter(user=self.user, badge=badge).count(), 1
+        )
+
+    def test_check_auto_badges_user_not_found(self):
+        """Test check_auto_badges with non-existent user."""
+        result = check_auto_badges(user_id=999999)
+        self.assertFalse(result["ok"])
+        self.assertIn("User not found", result["error"])
+
+    def test_check_auto_badges_corpus_not_found(self):
+        """Test check_auto_badges with non-existent corpus."""
+        result = check_auto_badges(user_id=self.user.id, corpus_id=999999)
+        self.assertFalse(result["ok"])
+        self.assertIn("Corpus not found", result["error"])
+
+    def test_badge_without_criteria_config(self):
+        """Test badge with no criteria config."""
+        Badge.objects.create(
+            name="No Criteria",
+            description="Badge without criteria",
+            icon="Star",
+            badge_type=BadgeTypeChoices.GLOBAL,
+            is_auto_awarded=True,
+            criteria_config=None,
+            creator=self.admin_user,
+            is_public=True,
+        )
+
+        result = check_auto_badges(self.user.id)
+        # Should check the badge but not award it
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["awards_count"], 0)
+
+    def test_badge_with_incomplete_criteria_config(self):
+        """Test badge with incomplete criteria config."""
+        Badge.objects.create(
+            name="Incomplete Criteria",
+            description="Badge with incomplete criteria",
+            icon="Star",
+            badge_type=BadgeTypeChoices.GLOBAL,
+            is_auto_awarded=True,
+            criteria_config={"type": "message_count"},  # Missing value
+            creator=self.admin_user,
+            is_public=True,
+        )
+
+        result = check_auto_badges(self.user.id)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["awards_count"], 0)
+
+    def test_badge_with_unknown_criteria_type(self):
+        """Test badge with unknown criteria type."""
+        Badge.objects.create(
+            name="Unknown Criteria",
+            description="Badge with unknown criteria",
+            icon="Star",
+            badge_type=BadgeTypeChoices.GLOBAL,
+            is_auto_awarded=True,
+            criteria_config={
+                "type": "unknown_type",
+                "value": 10,
+            },
+            creator=self.admin_user,
+            is_public=True,
+        )
+
+        result = check_auto_badges(self.user.id)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["awards_count"], 0)
+
+    def test_check_badges_for_all_users(self):
+        """Test checking badges for all active users."""
+        from opencontractserver.tasks.badge_tasks import check_badges_for_all_users
+
+        # Create another active user
+        user2 = User.objects.create_user(
+            username="autoawardtasks_user2",
+            password="testpass123",
+            email="autoawardtasks_user2@test.com",
+            is_active=True,
+        )
+
+        # Create messages for both users
+        for user in [self.user, user2]:
+            conversation = Conversation.objects.create(
+                title=f"Test {user.username}",
+                creator=user,
+            )
+            ChatMessage.objects.create(
+                conversation=conversation,
+                msg_type="HUMAN",
+                content="First post!",
+                creator=user,
+            )
+
+        # Run task
+        result = check_badges_for_all_users()
+
+        self.assertTrue(result["ok"])
+        self.assertGreaterEqual(result["users_checked"], 2)
+        self.assertGreaterEqual(result["users_with_awards"], 2)
+
+        # Verify both users got the first post badge
+        for user in [self.user, user2]:
+            self.assertTrue(
+                UserBadge.objects.filter(
+                    user=user, badge=self.first_post_badge
+                ).exists()
+            )
+
+    def test_revoke_badges_by_criteria(self):
+        """Test revoking badges that no longer meet criteria."""
+        from opencontractserver.tasks.badge_tasks import revoke_badges_by_criteria
+
+        # Create a badge with message count criteria
+        badge = Badge.objects.create(
+            name="Active User",
+            description="Has 2+ messages",
+            icon="MessageCircle",
+            badge_type=BadgeTypeChoices.GLOBAL,
+            is_auto_awarded=True,
+            criteria_config={
+                "type": "message_count",
+                "value": 2,
+            },
+            creator=self.admin_user,
+            is_public=True,
+        )
+
+        # Create 2 messages and award badge
+        conversation = Conversation.objects.create(
+            title="Test",
+            creator=self.user,
+        )
+        ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Message 1",
+            creator=self.user,
+        )
+        msg2 = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Message 2",
+            creator=self.user,
+        )
+
+        # Award badge
+        UserBadge.objects.create(
+            user=self.user,
+            badge=badge,
+        )
+
+        # Verify badge exists
+        self.assertTrue(UserBadge.objects.filter(user=self.user, badge=badge).exists())
+
+        # Delete one message so user no longer meets criteria
+        msg2.delete()
+
+        # Run revoke task
+        result = revoke_badges_by_criteria(badge.id)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["checked_count"], 1)
+        self.assertEqual(result["revoked_count"], 1)
+
+        # Verify badge was revoked
+        self.assertFalse(UserBadge.objects.filter(user=self.user, badge=badge).exists())
+
+    def test_revoke_badges_badge_not_found(self):
+        """Test revoking badges with non-existent badge."""
+        from opencontractserver.tasks.badge_tasks import revoke_badges_by_criteria
+
+        result = revoke_badges_by_criteria(badge_id=999999)
+        self.assertFalse(result["ok"])
+        self.assertIn("Badge not found", result["error"])
+
+    def test_revoke_badges_non_auto_awarded_badge(self):
+        """Test revoking badges for non-auto-awarded badge."""
+        from opencontractserver.tasks.badge_tasks import revoke_badges_by_criteria
+
+        # Create non-auto-awarded badge
+        badge = Badge.objects.create(
+            name="Manual Badge",
+            description="Manually awarded",
+            icon="Trophy",
+            badge_type=BadgeTypeChoices.GLOBAL,
+            is_auto_awarded=False,
+            creator=self.admin_user,
+            is_public=True,
+        )
+
+        result = revoke_badges_by_criteria(badge.id)
+        self.assertFalse(result["ok"])
+        self.assertIn("not auto-awarded", result["error"])

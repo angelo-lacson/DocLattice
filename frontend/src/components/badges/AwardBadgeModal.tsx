@@ -49,7 +49,7 @@ export const AwardBadgeModal: React.FC<AwardBadgeModalProps> = ({
 
   const [awardBadge, { loading: awarding, error }] = useMutation<
     AwardBadgeOutput,
-    { variables: AwardBadgeInput }
+    AwardBadgeInput
   >(AWARD_BADGE, {
     onCompleted: () => {
       onClose();

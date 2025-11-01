@@ -82,8 +82,8 @@ export const Badge: React.FC<BadgeProps> = ({
   showTooltip = true,
 }) => {
   // Dynamically get the icon component from lucide-react
-  const IconComponent =
-    LucideIcons[badge.icon as keyof typeof LucideIcons] || LucideIcons.Award;
+  const IconComponent = (LucideIcons[badge.icon as keyof typeof LucideIcons] ||
+    LucideIcons.Award) as React.ComponentType<{ size: number }>;
 
   const badgeElement = (
     <StyledBadge $badgeColor={badge.color || "#05313d"} size={size}>
