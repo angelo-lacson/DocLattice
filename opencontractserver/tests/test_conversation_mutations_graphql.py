@@ -100,7 +100,7 @@ class ConversationMutationsTestCase(TestCase):
         self.assertEqual(data["message"], "Thread created successfully")
         self.assertIsNotNone(data["obj"])
         self.assertEqual(data["obj"]["title"], "Test Thread")
-        self.assertEqual(data["obj"]["conversationType"], "thread")
+        self.assertEqual(data["obj"]["conversationType"], "THREAD")
 
         # Verify conversation was created in database
         conversation = Conversation.objects.get(title="Test Thread")
