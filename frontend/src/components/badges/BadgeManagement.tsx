@@ -98,7 +98,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
 
   const [createBadge, { loading: creating }] = useMutation<
     CreateBadgeOutput,
-    { variables: CreateBadgeInput }
+    CreateBadgeInput
   >(CREATE_BADGE, {
     onCompleted: () => {
       setShowCreateModal(false);
@@ -107,16 +107,16 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
     },
   });
 
-  const [deleteBadge] = useMutation<
-    DeleteBadgeOutput,
-    { variables: DeleteBadgeInput }
-  >(DELETE_BADGE, {
-    onCompleted: () => {
-      setDeleteModalOpen(false);
-      setBadgeToDelete(null);
-      refetch();
-    },
-  });
+  const [deleteBadge] = useMutation<DeleteBadgeOutput, DeleteBadgeInput>(
+    DELETE_BADGE,
+    {
+      onCompleted: () => {
+        setDeleteModalOpen(false);
+        setBadgeToDelete(null);
+        refetch();
+      },
+    }
+  );
 
   const resetForm = () => {
     setName("");
