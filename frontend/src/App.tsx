@@ -62,6 +62,7 @@ import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { LabelDisplayBehavior } from "./types/graphql-api";
 import { CookieConsentDialog } from "./components/cookies/CookieConsent";
 import { Extracts } from "./views/Extracts";
+import { BadgeManagement } from "./components/badges/BadgeManagement";
 import { useEnv } from "./components/hooks/UseEnv";
 import { EditExtractModal } from "./components/widgets/modals/EditExtractModal";
 import { SelectAnalyzerOrFieldsetModal } from "./components/widgets/modals/SelectCorpusAnalyzerOrFieldsetAnalyzer";
@@ -386,6 +387,7 @@ export const App = () => {
                     element={<TermsOfService />}
                   />
                   <Route path="/extracts" element={<Extracts />} />
+                  <Route path="/admin/badges" element={<BadgeManagement />} />
 
                   {/* 404 explicit route and catch-all */}
                   <Route path="/404" element={<NotFound />} />
