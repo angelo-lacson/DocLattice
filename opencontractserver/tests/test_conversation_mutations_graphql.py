@@ -28,13 +28,13 @@ class ConversationMutationsTestCase(TestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
+            username="conversation_testuser",
+            email="conversation_test@example.com",
             password="testpass123",
         )
         self.other_user = User.objects.create_user(
-            username="otheruser",
-            email="other@example.com",
+            username="conversation_otheruser",
+            email="conversation_other@example.com",
             password="testpass123",
         )
 

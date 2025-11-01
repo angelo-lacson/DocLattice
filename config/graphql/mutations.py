@@ -20,6 +20,15 @@ from graphql_relay import from_global_id, to_global_id
 
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
 from config.graphql.base import DRFDeletion, DRFMutation
+
+# Import conversation mutations
+from config.graphql.conversation_mutations import (
+    CreateThreadMessageMutation,
+    CreateThreadMutation,
+    DeleteConversationMutation,
+    DeleteMessageMutation,
+    ReplyToMessageMutation,
+)
 from config.graphql.graphene_types import (
     AnalysisType,
     AnnotationLabelType,
@@ -72,15 +81,6 @@ from config.graphql.smart_label_mutations import (
 
 # Import voting mutations
 from config.graphql.voting_mutations import RemoveVoteMutation, VoteMessageMutation
-
-# Import conversation mutations
-from config.graphql.conversation_mutations import (
-    CreateThreadMutation,
-    CreateThreadMessageMutation,
-    DeleteConversationMutation,
-    DeleteMessageMutation,
-    ReplyToMessageMutation,
-)
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import (
