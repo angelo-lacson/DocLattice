@@ -26,6 +26,7 @@ import {
   AlignJustify,
   Send,
   History,
+  Trophy,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -120,6 +121,7 @@ import { CorpusSettings } from "../components/corpuses/CorpusSettings";
 import { CorpusChat } from "../components/corpuses/CorpusChat";
 import { CorpusHome } from "../components/corpuses/CorpusHome";
 import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptionEditor";
+import { BadgeManagement } from "../components/badges/BadgeManagement";
 
 // Add these styled components near your other styled components
 const DashboardContainer = styled.div`
@@ -2226,6 +2228,35 @@ export const Corpuses = () => {
                         myPermissions: corpusAtomPermissions,
                       }}
                     />
+                  </div>
+                </div>
+              ) : null,
+            },
+            {
+              id: "badges",
+              label: "Badges",
+              icon: <Trophy />,
+              component: opened_corpus?.id ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                  }}
+                >
+                  <TabNavigationHeader>
+                    <BackNavButton
+                      onClick={() => setActiveTab(0)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      title="Back to Home"
+                    >
+                      <ArrowLeft />
+                    </BackNavButton>
+                    <TabTitle>Badges</TabTitle>
+                  </TabNavigationHeader>
+                  <div style={{ flex: 1, overflow: "auto" }}>
+                    <BadgeManagement corpusId={opened_corpus.id} />
                   </div>
                 </div>
               ) : null,
