@@ -2202,3 +2202,242 @@ export interface DeleteCorpusActionOutput {
     message: string;
   };
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// BADGE-RELATED MUTATIONS
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const CREATE_BADGE = gql`
+  mutation CreateBadge(
+    $name: String!
+    $description: String!
+    $icon: String!
+    $badgeType: String!
+    $color: String
+    $corpusId: ID
+    $isAutoAwarded: Boolean
+    $criteriaConfig: JSONString
+  ) {
+    createBadge(
+      name: $name
+      description: $description
+      icon: $icon
+      badgeType: $badgeType
+      color: $color
+      corpusId: $corpusId
+      isAutoAwarded: $isAutoAwarded
+      criteriaConfig: $criteriaConfig
+    ) {
+      ok
+      message
+      badge {
+        id
+        name
+        description
+        icon
+        badgeType
+        color
+        isAutoAwarded
+        criteriaConfig
+        corpus {
+          id
+          title
+        }
+      }
+    }
+  }
+`;
+
+export interface CreateBadgeInput {
+  name: string;
+  description: string;
+  icon: string;
+  badgeType: "GLOBAL" | "CORPUS";
+  color?: string;
+  corpusId?: string;
+  isAutoAwarded?: boolean;
+  criteriaConfig?: any;
+}
+
+export interface CreateBadgeOutput {
+  createBadge: {
+    ok: boolean;
+    message: string;
+    badge: {
+      id: string;
+      name: string;
+      description: string;
+      icon: string;
+      badgeType: string;
+      color: string;
+      isAutoAwarded: boolean;
+      criteriaConfig: any;
+      corpus?: {
+        id: string;
+        title: string;
+      };
+    } | null;
+  };
+}
+
+export const UPDATE_BADGE = gql`
+  mutation UpdateBadge(
+    $badgeId: ID!
+    $name: String
+    $description: String
+    $icon: String
+    $color: String
+    $isAutoAwarded: Boolean
+    $criteriaConfig: JSONString
+  ) {
+    updateBadge(
+      badgeId: $badgeId
+      name: $name
+      description: $description
+      icon: $icon
+      color: $color
+      isAutoAwarded: $isAutoAwarded
+      criteriaConfig: $criteriaConfig
+    ) {
+      ok
+      message
+      badge {
+        id
+        name
+        description
+        icon
+        color
+        isAutoAwarded
+        criteriaConfig
+      }
+    }
+  }
+`;
+
+export interface UpdateBadgeInput {
+  badgeId: string;
+  name?: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  isAutoAwarded?: boolean;
+  criteriaConfig?: any;
+}
+
+export interface UpdateBadgeOutput {
+  updateBadge: {
+    ok: boolean;
+    message: string;
+    badge: {
+      id: string;
+      name: string;
+      description: string;
+      icon: string;
+      color: string;
+      isAutoAwarded: boolean;
+      criteriaConfig: any;
+    } | null;
+  };
+}
+
+export const DELETE_BADGE = gql`
+  mutation DeleteBadge($badgeId: ID!) {
+    deleteBadge(badgeId: $badgeId) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface DeleteBadgeInput {
+  badgeId: string;
+}
+
+export interface DeleteBadgeOutput {
+  deleteBadge: {
+    ok: boolean;
+    message: string;
+  };
+}
+
+export const AWARD_BADGE = gql`
+  mutation AwardBadge($badgeId: ID!, $userId: ID!, $corpusId: ID) {
+    awardBadge(badgeId: $badgeId, userId: $userId, corpusId: $corpusId) {
+      ok
+      message
+      userBadge {
+        id
+        awardedAt
+        user {
+          id
+          username
+          email
+        }
+        badge {
+          id
+          name
+          description
+          icon
+          color
+        }
+        awardedBy {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+
+export interface AwardBadgeInput {
+  badgeId: string;
+  userId: string;
+  corpusId?: string;
+}
+
+export interface AwardBadgeOutput {
+  awardBadge: {
+    ok: boolean;
+    message: string;
+    userBadge: {
+      id: string;
+      awardedAt: string;
+      user: {
+        id: string;
+        username: string;
+        email: string;
+      };
+      badge: {
+        id: string;
+        name: string;
+        description: string;
+        icon: string;
+        color: string;
+      };
+      awardedBy?: {
+        id: string;
+        username: string;
+      };
+    } | null;
+  };
+}
+
+export const REVOKE_BADGE = gql`
+  mutation RevokeBadge($userBadgeId: ID!) {
+    revokeBadge(userBadgeId: $userBadgeId) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface RevokeBadgeInput {
+  userBadgeId: string;
+}
+
+export interface RevokeBadgeOutput {
+  revokeBadge: {
+    ok: boolean;
+    message: string;
+  };
+}

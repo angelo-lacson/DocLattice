@@ -153,6 +153,7 @@ LOCAL_APPS = [
     "doclatticeserver.extracts",
     "doclatticeserver.feedback",
     "doclatticeserver.conversations",
+    "doclatticeserver.badges",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
