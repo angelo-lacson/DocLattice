@@ -29,6 +29,15 @@ from config.graphql.badge_mutations import (
     UpdateBadgeMutation,
 )
 from config.graphql.base import DRFDeletion, DRFMutation
+
+# Import conversation mutations
+from config.graphql.conversation_mutations import (
+    CreateThreadMessageMutation,
+    CreateThreadMutation,
+    DeleteConversationMutation,
+    DeleteMessageMutation,
+    ReplyToMessageMutation,
+)
 from config.graphql.graphene_types import (
     AnalysisType,
     AnnotationLabelType,
@@ -3846,6 +3855,13 @@ class Mutation(graphene.ObjectType):
     delete_badge = DeleteBadgeMutation.Field()
     award_badge = AwardBadgeMutation.Field()
     revoke_badge = RevokeBadgeMutation.Field()
+
+    # CONVERSATION/THREAD MUTATIONS ##############################################
+    create_thread = CreateThreadMutation.Field()
+    create_thread_message = CreateThreadMessageMutation.Field()
+    reply_to_message = ReplyToMessageMutation.Field()
+    delete_conversation = DeleteConversationMutation.Field()
+    delete_message = DeleteMessageMutation.Field()
 
     # MODERATION MUTATIONS #######################################################
     lock_thread = LockThreadMutation.Field()
