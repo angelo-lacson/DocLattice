@@ -38,16 +38,16 @@ class TestBadgeModel(TestCase):
     def setUpTestData(cls):
         """Create test data."""
         cls.admin_user = User.objects.create_user(
-            username="admin",
+            username="badgemodel_admin",
             password="testpass123",
-            email="admin@test.com",
+            email="badgemodel_admin@test.com",
             is_superuser=True,
         )
 
         cls.normal_user = User.objects.create_user(
-            username="normal",
+            username="badgemodel_normal",
             password="testpass123",
-            email="normal@test.com",
+            email="badgemodel_normal@test.com",
         )
 
         cls.corpus = Corpus.objects.create(
@@ -171,16 +171,16 @@ class TestUserBadgeModel(TestCase):
     def setUpTestData(cls):
         """Create test data."""
         cls.admin_user = User.objects.create_user(
-            username="admin",
+            username="userbadgemodel_admin",
             password="testpass123",
-            email="admin@test.com",
+            email="userbadgemodel_admin@test.com",
             is_superuser=True,
         )
 
         cls.recipient = User.objects.create_user(
-            username="recipient",
+            username="userbadgemodel_recipient",
             password="testpass123",
-            email="recipient@test.com",
+            email="userbadgemodel_recipient@test.com",
         )
 
         cls.corpus = Corpus.objects.create(
@@ -328,22 +328,22 @@ class TestBadgeGraphQLMutations(TransactionTestCase):
     def setUp(self):
         """Set up test data for each test."""
         self.admin_user = User.objects.create_user(
-            username="admin",
+            username="graphqlmutations_admin",
             password="testpass123",
-            email="admin@test.com",
+            email="graphqlmutations_admin@test.com",
             is_superuser=True,
         )
 
         self.normal_user = User.objects.create_user(
-            username="normal",
+            username="graphqlmutations_normal",
             password="testpass123",
-            email="normal@test.com",
+            email="graphqlmutations_normal@test.com",
         )
 
         self.corpus_owner = User.objects.create_user(
-            username="corpusowner",
+            username="graphqlmutations_corpusowner",
             password="testpass123",
-            email="corpusowner@test.com",
+            email="graphqlmutations_corpusowner@test.com",
         )
 
         self.corpus = Corpus.objects.create(
@@ -492,7 +492,7 @@ class TestBadgeGraphQLMutations(TransactionTestCase):
         self.assertTrue(result["data"]["awardBadge"]["ok"])
         self.assertEqual(
             result["data"]["awardBadge"]["userBadge"]["user"]["username"],
-            "normal",
+            "graphqlmutations_normal",
         )
 
 
@@ -502,9 +502,9 @@ class TestBadgeGraphQLQueries(TransactionTestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(
-            username="testuser",
+            username="graphqlqueries_testuser",
             password="testpass123",
-            email="test@test.com",
+            email="graphqlqueries_test@test.com",
         )
 
         self.badge = Badge.objects.create(
@@ -585,16 +585,16 @@ class TestBadgeAutoAwardTasks(TestCase):
     def setUpTestData(cls):
         """Create test data."""
         cls.admin_user = User.objects.create_user(
-            username="admin",
+            username="autoawardtasks_admin",
             password="testpass123",
-            email="admin@test.com",
+            email="autoawardtasks_admin@test.com",
             is_superuser=True,
         )
 
         cls.user = User.objects.create_user(
-            username="testuser",
+            username="autoawardtasks_testuser",
             password="testpass123",
-            email="test@test.com",
+            email="autoawardtasks_test@test.com",
         )
 
         cls.corpus = Corpus.objects.create(
