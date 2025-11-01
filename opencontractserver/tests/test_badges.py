@@ -15,7 +15,6 @@ Tests cover:
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
 from django.test import TestCase, TransactionTestCase
 from graphene.test import Client
 from graphql_relay import to_global_id
@@ -302,7 +301,7 @@ class TestUserBadgeModel(TestCase):
         )
 
         # Try to award again
-        with self.assertRaises(IntegrityError):
+        with self.assertRaises(ValidationError):
             UserBadge.objects.create(
                 user=self.recipient,
                 badge=self.global_badge,

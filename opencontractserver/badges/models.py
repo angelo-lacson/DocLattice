@@ -77,6 +77,14 @@ class Badge(BaseOCModel):
             models.Index(fields=["badge_type", "corpus"]),
             models.Index(fields=["is_auto_awarded"]),
         ]
+        permissions = (
+            ("permission_badge", "permission badge"),
+            ("publish_badge", "publish badge"),
+            ("create_badge", "create badge"),
+            ("read_badge", "read badge"),
+            ("update_badge", "update badge"),
+            ("remove_badge", "remove badge"),
+        )
 
     def clean(self):
         """
@@ -146,10 +154,18 @@ class UserBadge(models.Model):
     class Meta:
         ordering = ["-awarded_at"]
         constraints = [
+            # Constraint for global badges (corpus is NULL)
+            models.UniqueConstraint(
+                fields=["user", "badge"],
+                condition=models.Q(corpus__isnull=True),
+                name="unique_user_badge_global",
+            ),
+            # Constraint for corpus-specific badges (corpus is NOT NULL)
             models.UniqueConstraint(
                 fields=["user", "badge", "corpus"],
+                condition=models.Q(corpus__isnull=False),
                 name="unique_user_badge_corpus",
-            )
+            ),
         ]
         indexes = [
             models.Index(fields=["user", "awarded_at"]),
