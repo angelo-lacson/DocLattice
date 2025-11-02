@@ -154,6 +154,7 @@ LOCAL_APPS = [
     "doclatticeserver.feedback",
     "doclatticeserver.conversations",
     "doclatticeserver.badges",
+    "doclatticeserver.notifications",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
