@@ -31,6 +31,7 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusDescriptionRevision,
+    CorpusEngagementMetrics,
     CorpusQuery,
 )
 from opencontractserver.documents.models import (
@@ -98,6 +99,50 @@ def build_flat_tree(
 
 
 class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    # Reputation fields (Epic #565)
+    reputation_global = graphene.Int(
+        description="Global reputation score across all corpuses"
+    )
+    reputation_for_corpus = graphene.Int(
+        corpus_id=graphene.ID(required=True),
+        description="Reputation score for a specific corpus",
+    )
+
+    def resolve_reputation_global(self, info):
+        """
+        Resolve global reputation for this user.
+
+        Epic: #565 - Corpus Engagement Metrics & Analytics
+        Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
+        """
+        from opencontractserver.conversations.models import UserReputation
+
+        try:
+            rep = UserReputation.objects.get(user=self, corpus__isnull=True)
+            return rep.reputation_score
+        except UserReputation.DoesNotExist:
+            return 0
+
+    def resolve_reputation_for_corpus(self, info, corpus_id):
+        """
+        Resolve reputation for this user in a specific corpus.
+
+        Epic: #565 - Corpus Engagement Metrics & Analytics
+        Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
+        """
+        from graphql_relay import from_global_id
+
+        from opencontractserver.conversations.models import UserReputation
+
+        try:
+            _, corpus_pk = from_global_id(corpus_id)
+            rep = UserReputation.objects.get(user=self, corpus_id=corpus_pk)
+            return rep.reputation_score
+        except UserReputation.DoesNotExist:
+            return 0
+        except Exception:
+            return 0
+
     class Meta:
         model = User
         interfaces = [relay.Node]
@@ -1036,6 +1081,60 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return queryset
 
 
+# ---------------- Engagement Metrics Types (Epic #565) ----------------
+class CorpusEngagementMetricsType(graphene.ObjectType):
+    """
+    GraphQL type for corpus engagement metrics.
+
+    This type does NOT use AnnotatePermissionsForReadMixin because
+    engagement metrics are read-only and permissions are checked on
+    the parent Corpus object.
+
+    Epic: #565 - Corpus Engagement Metrics & Analytics
+    Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
+    """
+
+    # Thread counts
+    total_threads = graphene.Int(
+        description="Total number of discussion threads in this corpus"
+    )
+    active_threads = graphene.Int(
+        description="Number of active (not locked/deleted) threads"
+    )
+
+    # Message counts
+    total_messages = graphene.Int(
+        description="Total number of messages across all threads"
+    )
+    messages_last_7_days = graphene.Int(
+        description="Number of messages posted in the last 7 days"
+    )
+    messages_last_30_days = graphene.Int(
+        description="Number of messages posted in the last 30 days"
+    )
+
+    # Contributor counts
+    unique_contributors = graphene.Int(
+        description="Total number of unique users who have posted messages"
+    )
+    active_contributors_30_days = graphene.Int(
+        description="Number of users who posted in the last 30 days"
+    )
+
+    # Engagement metrics
+    total_upvotes = graphene.Int(
+        description="Total upvotes across all messages in this corpus"
+    )
+    avg_messages_per_thread = graphene.Float(
+        description="Average number of messages per thread"
+    )
+
+    # Metadata
+    last_updated = graphene.DateTime(
+        description="Timestamp when metrics were last calculated"
+    )
+
+
 class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     all_annotation_summaries = graphene.List(
         AnnotationType,
@@ -1119,6 +1218,23 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_description_revisions(self, info):
         # Returns all revisions, ordered by version asc by default from model ordering
         return self.revisions.all() if hasattr(self, "revisions") else []
+
+    # Engagement metrics (Epic #565)
+    engagement_metrics = graphene.Field(CorpusEngagementMetricsType)
+
+    def resolve_engagement_metrics(self, info):
+        """
+        Resolve engagement metrics for this corpus.
+
+        Returns None if metrics haven't been calculated yet.
+
+        Epic: #565 - Corpus Engagement Metrics & Analytics
+        Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
+        """
+        try:
+            return self.engagement_metrics
+        except CorpusEngagementMetrics.DoesNotExist:
+            return None
 
     class Meta:
         model = Corpus

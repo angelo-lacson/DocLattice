@@ -590,3 +590,87 @@ class CorpusDescriptionRevision(django.db.models.Model):
         return (
             f"CorpusDescriptionRevision(corpus_id={self.corpus_id}, v={self.version})"
         )
+
+
+# --------------------------------------------------------------------------- #
+# Corpus Engagement Metrics
+# --------------------------------------------------------------------------- #
+
+
+class CorpusEngagementMetrics(django.db.models.Model):
+    """
+    Denormalized engagement metrics per corpus for fast dashboard queries.
+
+    This model stores aggregated statistics about corpus participation,
+    updated asynchronously via Celery tasks to avoid performance impact
+    on user operations.
+
+    Epic: #565 - Corpus Engagement Metrics & Analytics
+    """
+
+    corpus = django.db.models.OneToOneField(
+        "corpuses.Corpus",
+        on_delete=django.db.models.CASCADE,
+        related_name="engagement_metrics",
+        help_text="The corpus these metrics belong to",
+    )
+
+    # Thread counts
+    total_threads = django.db.models.IntegerField(
+        default=0,
+        help_text="Total number of discussion threads in this corpus",
+    )
+    active_threads = django.db.models.IntegerField(
+        default=0,
+        help_text="Number of active (not locked/deleted) threads",
+    )
+
+    # Message counts
+    total_messages = django.db.models.IntegerField(
+        default=0,
+        help_text="Total number of messages across all threads",
+    )
+    messages_last_7_days = django.db.models.IntegerField(
+        default=0,
+        help_text="Number of messages posted in the last 7 days",
+    )
+    messages_last_30_days = django.db.models.IntegerField(
+        default=0,
+        help_text="Number of messages posted in the last 30 days",
+    )
+
+    # Contributor counts
+    unique_contributors = django.db.models.IntegerField(
+        default=0,
+        help_text="Total number of unique users who have posted messages",
+    )
+    active_contributors_30_days = django.db.models.IntegerField(
+        default=0,
+        help_text="Number of users who posted in the last 30 days",
+    )
+
+    # Engagement metrics
+    total_upvotes = django.db.models.IntegerField(
+        default=0,
+        help_text="Total upvotes across all messages in this corpus",
+    )
+    avg_messages_per_thread = django.db.models.FloatField(
+        default=0.0,
+        help_text="Average number of messages per thread",
+    )
+
+    # Metadata
+    last_updated = django.db.models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when metrics were last calculated",
+    )
+
+    class Meta:
+        verbose_name = "Corpus Engagement Metrics"
+        verbose_name_plural = "Corpus Engagement Metrics"
+        indexes = [
+            django.db.models.Index(fields=["corpus", "last_updated"]),
+        ]
+
+    def __str__(self):
+        return f"Engagement Metrics for {self.corpus.title}"

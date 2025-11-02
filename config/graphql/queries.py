@@ -1831,6 +1831,75 @@ class Query(graphene.ObjectType):
 
         return Notification.objects.filter(recipient=user, is_read=False).count()
 
+    # ENGAGEMENT METRICS & LEADERBOARD QUERIES (Epic #565) ########
+    corpus_leaderboard = graphene.List(
+        UserType,
+        corpus_id=graphene.ID(required=True),
+        limit=graphene.Int(default_value=10),
+        description="Get top contributors for a specific corpus by reputation",
+    )
+    global_leaderboard = graphene.List(
+        UserType,
+        limit=graphene.Int(default_value=10),
+        description="Get top contributors globally by reputation",
+    )
+
+    def resolve_corpus_leaderboard(self, info, corpus_id, limit=10):
+        """
+        Get top contributors for a corpus by reputation.
+
+        Returns users ordered by corpus-specific reputation score.
+        Requires read access to the corpus.
+
+        Epic: #565 - Corpus Engagement Metrics & Analytics
+        Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
+        """
+        from opencontractserver.conversations.models import UserReputation
+
+        try:
+            # Get corpus PK from global ID
+            _, corpus_pk = from_global_id(corpus_id)
+
+            # Check if user has access to this corpus
+            Corpus.objects.visible_to_user(info.context.user).get(id=corpus_pk)
+
+            # Get top users by reputation for this corpus
+            top_reputations = (
+                UserReputation.objects.filter(corpus_id=corpus_pk)
+                .select_related("user")
+                .order_by("-reputation_score")[:limit]
+            )
+
+            # Return user objects
+            return [rep.user for rep in top_reputations]
+
+        except Corpus.DoesNotExist:
+            raise GraphQLError("Corpus not found or access denied")
+        except Exception as e:
+            logger.error(f"Error resolving corpus leaderboard: {e}")
+            return []
+
+    def resolve_global_leaderboard(self, info, limit=10):
+        """
+        Get top contributors globally by reputation.
+
+        Returns users ordered by global reputation score.
+
+        Epic: #565 - Corpus Engagement Metrics & Analytics
+        Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
+        """
+        from opencontractserver.conversations.models import UserReputation
+
+        # Get top users by global reputation (corpus__isnull=True)
+        top_reputations = (
+            UserReputation.objects.filter(corpus__isnull=True)
+            .select_related("user")
+            .order_by("-reputation_score")[:limit]
+        )
+
+        # Return user objects
+        return [rep.user for rep in top_reputations]
+
     # DEBUG FIELD ########################################
     if settings.ALLOW_GRAPHQL_DEBUG:
         debug = graphene.Field(DjangoDebug, name="_debug")

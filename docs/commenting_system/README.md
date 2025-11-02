@@ -18,6 +18,7 @@ The following sub-epics have been completed:
 4. **[#557](https://github.com/Open-Source-Legal/OpenContracts/issues/557)** - Create GraphQL mutations for moderation actions
 5. **[#558](https://github.com/Open-Source-Legal/OpenContracts/issues/558)** - Epic: Badge System
 6. **[#562](https://github.com/Open-Source-Legal/OpenContracts/issues/562)** - Epic: Notification System
+7. **[#565](https://github.com/Open-Source-Legal/OpenContracts/issues/565)** - Epic: Corpus Engagement Metrics & Analytics
 
 ## Current Implementation Status
 
@@ -89,6 +90,15 @@ The frontend UI components have not been built yet. The backend API is ready to 
 - Different limits for different operation types
 - User-tier based limits (superuser > authenticated > anonymous)
 - IP and user-based tracking
+
+### 7. Engagement Metrics & Analytics
+
+- Denormalized engagement metrics per corpus (threads, messages, contributors)
+- Time-based metrics (7-day and 30-day activity)
+- Async calculation via Celery tasks
+- Global and corpus-specific reputation leaderboards
+- GraphQL queries for metrics and leaderboards
+- Dashboard-ready aggregated statistics
 
 ## Documentation Structure
 
