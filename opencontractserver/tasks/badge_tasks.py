@@ -165,9 +165,8 @@ def _check_badge_criteria(
                 return False
 
             # Count documents uploaded to corpus
-            from opencontractserver.documents.models import Document
-
-            doc_count = Document.objects.filter(creator=user, corpus=corpus).count()
+            # Note: Corpus has a ManyToManyField to Document, so we query through corpus.documents
+            doc_count = corpus.documents.filter(creator=user).count()
 
             # Count annotations in corpus
             from opencontractserver.annotations.models import Annotation
