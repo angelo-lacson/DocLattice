@@ -23,7 +23,7 @@ from config.graphql.schema import schema
 from opencontractserver.badges.models import Badge, BadgeTypeChoices, UserBadge
 from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.tasks.badge_tasks import check_auto_badges
+from opencontractserver.tasks.badge_tasks import BadgeCriteriaType, check_auto_badges
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -130,7 +130,7 @@ class TestBadgeModel(TestCase):
             badge_type=BadgeTypeChoices.GLOBAL,
             is_auto_awarded=True,
             criteria_config={
-                "type": "first_post",
+                "type": BadgeCriteriaType.FIRST_POST,
                 "value": 1,
             },
             creator=self.admin_user,
@@ -138,7 +138,7 @@ class TestBadgeModel(TestCase):
         )
 
         self.assertTrue(badge.is_auto_awarded)
-        self.assertEqual(badge.criteria_config["type"], "first_post")
+        self.assertEqual(badge.criteria_config["type"], BadgeCriteriaType.FIRST_POST)
 
     def test_badge_string_representation(self):
         """Test badge string representation."""
@@ -610,7 +610,7 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             badge_type=BadgeTypeChoices.GLOBAL,
             is_auto_awarded=True,
             criteria_config={
-                "type": "first_post",
+                "type": BadgeCriteriaType.FIRST_POST,
                 "value": 1,
             },
             creator=self.admin_user,
@@ -681,7 +681,7 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             badge_type=BadgeTypeChoices.GLOBAL,
             is_auto_awarded=True,
             criteria_config={
-                "type": "message_count",
+                "type": BadgeCriteriaType.MESSAGE_COUNT,
                 "value": 5,
             },
             creator=self.admin_user,
@@ -733,7 +733,7 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             corpus=self.corpus,
             is_auto_awarded=True,
             criteria_config={
-                "type": "corpus_contribution",
+                "type": BadgeCriteriaType.CORPUS_CONTRIBUTION,
                 "value": 3,
             },
             creator=self.admin_user,
@@ -805,7 +805,7 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             icon="Star",
             badge_type=BadgeTypeChoices.GLOBAL,
             is_auto_awarded=True,
-            criteria_config={"type": "message_count"},  # Missing value
+            criteria_config={"type": BadgeCriteriaType.MESSAGE_COUNT},  # Missing value
             creator=self.admin_user,
             is_public=True,
         )
@@ -886,7 +886,7 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             badge_type=BadgeTypeChoices.GLOBAL,
             is_auto_awarded=True,
             criteria_config={
-                "type": "message_count",
+                "type": BadgeCriteriaType.MESSAGE_COUNT,
                 "value": 2,
             },
             creator=self.admin_user,
