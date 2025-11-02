@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Header, Icon, Button, Form } from "semantic-ui-react";
+import { Modal, Header, Icon, Button, Form, Divider } from "semantic-ui-react";
 import { useMutation, useReactiveVar } from "@apollo/client";
 
 import { backendUserObj, showUserSettingsModal } from "../../graphql/cache";
@@ -8,6 +8,7 @@ import {
   UpdateMeInputs,
   UpdateMeOutputs,
 } from "../../graphql/mutations";
+import { UserBadges } from "../badges/UserBadges";
 
 interface EditableProfileState {
   name?: string;
@@ -104,6 +105,17 @@ const UserSettingsModal: React.FC = () => {
             onChange={(_, data) => onChange("phone", String(data.value || ""))}
           />
         </Form>
+
+        {user && (user as any).id && (
+          <>
+            <Divider />
+            <UserBadges
+              userId={(user as any).id}
+              showTitle={true}
+              title="Your Badges"
+            />
+          </>
+        )}
       </Modal.Content>
       <Modal.Actions>
         <Button
