@@ -15,6 +15,7 @@ from opencontractserver.annotations.models import (
     LabelSet,
     Relationship,
 )
+from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.corpuses.models import Corpus, CorpusQuery
 from opencontractserver.documents.models import Document, DocumentRelationship
@@ -489,4 +490,60 @@ class ChatMessageFilter(django_filters.FilterSet):
             "created_at": ["gte", "lte"],
             "creator_id": ["exact"],
             "is_public": ["exact"],
+        }
+
+
+class BadgeFilter(django_filters.FilterSet):
+    """Filter set for Badge model."""
+
+    corpus_id = filters.CharFilter(method="filter_by_corpus_id")
+
+    def filter_by_corpus_id(self, queryset, name, value):
+        """Filter badges by corpus ID."""
+        if value:
+            django_pk = from_global_id(value)[1]
+            return queryset.filter(corpus_id=django_pk)
+        return queryset
+
+    class Meta:
+        model = Badge
+        fields = {
+            "badge_type": ["exact"],
+            "is_auto_awarded": ["exact"],
+            "name": ["contains", "exact"],
+        }
+
+
+class UserBadgeFilter(django_filters.FilterSet):
+    """Filter set for UserBadge model."""
+
+    user_id = filters.CharFilter(method="filter_by_user_id")
+    badge_id = filters.CharFilter(method="filter_by_badge_id")
+    corpus_id = filters.CharFilter(method="filter_by_corpus_id")
+
+    def filter_by_user_id(self, queryset, name, value):
+        """Filter user badges by user ID."""
+        if value:
+            django_pk = from_global_id(value)[1]
+            return queryset.filter(user_id=django_pk)
+        return queryset
+
+    def filter_by_badge_id(self, queryset, name, value):
+        """Filter user badges by badge ID."""
+        if value:
+            django_pk = from_global_id(value)[1]
+            return queryset.filter(badge_id=django_pk)
+        return queryset
+
+    def filter_by_corpus_id(self, queryset, name, value):
+        """Filter user badges by corpus ID."""
+        if value:
+            django_pk = from_global_id(value)[1]
+            return queryset.filter(corpus_id=django_pk)
+        return queryset
+
+    class Meta:
+        model = UserBadge
+        fields = {
+            "awarded_at": ["gte", "lte"],
         }

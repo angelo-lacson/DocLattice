@@ -19,6 +19,7 @@ from config.graphql.filters import (
     AnalysisFilter,
     AnalyzerFilter,
     AssignmentFilter,
+    BadgeFilter,
     ColumnFilter,
     ConversationFilter,
     CorpusFilter,
@@ -33,6 +34,7 @@ from config.graphql.filters import (
     LabelFilter,
     LabelsetFilter,
     RelationshipFilter,
+    UserBadgeFilter,
 )
 from config.graphql.graphene_types import (
     AnalysisType,
@@ -40,6 +42,7 @@ from config.graphql.graphene_types import (
     AnnotationLabelType,
     AnnotationType,
     AssignmentType,
+    BadgeType,
     BulkDocumentUploadStatusType,
     ColumnType,
     ConversationType,
@@ -63,6 +66,7 @@ from config.graphql.graphene_types import (
     PipelineComponentsType,
     PipelineComponentType,
     RelationshipType,
+    UserBadgeType,
     UserExportType,
     UserImportType,
     UserType,
@@ -79,6 +83,7 @@ from opencontractserver.annotations.models import (
     Note,
     Relationship,
 )
+from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.corpuses.models import Corpus, CorpusAction, CorpusQuery
 from opencontractserver.documents.models import Document, DocumentRelationship
@@ -1732,6 +1737,37 @@ class Query(graphene.ObjectType):
 
         except (Corpus.DoesNotExist, Document.DoesNotExist):
             return None
+
+    # BADGE RESOLVERS ####################################
+    badges = DjangoFilterConnectionField(BadgeType, filterset_class=BadgeFilter)
+    badge = relay.Node.Field(BadgeType)
+
+    def resolve_badges(self, info, **kwargs):
+        """Resolve badges visible to the user."""
+        return Badge.objects.visible_to_user(info.context.user).select_related(
+            "creator", "corpus"
+        )
+
+    def resolve_badge(self, info, **kwargs):
+        """Resolve a single badge by ID."""
+        django_pk = from_global_id(kwargs.get("id", None))[1]
+        return Badge.objects.visible_to_user(info.context.user).get(id=django_pk)
+
+    user_badges = DjangoFilterConnectionField(
+        UserBadgeType, filterset_class=UserBadgeFilter
+    )
+    user_badge = relay.Node.Field(UserBadgeType)
+
+    def resolve_user_badges(self, info, **kwargs):
+        """Resolve user badge awards."""
+        return UserBadge.objects.all().select_related(
+            "user", "badge", "awarded_by", "corpus"
+        )
+
+    def resolve_user_badge(self, info, **kwargs):
+        """Resolve a single user badge by ID."""
+        django_pk = from_global_id(kwargs.get("id", None))[1]
+        return UserBadge.objects.get(id=django_pk)
 
     # DEBUG FIELD ########################################
     if settings.ALLOW_GRAPHQL_DEBUG:
