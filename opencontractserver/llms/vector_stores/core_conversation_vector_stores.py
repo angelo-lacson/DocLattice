@@ -125,17 +125,36 @@ class CoreConversationVectorStore:
         self.embed_dim = embed_dim
         self.exclude_deleted = exclude_deleted
 
-        # Auto-detect embedder configuration
-        embedder_class, detected_embedder_path = get_embedder(
-            corpus_id=corpus_id,
-            embedder_path=embedder_path,
-        )
-        self.embedder_path = detected_embedder_path
-        _logger.debug(f"Configured embedder path: {self.embedder_path}")
+        # Use explicit embedder_path if provided, otherwise auto-detect
+        if embedder_path is not None:
+            # Trust the explicitly provided embedder_path (useful for testing and overrides)
+            self.embedder_path = embedder_path
+            _logger.debug(f"Using explicit embedder path: {self.embedder_path}")
+            # Try to get embedder class for dimension validation, but don't override path
+            try:
+                embedder_class, _ = get_embedder(
+                    corpus_id=corpus_id,
+                    embedder_path=embedder_path,
+                )
+            except Exception:
+                # If embedder resolution fails (e.g., test mock), use default dimension
+                embedder_class = None
+        else:
+            # Auto-detect embedder from corpus
+            embedder_class, detected_embedder_path = get_embedder(
+                corpus_id=corpus_id,
+                embedder_path=None,
+            )
+            self.embedder_path = detected_embedder_path
+            _logger.debug(f"Auto-detected embedder path: {self.embedder_path}")
 
         # Validate or fallback dimension
         if self.embed_dim not in [384, 768, 1536, 3072]:
-            self.embed_dim = getattr(embedder_class, "vector_size", 768)
+            if embedder_class:
+                self.embed_dim = getattr(embedder_class, "vector_size", 768)
+            else:
+                # Default to 384 if no embedder class available
+                self.embed_dim = 384
 
     async def _build_base_queryset(self) -> QuerySet[Conversation]:
         """Build the base conversation queryset applying filtering rules.
@@ -210,40 +229,32 @@ class CoreConversationVectorStore:
         """Synchronous search for conversations."""
         _logger.debug(f"Starting sync conversation search with query: {query}")
 
-        # Build base queryset synchronously
-        from django.db.models import Q
+        # Get user object for visible_to_user pattern
+        from django.contrib.auth import get_user_model
 
-        queryset = Conversation.objects.select_related(
-            "chat_with_corpus", "chat_with_document", "creator"
-        ).all()
+        User = get_user_model()
 
-        active_filters = Q()
+        user = None
+        if self.user_id:
+            try:
+                user = User.objects.get(id=self.user_id)
+            except User.DoesNotExist:
+                _logger.warning(f"User ID {self.user_id} not found")
+                return []
 
-        # Document-specific context
+        # Use standard visible_to_user() pattern for permission filtering
+        # This handles: superuser bypass, public conversations, creator conversations,
+        # guardian object permissions (explicitly shared), and soft-delete filtering
+        queryset = Conversation.objects.visible_to_user(user)
+
+        # Apply additional context filters
         if self.document_id is not None:
-            active_filters &= Q(chat_with_document_id=self.document_id)
-        # Corpus-specific context
+            queryset = queryset.filter(chat_with_document_id=self.document_id)
         elif self.corpus_id is not None:
-            active_filters &= Q(chat_with_corpus_id=self.corpus_id)
+            queryset = queryset.filter(chat_with_corpus_id=self.corpus_id)
 
-        # Apply scope filters
-        if active_filters != Q():
-            queryset = queryset.filter(active_filters)
-
-        # Filter by conversation type
         if self.conversation_type:
             queryset = queryset.filter(conversation_type=self.conversation_type)
-
-        # User visibility rules
-        if self.user_id:
-            visibility_filter = Q(creator_id=self.user_id) | Q(is_public=True)
-            queryset = queryset.filter(visibility_filter)
-        else:
-            queryset = queryset.filter(is_public=True)
-
-        # Exclude soft-deleted conversations
-        if self.exclude_deleted:
-            queryset = queryset.filter(deleted_at__isnull=True)
 
         # Generate embedding if query text provided
         if query.query_text:
@@ -287,8 +298,32 @@ class CoreConversationVectorStore:
         """Asynchronous search for conversations."""
         _logger.debug(f"Starting async conversation search with query: {query}")
 
-        # Build base queryset
-        queryset = await self._build_base_queryset()
+        # Get user object for visible_to_user pattern
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        user = None
+        if self.user_id:
+            try:
+                user = await sync_to_async(User.objects.get)(id=self.user_id)
+            except User.DoesNotExist:
+                _logger.warning(f"User ID {self.user_id} not found")
+                return []
+
+        # Use standard visible_to_user() pattern (wrapped for async)
+        queryset = await sync_to_async(
+            lambda: Conversation.objects.visible_to_user(user)
+        )()
+
+        # Apply additional context filters
+        if self.document_id is not None:
+            queryset = queryset.filter(chat_with_document_id=self.document_id)
+        elif self.corpus_id is not None:
+            queryset = queryset.filter(chat_with_corpus_id=self.corpus_id)
+
+        if self.conversation_type:
+            queryset = queryset.filter(conversation_type=self.conversation_type)
 
         # Generate embedding if query text provided
         if query.query_text:
@@ -371,17 +406,36 @@ class CoreChatMessageVectorStore:
         self.embed_dim = embed_dim
         self.exclude_deleted = exclude_deleted
 
-        # Auto-detect embedder configuration
-        embedder_class, detected_embedder_path = get_embedder(
-            corpus_id=corpus_id,
-            embedder_path=embedder_path,
-        )
-        self.embedder_path = detected_embedder_path
-        _logger.debug(f"Configured embedder path: {self.embedder_path}")
+        # Use explicit embedder_path if provided, otherwise auto-detect
+        if embedder_path is not None:
+            # Trust the explicitly provided embedder_path (useful for testing and overrides)
+            self.embedder_path = embedder_path
+            _logger.debug(f"Using explicit embedder path: {self.embedder_path}")
+            # Try to get embedder class for dimension validation, but don't override path
+            try:
+                embedder_class, _ = get_embedder(
+                    corpus_id=corpus_id,
+                    embedder_path=embedder_path,
+                )
+            except Exception:
+                # If embedder resolution fails (e.g., test mock), use default dimension
+                embedder_class = None
+        else:
+            # Auto-detect embedder from corpus
+            embedder_class, detected_embedder_path = get_embedder(
+                corpus_id=corpus_id,
+                embedder_path=None,
+            )
+            self.embedder_path = detected_embedder_path
+            _logger.debug(f"Auto-detected embedder path: {self.embedder_path}")
 
         # Validate or fallback dimension
         if self.embed_dim not in [384, 768, 1536, 3072]:
-            self.embed_dim = getattr(embedder_class, "vector_size", 768)
+            if embedder_class:
+                self.embed_dim = getattr(embedder_class, "vector_size", 768)
+            else:
+                # Default to 384 if no embedder class available
+                self.embed_dim = 384
 
     async def _build_base_queryset(self) -> QuerySet[ChatMessage]:
         """Build the base message queryset applying filtering rules.
@@ -466,50 +520,45 @@ class CoreChatMessageVectorStore:
         """Synchronous search for messages."""
         _logger.debug(f"Starting sync message search with query: {query}")
 
-        # Build base queryset synchronously
-        from django.db.models import Q
+        # Get user object for visible_to_user pattern
+        from django.contrib.auth import get_user_model
 
-        queryset = ChatMessage.objects.select_related(
+        User = get_user_model()
+
+        user = None
+        if self.user_id:
+            try:
+                user = User.objects.get(id=self.user_id)
+            except User.DoesNotExist:
+                _logger.warning(f"User ID {self.user_id} not found")
+                return []
+
+        # Get visible conversations using standard visible_to_user() pattern
+        # This ensures messages are filtered by conversation permissions
+        visible_conversations = Conversation.objects.visible_to_user(user)
+
+        # Start with messages in visible conversations only
+        queryset = ChatMessage.objects.filter(
+            conversation__in=visible_conversations
+        ).select_related(
             "conversation",
             "conversation__chat_with_corpus",
             "conversation__chat_with_document",
             "creator",
-        ).all()
+        )
 
-        active_filters = Q()
-
-        # Conversation-specific context
+        # Apply additional context filters
         if self.conversation_id is not None:
-            active_filters &= Q(conversation_id=self.conversation_id)
-        # Corpus-specific context (via conversation)
+            queryset = queryset.filter(conversation_id=self.conversation_id)
         elif self.corpus_id is not None:
-            active_filters &= Q(conversation__chat_with_corpus_id=self.corpus_id)
+            queryset = queryset.filter(conversation__chat_with_corpus_id=self.corpus_id)
 
-        # Apply scope filters
-        if active_filters != Q():
-            queryset = queryset.filter(active_filters)
-
-        # Filter by message type
         if self.msg_type:
             queryset = queryset.filter(msg_type=self.msg_type)
 
-        # User visibility rules (inherit from conversation visibility)
-        if self.user_id:
-            visibility_filter = (
-                Q(conversation__creator_id=self.user_id)
-                | Q(conversation__is_public=True)
-                | Q(creator_id=self.user_id)
-            )
-            queryset = queryset.filter(visibility_filter)
-        else:
-            queryset = queryset.filter(conversation__is_public=True)
-
-        # Exclude soft-deleted messages
+        # Exclude soft-deleted messages (conversations already filtered by manager)
         if self.exclude_deleted:
-            queryset = queryset.filter(
-                deleted_at__isnull=True,
-                conversation__deleted_at__isnull=True,
-            )
+            queryset = queryset.filter(deleted_at__isnull=True)
 
         # Generate embedding if query text provided
         if query.query_text:
@@ -551,8 +600,46 @@ class CoreChatMessageVectorStore:
         """Asynchronous search for messages."""
         _logger.debug(f"Starting async message search with query: {query}")
 
-        # Build base queryset
-        queryset = await self._build_base_queryset()
+        # Get user object for visible_to_user pattern
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        user = None
+        if self.user_id:
+            try:
+                user = await sync_to_async(User.objects.get)(id=self.user_id)
+            except User.DoesNotExist:
+                _logger.warning(f"User ID {self.user_id} not found")
+                return []
+
+        # Get visible conversations using standard visible_to_user() pattern (async)
+        visible_conversations = await sync_to_async(
+            lambda: Conversation.objects.visible_to_user(user)
+        )()
+
+        # Start with messages in visible conversations only
+        queryset = ChatMessage.objects.filter(
+            conversation__in=visible_conversations
+        ).select_related(
+            "conversation",
+            "conversation__chat_with_corpus",
+            "conversation__chat_with_document",
+            "creator",
+        )
+
+        # Apply additional context filters
+        if self.conversation_id is not None:
+            queryset = queryset.filter(conversation_id=self.conversation_id)
+        elif self.corpus_id is not None:
+            queryset = queryset.filter(conversation__chat_with_corpus_id=self.corpus_id)
+
+        if self.msg_type:
+            queryset = queryset.filter(msg_type=self.msg_type)
+
+        # Exclude soft-deleted messages
+        if self.exclude_deleted:
+            queryset = queryset.filter(deleted_at__isnull=True)
 
         # Generate embedding if query text provided
         if query.query_text:

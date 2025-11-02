@@ -234,6 +234,15 @@ class ConversationManager(SoftDeleteManager):
             deleted_at__isnull=True
         )
 
+    def search_by_embedding(self, query_vector, embedder_path, top_k=10):
+        """
+        Convenience method to perform vector search:
+            Conversation.objects.search_by_embedding([...], "embedder/path", top_k=10)
+        """
+        return self.get_queryset().search_by_embedding(
+            query_vector, embedder_path, top_k
+        )
+
 
 class ChatMessageManager(SoftDeleteManager):
     """Manager for ChatMessage model that uses ChatMessageQuerySet."""
@@ -241,6 +250,15 @@ class ChatMessageManager(SoftDeleteManager):
     def get_queryset(self):
         return ChatMessageQuerySet(self.model, using=self._db).filter(
             deleted_at__isnull=True
+        )
+
+    def search_by_embedding(self, query_vector, embedder_path, top_k=10):
+        """
+        Convenience method to perform vector search:
+            ChatMessage.objects.search_by_embedding([...], "embedder/path", top_k=10)
+        """
+        return self.get_queryset().search_by_embedding(
+            query_vector, embedder_path, top_k
         )
 
 

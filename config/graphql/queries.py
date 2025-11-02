@@ -1294,11 +1294,16 @@ class Query(graphene.ObjectType):
 
         # Get embedder path from settings if no corpus specified
         embedder_path = None
-        if not corpus_pk:
+        if not corpus_pk and not document_id:
             # Use default embedder from settings
             from django.conf import settings
 
             embedder_path = getattr(settings, "DEFAULT_EMBEDDER_PATH", None)
+            if not embedder_path:
+                # If still no embedder available, raise clear error
+                raise ValueError(
+                    "Either corpus_id, document_id, or DEFAULT_EMBEDDER_PATH setting is required"
+                )
 
         # Create vector store
         vector_store = CoreConversationVectorStore(
@@ -1366,11 +1371,16 @@ class Query(graphene.ObjectType):
 
         # Get embedder path from settings if no corpus specified
         embedder_path = None
-        if not corpus_pk:
+        if not corpus_pk and not conversation_pk:
             # Use default embedder from settings
             from django.conf import settings
 
             embedder_path = getattr(settings, "DEFAULT_EMBEDDER_PATH", None)
+            if not embedder_path:
+                # If still no embedder available, raise clear error
+                raise ValueError(
+                    "Either corpus_id, conversation_id, or DEFAULT_EMBEDDER_PATH setting is required"
+                )
 
         # Create vector store
         vector_store = CoreChatMessageVectorStore(
