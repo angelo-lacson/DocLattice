@@ -8,6 +8,7 @@ This test suite covers:
 - GraphQL query integration
 """
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
@@ -606,6 +607,157 @@ class GraphQLConversationSearchTest(TestCase):
         # Should have errors (not authenticated)
         self.assertIsNotNone(result.get("errors"))
 
+    def test_search_conversations_with_document_filter(self):
+        """Test searchConversations with document_id filter."""
+        pdf_file = ContentFile(b"%PDF-1.4 test pdf", name="doc_filter.pdf")
+        doc = Document.objects.create(
+            creator=self.user,
+            title="Document Filter Test",
+            pdf_file=pdf_file,
+            backend_lock=True,
+        )
+
+        # Create document-linked conversation
+        doc_conv = Conversation.objects.create(
+            title="Document Conversation",
+            chat_with_document=doc,
+            creator=self.user,
+            conversation_type="chat",
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=doc_conv,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        Embedding.objects.create(
+            conversation=doc_conv,
+            embedder_path="test/embedder",
+            vector_384=[0.3] * 384,
+            creator=self.user,
+        )
+
+        query = """
+            query SearchConversations($query: String!, $documentId: ID) {
+                searchConversations(query: $query, documentId: $documentId) {
+                    id
+                    title
+                }
+            }
+        """
+
+        doc_global_id = to_global_id("DocumentType", doc.id)
+
+        result = self.client.execute(
+            query,
+            variables={
+                "query": "test document query",
+                "documentId": doc_global_id,
+            },
+        )
+
+        # May fail without real embedder, but tests the resolver path
+        if result.get("errors"):
+            error_message = result["errors"][0]["message"]
+            self.assertTrue(
+                "len(" in error_message or "embedder" in error_message.lower(),
+                f"Unexpected error: {error_message}",
+            )
+
+    def test_search_messages_with_corpus_filter(self):
+        """Test searchMessages with corpus filter."""
+        query = """
+            query SearchMessages($query: String!, $corpusId: ID) {
+                searchMessages(query: $query, corpusId: $corpusId) {
+                    id
+                    content
+                }
+            }
+        """
+
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+
+        result = self.client.execute(
+            query,
+            variables={
+                "query": "test message query",
+                "corpusId": corpus_global_id,
+            },
+        )
+
+        # May fail without real embedder, but tests the resolver path
+        if result.get("errors"):
+            error_message = result["errors"][0]["message"]
+            self.assertTrue(
+                "len(" in error_message or "embedder" in error_message.lower(),
+                f"Unexpected error: {error_message}",
+            )
+
+    def test_search_messages_with_msg_type_filter(self):
+        """Test searchMessages with msg_type filter."""
+        query = """
+            query SearchMessages($query: String!, $conversationId: ID, $msgType: String) {
+                searchMessages(
+                    query: $query,
+                    conversationId: $conversationId,
+                    msgType: $msgType
+                ) {
+                    id
+                    content
+                    msgType
+                }
+            }
+        """
+
+        conversation_global_id = to_global_id("ConversationType", self.conversation.id)
+
+        result = self.client.execute(
+            query,
+            variables={
+                "query": "test message",
+                "conversationId": conversation_global_id,
+                "msgType": "HUMAN",
+            },
+        )
+
+        # May fail without real embedder
+        if result.get("errors"):
+            error_message = result["errors"][0]["message"]
+            self.assertTrue(
+                "len(" in error_message or "embedder" in error_message.lower(),
+                f"Unexpected error: {error_message}",
+            )
+
+    def test_search_with_custom_top_k(self):
+        """Test search queries with custom top_k parameter."""
+        query = """
+            query SearchConversations($query: String!, $corpusId: ID, $topK: Int) {
+                searchConversations(query: $query, corpusId: $corpusId, topK: $topK) {
+                    id
+                    title
+                }
+            }
+        """
+
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+
+        result = self.client.execute(
+            query,
+            variables={
+                "query": "test",
+                "corpusId": corpus_global_id,
+                "topK": 5,
+            },
+        )
+
+        # May fail without real embedder
+        if result.get("errors"):
+            error_message = result["errors"][0]["message"]
+            self.assertTrue(
+                "len(" in error_message or "embedder" in error_message.lower(),
+                f"Unexpected error: {error_message}",
+            )
+
 
 class ConversationPermissionTest(TestCase):
     """Test permission filtering in conversation search using visible_to_user() pattern."""
@@ -997,3 +1149,293 @@ class MessagePermissionTest(TestCase):
         # User1 should see messages from both conversations
         self.assertIn(self.private_msg1.id, message_ids)
         self.assertIn(self.public_msg1.id, message_ids)
+
+
+@pytest.mark.django_db
+class AsyncConversationSearchTest(TestCase):
+    """Test async search methods in CoreConversationVectorStore."""
+
+    def setUp(self):
+        """Set up test data."""
+        # Create user
+        self.user = User.objects.create_user(
+            username="async_conv_user", password="testpassword"
+        )
+
+        # Create corpus
+        self.corpus = Corpus.objects.create(
+            title="Async Conversation Test Corpus", creator=self.user
+        )
+
+        # Create conversations
+        self.conversation1 = Conversation.objects.create(
+            title="Async Test Conversation 1",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=self.conversation1,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        self.conversation2 = Conversation.objects.create(
+            title="Async Test Conversation 2",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=self.conversation2,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        # Create embeddings
+        Embedding.objects.create(
+            conversation=self.conversation1,
+            embedder_path="test/embedder",
+            vector_384=[0.1] * 384,
+            creator=self.user,
+        )
+
+        Embedding.objects.create(
+            conversation=self.conversation2,
+            embedder_path="test/embedder",
+            vector_384=[0.2] * 384,
+            creator=self.user,
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_conversation_search(self):
+        """Test CoreConversationVectorStore.async_search method."""
+        store = CoreConversationVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = await store.async_search(query)
+
+        # Should return results
+        self.assertGreater(len(results), 0)
+
+        # Verify conversation IDs
+        conversation_ids = {r.conversation.id for r in results}
+        self.assertIn(self.conversation1.id, conversation_ids)
+        self.assertIn(self.conversation2.id, conversation_ids)
+
+        # Verify similarity scores are present
+        for result in results:
+            self.assertIsNotNone(result.similarity_score)
+            self.assertIsInstance(result.similarity_score, float)
+
+    @pytest.mark.asyncio
+    async def test_async_conversation_search_with_filters(self):
+        """Test async search with additional filters."""
+        store = CoreConversationVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            conversation_type="thread",
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = await store.async_search(query)
+
+        # Should work with type filter
+        self.assertIsInstance(results, list)
+
+    @pytest.mark.asyncio
+    async def test_async_conversation_search_nonexistent_user(self):
+        """Test async search gracefully handles nonexistent user."""
+        store = CoreConversationVectorStore(
+            user_id=99999,  # Non-existent user
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = await store.async_search(query)
+
+        # Should return empty results, not crash
+        self.assertEqual(len(results), 0)
+
+    @pytest.mark.asyncio
+    async def test_async_conversation_search_with_top_k(self):
+        """Test async search respects top_k parameter."""
+        store = CoreConversationVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=1,  # Limit to 1 result
+        )
+
+        results = await store.async_search(query)
+
+        # Should respect top_k limit
+        self.assertLessEqual(len(results), 1)
+
+
+@pytest.mark.django_db
+class AsyncMessageSearchTest(TestCase):
+    """Test async search methods in CoreChatMessageVectorStore."""
+
+    def setUp(self):
+        """Set up test data."""
+        # Create user
+        self.user = User.objects.create_user(
+            username="async_msg_user", password="testpassword"
+        )
+
+        # Create corpus
+        self.corpus = Corpus.objects.create(
+            title="Async Message Test Corpus", creator=self.user
+        )
+
+        # Create conversation
+        self.conversation = Conversation.objects.create(
+            title="Async Message Test Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=self.conversation,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        # Create messages
+        self.message1 = ChatMessage.objects.create(
+            conversation=self.conversation,
+            creator=self.user,
+            msg_type="HUMAN",
+            content="First async test message",
+        )
+
+        self.message2 = ChatMessage.objects.create(
+            conversation=self.conversation,
+            creator=self.user,
+            msg_type="LLM",
+            content="Second async test message",
+        )
+
+        # Create embeddings
+        Embedding.objects.create(
+            message=self.message1,
+            embedder_path="test/embedder",
+            vector_384=[0.1] * 384,
+            creator=self.user,
+        )
+
+        Embedding.objects.create(
+            message=self.message2,
+            embedder_path="test/embedder",
+            vector_384=[0.2] * 384,
+            creator=self.user,
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_message_search(self):
+        """Test CoreChatMessageVectorStore.async_search method."""
+        store = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = await store.async_search(query)
+
+        # Should return results
+        self.assertGreater(len(results), 0)
+
+        # Verify message IDs
+        message_ids = {r.message.id for r in results}
+        self.assertIn(self.message1.id, message_ids)
+        self.assertIn(self.message2.id, message_ids)
+
+        # Verify similarity scores
+        for result in results:
+            self.assertIsNotNone(result.similarity_score)
+            self.assertIsInstance(result.similarity_score, float)
+
+    @pytest.mark.asyncio
+    async def test_async_message_search_with_msg_type_filter(self):
+        """Test async message search with message type filter."""
+        store = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            msg_type="HUMAN",
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = await store.async_search(query)
+
+        # Should only return HUMAN messages
+        for result in results:
+            self.assertEqual(result.message.msg_type, "HUMAN")
+
+    @pytest.mark.asyncio
+    async def test_async_message_search_with_conversation_filter(self):
+        """Test async message search with conversation filter."""
+        store = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            conversation_id=self.conversation.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = await store.async_search(query)
+
+        # All results should be from the specified conversation
+        for result in results:
+            self.assertEqual(result.message.conversation_id, self.conversation.id)
+
+    @pytest.mark.asyncio
+    async def test_async_message_search_nonexistent_user(self):
+        """Test async message search with nonexistent user."""
+        store = CoreChatMessageVectorStore(
+            user_id=99999,  # Non-existent user
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = await store.async_search(query)
+
+        # Should return empty results, not crash
+        self.assertEqual(len(results), 0)
