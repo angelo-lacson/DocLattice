@@ -577,34 +577,33 @@ class TestBadgeGraphQLQueries(TransactionTestCase):
         self.assertGreater(len(edges), 0)
 
 
-class TestBadgeAutoAwardTasks(TestCase):
+class TestBadgeAutoAwardTasks(TransactionTestCase):
     """Test auto-badge award tasks."""
 
-    @classmethod
-    def setUpTestData(cls):
+    def setUp(self):
         """Create test data."""
-        cls.admin_user = User.objects.create_user(
+        self.admin_user = User.objects.create_user(
             username="autoawardtasks_admin",
             password="testpass123",
             email="autoawardtasks_admin@test.com",
             is_superuser=True,
         )
 
-        cls.user = User.objects.create_user(
+        self.user = User.objects.create_user(
             username="autoawardtasks_testuser",
             password="testpass123",
             email="autoawardtasks_test@test.com",
         )
 
-        cls.corpus = Corpus.objects.create(
+        self.corpus = Corpus.objects.create(
             title="Test Corpus",
             description="Test",
-            creator=cls.admin_user,
+            creator=self.admin_user,
             is_public=True,
         )
 
         # Create auto-award badge for first post
-        cls.first_post_badge = Badge.objects.create(
+        self.first_post_badge = Badge.objects.create(
             name="First Post",
             description="Made your first post",
             icon="MessageSquare",
@@ -614,7 +613,7 @@ class TestBadgeAutoAwardTasks(TestCase):
                 "type": "first_post",
                 "value": 1,
             },
-            creator=cls.admin_user,
+            creator=self.admin_user,
             is_public=True,
         )
 
@@ -743,12 +742,12 @@ class TestBadgeAutoAwardTasks(TestCase):
 
         # Add 2 documents to corpus - should not award
         for i in range(2):
-            Document.objects.create(
+            doc = Document.objects.create(
                 title=f"Doc {i}",
                 description="Test",
                 creator=self.user,
-                corpus=self.corpus,
             )
+            self.corpus.documents.add(doc)
 
         check_auto_badges(self.user.id, self.corpus.id)
         self.assertEqual(
@@ -756,12 +755,12 @@ class TestBadgeAutoAwardTasks(TestCase):
         )
 
         # Add one more document (total 3) - should award
-        Document.objects.create(
+        doc = Document.objects.create(
             title="Doc 3",
             description="Test",
             creator=self.user,
-            corpus=self.corpus,
         )
+        self.corpus.documents.add(doc)
 
         check_auto_badges(self.user.id, self.corpus.id)
         self.assertEqual(
