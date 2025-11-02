@@ -17,6 +17,22 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+class BadgeCriteriaType:
+    """Constants for badge criteria types."""
+
+    REPUTATION = "reputation_threshold"
+    MESSAGE_COUNT = "message_count"
+    FIRST_POST = "first_post"
+    MESSAGE_UPVOTES = "message_upvotes"
+    CORPUS_CONTRIBUTION = "corpus_contribution"
+
+
+class BadgeCriteriaError(Exception):
+    """Raised when badge criteria configuration is invalid."""
+
+    pass
+
+
 @celery_app.task()
 def check_auto_badges(user_id: int, corpus_id: Optional[int] = None) -> dict:
     """
@@ -122,14 +138,14 @@ def _check_badge_criteria(
         return False
 
     try:
-        if criteria_type == "reputation_threshold":
+        if criteria_type == BadgeCriteriaType.REPUTATION:
             # Check user's reputation
             # Note: This assumes you have a reputation system in place
             # For now, we'll use a placeholder
             # TODO: Implement actual reputation check when reputation system is in place
             return False
 
-        elif criteria_type == "message_count":
+        elif criteria_type == BadgeCriteriaType.MESSAGE_COUNT:
             # Check number of messages created
             if corpus:
                 # Corpus-specific message count
@@ -142,7 +158,7 @@ def _check_badge_criteria(
 
             return count >= int(value)
 
-        elif criteria_type == "first_post":
+        elif criteria_type == BadgeCriteriaType.FIRST_POST:
             # Award on first message created
             if corpus:
                 count = ChatMessage.objects.filter(
@@ -153,15 +169,18 @@ def _check_badge_criteria(
 
             return count >= 1
 
-        elif criteria_type == "message_upvotes":
+        elif criteria_type == BadgeCriteriaType.MESSAGE_UPVOTES:
             # Check if user has a message with N upvotes
             # Note: This assumes you have a voting system in place
             # TODO: Implement when voting system is available
             return False
 
-        elif criteria_type == "corpus_contribution":
+        elif criteria_type == BadgeCriteriaType.CORPUS_CONTRIBUTION:
             # Check contribution to corpus (documents, annotations, etc.)
             if not corpus:
+                logger.warning(
+                    f"Badge {badge.name} requires corpus context but none provided"
+                )
                 return False
 
             # Count documents uploaded to corpus
@@ -179,11 +198,31 @@ def _check_badge_criteria(
             return total_contributions >= int(value)
 
         else:
-            logger.warning(f"Unknown criteria type: {criteria_type}")
+            valid_types = [
+                BadgeCriteriaType.REPUTATION,
+                BadgeCriteriaType.MESSAGE_COUNT,
+                BadgeCriteriaType.FIRST_POST,
+                BadgeCriteriaType.MESSAGE_UPVOTES,
+                BadgeCriteriaType.CORPUS_CONTRIBUTION,
+            ]
+            logger.error(
+                f"Unknown criteria type '{criteria_type}' for badge {badge.name}. "
+                f"Valid types: {', '.join(valid_types)}"
+            )
             return False
 
+    except (ValueError, TypeError) as e:
+        # Configuration errors - invalid value format
+        logger.error(
+            f"Badge configuration error for '{badge.name}': {e}. "
+            f"Check criteria_config: {badge.criteria_config}"
+        )
+        return False
     except Exception as e:
-        logger.exception(f"Error checking badge criteria for {badge.name}: {e}")
+        # Unexpected errors - database issues, etc.
+        logger.exception(
+            f"Unexpected error checking badge criteria for '{badge.name}': {e}"
+        )
         return False
 
 
