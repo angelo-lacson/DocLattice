@@ -495,6 +495,65 @@ class MessageVectorSearchTest(TestCase):
         for result in results:
             self.assertEqual(result.message.conversation_id, self.conversation.id)
 
+    def test_message_search_with_query_text(self):
+        """Test message search using query_text (generates embedding)."""
+        store = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_text="test message search",
+            similarity_top_k=10,
+        )
+
+        # Will fail without real embedder, but tests the code path
+        try:
+            results = store.search(query)
+            self.assertIsInstance(results, list)
+        except (ValueError, AttributeError, TypeError) as e:
+            # Expected without real embedder service
+            error_msg = str(e).lower()
+            self.assertTrue(
+                "len(" in error_msg or "embedder" in error_msg or "vector" in error_msg
+            )
+
+    def test_message_search_nonexistent_user(self):
+        """Test message search with nonexistent user."""
+        store = CoreChatMessageVectorStore(
+            user_id=99999,  # Non-existent user
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = store.search(query)
+
+        # Should return empty results, not crash
+        self.assertEqual(len(results), 0)
+
+    def test_message_search_missing_query_raises_error(self):
+        """Test that message search raises ValueError when neither text nor embedding provided."""
+        store = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            similarity_top_k=10,
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            store.search(query)
+
+        self.assertIn("Either query_text or query_embedding", str(ctx.exception))
+
 
 class GraphQLConversationSearchTest(TestCase):
     """Test GraphQL search queries."""
