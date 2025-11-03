@@ -12,6 +12,7 @@ from opencontractserver.documents.models import Document
 from opencontractserver.shared.defaults import jsonfield_default_value
 from opencontractserver.shared.fields import NullableJSONField
 from opencontractserver.shared.Managers import BaseVisibilityManager
+from opencontractserver.shared.mixins import HasEmbeddingMixin
 from opencontractserver.shared.Models import BaseOCModel
 
 User = get_user_model()
@@ -91,6 +92,112 @@ class SoftDeleteQuerySet(models.QuerySet):
             return queryset.filter(Q(creator_id=user.id) | Q(is_public=True))
 
 
+# QuerySets with vector search support
+class ConversationQuerySet(SoftDeleteQuerySet):
+    """
+    QuerySet for Conversation model with vector search capabilities.
+    Combines soft-delete filtering with vector similarity search.
+    """
+
+    from opencontractserver.shared.mixins import VectorSearchViaEmbeddingMixin
+
+    # Use the VectorSearchViaEmbeddingMixin directly within the class
+    EMBEDDING_RELATED_NAME = "embedding_set"
+
+    def search_by_embedding(
+        self,
+        query_vector: list[float],
+        embedder_path: str,
+        top_k: int = 10,
+    ) -> models.QuerySet:
+        """
+        Vector search for conversations by embeddings.
+        Inherits from VectorSearchViaEmbeddingMixin pattern.
+        """
+        from pgvector.django import CosineDistance
+
+        dimension = len(query_vector)
+
+        # Map dimension to vector field
+        if dimension == 384:
+            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_384"
+        elif dimension == 768:
+            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_768"
+        elif dimension == 1536:
+            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
+        elif dimension == 3072:
+            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
+        else:
+            raise ValueError(f"Unsupported embedding dimension: {dimension}")
+
+        # Filter for embeddings with matching embedder_path and non-null vector
+        base_qs = self.filter(
+            **{
+                f"{self.EMBEDDING_RELATED_NAME}__embedder_path": embedder_path,
+                f"{vector_field}__isnull": False,
+            }
+        )
+
+        # Annotate with similarity score using cosine distance
+        base_qs = base_qs.annotate(
+            similarity_score=CosineDistance(vector_field, query_vector)
+        )
+
+        # Order by similarity and limit to top_k
+        return base_qs.order_by("similarity_score")[:top_k]
+
+
+class ChatMessageQuerySet(SoftDeleteQuerySet):
+    """
+    QuerySet for ChatMessage model with vector search capabilities.
+    Combines soft-delete filtering with vector similarity search.
+    """
+
+    EMBEDDING_RELATED_NAME = "embedding_set"
+
+    def search_by_embedding(
+        self,
+        query_vector: list[float],
+        embedder_path: str,
+        top_k: int = 10,
+    ) -> models.QuerySet:
+        """
+        Vector search for chat messages by embeddings.
+        Inherits from VectorSearchViaEmbeddingMixin pattern.
+        """
+        from pgvector.django import CosineDistance
+
+        dimension = len(query_vector)
+
+        # Map dimension to vector field
+        if dimension == 384:
+            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_384"
+        elif dimension == 768:
+            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_768"
+        elif dimension == 1536:
+            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
+        elif dimension == 3072:
+            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
+        else:
+            raise ValueError(f"Unsupported embedding dimension: {dimension}")
+
+        # Filter for embeddings with matching embedder_path and non-null vector
+        base_qs = self.filter(
+            **{
+                f"{self.EMBEDDING_RELATED_NAME}__embedder_path": embedder_path,
+                f"{vector_field}__isnull": False,
+            }
+        )
+
+        # Annotate with similarity score using cosine distance
+        base_qs = base_qs.annotate(
+            similarity_score=CosineDistance(vector_field, query_vector)
+        )
+
+        # Order by similarity and limit to top_k
+        return base_qs.order_by("similarity_score")[:top_k]
+
+
 # Custom manager for soft delete functionality
 class SoftDeleteManager(BaseVisibilityManager):
     """
@@ -118,6 +225,43 @@ class SoftDeleteManager(BaseVisibilityManager):
         return queryset.filter(deleted_at__isnull=True)
 
 
+# Specialized managers for Conversation and ChatMessage with vector search support
+class ConversationManager(SoftDeleteManager):
+    """Manager for Conversation model that uses ConversationQuerySet."""
+
+    def get_queryset(self):
+        return ConversationQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=True
+        )
+
+    def search_by_embedding(self, query_vector, embedder_path, top_k=10):
+        """
+        Convenience method to perform vector search:
+            Conversation.objects.search_by_embedding([...], "embedder/path", top_k=10)
+        """
+        return self.get_queryset().search_by_embedding(
+            query_vector, embedder_path, top_k
+        )
+
+
+class ChatMessageManager(SoftDeleteManager):
+    """Manager for ChatMessage model that uses ChatMessageQuerySet."""
+
+    def get_queryset(self):
+        return ChatMessageQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=True
+        )
+
+    def search_by_embedding(self, query_vector, embedder_path, top_k=10):
+        """
+        Convenience method to perform vector search:
+            ChatMessage.objects.search_by_embedding([...], "embedder/path", top_k=10)
+        """
+        return self.get_queryset().search_by_embedding(
+            query_vector, embedder_path, top_k
+        )
+
+
 class ConversationUserObjectPermission(UserObjectPermissionBase):
     """
     Permissions for Conversation objects at the user level.
@@ -138,11 +282,13 @@ class ConversationGroupObjectPermission(GroupObjectPermissionBase):
     )
 
 
-class Conversation(BaseOCModel):
+class Conversation(BaseOCModel, HasEmbeddingMixin):
     """
     Stores high-level information about an agent-based conversation.
     Each conversation can have multiple messages (now renamed to ChatMessage) associated with it.
     Only one of chat_with_corpus or chat_with_document can be set.
+
+    Includes HasEmbeddingMixin for vector search support on conversation titles and descriptions.
     """
 
     title = models.CharField(
@@ -228,7 +374,7 @@ class Conversation(BaseOCModel):
     )
 
     # Managers
-    objects = SoftDeleteManager()  # Default manager excludes soft-deleted
+    objects = ConversationManager()  # Default manager with vector search support
     all_objects = models.Manager()  # Access all objects including soft-deleted
 
     class Meta:
@@ -430,12 +576,20 @@ class Conversation(BaseOCModel):
     def __str__(self) -> str:
         return f"Conversation {self.pk} - {self.title if self.title else 'Untitled'}"
 
+    def get_embedding_reference_kwargs(self) -> dict:
+        """
+        Required by HasEmbeddingMixin to specify which field references this conversation.
+        """
+        return {"conversation_id": self.pk}
 
-class ChatMessage(BaseOCModel):
+
+class ChatMessage(BaseOCModel, HasEmbeddingMixin):
     """
     Represents a single chat message within an agent conversation.
     ChatMessages follow a standardized format to indicate their type,
     content, and any additional data.
+
+    Includes HasEmbeddingMixin for vector search support on message content.
     """
 
     class Meta:
@@ -539,7 +693,7 @@ class ChatMessage(BaseOCModel):
     )
 
     # Managers
-    objects = SoftDeleteManager()  # Default manager excludes soft-deleted
+    objects = ChatMessageManager()  # Default manager with vector search support
     all_objects = models.Manager()  # Access all objects including soft-deleted
 
     def soft_delete_message(self, moderator, reason: str = ""):
@@ -595,6 +749,12 @@ class ChatMessage(BaseOCModel):
             f"ChatMessage {self.pk} - {self.msg_type} "
             f"in conversation {self.conversation.pk}"
         )
+
+    def get_embedding_reference_kwargs(self) -> dict:
+        """
+        Required by HasEmbeddingMixin to specify which field references this message.
+        """
+        return {"message_id": self.pk}
 
     # (compatibility alias added below, outside the class body)
 

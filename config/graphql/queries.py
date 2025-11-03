@@ -1246,6 +1246,163 @@ class Query(graphene.ObjectType):
             .order_by("-created")
         )
 
+    # CONVERSATION SEARCH RESOLVERS #######################################
+    search_conversations = graphene.List(
+        ConversationType,
+        query=graphene.String(required=True, description="Search query text"),
+        corpus_id=graphene.ID(required=False, description="Filter by corpus ID"),
+        document_id=graphene.ID(required=False, description="Filter by document ID"),
+        conversation_type=graphene.String(
+            required=False, description="Filter by conversation type (chat/thread)"
+        ),
+        top_k=graphene.Int(default_value=10, description="Number of results to return"),
+        description="Search conversations using vector similarity",
+    )
+
+    @login_required
+    def resolve_search_conversations(
+        self,
+        info,
+        query,
+        corpus_id=None,
+        document_id=None,
+        conversation_type=None,
+        top_k=10,
+    ):
+        """
+        Search conversations using vector similarity.
+
+        Args:
+            info: GraphQL execution info
+            query: Search query text
+            corpus_id: Optional corpus ID filter
+            document_id: Optional document ID filter
+            conversation_type: Optional conversation type filter
+            top_k: Number of results to return
+
+        Returns:
+            List[Conversation]: List of matching conversations
+        """
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            CoreConversationVectorStore,
+            VectorSearchQuery,
+        )
+
+        # Convert global IDs to database IDs
+        corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+        document_pk = from_global_id(document_id)[1] if document_id else None
+
+        # Get embedder path from settings if no corpus specified
+        embedder_path = None
+        if not corpus_pk and not document_id:
+            # Use default embedder from settings
+            from django.conf import settings
+
+            embedder_path = getattr(settings, "DEFAULT_EMBEDDER_PATH", None)
+            if not embedder_path:
+                # If still no embedder available, raise clear error
+                raise ValueError(
+                    "Either corpus_id, document_id, or DEFAULT_EMBEDDER_PATH setting is required"
+                )
+
+        # Create vector store
+        vector_store = CoreConversationVectorStore(
+            user_id=info.context.user.id,
+            corpus_id=corpus_pk,
+            document_id=document_pk,
+            conversation_type=conversation_type,
+            embedder_path=embedder_path,
+        )
+
+        # Create search query
+        search_query = VectorSearchQuery(
+            query_text=query,
+            similarity_top_k=top_k,
+        )
+
+        # Perform search (sync in GraphQL context)
+        results = vector_store.search(search_query)
+
+        # Extract conversations from results
+        return [result.conversation for result in results]
+
+    search_messages = graphene.List(
+        "config.graphql.graphene_types.MessageType",
+        query=graphene.String(required=True, description="Search query text"),
+        corpus_id=graphene.ID(required=False, description="Filter by corpus ID"),
+        conversation_id=graphene.ID(
+            required=False, description="Filter by conversation ID"
+        ),
+        msg_type=graphene.String(
+            required=False, description="Filter by message type (HUMAN/LLM/SYSTEM)"
+        ),
+        top_k=graphene.Int(default_value=10, description="Number of results to return"),
+        description="Search messages using vector similarity",
+    )
+
+    @login_required
+    def resolve_search_messages(
+        self, info, query, corpus_id=None, conversation_id=None, msg_type=None, top_k=10
+    ):
+        """
+        Search messages using vector similarity.
+
+        Args:
+            info: GraphQL execution info
+            query: Search query text
+            corpus_id: Optional corpus ID filter
+            conversation_id: Optional conversation ID filter
+            msg_type: Optional message type filter
+            top_k: Number of results to return
+
+        Returns:
+            List[ChatMessage]: List of matching messages
+        """
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            CoreChatMessageVectorStore,
+            VectorSearchQuery,
+        )
+
+        # Convert global IDs to database IDs
+        corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+        conversation_pk = (
+            from_global_id(conversation_id)[1] if conversation_id else None
+        )
+
+        # Get embedder path from settings if no corpus specified
+        embedder_path = None
+        if not corpus_pk and not conversation_pk:
+            # Use default embedder from settings
+            from django.conf import settings
+
+            embedder_path = getattr(settings, "DEFAULT_EMBEDDER_PATH", None)
+            if not embedder_path:
+                # If still no embedder available, raise clear error
+                raise ValueError(
+                    "Either corpus_id, conversation_id, or DEFAULT_EMBEDDER_PATH setting is required"
+                )
+
+        # Create vector store
+        vector_store = CoreChatMessageVectorStore(
+            user_id=info.context.user.id,
+            corpus_id=corpus_pk,
+            conversation_id=conversation_pk,
+            msg_type=msg_type,
+            embedder_path=embedder_path,
+        )
+
+        # Create search query
+        search_query = VectorSearchQuery(
+            query_text=query,
+            similarity_top_k=top_k,
+        )
+
+        # Perform search (sync in GraphQL context)
+        results = vector_store.search(search_query)
+
+        # Extract messages from results
+        return [result.message for result in results]
+
     # DOCUMENT RELATIONSHIP RESOLVERS #####################################
     document_relationships = DjangoFilterConnectionField(
         DocumentRelationshipType,
