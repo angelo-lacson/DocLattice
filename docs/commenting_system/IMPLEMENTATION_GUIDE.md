@@ -1251,65 +1251,158 @@ yarn run test:ct --ui frontend/tests/threads/ThreadList.test.tsx
 
 ## Implementation Checklist
 
-### Issue #573: Thread List and Detail Views
+### ✅ Issue #573: Thread List and Detail Views (COMPLETED)
 
-#### Setup
-- [x] Create branch `feature/thread-list-detail-573`
-- [x] Create directory structure
-- [x] Update TypeScript types
-- [x] Add GraphQL queries
-- [ ] Create Jotai atoms
+**Branch**: `feature/thread-list-detail-573`
+**Status**: ✅ Complete and committed (with linting fixes)
+**Commit**: `ba31e15b`
 
-#### Components
-- [ ] Create `ThreadList.tsx`
-- [ ] Create `ThreadListHeader.tsx`
-- [ ] Create `ThreadListItem.tsx`
-- [ ] Create `ThreadSortDropdown.tsx`
-- [ ] Create `ThreadFilterToggles.tsx`
-- [ ] Create `ThreadBadge.tsx`
-- [ ] Create `ThreadDetail.tsx`
-- [ ] Create `ThreadDetailHeader.tsx`
-- [ ] Create `MessageItem.tsx`
-- [ ] Create `MessageTree.tsx`
-- [ ] Create `RelativeTime.tsx`
-- [ ] Create `ThreadListEmpty.tsx`
-- [ ] Create `ThreadDetailEmpty.tsx`
-
-#### Utilities
-- [ ] Implement `buildMessageTree()` algorithm
-- [ ] Implement `useThreadPreferences()` hook
-- [ ] Implement deep linking logic
-- [ ] Implement sorting logic
-- [ ] Implement filtering logic
+#### Components Created
+- [x] `ThreadList.tsx` - Container with sorting/filtering
+- [x] `ThreadListItem.tsx` - Individual thread cards
+- [x] `ThreadBadge.tsx` - Pinned/locked/deleted indicators
+- [x] `ThreadDetail.tsx` - Full thread view with message tree
+- [x] `MessageItem.tsx` - Individual message with nesting
+- [x] `MessageTree.tsx` - Recursive message rendering
+- [x] `RelativeTime.tsx` - Time formatting with date-fns
+- [x] `utils.ts` - Message tree building, sorting, filtering
+- [x] `useThreadPreferences.ts` - Hook for user preferences
+- [x] `threadAtoms.ts` - Jotai state management
+- [x] GraphQL queries and TypeScript types
 
 #### Testing
-- [ ] Write ThreadList tests
-- [ ] Write ThreadListItem tests
-- [ ] Write ThreadDetail tests
-- [ ] Write MessageItem tests
-- [ ] Write MessageTree tests
-- [ ] Create mock data factories
-- [ ] Create test wrapper
-- [ ] All tests passing
+- [x] ThreadList.test.tsx
+- [x] ThreadDetail.test.tsx
+- [x] utils.test.ts
+- [x] Mock data factories
+- [x] Test wrapper
 
-#### Quality
-- [ ] Run `pre-commit run --all-files`
-- [ ] Fix any linting errors
-- [ ] Fix any formatting issues
-- [ ] Ensure no TypeScript errors
+---
 
-#### Documentation
-- [ ] Add JSDoc comments to components
-- [ ] Update CLAUDE.md if needed
-- [ ] Add usage examples
+### ✅ Issue #574: Message Composer and Reply UI (COMPLETED)
 
-#### Git & PR
-- [ ] Commit changes with clear message
-- [ ] Push to remote
-- [ ] Open PR against `v3.0.0.b3`
-- [ ] Link PR to issue #573
-- [ ] Wait for CI checks
-- [ ] Request review
+**Branch**: `feature/message-composer-574` (based on #573)
+**Status**: ✅ Complete and committed
+**Commit**: `9f2f7739`
+
+#### Components Created
+- [x] `MessageComposer.tsx` - TipTap rich text editor
+- [x] `CreateThreadForm.tsx` - Thread creation modal
+- [x] `ReplyForm.tsx` - Inline reply component
+- [x] GraphQL mutations (CREATE_THREAD, CREATE_THREAD_MESSAGE, REPLY_TO_MESSAGE)
+- [x] TipTap dependencies installed
+
+#### Testing
+- [x] MessageComposer.ct.tsx (15 tests)
+- [x] CreateThreadForm.ct.tsx (12 tests)
+- [x] ReplyForm.ct.tsx (14 tests)
+
+---
+
+### ✅ Issue #575: Voting UI and Reputation Display (COMPLETED)
+
+**Branch**: `feature/voting-ui-575` (based on #574)
+**Status**: ✅ Complete and committed
+**Commit**: `c637ebdc`
+
+#### Components Created
+- [x] `VoteButtons.tsx` - Upvote/downvote with optimistic updates
+- [x] `ReputationBadge.tsx` - Compact display with tooltip
+- [x] `ReputationDisplay.tsx` - User context display
+- [x] `UserProfileReputation.tsx` - Full profile section
+- [x] GraphQL mutations (UPVOTE_MESSAGE, DOWNVOTE_MESSAGE, REMOVE_VOTE)
+
+#### Testing
+- [x] VoteButtons.ct.tsx (15 tests)
+- [x] ReputationBadge.ct.tsx (12 tests)
+
+---
+
+### 🚧 Issue #576: Moderation UI and Controls (NEXT)
+
+**Branch**: TBD - will build off #575
+**Status**: ⏳ Pending
+**Estimated**: 4 days
+
+#### Components to Create
+- [ ] `ModerationControls.tsx` - Pin/lock/delete thread controls
+- [ ] `ModeratorBadge.tsx` - Visual moderator indicator
+- [ ] `DeleteMessageButton.tsx` - Soft delete with confirmation
+- [ ] `PinThreadButton.tsx` - Pin/unpin toggle
+- [ ] `LockThreadButton.tsx` - Lock/unlock toggle
+- [ ] `ModerationLog.tsx` - Show moderation history
+
+#### Mutations Needed
+- [ ] PIN_THREAD
+- [ ] UNPIN_THREAD
+- [ ] LOCK_THREAD
+- [ ] UNLOCK_THREAD
+- [ ] DELETE_THREAD (soft delete)
+- [ ] RESTORE_THREAD
+
+---
+
+### ⏳ Issue #577: Notification Center UI
+
+**Status**: ⏳ Pending (after #576)
+**Estimated**: 4 days
+
+---
+
+### ⏳ Issue #578: Badge Display and Management UI
+
+**Status**: ⏳ Pending (after #577)
+**Estimated**: 4 days
+
+---
+
+### ⏳ Issue #579: Analytics Dashboard
+
+**Status**: ⏳ Pending (after #578)
+**Estimated**: 4 days
+
+---
+
+### ⏳ Issue #580: Thread Search UI
+
+**Status**: ⏳ Pending (after #579)
+**Estimated**: 4 days
+
+---
+
+### ⏳ Issue #621: Forum-like Corpus Discussion View
+
+**Status**: ⏳ Pending (after #580)
+**Estimated**: 2 days
+
+---
+
+### ⏳ Issue #622: Document-Specific Discussions
+
+**Status**: ⏳ Pending (after #621)
+**Estimated**: 3 days
+
+---
+
+### ⏳ Issue #623: Global Discussions Forum View
+
+**Status**: ⏳ Pending (after #622)
+**Estimated**: 3 days
+
+---
+
+## Branch Dependency Tree
+
+```
+v3.0.0.b3 (base)
+└─ feature/thread-list-detail-573 ✅
+   └─ feature/message-composer-574 ✅
+      └─ feature/voting-ui-575 ✅ (current)
+         └─ feature/moderation-ui-576 (next)
+            └─ ... (subsequent issues)
+```
+
+**IMPORTANT**: Each branch builds on the previous issue's branch to maintain a clean dependency chain.
 
 ---
 
