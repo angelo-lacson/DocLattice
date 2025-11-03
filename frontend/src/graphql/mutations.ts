@@ -2441,3 +2441,250 @@ export interface RevokeBadgeOutput {
     message: string;
   };
 }
+
+// ============================================================================
+// Thread and Message Mutations
+// ============================================================================
+
+export const CREATE_THREAD = gql`
+  mutation CreateThread(
+    $corpusId: ID!
+    $title: String!
+    $description: String
+    $initialMessage: String!
+  ) {
+    createThread(
+      corpusId: $corpusId
+      title: $title
+      description: $description
+      initialMessage: $initialMessage
+    ) {
+      ok
+      message
+      conversation {
+        id
+        conversationType
+        title
+        description
+        createdAt
+        updatedAt
+        isPinned
+        isLocked
+        creator {
+          id
+          username
+          email
+        }
+        corpus {
+          id
+          title
+        }
+        messageCount
+      }
+    }
+  }
+`;
+
+export interface CreateThreadInput {
+  corpusId: string;
+  title: string;
+  description?: string;
+  initialMessage: string;
+}
+
+export interface CreateThreadOutput {
+  createThread: {
+    ok: boolean;
+    message: string;
+    conversation: {
+      id: string;
+      conversationType: string;
+      title: string;
+      description?: string;
+      createdAt: string;
+      updatedAt: string;
+      isPinned: boolean;
+      isLocked: boolean;
+      creator: {
+        id: string;
+        username: string;
+        email: string;
+      };
+      corpus: {
+        id: string;
+        title: string;
+      };
+      messageCount: number;
+    } | null;
+  };
+}
+
+export const CREATE_THREAD_MESSAGE = gql`
+  mutation CreateThreadMessage($conversationId: ID!, $content: String!) {
+    createThreadMessage(conversationId: $conversationId, content: $content) {
+      ok
+      message
+      chatMessage {
+        id
+        content
+        createdAt
+        updatedAt
+        sender {
+          id
+          username
+          email
+        }
+        conversation {
+          id
+          title
+        }
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface CreateThreadMessageInput {
+  conversationId: string;
+  content: string;
+}
+
+export interface CreateThreadMessageOutput {
+  createThreadMessage: {
+    ok: boolean;
+    message: string;
+    chatMessage: {
+      id: string;
+      content: string;
+      createdAt: string;
+      updatedAt: string;
+      sender: {
+        id: string;
+        username: string;
+        email: string;
+      };
+      conversation: {
+        id: string;
+        title: string;
+      };
+      upvoteCount: number;
+      downvoteCount: number;
+      userVote?: string;
+    } | null;
+  };
+}
+
+export const REPLY_TO_MESSAGE = gql`
+  mutation ReplyToMessage($parentMessageId: ID!, $content: String!) {
+    replyToMessage(parentMessageId: $parentMessageId, content: $content) {
+      ok
+      message
+      chatMessage {
+        id
+        content
+        createdAt
+        updatedAt
+        sender {
+          id
+          username
+          email
+        }
+        parentMessage {
+          id
+          content
+          sender {
+            id
+            username
+          }
+        }
+        conversation {
+          id
+          title
+        }
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface ReplyToMessageInput {
+  parentMessageId: string;
+  content: string;
+}
+
+export interface ReplyToMessageOutput {
+  replyToMessage: {
+    ok: boolean;
+    message: string;
+    chatMessage: {
+      id: string;
+      content: string;
+      createdAt: string;
+      updatedAt: string;
+      sender: {
+        id: string;
+        username: string;
+        email: string;
+      };
+      parentMessage: {
+        id: string;
+        content: string;
+        sender: {
+          id: string;
+          username: string;
+        };
+      } | null;
+      conversation: {
+        id: string;
+        title: string;
+      };
+      upvoteCount: number;
+      downvoteCount: number;
+      userVote?: string;
+    } | null;
+  };
+}
+
+export const DELETE_CONVERSATION = gql`
+  mutation DeleteConversation($conversationId: ID!) {
+    deleteConversation(conversationId: $conversationId) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface DeleteConversationInput {
+  conversationId: string;
+}
+
+export interface DeleteConversationOutput {
+  deleteConversation: {
+    ok: boolean;
+    message: string;
+  };
+}
+
+export const DELETE_MESSAGE = gql`
+  mutation DeleteMessage($messageId: ID!) {
+    deleteMessage(messageId: $messageId) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface DeleteMessageInput {
+  messageId: string;
+}
+
+export interface DeleteMessageOutput {
+  deleteMessage: {
+    ok: boolean;
+    message: string;
+  };
+}
