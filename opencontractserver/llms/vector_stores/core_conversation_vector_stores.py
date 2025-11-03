@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Optional, Union
 
 from asgiref.sync import sync_to_async
-from django.db.models import Q, QuerySet
+from django.db.models import QuerySet
 
 from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.utils.embeddings import (
@@ -156,75 +156,6 @@ class CoreConversationVectorStore:
                 # Default to 384 if no embedder class available
                 self.embed_dim = 384
 
-    async def _build_base_queryset(self) -> QuerySet[Conversation]:
-        """Build the base conversation queryset applying filtering rules.
-
-        1. Scope by corpus or document if provided
-        2. Filter by conversation type if specified
-        3. Apply user visibility rules
-        4. Optionally exclude soft-deleted conversations
-        """
-        _logger.debug("Building base queryset for conversation vector search")
-
-        # Start with all conversations
-        queryset = Conversation.objects.select_related(
-            "chat_with_corpus", "chat_with_document", "creator"
-        ).all()
-        _logger.info(
-            await _safe_queryset_info(queryset, "Initial: Total conversations in DB")
-        )
-
-        active_filters = Q()
-
-        # Document-specific context
-        if self.document_id is not None:
-            _logger.debug(f"Document context: document_id={self.document_id}")
-            active_filters &= Q(chat_with_document_id=self.document_id)
-
-        # Corpus-specific context
-        elif self.corpus_id is not None:
-            _logger.debug(f"Corpus context: corpus_id={self.corpus_id}")
-            active_filters &= Q(chat_with_corpus_id=self.corpus_id)
-
-        # Apply scope filters
-        if active_filters != Q():
-            queryset = queryset.filter(active_filters)
-            _logger.info(
-                await _safe_queryset_info(queryset, "After document/corpus scoping")
-            )
-
-        # Filter by conversation type
-        if self.conversation_type:
-            queryset = queryset.filter(conversation_type=self.conversation_type)
-            _logger.info(
-                await _safe_queryset_info(
-                    queryset,
-                    f"After conversation_type filter: {self.conversation_type}",
-                )
-            )
-
-        # User visibility rules
-        if self.user_id:
-            # User can see: their own conversations, public conversations, or explicitly shared
-            visibility_filter = Q(creator_id=self.user_id) | Q(is_public=True)
-            queryset = queryset.filter(visibility_filter)
-            _logger.info(
-                await _safe_queryset_info(queryset, "After user visibility filter")
-            )
-        else:
-            # No user specified - only public conversations
-            queryset = queryset.filter(is_public=True)
-            _logger.info(
-                await _safe_queryset_info(queryset, "After public-only filter")
-            )
-
-        # Exclude soft-deleted conversations
-        if self.exclude_deleted:
-            queryset = queryset.filter(deleted_at__isnull=True)
-            _logger.info(await _safe_queryset_info(queryset, "After excluding deleted"))
-
-        return queryset
-
     def search(self, query: VectorSearchQuery) -> list[ConversationSearchResult]:
         """Synchronous search for conversations."""
         _logger.debug(f"Starting sync conversation search with query: {query}")
@@ -274,11 +205,9 @@ class CoreConversationVectorStore:
             top_k=query.similarity_top_k,
         )
 
-        # Apply additional filters
-        if query.filters:
-            for key, value in query.filters.items():
-                filter_dict = {key: value}
-                results_qs = results_qs.filter(**filter_dict)
+        # Note: query.filters cannot be applied here because search_by_embedding
+        # returns a sliced queryset, and Django doesn't allow filtering after slicing.
+        # All filtering must be done before the vector search operation above.
 
         # Convert to result objects
         results = [
@@ -345,11 +274,9 @@ class CoreConversationVectorStore:
             )
         )()
 
-        # Apply additional filters
-        if query.filters:
-            for key, value in query.filters.items():
-                filter_dict = {key: value}
-                results_qs = results_qs.filter(**filter_dict)
+        # Note: query.filters cannot be applied here because search_by_embedding
+        # returns a sliced queryset, and Django doesn't allow filtering after slicing.
+        # All filtering must be done before the vector search operation above.
 
         # Execute queryset and convert to result objects
         conversations = await _safe_execute_queryset(results_qs)
@@ -437,85 +364,6 @@ class CoreChatMessageVectorStore:
                 # Default to 384 if no embedder class available
                 self.embed_dim = 384
 
-    async def _build_base_queryset(self) -> QuerySet[ChatMessage]:
-        """Build the base message queryset applying filtering rules.
-
-        1. Scope by conversation or corpus if provided
-        2. Filter by message type if specified
-        3. Apply user visibility rules
-        4. Optionally exclude soft-deleted messages
-        """
-        _logger.debug("Building base queryset for message vector search")
-
-        # Start with all messages
-        queryset = ChatMessage.objects.select_related(
-            "conversation",
-            "conversation__chat_with_corpus",
-            "conversation__chat_with_document",
-            "creator",
-        ).all()
-        _logger.info(
-            await _safe_queryset_info(queryset, "Initial: Total messages in DB")
-        )
-
-        active_filters = Q()
-
-        # Conversation-specific context
-        if self.conversation_id is not None:
-            _logger.debug(
-                f"Conversation context: conversation_id={self.conversation_id}"
-            )
-            active_filters &= Q(conversation_id=self.conversation_id)
-
-        # Corpus-specific context (via conversation)
-        elif self.corpus_id is not None:
-            _logger.debug(f"Corpus context: corpus_id={self.corpus_id}")
-            active_filters &= Q(conversation__chat_with_corpus_id=self.corpus_id)
-
-        # Apply scope filters
-        if active_filters != Q():
-            queryset = queryset.filter(active_filters)
-            _logger.info(
-                await _safe_queryset_info(queryset, "After conversation/corpus scoping")
-            )
-
-        # Filter by message type
-        if self.msg_type:
-            queryset = queryset.filter(msg_type=self.msg_type)
-            _logger.info(
-                await _safe_queryset_info(
-                    queryset, f"After msg_type filter: {self.msg_type}"
-                )
-            )
-
-        # User visibility rules (inherit from conversation visibility)
-        if self.user_id:
-            visibility_filter = (
-                Q(conversation__creator_id=self.user_id)
-                | Q(conversation__is_public=True)
-                | Q(creator_id=self.user_id)
-            )
-            queryset = queryset.filter(visibility_filter)
-            _logger.info(
-                await _safe_queryset_info(queryset, "After user visibility filter")
-            )
-        else:
-            # No user specified - only messages in public conversations
-            queryset = queryset.filter(conversation__is_public=True)
-            _logger.info(
-                await _safe_queryset_info(queryset, "After public-only filter")
-            )
-
-        # Exclude soft-deleted messages
-        if self.exclude_deleted:
-            queryset = queryset.filter(
-                deleted_at__isnull=True,
-                conversation__deleted_at__isnull=True,  # Also exclude messages in deleted conversations
-            )
-            _logger.info(await _safe_queryset_info(queryset, "After excluding deleted"))
-
-        return queryset
-
     def search(self, query: VectorSearchQuery) -> list[MessageSearchResult]:
         """Synchronous search for messages."""
         _logger.debug(f"Starting sync message search with query: {query}")
@@ -578,11 +426,9 @@ class CoreChatMessageVectorStore:
             top_k=query.similarity_top_k,
         )
 
-        # Apply additional filters
-        if query.filters:
-            for key, value in query.filters.items():
-                filter_dict = {key: value}
-                results_qs = results_qs.filter(**filter_dict)
+        # Note: query.filters cannot be applied here because search_by_embedding
+        # returns a sliced queryset, and Django doesn't allow filtering after slicing.
+        # All filtering must be done before the vector search operation above.
 
         # Convert to result objects
         results = [
@@ -661,11 +507,9 @@ class CoreChatMessageVectorStore:
             )
         )()
 
-        # Apply additional filters
-        if query.filters:
-            for key, value in query.filters.items():
-                filter_dict = {key: value}
-                results_qs = results_qs.filter(**filter_dict)
+        # Note: query.filters cannot be applied here because search_by_embedding
+        # returns a sliced queryset, and Django doesn't allow filtering after slicing.
+        # All filtering must be done before the vector search operation above.
 
         # Execute queryset and convert to result objects
         messages = await _safe_execute_queryset(results_qs)
