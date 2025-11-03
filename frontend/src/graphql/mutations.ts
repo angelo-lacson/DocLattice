@@ -2788,3 +2788,235 @@ export interface RemoveVoteOutput {
     } | null;
   };
 }
+
+// ============================================================================
+// Moderation Mutations
+// ============================================================================
+
+export const PIN_THREAD = gql`
+  mutation PinThread($conversationId: ID!) {
+    pinThread(conversationId: $conversationId) {
+      ok
+      message
+      conversation {
+        id
+        isPinned
+        pinnedBy {
+          id
+          username
+        }
+        pinnedAt
+      }
+    }
+  }
+`;
+
+export interface PinThreadInput {
+  conversationId: string;
+}
+
+export interface PinThreadOutput {
+  pinThread: {
+    ok: boolean;
+    message: string;
+    conversation: {
+      id: string;
+      isPinned: boolean;
+      pinnedBy: {
+        id: string;
+        username: string;
+      } | null;
+      pinnedAt: string | null;
+    } | null;
+  };
+}
+
+export const UNPIN_THREAD = gql`
+  mutation UnpinThread($conversationId: ID!) {
+    unpinThread(conversationId: $conversationId) {
+      ok
+      message
+      conversation {
+        id
+        isPinned
+        pinnedBy {
+          id
+          username
+        }
+        pinnedAt
+      }
+    }
+  }
+`;
+
+export interface UnpinThreadInput {
+  conversationId: string;
+}
+
+export interface UnpinThreadOutput {
+  unpinThread: {
+    ok: boolean;
+    message: string;
+    conversation: {
+      id: string;
+      isPinned: boolean;
+      pinnedBy: {
+        id: string;
+        username: string;
+      } | null;
+      pinnedAt: string | null;
+    } | null;
+  };
+}
+
+export const LOCK_THREAD = gql`
+  mutation LockThread($conversationId: ID!) {
+    lockThread(conversationId: $conversationId) {
+      ok
+      message
+      conversation {
+        id
+        isLocked
+        lockedBy {
+          id
+          username
+        }
+        lockedAt
+      }
+    }
+  }
+`;
+
+export interface LockThreadInput {
+  conversationId: string;
+}
+
+export interface LockThreadOutput {
+  lockThread: {
+    ok: boolean;
+    message: string;
+    conversation: {
+      id: string;
+      isLocked: boolean;
+      lockedBy: {
+        id: string;
+        username: string;
+      } | null;
+      lockedAt: string | null;
+    } | null;
+  };
+}
+
+export const UNLOCK_THREAD = gql`
+  mutation UnlockThread($conversationId: ID!) {
+    unlockThread(conversationId: $conversationId) {
+      ok
+      message
+      conversation {
+        id
+        isLocked
+        lockedBy {
+          id
+          username
+        }
+        lockedAt
+      }
+    }
+  }
+`;
+
+export interface UnlockThreadInput {
+  conversationId: string;
+}
+
+export interface UnlockThreadOutput {
+  unlockThread: {
+    ok: boolean;
+    message: string;
+    conversation: {
+      id: string;
+      isLocked: boolean;
+      lockedBy: {
+        id: string;
+        username: string;
+      } | null;
+      lockedAt: string | null;
+    } | null;
+  };
+}
+
+export const DELETE_THREAD = gql`
+  mutation DeleteThread($conversationId: ID!) {
+    deleteThread(conversationId: $conversationId) {
+      ok
+      message
+      conversation {
+        id
+        isDeleted
+        deletedBy {
+          id
+          username
+        }
+        deletedAt
+      }
+    }
+  }
+`;
+
+export interface DeleteThreadInput {
+  conversationId: string;
+}
+
+export interface DeleteThreadOutput {
+  deleteThread: {
+    ok: boolean;
+    message: string;
+    conversation: {
+      id: string;
+      isDeleted: boolean;
+      deletedBy: {
+        id: string;
+        username: string;
+      } | null;
+      deletedAt: string | null;
+    } | null;
+  };
+}
+
+export const RESTORE_THREAD = gql`
+  mutation RestoreThread($conversationId: ID!) {
+    restoreThread(conversationId: $conversationId) {
+      ok
+      message
+      conversation {
+        id
+        isDeleted
+        deletedBy {
+          id
+          username
+        }
+        deletedAt
+      }
+    }
+  }
+`;
+
+export interface RestoreThreadInput {
+  conversationId: string;
+}
+
+export interface RestoreThreadOutput {
+  restoreThread: {
+    ok: boolean;
+    message: string;
+    conversation: {
+      id: string;
+      isDeleted: boolean;
+      deletedBy: {
+        id: string;
+        username: string;
+      } | null;
+      deletedAt: string | null;
+    } | null;
+  };
+}
