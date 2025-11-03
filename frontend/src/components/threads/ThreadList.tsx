@@ -1,0 +1,238 @@
+import React, { useMemo } from "react";
+import styled from "styled-components";
+import { useQuery } from "@apollo/client";
+import { useAtom } from "jotai";
+import {
+  GET_CONVERSATIONS,
+  GetConversationsInputs,
+  GetConversationsOutputs,
+} from "../../graphql/queries";
+import { ConversationType } from "../../types/graphql-api";
+import { color } from "../../theme/colors";
+import { spacing } from "../../theme/spacing";
+import { threadSortAtom, threadFiltersAtom } from "../../atoms/threadAtoms";
+import { ThreadListItem } from "./ThreadListItem";
+import { calculateThreadUpvotes, getLastActivityTime } from "./utils";
+import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
+import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
+import { PlaceholderCard } from "../placeholders/PlaceholderCard";
+import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
+
+interface ThreadListProps {
+  corpusId?: string;
+  documentId?: string;
+  embedded?: boolean;
+}
+
+const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: ${spacing.md};
+  padding: ${(props) => (props.$embedded ? spacing.md : spacing.lg)};
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+
+  @media (max-width: 640px) {
+    padding: ${spacing.sm};
+    gap: ${spacing.sm};
+  }
+`;
+
+const ThreadGrid = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${spacing.sm};
+`;
+
+const ThreadListHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: ${spacing.md};
+  flex-wrap: wrap;
+  gap: ${spacing.sm};
+`;
+
+const Title = styled.h2`
+  font-size: 24px;
+  font-weight: 700;
+  color: ${color.N10};
+  margin: 0;
+
+  @media (max-width: 640px) {
+    font-size: 20px;
+  }
+`;
+
+/**
+ * Thread list component
+ * Displays list of discussion threads with sorting, filtering, and pagination
+ */
+export function ThreadList({
+  corpusId,
+  documentId,
+  embedded = false,
+}: ThreadListProps) {
+  const [sortBy] = useAtom(threadSortAtom);
+  const [filters] = useAtom(threadFiltersAtom);
+
+  // Fetch threads
+  const { data, loading, error, refetch, fetchMore } = useQuery<
+    GetConversationsOutputs,
+    GetConversationsInputs
+  >(GET_CONVERSATIONS, {
+    variables: {
+      corpusId,
+      documentId,
+      conversationType: "THREAD",
+      limit: 20,
+    },
+    // Refetch every 30 seconds for new threads
+    pollInterval: 30000,
+    fetchPolicy: "cache-and-network",
+  });
+
+  // Process and sort threads
+  const processedThreads = useMemo(() => {
+    let threads = data?.conversations?.edges?.map((e) => e.node) || [];
+
+    // Apply filters
+    if (!filters.showLocked) {
+      threads = threads.filter((t) => !t.isLocked);
+    }
+    if (!filters.showDeleted) {
+      threads = threads.filter((t) => !t.deletedAt);
+    }
+
+    // Apply sort
+    threads = [...threads].sort((a, b) => {
+      // Pinned threads always first (if not sorting by pinned)
+      if (sortBy !== "pinned") {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+      }
+
+      switch (sortBy) {
+        case "newest":
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
+        case "active": {
+          // Sort by most recent update
+          const aTime = new Date(a.updatedAt || a.createdAt).getTime();
+          const bTime = new Date(b.updatedAt || b.createdAt).getTime();
+          return bTime - aTime;
+        }
+
+        case "upvoted": {
+          // TODO: Calculate total upvotes from messages when available
+          // For now, fall back to message count as proxy for activity
+          const aCount = a.chatMessages?.totalCount || 0;
+          const bCount = b.chatMessages?.totalCount || 0;
+          return bCount - aCount;
+        }
+
+        case "pinned":
+        default: {
+          // Pinned first, then by creation date
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        }
+      }
+    });
+
+    return threads;
+  }, [data, sortBy, filters]);
+
+  // Handle load more for pagination
+  const handleLoadMore = () => {
+    if (data?.conversations?.pageInfo?.hasNextPage && fetchMore) {
+      fetchMore({
+        variables: {
+          cursor: data.conversations.pageInfo.endCursor,
+        },
+      });
+    }
+  };
+
+  // Loading state
+  if (loading && !data) {
+    return (
+      <ThreadListContainer $embedded={embedded}>
+        <ModernLoadingDisplay
+          type="default"
+          message="Loading discussions..."
+          size="medium"
+        />
+      </ThreadListContainer>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <ThreadListContainer $embedded={embedded}>
+        <ModernErrorDisplay
+          type="generic"
+          error={error.message}
+          onRetry={() => refetch()}
+        />
+      </ThreadListContainer>
+    );
+  }
+
+  // Empty state
+  if (processedThreads.length === 0) {
+    return (
+      <ThreadListContainer $embedded={embedded}>
+        {!embedded && (
+          <ThreadListHeader>
+            <Title>Discussions</Title>
+          </ThreadListHeader>
+        )}
+        <PlaceholderCard
+          title="No Discussions Yet"
+          description={
+            corpusId
+              ? "Start the conversation by creating the first discussion thread."
+              : "There are no discussions in this document yet."
+          }
+          compact
+        />
+      </ThreadListContainer>
+    );
+  }
+
+  // Render thread list
+  return (
+    <ThreadListContainer $embedded={embedded}>
+      {!embedded && (
+        <ThreadListHeader>
+          <Title>Discussions</Title>
+          {/* TODO: Add sort dropdown and filters in future */}
+        </ThreadListHeader>
+      )}
+
+      <ThreadGrid role="list" aria-label="Discussion threads">
+        {processedThreads.map((thread) => (
+          <ThreadListItem
+            key={thread.id}
+            thread={thread}
+            corpusId={corpusId}
+            compact={embedded}
+          />
+        ))}
+      </ThreadGrid>
+
+      {/* Infinite scroll trigger */}
+      {data?.conversations?.pageInfo?.hasNextPage && (
+        <FetchMoreOnVisible fetchNextPage={handleLoadMore} />
+      )}
+    </ThreadListContainer>
+  );
+}

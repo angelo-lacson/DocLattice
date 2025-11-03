@@ -2171,6 +2171,7 @@ export const GET_CONVERSATIONS = gql`
     $title_Contains: String
     $createdAt_Gte: DateTime
     $createdAt_Lte: DateTime
+    $conversationType: String
   ) {
     conversations(
       documentId: $documentId
@@ -2180,22 +2181,49 @@ export const GET_CONVERSATIONS = gql`
       title_Contains: $title_Contains
       createdAt_Gte: $createdAt_Gte
       createdAt_Lte: $createdAt_Lte
+      conversationType: $conversationType
     ) {
       edges {
         node {
           id
+          conversationType
           title
+          description
           createdAt
           updatedAt
           creator {
             id
+            username
             email
+          }
+          chatWithCorpus {
+            id
+            title
+          }
+          chatWithDocument {
+            id
+            title
           }
           chatMessages {
             totalCount
           }
           isPublic
           myPermissions
+
+          # Moderation fields
+          isLocked
+          lockedBy {
+            id
+            username
+          }
+          lockedAt
+          isPinned
+          pinnedBy {
+            id
+            username
+          }
+          pinnedAt
+          deletedAt
         }
       }
       pageInfo {
@@ -2203,6 +2231,97 @@ export const GET_CONVERSATIONS = gql`
         hasPreviousPage
         startCursor
         endCursor
+      }
+      totalCount
+    }
+  }
+`;
+
+/**
+ * Get detailed thread with all messages including threading and voting info
+ */
+export interface GetThreadDetailInput {
+  conversationId: string;
+}
+
+export interface GetThreadDetailOutput {
+  conversation: ConversationType & {
+    allMessages: ChatMessageType[];
+  };
+}
+
+export const GET_THREAD_DETAIL = gql`
+  query GetThreadDetail($conversationId: ID!) {
+    conversation(id: $conversationId) {
+      id
+      conversationType
+      title
+      description
+      createdAt
+      updatedAt
+      creator {
+        id
+        username
+        email
+      }
+      chatWithCorpus {
+        id
+        title
+      }
+      chatWithDocument {
+        id
+        title
+      }
+      isPublic
+      myPermissions
+
+      # Moderation fields
+      isLocked
+      lockedBy {
+        id
+        username
+      }
+      lockedAt
+      isPinned
+      pinnedBy {
+        id
+        username
+      }
+      pinnedAt
+      deletedAt
+
+      # All messages with full details
+      allMessages {
+        id
+        msgType
+        agentType
+        content
+        state
+        createdAt
+        created
+        modified
+        creator {
+          id
+          username
+          email
+        }
+
+        # Threading
+        parentMessage {
+          id
+        }
+
+        # Voting
+        upvoteCount
+        downvoteCount
+        userVote
+
+        # Soft delete
+        deletedAt
+        deletedBy {
+          id
+          username
+        }
       }
     }
   }

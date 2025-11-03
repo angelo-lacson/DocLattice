@@ -1446,10 +1446,22 @@ export interface FeedbackType extends Node {
   commented_annotation?: ServerAnnotationType | null;
 }
 
+export type ConversationTypeEnum = "CHAT" | "THREAD";
+export type AgentTypeEnum = "DOCUMENT_AGENT" | "CORPUS_AGENT";
+export type MessageStateChoices =
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "ERROR"
+  | "AWAITING_APPROVAL";
+export type VoteType = "UPVOTE" | "DOWNVOTE";
+
 export type ConversationType = Node & {
   __typename?: "ConversationType";
   id: Scalars["ID"];
+  conversationType?: ConversationTypeEnum;
   title?: Maybe<Scalars["String"]>;
+  description?: Maybe<Scalars["String"]>;
   createdAt: Scalars["DateTime"];
   updatedAt: Scalars["DateTime"];
   chatWithCorpus?: Maybe<CorpusType>;
@@ -1461,6 +1473,15 @@ export type ConversationType = Node & {
   modified: Scalars["DateTime"];
   isPublic?: Scalars["Boolean"];
   myPermissions?: PermissionTypes[];
+
+  // Moderation fields
+  isLocked?: Scalars["Boolean"];
+  lockedBy?: Maybe<UserType>;
+  lockedAt?: Maybe<Scalars["DateTime"]>;
+  isPinned?: Scalars["Boolean"];
+  pinnedBy?: Maybe<UserType>;
+  pinnedAt?: Maybe<Scalars["DateTime"]>;
+  deletedAt?: Maybe<Scalars["DateTime"]>;
 };
 
 export type ConversationTypeConnection = {
@@ -1481,11 +1502,13 @@ export type ChatMessageType = Node & {
   id: Scalars["ID"];
   conversation: ConversationType;
   msgType: Scalars["String"];
+  agentType?: Maybe<AgentTypeEnum>;
   content: Scalars["String"];
   data?: Maybe<{
     sources?: WebSocketSources[];
     message_id?: string;
   }>;
+  state?: MessageStateChoices;
   createdAt: Scalars["DateTime"];
   sourceDocument?: Maybe<DocumentType>;
   sourceAnnotations: AnnotationTypeConnection;
@@ -1495,6 +1518,19 @@ export type ChatMessageType = Node & {
   modified: Scalars["DateTime"];
   isPublic?: Scalars["Boolean"];
   myPermissions?: PermissionTypes[];
+
+  // Threading fields
+  parentMessage?: Maybe<ChatMessageType>;
+  replies?: Maybe<ChatMessageType[]>;
+
+  // Voting fields
+  upvoteCount?: Scalars["Int"];
+  downvoteCount?: Scalars["Int"];
+  userVote?: Maybe<VoteType>;
+
+  // Soft delete
+  deletedAt?: Maybe<Scalars["DateTime"]>;
+  deletedBy?: Maybe<UserType>;
 };
 
 export type ChatMessageTypeConnection = {
