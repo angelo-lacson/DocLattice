@@ -1,5 +1,6 @@
 import React from "react";
 import styled from "styled-components";
+import { color } from "../../theme/colors";
 import {
   MessageCircle,
   ThumbsUp,
@@ -36,16 +37,13 @@ const ItemContainer = styled.div<{ $isRead?: boolean }>`
   display: flex;
   gap: 12px;
   padding: 12px;
-  background: ${({ theme, $isRead }) =>
-    $isRead
-      ? theme.color.background.primary
-      : theme.color.background.secondary};
-  border-bottom: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  background: ${({ theme, $isRead }) => ($isRead ? color.N1 : color.N2)};
+  border-bottom: 1px solid ${({ theme }) => color.N4};
   cursor: pointer;
   transition: background 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.color.background.tertiary};
+    background: ${({ theme }) => color.N3};
   }
 
   &:last-child {
@@ -84,33 +82,33 @@ const Header = styled.div`
 
 const Username = styled.span`
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
   font-size: 14px;
 `;
 
 const Time = styled.span`
   font-size: 12px;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
 `;
 
 const UnreadDot = styled.span`
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: ${({ theme }) => theme.color.primary};
+  background: ${({ theme }) => color.B5};
   flex-shrink: 0;
 `;
 
 const Message = styled.p`
   margin: 0;
   font-size: 14px;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
   line-height: 1.4;
 `;
 
 const ThreadTitle = styled.span`
   font-weight: 500;
-  color: ${({ theme }) => theme.color.primary};
+  color: ${({ theme }) => color.B5};
 `;
 
 const Actions = styled.div`
@@ -123,16 +121,16 @@ const ActionButton = styled.button`
   padding: 4px 8px;
   font-size: 12px;
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.color.borders.secondary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 4px;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.color.background.tertiary};
-    border-color: ${({ theme }) => theme.color.primary};
-    color: ${({ theme }) => theme.color.primary};
+    background: ${({ theme }) => color.N3};
+    border-color: ${({ theme }) => color.B5};
+    color: ${({ theme }) => color.B5};
   }
 `;
 

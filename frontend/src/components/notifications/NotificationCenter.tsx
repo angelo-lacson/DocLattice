@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import styled from "styled-components";
 import { useQuery, useMutation } from "@apollo/client";
+import { color } from "../../theme/colors";
 import { CheckCheck, Filter, X } from "lucide-react";
 import {
   GET_NOTIFICATIONS,
@@ -33,7 +34,7 @@ const Title = styled.h1`
   margin: 0 0 16px 0;
   font-size: 24px;
   font-weight: 700;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
 `;
 
 const Controls = styled.div`
@@ -54,19 +55,16 @@ const FilterButton = styled.button<{ $active?: boolean }>`
   padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid ${({ theme }) => theme.color.borders.secondary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 6px;
-  background: ${({ theme, $active }) =>
-    $active ? theme.color.primary : "transparent"};
-  color: ${({ theme, $active }) =>
-    $active ? "white" : theme.color.text.primary};
+  background: ${({ theme, $active }) => ($active ? color.B5 : "transparent")};
+  color: ${({ theme, $active }) => ($active ? "white" : color.N10)};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: ${({ theme, $active }) =>
-      $active ? theme.color.primary : theme.color.background.tertiary};
-    border-color: ${({ theme }) => theme.color.primary};
+    background: ${({ theme, $active }) => ($active ? color.B5 : color.N3)};
+    border-color: ${({ theme }) => color.B5};
   }
 `;
 
@@ -74,10 +72,10 @@ const ActionButton = styled.button`
   padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid ${({ theme }) => theme.color.borders.secondary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 6px;
   background: transparent;
-  color: ${({ theme }) => theme.color.primary};
+  color: ${({ theme }) => color.B5};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -85,9 +83,9 @@ const ActionButton = styled.button`
   transition: all 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.color.primary};
+    background: ${({ theme }) => color.B5};
     color: white;
-    border-color: ${({ theme }) => theme.color.primary};
+    border-color: ${({ theme }) => color.B5};
   }
 
   &:disabled {
@@ -102,8 +100,8 @@ const ActionButton = styled.button`
 `;
 
 const NotificationList = styled.div`
-  background: ${({ theme }) => theme.color.background.primary};
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  background: ${({ theme }) => color.N1};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 8px;
   overflow: hidden;
 `;
@@ -111,13 +109,13 @@ const NotificationList = styled.div`
 const EmptyState = styled.div`
   padding: 64px 24px;
   text-align: center;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
 
   h3 {
     margin: 0 0 8px 0;
     font-size: 18px;
     font-weight: 600;
-    color: ${({ theme }) => theme.color.text.primary};
+    color: ${({ theme }) => color.N10};
   }
 
   p {
@@ -129,31 +127,31 @@ const EmptyState = styled.div`
 const LoadingState = styled.div`
   padding: 64px 24px;
   text-align: center;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   font-size: 14px;
 `;
 
 const LoadMoreContainer = styled.div`
   padding: 16px;
   text-align: center;
-  border-top: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  border-top: 1px solid ${({ theme }) => color.N4};
 `;
 
 const LoadMoreButton = styled.button`
   padding: 8px 24px;
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid ${({ theme }) => theme.color.borders.secondary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 6px;
   background: transparent;
-  color: ${({ theme }) => theme.color.primary};
+  color: ${({ theme }) => color.B5};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.color.primary};
+    background: ${({ theme }) => color.B5};
     color: white;
-    border-color: ${({ theme }) => theme.color.primary};
+    border-color: ${({ theme }) => color.B5};
   }
 
   &:disabled {

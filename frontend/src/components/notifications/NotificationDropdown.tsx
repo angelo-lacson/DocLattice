@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { useQuery, useMutation } from "@apollo/client";
+import { color } from "../../theme/colors";
 import { CheckCheck, Settings } from "lucide-react";
 import {
   GET_NOTIFICATIONS,
@@ -20,8 +21,8 @@ const DropdownContainer = styled.div`
   right: 0;
   width: 400px;
   max-height: 600px;
-  background: ${({ theme }) => theme.color.background.primary};
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  background: ${({ theme }) => color.N1};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 8px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
   display: flex;
@@ -40,7 +41,7 @@ const DropdownContainer = styled.div`
 
 const Header = styled.div`
   padding: 16px;
-  border-bottom: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  border-bottom: 1px solid ${({ theme }) => color.N4};
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -50,7 +51,7 @@ const Title = styled.h3`
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
 `;
 
 const HeaderActions = styled.div`
@@ -61,19 +62,19 @@ const HeaderActions = styled.div`
 const IconButton = styled.button`
   padding: 6px;
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.color.borders.secondary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 4px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   transition: all 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.color.background.tertiary};
-    border-color: ${({ theme }) => theme.color.primary};
-    color: ${({ theme }) => theme.color.primary};
+    background: ${({ theme }) => color.N3};
+    border-color: ${({ theme }) => color.B5};
+    color: ${({ theme }) => color.B5};
   }
 
   &:disabled {
@@ -96,13 +97,13 @@ const NotificationList = styled.div`
 const EmptyState = styled.div`
   padding: 48px 24px;
   text-align: center;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   font-size: 14px;
 `;
 
 const Footer = styled.div`
   padding: 12px;
-  border-top: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  border-top: 1px solid ${({ theme }) => color.N4};
   display: flex;
   justify-content: center;
 `;
@@ -110,25 +111,25 @@ const Footer = styled.div`
 const ViewAllButton = styled.button`
   padding: 8px 16px;
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.color.borders.secondary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 4px;
   font-size: 14px;
   font-weight: 500;
-  color: ${({ theme }) => theme.color.primary};
+  color: ${({ theme }) => color.B5};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.color.primary};
+    background: ${({ theme }) => color.B5};
     color: white;
-    border-color: ${({ theme }) => theme.color.primary};
+    border-color: ${({ theme }) => color.B5};
   }
 `;
 
 const LoadingState = styled.div`
   padding: 48px 24px;
   text-align: center;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   font-size: 14px;
 `;
 
