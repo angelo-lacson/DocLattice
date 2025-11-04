@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useMutation } from "@apollo/client";
 import styled from "styled-components";
 import { ChevronUp, ChevronDown } from "lucide-react";
+import { color } from "../../theme/colors";
 import {
   UPVOTE_MESSAGE,
   DOWNVOTE_MESSAGE,
@@ -34,13 +35,13 @@ const VoteButton = styled.button<{
   border-radius: 4px;
   background: ${({ $isActive, $variant, theme }) => {
     if ($isActive && $variant === "up") return theme.color.success + "20";
-    if ($isActive && $variant === "down") return theme.color.error + "20";
+    if ($isActive && $variant === "down") return color.R7 + "20";
     return "transparent";
   }};
   color: ${({ $isActive, $variant, theme }) => {
     if ($isActive && $variant === "up") return theme.color.success;
-    if ($isActive && $variant === "down") return theme.color.error;
-    return theme.color.text.secondary;
+    if ($isActive && $variant === "down") return color.R7;
+    return color.N7;
   }};
   cursor: pointer;
   transition: all 0.15s ease;
@@ -48,13 +49,13 @@ const VoteButton = styled.button<{
   &:hover:not(:disabled) {
     background: ${({ $variant, theme }) => {
       if ($variant === "up") return theme.color.success + "15";
-      if ($variant === "down") return theme.color.error + "15";
-      return theme.color.background.secondary;
+      if ($variant === "down") return color.R7 + "15";
+      return color.N2;
     }};
     color: ${({ $variant, theme }) => {
       if ($variant === "up") return theme.color.success;
-      if ($variant === "down") return theme.color.error;
-      return theme.color.text.primary;
+      if ($variant === "down") return color.R7;
+      return color.N10;
     }};
   }
 
@@ -74,8 +75,8 @@ const VoteCount = styled.div<{ $score: number }>`
   font-weight: 600;
   color: ${({ $score, theme }) => {
     if ($score > 0) return theme.color.success;
-    if ($score < 0) return theme.color.error;
-    return theme.color.text.secondary;
+    if ($score < 0) return color.R7;
+    return color.N7;
   }};
   padding: 2px 0;
   min-width: 24px;
@@ -89,7 +90,7 @@ const ErrorMessage = styled.div`
   transform: translateX(-50%);
   margin-top: 4px;
   padding: 6px 10px;
-  background: ${({ theme }) => theme.color.error};
+  background: ${({ theme }) => color.R7};
   color: white;
   font-size: 12px;
   border-radius: 4px;
@@ -104,7 +105,7 @@ const ErrorMessage = styled.div`
     left: 50%;
     transform: translateX(-50%);
     border: 4px solid transparent;
-    border-bottom-color: ${({ theme }) => theme.color.error};
+    border-bottom-color: ${({ theme }) => color.R7};
   }
 `;
 

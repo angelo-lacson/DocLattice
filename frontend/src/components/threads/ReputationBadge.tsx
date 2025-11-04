@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import styled from "styled-components";
 import { Award } from "lucide-react";
+import { color } from "../../theme/colors";
 
 const Badge = styled.div<{ $size?: "small" | "medium" | "large" }>`
   display: inline-flex;
@@ -15,8 +16,8 @@ const Badge = styled.div<{ $size?: "small" | "medium" | "large" }>`
     if ($size === "large") return "6px 12px";
     return "4px 8px";
   }};
-  background: ${({ theme }) => theme.color.background.secondary};
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  background: ${({ theme }) => color.N2};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 12px;
   font-size: ${({ $size }) => {
     if ($size === "small") return "11px";
@@ -24,14 +25,13 @@ const Badge = styled.div<{ $size?: "small" | "medium" | "large" }>`
     return "12px";
   }};
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
   cursor: ${({ title }) => (title ? "help" : "default")};
   transition: all 0.15s ease;
   position: relative;
 
   &:hover {
-    border-color: ${({ theme, title }) =>
-      title ? theme.color.primary : theme.color.borders.tertiary};
+    border-color: ${({ theme, title }) => (title ? color.B5 : color.N4)};
   }
 
   svg {
@@ -45,16 +45,16 @@ const Badge = styled.div<{ $size?: "small" | "medium" | "large" }>`
       if ($size === "large") return "18px";
       return "14px";
     }};
-    color: ${({ theme }) => theme.color.warning};
+    color: ${({ theme }) => color.Y6};
   }
 `;
 
 const ReputationValue = styled.span<{ $value: number }>`
   color: ${({ $value, theme }) => {
     if ($value >= 1000) return theme.color.success;
-    if ($value >= 500) return theme.color.primary;
-    if ($value < 0) return theme.color.error;
-    return theme.color.text.primary;
+    if ($value >= 500) return color.B5;
+    if ($value < 0) return color.R7;
+    return color.N10;
   }};
 `;
 
@@ -63,8 +63,8 @@ const Tooltip = styled.div`
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: ${({ theme }) => theme.color.background.primary};
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  background: ${({ theme }) => color.N1};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 6px;
   padding: 12px;
   min-width: 200px;
@@ -79,7 +79,7 @@ const Tooltip = styled.div`
     left: 50%;
     transform: translateX(-50%);
     border: 6px solid transparent;
-    border-top-color: ${({ theme }) => theme.color.borders.tertiary};
+    border-top-color: ${({ theme }) => color.N4};
   }
 
   &::before {
@@ -89,7 +89,7 @@ const Tooltip = styled.div`
     left: 50%;
     transform: translateX(-50%);
     border: 5px solid transparent;
-    border-top-color: ${({ theme }) => theme.color.background.primary};
+    border-top-color: ${({ theme }) => color.N1};
     z-index: 1;
   }
 `;
@@ -97,7 +97,7 @@ const Tooltip = styled.div`
 const TooltipTitle = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
   margin-bottom: 8px;
 `;
 
@@ -111,7 +111,7 @@ const TooltipSection = styled.div`
 
 const TooltipLabel = styled.div`
   font-size: 11px;
-  color: ${({ theme }) => theme.color.text.tertiary};
+  color: ${({ theme }) => color.N6};
   margin-bottom: 2px;
 `;
 
@@ -120,14 +120,14 @@ const TooltipValue = styled.div<{ $positive?: boolean }>`
   font-weight: 500;
   color: ${({ $positive, theme }) => {
     if ($positive === true) return theme.color.success;
-    if ($positive === false) return theme.color.text.secondary;
-    return theme.color.text.primary;
+    if ($positive === false) return color.N7;
+    return color.N10;
   }};
 `;
 
 const Divider = styled.div`
   height: 1px;
-  background: ${({ theme }) => theme.color.borders.tertiary};
+  background: ${({ theme }) => color.N4};
   margin: 8px 0;
 `;
 
