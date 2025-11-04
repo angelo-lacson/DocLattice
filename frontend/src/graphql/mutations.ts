@@ -3020,3 +3020,107 @@ export interface RestoreThreadOutput {
     } | null;
   };
 }
+
+/**
+ * ============================================================================
+ * NOTIFICATION MUTATIONS
+ * ============================================================================
+ */
+
+export const MARK_NOTIFICATION_READ = gql`
+  mutation MarkNotificationRead($notificationId: ID!) {
+    markNotificationRead(notificationId: $notificationId) {
+      ok
+      message
+      notification {
+        id
+        isRead
+        modified
+      }
+    }
+  }
+`;
+
+export interface MarkNotificationReadInput {
+  notificationId: string;
+}
+
+export interface MarkNotificationReadOutput {
+  markNotificationRead: {
+    ok: boolean;
+    message: string;
+    notification: {
+      id: string;
+      isRead: boolean;
+      modified: string;
+    } | null;
+  };
+}
+
+export const MARK_NOTIFICATION_UNREAD = gql`
+  mutation MarkNotificationUnread($notificationId: ID!) {
+    markNotificationUnread(notificationId: $notificationId) {
+      ok
+      message
+      notification {
+        id
+        isRead
+        modified
+      }
+    }
+  }
+`;
+
+export interface MarkNotificationUnreadInput {
+  notificationId: string;
+}
+
+export interface MarkNotificationUnreadOutput {
+  markNotificationUnread: {
+    ok: boolean;
+    message: string;
+    notification: {
+      id: string;
+      isRead: boolean;
+      modified: string;
+    } | null;
+  };
+}
+
+export const MARK_ALL_NOTIFICATIONS_READ = gql`
+  mutation MarkAllNotificationsRead {
+    markAllNotificationsRead {
+      ok
+      message
+      count
+    }
+  }
+`;
+
+export interface MarkAllNotificationsReadOutput {
+  markAllNotificationsRead: {
+    ok: boolean;
+    message: string;
+    count: number;
+  };
+}
+
+export const DELETE_NOTIFICATION = gql`
+  mutation DeleteNotification($notificationId: ID!) {
+    deleteNotification(notificationId: $notificationId) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface DeleteNotificationInput {
+  notificationId: string;
+}
+
+export interface DeleteNotificationOutput {
+  deleteNotification: {
+    ok: boolean;
+    message: string;
+  };
+}
