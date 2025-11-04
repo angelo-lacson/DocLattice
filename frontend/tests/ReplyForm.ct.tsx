@@ -10,8 +10,8 @@ import {
 import { GET_THREAD_DETAIL } from "../src/graphql/queries";
 
 test.describe("ReplyForm - Top-level Message", () => {
-  test("renders for top-level message", async ({ mount }) => {
-    const component = await mount(
+  test("renders for top-level message", async ({ mount, page }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ReplyForm conversationId="conv-1" onCancel={() => {}} />
       </MockedProvider>
@@ -19,17 +19,17 @@ test.describe("ReplyForm - Top-level Message", () => {
 
     await expect(component).toBeVisible();
     // Should have the composer
-    await expect(component.locator(".ProseMirror")).toBeVisible();
+    await expect(page.locator(".ProseMirror")).toBeVisible();
   });
 
-  test("shows placeholder for top-level message", async ({ mount }) => {
-    const component = await mount(
+  test("shows placeholder for top-level message", async ({ mount, page }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ReplyForm conversationId="conv-1" onCancel={() => {}} />
       </MockedProvider>
     );
 
-    await expect(component.getByText("Write your message...")).toBeVisible();
+    await expect(page.getByText("Write your message...")).toBeVisible();
   });
 
   test("submits top-level message", async ({ mount, page }) => {
@@ -89,7 +89,7 @@ test.describe("ReplyForm - Top-level Message", () => {
 
     let successCalled = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -101,11 +101,11 @@ test.describe("ReplyForm - Top-level Message", () => {
       </MockedProvider>
     );
 
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
     await editor.click();
     await editor.fill("Test message content");
 
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     await page.waitForTimeout(500);
@@ -113,10 +113,10 @@ test.describe("ReplyForm - Top-level Message", () => {
     expect(successCalled).toBe(true);
   });
 
-  test("calls onCancel when cancel button clicked", async ({ mount }) => {
+  test("calls onCancel when cancel button clicked", async ({ mount, page }) => {
     let cancelCalled = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -128,7 +128,7 @@ test.describe("ReplyForm - Top-level Message", () => {
       </MockedProvider>
     );
 
-    const cancelButton = component.getByRole("button", { name: /cancel/i });
+    const cancelButton = page.getByRole("button", { name: /cancel/i });
     await cancelButton.click();
 
     expect(cancelCalled).toBe(true);
@@ -136,8 +136,8 @@ test.describe("ReplyForm - Top-level Message", () => {
 });
 
 test.describe("ReplyForm - Nested Reply", () => {
-  test("renders for nested reply", async ({ mount }) => {
-    const component = await mount(
+  test("renders for nested reply", async ({ mount, page }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -149,12 +149,15 @@ test.describe("ReplyForm - Nested Reply", () => {
     );
 
     await expect(component).toBeVisible();
-    await expect(component.getByText(/replying to/i)).toBeVisible();
-    await expect(component.getByText("@testuser")).toBeVisible();
+    await expect(page.getByText(/replying to/i)).toBeVisible();
+    await expect(page.getByText("@testuser")).toBeVisible();
   });
 
-  test("shows username in placeholder for nested reply", async ({ mount }) => {
-    const component = await mount(
+  test("shows username in placeholder for nested reply", async ({
+    mount,
+    page,
+  }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -165,7 +168,7 @@ test.describe("ReplyForm - Nested Reply", () => {
       </MockedProvider>
     );
 
-    await expect(component.getByText("Reply to @testuser...")).toBeVisible();
+    await expect(page.getByText("Reply to @testuser...")).toBeVisible();
   });
 
   test("submits nested reply", async ({ mount, page }) => {
@@ -233,7 +236,7 @@ test.describe("ReplyForm - Nested Reply", () => {
 
     let successCalled = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -247,11 +250,11 @@ test.describe("ReplyForm - Nested Reply", () => {
       </MockedProvider>
     );
 
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
     await editor.click();
     await editor.fill("Test reply content");
 
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     await page.waitForTimeout(500);
@@ -281,7 +284,7 @@ test.describe("ReplyForm - Nested Reply", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -293,22 +296,20 @@ test.describe("ReplyForm - Nested Reply", () => {
       </MockedProvider>
     );
 
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
     await editor.click();
     await editor.fill("Test reply content");
 
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     await page.waitForTimeout(500);
 
-    await expect(
-      component.getByText(/parent message not found/i)
-    ).toBeVisible();
+    await expect(page.getByText(/parent message not found/i)).toBeVisible();
   });
 
   test("validates required content before submit", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -320,12 +321,12 @@ test.describe("ReplyForm - Nested Reply", () => {
     );
 
     // Try to send without content
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     await page.waitForTimeout(100);
 
-    await expect(component.getByText(/please write a message/i)).toBeVisible();
+    await expect(page.getByText(/please write a message/i)).toBeVisible();
   });
 
   test("disables form while submitting", async ({ mount, page }) => {
@@ -393,7 +394,7 @@ test.describe("ReplyForm - Nested Reply", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -404,11 +405,11 @@ test.describe("ReplyForm - Nested Reply", () => {
       </MockedProvider>
     );
 
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
     await editor.click();
     await editor.fill("Test reply content");
 
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     // While loading, button should be disabled
@@ -420,7 +421,7 @@ test.describe("ReplyForm - Nested Reply", () => {
     mount,
     page,
   }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ReplyForm
           conversationId="conv-1"
@@ -432,7 +433,7 @@ test.describe("ReplyForm - Nested Reply", () => {
       </MockedProvider>
     );
 
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
 
     // Should be able to type without clicking
     await page.keyboard.type("Auto-focused!");

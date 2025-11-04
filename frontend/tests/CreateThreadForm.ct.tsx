@@ -9,8 +9,8 @@ import {
 import { GET_CONVERSATIONS } from "../src/graphql/queries";
 
 test.describe("CreateThreadForm", () => {
-  test("renders form fields", async ({ mount }) => {
-    const component = await mount(
+  test("renders form fields", async ({ mount, page }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -20,14 +20,14 @@ test.describe("CreateThreadForm", () => {
       </MockedProvider>
     );
 
-    await expect(component.getByText("Start New Discussion")).toBeVisible();
-    await expect(component.getByLabelText(/title/i)).toBeVisible();
-    await expect(component.getByLabelText(/description/i)).toBeVisible();
-    await expect(component.getByText("Initial Message *")).toBeVisible();
+    await expect(page.getByText("Start New Discussion")).toBeVisible();
+    await expect(page.getByLabel(/title/i)).toBeVisible();
+    await expect(page.getByLabel(/description/i)).toBeVisible();
+    await expect(page.getByText("Initial Message *")).toBeVisible();
   });
 
   test("shows character count for title", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -37,14 +37,14 @@ test.describe("CreateThreadForm", () => {
       </MockedProvider>
     );
 
-    const titleInput = component.getByLabelText(/title/i);
+    const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Title");
 
-    await expect(component.getByText("10 / 200 characters")).toBeVisible();
+    await expect(page.getByText("10 / 200 characters")).toBeVisible();
   });
 
   test("shows character count for description", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -54,16 +54,16 @@ test.describe("CreateThreadForm", () => {
       </MockedProvider>
     );
 
-    const descriptionInput = component.getByLabelText(/description/i);
+    const descriptionInput = page.getByLabel(/description/i);
     await descriptionInput.fill("Test Description");
 
-    await expect(component.getByText("16 / 1000 characters")).toBeVisible();
+    await expect(page.getByText("16 / 1000 characters")).toBeVisible();
   });
 
-  test("calls onClose when close button clicked", async ({ mount }) => {
+  test("calls onClose when close button clicked", async ({ mount, page }) => {
     let closeCalled = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -75,7 +75,7 @@ test.describe("CreateThreadForm", () => {
       </MockedProvider>
     );
 
-    const closeButton = component.getByTitle("Close");
+    const closeButton = page.getByTitle("Close");
     await closeButton.click();
 
     expect(closeCalled).toBe(true);
@@ -84,7 +84,7 @@ test.describe("CreateThreadForm", () => {
   test("calls onClose when clicking outside modal", async ({ mount, page }) => {
     let closeCalled = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -97,14 +97,14 @@ test.describe("CreateThreadForm", () => {
     );
 
     // Click on the overlay (outside the modal)
-    const overlay = component.locator('[class*="Overlay"]').first();
+    const overlay = page.locator('[class*="Overlay"]').first();
     await overlay.click({ position: { x: 5, y: 5 } });
 
     expect(closeCalled).toBe(true);
   });
 
   test("validates required title", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -115,23 +115,23 @@ test.describe("CreateThreadForm", () => {
     );
 
     // Fill in message but not title
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
     await editor.click();
     await editor.fill("Test message content");
 
     // Try to send
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     // Wait for validation
     await page.waitForTimeout(100);
 
     // Should show error
-    await expect(component.getByText(/please enter a title/i)).toBeVisible();
+    await expect(page.getByText(/please enter a title/i)).toBeVisible();
   });
 
   test("validates required message", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -142,18 +142,18 @@ test.describe("CreateThreadForm", () => {
     );
 
     // Fill in title but not message
-    const titleInput = component.getByLabelText(/title/i);
+    const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
 
     // Try to send (message is empty)
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     // Wait for validation
     await page.waitForTimeout(100);
 
     // Should show error
-    await expect(component.getByText(/please write a message/i)).toBeVisible();
+    await expect(page.getByText(/please write a message/i)).toBeVisible();
   });
 
   test("submits thread with all fields", async ({ mount, page }) => {
@@ -224,7 +224,7 @@ test.describe("CreateThreadForm", () => {
 
     let successCallbackFired = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -238,18 +238,18 @@ test.describe("CreateThreadForm", () => {
     );
 
     // Fill in all fields
-    const titleInput = component.getByLabelText(/title/i);
+    const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
 
-    const descriptionInput = component.getByLabelText(/description/i);
+    const descriptionInput = page.getByLabel(/description/i);
     await descriptionInput.fill("Test description");
 
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
     await editor.click();
     await editor.fill("Test message content");
 
     // Submit
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     // Wait for mutation
@@ -325,7 +325,7 @@ test.describe("CreateThreadForm", () => {
 
     let successCallbackFired = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -338,15 +338,15 @@ test.describe("CreateThreadForm", () => {
     );
 
     // Fill in only required fields
-    const titleInput = component.getByLabelText(/title/i);
+    const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
 
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
     await editor.click();
     await editor.fill("Test message content");
 
     // Submit
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     // Wait for mutation
@@ -378,7 +378,7 @@ test.describe("CreateThreadForm", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -389,28 +389,26 @@ test.describe("CreateThreadForm", () => {
     );
 
     // Fill in fields
-    const titleInput = component.getByLabelText(/title/i);
+    const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
 
-    const editor = component.locator(".ProseMirror");
+    const editor = page.locator(".ProseMirror");
     await editor.click();
     await editor.fill("Test message content");
 
     // Submit
-    const sendButton = component.getByRole("button", { name: /send/i });
+    const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
     // Wait for mutation
     await page.waitForTimeout(500);
 
     // Should show error
-    await expect(
-      component.getByText(/you don't have permission/i)
-    ).toBeVisible();
+    await expect(page.getByText(/you don't have permission/i)).toBeVisible();
   });
 
   test("enforces max length on title", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -420,7 +418,7 @@ test.describe("CreateThreadForm", () => {
       </MockedProvider>
     );
 
-    const titleInput = component.getByLabelText(/title/i);
+    const titleInput = page.getByLabel(/title/i);
 
     // Try to enter more than 200 characters
     const longTitle = "A".repeat(250);
@@ -432,7 +430,7 @@ test.describe("CreateThreadForm", () => {
   });
 
   test("enforces max length on description", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <CreateThreadForm
           corpusId="corpus-1"
@@ -442,7 +440,7 @@ test.describe("CreateThreadForm", () => {
       </MockedProvider>
     );
 
-    const descriptionInput = component.getByLabelText(/description/i);
+    const descriptionInput = page.getByLabel(/description/i);
 
     // Try to enter more than 1000 characters
     const longDescription = "A".repeat(1050);
