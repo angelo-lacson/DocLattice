@@ -1,18 +1,19 @@
 import React from "react";
 import styled from "styled-components";
 import { Shield } from "lucide-react";
+import { color } from "../../theme/colors";
 
 const Badge = styled.span<{ $size?: "small" | "medium" }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: ${({ $size }) => ($size === "small" ? "2px 6px" : "4px 8px")};
-  background: ${({ theme }) => theme.color.primary}15;
-  border: 1px solid ${({ theme }) => theme.color.primary}40;
+  background: ${({ theme }) => color.B5}15;
+  border: 1px solid ${({ theme }) => color.B5}40;
   border-radius: 4px;
   font-size: ${({ $size }) => ($size === "small" ? "11px" : "12px")};
   font-weight: 600;
-  color: ${({ theme }) => theme.color.primary};
+  color: ${({ theme }) => color.B5};
 
   svg {
     width: ${({ $size }) => ($size === "small" ? "12px" : "14px")};

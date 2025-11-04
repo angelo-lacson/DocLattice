@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import styled from "styled-components";
 import { Pin, Lock, Trash2, RotateCcw } from "lucide-react";
 import { useMutation } from "@apollo/client";
+import { color } from "../../theme/colors";
 import {
   PIN_THREAD,
   UNPIN_THREAD,
@@ -29,8 +30,8 @@ const Container = styled.div`
   align-items: center;
   gap: 8px;
   padding: 12px;
-  background: ${({ theme }) => theme.color.background.secondary};
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  background: ${({ theme }) => color.N2};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 6px;
 `;
 
@@ -52,32 +53,32 @@ const ModerationButton = styled.button<{
     switch ($variant) {
       case "danger":
         return `
-          background: ${theme.color.error}10;
-          border-color: ${theme.color.error}40;
-          color: ${theme.color.error};
+          background: ${color.R7}10;
+          border-color: ${color.R7}40;
+          color: ${color.R7};
           &:hover:not(:disabled) {
-            background: ${theme.color.error}20;
-            border-color: ${theme.color.error};
+            background: ${color.R7}20;
+            border-color: ${color.R7};
           }
         `;
       case "warning":
         return `
-          background: ${theme.color.warning}10;
-          border-color: ${theme.color.warning}40;
-          color: ${theme.color.warning};
+          background: ${color.Y6}10;
+          border-color: ${color.Y6}40;
+          color: ${color.Y6};
           &:hover:not(:disabled) {
-            background: ${theme.color.warning}20;
-            border-color: ${theme.color.warning};
+            background: ${color.Y6}20;
+            border-color: ${color.Y6};
           }
         `;
       default:
         return `
-          background: ${theme.color.primary}10;
-          border-color: ${theme.color.primary}40;
-          color: ${theme.color.primary};
+          background: ${color.B5}10;
+          border-color: ${color.B5}40;
+          color: ${color.B5};
           &:hover:not(:disabled) {
-            background: ${theme.color.primary}20;
-            border-color: ${theme.color.primary};
+            background: ${color.B5}20;
+            border-color: ${color.B5};
           }
         `;
     }
@@ -109,7 +110,7 @@ const ConfirmDialog = styled.div`
 `;
 
 const ConfirmBox = styled.div`
-  background: ${({ theme }) => theme.color.background.primary};
+  background: ${({ theme }) => color.N1};
   border-radius: 8px;
   padding: 24px;
   max-width: 400px;
@@ -121,13 +122,13 @@ const ConfirmTitle = styled.h3`
   margin: 0 0 12px 0;
   font-size: 18px;
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
 `;
 
 const ConfirmMessage = styled.p`
   margin: 0 0 20px 0;
   font-size: 14px;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   line-height: 1.5;
 `;
 
@@ -149,17 +150,17 @@ const ConfirmButton = styled.button<{ $primary?: boolean }>`
   ${({ $primary, theme }) =>
     $primary
       ? `
-    background: ${theme.color.error};
+    background: ${color.R7};
     color: white;
     &:hover:not(:disabled) {
       opacity: 0.9;
     }
   `
       : `
-    background: ${theme.color.background.tertiary};
-    color: ${theme.color.text.primary};
+    background: ${color.N3};
+    color: ${color.N10};
     &:hover:not(:disabled) {
-      background: ${theme.color.background.secondary};
+      background: ${color.N2};
     }
   `}
 
@@ -171,8 +172,8 @@ const ConfirmButton = styled.button<{ $primary?: boolean }>`
 
 const ErrorMessage = styled.div`
   padding: 8px 12px;
-  background: ${({ theme }) => theme.color.error}15;
-  color: ${({ theme }) => theme.color.error};
+  background: ${({ theme }) => color.R7}15;
+  color: ${({ theme }) => color.R7};
   font-size: 13px;
   border-radius: 4px;
   margin-top: 8px;
