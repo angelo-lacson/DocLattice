@@ -95,52 +95,57 @@ export function ThreadList({
 
   // Process and sort threads
   const processedThreads = useMemo(() => {
-    let threads = data?.conversations?.edges?.map((e) => e.node) || [];
+    let threads =
+      data?.conversations?.edges
+        ?.map((e) => e?.node)
+        .filter((node): node is NonNullable<typeof node> => node != null) || [];
 
     // Apply filters
     if (!filters.showLocked) {
-      threads = threads.filter((t) => !t.isLocked);
+      threads = threads.filter((t) => !t?.isLocked);
     }
     if (!filters.showDeleted) {
-      threads = threads.filter((t) => !t.deletedAt);
+      threads = threads.filter((t) => !t?.deletedAt);
     }
 
     // Apply sort
     threads = [...threads].sort((a, b) => {
       // Pinned threads always first (if not sorting by pinned)
       if (sortBy !== "pinned") {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
+        if (a?.isPinned && !b?.isPinned) return -1;
+        if (!a?.isPinned && b?.isPinned) return 1;
       }
 
       switch (sortBy) {
         case "newest":
           return (
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            new Date(b?.createdAt || 0).getTime() -
+            new Date(a?.createdAt || 0).getTime()
           );
 
         case "active": {
           // Sort by most recent update
-          const aTime = new Date(a.updatedAt || a.createdAt).getTime();
-          const bTime = new Date(b.updatedAt || b.createdAt).getTime();
+          const aTime = new Date(a?.updatedAt || a?.createdAt || 0).getTime();
+          const bTime = new Date(b?.updatedAt || b?.createdAt || 0).getTime();
           return bTime - aTime;
         }
 
         case "upvoted": {
           // TODO: Calculate total upvotes from messages when available
           // For now, fall back to message count as proxy for activity
-          const aCount = a.chatMessages?.totalCount || 0;
-          const bCount = b.chatMessages?.totalCount || 0;
+          const aCount = a?.chatMessages?.totalCount || 0;
+          const bCount = b?.chatMessages?.totalCount || 0;
           return bCount - aCount;
         }
 
         case "pinned":
         default: {
           // Pinned first, then by creation date
-          if (a.isPinned && !b.isPinned) return -1;
-          if (!a.isPinned && b.isPinned) return 1;
+          if (a?.isPinned && !b?.isPinned) return -1;
+          if (!a?.isPinned && b?.isPinned) return 1;
           return (
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            new Date(b?.createdAt || 0).getTime() -
+            new Date(a?.createdAt || 0).getTime()
           );
         }
       }

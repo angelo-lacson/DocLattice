@@ -47,7 +47,7 @@ export const selectedMessageIdAtom = atom<string | null>(null);
 /**
  * Message tree expansion state (for collapsible threads in future)
  */
-export const expandedMessageIdsAtom = atom<Set<string>>(new Set());
+export const expandedMessageIdsAtom = atom<Set<string>>(new Set<string>());
 
 // ============================================================================
 // UI STATE

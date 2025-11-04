@@ -18,6 +18,7 @@ import {
   CorpusActionType,
   DocumentType,
   AnalysisRowType,
+  ConversationType,
   ConversationTypeConnection,
   PipelineComponentType,
   ChatMessageType,
@@ -2146,6 +2147,9 @@ export const listAnnotations = /* GraphQL */ `
 export interface GetConversationsInputs {
   documentId?: string;
   corpusId?: string;
+  conversationType?: string;
+  limit?: number;
+  cursor?: string;
   title_Contains?: string;
   createdAt_Gte?: string;
   createdAt_Lte?: string;
