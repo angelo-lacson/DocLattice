@@ -2,14 +2,15 @@ import React from "react";
 import styled from "styled-components";
 import { TrendingUp, TrendingDown, Award } from "lucide-react";
 import { ReputationBadge, ReputationBreakdown } from "./ReputationBadge";
+import { color } from "../../theme/colors";
 
 const Container = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
   padding: 20px;
-  background: ${({ theme }) => theme.color.background.primary};
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  background: ${({ theme }) => color.N1};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 8px;
 `;
 
@@ -23,7 +24,7 @@ const Title = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
 `;
 
 const Stats = styled.div`
@@ -34,13 +35,13 @@ const Stats = styled.div`
 
 const StatCard = styled.div`
   padding: 16px;
-  background: ${({ theme }) => theme.color.background.secondary};
+  background: ${({ theme }) => color.N2};
   border-radius: 6px;
 `;
 
 const StatLabel = styled.div`
   font-size: 12px;
-  color: ${({ theme }) => theme.color.text.tertiary};
+  color: ${({ theme }) => color.N6};
   margin-bottom: 6px;
 `;
 
@@ -52,8 +53,8 @@ const StatValue = styled.div<{ $trend?: "up" | "down" }>`
   font-weight: 700;
   color: ${({ $trend, theme }) => {
     if ($trend === "up") return theme.color.success;
-    if ($trend === "down") return theme.color.error;
-    return theme.color.text.primary;
+    if ($trend === "down") return color.R7;
+    return color.N10;
   }};
 
   svg {
@@ -78,13 +79,13 @@ const SectionTitle = styled.h4`
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
 `;
 
 const ProgressBar = styled.div`
   width: 100%;
   height: 8px;
-  background: ${({ theme }) => theme.color.background.tertiary};
+  background: ${({ theme }) => color.N3};
   border-radius: 4px;
   overflow: hidden;
 `;
@@ -92,13 +93,13 @@ const ProgressBar = styled.div`
 const ProgressFill = styled.div<{ $percentage: number }>`
   width: ${({ $percentage }) => Math.min(100, Math.max(0, $percentage))}%;
   height: 100%;
-  background: ${({ theme }) => theme.color.primary};
+  background: ${({ theme }) => color.B5};
   transition: width 0.3s ease;
 `;
 
 const NextMilestone = styled.div`
   font-size: 12px;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   margin-top: 4px;
 `;
 

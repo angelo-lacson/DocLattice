@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { ReputationBadge, ReputationBreakdown } from "./ReputationBadge";
+import { color } from "../../theme/colors";
 
 const Container = styled.div<{ $layout?: "horizontal" | "vertical" }>`
   display: flex;
@@ -20,12 +21,12 @@ const UserInfo = styled.div`
 const Username = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
 `;
 
 const UserRole = styled.div`
   font-size: 12px;
-  color: ${({ theme }) => theme.color.text.tertiary};
+  color: ${({ theme }) => color.N6};
 `;
 
 const ReputationGroup = styled.div`
