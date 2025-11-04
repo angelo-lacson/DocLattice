@@ -4,13 +4,14 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
+import { color } from "../../theme/colors";
 
 const ComposerContainer = styled.div`
   display: flex;
   flex-direction: column;
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 8px;
-  background: ${({ theme }) => theme.color.background.primary};
+  background: ${({ theme }) => color.N1};
   overflow: hidden;
 `;
 
@@ -19,8 +20,8 @@ const Toolbar = styled.div`
   align-items: center;
   gap: 4px;
   padding: 8px;
-  border-bottom: 1px solid ${({ theme }) => theme.color.borders.tertiary};
-  background: ${({ theme }) => theme.color.background.secondary};
+  border-bottom: 1px solid ${({ theme }) => color.N4};
+  background: ${({ theme }) => color.N2};
 `;
 
 const ToolbarButton = styled.button<{ $isActive?: boolean }>`
@@ -32,13 +33,13 @@ const ToolbarButton = styled.button<{ $isActive?: boolean }>`
   border: none;
   border-radius: 4px;
   background: ${({ $isActive, theme }) =>
-    $isActive ? theme.color.background.tertiary : "transparent"};
-  color: ${({ theme }) => theme.color.text.primary};
+    $isActive ? color.N3 : "transparent"};
+  color: ${({ theme }) => color.N10};
   cursor: pointer;
   transition: background 0.15s ease;
 
   &:hover:not(:disabled) {
-    background: ${({ theme }) => theme.color.background.tertiary};
+    background: ${({ theme }) => color.N3};
   }
 
   &:disabled {
@@ -66,7 +67,7 @@ const EditorContainer = styled.div`
     p.is-editor-empty:first-child::before {
       content: attr(data-placeholder);
       float: left;
-      color: ${({ theme }) => theme.color.text.tertiary};
+      color: ${({ theme }) => color.N6};
       pointer-events: none;
       height: 0;
     }
@@ -100,13 +101,13 @@ const Footer = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-top: 1px solid ${({ theme }) => theme.color.borders.tertiary};
-  background: ${({ theme }) => theme.color.background.secondary};
+  border-top: 1px solid ${({ theme }) => color.N4};
+  background: ${({ theme }) => color.N2};
 `;
 
 const CharacterCount = styled.span`
   font-size: 12px;
-  color: ${({ theme }) => theme.color.text.tertiary};
+  color: ${({ theme }) => color.N6};
 `;
 
 const SendButton = styled.button`
@@ -116,7 +117,7 @@ const SendButton = styled.button`
   padding: 8px 16px;
   border: none;
   border-radius: 6px;
-  background: ${({ theme }) => theme.color.primary};
+  background: ${({ theme }) => color.B5};
   color: white;
   font-size: 14px;
   font-weight: 500;
@@ -140,10 +141,10 @@ const SendButton = styled.button`
 
 const ErrorMessage = styled.div`
   padding: 8px 12px;
-  background: ${({ theme }) => theme.color.error}15;
-  color: ${({ theme }) => theme.color.error};
+  background: ${({ theme }) => color.R7}15;
+  color: ${({ theme }) => color.R7};
   font-size: 13px;
-  border-top: 1px solid ${({ theme }) => theme.color.error}40;
+  border-top: 1px solid ${({ theme }) => color.R7}40;
 `;
 
 export interface MessageComposerProps {

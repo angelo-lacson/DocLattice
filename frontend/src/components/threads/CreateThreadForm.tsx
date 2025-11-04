@@ -9,6 +9,7 @@ import {
 } from "../../graphql/mutations";
 import { GET_CONVERSATIONS } from "../../graphql/queries";
 import { MessageComposer } from "./MessageComposer";
+import { color } from "../../theme/colors";
 
 const Overlay = styled.div`
   position: fixed;
@@ -25,7 +26,7 @@ const Overlay = styled.div`
 `;
 
 const Modal = styled.div`
-  background: ${({ theme }) => theme.color.background.primary};
+  background: ${({ theme }) => color.N1};
   border-radius: 8px;
   width: 100%;
   max-width: 600px;
@@ -41,14 +42,14 @@ const Header = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  border-bottom: 1px solid ${({ theme }) => color.N4};
 `;
 
 const Title = styled.h2`
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
 `;
 
 const CloseButton = styled.button`
@@ -60,12 +61,12 @@ const CloseButton = styled.button`
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   cursor: pointer;
   transition: background 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.color.background.secondary};
+    background: ${({ theme }) => color.N2};
   }
 
   svg {
@@ -89,27 +90,27 @@ const Label = styled.label`
   margin-bottom: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: ${({ theme }) => theme.color.text.primary};
+  color: ${({ theme }) => color.N10};
 `;
 
 const Input = styled.input`
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 6px;
-  background: ${({ theme }) => theme.color.background.primary};
-  color: ${({ theme }) => theme.color.text.primary};
+  background: ${({ theme }) => color.N1};
+  color: ${({ theme }) => color.N10};
   font-size: 14px;
   font-family: inherit;
   transition: border-color 0.15s ease;
 
   &:focus {
     outline: none;
-    border-color: ${({ theme }) => theme.color.primary};
+    border-color: ${({ theme }) => color.B5};
   }
 
   &::placeholder {
-    color: ${({ theme }) => theme.color.text.tertiary};
+    color: ${({ theme }) => color.N6};
   }
 `;
 
@@ -117,10 +118,10 @@ const TextArea = styled.textarea`
   width: 100%;
   min-height: 80px;
   padding: 10px 12px;
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 6px;
-  background: ${({ theme }) => theme.color.background.primary};
-  color: ${({ theme }) => theme.color.text.primary};
+  background: ${({ theme }) => color.N1};
+  color: ${({ theme }) => color.N10};
   font-size: 14px;
   font-family: inherit;
   resize: vertical;
@@ -128,27 +129,27 @@ const TextArea = styled.textarea`
 
   &:focus {
     outline: none;
-    border-color: ${({ theme }) => theme.color.primary};
+    border-color: ${({ theme }) => color.B5};
   }
 
   &::placeholder {
-    color: ${({ theme }) => theme.color.text.tertiary};
+    color: ${({ theme }) => color.N6};
   }
 `;
 
 const HelpText = styled.p`
   margin: 4px 0 0 0;
   font-size: 12px;
-  color: ${({ theme }) => theme.color.text.tertiary};
+  color: ${({ theme }) => color.N6};
 `;
 
 const ErrorMessage = styled.div`
   padding: 12px;
   margin-bottom: 16px;
-  background: ${({ theme }) => theme.color.error}15;
-  border: 1px solid ${({ theme }) => theme.color.error}40;
+  background: ${({ theme }) => color.R7}15;
+  border: 1px solid ${({ theme }) => color.R7}40;
   border-radius: 6px;
-  color: ${({ theme }) => theme.color.error};
+  color: ${({ theme }) => color.R7};
   font-size: 13px;
 `;
 

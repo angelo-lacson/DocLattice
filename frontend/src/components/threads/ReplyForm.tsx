@@ -12,11 +12,12 @@ import {
 } from "../../graphql/mutations";
 import { GET_THREAD_DETAIL } from "../../graphql/queries";
 import { MessageComposer } from "./MessageComposer";
+import { color } from "../../theme/colors";
 
 const Container = styled.div`
-  border: 1px solid ${({ theme }) => theme.color.borders.tertiary};
+  border: 1px solid ${({ theme }) => color.N4};
   border-radius: 8px;
-  background: ${({ theme }) => theme.color.background.secondary};
+  background: ${({ theme }) => color.N2};
   padding: 12px;
 `;
 
@@ -29,10 +30,10 @@ const Header = styled.div`
 
 const ReplyingTo = styled.div`
   font-size: 13px;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
 
   strong {
-    color: ${({ theme }) => theme.color.text.primary};
+    color: ${({ theme }) => color.N10};
     font-weight: 500;
   }
 `;
@@ -45,13 +46,13 @@ const CancelButton = styled.button`
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: ${({ theme }) => theme.color.text.secondary};
+  color: ${({ theme }) => color.N7};
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.color.background.tertiary};
+    background: ${({ theme }) => color.N3};
   }
 
   svg {
@@ -63,10 +64,10 @@ const CancelButton = styled.button`
 const ErrorMessage = styled.div`
   padding: 8px 12px;
   margin-bottom: 12px;
-  background: ${({ theme }) => theme.color.error}15;
-  border: 1px solid ${({ theme }) => theme.color.error}40;
+  background: ${({ theme }) => color.R7}15;
+  border: 1px solid ${({ theme }) => color.R7}40;
   border-radius: 6px;
-  color: ${({ theme }) => theme.color.error};
+  color: ${({ theme }) => color.R7};
   font-size: 13px;
 `;
 
