@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import styled from "styled-components";
 import { Bell } from "lucide-react";
+import { color } from "../../theme/colors";
 import { useQuery } from "@apollo/client";
 import { GET_UNREAD_NOTIFICATION_COUNT } from "../../graphql/queries";
 import { NotificationDropdown } from "./NotificationDropdown";
@@ -19,16 +20,15 @@ const BellButton = styled.button<{ $hasUnread?: boolean }>`
   height: 40px;
   border: none;
   background: ${({ theme, $hasUnread }) =>
-    $hasUnread ? theme.color.primary : "transparent"};
+    $hasUnread ? color.B5 : "transparent"};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: ${({ theme, $hasUnread }) =>
-    $hasUnread ? "white" : theme.color.text.primary};
+  color: ${({ theme, $hasUnread }) => ($hasUnread ? "white" : color.N10)};
 
   &:hover {
-    background: ${({ theme }) => theme.color.background.tertiary};
-    color: ${({ theme }) => theme.color.primary};
+    background: ${({ theme }) => color.N3};
+    color: ${({ theme }) => color.B5};
   }
 
   svg {
@@ -44,7 +44,7 @@ const Badge = styled.span`
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  background: ${({ theme }) => theme.color.error};
+  background: ${({ theme }) => color.R7};
   color: white;
   font-size: 11px;
   font-weight: 700;
