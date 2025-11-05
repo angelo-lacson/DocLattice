@@ -84,6 +84,8 @@ export interface ReplyFormProps {
   onCancel: () => void;
   /** Auto-focus on mount */
   autoFocus?: boolean;
+  /** Initial content (for testing) */
+  initialContent?: string;
 }
 
 export function ReplyForm({
@@ -93,6 +95,7 @@ export function ReplyForm({
   onSuccess,
   onCancel,
   autoFocus = true,
+  initialContent,
 }: ReplyFormProps) {
   const [error, setError] = useState("");
 
@@ -219,6 +222,7 @@ export function ReplyForm({
         error={error}
         autoFocus={autoFocus}
         maxLength={10000}
+        initialContent={initialContent}
       />
     </Container>
   );
