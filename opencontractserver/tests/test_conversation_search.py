@@ -1811,6 +1811,78 @@ class ConversationModelVisibilityTest(TestCase):
         # Creator should see their own conversation
         self.assertIn(conv.id, visible_ids)
 
+    def test_visible_to_user_superuser_sees_all(self):
+        """Test that superusers see all conversations including private ones."""
+        # Create a superuser
+        superuser = User.objects.create_superuser(
+            username="admin", password="admin", email="admin@test.com"
+        )
+
+        # Create private conversation owned by regular user
+        private_conv = Conversation.objects.create(
+            title="Private Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+        # Create public conversation
+        public_conv = Conversation.objects.create(
+            title="Public Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_public=True,
+        )
+
+        # Superuser should see both
+        visible = Conversation.objects.visible_to_user(superuser)
+        visible_ids = set(visible.values_list("id", flat=True))
+
+        self.assertIn(private_conv.id, visible_ids)
+        self.assertIn(public_conv.id, visible_ids)
+
+    def test_visible_to_user_with_shared_permissions(self):
+        """Test that users see conversations explicitly shared with them."""
+        # Create second user
+        other_user = User.objects.create_user(
+            username="other_user", password="testpass"
+        )
+
+        # Create private conversation owned by first user
+        conv = Conversation.objects.create(
+            title="Shared Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+        # Share with other_user
+        set_permissions_for_obj_to_user(
+            user_val=other_user,
+            instance=conv,
+            permissions=[PermissionTypes.READ],
+        )
+
+        # other_user should be able to see it
+        visible = Conversation.objects.visible_to_user(other_user)
+        visible_ids = set(visible.values_list("id", flat=True))
+
+        self.assertIn(conv.id, visible_ids)
+
+        # But they shouldn't see conversations they don't have access to
+        private_conv = Conversation.objects.create(
+            title="Not Shared",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+        visible2 = Conversation.objects.visible_to_user(other_user)
+        visible_ids2 = set(visible2.values_list("id", flat=True))
+
+        self.assertIn(conv.id, visible_ids2)  # Still sees shared one
+        self.assertNotIn(private_conv.id, visible_ids2)  # Doesn't see unshared
+
 
 class EmbeddingDimensionTest(TestCase):
     """Test vector search with different embedding dimensions."""
@@ -2058,3 +2130,118 @@ class EmbeddingDimensionTest(TestCase):
             )
 
         self.assertIn("Unsupported embedding dimension", str(ctx.exception))
+
+
+class HelperFunctionsTest(TestCase):
+    """Test utility helper functions in vector stores module."""
+
+    def test_is_async_context_returns_false_in_sync(self):
+        """Test _is_async_context returns False in synchronous context."""
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            _is_async_context,
+        )
+
+        # In sync context, should return False
+        result = _is_async_context()
+        self.assertFalse(result)
+
+    def test_safe_queryset_info_sync_in_sync_context(self):
+        """Test _safe_queryset_info_sync in synchronous context."""
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            _safe_queryset_info_sync,
+        )
+
+        # Create a simple queryset
+        User.objects.create_user(username="helper_user", password="testpass")
+        queryset = User.objects.filter(username="helper_user")
+
+        # Should return count info
+        result = _safe_queryset_info_sync(queryset, "Test query")
+        self.assertIn("Test query:", result)
+        self.assertIn("1 results", result)
+
+    def test_safe_queryset_info_sync_handles_exception(self):
+        """Test _safe_queryset_info_sync handles queryset exceptions."""
+        from unittest.mock import Mock
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            _safe_queryset_info_sync,
+        )
+
+        # Create a mock queryset that raises an exception
+        mock_qs = Mock()
+        mock_qs.count.side_effect = Exception("Database error")
+
+        result = _safe_queryset_info_sync(mock_qs, "Error test")
+        self.assertIn("unable to count results", result)
+        self.assertIn("Database error", result)
+
+    @pytest.mark.asyncio
+    async def test_is_async_context_returns_true_in_async(self):
+        """Test _is_async_context returns True in asynchronous context."""
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            _is_async_context,
+        )
+
+        # In async context, should return True
+        result = _is_async_context()
+        self.assertTrue(result)
+
+    @pytest.mark.asyncio
+    async def test_safe_queryset_info_in_async_context(self):
+        """Test _safe_queryset_info in asynchronous context."""
+        from asgiref.sync import sync_to_async
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            _safe_queryset_info,
+        )
+
+        # Create queryset
+        await sync_to_async(User.objects.create_user)(
+            username="async_info_user", password="testpass"
+        )
+        queryset = User.objects.filter(username="async_info_user")
+
+        # Should use async path (lines 33-35)
+        result = await _safe_queryset_info(queryset, "Async test")
+        self.assertIn("Async test:", result)
+        self.assertIn("1 results", result)
+
+    @pytest.mark.asyncio
+    async def test_safe_queryset_info_handles_exception(self):
+        """Test _safe_queryset_info handles exceptions gracefully."""
+        from unittest.mock import Mock
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            _safe_queryset_info,
+        )
+
+        # Create mock queryset that raises exception
+        mock_qs = Mock()
+        mock_qs.count.side_effect = Exception("Async error")
+
+        result = await _safe_queryset_info(mock_qs, "Error test")
+        self.assertIn("unable to count results", result)
+        self.assertIn("Async error", result)
+
+    @pytest.mark.asyncio
+    async def test_safe_execute_queryset_in_async_context(self):
+        """Test _safe_execute_queryset in asynchronous context."""
+        from asgiref.sync import sync_to_async
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            _safe_execute_queryset,
+        )
+
+        # Create users
+        await sync_to_async(User.objects.create_user)(
+            username="async_exec1", password="testpass"
+        )
+        await sync_to_async(User.objects.create_user)(
+            username="async_exec2", password="testpass"
+        )
+        queryset = User.objects.filter(username__startswith="async_exec")
+
+        # Execute in async context (line 56)
+        result = await _safe_execute_queryset(queryset)
+        self.assertEqual(len(result), 2)
