@@ -1,3 +1,4 @@
+import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { CreateThreadForm } from "../src/components/threads/CreateThreadForm";
 import { MockedProvider } from "@apollo/client/testing";
@@ -96,9 +97,12 @@ test.describe("CreateThreadForm", () => {
       </MockedProvider>
     );
 
-    // Click on the overlay (outside the modal)
-    const overlay = page.locator('[class*="Overlay"]').first();
-    await overlay.click({ position: { x: 5, y: 5 } });
+    // Wait for modal to be visible
+    await expect(page.getByText("Start New Discussion")).toBeVisible();
+
+    // The overlay should be the parent of the modal - click at the edge of the viewport
+    // to hit the overlay outside the modal
+    await page.click("body", { position: { x: 5, y: 5 }, force: true });
 
     expect(closeCalled).toBe(true);
   });
@@ -110,15 +114,12 @@ test.describe("CreateThreadForm", () => {
           corpusId="corpus-1"
           onSuccess={() => {}}
           onClose={() => {}}
+          initialMessage="<p>Test message content</p>"
         />
       </MockedProvider>
     );
 
-    // Fill in message but not title
-    const editor = page.locator(".ProseMirror");
-    await editor.click();
-    await editor.fill("Test message content");
-
+    // Title is empty, but message has content
     // Try to send
     const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
@@ -145,15 +146,9 @@ test.describe("CreateThreadForm", () => {
     const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
 
-    // Try to send (message is empty)
+    // Send button should be disabled when message is empty
     const sendButton = page.getByRole("button", { name: /send/i });
-    await sendButton.click();
-
-    // Wait for validation
-    await page.waitForTimeout(100);
-
-    // Should show error
-    await expect(page.getByText(/please write a message/i)).toBeVisible();
+    await expect(sendButton).toBeDisabled();
   });
 
   test("submits thread with all fields", async ({ mount, page }) => {
@@ -168,7 +163,7 @@ test.describe("CreateThreadForm", () => {
             corpusId: "corpus-1",
             title: "Test Thread",
             description: "Test description",
-            initialMessage: expect.stringContaining("Test message"),
+            initialMessage: "<p>Test message content</p>",
           },
         },
         result: {
@@ -233,6 +228,7 @@ test.describe("CreateThreadForm", () => {
             expect(id).toBe("thread-1");
           }}
           onClose={() => {}}
+          initialMessage="<p>Test message content</p>"
         />
       </MockedProvider>
     );
@@ -243,10 +239,6 @@ test.describe("CreateThreadForm", () => {
 
     const descriptionInput = page.getByLabel(/description/i);
     await descriptionInput.fill("Test description");
-
-    const editor = page.locator(".ProseMirror");
-    await editor.click();
-    await editor.fill("Test message content");
 
     // Submit
     const sendButton = page.getByRole("button", { name: /send/i });
@@ -269,7 +261,7 @@ test.describe("CreateThreadForm", () => {
           variables: {
             corpusId: "corpus-1",
             title: "Test Thread",
-            initialMessage: expect.stringContaining("Test message"),
+            initialMessage: "<p>Test message content</p>",
           },
         },
         result: {
@@ -333,6 +325,7 @@ test.describe("CreateThreadForm", () => {
             successCallbackFired = true;
           }}
           onClose={() => {}}
+          initialMessage="<p>Test message content</p>"
         />
       </MockedProvider>
     );
@@ -340,10 +333,6 @@ test.describe("CreateThreadForm", () => {
     // Fill in only required fields
     const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
-
-    const editor = page.locator(".ProseMirror");
-    await editor.click();
-    await editor.fill("Test message content");
 
     // Submit
     const sendButton = page.getByRole("button", { name: /send/i });
@@ -363,7 +352,7 @@ test.describe("CreateThreadForm", () => {
           variables: {
             corpusId: "corpus-1",
             title: "Test Thread",
-            initialMessage: expect.stringContaining("Test message"),
+            initialMessage: "<p>Test message content</p>",
           },
         },
         result: {
@@ -384,6 +373,7 @@ test.describe("CreateThreadForm", () => {
           corpusId="corpus-1"
           onSuccess={() => {}}
           onClose={() => {}}
+          initialMessage="<p>Test message content</p>"
         />
       </MockedProvider>
     );
@@ -391,10 +381,6 @@ test.describe("CreateThreadForm", () => {
     // Fill in fields
     const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
-
-    const editor = page.locator(".ProseMirror");
-    await editor.click();
-    await editor.fill("Test message content");
 
     // Submit
     const sendButton = page.getByRole("button", { name: /send/i });

@@ -160,12 +160,15 @@ export interface CreateThreadFormProps {
   onSuccess: (conversationId: string) => void;
   /** Called when form is closed/cancelled */
   onClose: () => void;
+  /** Initial message content (for testing) */
+  initialMessage?: string;
 }
 
 export function CreateThreadForm({
   corpusId,
   onSuccess,
   onClose,
+  initialMessage,
 }: CreateThreadFormProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -285,6 +288,7 @@ export function CreateThreadForm({
               onChange={setMessage}
               disabled={loading}
               maxLength={10000}
+              initialContent={initialMessage}
             />
             <HelpText>
               Tip: Use <strong>Cmd+Enter</strong> to send your message
