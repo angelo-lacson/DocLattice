@@ -1815,7 +1815,7 @@ class ConversationModelVisibilityTest(TestCase):
         """Test that superusers see all conversations including private ones."""
         # Create a superuser
         superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="superuser_admin", password="admin", email="superuser@test.com"
         )
 
         # Create private conversation owned by regular user

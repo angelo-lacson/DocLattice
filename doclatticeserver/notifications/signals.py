@@ -41,7 +41,7 @@ def create_reply_notification(sender, instance, created, **kwargs):
     message = instance
 
     # Don't notify if the message is from a system/bot
-    if message.msg_type != "human":
+    if message.msg_type != "HUMAN":
         return
 
     # Don't create duplicate notifications during tests or fixtures
@@ -133,7 +133,7 @@ def create_mention_notification(sender, instance, created, **kwargs):
     message = instance
 
     # Don't process system messages
-    if message.msg_type != "human":
+    if message.msg_type != "HUMAN":
         return
 
     # Don't create duplicate notifications during tests or fixtures

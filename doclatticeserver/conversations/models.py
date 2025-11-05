@@ -633,6 +633,7 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         related_name="replies",
         blank=True,
         null=True,
+        db_index=True,
         help_text="Parent message for threaded replies",
     )
     content = models.TextField(
