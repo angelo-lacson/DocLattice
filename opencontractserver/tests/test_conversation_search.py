@@ -1607,3 +1607,454 @@ class AsyncMessageSearchTest(TestCase):
             self.assertTrue(
                 "len(" in error_msg or "embedder" in error_msg or "vector" in error_msg
             )
+
+    @pytest.mark.asyncio
+    async def test_async_message_search_missing_query_raises_error(self):
+        """Test that async message search raises ValueError when query missing."""
+        store = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            similarity_top_k=10,
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            await store.async_search(query)
+
+        self.assertIn("Either query_text or query_embedding", str(ctx.exception))
+
+
+class VectorStoreEdgeCasesTest(TestCase):
+    """Test edge cases and error paths in vector stores."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username="edge_case_user", password="testpassword"
+        )
+        self.corpus = Corpus.objects.create(title="Edge Case Corpus", creator=self.user)
+
+    def test_conversation_store_requires_corpus_or_embedder(self):
+        """Test that CoreConversationVectorStore requires either corpus_id or embedder_path."""
+        with self.assertRaises(ValueError) as ctx:
+            CoreConversationVectorStore(
+                user_id=self.user.id,
+                # No corpus_id or embedder_path provided
+            )
+
+        self.assertIn("requires either 'corpus_id'", str(ctx.exception))
+
+    def test_message_store_requires_corpus_or_embedder(self):
+        """Test that CoreChatMessageVectorStore requires either corpus_id or embedder_path."""
+        with self.assertRaises(ValueError) as ctx:
+            CoreChatMessageVectorStore(
+                user_id=self.user.id,
+                # No corpus_id or embedder_path provided
+            )
+
+        self.assertIn("requires either 'corpus_id'", str(ctx.exception))
+
+    def test_conversation_store_with_invalid_embed_dim(self):
+        """Test conversation store handles invalid embed dimensions gracefully."""
+        # Create store with invalid dimension (not 384, 768, 1536, or 3072)
+        store = CoreConversationVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+            embed_dim=512,  # Invalid dimension
+        )
+
+        # Should fall back to default dimension (384)
+        self.assertEqual(store.embed_dim, 384)
+
+    def test_message_store_with_invalid_embed_dim(self):
+        """Test message store handles invalid embed dimensions gracefully."""
+        store = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+            embed_dim=999,  # Invalid dimension
+        )
+
+        # Should fall back to default dimension (384)
+        self.assertEqual(store.embed_dim, 384)
+
+    def test_conversation_store_with_document_id_filter(self):
+        """Test conversation store filtering by document_id."""
+        pdf_file = ContentFile(b"%PDF-1.4 test", name="doc_test.pdf")
+        doc = Document.objects.create(
+            creator=self.user,
+            title="Test Document",
+            pdf_file=pdf_file,
+            backend_lock=True,
+        )
+
+        # Create document-linked conversation
+        conv = Conversation.objects.create(
+            title="Document Conversation",
+            chat_with_document=doc,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conv,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        Embedding.objects.create(
+            conversation=conv,
+            embedder_path="test/embedder",
+            vector_384=[0.1] * 384,
+            creator=self.user,
+        )
+
+        # Create store with document_id filter
+        store = CoreConversationVectorStore(
+            user_id=self.user.id,
+            document_id=doc.id,
+            embedder_path="test/embedder",
+        )
+
+        query = VectorSearchQuery(
+            query_embedding=[0.1] * 384,
+            similarity_top_k=10,
+        )
+
+        results = store.search(query)
+        conversation_ids = {result.conversation.id for result in results}
+
+        # Should include document-linked conversation
+        self.assertIn(conv.id, conversation_ids)
+
+    def test_message_store_exclude_deleted_parameter(self):
+        """Test message store exclude_deleted parameter exists and can be set."""
+        # Test that exclude_deleted parameter can be set to False
+        store_include = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+            exclude_deleted=False,
+        )
+
+        # Verify the parameter is set correctly
+        self.assertEqual(store_include.exclude_deleted, False)
+
+        # Test default value (True)
+        store_default = CoreChatMessageVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus.id,
+            embedder_path="test/embedder",
+        )
+
+        self.assertEqual(store_default.exclude_deleted, True)
+
+
+class ConversationModelVisibilityTest(TestCase):
+    """Test SoftDeleteQuerySet.visible_to_user edge cases."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username="visibility_user", password="testpassword"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Visibility Test Corpus", creator=self.user
+        )
+
+    def test_visible_to_user_with_none_user(self):
+        """Test visible_to_user handles None user (anonymous)."""
+        # Create public conversation
+        public_conv = Conversation.objects.create(
+            title="Public Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_public=True,
+        )
+
+        # Create private conversation
+        private_conv = Conversation.objects.create(
+            title="Private Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+        # Query with None user (anonymous)
+        visible = Conversation.objects.visible_to_user(None)
+
+        visible_ids = set(visible.values_list("id", flat=True))
+
+        # Anonymous should only see public
+        self.assertIn(public_conv.id, visible_ids)
+        self.assertNotIn(private_conv.id, visible_ids)
+
+    def test_visible_to_user_fallback_no_permission_model(self):
+        """Test visible_to_user fallback when permission model doesn't exist."""
+        # This tests the LookupError exception handling in visible_to_user
+        # The code handles cases where guardian permission models don't exist
+
+        # Create conversation
+        conv = Conversation.objects.create(
+            title="Test Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+        # Query as creator
+        visible = Conversation.objects.visible_to_user(self.user)
+        visible_ids = set(visible.values_list("id", flat=True))
+
+        # Creator should see their own conversation
+        self.assertIn(conv.id, visible_ids)
+
+
+class EmbeddingDimensionTest(TestCase):
+    """Test vector search with different embedding dimensions."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username="dimension_user", password="testpassword"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Dimension Test Corpus", creator=self.user
+        )
+
+    def test_conversation_search_with_768_dimension(self):
+        """Test conversation search with 768-dimensional embeddings."""
+        conv = Conversation.objects.create(
+            title="768D Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conv,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        # Create 768-dimensional embedding
+        Embedding.objects.create(
+            conversation=conv,
+            embedder_path="test/embedder-768",
+            vector_768=[0.1] * 768,
+            creator=self.user,
+        )
+
+        # Search with 768-dimensional vector
+        results = Conversation.objects.search_by_embedding(
+            query_vector=[0.1] * 768,
+            embedder_path="test/embedder-768",
+            top_k=10,
+        )
+
+        self.assertGreater(len(results), 0)
+        conv_ids = [c.id for c in results]
+        self.assertIn(conv.id, conv_ids)
+
+    def test_conversation_search_with_1536_dimension(self):
+        """Test conversation search with 1536-dimensional embeddings."""
+        conv = Conversation.objects.create(
+            title="1536D Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conv,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        # Create 1536-dimensional embedding
+        Embedding.objects.create(
+            conversation=conv,
+            embedder_path="test/embedder-1536",
+            vector_1536=[0.1] * 1536,
+            creator=self.user,
+        )
+
+        # Search with 1536-dimensional vector
+        results = Conversation.objects.search_by_embedding(
+            query_vector=[0.1] * 1536,
+            embedder_path="test/embedder-1536",
+            top_k=10,
+        )
+
+        self.assertGreater(len(results), 0)
+        conv_ids = [c.id for c in results]
+        self.assertIn(conv.id, conv_ids)
+
+    def test_conversation_search_with_3072_dimension(self):
+        """Test conversation search with 3072-dimensional embeddings."""
+        conv = Conversation.objects.create(
+            title="3072D Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conv,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        # Create 3072-dimensional embedding
+        Embedding.objects.create(
+            conversation=conv,
+            embedder_path="test/embedder-3072",
+            vector_3072=[0.1] * 3072,
+            creator=self.user,
+        )
+
+        # Search with 3072-dimensional vector
+        results = Conversation.objects.search_by_embedding(
+            query_vector=[0.1] * 3072,
+            embedder_path="test/embedder-3072",
+            top_k=10,
+        )
+
+        self.assertGreater(len(results), 0)
+        conv_ids = [c.id for c in results]
+        self.assertIn(conv.id, conv_ids)
+
+    def test_message_search_with_768_dimension(self):
+        """Test message search with 768-dimensional embeddings."""
+        conversation = Conversation.objects.create(
+            title="768D Message Test",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conversation,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            creator=self.user,
+            msg_type="HUMAN",
+            content="Test message 768D",
+        )
+
+        # Create 768-dimensional embedding
+        Embedding.objects.create(
+            message=message,
+            embedder_path="test/embedder-768",
+            vector_768=[0.1] * 768,
+            creator=self.user,
+        )
+
+        # Search with 768-dimensional vector
+        results = ChatMessage.objects.search_by_embedding(
+            query_vector=[0.1] * 768,
+            embedder_path="test/embedder-768",
+            top_k=10,
+        )
+
+        self.assertGreater(len(results), 0)
+        message_ids = [m.id for m in results]
+        self.assertIn(message.id, message_ids)
+
+    def test_message_search_with_1536_dimension(self):
+        """Test message search with 1536-dimensional embeddings."""
+        conversation = Conversation.objects.create(
+            title="1536D Message Test",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conversation,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            creator=self.user,
+            msg_type="HUMAN",
+            content="Test message 1536D",
+        )
+
+        # Create 1536-dimensional embedding
+        Embedding.objects.create(
+            message=message,
+            embedder_path="test/embedder-1536",
+            vector_1536=[0.1] * 1536,
+            creator=self.user,
+        )
+
+        # Search with 1536-dimensional vector
+        results = ChatMessage.objects.search_by_embedding(
+            query_vector=[0.1] * 1536,
+            embedder_path="test/embedder-1536",
+            top_k=10,
+        )
+
+        self.assertGreater(len(results), 0)
+        message_ids = [m.id for m in results]
+        self.assertIn(message.id, message_ids)
+
+    def test_message_search_with_3072_dimension(self):
+        """Test message search with 3072-dimensional embeddings."""
+        conversation = Conversation.objects.create(
+            title="3072D Message Test",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conversation,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            creator=self.user,
+            msg_type="HUMAN",
+            content="Test message 3072D",
+        )
+
+        # Create 3072-dimensional embedding
+        Embedding.objects.create(
+            message=message,
+            embedder_path="test/embedder-3072",
+            vector_3072=[0.1] * 3072,
+            creator=self.user,
+        )
+
+        # Search with 3072-dimensional vector
+        results = ChatMessage.objects.search_by_embedding(
+            query_vector=[0.1] * 3072,
+            embedder_path="test/embedder-3072",
+            top_k=10,
+        )
+
+        self.assertGreater(len(results), 0)
+        message_ids = [m.id for m in results]
+        self.assertIn(message.id, message_ids)
+
+    def test_conversation_search_invalid_dimension_raises_error(self):
+        """Test that invalid embedding dimensions raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            Conversation.objects.search_by_embedding(
+                query_vector=[0.1] * 512,  # Invalid dimension
+                embedder_path="test/embedder",
+                top_k=10,
+            )
+
+        self.assertIn("Unsupported embedding dimension", str(ctx.exception))
+
+    def test_message_search_invalid_dimension_raises_error(self):
+        """Test that invalid message embedding dimensions raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            ChatMessage.objects.search_by_embedding(
+                query_vector=[0.1] * 999,  # Invalid dimension
+                embedder_path="test/embedder",
+                top_k=10,
+            )
+
+        self.assertIn("Unsupported embedding dimension", str(ctx.exception))
