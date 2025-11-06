@@ -3406,3 +3406,112 @@ export interface GetUserBadgesOutput {
     };
   };
 }
+
+/**
+ * ============================================================================
+ * NOTIFICATION QUERIES
+ * ============================================================================
+ */
+
+export const GET_NOTIFICATIONS = gql`
+  query GetNotifications(
+    $isRead: Boolean
+    $notificationType: String
+    $limit: Int
+    $cursor: String
+  ) {
+    notifications(
+      isRead: $isRead
+      notificationType: $notificationType
+      first: $limit
+      after: $cursor
+    ) {
+      edges {
+        node {
+          id
+          notificationType
+          isRead
+          createdAt
+          modified
+          data
+          actor {
+            id
+            username
+            email
+          }
+          message {
+            id
+            content
+          }
+          conversation {
+            id
+            title
+            conversationType
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      totalCount
+    }
+  }
+`;
+
+export const GET_UNREAD_NOTIFICATION_COUNT = gql`
+  query GetUnreadNotificationCount {
+    unreadNotificationCount
+  }
+`;
+
+export interface GetNotificationsInput {
+  isRead?: boolean;
+  notificationType?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface NotificationNode {
+  id: string;
+  notificationType: string;
+  isRead: boolean;
+  createdAt: string;
+  modified: string;
+  data?: Record<string, any>;
+  actor?: {
+    id: string;
+    username: string;
+    email: string;
+  };
+  message?: {
+    id: string;
+    content: string;
+  };
+  conversation?: {
+    id: string;
+    title: string;
+    conversationType: string;
+  };
+}
+
+export interface GetNotificationsOutput {
+  notifications: {
+    edges: Array<{
+      node: NotificationNode;
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string;
+      endCursor: string;
+    };
+    totalCount: number;
+  };
+}
+
+export interface GetUnreadNotificationCountOutput {
+  unreadNotificationCount: number;
+}
