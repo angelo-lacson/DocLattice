@@ -18,7 +18,7 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell pollInterval={0} />
       </MockedProvider>
@@ -41,7 +41,7 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell pollInterval={0} />
       </MockedProvider>
@@ -65,7 +65,7 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell pollInterval={0} />
       </MockedProvider>
@@ -89,7 +89,7 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell pollInterval={0} />
       </MockedProvider>
@@ -123,7 +123,7 @@ test.describe("NotificationBell", () => {
 
     let viewAllCalled = false;
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell
           fullPageMode={true}
@@ -183,7 +183,7 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell fullPageMode={false} pollInterval={0} />
       </MockedProvider>
@@ -237,7 +237,7 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell fullPageMode={false} pollInterval={0} />
       </MockedProvider>

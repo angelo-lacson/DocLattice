@@ -28,7 +28,7 @@ test("@slug profile modal updates user slug", async ({ mount, page }) => {
     },
   ];
 
-  await mount(<UserSettingsModalHarness mocks={mocks} />);
+  const component = await mount(<UserSettingsModalHarness mocks={mocks} />);
   await expect(page.getByTestId("user-settings-modal")).toBeVisible();
   await page.getByPlaceholder("your-slug").fill("Alice-Pro");
   await page.getByRole("button", { name: /Save/i }).click();

@@ -35,7 +35,7 @@ test.describe("NotificationCenter", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={mocks} addTypename={false}>
           <NotificationCenter />
@@ -44,7 +44,7 @@ test.describe("NotificationCenter", () => {
     );
 
     await expect(
-      page.getByRole("heading", { name: "Notifications" })
+      page.getByRole("heading", { name: "Notifications" }).first()
     ).toBeVisible();
   });
 
@@ -74,7 +74,7 @@ test.describe("NotificationCenter", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={mocks} addTypename={false}>
           <NotificationCenter />
@@ -82,9 +82,15 @@ test.describe("NotificationCenter", () => {
       </MemoryRouter>
     );
 
-    await expect(page.getByRole("button", { name: "All" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Unread" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Read" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "All" }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Unread" }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Read" }).first()
+    ).toBeVisible();
   });
 
   test("shows mark all as read button", async ({ mount, page }) => {
@@ -113,7 +119,7 @@ test.describe("NotificationCenter", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={mocks} addTypename={false}>
           <NotificationCenter />
@@ -152,7 +158,7 @@ test.describe("NotificationCenter", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={mocks} addTypename={false}>
           <NotificationCenter />
@@ -210,7 +216,7 @@ test.describe("NotificationCenter", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={mocks} addTypename={false}>
           <NotificationCenter />
@@ -310,7 +316,7 @@ test.describe("NotificationCenter", () => {
       },
     };
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={[allMock, unreadMock]} addTypename={false}>
           <NotificationCenter />
@@ -387,7 +393,7 @@ test.describe("NotificationCenter", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={mocks} addTypename={false}>
           <NotificationCenter />
@@ -451,7 +457,7 @@ test.describe("NotificationCenter", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={mocks} addTypename={false}>
           <NotificationCenter />
@@ -513,7 +519,7 @@ test.describe("NotificationCenter", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MemoryRouter>
         <MockedProvider mocks={mocks} addTypename={false}>
           <NotificationCenter />

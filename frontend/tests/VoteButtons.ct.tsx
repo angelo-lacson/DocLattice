@@ -12,7 +12,7 @@ import {
 
 test.describe("VoteButtons", () => {
   test("renders vote buttons and count", async ({ mount, page }) => {
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -32,7 +32,7 @@ test.describe("VoteButtons", () => {
   });
 
   test("shows negative score", async ({ mount, page }) => {
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -49,7 +49,7 @@ test.describe("VoteButtons", () => {
   });
 
   test("shows upvoted state", async ({ mount, page }) => {
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -68,7 +68,7 @@ test.describe("VoteButtons", () => {
   });
 
   test("shows downvoted state", async ({ mount, page }) => {
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -111,7 +111,7 @@ test.describe("VoteButtons", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -160,7 +160,7 @@ test.describe("VoteButtons", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -209,7 +209,7 @@ test.describe("VoteButtons", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -230,7 +230,7 @@ test.describe("VoteButtons", () => {
   });
 
   test("prevents voting on own message", async ({ mount, page }) => {
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -273,7 +273,7 @@ test.describe("VoteButtons", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -297,7 +297,7 @@ test.describe("VoteButtons", () => {
     mount,
     page,
   }) => {
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -345,7 +345,7 @@ test.describe("VoteButtons", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
@@ -399,7 +399,7 @@ test.describe("VoteButtons", () => {
       },
     ];
 
-    await mount(
+    const component = await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <VoteButtons
           messageId="msg-1"
