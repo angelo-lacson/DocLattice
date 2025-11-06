@@ -1,0 +1,202 @@
+import { test, expect } from "@playwright/experimental-ct-react";
+import { ReputationBadge } from "../src/components/threads/ReputationBadge";
+
+test.describe("ReputationBadge", () => {
+  test("renders basic reputation badge", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge reputation={150} showTooltip={false} />
+    );
+
+    await expect(component).toBeVisible();
+    await expect(component.getByText("150")).toBeVisible();
+  });
+
+  test("formats large numbers with k suffix", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge reputation={1500} showTooltip={false} />
+    );
+
+    await expect(component.getByText("1.5k")).toBeVisible();
+  });
+
+  test("formats very large numbers", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge reputation={15000} showTooltip={false} />
+    );
+
+    await expect(component.getByText("15k")).toBeVisible();
+  });
+
+  test("shows icon when showIcon is true", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge reputation={150} showIcon={true} showTooltip={false} />
+    );
+
+    // Check for Award icon (Lucide React)
+    const icon = component.locator("svg");
+    await expect(icon).toBeVisible();
+  });
+
+  test("hides icon when showIcon is false", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge reputation={150} showIcon={false} showTooltip={false} />
+    );
+
+    const icon = component.locator("svg");
+    await expect(icon).not.toBeVisible();
+  });
+
+  test("shows custom label", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge
+        reputation={150}
+        label="Global"
+        showIcon={false}
+        showTooltip={false}
+      />
+    );
+
+    await expect(component.getByText("Global:")).toBeVisible();
+    await expect(component.getByText("150")).toBeVisible();
+  });
+
+  test("renders small size", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge
+        reputation={150}
+        size="small"
+        showIcon={false}
+        showTooltip={false}
+      />
+    );
+
+    await expect(component).toBeVisible();
+  });
+
+  test("renders large size", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge
+        reputation={150}
+        size="large"
+        showIcon={false}
+        showTooltip={false}
+      />
+    );
+
+    await expect(component).toBeVisible();
+  });
+
+  test("shows tooltip on hover with breakdown", async ({ mount, page }) => {
+    const component = await mount(
+      <ReputationBadge
+        reputation={250}
+        breakdown={{
+          total: 250,
+          fromUpvotes: 200,
+          fromDownvotes: -20,
+          fromAcceptedAnswers: 50,
+          fromBadges: 20,
+        }}
+        showIcon={false}
+        showTooltip={true}
+      />
+    );
+
+    // Hover over badge
+    await component.hover();
+
+    // Wait for tooltip
+    await page.waitForTimeout(200);
+
+    // Check tooltip content
+    await expect(component.getByText("Reputation Breakdown")).toBeVisible();
+    await expect(component.getByText("+200")).toBeVisible();
+    await expect(component.getByText("-20")).toBeVisible();
+    await expect(component.getByText("+50")).toBeVisible();
+    await expect(component.getByText("+20")).toBeVisible();
+  });
+
+  test("shows corpus reputation in tooltip", async ({ mount, page }) => {
+    const component = await mount(
+      <ReputationBadge
+        reputation={250}
+        breakdown={{
+          total: 250,
+          corpusReputation: 100,
+          fromUpvotes: 150,
+        }}
+        showIcon={false}
+        showTooltip={true}
+      />
+    );
+
+    // Hover over badge
+    await component.hover();
+
+    // Wait for tooltip
+    await page.waitForTimeout(200);
+
+    await expect(component.getByText("Corpus Reputation")).toBeVisible();
+    await expect(component.getByText("100")).toBeVisible();
+  });
+
+  test("does not show tooltip when showTooltip is false", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ReputationBadge
+        reputation={250}
+        breakdown={{
+          total: 250,
+          fromUpvotes: 200,
+        }}
+        showIcon={false}
+        showTooltip={false}
+      />
+    );
+
+    // Hover over badge
+    await component.hover();
+
+    // Wait a bit
+    await page.waitForTimeout(200);
+
+    // Tooltip should not appear
+    await expect(component.getByText("Reputation Breakdown")).not.toBeVisible();
+  });
+
+  test("does not show tooltip when no breakdown provided", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ReputationBadge reputation={250} showIcon={false} showTooltip={true} />
+    );
+
+    // Hover over badge
+    await component.hover();
+
+    // Wait a bit
+    await page.waitForTimeout(200);
+
+    // Tooltip should not appear since no breakdown was provided
+    await expect(component.getByText("Reputation Breakdown")).not.toBeVisible();
+  });
+
+  test("handles negative reputation", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge reputation={-50} showIcon={false} showTooltip={false} />
+    );
+
+    await expect(component.getByText("-50")).toBeVisible();
+  });
+
+  test("handles zero reputation", async ({ mount }) => {
+    const component = await mount(
+      <ReputationBadge reputation={0} showIcon={false} showTooltip={false} />
+    );
+
+    await expect(component.getByText("0")).toBeVisible();
+  });
+});

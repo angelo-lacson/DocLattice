@@ -2688,3 +2688,103 @@ export interface DeleteMessageOutput {
     message: string;
   };
 }
+
+// ============================================================================
+// Voting Mutations
+// ============================================================================
+
+export const UPVOTE_MESSAGE = gql`
+  mutation UpvoteMessage($messageId: ID!) {
+    upvoteMessage(messageId: $messageId) {
+      ok
+      message
+      chatMessage {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface UpvoteMessageInput {
+  messageId: string;
+}
+
+export interface UpvoteMessageOutput {
+  upvoteMessage: {
+    ok: boolean;
+    message: string;
+    chatMessage: {
+      id: string;
+      upvoteCount: number;
+      downvoteCount: number;
+      userVote?: string;
+    } | null;
+  };
+}
+
+export const DOWNVOTE_MESSAGE = gql`
+  mutation DownvoteMessage($messageId: ID!) {
+    downvoteMessage(messageId: $messageId) {
+      ok
+      message
+      chatMessage {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface DownvoteMessageInput {
+  messageId: string;
+}
+
+export interface DownvoteMessageOutput {
+  downvoteMessage: {
+    ok: boolean;
+    message: string;
+    chatMessage: {
+      id: string;
+      upvoteCount: number;
+      downvoteCount: number;
+      userVote?: string;
+    } | null;
+  };
+}
+
+export const REMOVE_VOTE = gql`
+  mutation RemoveVote($messageId: ID!) {
+    removeVote(messageId: $messageId) {
+      ok
+      message
+      chatMessage {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface RemoveVoteInput {
+  messageId: string;
+}
+
+export interface RemoveVoteOutput {
+  removeVote: {
+    ok: boolean;
+    message: string;
+    chatMessage: {
+      id: string;
+      upvoteCount: number;
+      downvoteCount: number;
+      userVote?: string;
+    } | null;
+  };
+}
