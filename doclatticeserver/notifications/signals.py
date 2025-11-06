@@ -80,8 +80,10 @@ def create_reply_notification(sender, instance, created, **kwargs):
     if message.conversation and message.conversation.conversation_type == "thread":
         try:
             # Get all users who have posted in this thread
+            # Exclude the new message itself to prevent race conditions
             participant_ids = (
                 ChatMessage.objects.filter(conversation=message.conversation)
+                .exclude(pk=message.pk)  # Exclude the new message itself
                 .exclude(creator=message.creator)  # Don't notify self
                 .values_list("creator_id", flat=True)
                 .distinct()
