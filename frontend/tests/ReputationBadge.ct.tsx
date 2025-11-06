@@ -105,10 +105,10 @@ test.describe("ReputationBadge", () => {
 
     // Check tooltip content
     await expect(page.getByText("Reputation Breakdown")).toBeVisible();
-    await expect(page.getByText("+200")).toBeVisible();
-    await expect(page.getByText("-20")).toBeVisible();
-    await expect(page.getByText("+50")).toBeVisible();
-    await expect(page.getByText("+20")).toBeVisible();
+    await expect(page.getByText("+200", { exact: true })).toBeVisible();
+    await expect(page.getByText("-20", { exact: true })).toBeVisible();
+    await expect(page.getByText("+50", { exact: true })).toBeVisible();
+    await expect(page.getByText("+20", { exact: true })).toBeVisible();
   });
 
   test("shows corpus reputation in tooltip", async ({ mount, page }) => {

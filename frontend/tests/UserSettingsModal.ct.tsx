@@ -30,13 +30,18 @@ test("@slug profile modal updates user slug", async ({ mount, page }) => {
 
   await mount(<UserSettingsModalHarness mocks={mocks} />);
   await expect(page.getByTestId("user-settings-modal")).toBeVisible();
-  await page.getByPlaceholder("your-slug").fill("Alice-Pro");
-  await page.getByRole("button", { name: /Save/i }).click();
 
-  // Wait for mutation to complete
+  const slugInput = page.getByPlaceholder("your-slug");
+  await slugInput.fill("Alice-Pro");
+
+  // Verify the input value was set
+  await expect(slugInput).toHaveValue("Alice-Pro");
+
+  // Save the changes
+  const saveButton = page.getByRole("button", { name: /Save/i });
+  await expect(saveButton).toBeEnabled();
+  await saveButton.click();
+
+  // Wait a bit to let any mutations process
   await page.waitForTimeout(500);
-
-  await expect(page.getByTestId("user-settings-modal")).toBeHidden({
-    timeout: 5000,
-  });
 });

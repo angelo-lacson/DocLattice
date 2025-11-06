@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { NotificationBell } from "../src/components/notifications/NotificationBell";
 import { MockedProvider } from "@apollo/client/testing";
+import { MemoryRouter } from "react-router-dom";
 import { GET_UNREAD_NOTIFICATION_COUNT } from "../src/graphql/queries";
 
 test.describe("NotificationBell", () => {
@@ -19,9 +20,11 @@ test.describe("NotificationBell", () => {
     ];
 
     const component = await mount(
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <NotificationBell pollInterval={0} />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <NotificationBell pollInterval={0} />
+        </MockedProvider>
+      </MemoryRouter>
     );
 
     await expect(page.getByLabel(/Notifications/i)).toBeVisible();
@@ -42,9 +45,11 @@ test.describe("NotificationBell", () => {
     ];
 
     const component = await mount(
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <NotificationBell pollInterval={0} />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <NotificationBell pollInterval={0} />
+        </MockedProvider>
+      </MemoryRouter>
     );
 
     await page.waitForTimeout(500);
@@ -66,9 +71,11 @@ test.describe("NotificationBell", () => {
     ];
 
     const component = await mount(
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <NotificationBell pollInterval={0} />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <NotificationBell pollInterval={0} />
+        </MockedProvider>
+      </MemoryRouter>
     );
 
     await page.waitForTimeout(500);
@@ -90,9 +97,11 @@ test.describe("NotificationBell", () => {
     ];
 
     const component = await mount(
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <NotificationBell pollInterval={0} />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <NotificationBell pollInterval={0} />
+        </MockedProvider>
+      </MemoryRouter>
     );
 
     await page.waitForTimeout(500);
@@ -124,15 +133,17 @@ test.describe("NotificationBell", () => {
     let viewAllCalled = false;
 
     const component = await mount(
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <NotificationBell
-          fullPageMode={true}
-          onViewAll={() => {
-            viewAllCalled = true;
-          }}
-          pollInterval={0}
-        />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <NotificationBell
+            fullPageMode={true}
+            onViewAll={() => {
+              viewAllCalled = true;
+            }}
+            pollInterval={0}
+          />
+        </MockedProvider>
+      </MemoryRouter>
     );
 
     await page.waitForTimeout(500);
@@ -184,9 +195,11 @@ test.describe("NotificationBell", () => {
     ];
 
     const component = await mount(
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <NotificationBell fullPageMode={false} pollInterval={0} />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <NotificationBell fullPageMode={false} pollInterval={0} />
+        </MockedProvider>
+      </MemoryRouter>
     );
 
     await page.waitForTimeout(500);
@@ -238,9 +251,11 @@ test.describe("NotificationBell", () => {
     ];
 
     const component = await mount(
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <NotificationBell fullPageMode={false} pollInterval={0} />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <NotificationBell fullPageMode={false} pollInterval={0} />
+        </MockedProvider>
+      </MemoryRouter>
     );
 
     await page.waitForTimeout(500);
