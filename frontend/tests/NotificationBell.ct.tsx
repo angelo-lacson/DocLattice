@@ -24,7 +24,7 @@ test.describe("NotificationBell", () => {
       </MockedProvider>
     );
 
-    await expect(component.getByLabelText(/Notifications/i)).toBeVisible();
+    await expect(page.getByLabel(/Notifications/i)).toBeVisible();
   });
 
   test("shows unread count badge when > 0", async ({ mount, page }) => {
@@ -48,7 +48,7 @@ test.describe("NotificationBell", () => {
     );
 
     await page.waitForTimeout(500);
-    await expect(component.getByText("5")).toBeVisible();
+    await expect(page.getByText("5")).toBeVisible();
   });
 
   test("shows 99+ for counts over 99", async ({ mount, page }) => {
@@ -72,7 +72,7 @@ test.describe("NotificationBell", () => {
     );
 
     await page.waitForTimeout(500);
-    await expect(component.getByText("99+")).toBeVisible();
+    await expect(page.getByText("99+")).toBeVisible();
   });
 
   test("does not show badge when count is 0", async ({ mount, page }) => {
@@ -96,11 +96,11 @@ test.describe("NotificationBell", () => {
     );
 
     await page.waitForTimeout(500);
-    const bell = component.getByLabelText(/Notifications/i);
+    const bell = page.getByLabel(/Notifications/i);
     await expect(bell).toBeVisible();
     // Badge should not be present
     await expect(
-      component.locator("span").filter({ hasText: /^\d+$/ })
+      page.locator("span").filter({ hasText: /^\d+$/ })
     ).not.toBeVisible();
   });
 
@@ -137,7 +137,7 @@ test.describe("NotificationBell", () => {
 
     await page.waitForTimeout(500);
 
-    const bell = component.getByLabelText(/Notifications/i);
+    const bell = page.getByLabel(/Notifications/i);
     await bell.click();
 
     await page.waitForTimeout(100);
@@ -191,13 +191,13 @@ test.describe("NotificationBell", () => {
 
     await page.waitForTimeout(500);
 
-    const bell = component.getByLabelText(/Notifications/i);
+    const bell = page.getByLabel(/Notifications/i);
     await bell.click();
 
     await page.waitForTimeout(500);
     // Dropdown should be visible with "Notifications" title
     await expect(
-      component.getByRole("heading", { name: /Notifications/i })
+      page.getByRole("heading", { name: /Notifications/i })
     ).toBeVisible();
   });
 
@@ -246,12 +246,12 @@ test.describe("NotificationBell", () => {
     await page.waitForTimeout(500);
 
     // Open dropdown
-    const bell = component.getByLabelText(/Notifications/i);
+    const bell = page.getByLabel(/Notifications/i);
     await bell.click();
 
     await page.waitForTimeout(500);
     await expect(
-      component.getByRole("heading", { name: /Notifications/i })
+      page.getByRole("heading", { name: /Notifications/i })
     ).toBeVisible();
 
     // Click outside
@@ -259,7 +259,7 @@ test.describe("NotificationBell", () => {
 
     await page.waitForTimeout(300);
     await expect(
-      component.getByRole("heading", { name: /Notifications/i })
+      page.getByRole("heading", { name: /Notifications/i })
     ).not.toBeVisible();
   });
 });
