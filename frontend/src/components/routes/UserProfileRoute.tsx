@@ -13,8 +13,8 @@ import { useParams, Navigate } from "react-router-dom";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { GET_USER, GetUserInput, GetUserOutput } from "../../graphql/queries";
 import { backendUserObj } from "../../graphql/cache";
-import { ModernLoadingDisplay } from "../widgets/data-display/ModernLoadingDisplay";
-import { ModernErrorDisplay } from "../widgets/data-display/ModernErrorDisplay";
+import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
+import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { UserProfile } from "../../views/UserProfile";
 
 export const UserProfileRoute: React.FC = () => {
