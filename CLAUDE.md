@@ -120,13 +120,13 @@ docker compose -f production.yml up
    - Computed/derived atoms automatically update when dependencies change
 
 2. **Routing System**:
-   - We use a central routing system on the frontend to permit deep-linking to key resources and drive state management for key selected resources - e.g. specific corpus, document in a corpus, annotation in a document (potentially in a corpus), etc. 
-   - This mantra must be respected and you must align all state changes or routing with the mantra and system outlined in docs/frontend/routing_system.md . 
+   - We use a central routing system on the frontend to permit deep-linking to key resources and drive state management for key selected resources - e.g. specific corpus, document in a corpus, annotation in a document (potentially in a corpus), etc.
+   - This mantra must be respected and you must align all state changes or routing with the mantra and system outlined in docs/frontend/routing_system.md .
 
 3. **Permissioning System**:
-   - When designing permission-related changes or features that are permissioned, ensure you align approach with our consolidated permissioning guide in docs/permissioning/consolidated_permissioning_guide.md . 
+   - When designing permission-related changes or features that are permissioned, ensure you align approach with our consolidated permissioning guide in docs/permissioning/consolidated_permissioning_guide.md .
    - Before making any changes to permission logic, consult with the user.
-   - When designing features that need to accessed any backend data, always consider the permissioning requirements or highlight of they're not specified.  
+   - When designing features that need to accessed any backend data, always consider the permissioning requirements or highlight of they're not specified.
 
 2. **PDF Annotation System** (see `.cursor/rules/pdf-viewer-and-annotator-architecture.mdc`):
    - **Virtualized rendering**: Only visible pages (+overscan) rendered for performance
