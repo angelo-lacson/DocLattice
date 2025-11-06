@@ -44,7 +44,7 @@ export const UserProfileRoute: React.FC = () => {
   if (error) {
     return (
       <ModernErrorDisplay
-        type="not_found"
+        type="generic"
         title="User Not Found"
         error={`Could not find user with slug "${slug}"`}
       />
@@ -54,7 +54,7 @@ export const UserProfileRoute: React.FC = () => {
   if (!data?.userBySlug) {
     return (
       <ModernErrorDisplay
-        type="not_found"
+        type="generic"
         title="User Not Found"
         error={`User "${slug}" does not exist or their profile is private`}
       />
