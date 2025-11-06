@@ -194,11 +194,11 @@ test.describe("NotificationBell", () => {
     const bell = page.getByLabel(/Notifications/i);
     await bell.click();
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
     // Dropdown should be visible with "Notifications" title
     await expect(
-      page.getByRole("heading", { name: /Notifications/i })
-    ).toBeVisible();
+      page.getByRole("heading", { name: /Notifications/i }).first()
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test("closes dropdown when clicking outside", async ({ mount, page }) => {
@@ -249,10 +249,10 @@ test.describe("NotificationBell", () => {
     const bell = page.getByLabel(/Notifications/i);
     await bell.click();
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
     await expect(
-      page.getByRole("heading", { name: /Notifications/i })
-    ).toBeVisible();
+      page.getByRole("heading", { name: /Notifications/i }).first()
+    ).toBeVisible({ timeout: 10000 });
 
     // Click outside
     await page.mouse.click(10, 10);

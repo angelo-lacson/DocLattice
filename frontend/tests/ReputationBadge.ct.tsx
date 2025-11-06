@@ -97,8 +97,8 @@ test.describe("ReputationBadge", () => {
       />
     );
 
-    // Hover over badge
-    await page.locator("body").hover();
+    // Hover over badge (the reputation text)
+    await page.getByText("250").hover();
 
     // Wait for tooltip
     await page.waitForTimeout(200);
@@ -125,8 +125,8 @@ test.describe("ReputationBadge", () => {
       />
     );
 
-    // Hover over badge
-    await page.locator("body").hover();
+    // Hover over badge (the reputation text)
+    await page.getByText("250").hover();
 
     // Wait for tooltip
     await page.waitForTimeout(200);

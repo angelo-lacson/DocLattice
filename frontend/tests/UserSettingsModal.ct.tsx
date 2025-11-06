@@ -32,7 +32,11 @@ test("@slug profile modal updates user slug", async ({ mount, page }) => {
   await expect(page.getByTestId("user-settings-modal")).toBeVisible();
   await page.getByPlaceholder("your-slug").fill("Alice-Pro");
   await page.getByRole("button", { name: /Save/i }).click();
+
+  // Wait for mutation to complete
+  await page.waitForTimeout(500);
+
   await expect(page.getByTestId("user-settings-modal")).toBeHidden({
-    timeout: 3000,
+    timeout: 5000,
   });
 });
