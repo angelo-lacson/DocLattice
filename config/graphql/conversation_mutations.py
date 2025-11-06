@@ -30,7 +30,12 @@ logger = logging.getLogger(__name__)
 
 
 class CreateThreadMutation(graphene.Mutation):
-    """Create a new discussion thread in a corpus."""
+    """
+    Create a new discussion thread in a corpus.
+
+    Security Note: Message content is stored as HTML from TipTap editor.
+    Frontend MUST sanitize on display (e.g., with DOMPurify) to prevent XSS.
+    """
 
     class Arguments:
         corpus_id = graphene.String(
@@ -191,7 +196,19 @@ class ReplyToMessageMutation(graphene.Mutation):
         try:
             user = info.context.user
             parent_pk = from_global_id(parent_message_id)[1]
-            parent_message = ChatMessage.objects.get(pk=parent_pk)
+
+            # Use .visible_to_user() pattern to prevent enumeration
+            try:
+                parent_message = ChatMessage.objects.visible_to_user(user).get(
+                    pk=parent_pk
+                )
+            except ChatMessage.DoesNotExist:
+                return ReplyToMessageMutation(
+                    ok=False,
+                    message="You do not have permission to reply to this message",
+                    obj=None,
+                )
+
             conversation = parent_message.conversation
 
             # Check if conversation is locked
