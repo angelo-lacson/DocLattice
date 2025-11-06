@@ -26,6 +26,10 @@ export { ReputationBadge } from "./ReputationBadge";
 export { ReputationDisplay } from "./ReputationDisplay";
 export { UserProfileReputation } from "./UserProfileReputation";
 
+// Moderation (Issue #576)
+export { ModerationControls } from "./ModerationControls";
+export { ModeratorBadge } from "./ModeratorBadge";
+
 // Utility components
 export { ThreadBadge } from "./ThreadBadge";
 export { RelativeTime } from "./RelativeTime";
@@ -55,3 +59,7 @@ export type {
 } from "./ReputationBadge";
 export type { ReputationDisplayProps } from "./ReputationDisplay";
 export type { UserProfileReputationProps } from "./UserProfileReputation";
+
+// Component prop types (Issue #576)
+export type { ModerationControlsProps } from "./ModerationControls";
+export type { ModeratorBadgeProps } from "./ModeratorBadge";
