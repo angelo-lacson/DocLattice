@@ -11,7 +11,7 @@ import {
 } from "../src/graphql/mutations";
 
 test.describe("VoteButtons", () => {
-  test("renders vote buttons and count", async ({ mount, page }) => {
+  test("renders vote buttons and count", async ({ mount }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -24,14 +24,14 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    await expect(page.getByRole("button", { name: /upvote/i })).toBeVisible();
+    await expect(component).toBeVisible();
     // Net score should be 5 - 2 = 3
-    await expect(page.getByText("3")).toBeVisible();
-    await expect(page.getByLabel("Upvote")).toBeVisible();
-    await expect(page.getByLabel("Downvote")).toBeVisible();
+    await expect(component.getByText("3")).toBeVisible();
+    await expect(component.getByLabelText("Upvote")).toBeVisible();
+    await expect(component.getByLabelText("Downvote")).toBeVisible();
   });
 
-  test("shows negative score", async ({ mount, page }) => {
+  test("shows negative score", async ({ mount }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -45,10 +45,10 @@ test.describe("VoteButtons", () => {
     );
 
     // Net score should be 2 - 5 = -3
-    await expect(page.getByText("-3")).toBeVisible();
+    await expect(component.getByText("-3")).toBeVisible();
   });
 
-  test("shows upvoted state", async ({ mount, page }) => {
+  test("shows upvoted state", async ({ mount }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -62,12 +62,12 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const upvoteButton = page.getByLabel("Upvote");
+    const upvoteButton = component.getByLabelText("Upvote");
     // Check if button has active state (you may need to adjust based on your styling)
     await expect(upvoteButton).toBeVisible();
   });
 
-  test("shows downvoted state", async ({ mount, page }) => {
+  test("shows downvoted state", async ({ mount }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -81,7 +81,7 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const downvoteButton = page.getByLabel("Downvote");
+    const downvoteButton = component.getByLabelText("Downvote");
     await expect(downvoteButton).toBeVisible();
   });
 
@@ -123,12 +123,12 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const upvoteButton = page.getByLabel("Upvote");
+    const upvoteButton = component.getByLabelText("Upvote");
     await upvoteButton.click();
 
     // Wait for optimistic update (score should increase)
     await page.waitForTimeout(100);
-    await expect(page.getByText("4")).toBeVisible();
+    await expect(component.getByText("4")).toBeVisible();
 
     // Wait for mutation to complete
     await page.waitForTimeout(500);
@@ -172,12 +172,12 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const downvoteButton = page.getByLabel("Downvote");
+    const downvoteButton = component.getByLabelText("Downvote");
     await downvoteButton.click();
 
     // Wait for optimistic update (score should decrease)
     await page.waitForTimeout(100);
-    await expect(page.getByText("2")).toBeVisible();
+    await expect(component.getByText("2")).toBeVisible();
 
     // Wait for mutation to complete
     await page.waitForTimeout(500);
@@ -222,7 +222,7 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const upvoteButton = page.getByLabel("Upvote");
+    const upvoteButton = component.getByLabelText("Upvote");
     await upvoteButton.click();
 
     // Wait for mutation
@@ -242,13 +242,13 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const upvoteButton = page.getByLabel("Upvote");
+    const upvoteButton = component.getByLabelText("Upvote");
     await upvoteButton.click();
 
     // Should show error
     await page.waitForTimeout(100);
     await expect(
-      page.getByText(/cannot vote on your own messages/i)
+      component.getByText(/cannot vote on your own messages/i)
     ).toBeVisible();
   });
 
@@ -285,18 +285,15 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const upvoteButton = page.getByLabel("Upvote");
+    const upvoteButton = component.getByLabelText("Upvote");
     await upvoteButton.click();
 
     // Wait for error
     await page.waitForTimeout(500);
-    await expect(page.getByText(/rate limit exceeded/i)).toBeVisible();
+    await expect(component.getByText(/rate limit exceeded/i)).toBeVisible();
   });
 
-  test("disables buttons when disabled prop is true", async ({
-    mount,
-    page,
-  }) => {
+  test("disables buttons when disabled prop is true", async ({ mount }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -310,8 +307,8 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const upvoteButton = page.getByLabel("Upvote");
-    const downvoteButton = page.getByLabel("Downvote");
+    const upvoteButton = component.getByLabelText("Upvote");
+    const downvoteButton = component.getByLabelText("Downvote");
 
     await expect(upvoteButton).toBeDisabled();
     await expect(downvoteButton).toBeDisabled();
@@ -360,7 +357,7 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    const upvoteButton = page.getByLabel("Upvote");
+    const upvoteButton = component.getByLabelText("Upvote");
     await upvoteButton.click();
 
     // Wait for mutation
@@ -412,13 +409,13 @@ test.describe("VoteButtons", () => {
     );
 
     // Initial score: 5 - 2 = 3
-    await expect(page.getByText("3")).toBeVisible();
+    await expect(component.getByText("3")).toBeVisible();
 
-    const upvoteButton = page.getByLabel("Upvote");
+    const upvoteButton = component.getByLabelText("Upvote");
     await upvoteButton.click();
 
     // Optimistic update: should show 4 immediately
     await page.waitForTimeout(100);
-    await expect(page.getByText("4")).toBeVisible();
+    await expect(component.getByText("4")).toBeVisible();
   });
 });

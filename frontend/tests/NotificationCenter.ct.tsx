@@ -9,7 +9,7 @@ import {
 import { MARK_ALL_NOTIFICATIONS_READ } from "../src/graphql/mutations";
 
 test.describe("NotificationCenter", () => {
-  test("renders notification center title", async ({ mount, page }) => {
+  test("renders notification center title", async ({ mount }) => {
     const mocks = [
       {
         request: {
@@ -44,11 +44,11 @@ test.describe("NotificationCenter", () => {
     );
 
     await expect(
-      page.getByRole("heading", { name: "Notifications" }).first()
+      component.getByRole("heading", { name: "Notifications" })
     ).toBeVisible();
   });
 
-  test("shows filter buttons", async ({ mount, page }) => {
+  test("shows filter buttons", async ({ mount }) => {
     const mocks = [
       {
         request: {
@@ -82,18 +82,14 @@ test.describe("NotificationCenter", () => {
       </MemoryRouter>
     );
 
+    await expect(component.getByRole("button", { name: "All" })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "All" }).first()
+      component.getByRole("button", { name: "Unread" })
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Unread" }).first()
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Read" }).first()
-    ).toBeVisible();
+    await expect(component.getByRole("button", { name: "Read" })).toBeVisible();
   });
 
-  test("shows mark all as read button", async ({ mount, page }) => {
+  test("shows mark all as read button", async ({ mount }) => {
     const mocks = [
       {
         request: {
@@ -128,7 +124,7 @@ test.describe("NotificationCenter", () => {
     );
 
     await expect(
-      page.getByRole("button", { name: /Mark all as read/i })
+      component.getByRole("button", { name: /Mark all as read/i })
     ).toBeVisible();
   });
 
@@ -167,7 +163,7 @@ test.describe("NotificationCenter", () => {
     );
 
     await page.waitForTimeout(500);
-    await expect(page.getByText("No notifications yet")).toBeVisible();
+    await expect(component.getByText("No notifications yet")).toBeVisible();
   });
 
   test("renders notification list", async ({ mount, page }) => {
@@ -225,7 +221,7 @@ test.describe("NotificationCenter", () => {
     );
 
     await page.waitForTimeout(500);
-    await expect(page.getByText(/testuser replied/i)).toBeVisible();
+    await expect(component.getByText(/testuser replied/i)).toBeVisible();
   });
 
   test("filters notifications by unread", async ({ mount, page }) => {
@@ -326,11 +322,11 @@ test.describe("NotificationCenter", () => {
 
     await page.waitForTimeout(500);
 
-    const unreadButton = page.getByRole("button", { name: "Unread" });
+    const unreadButton = component.getByRole("button", { name: "Unread" });
     await unreadButton.click();
 
     await page.waitForTimeout(500);
-    await expect(page.getByText(/testuser replied/i)).toBeVisible();
+    await expect(component.getByText(/testuser replied/i)).toBeVisible();
   });
 
   test("marks all as read", async ({ mount, page }) => {
@@ -403,7 +399,7 @@ test.describe("NotificationCenter", () => {
 
     await page.waitForTimeout(500);
 
-    const markAllButton = page.getByRole("button", {
+    const markAllButton = component.getByRole("button", {
       name: /Mark all as read/i,
     });
     await markAllButton.click();
@@ -467,7 +463,7 @@ test.describe("NotificationCenter", () => {
 
     await page.waitForTimeout(500);
 
-    const markAllButton = page.getByRole("button", {
+    const markAllButton = component.getByRole("button", {
       name: /Mark all as read/i,
     });
     await expect(markAllButton).toBeDisabled();
@@ -529,7 +525,7 @@ test.describe("NotificationCenter", () => {
 
     await page.waitForTimeout(500);
     await expect(
-      page.getByRole("button", { name: /Load more/i })
+      component.getByRole("button", { name: /Load more/i })
     ).toBeVisible();
   });
 });
