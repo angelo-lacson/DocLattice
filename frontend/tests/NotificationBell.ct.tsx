@@ -4,7 +4,7 @@ import { MockedProvider } from "@apollo/client/testing";
 import { GET_UNREAD_NOTIFICATION_COUNT } from "../src/graphql/queries";
 
 test.describe("NotificationBell", () => {
-  test("renders bell icon", async ({ mount }) => {
+  test("renders bell icon", async ({ mount, page }) => {
     const mocks = [
       {
         request: {

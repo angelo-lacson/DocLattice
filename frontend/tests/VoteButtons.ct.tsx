@@ -11,7 +11,7 @@ import {
 } from "../src/graphql/mutations";
 
 test.describe("VoteButtons", () => {
-  test("renders vote buttons and count", async ({ mount }) => {
+  test("renders vote buttons and count", async ({ mount, page }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -30,7 +30,7 @@ test.describe("VoteButtons", () => {
     await expect(page.getByLabel("Downvote")).toBeVisible();
   });
 
-  test("shows negative score", async ({ mount }) => {
+  test("shows negative score", async ({ mount, page }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -47,7 +47,7 @@ test.describe("VoteButtons", () => {
     await expect(page.getByText("-3")).toBeVisible();
   });
 
-  test("shows upvoted state", async ({ mount }) => {
+  test("shows upvoted state", async ({ mount, page }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -66,7 +66,7 @@ test.describe("VoteButtons", () => {
     await expect(upvoteButton).toBeVisible();
   });
 
-  test("shows downvoted state", async ({ mount }) => {
+  test("shows downvoted state", async ({ mount, page }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons
@@ -292,7 +292,10 @@ test.describe("VoteButtons", () => {
     await expect(page.getByText(/rate limit exceeded/i)).toBeVisible();
   });
 
-  test("disables buttons when disabled prop is true", async ({ mount }) => {
+  test("disables buttons when disabled prop is true", async ({
+    mount,
+    page,
+  }) => {
     const component = await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <VoteButtons

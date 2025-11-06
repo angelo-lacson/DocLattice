@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { ReputationBadge } from "../src/components/threads/ReputationBadge";
 
 test.describe("ReputationBadge", () => {
-  test("renders basic reputation badge", async ({ mount }) => {
+  test("renders basic reputation badge", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge reputation={150} showTooltip={false} />
     );
@@ -10,7 +10,7 @@ test.describe("ReputationBadge", () => {
     await expect(page.getByText("150")).toBeVisible();
   });
 
-  test("formats large numbers with k suffix", async ({ mount }) => {
+  test("formats large numbers with k suffix", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge reputation={1500} showTooltip={false} />
     );
@@ -18,7 +18,7 @@ test.describe("ReputationBadge", () => {
     await expect(page.getByText("1.5k")).toBeVisible();
   });
 
-  test("formats very large numbers", async ({ mount }) => {
+  test("formats very large numbers", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge reputation={15000} showTooltip={false} />
     );
@@ -26,7 +26,7 @@ test.describe("ReputationBadge", () => {
     await expect(page.getByText("15k")).toBeVisible();
   });
 
-  test("shows icon when showIcon is true", async ({ mount }) => {
+  test("shows icon when showIcon is true", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge reputation={150} showIcon={true} showTooltip={false} />
     );
@@ -36,7 +36,7 @@ test.describe("ReputationBadge", () => {
     await expect(icon).toBeVisible();
   });
 
-  test("hides icon when showIcon is false", async ({ mount }) => {
+  test("hides icon when showIcon is false", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge reputation={150} showIcon={false} showTooltip={false} />
     );
@@ -45,7 +45,7 @@ test.describe("ReputationBadge", () => {
     await expect(icon).not.toBeVisible();
   });
 
-  test("shows custom label", async ({ mount }) => {
+  test("shows custom label", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge
         reputation={150}
@@ -59,7 +59,7 @@ test.describe("ReputationBadge", () => {
     await expect(page.getByText("150")).toBeVisible();
   });
 
-  test("renders small size", async ({ mount }) => {
+  test("renders small size", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge
         reputation={150}
@@ -70,7 +70,7 @@ test.describe("ReputationBadge", () => {
     );
   });
 
-  test("renders large size", async ({ mount }) => {
+  test("renders large size", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge
         reputation={150}
@@ -179,7 +179,7 @@ test.describe("ReputationBadge", () => {
     await expect(page.getByText("Reputation Breakdown")).not.toBeVisible();
   });
 
-  test("handles negative reputation", async ({ mount }) => {
+  test("handles negative reputation", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge reputation={-50} showIcon={false} showTooltip={false} />
     );
@@ -187,7 +187,7 @@ test.describe("ReputationBadge", () => {
     await expect(page.getByText("-50")).toBeVisible();
   });
 
-  test("handles zero reputation", async ({ mount }) => {
+  test("handles zero reputation", async ({ mount, page }) => {
     const component = await mount(
       <ReputationBadge reputation={0} showIcon={false} showTooltip={false} />
     );

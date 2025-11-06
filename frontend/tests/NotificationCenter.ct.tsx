@@ -9,7 +9,7 @@ import {
 import { MARK_ALL_NOTIFICATIONS_READ } from "../src/graphql/mutations";
 
 test.describe("NotificationCenter", () => {
-  test("renders notification center title", async ({ mount }) => {
+  test("renders notification center title", async ({ mount, page }) => {
     const mocks = [
       {
         request: {
@@ -48,7 +48,7 @@ test.describe("NotificationCenter", () => {
     ).toBeVisible();
   });
 
-  test("shows filter buttons", async ({ mount }) => {
+  test("shows filter buttons", async ({ mount, page }) => {
     const mocks = [
       {
         request: {
@@ -87,7 +87,7 @@ test.describe("NotificationCenter", () => {
     await expect(page.getByRole("button", { name: "Read" })).toBeVisible();
   });
 
-  test("shows mark all as read button", async ({ mount }) => {
+  test("shows mark all as read button", async ({ mount, page }) => {
     const mocks = [
       {
         request: {
