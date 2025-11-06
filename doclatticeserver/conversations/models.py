@@ -385,6 +385,9 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
                 name="one_chat_field_null_constraint",
             ),
         ]
+        indexes = [
+            models.Index(fields=["deleted_at"]),  # Optimize soft-delete queries
+        ]
         permissions = (
             ("permission_conversation", "permission conversation"),
             ("publish_conversation", "publish conversation"),
@@ -593,6 +596,9 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
     """
 
     class Meta:
+        indexes = [
+            models.Index(fields=["deleted_at"]),  # Optimize soft-delete queries
+        ]
         permissions = (
             ("permission_chatmessage", "permission chatmessage"),
             ("publish_chatmessage", "publish chatmessage"),
@@ -633,6 +639,7 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         related_name="replies",
         blank=True,
         null=True,
+        db_index=True,
         help_text="Parent message for threaded replies",
     )
     content = models.TextField(

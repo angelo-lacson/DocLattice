@@ -341,8 +341,10 @@ class AddModeratorMutation(graphene.Mutation):
                 corpus=corpus,
                 user=target_user,
                 defaults={
-                    "permissions": {perm: True for perm in permissions},
-                    "added_by": user,
+                    "permissions": list(
+                        permissions
+                    ),  # Store as list for has_permission() checks
+                    "assigned_by": user,  # Correct field name per CorpusModerator model
                     "creator": user,
                 },
             )
@@ -494,7 +496,9 @@ class UpdateModeratorPermissionsMutation(graphene.Mutation):
             # Update moderator permissions
             try:
                 moderator = CorpusModerator.objects.get(corpus=corpus, user=target_user)
-                moderator.permissions = {perm: True for perm in permissions}
+                moderator.permissions = list(
+                    permissions
+                )  # Store as list for has_permission() checks
                 moderator.save(update_fields=["permissions"])
                 ok = True
                 message_text = "Moderator permissions updated successfully"
