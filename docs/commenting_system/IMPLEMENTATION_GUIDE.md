@@ -1318,27 +1318,24 @@ yarn run test:ct --ui frontend/tests/threads/ThreadList.test.tsx
 
 ---
 
-### 🚧 Issue #576: Moderation UI and Controls (NEXT)
+### ✅ Issue #576: Moderation UI and Controls (COMPLETED)
 
-**Branch**: TBD - will build off #575
-**Status**: ⏳ Pending
-**Estimated**: 4 days
+**Branch**: `feature/moderation-ui-576` (based on #575)
+**Status**: ✅ Complete and committed
+**Commit**: `3b72d22c`
 
-#### Components to Create
-- [ ] `ModerationControls.tsx` - Pin/lock/delete thread controls
-- [ ] `ModeratorBadge.tsx` - Visual moderator indicator
-- [ ] `DeleteMessageButton.tsx` - Soft delete with confirmation
-- [ ] `PinThreadButton.tsx` - Pin/unpin toggle
-- [ ] `LockThreadButton.tsx` - Lock/unlock toggle
-- [ ] `ModerationLog.tsx` - Show moderation history
+#### Components Created
+- [x] `ModerationControls.tsx` - Unified moderation component with pin/lock/delete/restore
+- [x] `ModeratorBadge.tsx` - Visual moderator indicator with Shield icon
+- [x] GraphQL mutations (PIN_THREAD, UNPIN_THREAD, LOCK_THREAD, UNLOCK_THREAD, DELETE_THREAD, RESTORE_THREAD)
 
-#### Mutations Needed
-- [ ] PIN_THREAD
-- [ ] UNPIN_THREAD
-- [ ] LOCK_THREAD
-- [ ] UNLOCK_THREAD
-- [ ] DELETE_THREAD (soft delete)
-- [ ] RESTORE_THREAD
+#### Testing
+- [x] ModerationControls.ct.tsx (16 tests)
+  - Button rendering and state changes
+  - All mutation scenarios
+  - Confirmation dialog flow
+  - Error handling
+  - Permission checks
 
 ---
 
@@ -1397,9 +1394,10 @@ yarn run test:ct --ui frontend/tests/threads/ThreadList.test.tsx
 v3.0.0.b3 (base)
 └─ feature/thread-list-detail-573 ✅
    └─ feature/message-composer-574 ✅
-      └─ feature/voting-ui-575 ✅ (current)
-         └─ feature/moderation-ui-576 (next)
-            └─ ... (subsequent issues)
+      └─ feature/voting-ui-575 ✅
+         └─ feature/moderation-ui-576 ✅ (current)
+            └─ feature/notification-center-577 (next)
+               └─ ... (subsequent issues)
 ```
 
 **IMPORTANT**: Each branch builds on the previous issue's branch to maintain a clean dependency chain.
