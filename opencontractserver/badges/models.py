@@ -89,6 +89,7 @@ class Badge(BaseOCModel):
     def clean(self):
         """
         Validate that corpus-specific badges have a corpus and global badges don't.
+        Also validate criteria_config structure for auto-awarded badges.
         """
         if self.badge_type == BadgeTypeChoices.CORPUS and not self.corpus:
             raise ValidationError(
@@ -98,6 +99,19 @@ class Badge(BaseOCModel):
             raise ValidationError(
                 {"corpus": "Global badges cannot be associated with a corpus."}
             )
+
+        # Validate criteria_config for auto-awarded badges
+        if self.is_auto_awarded and self.criteria_config:
+            if not isinstance(self.criteria_config, dict):
+                raise ValidationError(
+                    {"criteria_config": "Must be a JSON object (dictionary)."}
+                )
+            if "type" not in self.criteria_config:
+                raise ValidationError(
+                    {
+                        "criteria_config": 'Must include "type" field specifying award criteria.'
+                    }
+                )
 
     def save(self, *args, **kwargs):
         self.full_clean()
