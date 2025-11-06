@@ -4,7 +4,7 @@ import { MockedProvider } from "@apollo/client/testing";
 import { GET_UNREAD_NOTIFICATION_COUNT } from "../src/graphql/queries";
 
 test.describe("NotificationBell", () => {
-  test("renders bell icon", async ({ mount }) => {
+  test("renders bell icon", async ({ mount, page }) => {
     const mocks = [
       {
         request: {
@@ -18,13 +18,13 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell pollInterval={0} />
       </MockedProvider>
     );
 
-    await expect(component.getByLabelText(/Notifications/i)).toBeVisible();
+    await expect(page.getByLabel(/Notifications/i)).toBeVisible();
   });
 
   test("shows unread count badge when > 0", async ({ mount, page }) => {
@@ -41,14 +41,14 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell pollInterval={0} />
       </MockedProvider>
     );
 
     await page.waitForTimeout(500);
-    await expect(component.getByText("5")).toBeVisible();
+    await expect(page.getByText("5")).toBeVisible();
   });
 
   test("shows 99+ for counts over 99", async ({ mount, page }) => {
@@ -65,14 +65,14 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell pollInterval={0} />
       </MockedProvider>
     );
 
     await page.waitForTimeout(500);
-    await expect(component.getByText("99+")).toBeVisible();
+    await expect(page.getByText("99+")).toBeVisible();
   });
 
   test("does not show badge when count is 0", async ({ mount, page }) => {
@@ -89,14 +89,14 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell pollInterval={0} />
       </MockedProvider>
     );
 
     await page.waitForTimeout(500);
-    const bell = component.getByLabelText(/Notifications/i);
+    const bell = page.getByLabel(/Notifications/i);
     await expect(bell).toBeVisible();
     // Badge should not be present
     await expect(
@@ -123,7 +123,7 @@ test.describe("NotificationBell", () => {
 
     let viewAllCalled = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell
           fullPageMode={true}
@@ -137,7 +137,7 @@ test.describe("NotificationBell", () => {
 
     await page.waitForTimeout(500);
 
-    const bell = component.getByLabelText(/Notifications/i);
+    const bell = page.getByLabel(/Notifications/i);
     await bell.click();
 
     await page.waitForTimeout(100);
@@ -183,7 +183,7 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell fullPageMode={false} pollInterval={0} />
       </MockedProvider>
@@ -191,13 +191,13 @@ test.describe("NotificationBell", () => {
 
     await page.waitForTimeout(500);
 
-    const bell = component.getByLabelText(/Notifications/i);
+    const bell = page.getByLabel(/Notifications/i);
     await bell.click();
 
     await page.waitForTimeout(500);
     // Dropdown should be visible with "Notifications" title
     await expect(
-      component.getByRole("heading", { name: /Notifications/i })
+      page.getByRole("heading", { name: /Notifications/i })
     ).toBeVisible();
   });
 
@@ -237,7 +237,7 @@ test.describe("NotificationBell", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <NotificationBell fullPageMode={false} pollInterval={0} />
       </MockedProvider>
@@ -246,12 +246,12 @@ test.describe("NotificationBell", () => {
     await page.waitForTimeout(500);
 
     // Open dropdown
-    const bell = component.getByLabelText(/Notifications/i);
+    const bell = page.getByLabel(/Notifications/i);
     await bell.click();
 
     await page.waitForTimeout(500);
     await expect(
-      component.getByRole("heading", { name: /Notifications/i })
+      page.getByRole("heading", { name: /Notifications/i })
     ).toBeVisible();
 
     // Click outside
@@ -259,7 +259,7 @@ test.describe("NotificationBell", () => {
 
     await page.waitForTimeout(300);
     await expect(
-      component.getByRole("heading", { name: /Notifications/i })
+      page.getByRole("heading", { name: /Notifications/i })
     ).not.toBeVisible();
   });
 });
