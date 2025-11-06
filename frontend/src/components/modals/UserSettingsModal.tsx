@@ -16,6 +16,7 @@ interface EditableProfileState {
   lastName?: string;
   phone?: string;
   slug?: string;
+  isProfilePublic?: boolean; // Issue #611
 }
 
 const UserSettingsModal: React.FC = () => {
@@ -32,6 +33,7 @@ const UserSettingsModal: React.FC = () => {
         lastName: (user as any).lastName,
         phone: (user as any).phone,
         slug: (user as any).slug,
+        isProfilePublic: (user as any).isProfilePublic ?? true, // Issue #611
       });
       setDirty(false);
     }
@@ -104,6 +106,25 @@ const UserSettingsModal: React.FC = () => {
             value={form.phone || ""}
             onChange={(_, data) => onChange("phone", String(data.value || ""))}
           />
+          <Form.Field>
+            <label>Profile Visibility</label>
+            <Form.Checkbox
+              toggle
+              label="Public Profile"
+              checked={form.isProfilePublic ?? true}
+              onChange={(_, data) => {
+                setForm((prev) => ({ ...prev, isProfilePublic: data.checked }));
+                setDirty(true);
+              }}
+            />
+            <div
+              style={{ fontSize: "12px", color: "#666", marginTop: "0.5rem" }}
+            >
+              {form.isProfilePublic
+                ? "Your profile is visible to all users"
+                : "Your profile is only visible to you"}
+            </div>
+          </Form.Field>
         </Form>
 
         {user && (user as any).id && (

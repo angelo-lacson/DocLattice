@@ -108,6 +108,20 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Reputation score for a specific corpus",
     )
 
+    # Activity statistics (Issue #611 - User Profile Page)
+    total_messages = graphene.Int(
+        description="Total number of messages posted by this user"
+    )
+    total_threads_created = graphene.Int(
+        description="Total number of threads created by this user"
+    )
+    total_annotations_created = graphene.Int(
+        description="Total number of annotations created by this user (visible to requester)"
+    )
+    total_documents_uploaded = graphene.Int(
+        description="Total number of documents uploaded by this user (visible to requester)"
+    )
+
     def resolve_reputation_global(self, info):
         """
         Resolve global reputation for this user.
@@ -142,6 +156,66 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return 0
         except Exception:
             return 0
+
+    def resolve_total_messages(self, info):
+        """
+        Resolve total messages posted by this user.
+        Only counts messages visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.conversations.models import ChatMessage
+
+        return (
+            ChatMessage.objects.filter(creator=self, msg_type="HUMAN")
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_threads_created(self, info):
+        """
+        Resolve total threads created by this user.
+        Only counts threads visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.conversations.models import Conversation
+
+        return (
+            Conversation.objects.filter(creator=self, conversation_type="thread")
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_annotations_created(self, info):
+        """
+        Resolve total annotations created by this user.
+        Only counts annotations visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.annotations.models import Annotation
+
+        return (
+            Annotation.objects.filter(creator=self)
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_documents_uploaded(self, info):
+        """
+        Resolve total documents uploaded by this user.
+        Only counts documents visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.documents.models import Document
+
+        return (
+            Document.objects.filter(creator=self)
+            .visible_to_user(info.context.user)
+            .count()
+        )
 
     class Meta:
         model = User
