@@ -100,7 +100,7 @@ test.describe("NotificationBell", () => {
     await expect(bell).toBeVisible();
     // Badge should not be present
     await expect(
-      component.locator("span").filter({ hasText: /^\d+$/ })
+      page.locator("span").filter({ hasText: /^\d+$/ })
     ).not.toBeVisible();
   });
 

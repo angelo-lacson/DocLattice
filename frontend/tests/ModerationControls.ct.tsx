@@ -385,11 +385,16 @@ test.describe("ModerationControls", () => {
     const deleteButton = page.getByLabel("Delete thread");
     await deleteButton.click();
 
-    // Confirm deletion
-    const confirmButton = page.getByRole("button", {
-      name: "Delete Thread",
-    });
-    await expect(confirmButton).toBeVisible();
+    // Wait for dialog to appear
+    await expect(page.getByText("Delete Thread?")).toBeVisible();
+
+    // Confirm deletion - use exact match on the confirm button in dialog
+    const confirmButton = page
+      .getByRole("button", {
+        name: "Delete Thread",
+        exact: true,
+      })
+      .last();
     await confirmButton.click();
 
     await page.waitForTimeout(500);

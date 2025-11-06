@@ -24,7 +24,7 @@ test.describe("VoteButtons", () => {
       </MockedProvider>
     );
 
-    await expect(component).toBeVisible();
+    await expect(page.getByRole("button", { name: /upvote/i })).toBeVisible();
     // Net score should be 5 - 2 = 3
     await expect(page.getByText("3")).toBeVisible();
     await expect(page.getByLabel("Upvote")).toBeVisible();

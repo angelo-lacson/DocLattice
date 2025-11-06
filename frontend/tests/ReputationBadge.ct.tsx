@@ -5,7 +5,6 @@ test.describe("ReputationBadge", () => {
   test("renders basic reputation badge", async ({ mount, page }) => {
     await mount(<ReputationBadge reputation={150} showTooltip={false} />);
 
-    await expect(component).toBeVisible();
     await expect(page.getByText("150")).toBeVisible();
   });
 
@@ -27,7 +26,7 @@ test.describe("ReputationBadge", () => {
     );
 
     // Check for Award icon (Lucide React)
-    const icon = component.locator("svg");
+    const icon = page.locator("svg");
     await expect(icon).toBeVisible();
   });
 
@@ -36,7 +35,7 @@ test.describe("ReputationBadge", () => {
       <ReputationBadge reputation={150} showIcon={false} showTooltip={false} />
     );
 
-    const icon = component.locator("svg");
+    const icon = page.locator("svg");
     await expect(icon).not.toBeVisible();
   });
 
@@ -64,7 +63,7 @@ test.describe("ReputationBadge", () => {
       />
     );
 
-    await expect(component).toBeVisible();
+    await expect(page.getByText("150")).toBeVisible();
   });
 
   test("renders large size", async ({ mount, page }) => {
@@ -77,7 +76,7 @@ test.describe("ReputationBadge", () => {
       />
     );
 
-    await expect(component).toBeVisible();
+    await expect(page.getByText("150")).toBeVisible();
   });
 
   test("shows tooltip on hover with breakdown", async ({ mount, page }) => {
@@ -97,7 +96,9 @@ test.describe("ReputationBadge", () => {
     );
 
     // Hover over badge
-    await component.hover();
+    // Hover on the reputation number to trigger tooltip
+    const repNumber = page.getByText(/\d+/);
+    await repNumber.first().hover();
 
     // Wait for tooltip
     await page.waitForTimeout(200);
@@ -125,7 +126,9 @@ test.describe("ReputationBadge", () => {
     );
 
     // Hover over badge
-    await component.hover();
+    // Hover on the reputation number to trigger tooltip
+    const repNumber = page.getByText(/\d+/);
+    await repNumber.first().hover();
 
     // Wait for tooltip
     await page.waitForTimeout(200);
@@ -151,7 +154,9 @@ test.describe("ReputationBadge", () => {
     );
 
     // Hover over badge
-    await component.hover();
+    // Hover on the reputation number to trigger tooltip
+    const repNumber = page.getByText(/\d+/);
+    await repNumber.first().hover();
 
     // Wait a bit
     await page.waitForTimeout(200);
@@ -169,7 +174,9 @@ test.describe("ReputationBadge", () => {
     );
 
     // Hover over badge
-    await component.hover();
+    // Hover on the reputation number to trigger tooltip
+    const repNumber = page.getByText(/\d+/);
+    await repNumber.first().hover();
 
     // Wait a bit
     await page.waitForTimeout(200);
