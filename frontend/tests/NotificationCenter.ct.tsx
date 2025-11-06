@@ -44,7 +44,7 @@ test.describe("NotificationCenter", () => {
     );
 
     await expect(
-      page.getByRole("heading", { name: "Notifications" })
+      page.getByRole("heading", { name: "Notifications", exact: true }).first()
     ).toBeVisible();
   });
 
@@ -82,9 +82,15 @@ test.describe("NotificationCenter", () => {
       </MemoryRouter>
     );
 
-    await expect(page.getByRole("button", { name: "All" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Unread" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Read" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "All", exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Unread", exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Read", exact: true })
+    ).toBeVisible();
   });
 
   test("shows mark all as read button", async ({ mount, page }) => {

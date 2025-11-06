@@ -97,18 +97,18 @@ test.describe("ReputationBadge", () => {
       />
     );
 
-    // Hover over badge
-    await page.locator("body").hover();
+    // Hover over badge (the reputation text)
+    await page.getByText("250").hover();
 
     // Wait for tooltip
     await page.waitForTimeout(200);
 
     // Check tooltip content
     await expect(page.getByText("Reputation Breakdown")).toBeVisible();
-    await expect(page.getByText("+200")).toBeVisible();
-    await expect(page.getByText("-20")).toBeVisible();
-    await expect(page.getByText("+50")).toBeVisible();
-    await expect(page.getByText("+20")).toBeVisible();
+    await expect(page.getByText("+200", { exact: true })).toBeVisible();
+    await expect(page.getByText("-20", { exact: true })).toBeVisible();
+    await expect(page.getByText("+50", { exact: true })).toBeVisible();
+    await expect(page.getByText("+20", { exact: true })).toBeVisible();
   });
 
   test("shows corpus reputation in tooltip", async ({ mount, page }) => {
@@ -125,8 +125,8 @@ test.describe("ReputationBadge", () => {
       />
     );
 
-    // Hover over badge
-    await page.locator("body").hover();
+    // Hover over badge (the reputation text)
+    await page.getByText("250").hover();
 
     // Wait for tooltip
     await page.waitForTimeout(200);
