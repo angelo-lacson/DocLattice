@@ -93,10 +93,10 @@ class CreateThreadMutation(graphene.Mutation):
             obj = conversation
 
         except Corpus.DoesNotExist:
-            message = "Corpus not found"
+            message = "You do not have permission to create threads in this corpus"
         except Exception as e:
             logger.error(f"Error creating thread: {e}")
-            message = f"Failed to create thread: {str(e)}"
+            message = "Failed to create thread"
 
         return CreateThreadMutation(ok=ok, message=message, obj=obj)
 
@@ -160,10 +160,10 @@ class CreateThreadMessageMutation(graphene.Mutation):
             obj = chat_message
 
         except Conversation.DoesNotExist:
-            message = "Conversation not found"
+            message = "You do not have permission to post in this thread"
         except Exception as e:
             logger.error(f"Error creating message: {e}")
-            message = f"Failed to create message: {str(e)}"
+            message = "Failed to create message"
 
         return CreateThreadMessageMutation(ok=ok, message=message, obj=obj)
 
@@ -229,10 +229,10 @@ class ReplyToMessageMutation(graphene.Mutation):
             obj = reply_message
 
         except ChatMessage.DoesNotExist:
-            message = "Parent message not found"
+            message = "You do not have permission to reply in this thread"
         except Exception as e:
             logger.error(f"Error creating reply: {e}")
-            message = f"Failed to create reply: {str(e)}"
+            message = "Failed to create reply"
 
         return ReplyToMessageMutation(ok=ok, message=message, obj=obj)
 
@@ -257,19 +257,30 @@ class DeleteConversationMutation(graphene.Mutation):
         try:
             user = info.context.user
             conversation_pk = from_global_id(conversation_id)[1]
-            conversation = Conversation.objects.get(pk=conversation_pk)
+
+            # Use .visible_to_user() pattern to prevent IDOR enumeration
+            # Returns same error whether object doesn't exist or user lacks permission
+            try:
+                conversation = Conversation.objects.visible_to_user(user).get(
+                    pk=conversation_pk
+                )
+            except Conversation.DoesNotExist:
+                return DeleteConversationMutation(
+                    ok=False,
+                    message="You do not have permission to delete this conversation",
+                )
 
             # Check if user has permission to delete
-            # Either the creator or someone with delete permission can delete
-            if not user_has_permission_for_obj(
+            has_delete_permission = user_has_permission_for_obj(
                 user, conversation, PermissionTypes.DELETE
-            ):
-                # Also allow moderators to delete
-                if not conversation.can_moderate(user):
-                    return DeleteConversationMutation(
-                        ok=False,
-                        message="You do not have permission to delete this conversation",
-                    )
+            )
+            is_moderator = conversation.can_moderate(user)
+
+            if not has_delete_permission and not is_moderator:
+                return DeleteConversationMutation(
+                    ok=False,
+                    message="You do not have permission to delete this conversation",
+                )
 
             # Soft delete the conversation
             conversation.deleted_at = timezone.now()
@@ -279,10 +290,10 @@ class DeleteConversationMutation(graphene.Mutation):
             message = "Conversation deleted successfully"
 
         except Conversation.DoesNotExist:
-            message = "Conversation not found"
+            message = "You do not have permission to delete this conversation"
         except Exception as e:
             logger.error(f"Error deleting conversation: {e}")
-            message = f"Failed to delete conversation: {str(e)}"
+            message = "Failed to delete conversation"
 
         return DeleteConversationMutation(ok=ok, message=message)
 
@@ -307,20 +318,30 @@ class DeleteMessageMutation(graphene.Mutation):
         try:
             user = info.context.user
             message_pk = from_global_id(message_id)[1]
-            chat_message = ChatMessage.objects.get(pk=message_pk)
-            conversation = chat_message.conversation
+
+            # Use .visible_to_user() pattern to prevent IDOR enumeration
+            # Returns same error whether object doesn't exist or user lacks permission
+            try:
+                chat_message = ChatMessage.objects.visible_to_user(user).get(
+                    pk=message_pk
+                )
+            except ChatMessage.DoesNotExist:
+                return DeleteMessageMutation(
+                    ok=False,
+                    message="You do not have permission to delete this message",
+                )
 
             # Check if user has permission to delete
-            # Either the creator or someone with delete permission can delete
-            if not user_has_permission_for_obj(
+            has_delete_permission = user_has_permission_for_obj(
                 user, chat_message, PermissionTypes.DELETE
-            ):
-                # Also allow moderators to delete
-                if not conversation.can_moderate(user):
-                    return DeleteMessageMutation(
-                        ok=False,
-                        message="You do not have permission to delete this message",
-                    )
+            )
+            is_moderator = chat_message.conversation.can_moderate(user)
+
+            if not has_delete_permission and not is_moderator:
+                return DeleteMessageMutation(
+                    ok=False,
+                    message="You do not have permission to delete this message",
+                )
 
             # Soft delete the message
             chat_message.deleted_at = timezone.now()
@@ -330,9 +351,9 @@ class DeleteMessageMutation(graphene.Mutation):
             message = "Message deleted successfully"
 
         except ChatMessage.DoesNotExist:
-            message = "Message not found"
+            message = "You do not have permission to delete this message"
         except Exception as e:
             logger.error(f"Error deleting message: {e}")
-            message = f"Failed to delete message: {str(e)}"
+            message = "Failed to delete message"
 
         return DeleteMessageMutation(ok=ok, message=message)

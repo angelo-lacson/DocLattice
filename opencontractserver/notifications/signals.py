@@ -87,6 +87,8 @@ def create_reply_notification(sender, instance, created, **kwargs):
                 .distinct()
             )
 
+            # Build list of notifications to create in bulk (performance optimization)
+            notifications_to_create = []
             for participant_id in participant_ids:
                 # Skip if this is the parent message creator (already notified above)
                 if (
@@ -95,8 +97,8 @@ def create_reply_notification(sender, instance, created, **kwargs):
                 ):
                     continue
 
-                try:
-                    Notification.objects.create(
+                notifications_to_create.append(
+                    Notification(
                         recipient_id=participant_id,
                         notification_type=NotificationTypeChoices.THREAD_REPLY,
                         message=message,
@@ -107,9 +109,19 @@ def create_reply_notification(sender, instance, created, **kwargs):
                             "reply_content_preview": message.content[:100],
                         },
                     )
+                )
+
+            # Use bulk_create to avoid N+1 query problem
+            if notifications_to_create:
+                try:
+                    Notification.objects.bulk_create(notifications_to_create)
+                    logger.debug(
+                        f"Created {len(notifications_to_create)} THREAD_REPLY "
+                        f"notifications for thread {message.conversation.id}"
+                    )
                 except Exception as e:
                     logger.error(
-                        f"Failed to create THREAD_REPLY notification for user {participant_id}: {e}",
+                        f"Failed to bulk create THREAD_REPLY notifications: {e}",
                         exc_info=True,
                     )
 
