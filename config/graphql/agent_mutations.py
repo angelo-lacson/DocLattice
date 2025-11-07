@@ -5,7 +5,6 @@ GraphQL mutations for the agent configuration system.
 import logging
 
 import graphene
-from graphql import GraphQLError
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
@@ -46,9 +45,7 @@ class CreateAgentConfigurationMutation(graphene.Mutation):
             description="Badge display configuration",
         )
         avatar_url = graphene.String(required=False, description="Avatar URL")
-        scope = graphene.String(
-            required=True, description="Scope: GLOBAL or CORPUS"
-        )
+        scope = graphene.String(required=True, description="Scope: GLOBAL or CORPUS")
         corpus_id = graphene.ID(
             required=False, description="Corpus ID for corpus-specific agents"
         )

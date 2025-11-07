@@ -1454,7 +1454,7 @@ yarn run test:ct --ui frontend/tests/threads/ThreadList.test.tsx
 
 ## Pending Issues: Roadmap to Full Integration
 
-The remaining issues (#578-580, #621-623) complete the discussion system by adding supporting features and full integration into existing views. Issues **#621-623 now link to detailed specifications** in the [Integration with Existing Views](#integration-with-existing-views) section.
+The remaining issues (#578-580, #610-611, #621-623, #634) complete the discussion system by adding supporting features and full integration into existing views. Issues **#621-623 now link to detailed specifications** in the [Integration with Existing Views](#integration-with-existing-views) section.
 
 **Key Update**: Issues #621-623 have been enhanced with:
 - Comprehensive routing architecture following `docs/frontend/routing_system.md`
@@ -1462,11 +1462,42 @@ The remaining issues (#578-580, #621-623) complete the discussion system by addi
 - @ mentions feature for cross-referencing corpuses and documents
 - Implementation checklists mapped to specific phases
 
+**NEW: Agent/Bot Configuration** (Issue #634):
+- Backend model for configurable bots with custom tools, instructions, badges
+- Blocks frontend work on #610, #611 (user/bot badge display)
+- Foundation for showing bot identity consistently across the app
+
 **Progression Summary**:
-1. **#578-580**: Supporting features (badges, analytics, search)
-2. **#621**: Corpus integration with full-page thread routing
-3. **#622**: Document integration with sidebar discussions
-4. **#623**: Global discussions view + @ mentions
+1. **#634**: Backend agent/bot configuration (FOUNDATION - blocks #610, #611)
+2. **#578-580**: Supporting features (badges, analytics, search)
+3. **#610**: Display user & bot badges in conversations (depends on #634)
+4. **#611**: User profile page (depends on #634, #610)
+5. **#621**: Corpus integration with full-page thread routing
+6. **#622**: Document integration with sidebar discussions
+7. **#623**: Global discussions view + @ mentions
+
+---
+
+### ⏳ Issue #634: Backend: Configurable Agent/Bot Profiles for Conversations
+
+**Status**: ⏳ Pending (foundational - should be next after #577)
+**Estimated**: 12-16 hours (2 days)
+**Blocks**: #610, #611
+
+**Scope**:
+- Create `AgentConfiguration` model with tools, instructions, badges, display metadata
+- Add `agent_configuration` FK to `ChatMessage`
+- GraphQL schema for querying/managing agents
+- Permission model: global agents (public read) vs corpus agents (inherit corpus perms)
+- Data migration to create default agents from settings
+- Tests for model, permissions, GraphQL operations
+
+**Why First**:
+- #610 needs agent badge data to display bot badges alongside user badges
+- #611 should use same UI patterns as #610 for consistency
+- Implementing backend first avoids retrofitting frontend later
+
+**Related Issues**: #610, #611
 
 ---
 
@@ -1488,6 +1519,56 @@ The remaining issues (#578-580, #621-623) complete the discussion system by addi
 
 **Status**: ⏳ Pending (after #579)
 **Estimated**: 4 days
+
+---
+
+### ⏳ Issue #610: Display User Badges in Conversation/Chat UI
+
+**Status**: ⏳ Pending (after #634)
+**Estimated**: 6-8 hours
+**Depends On**: #634 (Backend: Agent Configuration)
+
+**Scope**:
+- Display earned badges as small pills next to usernames in conversation threads
+- Display bot/agent badges from `agent_configuration.badge_config`
+- Use consistent rendering patterns for both user and bot badges
+- GraphQL queries to fetch user badge data and agent configuration
+- Badge priority/filtering (show top 2-3 badges, hover for more)
+- Performance optimization (no lag from badge queries)
+- Mobile-responsive (may hide badges on small screens)
+
+**Why After #634**:
+- Needs `agent_configuration` field from ChatMessage
+- Needs `badge_config` JSON structure from AgentConfiguration model
+- Should render user and bot badges with same visual pattern
+
+**Related Issues**: #634 (depends on), #611 (establishes patterns for)
+
+---
+
+### ⏳ Issue #611: Create User Profile Page with Badge Display and Stats
+
+**Status**: ⏳ Pending (after #610)
+**Estimated**: 8-10 hours
+**Depends On**: #634 (Backend: Agent Configuration), #610 (Badge UI patterns)
+
+**Scope**:
+- Create routes `/profile` (current user) and `/users/:userId` (any user)
+- UserProfile view component with sections:
+  - User info (avatar, name, bio, join date)
+  - Badge showcase (reuse patterns from #610)
+  - Contribution statistics
+  - Recent activity feed
+- Permissions/privacy settings
+- Mobile-responsive layout
+- Navigation from username clicks throughout app
+
+**Why After #610**:
+- Should reuse badge display components from #610
+- Same visual style across conversation UI and profile page
+- #610 establishes badge UI patterns to follow
+
+**Related Issues**: #634 (depends on), #610 (depends on, reuses patterns)
 
 ---
 
@@ -1572,7 +1653,10 @@ v3.0.0.b3 (base)
       └─ feature/voting-ui-575 ✅ (committed)
          └─ feature/moderation-ui-576 ✅ (committed)
             └─ feature/notification-center-577 ✅ (committed)
-               └─ feature/badge-display-578 ⏳ (4 days - next)
+               ├─ feature/agent-configuration-634 ⏳ (2 days - NEXT, foundational)
+               │  └─ feature/badge-display-610 ⏳ (1 day - depends on #634)
+               │     └─ feature/user-profile-611 ⏳ (1.5 days - depends on #634, #610)
+               └─ feature/badge-management-578 ⏳ (4 days)
                   └─ feature/analytics-dashboard-579 ⏳ (4 days)
                      └─ feature/thread-search-580 ⏳ (4 days)
                         └─ feature/corpus-discussions-621 ⏳ (3 days - includes routing)
@@ -1582,7 +1666,13 @@ v3.0.0.b3 (base)
 
 **IMPORTANT**: Each branch builds on the previous issue's branch to maintain a clean dependency chain.
 
-**Total Remaining Effort**: ~22 days across 6 issues (#578-580, #621-623)
+**Key Dependencies**:
+- **#634 (Agent Configuration)** is foundational and should be implemented next
+- **#610 and #611** branch from #634 (not from #578) because they need agent data
+- **#578-580** can proceed in parallel with #634→#610→#611 track
+- **#621-623** are integration work that comes after all UI components are done
+
+**Total Remaining Effort**: ~26.5 days across 9 issues (#634, #578-580, #610-611, #621-623)
 
 ---
 
