@@ -18,6 +18,12 @@ from graphql import GraphQLError
 from graphql_jwt.decorators import login_required, user_passes_test
 from graphql_relay import from_global_id, to_global_id
 
+# Import agent mutations
+from config.graphql.agent_mutations import (
+    CreateAgentConfigurationMutation,
+    DeleteAgentConfigurationMutation,
+    UpdateAgentConfigurationMutation,
+)
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
 
 # Import badge mutations
@@ -3888,3 +3894,8 @@ class Mutation(graphene.ObjectType):
     mark_notification_unread = MarkNotificationUnreadMutation.Field()
     mark_all_notifications_read = MarkAllNotificationsReadMutation.Field()
     delete_notification = DeleteNotificationMutation.Field()
+
+    # AGENT CONFIGURATION MUTATIONS ##############################################
+    create_agent_configuration = CreateAgentConfigurationMutation.Field()
+    update_agent_configuration = UpdateAgentConfigurationMutation.Field()
+    delete_agent_configuration = DeleteAgentConfigurationMutation.Field()

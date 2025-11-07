@@ -17,6 +17,7 @@ from graphql_relay import from_global_id
 
 from config.graphql.base import OpenContractsNode
 from config.graphql.filters import (
+    AgentConfigurationFilter,
     AnalysisFilter,
     AnalyzerFilter,
     AssignmentFilter,
@@ -38,6 +39,7 @@ from config.graphql.filters import (
     UserBadgeFilter,
 )
 from config.graphql.graphene_types import (
+    AgentConfigurationType,
     AnalysisType,
     AnalyzerType,
     AnnotationLabelType,
@@ -1928,6 +1930,29 @@ class Query(graphene.ObjectType):
         """Resolve a single user badge by ID."""
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return UserBadge.objects.get(id=django_pk)
+
+    # AGENT CONFIGURATION QUERIES ########################################
+    agents = DjangoFilterConnectionField(
+        AgentConfigurationType, filterset_class=AgentConfigurationFilter
+    )
+    agent = relay.Node.Field(AgentConfigurationType)
+
+    def resolve_agents(self, info, **kwargs):
+        """Resolve agent configurations visible to the user."""
+        from opencontractserver.agents.models import AgentConfiguration
+
+        return AgentConfiguration.objects.visible_to_user(
+            info.context.user
+        ).select_related("creator", "corpus")
+
+    def resolve_agent(self, info, **kwargs):
+        """Resolve a single agent configuration by ID."""
+        from opencontractserver.agents.models import AgentConfiguration
+
+        django_pk = from_global_id(kwargs.get("id", None))[1]
+        return AgentConfiguration.objects.visible_to_user(info.context.user).get(
+            id=django_pk
+        )
 
     # NOTIFICATION QUERIES ########################################
     notifications = DjangoFilterConnectionField(
