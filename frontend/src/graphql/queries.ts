@@ -2299,6 +2299,13 @@ export const GET_THREAD_DETAIL = gql`
         id
         msgType
         agentType
+        agentConfiguration {
+          id
+          name
+          description
+          badgeConfig
+          avatarUrl
+        }
         content
         state
         createdAt
@@ -2908,9 +2915,22 @@ export const GET_CHAT_MESSAGES = gql`
     chatMessages(conversationId: $conversationId, orderBy: $orderBy) {
       id
       msgType
+      agentType
+      agentConfiguration {
+        id
+        name
+        description
+        badgeConfig
+        avatarUrl
+      }
       content
       state
       data
+      creator {
+        id
+        username
+        email
+      }
     }
   }
 `;
