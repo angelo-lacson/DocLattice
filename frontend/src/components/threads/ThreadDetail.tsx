@@ -19,6 +19,7 @@ import { RelativeTime } from "./RelativeTime";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
+import { useMessageBadges } from "../../hooks/useMessageBadges";
 
 interface ThreadDetailProps {
   conversationId: string;
@@ -139,6 +140,20 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   });
 
   const thread = data?.conversation;
+
+  // Extract unique user IDs from messages
+  const userIds = useMemo(() => {
+    if (!thread?.allMessages) return [];
+    const uniqueIds = new Set(
+      thread.allMessages
+        .filter((msg) => msg.msgType !== "AGENT") // Only fetch badges for human users
+        .map((msg) => msg.creator.id)
+    );
+    return Array.from(uniqueIds);
+  }, [thread?.allMessages]);
+
+  // Fetch badges for all message creators
+  const { badgesByUser } = useMessageBadges(userIds, corpusId);
 
   // Build message tree
   const messageTree = useMemo(() => {
@@ -280,6 +295,7 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
             messages={messageTree}
             highlightedMessageId={selectedMessageId}
             onReply={handleReply}
+            badgesByUser={badgesByUser}
           />
         </MessageListContainer>
       )}

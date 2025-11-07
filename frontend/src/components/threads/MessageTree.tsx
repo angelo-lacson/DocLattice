@@ -1,11 +1,13 @@
 import React from "react";
 import { MessageNode } from "./utils";
 import { MessageItem } from "./MessageItem";
+import { UserBadgeType } from "../../types/graphql-api";
 
 interface MessageTreeProps {
   messages: MessageNode[];
   highlightedMessageId?: string | null;
   onReply?: (messageId: string) => void;
+  badgesByUser?: Map<string, UserBadgeType[]>;
 }
 
 /**
@@ -16,6 +18,7 @@ export function MessageTree({
   messages,
   highlightedMessageId,
   onReply,
+  badgesByUser = new Map(),
 }: MessageTreeProps) {
   if (!messages || messages.length === 0) {
     return null;
@@ -23,25 +26,32 @@ export function MessageTree({
 
   return (
     <>
-      {messages.map((message) => (
-        <React.Fragment key={message.id}>
-          {/* Render current message */}
-          <MessageItem
-            message={message}
-            isHighlighted={message.id === highlightedMessageId}
-            onReply={onReply}
-          />
+      {messages.map((message) => {
+        // Get badges for this message's creator
+        const userBadges = badgesByUser.get(message.creator.id) || [];
 
-          {/* Recursively render children */}
-          {message.children && message.children.length > 0 && (
-            <MessageTree
-              messages={message.children}
-              highlightedMessageId={highlightedMessageId}
+        return (
+          <React.Fragment key={message.id}>
+            {/* Render current message */}
+            <MessageItem
+              message={message}
+              isHighlighted={message.id === highlightedMessageId}
               onReply={onReply}
+              userBadges={userBadges}
             />
-          )}
-        </React.Fragment>
-      ))}
+
+            {/* Recursively render children */}
+            {message.children && message.children.length > 0 && (
+              <MessageTree
+                messages={message.children}
+                highlightedMessageId={highlightedMessageId}
+                onReply={onReply}
+                badgesByUser={badgesByUser}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
     </>
   );
 }
