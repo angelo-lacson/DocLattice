@@ -62,9 +62,7 @@ class AgentConfiguration(BaseOCModel):
     )
 
     # Identity
-    name = models.CharField(
-        max_length=255, help_text="Display name for this agent"
-    )
+    name = models.CharField(max_length=255, help_text="Display name for this agent")
     description = models.TextField(
         blank=True, help_text="Description of agent's purpose and capabilities"
     )
@@ -141,21 +139,19 @@ class AgentConfiguration(BaseOCModel):
         )
 
     def __str__(self):
-        scope_label = f" ({self.corpus.title})" if self.scope == "CORPUS" else " (Global)"
+        scope_label = (
+            f" ({self.corpus.title})" if self.scope == "CORPUS" else " (Global)"
+        )
         return f"{self.name}{scope_label}"
 
 
 class AgentConfigurationUserObjectPermission(UserObjectPermissionBase):
     """Permissions for AgentConfiguration objects at the user level."""
 
-    content_object = models.ForeignKey(
-        "AgentConfiguration", on_delete=models.CASCADE
-    )
+    content_object = models.ForeignKey("AgentConfiguration", on_delete=models.CASCADE)
 
 
 class AgentConfigurationGroupObjectPermission(GroupObjectPermissionBase):
     """Permissions for AgentConfiguration objects at the group level."""
 
-    content_object = models.ForeignKey(
-        "AgentConfiguration", on_delete=models.CASCADE
-    )
+    content_object = models.ForeignKey("AgentConfiguration", on_delete=models.CASCADE)

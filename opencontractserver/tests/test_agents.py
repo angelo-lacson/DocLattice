@@ -324,7 +324,6 @@ class TestChatMessageAgentRelationship(TestCase):
             agent_configuration=self.agent,
         )
 
-        agent_id = self.agent.id
         self.agent.delete()
 
         # Refresh message from database
@@ -367,7 +366,7 @@ class TestAgentConfigurationGraphQL(TestCase):
     def test_query_agents(self):
         """Test querying agent configurations."""
         # Create test agents
-        global_agent = AgentConfiguration.objects.create(
+        AgentConfiguration.objects.create(
             name="Global Agent",
             description="Test",
             system_instructions="Test",
@@ -377,7 +376,7 @@ class TestAgentConfigurationGraphQL(TestCase):
             is_active=True,
         )
 
-        corpus_agent = AgentConfiguration.objects.create(
+        AgentConfiguration.objects.create(
             name="Corpus Agent",
             description="Test",
             system_instructions="Test",
@@ -439,7 +438,9 @@ class TestAgentConfigurationGraphQL(TestCase):
         )
         self.assertIsNone(result.get("errors"))
         if not result["data"]["createAgentConfiguration"]["ok"]:
-            print(f"Global Agent Error: {result['data']['createAgentConfiguration']['message']}")
+            print(
+                f"Global Agent Error: {result['data']['createAgentConfiguration']['message']}"
+            )
         self.assertTrue(result["data"]["createAgentConfiguration"]["ok"])
         agent_data = result["data"]["createAgentConfiguration"]["agent"]
         self.assertEqual(agent_data["name"], "New Global Agent")
@@ -480,7 +481,9 @@ class TestAgentConfigurationGraphQL(TestCase):
         )
         self.assertIsNone(result.get("errors"))
         if not result["data"]["createAgentConfiguration"]["ok"]:
-            print(f"Corpus Agent Error: {result['data']['createAgentConfiguration']['message']}")
+            print(
+                f"Corpus Agent Error: {result['data']['createAgentConfiguration']['message']}"
+            )
         self.assertTrue(result["data"]["createAgentConfiguration"]["ok"])
         agent_data = result["data"]["createAgentConfiguration"]["agent"]
         self.assertEqual(agent_data["scope"], "CORPUS")
@@ -499,9 +502,7 @@ class TestAgentConfigurationGraphQL(TestCase):
         )
 
         # Give admin CRUD permissions
-        set_permissions_for_obj_to_user(
-            self.admin_user, agent, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.admin_user, agent, [PermissionTypes.CRUD])
 
         agent_gid = to_global_id("AgentConfigurationType", agent.id)
 
@@ -545,9 +546,7 @@ class TestAgentConfigurationGraphQL(TestCase):
         )
 
         # Give admin CRUD permissions
-        set_permissions_for_obj_to_user(
-            self.admin_user, agent, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.admin_user, agent, [PermissionTypes.CRUD])
 
         agent_gid = to_global_id("AgentConfigurationType", agent.id)
 
@@ -600,7 +599,10 @@ class TestAgentConfigurationGraphQL(TestCase):
             self.assertIn("superuser", str(result["errors"]).lower())
         else:
             self.assertFalse(result["data"]["createAgentConfiguration"]["ok"])
-            self.assertIn("superuser", result["data"]["createAgentConfiguration"]["message"].lower())
+            self.assertIn(
+                "superuser",
+                result["data"]["createAgentConfiguration"]["message"].lower(),
+            )
 
     def test_create_corpus_agent_requires_corpus_permission(self):
         """Test that users need corpus permissions to create corpus agents."""
@@ -648,7 +650,7 @@ class TestAgentConfigurationGraphQL(TestCase):
     def test_filter_agents_by_corpus(self):
         """Test filtering agents by corpus."""
         # Create agents for different corpuses
-        corpus1_agent = AgentConfiguration.objects.create(
+        AgentConfiguration.objects.create(
             name="Corpus 1 Agent",
             description="Test",
             system_instructions="Test",
@@ -666,7 +668,7 @@ class TestAgentConfigurationGraphQL(TestCase):
             is_public=True,
         )
 
-        corpus2_agent = AgentConfiguration.objects.create(
+        AgentConfiguration.objects.create(
             name="Corpus 2 Agent",
             description="Test",
             system_instructions="Test",
