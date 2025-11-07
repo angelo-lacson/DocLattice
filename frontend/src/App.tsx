@@ -72,6 +72,7 @@ import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
 import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
+import { UserProfileRoute } from "./components/routes/UserProfileRoute";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
 import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
@@ -372,6 +373,10 @@ export const App = () => {
                   {/* List views */}
                   <Route path="/corpuses" element={<Corpuses />} />
                   <Route path="/documents" element={<Documents />} />
+
+                  {/* User Profile Routes (Issue #611) */}
+                  <Route path="/profile" element={<UserProfileRoute />} />
+                  <Route path="/users/:slug" element={<UserProfileRoute />} />
 
                   {/* Auth */}
                   {!REACT_APP_USE_AUTH0 ? (

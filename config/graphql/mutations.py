@@ -2477,6 +2477,7 @@ class UpdateMe(graphene.Mutation):
         last_name = graphene.String(required=False)
         phone = graphene.String(required=False)
         slug = graphene.String(required=False)
+        is_profile_public = graphene.Boolean(required=False)  # Issue #611
 
     ok = graphene.Boolean()
     message = graphene.String()

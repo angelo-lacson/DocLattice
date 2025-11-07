@@ -3112,6 +3112,7 @@ export const GET_ME = gql`
       lastName
       phone
       isUsageCapped # Crucially, fetch this field
+      isProfilePublic # Issue #611
     }
   }
 `;
@@ -3123,6 +3124,49 @@ export interface GetMeOutputs {
 
 // No inputs needed for this query
 export interface GetMeInputs {}
+
+// Issue #611 - User Profile Page
+export const GET_USER = gql`
+  query GetUser($slug: String!) {
+    userBySlug(slug: $slug) {
+      id
+      username
+      slug
+      name
+      firstName
+      lastName
+      email
+      isProfilePublic
+      reputationGlobal
+      totalMessages
+      totalThreadsCreated
+      totalAnnotationsCreated
+      totalDocumentsUploaded
+    }
+  }
+`;
+
+export interface GetUserInput {
+  slug: string;
+}
+
+export interface GetUserOutput {
+  userBySlug: {
+    id: string;
+    username: string;
+    slug: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    isProfilePublic: boolean;
+    reputationGlobal: number;
+    totalMessages: number;
+    totalThreadsCreated: number;
+    totalAnnotationsCreated: number;
+    totalDocumentsUploaded: number;
+  } | null;
+}
 
 // ID-based resolution queries for navigation fallback
 export const GET_CORPUS_BY_ID_FOR_REDIRECT = gql`
