@@ -1589,12 +1589,20 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     agent_type = graphene.Field(
         AgentTypeEnum, description="Type of agent that generated this message"
     )
+    agent_configuration = graphene.Field(
+        lambda: AgentConfigurationType,
+        description="Agent configuration that generated this message",
+    )
 
     def resolve_agent_type(self, info):
         """Convert string agent_type from model to enum."""
         if self.agent_type:
             return AgentTypeEnum.get(self.agent_type)
         return None
+
+    def resolve_agent_configuration(self, info):
+        """Resolve agent_configuration field."""
+        return self.agent_configuration
 
     class Meta:
         model = ChatMessage
@@ -1782,6 +1790,40 @@ class UserBadgeType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "awarded_by",
             "corpus",
         )
+
+
+# ---------------- Agent Configuration Types ----------------
+class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for agent configurations."""
+
+    class Meta:
+        from opencontractserver.agents.models import AgentConfiguration
+
+        model = AgentConfiguration
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+        fields = (
+            "id",
+            "name",
+            "description",
+            "system_instructions",
+            "available_tools",
+            "permission_required_tools",
+            "badge_config",
+            "avatar_url",
+            "scope",
+            "corpus",
+            "is_active",
+            "creator",
+            "is_public",
+            "created",
+            "modified",
+        )
+        filter_fields = {
+            "scope": ["exact"],
+            "is_active": ["exact"],
+            "corpus": ["exact"],
+        }
 
 
 class NotificationType(DjangoObjectType):

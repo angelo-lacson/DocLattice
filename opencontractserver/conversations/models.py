@@ -633,6 +633,14 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         null=True,
         help_text="The specific agent type that generated this message (for LLM messages)",
     )
+    agent_configuration = models.ForeignKey(
+        "agents.AgentConfiguration",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="messages",
+        help_text="Which agent generated this message (if msgType != HUMAN)",
+    )
     parent_message = models.ForeignKey(
         "self",
         on_delete=models.CASCADE,
