@@ -18,8 +18,8 @@ import {
 import { GET_THREAD_DETAIL } from "../src/graphql/queries";
 
 test.describe("ModerationControls", () => {
-  test("renders all moderation buttons", async ({ mount }) => {
-    const component = await mount(
+  test("renders all moderation buttons", async ({ mount, page }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -30,14 +30,13 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    await expect(component).toBeVisible();
-    await expect(component.getByLabelText("Pin thread")).toBeVisible();
-    await expect(component.getByLabelText("Lock thread")).toBeVisible();
-    await expect(component.getByLabelText("Delete thread")).toBeVisible();
+    await expect(page.getByLabel("Pin thread")).toBeVisible();
+    await expect(page.getByLabel("Lock thread")).toBeVisible();
+    await expect(page.getByLabel("Delete thread")).toBeVisible();
   });
 
-  test("shows unpin when thread is pinned", async ({ mount }) => {
-    const component = await mount(
+  test("shows unpin when thread is pinned", async ({ mount, page }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -48,12 +47,12 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    await expect(component.getByLabelText("Unpin thread")).toBeVisible();
-    await expect(component.getByText("Unpin")).toBeVisible();
+    await expect(page.getByLabel("Unpin thread")).toBeVisible();
+    await expect(page.getByText("Unpin")).toBeVisible();
   });
 
-  test("shows unlock when thread is locked", async ({ mount }) => {
-    const component = await mount(
+  test("shows unlock when thread is locked", async ({ mount, page }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -64,12 +63,15 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    await expect(component.getByLabelText("Unlock thread")).toBeVisible();
-    await expect(component.getByText("Unlock")).toBeVisible();
+    await expect(page.getByLabel("Unlock thread")).toBeVisible();
+    await expect(page.getByText("Unlock")).toBeVisible();
   });
 
-  test("shows restore button when thread is deleted", async ({ mount }) => {
-    const component = await mount(
+  test("shows restore button when thread is deleted", async ({
+    mount,
+    page,
+  }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -80,10 +82,10 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    await expect(component.getByLabelText("Restore thread")).toBeVisible();
-    await expect(component.getByText("Restore")).toBeVisible();
+    await expect(page.getByLabel("Restore thread")).toBeVisible();
+    await expect(page.getByText("Restore")).toBeVisible();
     // Delete button should not be visible
-    await expect(component.getByLabelText("Delete thread")).not.toBeVisible();
+    await expect(page.getByLabel("Delete thread")).not.toBeVisible();
   });
 
   test("pins thread successfully", async ({ mount, page }) => {
@@ -133,7 +135,7 @@ test.describe("ModerationControls", () => {
 
     let successCalled = false;
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -147,7 +149,7 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const pinButton = component.getByLabelText("Pin thread");
+    const pinButton = page.getByLabel("Pin thread");
     await pinButton.click();
 
     await page.waitForTimeout(500);
@@ -196,7 +198,7 @@ test.describe("ModerationControls", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -207,7 +209,7 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const unpinButton = component.getByLabelText("Unpin thread");
+    const unpinButton = page.getByLabel("Unpin thread");
     await unpinButton.click();
 
     await page.waitForTimeout(500);
@@ -258,7 +260,7 @@ test.describe("ModerationControls", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -269,14 +271,14 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const lockButton = component.getByLabelText("Lock thread");
+    const lockButton = page.getByLabel("Lock thread");
     await lockButton.click();
 
     await page.waitForTimeout(500);
   });
 
   test("shows delete confirmation dialog", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -287,18 +289,18 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const deleteButton = component.getByLabelText("Delete thread");
+    const deleteButton = page.getByLabel("Delete thread");
     await deleteButton.click();
 
     // Confirmation dialog should appear
-    await expect(component.getByText("Delete Thread?")).toBeVisible();
+    await expect(page.getByText("Delete Thread?")).toBeVisible();
     await expect(
-      component.getByText(/Are you sure you want to delete this thread/)
+      page.getByText(/Are you sure you want to delete this thread/)
     ).toBeVisible();
   });
 
   test("can cancel delete confirmation", async ({ mount, page }) => {
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -309,19 +311,19 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const deleteButton = component.getByLabelText("Delete thread");
+    const deleteButton = page.getByLabel("Delete thread");
     await deleteButton.click();
 
     // Dialog appears
-    await expect(component.getByText("Delete Thread?")).toBeVisible();
+    await expect(page.getByText("Delete Thread?")).toBeVisible();
 
     // Click cancel
-    const cancelButton = component.getByRole("button", { name: "Cancel" });
+    const cancelButton = page.getByRole("button", { name: "Cancel" });
     await cancelButton.click();
 
     // Dialog should disappear
     await page.waitForTimeout(100);
-    await expect(component.getByText("Delete Thread?")).not.toBeVisible();
+    await expect(page.getByText("Delete Thread?")).not.toBeVisible();
   });
 
   test("deletes thread after confirmation", async ({ mount, page }) => {
@@ -369,7 +371,7 @@ test.describe("ModerationControls", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -380,19 +382,25 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const deleteButton = component.getByLabelText("Delete thread");
+    const deleteButton = page.getByLabel("Delete thread");
     await deleteButton.click();
 
-    // Confirm deletion
-    const confirmButton = component.getByRole("button", {
-      name: "Delete Thread",
-    });
+    // Wait for dialog to appear
+    await expect(page.getByText("Delete Thread?")).toBeVisible();
+
+    // Confirm deletion - use exact match on the confirm button in dialog
+    const confirmButton = page
+      .getByRole("button", {
+        name: "Delete Thread",
+        exact: true,
+      })
+      .last();
     await confirmButton.click();
 
     await page.waitForTimeout(500);
 
     // Dialog should close
-    await expect(component.getByText("Delete Thread?")).not.toBeVisible();
+    await expect(page.getByText("Delete Thread?")).not.toBeVisible();
   });
 
   test("restores deleted thread", async ({ mount, page }) => {
@@ -437,7 +445,7 @@ test.describe("ModerationControls", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -448,7 +456,7 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const restoreButton = component.getByLabelText("Restore thread");
+    const restoreButton = page.getByLabel("Restore thread");
     await restoreButton.click();
 
     await page.waitForTimeout(500);
@@ -475,7 +483,7 @@ test.describe("ModerationControls", () => {
       },
     ];
 
-    const component = await mount(
+    await mount(
       <MockedProvider mocks={mocks} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -486,16 +494,16 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const pinButton = component.getByLabelText("Pin thread");
+    const pinButton = page.getByLabel("Pin thread");
     await pinButton.click();
 
     await page.waitForTimeout(500);
 
-    await expect(component.getByText(/don't have permission/i)).toBeVisible();
+    await expect(page.getByText(/don't have permission/i)).toBeVisible();
   });
 
-  test("disables buttons when deleted", async ({ mount }) => {
-    const component = await mount(
+  test("disables buttons when deleted", async ({ mount, page }) => {
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <ModerationControls
           conversationId="thread-1"
@@ -506,8 +514,8 @@ test.describe("ModerationControls", () => {
       </MockedProvider>
     );
 
-    const pinButton = component.getByLabelText("Pin thread");
-    const lockButton = component.getByLabelText("Lock thread");
+    const pinButton = page.getByLabel("Pin thread");
+    const lockButton = page.getByLabel("Lock thread");
 
     await expect(pinButton).toBeDisabled();
     await expect(lockButton).toBeDisabled();
