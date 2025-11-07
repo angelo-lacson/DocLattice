@@ -636,14 +636,14 @@ class TestAgentConfigurationGraphQL(TestCase):
         result = self.client.execute(
             mutation, context_value=type("Request", (), {"user": self.normal_user})()
         )
-        # Should fail due to lack of permissions
+        # Should fail with "Corpus not found" to prevent IDOR enumeration
         if result.get("errors"):
             error_msg = str(result["errors"]).lower()
-            self.assertTrue("permission" in error_msg or "owner" in error_msg)
+            self.assertTrue("corpus not found" in error_msg or "not found" in error_msg)
         else:
             self.assertFalse(result["data"]["createAgentConfiguration"]["ok"])
             msg = result["data"]["createAgentConfiguration"]["message"].lower()
-            self.assertTrue("permission" in msg or "owner" in msg)
+            self.assertTrue("corpus not found" in msg or "not found" in msg)
 
     def test_filter_agents_by_corpus(self):
         """Test filtering agents by corpus."""

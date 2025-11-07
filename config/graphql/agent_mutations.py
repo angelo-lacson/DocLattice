@@ -85,7 +85,16 @@ class CreateAgentConfigurationMutation(graphene.Mutation):
             corpus = None
             if corpus_id:
                 corpus_pk = from_global_id(corpus_id)[1]
-                corpus = Corpus.objects.get(pk=corpus_pk)
+                # Use visible_to_user to prevent IDOR - returns same error whether
+                # corpus doesn't exist or user lacks permission
+                try:
+                    corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+                except Corpus.DoesNotExist:
+                    return CreateAgentConfigurationMutation(
+                        ok=False,
+                        message="Corpus not found",
+                        agent=None,
+                    )
 
                 # Check if user has permission for this corpus
                 if not user.is_superuser and not user_has_permission_for_obj(
@@ -93,7 +102,7 @@ class CreateAgentConfigurationMutation(graphene.Mutation):
                 ):
                     return CreateAgentConfigurationMutation(
                         ok=False,
-                        message="You must be a corpus owner to create corpus-specific agents.",
+                        message="Corpus not found",
                         agent=None,
                     )
             elif scope == "CORPUS":
@@ -142,12 +151,6 @@ class CreateAgentConfigurationMutation(graphene.Mutation):
                 agent=agent,
             )
 
-        except Corpus.DoesNotExist:
-            return CreateAgentConfigurationMutation(
-                ok=False,
-                message="Corpus not found",
-                agent=None,
-            )
         except Exception as e:
             logger.exception("Error creating agent configuration")
             return CreateAgentConfigurationMutation(
