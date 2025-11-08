@@ -447,6 +447,75 @@ class AnnotationQueryOptimizerTestCase(TestCase):
 
         logger.info("✓ Anonymous user sees only public analyses")
 
+    def test_compute_effective_permissions_anonymous_user_public_doc_no_corpus(self):
+        """
+        Test that anonymous users can access public documents without a corpus.
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        logger.info("\n" + "=" * 80)
+        logger.info("TEST: Anonymous user accessing public doc without corpus")
+        logger.info("=" * 80)
+
+        # Make document public
+        self.doc1.is_public = True
+        self.doc1.save()
+
+        anon_user = AnonymousUser()
+
+        (
+            can_read,
+            can_create,
+            can_update,
+            can_delete,
+            can_comment,
+        ) = AnnotationQueryOptimizer._compute_effective_permissions(
+            user=anon_user, document_id=self.doc1.id, corpus_id=None
+        )
+
+        # Anonymous user should only have read permission
+        self.assertTrue(can_read, "Anonymous user should read public document")
+        self.assertFalse(can_create, "Anonymous user cannot create annotations")
+        self.assertFalse(can_update, "Anonymous user cannot update annotations")
+        self.assertFalse(can_delete, "Anonymous user cannot delete annotations")
+        self.assertFalse(can_comment, "Anonymous user cannot comment")
+
+        logger.info("✓ Anonymous user can read public doc without corpus")
+
+    def test_compute_effective_permissions_nonexistent_document(self):
+        """
+        Test that accessing a nonexistent document returns all False permissions.
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        logger.info("\n" + "=" * 80)
+        logger.info("TEST: Nonexistent document returns no permissions")
+        logger.info("=" * 80)
+
+        anon_user = AnonymousUser()
+
+        # Use a document ID that doesn't exist
+        nonexistent_id = 999999
+
+        (
+            can_read,
+            can_create,
+            can_update,
+            can_delete,
+            can_comment,
+        ) = AnnotationQueryOptimizer._compute_effective_permissions(
+            user=anon_user, document_id=nonexistent_id, corpus_id=None
+        )
+
+        # All permissions should be False for nonexistent document
+        self.assertFalse(can_read, "Should not read nonexistent document")
+        self.assertFalse(can_create, "Should not create on nonexistent document")
+        self.assertFalse(can_update, "Should not update on nonexistent document")
+        self.assertFalse(can_delete, "Should not delete on nonexistent document")
+        self.assertFalse(can_comment, "Should not comment on nonexistent document")
+
+        logger.info("✓ Nonexistent document properly denied")
+
 
 class RelationshipQueryOptimizerTestCase(TestCase):
     """
