@@ -1299,7 +1299,7 @@
   dependencies:
     playwright "1.52.0"
 
-"@popperjs/core@^2.6.0":
+"@popperjs/core@^2.6.0", "@popperjs/core@^2.9.0":
   version "2.11.8"
   resolved "https://registry.yarnpkg.com/@popperjs/core/-/core-2.11.8.tgz#6b79032e760a0899cd4204710beede972a3a185f"
   integrity sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==
@@ -1695,6 +1695,11 @@
   resolved "https://registry.yarnpkg.com/@tiptap/core/-/core-3.10.1.tgz#89fec750db261ee569f64926b3b9f9a509b81ea3"
   integrity sha512-YY/u+RsjLVhcUaIn+wv6vjMx8kldO7SzFFnRu0iuC+QW57VrlqUzqz5PR6CenphwJHuqGM5b3SCr4K2ZPjN8jQ==
 
+"@tiptap/core@^3.10.4":
+  version "3.10.4"
+  resolved "https://registry.yarnpkg.com/@tiptap/core/-/core-3.10.4.tgz#afb3ccd03760d7a378600924d935b6286ca1b591"
+  integrity sha512-/jT0NAOvNPHn9x2TmJE2lWe81qTOE4wdRD+OEE+NJUsOtRPEvEP/CEPpT3cT9/mfPBC/U80EvVeUn7bjc2USOw==
+
 "@tiptap/extension-blockquote@^3.10.1":
   version "3.10.1"
   resolved "https://registry.yarnpkg.com/@tiptap/extension-blockquote/-/extension-blockquote-3.10.1.tgz#6f5a5f5a5248ab13c2fe6bff22471ddef0631d73"
@@ -1853,6 +1858,30 @@
     prosemirror-transform "^1.10.2"
     prosemirror-view "^1.38.1"
 
+"@tiptap/pm@^3.10.4":
+  version "3.10.4"
+  resolved "https://registry.yarnpkg.com/@tiptap/pm/-/pm-3.10.4.tgz#5dbf6623de10fdcb177ed510f450de3a0077db2f"
+  integrity sha512-tNGAXSLq5l/G72EPTBUNRHkRmiQoU2ODpIvqXZWFjymaW+8x1nzU3oZwinfvCdwNPrsZJv4x7pfX5EA6pbnW8w==
+  dependencies:
+    prosemirror-changeset "^2.3.0"
+    prosemirror-collab "^1.3.1"
+    prosemirror-commands "^1.6.2"
+    prosemirror-dropcursor "^1.8.1"
+    prosemirror-gapcursor "^1.3.2"
+    prosemirror-history "^1.4.1"
+    prosemirror-inputrules "^1.4.0"
+    prosemirror-keymap "^1.2.2"
+    prosemirror-markdown "^1.13.1"
+    prosemirror-menu "^1.2.4"
+    prosemirror-model "^1.24.1"
+    prosemirror-schema-basic "^1.2.3"
+    prosemirror-schema-list "^1.5.0"
+    prosemirror-state "^1.4.3"
+    prosemirror-tables "^1.6.4"
+    prosemirror-trailing-node "^3.0.0"
+    prosemirror-transform "^1.10.2"
+    prosemirror-view "^1.38.1"
+
 "@tiptap/react@^3.10.1":
   version "3.10.1"
   resolved "https://registry.yarnpkg.com/@tiptap/react/-/react-3.10.1.tgz#66321958a58684a425ed137e02c5654bdb22403d"
@@ -1894,6 +1923,11 @@
     "@tiptap/extension-underline" "^3.10.1"
     "@tiptap/extensions" "^3.10.1"
     "@tiptap/pm" "^3.10.1"
+
+"@tiptap/suggestion@^3.10.4":
+  version "3.10.4"
+  resolved "https://registry.yarnpkg.com/@tiptap/suggestion/-/suggestion-3.10.4.tgz#d575fb93736538c33d1bfa3f7d70b269f1f6fb88"
+  integrity sha512-6tyL/jJ5KIsL26pFTOTGvgJUX2qtOfSxPDqZ7SDbFuPI5nbvgB1xw7UHAy9aHxRpXgIl9xnpRdRrpTSqDdFuMQ==
 
 "@types/aria-query@^5.0.1":
   version "5.0.4"
@@ -7412,6 +7446,13 @@ tinyspy@^3.0.2:
   version "3.0.2"
   resolved "https://registry.yarnpkg.com/tinyspy/-/tinyspy-3.0.2.tgz#86dd3cf3d737b15adcf17d7887c84a75201df20a"
   integrity sha512-n1cw8k1k0x4pgA2+9XrOkFydTerNcJ1zWCO5Nn9scWHTD+5tp8dghT2x1uduQePZTZgd3Tupf+x9BxJjeJi77Q==
+
+tippy.js@^6.3.7:
+  version "6.3.7"
+  resolved "https://registry.yarnpkg.com/tippy.js/-/tippy.js-6.3.7.tgz#8ccfb651d642010ed9a32ff29b0e9e19c5b8c61c"
+  integrity sha512-E1d3oP2emgJ9dRQZdf3Kkn0qJgI6ZLpyS5z6ZkY1DF3kaQaBsGZsndEpHwx+eC+tYM41HaSNvNtLx8tU57FzTQ==
+  dependencies:
+    "@popperjs/core" "^2.9.0"
 
 title-case@^3.0.3:
   version "3.0.3"
