@@ -234,6 +234,13 @@ class ConversationManager(SoftDeleteManager):
             deleted_at__isnull=True
         )
 
+    def visible_to_user(self, user=None):
+        """
+        Delegate to the queryset's visible_to_user method.
+        This ensures the custom visibility logic in SoftDeleteQuerySet is used.
+        """
+        return self.get_queryset().visible_to_user(user)
+
     def search_by_embedding(self, query_vector, embedder_path, top_k=10):
         """
         Convenience method to perform vector search:
@@ -251,6 +258,13 @@ class ChatMessageManager(SoftDeleteManager):
         return ChatMessageQuerySet(self.model, using=self._db).filter(
             deleted_at__isnull=True
         )
+
+    def visible_to_user(self, user=None):
+        """
+        Delegate to the queryset's visible_to_user method.
+        This ensures the custom visibility logic in SoftDeleteQuerySet is used.
+        """
+        return self.get_queryset().visible_to_user(user)
 
     def search_by_embedding(self, query_vector, embedder_path, top_k=10):
         """

@@ -1056,6 +1056,7 @@ class Query(graphene.ObjectType):
         total_comments = 0
         total_analyses = 0
         total_extracts = 0
+        total_threads = 0
 
         corpus_pk = from_global_id(corpus_id)[1]
         corpuses = Corpus.objects.visible_to_user(info.context.user).filter(
@@ -1071,6 +1072,13 @@ class Query(graphene.ObjectType):
             ).count()
             total_analyses = corpus.analyses.all().count()
             total_extracts = corpus.extracts.all().count()
+            total_threads = (
+                Conversation.objects.filter(
+                    conversation_type="thread", chat_with_corpus=corpus
+                )
+                .visible_to_user(info.context.user)
+                .count()
+            )
 
         return CorpusStatsType(
             total_docs=total_docs,
@@ -1078,6 +1086,7 @@ class Query(graphene.ObjectType):
             total_comments=total_comments,
             total_analyses=total_analyses,
             total_extracts=total_extracts,
+            total_threads=total_threads,
         )
 
     document_corpus_actions = graphene.Field(
@@ -1231,10 +1240,12 @@ class Query(graphene.ObjectType):
         description="Retrieve conversations, optionally filtered by document_id or corpus_id",
     )
 
-    @login_required
     def resolve_conversations(self, info, **kwargs):
         """
         Resolver to fetch Conversations along with their Messages.
+
+        Anonymous users can see public conversations.
+        Authenticated users see public conversations, their own, or explicitly shared.
 
         Args:
             info: GraphQL execution info.
@@ -1267,7 +1278,6 @@ class Query(graphene.ObjectType):
         description="Search conversations using vector similarity",
     )
 
-    @login_required
     def resolve_search_conversations(
         self,
         info,
@@ -1279,6 +1289,9 @@ class Query(graphene.ObjectType):
     ):
         """
         Search conversations using vector similarity.
+
+        Anonymous users can search public conversations.
+        Authenticated users can search public, their own, or explicitly shared conversations.
 
         Args:
             info: GraphQL execution info
@@ -1313,9 +1326,12 @@ class Query(graphene.ObjectType):
                     "Either corpus_id, document_id, or DEFAULT_EMBEDDER_PATH setting is required"
                 )
 
+        # Handle anonymous users
+        user_id = None if info.context.user.is_anonymous else info.context.user.id
+
         # Create vector store
         vector_store = CoreConversationVectorStore(
-            user_id=info.context.user.id,
+            user_id=user_id,
             corpus_id=corpus_pk,
             document_id=document_pk,
             conversation_type=conversation_type,
@@ -1664,8 +1680,13 @@ class Query(graphene.ObjectType):
 
     conversation = relay.Node.Field(ConversationType)
 
-    @login_required
     def resolve_conversation(self, info, **kwargs):
+        """
+        Resolver to fetch a single Conversation by ID.
+
+        Anonymous users can see public conversations.
+        Authenticated users see public conversations, their own, or explicitly shared.
+        """
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return Conversation.objects.visible_to_user(info.context.user).get(id=django_pk)
 

@@ -475,6 +475,7 @@ class ConversationFilter(django_filters.FilterSet):
         fields = {
             "created_at": ["gte", "lte"],
             "title": ["contains"],
+            "conversation_type": ["exact"],
         }
 
 

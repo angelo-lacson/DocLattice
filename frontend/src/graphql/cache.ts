@@ -438,6 +438,16 @@ export const selectedQueryIds = makeVar<string[]>([]);
 export const openedQueryObj = makeVar<CorpusQueryType | null>(null);
 
 /**
+ * Thread/Discussion-related global variables
+ *
+ * URL-DRIVEN STATE: selectedThreadId is controlled by URL query parameter ?thread=
+ * Examples:
+ *   /c/user/corpus?thread=thread-123  → selectedThreadId("thread-123")
+ *   /d/user/doc?thread=thread-456     → selectedThreadId("thread-456")
+ */
+export const selectedThreadId = makeVar<string | null>(null);
+
+/**
  * Auth-related global variables
  */
 export const userObj = makeVar<User | null>(null);
