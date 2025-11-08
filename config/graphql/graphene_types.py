@@ -1581,6 +1581,7 @@ class CorpusStatsType(graphene.ObjectType):
     total_comments = graphene.Int()
     total_analyses = graphene.Int()
     total_extracts = graphene.Int()
+    total_threads = graphene.Int()
 
 
 class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -1625,6 +1626,18 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if self.conversation_type:
             return ConversationTypeEnum.get(self.conversation_type)
         return None
+
+    @classmethod
+    def get_node(cls, info, id):
+        """
+        Override the default node resolution to apply permission checks.
+        Anonymous users can only see public conversations.
+        Authenticated users can see public, their own, or explicitly shared.
+        """
+        try:
+            return Conversation.objects.visible_to_user(info.context.user).get(pk=id)
+        except Conversation.DoesNotExist:
+            return None
 
     class Meta:
         model = Conversation
