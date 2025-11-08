@@ -2177,7 +2177,7 @@ export const GET_CONVERSATIONS = gql`
     $title_Contains: String
     $createdAt_Gte: DateTime
     $createdAt_Lte: DateTime
-    $conversationType: String
+    $conversationType: ConversationTypeEnum
   ) {
     conversations(
       documentId: $documentId
@@ -3482,7 +3482,7 @@ export interface GetUserBadgesOutput {
 export const GET_NOTIFICATIONS = gql`
   query GetNotifications(
     $isRead: Boolean
-    $notificationType: String
+    $notificationType: NotificationsNotificationNotificationTypeChoices
     $limit: Int
     $cursor: String
   ) {

@@ -47,6 +47,30 @@ class AnnotationQueryOptimizer:
         if user.is_superuser:
             return True, True, True, True, True
 
+        # Anonymous users only have read access to public documents/corpuses
+        if user.is_anonymous:
+            try:
+                document = Document.objects.get(id=document_id)
+                doc_read = document.is_public
+            except Document.DoesNotExist:
+                return False, False, False, False, False
+
+            if not doc_read:
+                return False, False, False, False, False
+
+            if corpus_id:
+                try:
+                    corpus = Corpus.objects.get(id=corpus_id)
+                    corpus_read = corpus.is_public
+                except Corpus.DoesNotExist:
+                    return False, False, False, False, False
+
+                if not corpus_read:
+                    return False, False, False, False, False
+
+            # Anonymous users only get read permission
+            return True, False, False, False, False
+
         # First check document permissions (primary)
         try:
             document = Document.objects.get(id=document_id)
@@ -153,33 +177,40 @@ class AnnotationQueryOptimizer:
             )
             from opencontractserver.extracts.models import Extract
 
-            # Base query for visible analyses
-            visible_analyses = Analysis.objects.filter(
-                Q(is_public=True) | Q(creator=user)
-            )
+            # Anonymous users can only see public analyses/extracts
+            if user.is_anonymous:
+                visible_analyses = Analysis.objects.filter(Q(is_public=True))
+                visible_extracts = Extract.objects.none()  # No extracts for anonymous
+            else:
+                # Base query for visible analyses
+                visible_analyses = Analysis.objects.filter(
+                    Q(is_public=True) | Q(creator=user)
+                )
 
-            # Add analyses with explicit permissions
-            analyses_with_permission = AnalysisUserObjectPermission.objects.filter(
-                user=user
-            ).values_list("content_object_id", flat=True)
+                # Add analyses with explicit permissions
+                analyses_with_permission = AnalysisUserObjectPermission.objects.filter(
+                    user=user
+                ).values_list("content_object_id", flat=True)
 
-            visible_analyses = visible_analyses | Analysis.objects.filter(
-                id__in=analyses_with_permission
-            )
+                visible_analyses = visible_analyses | Analysis.objects.filter(
+                    id__in=analyses_with_permission
+                )
 
-            # Get extracts user can access
-            from opencontractserver.extracts.models import ExtractUserObjectPermission
+                # Get extracts user can access
+                from opencontractserver.extracts.models import (
+                    ExtractUserObjectPermission,
+                )
 
-            visible_extracts = Extract.objects.filter(Q(creator=user))
+                visible_extracts = Extract.objects.filter(Q(creator=user))
 
-            # Add extracts with explicit permissions
-            extracts_with_permission = ExtractUserObjectPermission.objects.filter(
-                user=user
-            ).values_list("content_object_id", flat=True)
+                # Add extracts with explicit permissions
+                extracts_with_permission = ExtractUserObjectPermission.objects.filter(
+                    user=user
+                ).values_list("content_object_id", flat=True)
 
-            visible_extracts = visible_extracts | Extract.objects.filter(
-                id__in=extracts_with_permission
-            )
+                visible_extracts = visible_extracts | Extract.objects.filter(
+                    id__in=extracts_with_permission
+                )
 
             # Filter annotations: exclude private ones unless user has access
             # BUT always include structural annotations (they're always visible)
@@ -407,33 +438,40 @@ class RelationshipQueryOptimizer:
             )
             from opencontractserver.extracts.models import Extract
 
-            # Base query for visible analyses
-            visible_analyses = Analysis.objects.filter(
-                Q(is_public=True) | Q(creator=user)
-            )
+            # Anonymous users can only see public analyses/extracts
+            if user.is_anonymous:
+                visible_analyses = Analysis.objects.filter(Q(is_public=True))
+                visible_extracts = Extract.objects.none()  # No extracts for anonymous
+            else:
+                # Base query for visible analyses
+                visible_analyses = Analysis.objects.filter(
+                    Q(is_public=True) | Q(creator=user)
+                )
 
-            # Add analyses with explicit permissions
-            analyses_with_permission = AnalysisUserObjectPermission.objects.filter(
-                user=user
-            ).values_list("content_object_id", flat=True)
+                # Add analyses with explicit permissions
+                analyses_with_permission = AnalysisUserObjectPermission.objects.filter(
+                    user=user
+                ).values_list("content_object_id", flat=True)
 
-            visible_analyses = visible_analyses | Analysis.objects.filter(
-                id__in=analyses_with_permission
-            )
+                visible_analyses = visible_analyses | Analysis.objects.filter(
+                    id__in=analyses_with_permission
+                )
 
-            # Get extracts user can access
-            from opencontractserver.extracts.models import ExtractUserObjectPermission
+                # Get extracts user can access
+                from opencontractserver.extracts.models import (
+                    ExtractUserObjectPermission,
+                )
 
-            visible_extracts = Extract.objects.filter(Q(creator=user))
+                visible_extracts = Extract.objects.filter(Q(creator=user))
 
-            # Add extracts with explicit permissions
-            extracts_with_permission = ExtractUserObjectPermission.objects.filter(
-                user=user
-            ).values_list("content_object_id", flat=True)
+                # Add extracts with explicit permissions
+                extracts_with_permission = ExtractUserObjectPermission.objects.filter(
+                    user=user
+                ).values_list("content_object_id", flat=True)
 
-            visible_extracts = visible_extracts | Extract.objects.filter(
-                id__in=extracts_with_permission
-            )
+                visible_extracts = visible_extracts | Extract.objects.filter(
+                    id__in=extracts_with_permission
+                )
 
             # Filter relationships: exclude private ones unless user has access
             # BUT always include structural relationships (they're always visible)
@@ -670,6 +708,12 @@ class AnalysisQueryOptimizer:
 
         if user.is_superuser:
             qs = Analysis.objects.all()
+        elif user.is_anonymous:
+            # Anonymous users can only see public analyses in public corpuses
+            qs = Analysis.objects.filter(
+                Q(is_public=True)
+                & (Q(analyzed_corpus__isnull=True) | Q(analyzed_corpus__is_public=True))
+            )
         else:
             # Import permission model
             from opencontractserver.analyzer.models import AnalysisUserObjectPermission
@@ -705,7 +749,11 @@ class AnalysisQueryOptimizer:
             # Check corpus permission
             try:
                 corpus = Corpus.objects.get(id=corpus_id)
-                if not user.is_superuser and not user_has_permission_for_obj(
+                # Anonymous users can only access public corpuses
+                if user.is_anonymous:
+                    if not corpus.is_public:
+                        return Analysis.objects.none()
+                elif not user.is_superuser and not user_has_permission_for_obj(
                     user, corpus, PermissionTypes.READ, include_group_permissions=True
                 ):
                     return Analysis.objects.none()
@@ -859,6 +907,11 @@ class ExtractQueryOptimizer:
 
         if user.is_superuser:
             qs = Extract.objects.all()
+        elif user.is_anonymous:
+            # Anonymous users can only see public extracts in public corpuses
+            qs = Extract.objects.filter(
+                Q(corpus__isnull=True) | Q(corpus__is_public=True)
+            )
         else:
             # Import permission model
             from opencontractserver.extracts.models import ExtractUserObjectPermission
@@ -893,7 +946,11 @@ class ExtractQueryOptimizer:
             # Check corpus permission
             try:
                 corpus = Corpus.objects.get(id=corpus_id)
-                if not user.is_superuser and not user_has_permission_for_obj(
+                # Anonymous users can only access public corpuses
+                if user.is_anonymous:
+                    if not corpus.is_public:
+                        return Extract.objects.none()
+                elif not user.is_superuser and not user_has_permission_for_obj(
                     user, corpus, PermissionTypes.READ, include_group_permissions=True
                 ):
                     return Extract.objects.none()
