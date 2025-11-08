@@ -1980,6 +1980,179 @@ const ThreadCard = styled.div`
 `;
 ```
 
+### Pattern 6: Backend IDOR Prevention (Security)
+
+**IDOR (Insecure Direct Object Reference)** vulnerabilities occur when different error messages reveal whether a resource exists vs whether the user lacks permission. This allows attackers to enumerate resources. **ALL GraphQL mutations must prevent IDOR by returning uniform error messages.**
+
+#### ❌ VULNERABLE Pattern (DO NOT USE):
+
+```python
+# BAD: Different errors reveal resource existence
+def mutate(cls, root, info, badge_id):
+    user = info.context.user
+    badge_pk = from_global_id(badge_id)[1]
+
+    try:
+        badge = Badge.objects.get(pk=badge_pk)  # ❌ Reveals badge exists
+    except Badge.DoesNotExist:
+        return UpdateBadgeMutation(
+            ok=False,
+            message="Badge not found",  # Error 1
+            badge=None,
+        )
+
+    # Permission check happens AFTER existence check
+    if not user.is_superuser and not user_has_permission_for_obj(...):
+        return UpdateBadgeMutation(
+            ok=False,
+            message="You don't have permission",  # ❌ Error 2 - reveals badge exists!
+            badge=None,
+        )
+```
+
+**Problem**: Attacker can enumerate badge IDs by observing different error messages:
+- "Badge not found" → Badge doesn't exist
+- "You don't have permission" → Badge exists but unauthorized
+
+#### ✅ SECURE Pattern 1: `visible_to_user()` Filter
+
+**Use this pattern for most mutations.** Filter objects BEFORE retrieval to prevent information leakage:
+
+```python
+def mutate(cls, root, info, badge_id):
+    user = info.context.user
+    badge_pk = from_global_id(badge_id)[1]
+
+    # ✅ Filter by visibility FIRST - single query combines existence + permission
+    try:
+        badge = Badge.objects.visible_to_user(user).get(pk=badge_pk)
+    except Badge.DoesNotExist:
+        # Uniform error - same message whether badge doesn't exist OR user lacks permission
+        return UpdateBadgeMutation(
+            ok=False,
+            message="Badge not found",
+            badge=None,
+        )
+
+    # Additional permission check if needed (e.g., for CRUD vs READ)
+    if not user.is_superuser and not user_has_permission_for_obj(
+        user, badge, PermissionTypes.CRUD, include_group_permissions=True
+    ):
+        # Same error message as DoesNotExist
+        return UpdateBadgeMutation(
+            ok=False,
+            message="Badge not found",  # ✅ Uniform error
+            badge=None,
+        )
+
+    # Perform mutation...
+```
+
+**Key Points**:
+- `visible_to_user(user)` filters queryset by permission BEFORE `.get()`
+- Single uniform error message for both "doesn't exist" and "no permission"
+- Prevents enumeration - attacker can't determine if badge exists
+
+#### ✅ SECURE Pattern 2: Creator-Scoped Query
+
+**Use this pattern when objects MUST belong to the user** (e.g., adding moderators to YOUR corpus):
+
+```python
+def mutate(cls, root, info, corpus_id, user_id):
+    user = info.context.user
+    corpus_pk = from_global_id(corpus_id)[1]
+
+    # ✅ Single query combining ID + ownership check
+    try:
+        corpus = Corpus.objects.get(pk=corpus_pk, creator=user)
+    except Corpus.DoesNotExist:
+        # Uniform error - same whether corpus doesn't exist OR user isn't creator
+        return AddModeratorMutation(
+            ok=False,
+            message="Corpus not found or access denied",
+        )
+
+    # Now safe to perform mutation - we know user is creator
+```
+
+**Key Points**:
+- `.get(pk=pk, creator=user)` combines both checks in one query
+- Uniform error message prevents enumeration
+- More restrictive than `visible_to_user()` - requires ownership
+
+#### ✅ Test Coverage for IDOR Prevention
+
+**CRITICAL**: Every mutation with IDOR protection MUST have tests verifying uniform error messages:
+
+```python
+class BadgeMutationIDORTest(TestCase):
+    """Test IDOR prevention in badge mutations."""
+
+    def test_update_badge_unauthorized_returns_same_error_as_nonexistent(self):
+        """Unauthorized access returns same error as non-existent badge."""
+        # Create badge owned by admin
+        badge = Badge.objects.create(
+            creator=self.admin_user,
+            name="Admin Badge",
+            # ... other fields
+        )
+
+        # Try to update as regular user (unauthorized)
+        mutation = '''
+            mutation UpdateBadge($id: ID!) {
+                updateBadge(badgeId: $id, name: "Hacked") {
+                    ok
+                    message
+                }
+            }
+        '''
+
+        # Execute as regular user
+        result = self.client.execute(
+            mutation,
+            variables={"id": to_global_id("BadgeType", badge.id)},
+            context_value=type("Context", (), {"user": self.regular_user}),
+        )
+
+        unauthorized_error = result["data"]["updateBadge"]["message"]
+
+        # Try to update non-existent badge
+        result = self.client.execute(
+            mutation,
+            variables={"id": to_global_id("BadgeType", 999999)},
+            context_value=type("Context", (), {"user": self.regular_user}),
+        )
+
+        nonexistent_error = result["data"]["updateBadge"]["message"]
+
+        # ✅ CRITICAL: Errors must be identical to prevent enumeration
+        self.assertEqual(unauthorized_error, nonexistent_error)
+        self.assertEqual(unauthorized_error, "Badge not found")
+```
+
+**Test Requirements**:
+1. Test unauthorized access to existing resource
+2. Test access to non-existent resource
+3. **Assert error messages are IDENTICAL**
+4. Apply to ALL mutations: Create, Update, Delete, Award, etc.
+
+#### Summary: IDOR Prevention Checklist
+
+When implementing ANY GraphQL mutation:
+
+- [ ] Use `visible_to_user()` or creator-scoped query BEFORE `.get()`
+- [ ] Return UNIFORM error messages (same text for "doesn't exist" and "unauthorized")
+- [ ] Add IDOR prevention tests comparing error messages
+- [ ] Never reveal resource existence in error messages
+- [ ] Document why specific pattern was chosen (visibility vs ownership)
+
+**Files Modified for IDOR Prevention** (PR #640):
+- `config/graphql/badge_mutations.py` - Badge CRUD mutations
+- `config/graphql/agent_mutations.py` - Agent configuration mutations
+- `config/graphql/moderation_mutations.py` - Corpus moderation mutations
+- `opencontractserver/tests/test_badges.py` - IDOR prevention tests
+- `opencontractserver/tests/test_moderation.py` - IDOR prevention tests
+
 ---
 
 ## Performance Considerations

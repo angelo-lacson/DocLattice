@@ -29,6 +29,7 @@ export interface QueryParams {
   annotationIds?: string[];
   analysisIds?: string[];
   extractIds?: string[];
+  threadId?: string | null;
   showStructural?: boolean;
   showSelectedOnly?: boolean;
   showBoundingBoxes?: boolean;
@@ -179,6 +180,9 @@ export function buildQueryParams(params: QueryParams): string {
   }
   if (params.extractIds?.length) {
     searchParams.set("extract", params.extractIds.join(","));
+  }
+  if (params.threadId) {
+    searchParams.set("thread", params.threadId);
   }
 
   // Visualization state - only add non-default values to keep URLs clean
@@ -613,4 +617,84 @@ export function clearAnnotationSelection(
     analysisIds: [],
     extractIds: [],
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Thread/Discussion Navigation Utilities
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Generate corpus thread URL for full-page view
+ * @param corpus - Corpus object with creator and slug
+ * @param threadId - Thread/conversation ID
+ * @returns Full URL path for corpus thread view, or "#" if slugs missing
+ * @example
+ * getCorpusThreadUrl({ creator: { slug: "john" }, slug: "legal-docs" }, "thread-123")
+ * // Returns: "/c/john/legal-docs/discussions/thread-123"
+ */
+export function getCorpusThreadUrl(
+  corpus: {
+    creator?: { slug?: string | null } | null;
+    slug?: string | null;
+  },
+  threadId: string
+): string {
+  if (!corpus.creator?.slug || !corpus.slug) {
+    console.warn("Corpus missing slug data:", corpus);
+    return "#";
+  }
+  return `/c/${corpus.creator.slug}/${corpus.slug}/discussions/${threadId}`;
+}
+
+/**
+ * Navigate to corpus thread (full page)
+ * @param corpus - Corpus object with creator and slug
+ * @param threadId - Thread/conversation ID
+ * @param navigate - React Router navigate function
+ * @param currentPath - Current pathname to avoid redundant navigation
+ */
+export function navigateToCorpusThread(
+  corpus: {
+    creator?: { slug?: string | null } | null;
+    slug?: string | null;
+  },
+  threadId: string,
+  navigate: (path: string) => void,
+  currentPath: string
+) {
+  const url = getCorpusThreadUrl(corpus, threadId);
+  if (url !== "#" && currentPath !== url) {
+    navigate(url);
+  }
+}
+
+/**
+ * Navigate to document thread (sidebar via query param)
+ * Used for document-scoped threads that open in sidebars rather than full-page views
+ * @param threadId - Thread/conversation ID
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ */
+export function navigateToDocumentThread(
+  threadId: string,
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void
+) {
+  const searchParams = new URLSearchParams(location.search);
+  searchParams.set("thread", threadId);
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Clear thread selection from URL
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ */
+export function clearThreadSelection(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void
+) {
+  const searchParams = new URLSearchParams(location.search);
+  searchParams.delete("thread");
+  navigate({ search: searchParams.toString() }, { replace: true });
 }

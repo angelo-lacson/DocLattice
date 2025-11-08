@@ -72,6 +72,7 @@ import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
 import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
+import { CorpusThreadRoute } from "./components/routes/CorpusThreadRoute";
 import { UserProfileRoute } from "./components/routes/UserProfileRoute";
 import { LeaderboardRoute } from "./components/routes/LeaderboardRoute";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
@@ -388,6 +389,11 @@ export const App = () => {
                   <Route
                     path="/c/:userIdent/:corpusIdent"
                     element={<CorpusLandingRoute />}
+                  />
+                  {/* Corpus discussion thread route (Issue #621) */}
+                  <Route
+                    path="/c/:userIdent/:corpusIdent/discussions/:threadId"
+                    element={<CorpusThreadRoute />}
                   />
 
                   {/* Extract routes */}

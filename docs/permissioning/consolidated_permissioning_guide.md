@@ -10,6 +10,8 @@
 
 > **⚠️ DEPRECATION WARNING**: The `resolve_oc_model_queryset` function in `opencontractserver.shared.resolvers` was DEPRECATED and replaced with `Model.objects.visible_to_user(user)` calls.
 
+> **🟡 ANONYMOUS USER SUPPORT**: Anonymous users can access public resources with read-only permissions. Document AND corpus must both be `is_public=True` for access. Applies to documents, corpuses, conversations, analyses (public only), and annotations.
+
 ## Key Changes in Current Implementation
 
 | Component | Old Model | New Model | Impact |
@@ -23,6 +25,7 @@
 | **Permission Uniformity** | Each annotation/relationship different | All same in document | Predictable behavior |
 | **Analysis Privacy** | All annotations visible with doc+corpus perms | Annotations created by analysis are private | Enhanced privacy control |
 | **Extract Privacy** | All annotations visible with doc+corpus perms | Annotations created by extract are private | Enhanced privacy control |
+| **Anonymous Access** | Not supported | Read-only access to public resources | Public corpus support |
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -47,6 +50,7 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
 1. **Standard Objects (Corpus, Document, etc.)**
    - Direct permission model - permissions are checked on the object itself
    - Corpus-level permissions can provide additional context when viewing documents
+   - **Anonymous users**: Read-only access if `is_public=True`
 
 2. **Annotations and Relationships - NO INDIVIDUAL PERMISSIONS**
    - **IMPORTANT: Annotations and Relationships do NOT have individual permissions**
@@ -505,6 +509,17 @@ class AnnotationQueryOptimizer:
         if user.is_superuser:
             return True, True, True, True
 
+        # Anonymous users only have read access to public documents/corpuses
+        if user.is_anonymous:
+            doc_read = document.is_public
+            if not doc_read:
+                return False, False, False, False
+            if corpus_id:
+                corpus = Corpus.objects.get(id=corpus_id)
+                if not corpus.is_public:
+                    return False, False, False, False
+            return True, False, False, False  # Read-only
+
         # Check document permissions (PRIMARY - must have these)
         doc = Document.objects.get(id=document_id)
         doc_read = user_has_permission(user, doc, READ)
@@ -571,6 +586,14 @@ class AnnotationQueryOptimizer:
    - Get full permissions automatically
    - Can see all annotations including private analysis/extract annotations
    - **Only superusers can modify or delete structural annotations/relationships**
+
+6. **Anonymous Users** (NEW)
+   - Can access resources where `is_public=True`
+   - Get READ-ONLY permissions (no CREATE, UPDATE, DELETE, COMMENT)
+   - For annotations: BOTH document AND corpus must be public
+   - For analyses: Only see public analyses in public corpuses
+   - For extracts: No access (always filtered out)
+   - For conversations: Only see `is_public=True` conversations
 
 ## Annotation Privacy Model (NEW)
 
