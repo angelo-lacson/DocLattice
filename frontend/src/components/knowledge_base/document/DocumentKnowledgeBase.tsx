@@ -28,6 +28,9 @@ import {
   GET_DOCUMENT_ANNOTATIONS_ONLY,
   GetDocumentAnnotationsOnlyInput,
   GetDocumentAnnotationsOnlyOutput,
+  GET_CONVERSATIONS,
+  GetConversationsInputs,
+  GetConversationsOutputs,
 } from "../../../graphql/queries";
 import { useFeatureAvailability } from "../../../hooks/useFeatureAvailability";
 import {
@@ -104,6 +107,7 @@ import {
   ChatIndicator,
   SidebarTabsContainer,
   SidebarTab,
+  TabBadge,
   MobileTabBar,
   MobileTab,
 } from "./StyledContainers";
@@ -1898,6 +1902,22 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     fetchPolicy: "network-only",
   });
 
+  // Query for thread count (for discussions tab badge)
+  const { data: threadCountData } = useQuery<
+    GetConversationsOutputs,
+    GetConversationsInputs
+  >(GET_CONVERSATIONS, {
+    variables: {
+      documentId: documentId,
+      conversationType: "THREAD",
+      limit: 1, // We only need the count
+    },
+    skip: !documentId,
+    fetchPolicy: "cache-and-network",
+  });
+
+  const threadCount = threadCountData?.conversations?.totalCount ?? 0;
+
   // Combine query results
   const loading = corpusLoading || documentLoading;
   const queryError = corpusError || documentError;
@@ -2968,6 +2988,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                     data-testid="view-mode-discussions"
                     aria-label="Document discussions"
                   >
+                    {threadCount > 0 && (
+                      <TabBadge $isActive={sidebarViewMode === "discussions"}>
+                        {threadCount}
+                      </TabBadge>
+                    )}
                     <MessageSquare />
                     <span className="tab-label">Discussions</span>
                   </SidebarTab>
@@ -3072,7 +3097,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                         aria-label="Document discussions"
                       >
                         <MessageSquare />
-                        <span>Discussions</span>
+                        <span>
+                          Discussions
+                          {threadCount > 0 ? ` (${threadCount})` : ""}
+                        </span>
                       </MobileTab>
                     </MobileTabBar>
 
@@ -3179,6 +3207,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                         data-testid="view-mode-discussions"
                         aria-label="Document discussions"
                       >
+                        {threadCount > 0 && (
+                          <TabBadge
+                            $isActive={sidebarViewMode === "discussions"}
+                          >
+                            {threadCount}
+                          </TabBadge>
+                        )}
                         <MessageSquare />
                         <span className="tab-label">Discussions</span>
                       </SidebarTab>
