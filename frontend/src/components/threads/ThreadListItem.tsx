@@ -12,6 +12,8 @@ interface ThreadListItemProps {
   thread: ConversationType;
   corpusId?: string;
   compact?: boolean;
+  /** Optional callback when thread is clicked (overrides default navigation) */
+  onThreadClick?: (threadId: string) => void;
 }
 
 const ThreadCard = styled.div<{ $isPinned?: boolean; $isDeleted?: boolean }>`
@@ -114,13 +116,19 @@ export function ThreadListItem({
   thread,
   corpusId,
   compact = false,
+  onThreadClick,
 }: ThreadListItemProps) {
   const navigate = useNavigate();
 
   const handleClick = () => {
-    const corpus = corpusId || thread.chatWithCorpus?.id;
-    if (corpus) {
-      navigate(`/corpus/${corpus}/discussions/${thread.id}`);
+    // Use callback if provided, otherwise use default navigation
+    if (onThreadClick) {
+      onThreadClick(thread.id);
+    } else {
+      const corpus = corpusId || thread.chatWithCorpus?.id;
+      if (corpus) {
+        navigate(`/corpus/${corpus}/discussions/${thread.id}`);
+      }
     }
   };
 

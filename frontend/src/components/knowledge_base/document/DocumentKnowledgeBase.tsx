@@ -16,6 +16,7 @@ import {
   PanelRightOpen,
   Database,
   BarChart3,
+  Download,
 } from "lucide-react";
 import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
@@ -138,8 +139,10 @@ import {
   showStructuralAnnotations,
   showSelectedAnnotationOnly,
   showAnnotationBoundingBoxes,
+  selectedThreadId,
 } from "../../../graphql/cache";
 import { useAuthReady } from "../../../hooks/useAuthReady";
+import { DocumentDiscussionsContent } from "../../discussions/DocumentDiscussionsContent";
 
 // New imports for unified feed
 import {
@@ -2179,6 +2182,18 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     }
   }, [pendingChatMessage]);
 
+  // Auto-open sidebar when ?thread= param detected
+  const threadId = useReactiveVar(selectedThreadId);
+  useEffect(() => {
+    if (threadId && combinedData?.document) {
+      unstable_batchedUpdates(() => {
+        setShowRightPanel(true);
+        setMode("half"); // 50% width to keep document visible
+        setSidebarViewMode("discussions");
+      });
+    }
+  }, [threadId, combinedData?.document]);
+
   const rightPanelContent = (() => {
     if (!showRightPanel) return null;
 
@@ -2333,6 +2348,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             }}
           />
         </div>
+      );
+    }
+
+    // Handle discussions mode
+    if (sidebarViewMode === "discussions") {
+      return (
+        <DocumentDiscussionsContent
+          documentId={documentId}
+          corpusId={corpusId}
+        />
       );
     }
 
@@ -2929,6 +2954,23 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                       <span className="tab-label">Analysis</span>
                     </SidebarTab>
                   )}
+                  {/* Discussions tab - always visible */}
+                  <SidebarTab
+                    $isActive={sidebarViewMode === "discussions"}
+                    $panelOpen={false}
+                    onClick={() => {
+                      setSidebarViewMode("discussions");
+                      setShowRightPanel(true);
+                      setMode("half"); // Keep document visible
+                    }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    data-testid="view-mode-discussions"
+                    aria-label="Document discussions"
+                  >
+                    <MessageSquare />
+                    <span className="tab-label">Discussions</span>
+                  </SidebarTab>
                 </SidebarTabsContainer>
               )}
 
@@ -3016,6 +3058,22 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                           <span>Analysis</span>
                         </MobileTab>
                       )}
+                      <MobileTab
+                        $active={sidebarViewMode === "discussions"}
+                        onClick={() => {
+                          if (sidebarViewMode === "discussions") {
+                            setShowRightPanel(!showRightPanel);
+                          } else {
+                            setSidebarViewMode("discussions");
+                            setShowRightPanel(true);
+                            setMode("full");
+                          }
+                        }}
+                        aria-label="Document discussions"
+                      >
+                        <MessageSquare />
+                        <span>Discussions</span>
+                      </MobileTab>
                     </MobileTabBar>
 
                     {/* Tabs when panel is open - positioned on left edge of panel (desktop only) */}
@@ -3102,6 +3160,28 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                           <span className="tab-label">Analysis</span>
                         </SidebarTab>
                       )}
+                      {/* Discussions tab - always visible */}
+                      <SidebarTab
+                        $isActive={sidebarViewMode === "discussions"}
+                        $panelOpen={true}
+                        onClick={() => {
+                          if (sidebarViewMode === "discussions") {
+                            // Clicking active tab closes the panel
+                            setShowRightPanel(false);
+                          } else {
+                            // Switch to discussions mode
+                            setSidebarViewMode("discussions");
+                            setMode("half"); // Keep document visible
+                          }
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        data-testid="view-mode-discussions"
+                        aria-label="Document discussions"
+                      >
+                        <MessageSquare />
+                        <span className="tab-label">Discussions</span>
+                      </SidebarTab>
                     </SidebarTabsContainer>
 
                     {rightPanelContent}
