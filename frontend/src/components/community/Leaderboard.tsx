@@ -361,7 +361,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                 {leaderboard.entries.map((entry: LeaderboardEntry) => (
                   <UserRow
                     key={entry.user.id}
-                    $isCurrentUser={entry.user.id === statsData?.communityStats}
+                    $isCurrentUser={
+                      leaderboard.currentUserRank !== null &&
+                      entry.rank === leaderboard.currentUserRank
+                    }
                     onClick={() => handleUserClick(entry.user.slug)}
                     style={{ cursor: "pointer" }}
                   >
