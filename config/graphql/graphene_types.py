@@ -1907,3 +1907,127 @@ class NotificationType(DjangoObjectType):
         # as GraphQL's GenericScalar handles JSON serialization safely.
         # XSS protection must be handled on frontend via proper escaping.
         return self.data
+
+
+# ==============================================================================
+# LEADERBOARD TYPES (Issue #613 - Leaderboard and Community Stats Dashboard)
+# ==============================================================================
+
+
+class LeaderboardMetricEnum(graphene.Enum):
+    """
+    Enum for different leaderboard metrics.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    BADGES = "badges"
+    MESSAGES = "messages"
+    THREADS = "threads"
+    ANNOTATIONS = "annotations"
+    REPUTATION = "reputation"
+
+
+class LeaderboardScopeEnum(graphene.Enum):
+    """
+    Enum for leaderboard scope (time period or corpus).
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    """
+
+    ALL_TIME = "all_time"
+    MONTHLY = "monthly"
+    WEEKLY = "weekly"
+
+
+class LeaderboardEntryType(graphene.ObjectType):
+    """
+    Represents a single entry in the leaderboard.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    user = graphene.Field(UserType, description="The user in this leaderboard entry")
+    rank = graphene.Int(description="User's rank in the leaderboard (1-indexed)")
+    score = graphene.Int(description="User's score for this metric")
+
+    # Optional detailed breakdown
+    badge_count = graphene.Int(description="Total badges earned by user")
+    message_count = graphene.Int(description="Total messages posted by user")
+    thread_count = graphene.Int(description="Total threads created by user")
+    annotation_count = graphene.Int(description="Total annotations created by user")
+    reputation = graphene.Int(description="User's reputation score")
+
+    # Rising star indicator (for users with recent high activity)
+    is_rising_star = graphene.Boolean(
+        description="True if user has shown significant recent activity"
+    )
+
+
+class LeaderboardType(graphene.ObjectType):
+    """
+    Complete leaderboard with entries and metadata.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    metric = graphene.Field(
+        LeaderboardMetricEnum, description="The metric this leaderboard is sorted by"
+    )
+    scope = graphene.Field(
+        LeaderboardScopeEnum, description="The time period for this leaderboard"
+    )
+    corpus_id = graphene.ID(description="If corpus-specific leaderboard, the corpus ID")
+    total_users = graphene.Int(description="Total number of users in leaderboard")
+    entries = graphene.List(
+        LeaderboardEntryType, description="Leaderboard entries in rank order"
+    )
+    current_user_rank = graphene.Int(
+        description="Current user's rank in this leaderboard (null if not ranked)"
+    )
+
+
+class BadgeDistributionType(graphene.ObjectType):
+    """
+    Statistics about badge distribution across users.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    badge = graphene.Field(BadgeType, description="The badge")
+    award_count = graphene.Int(
+        description="Number of times this badge has been awarded"
+    )
+    unique_recipients = graphene.Int(
+        description="Number of unique users who have earned this badge"
+    )
+
+
+class CommunityStatsType(graphene.ObjectType):
+    """
+    Overall community engagement statistics.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    total_users = graphene.Int(description="Total number of active users")
+    total_messages = graphene.Int(description="Total messages posted")
+    total_threads = graphene.Int(description="Total threads created")
+    total_annotations = graphene.Int(description="Total annotations created")
+    total_badges_awarded = graphene.Int(description="Total badge awards")
+    badge_distribution = graphene.List(
+        BadgeDistributionType, description="Badge distribution across users"
+    )
+
+    # Time-based metrics
+    messages_this_week = graphene.Int(description="Messages posted in last 7 days")
+    messages_this_month = graphene.Int(description="Messages posted in last 30 days")
+    active_users_this_week = graphene.Int(description="Users who posted in last 7 days")
+    active_users_this_month = graphene.Int(
+        description="Users who posted in last 30 days"
+    )

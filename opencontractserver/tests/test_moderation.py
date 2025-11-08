@@ -573,3 +573,190 @@ class NonCorpusConversationModerationTest(TestCase):
         action = ModerationAction.objects.get(conversation=self.conversation)
         self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD)
         self.assertEqual(action.moderator, self.creator)
+
+
+class ModerationMutationIDORTest(TestCase):
+    """Test IDOR prevention in moderation GraphQL mutations."""
+
+    def setUp(self):
+        """Set up test data."""
+        from django.contrib.auth import get_user_model
+        from graphene.test import Client
+
+        from config.graphql.schema import schema
+
+        User = get_user_model()
+
+        self.owner = User.objects.create_user(
+            username="corpus_owner",
+            password="testpass123",
+            email="owner@test.com",
+        )
+
+        self.other_user = User.objects.create_user(
+            username="other_user",
+            password="testpass123",
+            email="other@test.com",
+        )
+
+        self.moderator_user = User.objects.create_user(
+            username="moderator",
+            password="testpass123",
+            email="mod@test.com",
+        )
+
+        # Create a private corpus owned by owner
+        self.private_corpus = Corpus.objects.create(
+            title="Private Corpus",
+            description="Private",
+            creator=self.owner,
+            is_public=False,
+        )
+
+        self.client = Client(schema)
+
+    def test_add_moderator_idor_prevention(self):
+        """Test that AddModeratorMutation prevents corpus enumeration."""
+        from graphql_relay import to_global_id
+
+        corpus_global_id = to_global_id("CorpusType", self.private_corpus.id)
+        user_global_id = to_global_id("UserType", self.moderator_user.id)
+
+        # Try to add moderator to corpus owned by someone else
+        mutation = f"""
+            mutation AddModerator {{
+                addModerator(
+                    corpusId: "{corpus_global_id}"
+                    userId: "{user_global_id}"
+                    permissions: ["lock_threads", "pin_threads"]
+                ) {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.other_user})(),
+        )
+
+        # Should get "Corpus not found" error, NOT "Only corpus owners can add moderators"
+        # This prevents enumeration - same error whether corpus doesn't exist or user lacks permission
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["addModerator"]["ok"])
+        self.assertEqual(result["data"]["addModerator"]["message"], "Corpus not found")
+
+        # Now try with a non-existent corpus ID
+        fake_corpus_global_id = to_global_id("CorpusType", 999999)
+        mutation_fake = f"""
+            mutation AddModerator {{
+                addModerator(
+                    corpusId: "{fake_corpus_global_id}"
+                    userId: "{user_global_id}"
+                    permissions: ["lock_threads"]
+                ) {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result_fake = self.client.execute(
+            mutation_fake,
+            context_value=type("Request", (), {"user": self.other_user})(),
+        )
+
+        # Should get the SAME error message
+        self.assertIsNone(result_fake.get("errors"))
+        self.assertFalse(result_fake["data"]["addModerator"]["ok"])
+        self.assertEqual(
+            result_fake["data"]["addModerator"]["message"], "Corpus not found"
+        )
+
+    def test_remove_moderator_idor_prevention(self):
+        """Test that RemoveModeratorMutation prevents corpus enumeration."""
+        from graphql_relay import to_global_id
+
+        from opencontractserver.conversations.models import CorpusModerator
+
+        # First add a moderator (as owner)
+        CorpusModerator.objects.create(
+            corpus=self.private_corpus,
+            user=self.moderator_user,
+            assigned_by=self.owner,
+            creator=self.owner,
+            permissions=["lock_threads"],
+        )
+
+        corpus_global_id = to_global_id("CorpusType", self.private_corpus.id)
+        user_global_id = to_global_id("UserType", self.moderator_user.id)
+
+        # Try to remove moderator from corpus owned by someone else
+        mutation = f"""
+            mutation RemoveModerator {{
+                removeModerator(
+                    corpusId: "{corpus_global_id}"
+                    userId: "{user_global_id}"
+                ) {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.other_user})(),
+        )
+
+        # Should get "Corpus not found" error
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["removeModerator"]["ok"])
+        self.assertEqual(
+            result["data"]["removeModerator"]["message"], "Corpus not found"
+        )
+
+    def test_update_moderator_permissions_idor_prevention(self):
+        """Test that UpdateModeratorPermissionsMutation prevents corpus enumeration."""
+        from graphql_relay import to_global_id
+
+        from opencontractserver.conversations.models import CorpusModerator
+
+        # First add a moderator (as owner)
+        CorpusModerator.objects.create(
+            corpus=self.private_corpus,
+            user=self.moderator_user,
+            assigned_by=self.owner,
+            creator=self.owner,
+            permissions=["lock_threads"],
+        )
+
+        corpus_global_id = to_global_id("CorpusType", self.private_corpus.id)
+        user_global_id = to_global_id("UserType", self.moderator_user.id)
+
+        # Try to update moderator permissions for corpus owned by someone else
+        mutation = f"""
+            mutation UpdateModeratorPermissions {{
+                updateModeratorPermissions(
+                    corpusId: "{corpus_global_id}"
+                    userId: "{user_global_id}"
+                    permissions: ["lock_threads", "pin_threads", "delete_messages"]
+                ) {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.other_user})(),
+        )
+
+        # Should get "Corpus not found" error
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["updateModeratorPermissions"]["ok"])
+        self.assertEqual(
+            result["data"]["updateModeratorPermissions"]["message"], "Corpus not found"
+        )
