@@ -12,6 +12,9 @@ import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { threadSortAtom, threadFiltersAtom } from "../../atoms/threadAtoms";
 import { ThreadListItem } from "./ThreadListItem";
+import { ThreadSortDropdown } from "./ThreadSortDropdown";
+import { ThreadFilterToggles } from "./ThreadFilterToggles";
+import { CreateThreadButton } from "./CreateThreadButton";
 import { calculateThreadUpvotes, getLastActivityTime } from "./utils";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
@@ -22,6 +25,10 @@ interface ThreadListProps {
   corpusId?: string;
   documentId?: string;
   embedded?: boolean;
+  /** Show create button (requires corpusId) */
+  showCreateButton?: boolean;
+  /** Show moderator filters (deleted threads) */
+  showModeratorFilters?: boolean;
 }
 
 const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
@@ -65,6 +72,19 @@ const Title = styled.h2`
   }
 `;
 
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${spacing.md};
+  flex-wrap: wrap;
+
+  @media (max-width: 900px) {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+`;
+
 /**
  * Thread list component
  * Displays list of discussion threads with sorting, filtering, and pagination
@@ -73,6 +93,8 @@ export function ThreadList({
   corpusId,
   documentId,
   embedded = false,
+  showCreateButton = true,
+  showModeratorFilters = false,
 }: ThreadListProps) {
   const [sortBy] = useAtom(threadSortAtom);
   const [filters] = useAtom(threadFiltersAtom);
@@ -198,6 +220,9 @@ export function ThreadList({
         {!embedded && (
           <ThreadListHeader>
             <Title>Discussions</Title>
+            {showCreateButton && corpusId && (
+              <CreateThreadButton corpusId={corpusId} />
+            )}
           </ThreadListHeader>
         )}
         <PlaceholderCard
@@ -219,7 +244,13 @@ export function ThreadList({
       {!embedded && (
         <ThreadListHeader>
           <Title>Discussions</Title>
-          {/* TODO: Add sort dropdown and filters in future */}
+          <HeaderActions>
+            <ThreadSortDropdown />
+            <ThreadFilterToggles showModeratorFilters={showModeratorFilters} />
+            {showCreateButton && corpusId && (
+              <CreateThreadButton corpusId={corpusId} />
+            )}
+          </HeaderActions>
         </ThreadListHeader>
       )}
 
