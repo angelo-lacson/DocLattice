@@ -494,6 +494,126 @@ class TestBadgeGraphQLMutations(TransactionTestCase):
             "graphqlmutations_normal",
         )
 
+    def test_create_badge_idor_prevention(self):
+        """Test that CreateBadgeMutation prevents corpus enumeration (IDOR fix)."""
+        # Create a corpus owned by corpus_owner
+        private_corpus = Corpus.objects.create(
+            title="Private Corpus",
+            description="Private",
+            creator=self.corpus_owner,
+            is_public=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.corpus_owner, private_corpus, [PermissionTypes.CRUD]
+        )
+
+        # Try to create a badge for this corpus as normal_user (who doesn't have access)
+        corpus_global_id = to_global_id("CorpusType", private_corpus.id)
+        mutation = f"""
+            mutation CreateBadge {{
+                createBadge(
+                    name: "Unauthorized Badge"
+                    description: "Should fail"
+                    icon: "Trophy"
+                    badgeType: "CORPUS"
+                    corpusId: "{corpus_global_id}"
+                ) {{
+                    ok
+                    message
+                    badge {{
+                        name
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.normal_user})(),
+        )
+
+        # Should get "Corpus not found" error, NOT "You must be a corpus owner"
+        # This prevents enumeration - same error whether corpus doesn't exist or user lacks permission
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["createBadge"]["ok"])
+        self.assertEqual(result["data"]["createBadge"]["message"], "Corpus not found")
+
+        # Now try with a non-existent corpus ID
+        fake_corpus_global_id = to_global_id("CorpusType", 999999)
+        mutation_fake = f"""
+            mutation CreateBadge {{
+                createBadge(
+                    name: "Fake Corpus Badge"
+                    description: "Should fail"
+                    icon: "Trophy"
+                    badgeType: "CORPUS"
+                    corpusId: "{fake_corpus_global_id}"
+                ) {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result_fake = self.client.execute(
+            mutation_fake,
+            context_value=type("Request", (), {"user": self.normal_user})(),
+        )
+
+        # Should get the SAME error message
+        self.assertIsNone(result_fake.get("errors"))
+        self.assertFalse(result_fake["data"]["createBadge"]["ok"])
+        self.assertEqual(
+            result_fake["data"]["createBadge"]["message"], "Corpus not found"
+        )
+
+    def test_award_badge_idor_prevention(self):
+        """Test that AwardBadgeMutation prevents corpus enumeration (IDOR fix)."""
+        # Create a corpus badge
+        corpus_badge = Badge.objects.create(
+            name="Corpus Expert",
+            description="Expert in this corpus",
+            icon="Award",
+            badge_type="CORPUS",
+            corpus=self.corpus,
+            creator=self.corpus_owner,
+        )
+        badge_global_id = to_global_id("BadgeType", corpus_badge.id)
+        user_global_id = to_global_id("UserType", self.normal_user.id)
+
+        # Create a private corpus
+        private_corpus = Corpus.objects.create(
+            title="Private Corpus",
+            description="Private",
+            creator=self.corpus_owner,
+            is_public=False,
+        )
+        private_corpus_global_id = to_global_id("CorpusType", private_corpus.id)
+
+        # Try to award badge with private_corpus as corpus_id (user doesn't have access)
+        mutation = f"""
+            mutation AwardBadge {{
+                awardBadge(
+                    badgeId: "{badge_global_id}"
+                    userId: "{user_global_id}"
+                    corpusId: "{private_corpus_global_id}"
+                ) {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.normal_user})(),
+        )
+
+        # Should get "Corpus not found" error, preventing enumeration
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["awardBadge"]["ok"])
+        self.assertEqual(result["data"]["awardBadge"]["message"], "Corpus not found")
+
 
 class TestBadgeGraphQLQueries(TransactionTestCase):
     """Test GraphQL queries for badges."""

@@ -11,15 +11,13 @@ from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
-from doclatticeserver.annotations.models import Annotation, AnnotationLabel
 from doclatticeserver.badges.models import Badge, UserBadge
-from doclatticeserver.conversations.models import ChatMessage, Conversation, UserReputation
-from doclatticeserver.corpuses.models import Corpus
-from doclatticeserver.documents.models import Document
-from doclatticeserver.tests.fixtures import (
-    SAMPLE_PAWLS_FILE_ONE_PATH,
-    SAMPLE_PDF_FILE_ONE_PATH,
+from doclatticeserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    UserReputation,
 )
+from doclatticeserver.corpuses.models import Corpus
 
 User = get_user_model()
 
