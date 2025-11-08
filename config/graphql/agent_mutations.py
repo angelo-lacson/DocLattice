@@ -196,7 +196,17 @@ class UpdateAgentConfigurationMutation(graphene.Mutation):
 
         try:
             agent_pk = from_global_id(agent_id)[1]
-            agent = AgentConfiguration.objects.get(pk=agent_pk)
+            # Use visible_to_user to prevent IDOR
+            try:
+                agent = AgentConfiguration.objects.visible_to_user(user).get(
+                    pk=agent_pk
+                )
+            except AgentConfiguration.DoesNotExist:
+                return UpdateAgentConfigurationMutation(
+                    ok=False,
+                    message="Agent configuration not found",
+                    agent=None,
+                )
 
             # Permission check
             if not user.is_superuser and not user_has_permission_for_obj(
@@ -204,7 +214,7 @@ class UpdateAgentConfigurationMutation(graphene.Mutation):
             ):
                 return UpdateAgentConfigurationMutation(
                     ok=False,
-                    message="You do not have permission to update this agent configuration.",
+                    message="Agent configuration not found",
                     agent=None,
                 )
 
@@ -236,12 +246,6 @@ class UpdateAgentConfigurationMutation(graphene.Mutation):
                 agent=agent,
             )
 
-        except AgentConfiguration.DoesNotExist:
-            return UpdateAgentConfigurationMutation(
-                ok=False,
-                message="Agent configuration not found",
-                agent=None,
-            )
         except Exception as e:
             logger.exception("Error updating agent configuration")
             return UpdateAgentConfigurationMutation(
@@ -267,7 +271,16 @@ class DeleteAgentConfigurationMutation(graphene.Mutation):
 
         try:
             agent_pk = from_global_id(agent_id)[1]
-            agent = AgentConfiguration.objects.get(pk=agent_pk)
+            # Use visible_to_user to prevent IDOR
+            try:
+                agent = AgentConfiguration.objects.visible_to_user(user).get(
+                    pk=agent_pk
+                )
+            except AgentConfiguration.DoesNotExist:
+                return DeleteAgentConfigurationMutation(
+                    ok=False,
+                    message="Agent configuration not found",
+                )
 
             # Permission check
             if not user.is_superuser and not user_has_permission_for_obj(
@@ -275,7 +288,7 @@ class DeleteAgentConfigurationMutation(graphene.Mutation):
             ):
                 return DeleteAgentConfigurationMutation(
                     ok=False,
-                    message="You do not have permission to delete this agent configuration.",
+                    message="Agent configuration not found",
                 )
 
             agent.delete()
@@ -285,11 +298,6 @@ class DeleteAgentConfigurationMutation(graphene.Mutation):
                 message="Agent configuration deleted successfully",
             )
 
-        except AgentConfiguration.DoesNotExist:
-            return DeleteAgentConfigurationMutation(
-                ok=False,
-                message="Agent configuration not found",
-            )
         except Exception as e:
             logger.exception("Error deleting agent configuration")
             return DeleteAgentConfigurationMutation(

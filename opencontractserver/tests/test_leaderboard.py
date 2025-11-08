@@ -11,15 +11,13 @@ from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
-from opencontractserver.annotations.models import Annotation, AnnotationLabel
 from opencontractserver.badges.models import Badge, UserBadge
-from opencontractserver.conversations.models import ChatMessage, Conversation, UserReputation
-from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document
-from opencontractserver.tests.fixtures import (
-    SAMPLE_PAWLS_FILE_ONE_PATH,
-    SAMPLE_PDF_FILE_ONE_PATH,
+from opencontractserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    UserReputation,
 )
+from opencontractserver.corpuses.models import Corpus
 
 User = get_user_model()
 
