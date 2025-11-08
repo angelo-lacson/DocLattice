@@ -121,6 +121,7 @@ import { CorpusSettings } from "../components/corpuses/CorpusSettings";
 import { CorpusChat } from "../components/corpuses/CorpusChat";
 import { CorpusHome } from "../components/corpuses/CorpusHome";
 import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptionEditor";
+import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
 import { BadgeManagement } from "../components/badges/BadgeManagement";
 
 // Add these styled components near your other styled components
@@ -1825,6 +1826,7 @@ export const Corpuses = () => {
         totalAnnotations: 0,
         totalAnalyses: 0,
         totalExtracts: 0,
+        totalThreads: 0,
       }
     );
   }, [
@@ -1832,6 +1834,7 @@ export const Corpuses = () => {
     statsData?.corpusStats?.totalAnnotations,
     statsData?.corpusStats?.totalAnalyses,
     statsData?.corpusStats?.totalExtracts,
+    statsData?.corpusStats?.totalThreads,
   ]);
 
   // When query is skipped (no valid corpus ID), treat as not loading
@@ -2186,6 +2189,15 @@ export const Corpuses = () => {
             </div>
           </div>
         ),
+      },
+      {
+        id: "discussions",
+        label: "Discussions",
+        icon: <MessageSquare />,
+        badge: stats.totalThreads || 0,
+        component: opened_corpus?.id ? (
+          <CorpusDiscussionsView corpusId={opened_corpus.id} />
+        ) : null,
       },
       ...(opened_corpus && canUpdateCorpus
         ? [
