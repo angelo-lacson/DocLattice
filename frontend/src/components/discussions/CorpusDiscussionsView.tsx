@@ -1,14 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
 import { MessageSquare, Plus } from "lucide-react";
 import { openedCorpus } from "../../graphql/cache";
 import { navigateToCorpusThread } from "../../utils/navigationUtils";
-
-// Placeholder components - will be imported once available from issues #573-577
-// import { ThreadList } from "../threads/ThreadList";
-// import { CreateThreadButton } from "../threads/CreateThreadButton";
+import { ThreadList } from "../threads/ThreadList";
+import { CreateThreadForm } from "../threads/CreateThreadForm";
 
 const Container = styled.div`
   display: flex;
@@ -79,30 +77,9 @@ const CreateButton = styled.button`
   }
 `;
 
-const PlaceholderContainer = styled.div`
+const ThreadListContainer = styled.div`
   flex: 1;
-  padding: 2rem;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 2px dashed #cbd5e1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  text-align: center;
-  color: #64748b;
-`;
-
-const PlaceholderIcon = styled.div`
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
+  overflow: auto;
 `;
 
 interface CorpusDiscussionsViewProps {
@@ -123,7 +100,7 @@ interface CorpusDiscussionsViewProps {
  *
  * Features:
  * - Displays list of threads filtered by corpus
- * - Create new thread button
+ * - Create new thread button with modal
  * - Navigates to full-page thread view on click
  * - Responsive design
  */
@@ -133,16 +110,12 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const corpus = useReactiveVar(openedCorpus);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const handleThreadClick = (threadId: string) => {
     if (corpus) {
       navigateToCorpusThread(corpus, threadId, navigate, location.pathname);
     }
-  };
-
-  const handleCreateThread = () => {
-    // Placeholder - will open modal once CreateThreadButton is available
-    console.log("Create thread clicked for corpus:", corpusId);
   };
 
   if (!corpus) {
@@ -167,7 +140,7 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
           </Subtitle>
         </TitleSection>
         <CreateButton
-          onClick={handleCreateThread}
+          onClick={() => setShowCreateModal(true)}
           aria-label="Create new discussion thread"
         >
           <Plus size={16} />
@@ -175,38 +148,20 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
         </CreateButton>
       </Header>
 
-      {/* Placeholder until ThreadList component is available from issue #573 */}
-      <PlaceholderContainer>
-        <PlaceholderIcon>
-          <MessageSquare size={32} />
-        </PlaceholderIcon>
-        <div>
-          <h3>Thread List Component</h3>
-          <p>
-            ThreadList component will be integrated here once available from
-            issue #573
-          </p>
-          <p style={{ fontSize: "0.875rem", marginTop: "1rem" }}>
-            <strong>Expected features:</strong>
-            <br />
-            • List of threads filtered by corpus
-            <br />
-            • Sort by newest/active/upvoted/pinned
-            <br />
-            • Filter locked/deleted threads
-            <br />• Infinite scroll pagination
-          </p>
-        </div>
-      </PlaceholderContainer>
+      <ThreadListContainer>
+        <ThreadList corpusId={corpusId} embedded={false} />
+      </ThreadListContainer>
 
-      {/* Once ThreadList is available, uncomment this:
-      <ThreadList
-        corpusId={corpusId}
-        conversationType="THREAD"
-        onThreadClick={handleThreadClick}
-        embedded={false}
-      />
-      */}
+      {showCreateModal && (
+        <CreateThreadForm
+          corpusId={corpusId}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={(threadId) => {
+            setShowCreateModal(false);
+            handleThreadClick(threadId);
+          }}
+        />
+      )}
     </Container>
   );
 };

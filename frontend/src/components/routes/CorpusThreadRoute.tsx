@@ -4,9 +4,7 @@ import { useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
 import { ArrowLeft } from "lucide-react";
 import { openedCorpus } from "../../graphql/cache";
-
-// Placeholder for ThreadDetail component - will be imported once available
-// import { ThreadDetail } from "../threads/ThreadDetail";
+import { ThreadDetail } from "../threads/ThreadDetail";
 
 const Container = styled.div`
   max-width: 1200px;
@@ -38,15 +36,6 @@ const BackButton = styled.button`
     border-color: #4a90e2;
     color: #0f172a;
   }
-`;
-
-const PlaceholderContainer = styled.div`
-  padding: 2rem;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 2px dashed #cbd5e1;
-  text-align: center;
-  color: #64748b;
 `;
 
 /**
@@ -91,26 +80,7 @@ export const CorpusThreadRoute: React.FC = () => {
         Back to Discussions
       </BackButton>
 
-      {/* Placeholder until ThreadDetail component is available from issue #573 */}
-      <PlaceholderContainer>
-        <h2>Thread Detail View</h2>
-        <p>Thread ID: {threadId}</p>
-        <p>Corpus: {corpus?.title || corpusIdent}</p>
-        <p>
-          <em>
-            ThreadDetail component will be integrated here once available from
-            issue #573
-          </em>
-        </p>
-      </PlaceholderContainer>
-
-      {/* Once ThreadDetail is available, uncomment this:
-      <ThreadDetail
-        conversationId={threadId}
-        corpusId={corpus?.id}
-        showBreadcrumbs
-      />
-      */}
+      <ThreadDetail conversationId={threadId} corpusId={corpus?.id} />
     </Container>
   );
 };
