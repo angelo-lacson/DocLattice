@@ -10,6 +10,9 @@ export { ThreadDetail } from "./ThreadDetail";
 
 // List components
 export { ThreadListItem } from "./ThreadListItem";
+export { ThreadSortDropdown } from "./ThreadSortDropdown";
+export { ThreadFilterToggles } from "./ThreadFilterToggles";
+export { CreateThreadButton } from "./CreateThreadButton";
 
 // Message components
 export { MessageItem } from "./MessageItem";
@@ -45,6 +48,7 @@ export type { MessageNode } from "./utils";
 // Hooks
 export { useThreadPreferences } from "./hooks/useThreadPreferences";
 export type { ThreadPreferences } from "./hooks/useThreadPreferences";
+export { useMentionUsers } from "./hooks/useMentionUsers";
 
 // Component prop types (Issue #574)
 export type { MessageComposerProps } from "./MessageComposer";
@@ -63,3 +67,16 @@ export type { UserProfileReputationProps } from "./UserProfileReputation";
 // Component prop types (Issue #576)
 export type { ModerationControlsProps } from "./ModerationControls";
 export type { ModeratorBadgeProps } from "./ModeratorBadge";
+
+// Component prop types (UI Controls)
+export type { ThreadSortDropdownProps } from "./ThreadSortDropdown";
+export type { ThreadFilterTogglesProps } from "./ThreadFilterToggles";
+export type { CreateThreadButtonProps } from "./CreateThreadButton";
+
+// Mention support
+export { MentionPicker } from "./MentionPicker";
+export type {
+  MentionPickerProps,
+  MentionUser,
+  MentionPickerRef,
+} from "./MentionPicker";
