@@ -73,6 +73,7 @@ import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
 import { UserProfileRoute } from "./components/routes/UserProfileRoute";
+import { LeaderboardRoute } from "./components/routes/LeaderboardRoute";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
 import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
@@ -418,6 +419,13 @@ export const App = () => {
                   />
                   <Route path="/extracts" element={<Extracts />} />
                   <Route path="/admin/badges" element={<BadgeManagement />} />
+
+                  {/* Community Routes (Issue #613) */}
+                  <Route path="/leaderboard" element={<LeaderboardRoute />} />
+                  <Route
+                    path="/community/leaderboard"
+                    element={<LeaderboardRoute />}
+                  />
 
                   {/* 404 explicit route and catch-all */}
                   <Route path="/404" element={<NotFound />} />
