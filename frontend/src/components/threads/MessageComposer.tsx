@@ -1,10 +1,15 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import Mention from "@tiptap/extension-mention";
+import { ReactRenderer } from "@tiptap/react";
+import tippy, { Instance as TippyInstance } from "tippy.js";
 import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
 import { color } from "../../theme/colors";
+import { MentionPicker, MentionPickerRef } from "./MentionPicker";
+import { useMentionUsers } from "./hooks/useMentionUsers";
 
 const ComposerContainer = styled.div`
   display: flex;
@@ -93,6 +98,15 @@ const EditorContainer = styled.div`
     em {
       font-style: italic;
     }
+
+    /* Mention styling */
+    .mention {
+      background-color: ${({ theme }) => color.B2};
+      color: ${({ theme }) => color.B8};
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
   }
 `;
 
@@ -164,6 +178,8 @@ export interface MessageComposerProps {
   error?: string;
   /** Auto-focus on mount */
   autoFocus?: boolean;
+  /** Enable @ mentions (default: true) */
+  enableMentions?: boolean;
 }
 
 export function MessageComposer({
@@ -175,6 +191,7 @@ export function MessageComposer({
   disabled = false,
   error,
   autoFocus = false,
+  enableMentions = true,
 }: MessageComposerProps) {
   const editor = useEditor({
     extensions: [
@@ -186,6 +203,80 @@ export function MessageComposer({
       Placeholder.configure({
         placeholder,
       }),
+      ...(enableMentions
+        ? [
+            Mention.configure({
+              HTMLAttributes: {
+                class: "mention",
+              },
+              suggestion: {
+                items: ({ query }: { query: string }) => {
+                  // This will be handled by the suggestion plugin
+                  return [];
+                },
+                render: () => {
+                  let component: ReactRenderer<MentionPickerRef> | null = null;
+                  let popup: TippyInstance[] | null = null;
+
+                  return {
+                    onStart: (props: any) => {
+                      component = new ReactRenderer(MentionPicker, {
+                        props: {
+                          ...props,
+                          users: [],
+                        },
+                        editor: props.editor,
+                      });
+
+                      if (!props.clientRect) {
+                        return;
+                      }
+
+                      popup = tippy("body", {
+                        getReferenceClientRect: props.clientRect,
+                        appendTo: () => document.body,
+                        content: component.element,
+                        showOnCreate: true,
+                        interactive: true,
+                        trigger: "manual",
+                        placement: "bottom-start",
+                      });
+                    },
+
+                    onUpdate(props: any) {
+                      component?.updateProps({
+                        ...props,
+                        users: [],
+                      });
+
+                      if (!props.clientRect) {
+                        return;
+                      }
+
+                      popup?.[0]?.setProps({
+                        getReferenceClientRect: props.clientRect,
+                      });
+                    },
+
+                    onKeyDown(props: any) {
+                      if (props.event.key === "Escape") {
+                        popup?.[0]?.hide();
+                        return true;
+                      }
+
+                      return component?.ref?.onKeyDown(props) ?? false;
+                    },
+
+                    onExit() {
+                      popup?.[0]?.destroy();
+                      component?.destroy();
+                    },
+                  };
+                },
+              },
+            }),
+          ]
+        : []),
     ],
     content: initialContent,
     editable: !disabled,
