@@ -1980,9 +1980,7 @@ class LeaderboardType(graphene.ObjectType):
     scope = graphene.Field(
         LeaderboardScopeEnum, description="The time period for this leaderboard"
     )
-    corpus_id = graphene.ID(
-        description="If corpus-specific leaderboard, the corpus ID"
-    )
+    corpus_id = graphene.ID(description="If corpus-specific leaderboard, the corpus ID")
     total_users = graphene.Int(description="Total number of users in leaderboard")
     entries = graphene.List(
         LeaderboardEntryType, description="Leaderboard entries in rank order"
@@ -2029,9 +2027,7 @@ class CommunityStatsType(graphene.ObjectType):
     # Time-based metrics
     messages_this_week = graphene.Int(description="Messages posted in last 7 days")
     messages_this_month = graphene.Int(description="Messages posted in last 30 days")
-    active_users_this_week = graphene.Int(
-        description="Users who posted in last 7 days"
-    )
+    active_users_this_week = graphene.Int(description="Users who posted in last 7 days")
     active_users_this_month = graphene.Int(
         description="Users who posted in last 30 days"
     )

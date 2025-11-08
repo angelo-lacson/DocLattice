@@ -2143,7 +2143,9 @@ class Query(graphene.ObjectType):
             try:
                 _, corpus_django_pk = from_global_id(corpus_id)
                 # Verify user has access to this corpus
-                Corpus.objects.visible_to_user(info.context.user).get(id=corpus_django_pk)
+                Corpus.objects.visible_to_user(info.context.user).get(
+                    id=corpus_django_pk
+                )
             except Corpus.DoesNotExist:
                 raise GraphQLError("Corpus not found or access denied")
 
@@ -2176,19 +2178,24 @@ class Query(graphene.ObjectType):
                 user = User.objects.get(id=item["user"])
                 entries.append(
                     LeaderboardEntryType(
-                        user=user, rank=idx, score=item["count"], badge_count=item["count"]
+                        user=user,
+                        rank=idx,
+                        score=item["count"],
+                        badge_count=item["count"],
                     )
                 )
 
         elif metric == "messages":
             # Count messages per user
             # Filter by visible conversations since ChatMessage doesn't inherit conversation visibility
-            visible_conversations = Conversation.objects.visible_to_user(info.context.user)
+            visible_conversations = Conversation.objects.visible_to_user(
+                info.context.user
+            )
 
             message_query = ChatMessage.objects.filter(
                 creator__in=users,
                 msg_type="HUMAN",
-                conversation__in=visible_conversations
+                conversation__in=visible_conversations,
             )
 
             if cutoff_date:
@@ -2208,7 +2215,10 @@ class Query(graphene.ObjectType):
                 user = User.objects.get(id=item["creator"])
                 entries.append(
                     LeaderboardEntryType(
-                        user=user, rank=idx, score=item["count"], message_count=item["count"]
+                        user=user,
+                        rank=idx,
+                        score=item["count"],
+                        message_count=item["count"],
                     )
                 )
 
@@ -2233,7 +2243,10 @@ class Query(graphene.ObjectType):
                 user = User.objects.get(id=item["creator"])
                 entries.append(
                     LeaderboardEntryType(
-                        user=user, rank=idx, score=item["count"], thread_count=item["count"]
+                        user=user,
+                        rank=idx,
+                        score=item["count"],
+                        thread_count=item["count"],
                     )
                 )
 
@@ -2337,7 +2350,9 @@ class Query(graphene.ObjectType):
             try:
                 _, corpus_django_pk = from_global_id(corpus_id)
                 # Verify user has access to this corpus
-                Corpus.objects.visible_to_user(info.context.user).get(id=corpus_django_pk)
+                Corpus.objects.visible_to_user(info.context.user).get(
+                    id=corpus_django_pk
+                )
             except Corpus.DoesNotExist:
                 raise GraphQLError("Corpus not found or access denied")
 
@@ -2351,10 +2366,11 @@ class Query(graphene.ObjectType):
 
         # Total messages
         # Filter by visible conversations since ChatMessage doesn't inherit conversation visibility
-        visible_conversations_stats = Conversation.objects.visible_to_user(info.context.user)
+        visible_conversations_stats = Conversation.objects.visible_to_user(
+            info.context.user
+        )
         message_query = ChatMessage.objects.filter(
-            msg_type="HUMAN",
-            conversation__in=visible_conversations_stats
+            msg_type="HUMAN", conversation__in=visible_conversations_stats
         )
         if corpus_django_pk:
             message_query = message_query.filter(
