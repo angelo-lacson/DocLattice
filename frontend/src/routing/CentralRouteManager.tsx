@@ -22,6 +22,7 @@ import {
   selectedAnnotationIds,
   selectedAnalysesIds,
   selectedExtractIds,
+  selectedThreadId,
   routeLoading,
   routeError,
   authStatusVar,
@@ -608,6 +609,7 @@ export function CentralRouteManager() {
     const annIds = parseQueryParam(searchParams.get("ann"));
     const analysisIds = parseQueryParam(searchParams.get("analysis"));
     const extractIds = parseQueryParam(searchParams.get("extract"));
+    const threadId = searchParams.get("thread");
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
@@ -619,6 +621,7 @@ export function CentralRouteManager() {
       annIds,
       analysisIds,
       extractIds,
+      threadId,
       structural,
       selectedOnly,
       boundingBoxes,
@@ -630,6 +633,7 @@ export function CentralRouteManager() {
     const currentAnnIds = selectedAnnotationIds();
     const currentAnalysisIds = selectedAnalysesIds();
     const currentExtractIds = selectedExtractIds();
+    const currentThreadId = selectedThreadId();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -659,6 +663,9 @@ export function CentralRouteManager() {
     }
     if (!arraysEqual(currentExtractIds, extractIds)) {
       updates.push(() => selectedExtractIds(extractIds));
+    }
+    if (currentThreadId !== threadId) {
+      updates.push(() => selectedThreadId(threadId));
     }
     if (currentStructural !== structural) {
       updates.push(() => showStructuralAnnotations(structural));
@@ -780,6 +787,7 @@ export function CentralRouteManager() {
   const annIds = useReactiveVar(selectedAnnotationIds);
   const analysisIds = useReactiveVar(selectedAnalysesIds);
   const extractIds = useReactiveVar(selectedExtractIds);
+  const threadId = useReactiveVar(selectedThreadId);
   const structural = useReactiveVar(showStructuralAnnotations);
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
@@ -838,6 +846,7 @@ export function CentralRouteManager() {
         annIds,
         analysisIds,
         extractIds,
+        threadId,
         structural,
         selectedOnly,
         boundingBoxes,
@@ -849,6 +858,7 @@ export function CentralRouteManager() {
       annotationIds: annIds,
       analysisIds,
       extractIds,
+      threadId,
       showStructural: structural,
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
@@ -876,6 +886,7 @@ export function CentralRouteManager() {
     annIds,
     analysisIds,
     extractIds,
+    threadId,
     structural,
     selectedOnly,
     boundingBoxes,
