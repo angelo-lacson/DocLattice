@@ -4,7 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Mention from "@tiptap/extension-mention";
 import { ReactRenderer } from "@tiptap/react";
-import tippy, { Instance as TippyInstance } from "tippy.js";
+import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
 import { color } from "../../theme/colors";
@@ -216,7 +216,25 @@ export function MessageComposer({
                 },
                 render: () => {
                   let component: ReactRenderer<MentionPickerRef> | null = null;
-                  let popup: TippyInstance[] | null = null;
+                  let popup: HTMLDivElement | null = null;
+
+                  const updatePosition = (props: any) => {
+                    if (!popup || !props.clientRect) return;
+
+                    const virtualReference = {
+                      getBoundingClientRect: props.clientRect,
+                    };
+
+                    computePosition(virtualReference, popup, {
+                      placement: "bottom-start",
+                      middleware: [offset(8), flip(), shift({ padding: 8 })],
+                    }).then(({ x, y }) => {
+                      Object.assign(popup!.style, {
+                        left: `${x}px`,
+                        top: `${y}px`,
+                      });
+                    });
+                  };
 
                   return {
                     onStart: (props: any) => {
@@ -232,15 +250,13 @@ export function MessageComposer({
                         return;
                       }
 
-                      popup = tippy("body", {
-                        getReferenceClientRect: props.clientRect,
-                        appendTo: () => document.body,
-                        content: component.element,
-                        showOnCreate: true,
-                        interactive: true,
-                        trigger: "manual",
-                        placement: "bottom-start",
-                      });
+                      popup = document.createElement("div");
+                      popup.style.position = "absolute";
+                      popup.style.zIndex = "9999";
+                      popup.appendChild(component.element);
+                      document.body.appendChild(popup);
+
+                      updatePosition(props);
                     },
 
                     onUpdate(props: any) {
@@ -249,18 +265,11 @@ export function MessageComposer({
                         users: [],
                       });
 
-                      if (!props.clientRect) {
-                        return;
-                      }
-
-                      popup?.[0]?.setProps({
-                        getReferenceClientRect: props.clientRect,
-                      });
+                      updatePosition(props);
                     },
 
                     onKeyDown(props: any) {
                       if (props.event.key === "Escape") {
-                        popup?.[0]?.hide();
                         return true;
                       }
 
@@ -268,7 +277,7 @@ export function MessageComposer({
                     },
 
                     onExit() {
-                      popup?.[0]?.destroy();
+                      popup?.remove();
                       component?.destroy();
                     },
                   };
