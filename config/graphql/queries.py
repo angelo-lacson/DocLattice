@@ -804,35 +804,140 @@ class Query(graphene.ObjectType):
     def resolve_search_corpuses_for_mention(self, info, text_search=None, **kwargs):
         """
         Search corpuses for @ mention autocomplete.
-        SECURITY: Only returns corpuses visible to the requesting user.
+
+        SECURITY: Only returns corpuses where user can meaningfully contribute.
+        Requires write permission (CREATE/UPDATE/DELETE), creator status, or public corpus.
+
+        Rationale: Mentioning a corpus implies drawing attention to it for collaborative
+        purposes. Read-only viewers shouldn't be mentioning corpuses since they can't
+        contribute to them.
+
+        See: docs/permissioning/mention_permissioning_spec.md
         """
-        qs = Corpus.objects.visible_to_user(info.context.user)
+        from guardian.shortcuts import get_objects_for_user
+
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return Corpus.objects.none()
+
+        # Superusers see all corpuses
+        if user.is_superuser:
+            qs = Corpus.objects.all()
+        else:
+            # Get corpuses user has write permission to
+            writable_corpuses = get_objects_for_user(
+                user,
+                [
+                    "corpuses.create_corpus",
+                    "corpuses.update_corpus",
+                    "corpuses.delete_corpus",
+                ],
+                klass=Corpus,
+                accept_global_perms=False,
+                any_perm=True,  # Has ANY of these permissions
+            )
+
+            # Combine: creator OR writable OR public
+            qs = Corpus.objects.filter(
+                Q(creator=user) | Q(id__in=writable_corpuses) | Q(is_public=True)
+            ).distinct()
 
         if text_search:
             qs = qs.filter(
                 Q(title__icontains=text_search) | Q(description__icontains=text_search)
             )
 
-        # Order by relevance (title matches first, then description matches)
+        # Order by most recently modified first
         return qs.order_by("-modified")
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_search_documents_for_mention(self, info, text_search=None, **kwargs):
         """
         Search documents for @ mention autocomplete.
-        SECURITY: Only returns documents visible to the requesting user.
+
+        SECURITY: Only returns documents where user can meaningfully contribute.
+        Requires one of:
+        - User is creator
+        - User has write permission on document
+        - Document is in a corpus where user has write permission
+        - Document is public AND (no corpus OR public corpus OR user has corpus access)
+
+        Rationale: Similar to corpuses, mentioning a document implies collaborative context.
+        However, public documents are included to allow discussion/reference in open forums.
+
+        See: docs/permissioning/mention_permissioning_spec.md
         """
-        qs = Document.objects.visible_to_user(info.context.user)
+        from guardian.shortcuts import get_objects_for_user
+
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return Document.objects.none()
+
+        # Superusers see all documents
+        if user.is_superuser:
+            qs = Document.objects.all()
+        else:
+            # Get documents user has write permission to
+            writable_documents = get_objects_for_user(
+                user,
+                [
+                    "documents.create_document",
+                    "documents.update_document",
+                    "documents.delete_document",
+                ],
+                klass=Document,
+                accept_global_perms=False,
+                any_perm=True,
+            )
+
+            # Get corpuses user has write permission to
+            writable_corpuses = get_objects_for_user(
+                user,
+                [
+                    "corpuses.create_corpus",
+                    "corpuses.update_corpus",
+                    "corpuses.delete_corpus",
+                ],
+                klass=Corpus,
+                accept_global_perms=False,
+                any_perm=True,
+            )
+
+            # Get corpuses user can at least read (for public document context)
+            readable_corpuses = Corpus.objects.visible_to_user(user)
+
+            # Build complex filter:
+            # 1. User is creator
+            # 2. User has write permission on document
+            # 3. Document is in a writable corpus
+            # 4. Document is public AND (no corpus OR public corpus OR user has corpus access)
+            qs = Document.objects.filter(
+                Q(creator=user)
+                | Q(id__in=writable_documents)
+                | Q(corpus_set__in=writable_corpuses)
+                | (
+                    Q(is_public=True)
+                    & (
+                        Q(corpus_set__isnull=True)
+                        | Q(corpus_set__is_public=True)
+                        | Q(corpus_set__in=readable_corpuses)
+                    )
+                )
+            ).distinct()
 
         if text_search:
             qs = qs.filter(
                 Q(title__icontains=text_search) | Q(description__icontains=text_search)
             )
 
-        # Prefetch corpus relationship for efficient mention rendering
+        # Prefetch corpus relationship for efficient mention format generation
         qs = qs.prefetch_related("corpus_set", "corpus_set__creator")
 
-        # Order by relevance (title matches first, then description matches)
+        # Order by most recently modified first
         return qs.order_by("-modified")
 
     # DOCUMENT RESOLVERS #####################################
