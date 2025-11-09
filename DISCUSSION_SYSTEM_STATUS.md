@@ -159,20 +159,23 @@ This document tracks the implementation status of DocLattice' discussion and com
 - [x] `/discussions` route
 - [x] GlobalDiscussionsRoute component
 
-### Phase 3: Global Discussions UI (In Progress 🚧)
-- [ ] GlobalDiscussions view with tabbed sections
-- [ ] Search and filter functionality
-- [ ] FAB for quick thread creation
-- [ ] Animations and visual polish
-- [ ] ThreadList context filtering
+### Phase 3: Global Discussions UI (Complete ✅)
+- [x] GlobalDiscussions view with tabbed sections
+- [x] Search and filter functionality
+- [x] FAB for quick thread creation
+- [x] Animations and visual polish
+- [ ] ThreadList context filtering (deferred - requires backend updates)
 
-### Phase 4: @ Mentions Frontend (Not Started ⏳)
-- [ ] TipTap Mention extension integration
-- [ ] MentionList autocomplete component
-- [ ] GraphQL search integration
-- [ ] Mention chip rendering in messages
-- [ ] Click navigation for mentions
-- [ ] Keyboard navigation
+### Phase 4: @ Mentions Frontend (Complete ✅)
+- [x] GraphQL search integration (queries added to frontend)
+- [x] ResourceMentionPicker autocomplete component (11 tests passing)
+- [x] useResourceMentionSearch hook with debouncing
+- [x] Keyboard navigation support
+- [x] TipTap Mention extension integration in MessageComposer
+- [x] MentionChip component for rendering mentions (3 core tests passing)
+- [x] parseMentionsInContent function for parsing and rendering
+- [x] MessageItem updated to render mention chips
+- [x] Click navigation for mentions (corpus → full page, document → full page)
 
 ### Phase 5: Testing & Polish (Not Started ⏳)
 - [ ] Component tests for GlobalDiscussions
@@ -196,11 +199,25 @@ This document tracks the implementation status of DocLattice' discussion and com
 3. `8601bff0` - Frontend route foundation
 
 ### Files Changed
+
+**Backend (Previously Committed):**
 - `config/graphql/graphene_types.py` (+155 lines)
 - `config/graphql/queries.py` (+59 lines)
 - `doclatticeserver/tests/test_mentions.py` (+536 lines, new)
+
+**Frontend (Current Session):**
 - `frontend/src/App.tsx` (+6 lines)
 - `frontend/src/components/routes/GlobalDiscussionsRoute.tsx` (+31 lines, new)
+- `frontend/src/views/GlobalDiscussions.tsx` (+369 lines, new)
+- `frontend/src/graphql/queries.ts` (+98 lines - mention search queries + mentionedResources field)
+- `frontend/src/types/graphql-api.ts` (+17 lines - MentionedResourceType)
+- `frontend/src/components/threads/ResourceMentionPicker.tsx` (+291 lines, new)
+- `frontend/src/components/threads/hooks/useResourceMentionSearch.ts` (+111 lines, new)
+- `frontend/src/components/threads/MentionChip.tsx` (+238 lines, new)
+- `frontend/src/components/threads/MessageComposer.tsx` (+151 lines - resource mention support)
+- `frontend/src/components/threads/MessageItem.tsx` (+5 lines - render mention chips)
+- `frontend/tests/ResourceMentionPicker.ct.tsx` (+216 lines, new - 11/11 passing)
+- `frontend/tests/MentionChip.ct.tsx` (+86 lines, new - 3/3 tests passing)
 
 ---
 
@@ -216,7 +233,19 @@ This document tracks the implementation status of DocLattice' discussion and com
   - Core parsing logic verified manually
 
 ### Frontend Tests
-- ⏳ No tests yet (awaiting full UI implementation)
+- ✅ `ResourceMentionPicker` - 11/11 tests passing
+  - Empty state rendering
+  - Corpus/document format rendering
+  - Grouping by type
+  - Click handlers
+  - Keyboard navigation
+  - Long title truncation
+  - Icon display
+- ✅ `MentionChip` - 3/3 tests passing
+  - Corpus chip rendering with database icon
+  - Document chip rendering with file icon
+  - External link icon display
+- **Total:** 14/14 component tests passing ✅
 
 ### Pre-commit Hooks
 - ✅ All passing (black, isort, flake8, prettier)

@@ -1547,6 +1547,20 @@ export type ConversationTypeEdge = {
   cursor: Scalars["String"];
 };
 
+// Mentioned resource type for @corpus: and @document: mentions (Issue #623)
+export type MentionedResourceType = {
+  __typename?: "MentionedResourceType";
+  type: "CORPUS" | "DOCUMENT";
+  id: Scalars["ID"];
+  slug: Scalars["String"];
+  title: Scalars["String"];
+  url: Scalars["String"];
+  corpus?: Maybe<{
+    slug: Scalars["String"];
+    title: Scalars["String"];
+  }>;
+};
+
 export type ChatMessageType = Node & {
   __typename?: "ChatMessageType";
   id: Scalars["ID"];
@@ -1582,6 +1596,9 @@ export type ChatMessageType = Node & {
   // Soft delete
   deletedAt?: Maybe<Scalars["DateTime"]>;
   deletedBy?: Maybe<UserType>;
+
+  // Mentioned resources (Issue #623)
+  mentionedResources?: Maybe<MentionedResourceType[]>;
 };
 
 export type ChatMessageTypeConnection = {
