@@ -913,8 +913,9 @@ class Query(graphene.ObjectType):
             # Build complex filter:
             # 1. User is creator
             # 2. User has write permission on document
-            # 3. Document is in a writable corpus
+            # 3. Document is in a writable corpus (ManyToMany relationship)
             # 4. Document is public AND (no corpus OR public corpus OR user has corpus access)
+            # Note: corpus_set is the reverse ManyToMany from Corpus.documents
             qs = Document.objects.filter(
                 Q(creator=user)
                 | Q(id__in=writable_documents)
@@ -922,7 +923,7 @@ class Query(graphene.ObjectType):
                 | (
                     Q(is_public=True)
                     & (
-                        Q(corpus_set__isnull=True)
+                        ~Q(corpus_set__isnull=False)  # No corpus (standalone)
                         | Q(corpus_set__is_public=True)
                         | Q(corpus_set__in=readable_corpuses)
                     )
@@ -934,8 +935,8 @@ class Query(graphene.ObjectType):
                 Q(title__icontains=text_search) | Q(description__icontains=text_search)
             )
 
-        # Prefetch corpus relationship for efficient mention format generation
-        qs = qs.prefetch_related("corpus_set", "corpus_set__creator")
+        # Note: corpus field exists in model but not in current DB schema for select_related
+        # Documents use Many-to-Many relationship via Corpus.documents instead
 
         # Order by most recently modified first
         return qs.order_by("-modified")
