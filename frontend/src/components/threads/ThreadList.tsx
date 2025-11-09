@@ -29,6 +29,8 @@ interface ThreadListProps {
   showCreateButton?: boolean;
   /** Show moderator filters (deleted threads) */
   showModeratorFilters?: boolean;
+  /** Optional callback when thread is clicked (overrides default navigation) */
+  onThreadClick?: (threadId: string) => void;
 }
 
 const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
@@ -95,6 +97,7 @@ export function ThreadList({
   embedded = false,
   showCreateButton = true,
   showModeratorFilters = false,
+  onThreadClick,
 }: ThreadListProps) {
   const [sortBy] = useAtom(threadSortAtom);
   const [filters] = useAtom(threadFiltersAtom);
@@ -261,6 +264,7 @@ export function ThreadList({
             thread={thread}
             corpusId={corpusId}
             compact={embedded}
+            onThreadClick={onThreadClick}
           />
         ))}
       </ThreadGrid>
