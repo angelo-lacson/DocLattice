@@ -34,7 +34,7 @@ jobs:
         run: npm install -g yarn
 
       - name: Install Dependencies
-        run: yarn install
+        run: yarn install --frozen-lockfile # Use frozen lockfile for CI
 
       - name: Lint Prettier
         run: yarn run lint
