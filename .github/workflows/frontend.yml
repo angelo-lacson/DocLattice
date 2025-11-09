@@ -27,8 +27,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          cache: "yarn"
-          cache-dependency-path: frontend/yarn.lock
+          node-version: '20'
+          # Temporarily disable cache to debug phantom dependency issue
+          # cache: "yarn"
+          # cache-dependency-path: frontend/yarn.lock
 
       - name: Install Yarn
         run: npm install -g yarn
@@ -55,8 +57,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          cache: "yarn"
-          cache-dependency-path: frontend/yarn.lock
+          node-version: '20'
+          # Temporarily disable cache to debug phantom dependency issue
+          # cache: "yarn"
+          # cache-dependency-path: frontend/yarn.lock
 
       - name: Install Yarn
         run: npm install -g yarn # Still need global yarn
@@ -90,8 +94,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          cache: "yarn"
-          cache-dependency-path: frontend/yarn.lock
+          node-version: '20'
+          # Temporarily disable cache to debug phantom dependency issue
+          # cache: "yarn"
+          # cache-dependency-path: frontend/yarn.lock
       - name: Install Yarn
         run: npm install -g yarn
       - name: Clear Yarn Cache
@@ -113,8 +119,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          cache: "yarn"
-          cache-dependency-path: frontend/yarn.lock
+          node-version: '20'
+          # Temporarily disable cache to debug phantom dependency issue
+          # cache: "yarn"
+          # cache-dependency-path: frontend/yarn.lock
       - name: Install Yarn
         run: npm install -g yarn
       - name: Clear Yarn Cache
