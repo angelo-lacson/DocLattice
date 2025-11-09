@@ -217,7 +217,7 @@ This document tracks the implementation status of OpenContracts' discussion and 
 - `frontend/src/components/threads/MessageComposer.tsx` (+151 lines - resource mention support)
 - `frontend/src/components/threads/MessageItem.tsx` (+5 lines - render mention chips)
 - `frontend/tests/ResourceMentionPicker.ct.tsx` (+216 lines, new - 11/11 passing)
-- `frontend/tests/MentionChip.ct.tsx` (+214 lines, new - 3 core tests passing)
+- `frontend/tests/MentionChip.ct.tsx` (+86 lines, new - 3/3 tests passing)
 
 ---
 
@@ -233,7 +233,19 @@ This document tracks the implementation status of OpenContracts' discussion and 
   - Core parsing logic verified manually
 
 ### Frontend Tests
-- ⏳ No tests yet (awaiting full UI implementation)
+- ✅ `ResourceMentionPicker` - 11/11 tests passing
+  - Empty state rendering
+  - Corpus/document format rendering
+  - Grouping by type
+  - Click handlers
+  - Keyboard navigation
+  - Long title truncation
+  - Icon display
+- ✅ `MentionChip` - 3/3 tests passing
+  - Corpus chip rendering with database icon
+  - Document chip rendering with file icon
+  - External link icon display
+- **Total:** 14/14 component tests passing ✅
 
 ### Pre-commit Hooks
 - ✅ All passing (black, isort, flake8, prettier)

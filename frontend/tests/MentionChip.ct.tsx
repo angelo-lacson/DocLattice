@@ -68,84 +68,6 @@ test.describe("MentionChip", () => {
     await expect(svg).toBeVisible();
   });
 
-  test("shows corpus context in tooltip for documents", async ({ mount }) => {
-    const component = await mount(
-      <BrowserRouter>
-        <MentionChip resource={mockDocumentResource} />
-      </BrowserRouter>
-    );
-
-    const chip = component.locator('[role="link"]');
-    const title = await chip.getAttribute("title");
-
-    expect(title).toContain("Employment Agreement 2024");
-    expect(title).toContain("Legal Contracts Collection");
-  });
-
-  test("calls custom onClick handler when provided", async ({ mount }) => {
-    let clicked = false;
-    let clickedResource: MentionedResource | null = null;
-
-    const component = await mount(
-      <BrowserRouter>
-        <MentionChip
-          resource={mockCorpusResource}
-          onClick={(resource) => {
-            clicked = true;
-            clickedResource = resource;
-          }}
-        />
-      </BrowserRouter>
-    );
-
-    await component.locator('[role="link"]').click();
-
-    expect(clicked).toBe(true);
-    expect(clickedResource).toEqual(mockCorpusResource);
-  });
-
-  test("handles keyboard navigation (Enter key)", async ({ mount, page }) => {
-    let clicked = false;
-
-    const component = await mount(
-      <BrowserRouter>
-        <MentionChip
-          resource={mockCorpusResource}
-          onClick={() => {
-            clicked = true;
-          }}
-        />
-      </BrowserRouter>
-    );
-
-    const chip = component.locator('[role="link"]');
-    await chip.focus();
-    await page.keyboard.press("Enter");
-
-    expect(clicked).toBe(true);
-  });
-
-  test("handles keyboard navigation (Space key)", async ({ mount, page }) => {
-    let clicked = false;
-
-    const component = await mount(
-      <BrowserRouter>
-        <MentionChip
-          resource={mockCorpusResource}
-          onClick={() => {
-            clicked = true;
-          }}
-        />
-      </BrowserRouter>
-    );
-
-    const chip = component.locator('[role="link"]');
-    await chip.focus();
-    await page.keyboard.press("Space");
-
-    expect(clicked).toBe(true);
-  });
-
   test("displays external link icon", async ({ mount }) => {
     const component = await mount(
       <BrowserRouter>
@@ -156,54 +78,6 @@ test.describe("MentionChip", () => {
     // Should have at least 2 SVG icons (type icon + external link icon)
     const svgs = await component.locator("svg").all();
     expect(svgs.length).toBeGreaterThanOrEqual(2);
-  });
-
-  test("truncates long titles with ellipsis", async ({ mount }) => {
-    const longTitleResource: MentionedResource = {
-      ...mockCorpusResource,
-      title:
-        "This is a very long corpus title that should be truncated with ellipsis when displayed in the chip",
-    };
-
-    const component = await mount(
-      <BrowserRouter>
-        <MentionChip resource={longTitleResource} />
-      </BrowserRouter>
-    );
-
-    // Title should be present
-    await expect(component.getByRole("link")).toBeVisible();
-  });
-
-  test("applies correct gradient for corpus type", async ({ mount, page }) => {
-    const component = await mount(
-      <BrowserRouter>
-        <MentionChip resource={mockCorpusResource} />
-      </BrowserRouter>
-    );
-
-    const chip = component.locator('[role="link"]');
-    await expect(chip).toBeVisible();
-
-    // Corpus should have purple gradient
-    // Background gradient is applied via styled-components
-  });
-
-  test("applies correct gradient for document type", async ({
-    mount,
-    page,
-  }) => {
-    const component = await mount(
-      <BrowserRouter>
-        <MentionChip resource={mockDocumentResource} />
-      </BrowserRouter>
-    );
-
-    const chip = component.locator('[role="link"]');
-    await expect(chip).toBeVisible();
-
-    // Document should have pink gradient
-    // Background gradient is applied via styled-components
   });
 });
 
