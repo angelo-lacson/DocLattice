@@ -116,13 +116,8 @@ export const DocumentDiscussionsContent: React.FC<
           <Title>Document Discussions</Title>
         )}
 
-        {!threadId && (
-          <CreateThreadButton
-            documentId={documentId}
-            corpusId={corpusId}
-            conversationType="THREAD"
-            variant="secondary"
-          />
+        {!threadId && corpusId && (
+          <CreateThreadButton corpusId={corpusId} variant="secondary" />
         )}
       </Header>
 
@@ -136,7 +131,6 @@ export const DocumentDiscussionsContent: React.FC<
         ) : (
           <ThreadList
             documentId={documentId}
-            conversationType="THREAD"
             onThreadClick={handleThreadClick}
             embedded // Compact cards for sidebar
           />

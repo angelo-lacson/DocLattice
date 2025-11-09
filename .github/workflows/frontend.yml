@@ -72,6 +72,27 @@ jobs:
           yarn run test:ct tests/*Metadata*.ct.tsx
         continue-on-error: true
 
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          cache: "yarn"
+          cache-dependency-path: frontend/yarn.lock
+      - name: Install Yarn
+        run: npm install -g yarn
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile
+      - name: Build TypeScript and Vite
+        run: yarn build
+
   unit-test:
     name: Unit Tests
     runs-on: ubuntu-latest
