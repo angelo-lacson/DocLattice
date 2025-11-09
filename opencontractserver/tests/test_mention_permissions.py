@@ -307,7 +307,7 @@ class DocumentMentionPermissionTestCase(TestCase):
             title="Public Corpus", creator=self.owner, is_public=True
         )
 
-        # Private document in private corpus
+        # Private document in private corpus (using ManyToMany)
         self.private_doc_in_private_corpus = Document.objects.create(
             title="Private Contract",
             description="Confidential contract",
@@ -316,7 +316,7 @@ class DocumentMentionPermissionTestCase(TestCase):
         )
         self.private_corpus.documents.add(self.private_doc_in_private_corpus)
 
-        # Private document in public corpus
+        # Private document in public corpus (using ManyToMany)
         self.private_doc_in_public_corpus = Document.objects.create(
             title="Draft Document",
             description="Work in progress",
@@ -325,7 +325,7 @@ class DocumentMentionPermissionTestCase(TestCase):
         )
         self.public_corpus.documents.add(self.private_doc_in_public_corpus)
 
-        # Public document in public corpus
+        # Public document in public corpus (using ManyToMany)
         self.public_doc_in_public_corpus = Document.objects.create(
             title="Public Template",
             description="Open template",
@@ -425,15 +425,16 @@ class DocumentMentionPermissionTestCase(TestCase):
 
         results = query.resolve_search_documents_for_mention(MockInfo(), text_search="")
 
-        doc_ids = [d.id for d in results]
+        doc_titles = [d.title for d in results]
+
         self.assertIn(
-            self.private_doc_in_private_corpus.id,
-            doc_ids,
-            "Corpus contributor should be able to mention docs in writable corpus",
+            self.private_doc_in_private_corpus.title,
+            doc_titles,
+            f"Corpus contributor should be able to mention docs in writable corpus. Found: {doc_titles}",
         )
         self.assertIn(
-            self.public_doc_in_public_corpus.id,
-            doc_ids,
+            self.public_doc_in_public_corpus.title,
+            doc_titles,
             "Corpus contributor should be able to mention public docs",
         )
 

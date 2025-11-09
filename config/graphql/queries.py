@@ -832,7 +832,7 @@ class Query(graphene.ObjectType):
                 [
                     "corpuses.create_corpus",
                     "corpuses.update_corpus",
-                    "corpuses.delete_corpus",
+                    "corpuses.remove_corpus",  # Note: PermissionTypes.DELETE maps to "remove"
                 ],
                 klass=Corpus,
                 accept_global_perms=False,
@@ -887,7 +887,7 @@ class Query(graphene.ObjectType):
                 [
                     "documents.create_document",
                     "documents.update_document",
-                    "documents.delete_document",
+                    "documents.remove_document",  # Note: PermissionTypes.DELETE maps to "remove"
                 ],
                 klass=Document,
                 accept_global_perms=False,
@@ -900,7 +900,7 @@ class Query(graphene.ObjectType):
                 [
                     "corpuses.create_corpus",
                     "corpuses.update_corpus",
-                    "corpuses.delete_corpus",
+                    "corpuses.remove_corpus",  # Note: PermissionTypes.DELETE maps to "remove"
                 ],
                 klass=Corpus,
                 accept_global_perms=False,
@@ -913,19 +913,22 @@ class Query(graphene.ObjectType):
             # Build complex filter:
             # 1. User is creator
             # 2. User has write permission on document
-            # 3. Document is in a writable corpus (ManyToMany relationship)
-            # 4. Document is public AND (no corpus OR public corpus OR user has corpus access)
-            # Note: corpus_set is the reverse ManyToMany from Corpus.documents
+            # 3. Document is in a writable corpus (ManyToMany via 'corpus' reverse relation)
+            # 4. Document is public AND (not in any corpus OR in public corpus OR user has corpus access)
+            # Note: Documents have ManyToMany relationship to Corpus via Corpus.documents
+            #       The reverse relation is accessible via 'corpus' (not 'corpus_set')
             qs = Document.objects.filter(
                 Q(creator=user)
                 | Q(id__in=writable_documents)
-                | Q(corpus_set__in=writable_corpuses)
+                | Q(
+                    corpus__in=writable_corpuses
+                )  # Use 'corpus' for ManyToMany reverse relation
                 | (
                     Q(is_public=True)
                     & (
-                        ~Q(corpus_set__isnull=False)  # No corpus (standalone)
-                        | Q(corpus_set__is_public=True)
-                        | Q(corpus_set__in=readable_corpuses)
+                        Q(corpus__isnull=True)  # Not in any corpus (standalone)
+                        | Q(corpus__is_public=True)  # In a public corpus
+                        | Q(corpus__in=readable_corpuses)  # In a readable corpus
                     )
                 )
             ).distinct()
