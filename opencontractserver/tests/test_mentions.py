@@ -414,9 +414,13 @@ class MentionSearchTestCase(TestCase):
         )
 
         # Set permissions
-        set_permissions_for_obj_to_user(self.user1, self.corpus1, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(
+            self.user1, self.corpus1, [PermissionTypes.READ]
+        )
         set_permissions_for_obj_to_user(self.user1, self.doc1, [PermissionTypes.READ])
-        set_permissions_for_obj_to_user(self.user2, self.corpus2, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(
+            self.user2, self.corpus2, [PermissionTypes.READ]
+        )
         set_permissions_for_obj_to_user(self.user2, self.doc2, [PermissionTypes.READ])
 
         self.client = GrapheneClient(schema)

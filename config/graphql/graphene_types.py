@@ -1661,9 +1661,9 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             try:
                 corpus = Corpus.objects.visible_to_user(user).get(slug=corpus_slug)
                 # Use filter().first() instead of get() to handle case where doc not in corpus
-                document = Document.objects.visible_to_user(user).filter(
-                    slug=doc_slug
-                ).first()
+                document = (
+                    Document.objects.visible_to_user(user).filter(slug=doc_slug).first()
+                )
 
                 if document and corpus:
                     # Check if document is actually in this corpus
@@ -1718,7 +1718,11 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 url = f"/d/{document.creator.slug}/{document.slug}"
 
                 # Try to get corpus context (documents can be in multiple corpuses)
-                corpus = document.corpus_set.first() if document.corpus_set.exists() else None
+                corpus = (
+                    document.corpus_set.first()
+                    if document.corpus_set.exists()
+                    else None
+                )
 
                 mentions.append(
                     MentionedResourceType(
