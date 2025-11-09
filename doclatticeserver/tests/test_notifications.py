@@ -69,7 +69,7 @@ class TestNotificationModel(TestCase):
         cls.message = ChatMessage.objects.create(
             conversation=cls.thread,
             content="Test message",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=cls.user1,
         )
 
@@ -237,7 +237,7 @@ class TestNotificationSignals(TransactionTestCase):
         parent = ChatMessage.objects.create(
             conversation=self.thread,
             content="Parent message",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user1,
         )
 
@@ -245,7 +245,7 @@ class TestNotificationSignals(TransactionTestCase):
         reply = ChatMessage.objects.create(
             conversation=self.thread,
             content="Reply message",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user2,
             parent_message=parent,
         )
@@ -267,7 +267,7 @@ class TestNotificationSignals(TransactionTestCase):
         parent = ChatMessage.objects.create(
             conversation=self.thread,
             content="Parent message",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user1,
         )
 
@@ -275,7 +275,7 @@ class TestNotificationSignals(TransactionTestCase):
         ChatMessage.objects.create(
             conversation=self.thread,
             content="Self reply",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user1,
             parent_message=parent,
         )
@@ -293,7 +293,7 @@ class TestNotificationSignals(TransactionTestCase):
         ChatMessage.objects.create(
             conversation=self.thread,
             content="User1 initial message",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user1,
         )
 
@@ -301,7 +301,7 @@ class TestNotificationSignals(TransactionTestCase):
         ChatMessage.objects.create(
             conversation=self.thread,
             content="User2 message",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user2,
         )
 
@@ -309,7 +309,7 @@ class TestNotificationSignals(TransactionTestCase):
         ChatMessage.objects.create(
             conversation=self.thread,
             content="User3 message",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user3,
         )
 
@@ -332,7 +332,7 @@ class TestNotificationSignals(TransactionTestCase):
         message = ChatMessage.objects.create(
             conversation=self.thread,
             content=f"Hey @{self.user2.username}, check this out!",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user1,
         )
 
@@ -352,7 +352,7 @@ class TestNotificationSignals(TransactionTestCase):
         ChatMessage.objects.create(
             conversation=self.thread,
             content=f"Hey @{self.user2.username} and @{self.user3.username}!",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user1,
         )
 
@@ -372,7 +372,7 @@ class TestNotificationSignals(TransactionTestCase):
         ChatMessage.objects.create(
             conversation=self.thread,
             content=f"I think @{self.user1.username} should do this",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user1,
         )
 
@@ -444,7 +444,7 @@ class TestNotificationSignals(TransactionTestCase):
         message = ChatMessage.objects.create(
             conversation=self.thread,
             content="User2's message",
-            msg_type="human",
+            msg_type="HUMAN",
             creator=self.user2,
         )
 

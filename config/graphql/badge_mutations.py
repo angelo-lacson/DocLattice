@@ -76,14 +76,25 @@ class CreateBadgeMutation(graphene.Mutation):
             corpus = None
             if corpus_id:
                 corpus_pk = from_global_id(corpus_id)[1]
-                corpus = Corpus.objects.get(pk=corpus_pk)
+                # Use visible_to_user to prevent IDOR - returns same error whether
+                # corpus doesn't exist or user lacks permission
+                try:
+                    corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+                except Corpus.DoesNotExist:
+                    return CreateBadgeMutation(
+                        ok=False,
+                        message="Corpus not found",
+                        badge=None,
+                    )
 
                 # Check if user has permission for this corpus
                 if not user.is_superuser and not user_has_permission_for_obj(
-                    user, corpus, PermissionTypes.CRUD
+                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
                 ):
-                    raise GraphQLError(
-                        "You must be a corpus owner to create corpus-specific badges."
+                    return CreateBadgeMutation(
+                        ok=False,
+                        message="Corpus not found",
+                        badge=None,
                     )
             elif not user.is_superuser:
                 raise GraphQLError("You must be a superuser to create global badges.")
@@ -111,12 +122,6 @@ class CreateBadgeMutation(graphene.Mutation):
                 badge=badge,
             )
 
-        except Corpus.DoesNotExist:
-            return CreateBadgeMutation(
-                ok=False,
-                message="Corpus not found",
-                badge=None,
-            )
         except Exception as e:
             logger.exception("Error creating badge")
             return CreateBadgeMutation(
@@ -159,13 +164,26 @@ class UpdateBadgeMutation(graphene.Mutation):
 
         try:
             badge_pk = from_global_id(badge_id)[1]
-            badge = Badge.objects.get(pk=badge_pk)
+            # Use visible_to_user to prevent IDOR - returns same error whether
+            # badge doesn't exist or user lacks permission
+            try:
+                badge = Badge.objects.visible_to_user(user).get(pk=badge_pk)
+            except Badge.DoesNotExist:
+                return UpdateBadgeMutation(
+                    ok=False,
+                    message="Badge not found",
+                    badge=None,
+                )
 
             # Permission check
             if not user.is_superuser and not user_has_permission_for_obj(
-                user, badge, PermissionTypes.CRUD
+                user, badge, PermissionTypes.CRUD, include_group_permissions=True
             ):
-                raise GraphQLError("You do not have permission to update this badge.")
+                return UpdateBadgeMutation(
+                    ok=False,
+                    message="Badge not found",
+                    badge=None,
+                )
 
             # Update fields
             if name is not None:
@@ -189,12 +207,6 @@ class UpdateBadgeMutation(graphene.Mutation):
                 badge=badge,
             )
 
-        except Badge.DoesNotExist:
-            return UpdateBadgeMutation(
-                ok=False,
-                message="Badge not found",
-                badge=None,
-            )
         except Exception as e:
             logger.exception("Error updating badge")
             return UpdateBadgeMutation(
@@ -220,13 +232,23 @@ class DeleteBadgeMutation(graphene.Mutation):
 
         try:
             badge_pk = from_global_id(badge_id)[1]
-            badge = Badge.objects.get(pk=badge_pk)
+            # Use visible_to_user to prevent IDOR
+            try:
+                badge = Badge.objects.visible_to_user(user).get(pk=badge_pk)
+            except Badge.DoesNotExist:
+                return DeleteBadgeMutation(
+                    ok=False,
+                    message="Badge not found",
+                )
 
             # Permission check
             if not user.is_superuser and not user_has_permission_for_obj(
-                user, badge, PermissionTypes.CRUD
+                user, badge, PermissionTypes.CRUD, include_group_permissions=True
             ):
-                raise GraphQLError("You do not have permission to delete this badge.")
+                return DeleteBadgeMutation(
+                    ok=False,
+                    message="Badge not found",
+                )
 
             badge.delete()
 
@@ -235,11 +257,6 @@ class DeleteBadgeMutation(graphene.Mutation):
                 message="Badge deleted successfully",
             )
 
-        except Badge.DoesNotExist:
-            return DeleteBadgeMutation(
-                ok=False,
-                message="Badge not found",
-            )
         except Exception as e:
             logger.exception("Error deleting badge")
             return DeleteBadgeMutation(
@@ -277,13 +294,24 @@ class AwardBadgeMutation(graphene.Mutation):
             corpus = None
             if corpus_id:
                 corpus_pk = from_global_id(corpus_id)[1]
-                corpus = Corpus.objects.get(pk=corpus_pk)
+                # Use visible_to_user to prevent IDOR
+                try:
+                    corpus = Corpus.objects.visible_to_user(awarder).get(pk=corpus_pk)
+                except Corpus.DoesNotExist:
+                    return AwardBadgeMutation(
+                        ok=False,
+                        message="Corpus not found",
+                        user_badge=None,
+                    )
 
             # Permission check: must be moderator/owner of the corpus or superuser
             if badge.badge_type == "CORPUS" and badge.corpus:
                 # For corpus badges, check corpus permissions
                 if not awarder.is_superuser and not user_has_permission_for_obj(
-                    awarder, badge.corpus, PermissionTypes.CRUD
+                    awarder,
+                    badge.corpus,
+                    PermissionTypes.CRUD,
+                    include_group_permissions=True,
                 ):
                     raise GraphQLError(
                         "You must be a corpus owner/moderator to award this badge."
@@ -365,7 +393,10 @@ class RevokeBadgeMutation(graphene.Mutation):
             badge = user_badge.badge
             if badge.badge_type == "CORPUS" and badge.corpus:
                 if not user.is_superuser and not user_has_permission_for_obj(
-                    user, badge.corpus, PermissionTypes.CRUD
+                    user,
+                    badge.corpus,
+                    PermissionTypes.CRUD,
+                    include_group_permissions=True,
                 ):
                     raise GraphQLError(
                         "You must be a corpus owner/moderator to revoke this badge."

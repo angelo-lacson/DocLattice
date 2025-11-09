@@ -72,6 +72,9 @@ import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
 import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
+import { CorpusThreadRoute } from "./components/routes/CorpusThreadRoute";
+import { UserProfileRoute } from "./components/routes/UserProfileRoute";
+import { LeaderboardRoute } from "./components/routes/LeaderboardRoute";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
 import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
@@ -79,6 +82,9 @@ import {
   editDocForm_Schema,
   editDocForm_Ui_Schema,
 } from "./components/forms/schemas";
+import { useBadgeNotifications } from "./hooks/useBadgeNotifications";
+import { useBadgeCelebration } from "./hooks/useBadgeCelebration";
+import { BadgeCelebrationModal } from "./components/badges/BadgeCelebrationModal";
 
 export const App = () => {
   const { REACT_APP_USE_AUTH0, REACT_APP_AUDIENCE } = useEnv();
@@ -141,6 +147,16 @@ export const App = () => {
       backendUserObj(null);
     }
   }, [isLoading, meData, meLoading, meError, auth_token]);
+
+  // Badge notification system
+  const { newBadges } = useBadgeNotifications(30000); // Poll every 30 seconds
+  const { showModal, currentBadge, closeModal } = useBadgeCelebration(
+    newBadges,
+    {
+      showToast: true,
+      showModal: true,
+    }
+  );
 
   // Set mobile-friendly display settings once when narrow viewport detected
   // CRITICAL: Don't include location/navigate in deps - causes infinite loop!
@@ -237,6 +253,18 @@ export const App = () => {
           />
         )}
       {show_cookie_modal ? <CookieConsentDialog /> : <></>}
+      {showModal && currentBadge && (
+        <BadgeCelebrationModal
+          badgeName={currentBadge.badgeName}
+          badgeDescription={currentBadge.badgeDescription}
+          badgeIcon={currentBadge.badgeIcon}
+          badgeColor={currentBadge.badgeColor}
+          isAutoAwarded={currentBadge.isAutoAwarded}
+          awardedBy={currentBadge.awardedBy}
+          onClose={closeModal}
+          onViewBadges={() => navigate("/badges")}
+        />
+      )}
       <ThemeProvider>
         <div
           style={{
@@ -362,6 +390,11 @@ export const App = () => {
                     path="/c/:userIdent/:corpusIdent"
                     element={<CorpusLandingRoute />}
                   />
+                  {/* Corpus discussion thread route (Issue #621) */}
+                  <Route
+                    path="/c/:userIdent/:corpusIdent/discussions/:threadId"
+                    element={<CorpusThreadRoute />}
+                  />
 
                   {/* Extract routes */}
                   <Route
@@ -372,6 +405,10 @@ export const App = () => {
                   {/* List views */}
                   <Route path="/corpuses" element={<Corpuses />} />
                   <Route path="/documents" element={<Documents />} />
+
+                  {/* User Profile Routes (Issue #611) */}
+                  <Route path="/profile" element={<UserProfileRoute />} />
+                  <Route path="/users/:slug" element={<UserProfileRoute />} />
 
                   {/* Auth */}
                   {!REACT_APP_USE_AUTH0 ? (
@@ -388,6 +425,13 @@ export const App = () => {
                   />
                   <Route path="/extracts" element={<Extracts />} />
                   <Route path="/admin/badges" element={<BadgeManagement />} />
+
+                  {/* Community Routes (Issue #613) */}
+                  <Route path="/leaderboard" element={<LeaderboardRoute />} />
+                  <Route
+                    path="/community/leaderboard"
+                    element={<LeaderboardRoute />}
+                  />
 
                   {/* 404 explicit route and catch-all */}
                   <Route path="/404" element={<NotFound />} />

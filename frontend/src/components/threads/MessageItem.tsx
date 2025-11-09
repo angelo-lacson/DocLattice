@@ -5,11 +5,14 @@ import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { MessageNode } from "./utils";
 import { RelativeTime } from "./RelativeTime";
+import { MessageBadges } from "../badges/MessageBadges";
+import { UserBadgeType } from "../../types/graphql-api";
 
 interface MessageItemProps {
   message: MessageNode;
   isHighlighted?: boolean;
   onReply?: (messageId: string) => void;
+  userBadges?: UserBadgeType[];
 }
 
 const MessageContainer = styled.div<{
@@ -71,7 +74,15 @@ const UserAvatar = styled.div`
 const UserInfo = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 4px;
   min-width: 0;
+`;
+
+const UsernameRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 `;
 
 const Username = styled.span`
@@ -185,6 +196,7 @@ export function MessageItem({
   message,
   isHighlighted = false,
   onReply,
+  userBadges = [],
 }: MessageItemProps) {
   const isDeleted = !!message.deletedAt;
   const username =
@@ -214,7 +226,15 @@ export function MessageItem({
             <User size={16} />
           </UserAvatar>
           <UserInfo>
-            <Username>{username}</Username>
+            <UsernameRow>
+              <Username>{username}</Username>
+              <MessageBadges
+                message={message}
+                userBadges={userBadges}
+                maxBadges={3}
+                showTooltip={true}
+              />
+            </UsernameRow>
             <MessageTimestamp>
               <RelativeTime date={message.created} />
             </MessageTimestamp>

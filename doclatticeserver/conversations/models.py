@@ -234,6 +234,13 @@ class ConversationManager(SoftDeleteManager):
             deleted_at__isnull=True
         )
 
+    def visible_to_user(self, user=None):
+        """
+        Delegate to the queryset's visible_to_user method.
+        This ensures the custom visibility logic in SoftDeleteQuerySet is used.
+        """
+        return self.get_queryset().visible_to_user(user)
+
     def search_by_embedding(self, query_vector, embedder_path, top_k=10):
         """
         Convenience method to perform vector search:
@@ -251,6 +258,13 @@ class ChatMessageManager(SoftDeleteManager):
         return ChatMessageQuerySet(self.model, using=self._db).filter(
             deleted_at__isnull=True
         )
+
+    def visible_to_user(self, user=None):
+        """
+        Delegate to the queryset's visible_to_user method.
+        This ensures the custom visibility logic in SoftDeleteQuerySet is used.
+        """
+        return self.get_queryset().visible_to_user(user)
 
     def search_by_embedding(self, query_vector, embedder_path, top_k=10):
         """
@@ -384,6 +398,9 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
                 | django.db.models.Q(chat_with_document__isnull=True),
                 name="one_chat_field_null_constraint",
             ),
+        ]
+        indexes = [
+            models.Index(fields=["deleted_at"]),  # Optimize soft-delete queries
         ]
         permissions = (
             ("permission_conversation", "permission conversation"),
@@ -593,6 +610,9 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
     """
 
     class Meta:
+        indexes = [
+            models.Index(fields=["deleted_at"]),  # Optimize soft-delete queries
+        ]
         permissions = (
             ("permission_chatmessage", "permission chatmessage"),
             ("publish_chatmessage", "publish chatmessage"),
@@ -627,12 +647,21 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         null=True,
         help_text="The specific agent type that generated this message (for LLM messages)",
     )
+    agent_configuration = models.ForeignKey(
+        "agents.AgentConfiguration",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="messages",
+        help_text="Which agent generated this message (if msgType != HUMAN)",
+    )
     parent_message = models.ForeignKey(
         "self",
         on_delete=models.CASCADE,
         related_name="replies",
         blank=True,
         null=True,
+        db_index=True,
         help_text="Parent message for threaded replies",
     )
     content = models.TextField(
