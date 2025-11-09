@@ -475,6 +475,7 @@ class ConversationFilter(django_filters.FilterSet):
         fields = {
             "created_at": ["gte", "lte"],
             "title": ["contains"],
+            "conversation_type": ["exact"],
         }
 
 
@@ -546,4 +547,27 @@ class UserBadgeFilter(django_filters.FilterSet):
         model = UserBadge
         fields = {
             "awarded_at": ["gte", "lte"],
+        }
+
+
+class AgentConfigurationFilter(django_filters.FilterSet):
+    """Filter set for AgentConfiguration model."""
+
+    corpus_id = filters.CharFilter(method="filter_by_corpus_id")
+
+    def filter_by_corpus_id(self, queryset, name, value):
+        """Filter agent configurations by corpus ID."""
+        if value:
+            django_pk = from_global_id(value)[1]
+            return queryset.filter(corpus_id=django_pk)
+        return queryset
+
+    class Meta:
+        from opencontractserver.agents.models import AgentConfiguration
+
+        model = AgentConfiguration
+        fields = {
+            "scope": ["exact"],
+            "is_active": ["exact"],
+            "name": ["contains", "exact"],
         }

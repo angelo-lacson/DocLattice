@@ -298,19 +298,13 @@ class AddModeratorMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get corpus
+            # Get corpus - use creator check to prevent IDOR
+            # This returns same error whether corpus doesn't exist or user isn't owner
+            corpus_pk = from_global_id(corpus_id)[1]
             try:
-                corpus_pk = from_global_id(corpus_id)[1]
-                corpus = Corpus.objects.get(pk=corpus_pk)
+                corpus = Corpus.objects.get(pk=corpus_pk, creator=user)
             except Corpus.DoesNotExist:
                 return AddModeratorMutation(ok=False, message="Corpus not found")
-
-            # Only corpus owner can add moderators
-            if corpus.creator != user:
-                return AddModeratorMutation(
-                    ok=False,
-                    message="Only corpus owners can add moderators",
-                )
 
             # Get target user
             try:
@@ -341,8 +335,10 @@ class AddModeratorMutation(graphene.Mutation):
                 corpus=corpus,
                 user=target_user,
                 defaults={
-                    "permissions": {perm: True for perm in permissions},
-                    "added_by": user,
+                    "permissions": list(
+                        permissions
+                    ),  # Store as list for has_permission() checks
+                    "assigned_by": user,  # Correct field name per CorpusModerator model
                     "creator": user,
                 },
             )
@@ -381,19 +377,13 @@ class RemoveModeratorMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get corpus
+            # Get corpus - use creator check to prevent IDOR
+            # This returns same error whether corpus doesn't exist or user isn't owner
+            corpus_pk = from_global_id(corpus_id)[1]
             try:
-                corpus_pk = from_global_id(corpus_id)[1]
-                corpus = Corpus.objects.get(pk=corpus_pk)
+                corpus = Corpus.objects.get(pk=corpus_pk, creator=user)
             except Corpus.DoesNotExist:
                 return RemoveModeratorMutation(ok=False, message="Corpus not found")
-
-            # Only corpus owner can remove moderators
-            if corpus.creator != user:
-                return RemoveModeratorMutation(
-                    ok=False,
-                    message="Only corpus owners can remove moderators",
-                )
 
             # Get target user
             try:
@@ -449,20 +439,14 @@ class UpdateModeratorPermissionsMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get corpus
+            # Get corpus - use creator check to prevent IDOR
+            # This returns same error whether corpus doesn't exist or user isn't owner
+            corpus_pk = from_global_id(corpus_id)[1]
             try:
-                corpus_pk = from_global_id(corpus_id)[1]
-                corpus = Corpus.objects.get(pk=corpus_pk)
+                corpus = Corpus.objects.get(pk=corpus_pk, creator=user)
             except Corpus.DoesNotExist:
                 return UpdateModeratorPermissionsMutation(
                     ok=False, message="Corpus not found"
-                )
-
-            # Only corpus owner can update moderator permissions
-            if corpus.creator != user:
-                return UpdateModeratorPermissionsMutation(
-                    ok=False,
-                    message="Only corpus owners can update moderator permissions",
                 )
 
             # Get target user
@@ -494,7 +478,9 @@ class UpdateModeratorPermissionsMutation(graphene.Mutation):
             # Update moderator permissions
             try:
                 moderator = CorpusModerator.objects.get(corpus=corpus, user=target_user)
-                moderator.permissions = {perm: True for perm in permissions}
+                moderator.permissions = list(
+                    permissions
+                )  # Store as list for has_permission() checks
                 moderator.save(update_fields=["permissions"])
                 ok = True
                 message_text = "Moderator permissions updated successfully"

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { useQuery } from "@apollo/client";
 import { useAtom } from "jotai";
@@ -19,16 +19,20 @@ import { RelativeTime } from "./RelativeTime";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
+import { useMessageBadges } from "../../hooks/useMessageBadges";
 
 interface ThreadDetailProps {
   conversationId: string;
   corpusId?: string;
+  documentId?: string;
+  /** Compact mode for sidebar (narrower padding) */
+  compact?: boolean;
 }
 
-const ThreadDetailContainer = styled.div`
-  max-width: 1000px;
+const ThreadDetailContainer = styled.div<{ $compact?: boolean }>`
+  max-width: ${(props) => (props.$compact ? "100%" : "1000px")};
   margin: 0 auto;
-  padding: ${spacing.lg};
+  padding: ${(props) => (props.$compact ? spacing.md : spacing.lg)};
   width: 100%;
 
   @media (max-width: 640px) {
@@ -122,7 +126,12 @@ const EmptyMessageState = styled.div`
  * Thread detail view - shows full thread with all messages
  * Supports deep linking to specific messages via ?message=id query param
  */
-export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
+export function ThreadDetail({
+  conversationId,
+  corpusId,
+  documentId: _documentId, // Reserved for future document-specific filtering
+  compact = false,
+}: ThreadDetailProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedMessageId, setSelectedMessageId] = useAtom(
@@ -139,6 +148,20 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   });
 
   const thread = data?.conversation;
+
+  // Extract unique user IDs from messages
+  const userIds = useMemo(() => {
+    if (!thread?.allMessages) return [];
+    const uniqueIds = new Set(
+      thread.allMessages
+        .filter((msg) => msg.msgType !== "AGENT") // Only fetch badges for human users
+        .map((msg) => msg.creator.id)
+    );
+    return Array.from(uniqueIds);
+  }, [thread?.allMessages]);
+
+  // Fetch badges for all message creators
+  const { badgesByUser } = useMessageBadges(userIds, corpusId);
 
   // Build message tree
   const messageTree = useMemo(() => {
@@ -183,7 +206,7 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   // Loading state
   if (loading && !data) {
     return (
-      <ThreadDetailContainer>
+      <ThreadDetailContainer $compact={compact}>
         <ModernLoadingDisplay
           type="default"
           message="Loading discussion..."
@@ -196,7 +219,7 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   // Error state
   if (error || !thread) {
     return (
-      <ThreadDetailContainer>
+      <ThreadDetailContainer $compact={compact}>
         <ModernErrorDisplay
           type="generic"
           error={error?.message || "Thread not found"}
@@ -210,7 +233,7 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   const messageCount = thread.allMessages?.length || 0;
 
   return (
-    <ThreadDetailContainer>
+    <ThreadDetailContainer $compact={compact}>
       {/* Back button */}
       <BackButton onClick={handleBack} aria-label="Back to discussions">
         <ArrowLeft size={16} />
@@ -280,6 +303,7 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
             messages={messageTree}
             highlightedMessageId={selectedMessageId}
             onReply={handleReply}
+            badgesByUser={badgesByUser}
           />
         </MessageListContainer>
       )}

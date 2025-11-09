@@ -17,6 +17,7 @@ from graphql_relay import from_global_id
 
 from config.graphql.base import OpenContractsNode
 from config.graphql.filters import (
+    AgentConfigurationFilter,
     AnalysisFilter,
     AnalyzerFilter,
     AssignmentFilter,
@@ -38,14 +39,17 @@ from config.graphql.filters import (
     UserBadgeFilter,
 )
 from config.graphql.graphene_types import (
+    AgentConfigurationType,
     AnalysisType,
     AnalyzerType,
     AnnotationLabelType,
     AnnotationType,
     AssignmentType,
+    BadgeDistributionType,
     BadgeType,
     BulkDocumentUploadStatusType,
     ColumnType,
+    CommunityStatsType,
     ConversationType,
     CorpusActionType,
     CorpusQueryType,
@@ -60,6 +64,10 @@ from config.graphql.graphene_types import (
     FileTypeEnum,
     GremlinEngineType_READ,
     LabelSetType,
+    LeaderboardEntryType,
+    LeaderboardMetricEnum,
+    LeaderboardScopeEnum,
+    LeaderboardType,
     MessageType,
     NoteType,
     NotificationType,
@@ -1048,6 +1056,7 @@ class Query(graphene.ObjectType):
         total_comments = 0
         total_analyses = 0
         total_extracts = 0
+        total_threads = 0
 
         corpus_pk = from_global_id(corpus_id)[1]
         corpuses = Corpus.objects.visible_to_user(info.context.user).filter(
@@ -1063,6 +1072,13 @@ class Query(graphene.ObjectType):
             ).count()
             total_analyses = corpus.analyses.all().count()
             total_extracts = corpus.extracts.all().count()
+            total_threads = (
+                Conversation.objects.filter(
+                    conversation_type="thread", chat_with_corpus=corpus
+                )
+                .visible_to_user(info.context.user)
+                .count()
+            )
 
         return CorpusStatsType(
             total_docs=total_docs,
@@ -1070,6 +1086,7 @@ class Query(graphene.ObjectType):
             total_comments=total_comments,
             total_analyses=total_analyses,
             total_extracts=total_extracts,
+            total_threads=total_threads,
         )
 
     document_corpus_actions = graphene.Field(
@@ -1223,10 +1240,12 @@ class Query(graphene.ObjectType):
         description="Retrieve conversations, optionally filtered by document_id or corpus_id",
     )
 
-    @login_required
     def resolve_conversations(self, info, **kwargs):
         """
         Resolver to fetch Conversations along with their Messages.
+
+        Anonymous users can see public conversations.
+        Authenticated users see public conversations, their own, or explicitly shared.
 
         Args:
             info: GraphQL execution info.
@@ -1259,7 +1278,6 @@ class Query(graphene.ObjectType):
         description="Search conversations using vector similarity",
     )
 
-    @login_required
     def resolve_search_conversations(
         self,
         info,
@@ -1271,6 +1289,9 @@ class Query(graphene.ObjectType):
     ):
         """
         Search conversations using vector similarity.
+
+        Anonymous users can search public conversations.
+        Authenticated users can search public, their own, or explicitly shared conversations.
 
         Args:
             info: GraphQL execution info
@@ -1305,9 +1326,12 @@ class Query(graphene.ObjectType):
                     "Either corpus_id, document_id, or DEFAULT_EMBEDDER_PATH setting is required"
                 )
 
+        # Handle anonymous users
+        user_id = None if info.context.user.is_anonymous else info.context.user.id
+
         # Create vector store
         vector_store = CoreConversationVectorStore(
-            user_id=info.context.user.id,
+            user_id=user_id,
             corpus_id=corpus_pk,
             document_id=document_pk,
             conversation_type=conversation_type,
@@ -1656,8 +1680,13 @@ class Query(graphene.ObjectType):
 
     conversation = relay.Node.Field(ConversationType)
 
-    @login_required
     def resolve_conversation(self, info, **kwargs):
+        """
+        Resolver to fetch a single Conversation by ID.
+
+        Anonymous users can see public conversations.
+        Authenticated users see public conversations, their own, or explicitly shared.
+        """
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return Conversation.objects.visible_to_user(info.context.user).get(id=django_pk)
 
@@ -1929,6 +1958,29 @@ class Query(graphene.ObjectType):
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return UserBadge.objects.get(id=django_pk)
 
+    # AGENT CONFIGURATION QUERIES ########################################
+    agents = DjangoFilterConnectionField(
+        AgentConfigurationType, filterset_class=AgentConfigurationFilter
+    )
+    agent = relay.Node.Field(AgentConfigurationType)
+
+    def resolve_agents(self, info, **kwargs):
+        """Resolve agent configurations visible to the user."""
+        from opencontractserver.agents.models import AgentConfiguration
+
+        return AgentConfiguration.objects.visible_to_user(
+            info.context.user
+        ).select_related("creator", "corpus")
+
+    def resolve_agent(self, info, **kwargs):
+        """Resolve a single agent configuration by ID."""
+        from opencontractserver.agents.models import AgentConfiguration
+
+        django_pk = from_global_id(kwargs.get("id", None))[1]
+        return AgentConfiguration.objects.visible_to_user(info.context.user).get(
+            id=django_pk
+        )
+
     # NOTIFICATION QUERIES ########################################
     notifications = DjangoFilterConnectionField(
         NotificationType,
@@ -2056,6 +2108,369 @@ class Query(graphene.ObjectType):
 
         # Return user objects
         return [rep.user for rep in top_reputations]
+
+    # LEADERBOARD QUERIES (Issue #613) ###################
+    leaderboard = graphene.Field(
+        LeaderboardType,
+        metric=graphene.Argument(LeaderboardMetricEnum, required=True),
+        scope=graphene.Argument(LeaderboardScopeEnum, default_value="all_time"),
+        corpus_id=graphene.ID(),
+        limit=graphene.Int(default_value=25),
+        description="Get leaderboard for a specific metric and scope",
+    )
+    community_stats = graphene.Field(
+        CommunityStatsType,
+        corpus_id=graphene.ID(),
+        description="Get overall community engagement statistics",
+    )
+
+    def resolve_leaderboard(
+        self, info, metric, scope="all_time", corpus_id=None, limit=25
+    ):
+        """
+        Get leaderboard for a specific metric and scope.
+
+        Issue: #613 - Create leaderboard and community stats dashboard
+        Epic: #572 - Social Features Epic
+
+        Args:
+            metric: The metric to rank by (BADGES, MESSAGES, THREADS, ANNOTATIONS, REPUTATION)
+            scope: Time period (ALL_TIME, MONTHLY, WEEKLY)
+            corpus_id: Optional corpus ID for corpus-specific leaderboards
+            limit: Maximum number of entries to return (default 25)
+
+        Returns:
+            LeaderboardType with ranked entries
+        """
+        from datetime import datetime, timedelta
+
+        from django.contrib.auth import get_user_model
+        from django.db.models import Count, Q
+
+        from opencontractserver.annotations.models import Annotation
+
+        User = get_user_model()
+
+        # Calculate date cutoff based on scope
+        cutoff_date = None
+        if scope == "weekly":
+            cutoff_date = datetime.now() - timedelta(days=7)
+        elif scope == "monthly":
+            cutoff_date = datetime.now() - timedelta(days=30)
+
+        # Get corpus if specified
+        corpus_django_pk = None
+        if corpus_id:
+            try:
+                _, corpus_django_pk = from_global_id(corpus_id)
+                # Verify user has access to this corpus
+                Corpus.objects.visible_to_user(info.context.user).get(
+                    id=corpus_django_pk
+                )
+            except Corpus.DoesNotExist:
+                raise GraphQLError("Corpus not found or access denied")
+
+        # Get visible users (respect privacy settings)
+        users = User.objects.visible_to_user(info.context.user).filter(is_active=True)
+
+        # Build query based on metric
+        entries = []
+        current_user = info.context.user
+
+        if metric == "badges":
+            # Count badges per user
+            from opencontractserver.badges.models import UserBadge
+
+            badge_query = UserBadge.objects.filter(user__in=users)
+            if cutoff_date:
+                badge_query = badge_query.filter(awarded_at__gte=cutoff_date)
+            if corpus_django_pk:
+                badge_query = badge_query.filter(
+                    Q(corpus_id=corpus_django_pk) | Q(corpus__isnull=True)
+                )
+
+            user_badge_counts = (
+                badge_query.values("user")
+                .annotate(count=Count("id"))
+                .order_by("-count")[:limit]
+            )
+
+            for idx, item in enumerate(user_badge_counts, start=1):
+                user = User.objects.get(id=item["user"])
+                entries.append(
+                    LeaderboardEntryType(
+                        user=user,
+                        rank=idx,
+                        score=item["count"],
+                        badge_count=item["count"],
+                    )
+                )
+
+        elif metric == "messages":
+            # Count messages per user
+            # Filter by visible conversations since ChatMessage doesn't inherit conversation visibility
+            visible_conversations = Conversation.objects.visible_to_user(
+                info.context.user
+            )
+
+            message_query = ChatMessage.objects.filter(
+                creator__in=users,
+                msg_type="HUMAN",
+                conversation__in=visible_conversations,
+            )
+
+            if cutoff_date:
+                message_query = message_query.filter(created__gte=cutoff_date)
+            if corpus_django_pk:
+                message_query = message_query.filter(
+                    conversation__chat_with_corpus_id=corpus_django_pk
+                )
+
+            user_message_counts = (
+                message_query.values("creator")
+                .annotate(count=Count("id"))
+                .order_by("-count")[:limit]
+            )
+
+            for idx, item in enumerate(user_message_counts, start=1):
+                user = User.objects.get(id=item["creator"])
+                entries.append(
+                    LeaderboardEntryType(
+                        user=user,
+                        rank=idx,
+                        score=item["count"],
+                        message_count=item["count"],
+                    )
+                )
+
+        elif metric == "threads":
+            # Count threads created per user
+            thread_query = Conversation.objects.filter(
+                creator__in=users, conversation_type="thread"
+            ).visible_to_user(info.context.user)
+
+            if cutoff_date:
+                thread_query = thread_query.filter(created__gte=cutoff_date)
+            if corpus_django_pk:
+                thread_query = thread_query.filter(chat_with_corpus_id=corpus_django_pk)
+
+            user_thread_counts = (
+                thread_query.values("creator")
+                .annotate(count=Count("id"))
+                .order_by("-count")[:limit]
+            )
+
+            for idx, item in enumerate(user_thread_counts, start=1):
+                user = User.objects.get(id=item["creator"])
+                entries.append(
+                    LeaderboardEntryType(
+                        user=user,
+                        rank=idx,
+                        score=item["count"],
+                        thread_count=item["count"],
+                    )
+                )
+
+        elif metric == "annotations":
+            # Count annotations created per user
+            annotation_query = Annotation.objects.filter(
+                creator__in=users
+            ).visible_to_user(info.context.user)
+
+            if cutoff_date:
+                annotation_query = annotation_query.filter(created__gte=cutoff_date)
+            if corpus_django_pk:
+                annotation_query = annotation_query.filter(
+                    document__corpus__id=corpus_django_pk
+                )
+
+            user_annotation_counts = (
+                annotation_query.values("creator")
+                .annotate(count=Count("id"))
+                .order_by("-count")[:limit]
+            )
+
+            for idx, item in enumerate(user_annotation_counts, start=1):
+                user = User.objects.get(id=item["creator"])
+                entries.append(
+                    LeaderboardEntryType(
+                        user=user,
+                        rank=idx,
+                        score=item["count"],
+                        annotation_count=item["count"],
+                    )
+                )
+
+        elif metric == "reputation":
+            # Get reputation scores
+            from opencontractserver.conversations.models import UserReputation
+
+            rep_query = UserReputation.objects.filter(user__in=users)
+            if corpus_django_pk:
+                rep_query = rep_query.filter(corpus_id=corpus_django_pk)
+            else:
+                rep_query = rep_query.filter(corpus__isnull=True)
+
+            top_reps = rep_query.select_related("user").order_by("-reputation_score")[
+                :limit
+            ]
+
+            for idx, rep in enumerate(top_reps, start=1):
+                entries.append(
+                    LeaderboardEntryType(
+                        user=rep.user,
+                        rank=idx,
+                        score=rep.reputation_score,
+                        reputation=rep.reputation_score,
+                    )
+                )
+
+        # Find current user's rank
+        current_user_rank = None
+        if current_user and current_user.is_authenticated:
+            for entry in entries:
+                if entry.user.id == current_user.id:
+                    current_user_rank = entry.rank
+                    break
+
+        return LeaderboardType(
+            metric=metric,
+            scope=scope,
+            corpus_id=corpus_id,
+            total_users=len(entries),
+            entries=entries,
+            current_user_rank=current_user_rank,
+        )
+
+    def resolve_community_stats(self, info, corpus_id=None):
+        """
+        Get overall community engagement statistics.
+
+        Issue: #613 - Create leaderboard and community stats dashboard
+        Epic: #572 - Social Features Epic
+
+        Args:
+            corpus_id: Optional corpus ID for corpus-specific stats
+
+        Returns:
+            CommunityStatsType with engagement metrics
+        """
+        from datetime import datetime, timedelta
+
+        from django.contrib.auth import get_user_model
+        from django.db.models import Count, Q
+
+        from opencontractserver.annotations.models import Annotation
+        from opencontractserver.badges.models import UserBadge
+
+        User = get_user_model()
+
+        # Get corpus if specified
+        corpus_django_pk = None
+        if corpus_id:
+            try:
+                _, corpus_django_pk = from_global_id(corpus_id)
+                # Verify user has access to this corpus
+                Corpus.objects.visible_to_user(info.context.user).get(
+                    id=corpus_django_pk
+                )
+            except Corpus.DoesNotExist:
+                raise GraphQLError("Corpus not found or access denied")
+
+        # Calculate date cutoffs
+        week_ago = datetime.now() - timedelta(days=7)
+        month_ago = datetime.now() - timedelta(days=30)
+
+        # Get visible users
+        users = User.objects.visible_to_user(info.context.user).filter(is_active=True)
+        total_users = users.count()
+
+        # Total messages
+        # Filter by visible conversations since ChatMessage doesn't inherit conversation visibility
+        visible_conversations_stats = Conversation.objects.visible_to_user(
+            info.context.user
+        )
+        message_query = ChatMessage.objects.filter(
+            msg_type="HUMAN", conversation__in=visible_conversations_stats
+        )
+        if corpus_django_pk:
+            message_query = message_query.filter(
+                conversation__chat_with_corpus_id=corpus_django_pk
+            )
+        total_messages = message_query.count()
+        messages_this_week = message_query.filter(created__gte=week_ago).count()
+        messages_this_month = message_query.filter(created__gte=month_ago).count()
+
+        # Active users (users who posted messages)
+        active_users_week = (
+            message_query.filter(created__gte=week_ago)
+            .values("creator")
+            .distinct()
+            .count()
+        )
+        active_users_month = (
+            message_query.filter(created__gte=month_ago)
+            .values("creator")
+            .distinct()
+            .count()
+        )
+
+        # Total threads
+        thread_query = Conversation.objects.filter(
+            conversation_type="thread"
+        ).visible_to_user(info.context.user)
+        if corpus_django_pk:
+            thread_query = thread_query.filter(chat_with_corpus_id=corpus_django_pk)
+        total_threads = thread_query.count()
+
+        # Total annotations
+        annotation_query = Annotation.objects.visible_to_user(info.context.user)
+        if corpus_django_pk:
+            annotation_query = annotation_query.filter(
+                document__corpus__id=corpus_django_pk
+            )
+        total_annotations = annotation_query.count()
+
+        # Total badges awarded
+        badge_query = UserBadge.objects.all()
+        if corpus_django_pk:
+            badge_query = badge_query.filter(
+                Q(corpus_id=corpus_django_pk) | Q(corpus__isnull=True)
+            )
+        total_badges_awarded = badge_query.count()
+
+        # Badge distribution
+        badge_distribution = []
+        badge_stats = (
+            badge_query.values("badge")
+            .annotate(
+                award_count=Count("id"), unique_recipients=Count("user", distinct=True)
+            )
+            .order_by("-award_count")[:10]
+        )
+
+        for stat in badge_stats:
+            badge = Badge.objects.get(id=stat["badge"])
+            badge_distribution.append(
+                BadgeDistributionType(
+                    badge=badge,
+                    award_count=stat["award_count"],
+                    unique_recipients=stat["unique_recipients"],
+                )
+            )
+
+        return CommunityStatsType(
+            total_users=total_users,
+            total_messages=total_messages,
+            total_threads=total_threads,
+            total_annotations=total_annotations,
+            total_badges_awarded=total_badges_awarded,
+            badge_distribution=badge_distribution,
+            messages_this_week=messages_this_week,
+            messages_this_month=messages_this_month,
+            active_users_this_week=active_users_week,
+            active_users_this_month=active_users_month,
+        )
 
     # DEBUG FIELD ########################################
     if settings.ALLOW_GRAPHQL_DEBUG:

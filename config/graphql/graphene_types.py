@@ -108,6 +108,20 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Reputation score for a specific corpus",
     )
 
+    # Activity statistics (Issue #611 - User Profile Page)
+    total_messages = graphene.Int(
+        description="Total number of messages posted by this user"
+    )
+    total_threads_created = graphene.Int(
+        description="Total number of threads created by this user"
+    )
+    total_annotations_created = graphene.Int(
+        description="Total number of annotations created by this user (visible to requester)"
+    )
+    total_documents_uploaded = graphene.Int(
+        description="Total number of documents uploaded by this user (visible to requester)"
+    )
+
     def resolve_reputation_global(self, info):
         """
         Resolve global reputation for this user.
@@ -142,6 +156,66 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return 0
         except Exception:
             return 0
+
+    def resolve_total_messages(self, info):
+        """
+        Resolve total messages posted by this user.
+        Only counts messages visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.conversations.models import ChatMessage
+
+        return (
+            ChatMessage.objects.filter(creator=self, msg_type="HUMAN")
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_threads_created(self, info):
+        """
+        Resolve total threads created by this user.
+        Only counts threads visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.conversations.models import Conversation
+
+        return (
+            Conversation.objects.filter(creator=self, conversation_type="thread")
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_annotations_created(self, info):
+        """
+        Resolve total annotations created by this user.
+        Only counts annotations visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.annotations.models import Annotation
+
+        return (
+            Annotation.objects.filter(creator=self)
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_documents_uploaded(self, info):
+        """
+        Resolve total documents uploaded by this user.
+        Only counts documents visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.documents.models import Document
+
+        return (
+            Document.objects.filter(creator=self)
+            .visible_to_user(info.context.user)
+            .count()
+        )
 
     class Meta:
         model = User
@@ -1507,6 +1581,7 @@ class CorpusStatsType(graphene.ObjectType):
     total_comments = graphene.Int()
     total_analyses = graphene.Int()
     total_extracts = graphene.Int()
+    total_threads = graphene.Int()
 
 
 class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -1515,12 +1590,20 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     agent_type = graphene.Field(
         AgentTypeEnum, description="Type of agent that generated this message"
     )
+    agent_configuration = graphene.Field(
+        lambda: AgentConfigurationType,
+        description="Agent configuration that generated this message",
+    )
 
     def resolve_agent_type(self, info):
         """Convert string agent_type from model to enum."""
         if self.agent_type:
             return AgentTypeEnum.get(self.agent_type)
         return None
+
+    def resolve_agent_configuration(self, info):
+        """Resolve agent_configuration field."""
+        return self.agent_configuration
 
     class Meta:
         model = ChatMessage
@@ -1543,6 +1626,18 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if self.conversation_type:
             return ConversationTypeEnum.get(self.conversation_type)
         return None
+
+    @classmethod
+    def get_node(cls, info, id):
+        """
+        Override the default node resolution to apply permission checks.
+        Anonymous users can only see public conversations.
+        Authenticated users can see public, their own, or explicitly shared.
+        """
+        try:
+            return Conversation.objects.visible_to_user(info.context.user).get(pk=id)
+        except Conversation.DoesNotExist:
+            return None
 
     class Meta:
         model = Conversation
@@ -1710,6 +1805,40 @@ class UserBadgeType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
 
 
+# ---------------- Agent Configuration Types ----------------
+class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for agent configurations."""
+
+    class Meta:
+        from opencontractserver.agents.models import AgentConfiguration
+
+        model = AgentConfiguration
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+        fields = (
+            "id",
+            "name",
+            "description",
+            "system_instructions",
+            "available_tools",
+            "permission_required_tools",
+            "badge_config",
+            "avatar_url",
+            "scope",
+            "corpus",
+            "is_active",
+            "creator",
+            "is_public",
+            "created",
+            "modified",
+        )
+        filter_fields = {
+            "scope": ["exact"],
+            "is_active": ["exact"],
+            "corpus": ["exact"],
+        }
+
+
 class NotificationType(DjangoObjectType):
     """GraphQL type for notifications."""
 
@@ -1791,3 +1920,127 @@ class NotificationType(DjangoObjectType):
         # as GraphQL's GenericScalar handles JSON serialization safely.
         # XSS protection must be handled on frontend via proper escaping.
         return self.data
+
+
+# ==============================================================================
+# LEADERBOARD TYPES (Issue #613 - Leaderboard and Community Stats Dashboard)
+# ==============================================================================
+
+
+class LeaderboardMetricEnum(graphene.Enum):
+    """
+    Enum for different leaderboard metrics.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    BADGES = "badges"
+    MESSAGES = "messages"
+    THREADS = "threads"
+    ANNOTATIONS = "annotations"
+    REPUTATION = "reputation"
+
+
+class LeaderboardScopeEnum(graphene.Enum):
+    """
+    Enum for leaderboard scope (time period or corpus).
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    """
+
+    ALL_TIME = "all_time"
+    MONTHLY = "monthly"
+    WEEKLY = "weekly"
+
+
+class LeaderboardEntryType(graphene.ObjectType):
+    """
+    Represents a single entry in the leaderboard.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    user = graphene.Field(UserType, description="The user in this leaderboard entry")
+    rank = graphene.Int(description="User's rank in the leaderboard (1-indexed)")
+    score = graphene.Int(description="User's score for this metric")
+
+    # Optional detailed breakdown
+    badge_count = graphene.Int(description="Total badges earned by user")
+    message_count = graphene.Int(description="Total messages posted by user")
+    thread_count = graphene.Int(description="Total threads created by user")
+    annotation_count = graphene.Int(description="Total annotations created by user")
+    reputation = graphene.Int(description="User's reputation score")
+
+    # Rising star indicator (for users with recent high activity)
+    is_rising_star = graphene.Boolean(
+        description="True if user has shown significant recent activity"
+    )
+
+
+class LeaderboardType(graphene.ObjectType):
+    """
+    Complete leaderboard with entries and metadata.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    metric = graphene.Field(
+        LeaderboardMetricEnum, description="The metric this leaderboard is sorted by"
+    )
+    scope = graphene.Field(
+        LeaderboardScopeEnum, description="The time period for this leaderboard"
+    )
+    corpus_id = graphene.ID(description="If corpus-specific leaderboard, the corpus ID")
+    total_users = graphene.Int(description="Total number of users in leaderboard")
+    entries = graphene.List(
+        LeaderboardEntryType, description="Leaderboard entries in rank order"
+    )
+    current_user_rank = graphene.Int(
+        description="Current user's rank in this leaderboard (null if not ranked)"
+    )
+
+
+class BadgeDistributionType(graphene.ObjectType):
+    """
+    Statistics about badge distribution across users.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    badge = graphene.Field(BadgeType, description="The badge")
+    award_count = graphene.Int(
+        description="Number of times this badge has been awarded"
+    )
+    unique_recipients = graphene.Int(
+        description="Number of unique users who have earned this badge"
+    )
+
+
+class CommunityStatsType(graphene.ObjectType):
+    """
+    Overall community engagement statistics.
+
+    Issue: #613 - Create leaderboard and community stats dashboard
+    Epic: #572 - Social Features Epic
+    """
+
+    total_users = graphene.Int(description="Total number of active users")
+    total_messages = graphene.Int(description="Total messages posted")
+    total_threads = graphene.Int(description="Total threads created")
+    total_annotations = graphene.Int(description="Total annotations created")
+    total_badges_awarded = graphene.Int(description="Total badge awards")
+    badge_distribution = graphene.List(
+        BadgeDistributionType, description="Badge distribution across users"
+    )
+
+    # Time-based metrics
+    messages_this_week = graphene.Int(description="Messages posted in last 7 days")
+    messages_this_month = graphene.Int(description="Messages posted in last 30 days")
+    active_users_this_week = graphene.Int(description="Users who posted in last 7 days")
+    active_users_this_month = graphene.Int(
+        description="Users who posted in last 30 days"
+    )

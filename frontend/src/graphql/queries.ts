@@ -549,6 +549,7 @@ export interface CorpusStats {
   totalAnalyses: number;
   totalExtracts: number;
   totalAnnotations: number;
+  totalThreads?: number; // Optional for backward compatibility with backend
 }
 
 export interface GetCorpusStatsOutputType {
@@ -563,6 +564,7 @@ export const GET_CORPUS_STATS = gql`
       totalAnalyses
       totalExtracts
       totalAnnotations
+      totalThreads
     }
   }
 `;
@@ -2175,7 +2177,7 @@ export const GET_CONVERSATIONS = gql`
     $title_Contains: String
     $createdAt_Gte: DateTime
     $createdAt_Lte: DateTime
-    $conversationType: String
+    $conversationType: ConversationTypeEnum
   ) {
     conversations(
       documentId: $documentId
@@ -2299,6 +2301,13 @@ export const GET_THREAD_DETAIL = gql`
         id
         msgType
         agentType
+        agentConfiguration {
+          id
+          name
+          description
+          badgeConfig
+          avatarUrl
+        }
         content
         state
         createdAt
@@ -2908,9 +2917,22 @@ export const GET_CHAT_MESSAGES = gql`
     chatMessages(conversationId: $conversationId, orderBy: $orderBy) {
       id
       msgType
+      agentType
+      agentConfiguration {
+        id
+        name
+        description
+        badgeConfig
+        avatarUrl
+      }
       content
       state
       data
+      creator {
+        id
+        username
+        email
+      }
     }
   }
 `;
@@ -3112,6 +3134,7 @@ export const GET_ME = gql`
       lastName
       phone
       isUsageCapped # Crucially, fetch this field
+      isProfilePublic # Issue #611
     }
   }
 `;
@@ -3123,6 +3146,49 @@ export interface GetMeOutputs {
 
 // No inputs needed for this query
 export interface GetMeInputs {}
+
+// Issue #611 - User Profile Page
+export const GET_USER = gql`
+  query GetUser($slug: String!) {
+    userBySlug(slug: $slug) {
+      id
+      username
+      slug
+      name
+      firstName
+      lastName
+      email
+      isProfilePublic
+      reputationGlobal
+      totalMessages
+      totalThreadsCreated
+      totalAnnotationsCreated
+      totalDocumentsUploaded
+    }
+  }
+`;
+
+export interface GetUserInput {
+  slug: string;
+}
+
+export interface GetUserOutput {
+  userBySlug: {
+    id: string;
+    username: string;
+    slug: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    isProfilePublic: boolean;
+    reputationGlobal: number;
+    totalMessages: number;
+    totalThreadsCreated: number;
+    totalAnnotationsCreated: number;
+    totalDocumentsUploaded: number;
+  } | null;
+}
 
 // ID-based resolution queries for navigation fallback
 export const GET_CORPUS_BY_ID_FOR_REDIRECT = gql`
@@ -3405,4 +3471,113 @@ export interface GetUserBadgesOutput {
       endCursor: string;
     };
   };
+}
+
+/**
+ * ============================================================================
+ * NOTIFICATION QUERIES
+ * ============================================================================
+ */
+
+export const GET_NOTIFICATIONS = gql`
+  query GetNotifications(
+    $isRead: Boolean
+    $notificationType: NotificationsNotificationNotificationTypeChoices
+    $limit: Int
+    $cursor: String
+  ) {
+    notifications(
+      isRead: $isRead
+      notificationType: $notificationType
+      first: $limit
+      after: $cursor
+    ) {
+      edges {
+        node {
+          id
+          notificationType
+          isRead
+          createdAt
+          modified
+          data
+          actor {
+            id
+            username
+            email
+          }
+          message {
+            id
+            content
+          }
+          conversation {
+            id
+            title
+            conversationType
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      totalCount
+    }
+  }
+`;
+
+export const GET_UNREAD_NOTIFICATION_COUNT = gql`
+  query GetUnreadNotificationCount {
+    unreadNotificationCount
+  }
+`;
+
+export interface GetNotificationsInput {
+  isRead?: boolean;
+  notificationType?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface NotificationNode {
+  id: string;
+  notificationType: string;
+  isRead: boolean;
+  createdAt: string;
+  modified: string;
+  data?: Record<string, any>;
+  actor?: {
+    id: string;
+    username: string;
+    email: string;
+  };
+  message?: {
+    id: string;
+    content: string;
+  };
+  conversation?: {
+    id: string;
+    title: string;
+    conversationType: string;
+  };
+}
+
+export interface GetNotificationsOutput {
+  notifications: {
+    edges: Array<{
+      node: NotificationNode;
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string;
+      endCursor: string;
+    };
+    totalCount: number;
+  };
+}
+
+export interface GetUnreadNotificationCountOutput {
+  unreadNotificationCount: number;
 }

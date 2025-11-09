@@ -1456,6 +1456,56 @@ export type MessageStateChoices =
   | "AWAITING_APPROVAL";
 export type VoteType = "UPVOTE" | "DOWNVOTE";
 
+/**
+ * Agent Configuration Type - represents bot/agent profiles
+ */
+export type AgentConfigurationType = Node & {
+  __typename?: "AgentConfigurationType";
+  id: Scalars["ID"];
+  name: Scalars["String"];
+  description?: Maybe<Scalars["String"]>;
+  systemInstructions: Scalars["String"];
+  availableTools?: Maybe<Scalars["GenericScalar"]>;
+  permissionRequiredTools?: Maybe<Scalars["GenericScalar"]>;
+  badgeConfig?: Maybe<Scalars["GenericScalar"]>;
+  avatarUrl?: Maybe<Scalars["String"]>;
+  scope: Scalars["String"];
+  corpus?: Maybe<CorpusType>;
+  isActive: Scalars["Boolean"];
+  creator: UserType;
+  isPublic?: Scalars["Boolean"];
+  created: Scalars["DateTime"];
+  modified: Scalars["DateTime"];
+  myPermissions?: PermissionTypes[];
+};
+
+/**
+ * User Badge Type - represents awarded badges to users
+ */
+export type UserBadgeType = Node & {
+  __typename?: "UserBadgeType";
+  id: Scalars["ID"];
+  user: UserType;
+  badge: BadgeType;
+  awardedAt: Scalars["DateTime"];
+  awardedBy?: Maybe<UserType>;
+  corpus?: Maybe<CorpusType>;
+};
+
+/**
+ * Badge Type - represents badge definitions
+ */
+export type BadgeType = Node & {
+  __typename?: "BadgeType";
+  id: Scalars["ID"];
+  name: Scalars["String"];
+  description: Scalars["String"];
+  icon: Scalars["String"];
+  color: Scalars["String"];
+  badgeType: Scalars["String"];
+  isAutoAwarded?: Scalars["Boolean"];
+};
+
 export type ConversationType = Node & {
   __typename?: "ConversationType";
   id: Scalars["ID"];
@@ -1503,6 +1553,7 @@ export type ChatMessageType = Node & {
   conversation: ConversationType;
   msgType: Scalars["String"];
   agentType?: Maybe<AgentTypeEnum>;
+  agentConfiguration?: Maybe<AgentConfigurationType>;
   content: Scalars["String"];
   data?: Maybe<{
     sources?: WebSocketSources[];

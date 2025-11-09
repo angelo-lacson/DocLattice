@@ -155,6 +155,7 @@ LOCAL_APPS = [
     "opencontractserver.conversations",
     "opencontractserver.badges",
     "opencontractserver.notifications",
+    "opencontractserver.agents",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
