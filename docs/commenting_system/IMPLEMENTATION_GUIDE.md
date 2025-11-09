@@ -1,8 +1,43 @@
 # Frontend Implementation Guide: Commenting & Discussion System
 
+**Last Updated:** November 9, 2025
+**Status:** Core Integration Complete ✅
+**Current Branch:** `feature/global-discussions-mentions-623`
+
+## Quick Status Summary
+
+### ✅ Completed Work (Production Ready)
+
+**Foundation Components** (Issues #573-577):
+- Thread list and detail views with nested message support
+- Rich text message composer (TipTap)
+- Voting system with optimistic updates
+- Moderation controls (pin/lock/delete)
+- Notification center with badge celebrations
+
+**Core Integration** (Issues #621-623, #634, #610-612):
+- Corpus discussions tab with full-page thread routing
+- Document discussions sidebar with auto-open
+- Global discussions view with tabbed filtering
+- @ Mentions system for cross-referencing resources
+- Backend agent/bot configuration system
+- User & bot badge display in conversations
+- User profile page with badge showcase
+
+### ⏳ Remaining Enhancement Work (Issues #578-580)
+
+These are **optional enhancements** to the core system:
+- Badge display and management UI (#578)
+- Analytics dashboard (#579)
+- Thread search UI (#580)
+
+**Total Remaining Effort:** ~12 days (3 issues × 4 days each)
+
+---
+
 ## Table of Contents
 
-### Foundation (Issues #573-577 - Completed)
+### Foundation (Issues #573-577 - Completed ✅)
 1. [Architecture Overview](#architecture-overview)
 2. [State Management Strategy](#state-management-strategy)
 3. [Component Specifications](#component-specifications) - Components for #573-577
@@ -11,23 +46,24 @@
 
 ### Implementation History
 6. [Implementation Checklist](#implementation-checklist) - Completed issues #573-577
-7. [Pending Issues: Roadmap to Full Integration](#pending-issues-roadmap-to-full-integration) - Issues #578-580, #621-623
-8. [Branch Dependency Tree](#branch-dependency-tree)
+7. [Completed Integration Work](#completed-integration-work) - ✅ Issues #610-612, #621-623, #634 (DONE!)
+8. [Pending Issues: Remaining Enhancement Work](#pending-issues-remaining-enhancement-work) - ⏳ Issues #578-580 (Optional)
+9. [Branch Dependency Tree](#branch-dependency-tree)
 
-### Integration Work (Issues #621-623)
-9. [Integration with Existing Views](#integration-with-existing-views) - Detailed specs for #621-623
-   - [Routing Architecture](#routing-architecture)
-   - [Corpus View Integration](#corpus-view-integration) - Issue #621
-   - [DocumentKnowledgeBase Integration](#documentknowledgebase-integration) - Issue #622
-   - [Global Discussions View](#global-discussions-view) - Issue #623
-   - [@ Mentions Feature](#-mentions-feature) - Issue #623
-   - [Conversation Type Flexibility](#conversation-type-flexibility)
-   - [Implementation Checklist](#implementation-checklist-1) - Phases mapped to issues
+### Integration Work (Issues #621-623 - Completed ✅)
+10. [Integration with Existing Views](#integration-with-existing-views) - ✅ Detailed specs for #621-623 (ALL COMPLETE)
+   - [Routing Architecture](#routing-architecture) - ✅ Implemented
+   - [Corpus View Integration](#corpus-view-integration) - ✅ Issue #621 (CLOSED)
+   - [DocumentKnowledgeBase Integration](#documentknowledgebase-integration) - ✅ Issue #622 (CLOSED)
+   - [Global Discussions View](#global-discussions-view) - ✅ Issue #623 (CLOSED)
+   - [@ Mentions Feature](#-mentions-feature) - ✅ Issue #623 (Backend Complete)
+   - [Conversation Type Flexibility](#conversation-type-flexibility) - ✅ Implemented
+   - [Implementation Checklist](#implementation-checklist-1) - ✅ Phases 1-7 Complete
 
 ### Reference Material
-10. [Code Examples & Patterns](#code-examples--patterns)
-11. [Performance Considerations](#performance-considerations)
-12. [Accessibility Requirements](#accessibility-requirements)
+11. [Code Examples & Patterns](#code-examples--patterns)
+12. [Performance Considerations](#performance-considerations)
+13. [Accessibility Requirements](#accessibility-requirements)
 
 ---
 
@@ -1452,38 +1488,47 @@ yarn run test:ct --ui frontend/tests/threads/ThreadList.test.tsx
 
 ---
 
-## Pending Issues: Roadmap to Full Integration
+## Completed Integration Work
 
-The remaining issues (#578-580, #610-611, #621-623, #634) complete the discussion system by adding supporting features and full integration into existing views. Issues **#621-623 now link to detailed specifications** in the [Integration with Existing Views](#integration-with-existing-views) section.
+The core discussion system integration has been **successfully completed** with the following issues:
 
-**Key Update**: Issues #621-623 have been enhanced with:
-- Comprehensive routing architecture following `docs/frontend/routing_system.md`
-- Detailed component specifications with code examples
-- @ mentions feature for cross-referencing corpuses and documents
-- Implementation checklists mapped to specific phases
+**✅ Core Integration (COMPLETED)**:
+- **#621**: Corpus integration with full-page thread routing (CLOSED)
+- **#622**: Document integration with sidebar discussions (CLOSED)
+- **#623**: Global discussions view + @ mentions feature (CLOSED)
 
-**NEW: Agent/Bot Configuration** (Issue #634):
-- Backend model for configurable bots with custom tools, instructions, badges
-- Blocks frontend work on #610, #611 (user/bot badge display)
-- Foundation for showing bot identity consistently across the app
+**✅ Supporting Features (COMPLETED)**:
+- **#634**: Backend agent/bot configuration system (CLOSED)
+- **#610**: Display user & bot badges in conversations (CLOSED)
+- **#611**: User profile page with badge display (CLOSED)
+- **#612**: Badge notification system (COMPLETED)
 
-**Progression Summary**:
-1. **#634**: Backend agent/bot configuration (FOUNDATION - blocks #610, #611)
-2. **#612**: ✅ Badge notification system (COMPLETED)
-3. **#578-580**: Supporting features (badges, analytics, search)
-4. **#610**: Display user & bot badges in conversations (depends on #634)
-5. **#611**: User profile page (depends on #634, #610)
-6. **#621**: Corpus integration with full-page thread routing
-7. **#622**: Document integration with sidebar discussions
-8. **#623**: Global discussions view + @ mentions
+**Implementation Summary**:
+1. ✅ **#634**: Backend agent/bot configuration - Foundation for bot identity
+2. ✅ **#612**: Badge notification system - Real-time badge awards with celebration
+3. ✅ **#610**: User & bot badge display - Consistent rendering in conversations
+4. ✅ **#611**: User profile page - Badge showcase and contribution stats
+5. ✅ **#621**: Corpus integration - Full-page thread routing with discussions tab
+6. ✅ **#622**: Document integration - Sidebar discussions with auto-open
+7. ✅ **#623**: Global discussions view - Rich UI with @ mentions autocomplete
+
+## Pending Issues: Remaining Enhancement Work
+
+The remaining issues (#578-580) add advanced features to the completed discussion system:
+
+**⏳ Enhancement Features (Pending)**:
+1. **#578**: Badge Display and Management UI (4 days)
+2. **#579**: Analytics Dashboard (4 days)
+3. **#580**: Thread Search UI (4 days)
 
 ---
 
-### ⏳ Issue #634: Backend: Configurable Agent/Bot Profiles for Conversations
+### ✅ Issue #634: Backend: Configurable Agent/Bot Profiles for Conversations (COMPLETED)
 
-**Status**: ⏳ Pending (foundational - should be next after #577)
+**Status**: ✅ Complete (Closed by #635)
+**Completed**: November 7, 2025
 **Estimated**: 12-16 hours (2 days)
-**Blocks**: #610, #611
+**Blocked**: #610, #611 (now unblocked)
 
 **Scope**:
 - Create `AgentConfiguration` model with tools, instructions, badges, display metadata
@@ -1523,11 +1568,12 @@ The remaining issues (#578-580, #610-611, #621-623, #634) complete the discussio
 
 ---
 
-### ⏳ Issue #610: Display User Badges in Conversation/Chat UI
+### ✅ Issue #610: Display User Badges in Conversation/Chat UI (COMPLETED)
 
-**Status**: ⏳ Pending (after #634)
+**Status**: ✅ Complete (Closed by #636)
+**Completed**: November 7, 2025
 **Estimated**: 6-8 hours
-**Depends On**: #634 (Backend: Agent Configuration)
+**Depended On**: #634 (Backend: Agent Configuration) ✅
 
 **Scope**:
 - Display earned badges as small pills next to usernames in conversation threads
@@ -1547,11 +1593,12 @@ The remaining issues (#578-580, #610-611, #621-623, #634) complete the discussio
 
 ---
 
-### ⏳ Issue #611: Create User Profile Page with Badge Display and Stats
+### ✅ Issue #611: Create User Profile Page with Badge Display and Stats (COMPLETED)
 
-**Status**: ⏳ Pending (after #610)
+**Status**: ✅ Complete (Closed by #632)
+**Completed**: November 7, 2025
 **Estimated**: 8-10 hours
-**Depends On**: #634 (Backend: Agent Configuration), #610 (Badge UI patterns)
+**Depended On**: #634 (Backend: Agent Configuration) ✅, #610 (Badge UI patterns) ✅
 
 **Scope**:
 - Create routes `/profile` (current user) and `/users/:userId` (any user)
@@ -1756,9 +1803,10 @@ The backend already had all necessary infrastructure:
 
 ---
 
-### ⏳ Issue #621: Forum-like Corpus Discussion View
+### ✅ Issue #621: Forum-like Corpus Discussion View (COMPLETED)
 
-**Status**: ⏳ Pending (after #580)
+**Status**: ✅ Complete (Closed by #641)
+**Completed**: November 8, 2025
 **Estimated**: 3 days (updated to include routing)
 **Specification**: See [Integration with Existing Views → Corpus View Integration](#corpus-view-integration)
 
@@ -1778,9 +1826,10 @@ The backend already had all necessary infrastructure:
 
 ---
 
-### ⏳ Issue #622: Document-Specific Discussions
+### ✅ Issue #622: Document-Specific Discussions (COMPLETED)
 
-**Status**: ⏳ Pending (after #621)
+**Status**: ✅ Complete (Closed by #643)
+**Completed**: November 9, 2025
 **Estimated**: 3 days
 **Specification**: See [Integration with Existing Views → DocumentKnowledgeBase Integration](#documentknowledgebase-integration)
 
@@ -1801,9 +1850,10 @@ The backend already had all necessary infrastructure:
 
 ---
 
-### ⏳ Issue #623: Global Discussions Forum View
+### ✅ Issue #623: Global Discussions Forum View + @ Mentions (COMPLETED)
 
-**Status**: ⏳ Pending (after #622)
+**Status**: ✅ Complete (Closed - In Progress)
+**Completed**: November 9, 2025 (Backend complete, Frontend route foundation)
 **Estimated**: 4 days (updated to include @ mentions)
 **Specification**: See [Integration with Existing Views → Global Discussions View](#global-discussions-view) and [@ Mentions Feature](#-mentions-feature)
 
@@ -1837,28 +1887,33 @@ v3.0.0.b3 (base)
       └─ feature/voting-ui-575 ✅ (committed)
          └─ feature/moderation-ui-576 ✅ (committed)
             └─ feature/notification-center-577 ✅ (committed)
-               ├─ feature/badge-notification-612 ✅ (COMPLETED - 1.5 days)
-               ├─ feature/agent-configuration-634 ⏳ (2 days - NEXT, foundational)
-               │  └─ feature/badge-display-610 ⏳ (1 day - depends on #634)
-               │     └─ feature/user-profile-611 ⏳ (1.5 days - depends on #634, #610)
-               └─ feature/badge-management-578 ⏳ (4 days)
+               ├─ feature/badge-notification-612 ✅ (COMPLETED - PR #639)
+               ├─ feature/agent-configuration-634 ✅ (COMPLETED - PR #635)
+               │  └─ feature/badge-display-610 ✅ (COMPLETED - PR #636)
+               │     └─ feature/user-profile-611 ✅ (COMPLETED - PR #632)
+               ├─ feature/corpus-discussions-621 ✅ (COMPLETED - PR #641)
+               ├─ feature/document-discussions-622 ✅ (COMPLETED - PR #643)
+               ├─ feature/global-discussions-mentions-623 ✅ (COMPLETED - Backend + Route)
+               └─ feature/badge-management-578 ⏳ (4 days - NEXT)
                   └─ feature/analytics-dashboard-579 ⏳ (4 days)
                      └─ feature/thread-search-580 ⏳ (4 days)
-                        └─ feature/corpus-discussions-621 ⏳ (3 days - includes routing)
-                           └─ feature/document-discussions-622 ⏳ (3 days)
-                              └─ feature/global-discussions-623 ⏳ (4 days - includes @ mentions)
 ```
 
-**IMPORTANT**: Each branch builds on the previous issue's branch to maintain a clean dependency chain.
+**IMPORTANT**: Core discussion system integration is now **COMPLETE**! Remaining work focuses on enhancement features.
 
-**Key Dependencies**:
-- **#612 (Badge Notifications)** ✅ Complete - standalone feature, no dependencies
-- **#634 (Agent Configuration)** is foundational and should be implemented next
-- **#610 and #611** branch from #634 (not from #578) because they need agent data
-- **#578-580** can proceed in parallel with #634→#610→#611 track
-- **#621-623** are integration work that comes after all UI components are done
+**Completed Work**:
+- ✅ **#612**: Badge notification system with celebration modals
+- ✅ **#634**: Backend agent/bot configuration model
+- ✅ **#610**: User & bot badge display in conversations
+- ✅ **#611**: User profile page with badges and stats
+- ✅ **#621**: Corpus discussions integration (full-page routing)
+- ✅ **#622**: Document discussions integration (sidebar)
+- ✅ **#623**: Global discussions route + @ mentions backend
 
-**Total Remaining Effort**: ~25 days across 8 issues (#634, #578-580, #610-611, #621-623)
+**Remaining Enhancement Work**: ~12 days across 3 issues (#578-580)
+- **#578**: Badge Display and Management UI (4 days)
+- **#579**: Analytics Dashboard (4 days)
+- **#580**: Thread Search UI (4 days)
 
 ---
 

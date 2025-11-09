@@ -2,6 +2,7 @@ import React from "react";
 import { ErrorBoundary } from "../widgets/ErrorBoundary";
 import { MetaTags } from "../widgets/MetaTags";
 import { CardLayout } from "../layout/CardLayout";
+import { GlobalDiscussions } from "../../views/GlobalDiscussions";
 
 /**
  * Route wrapper for global discussions view.
@@ -18,14 +19,7 @@ export const GlobalDiscussionsRoute: React.FC = () => {
         type="discussions"
       />
       <CardLayout>
-        <div style={{ padding: "2rem", textAlign: "center" }}>
-          <h1>Global Discussions</h1>
-          <p>
-            Feature in development - Issue #623
-            <br />
-            Backend infrastructure complete. Frontend UI coming soon.
-          </p>
-        </div>
+        <GlobalDiscussions />
       </CardLayout>
     </ErrorBoundary>
   );

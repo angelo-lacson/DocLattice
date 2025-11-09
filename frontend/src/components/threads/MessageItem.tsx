@@ -6,7 +6,8 @@ import { spacing } from "../../theme/spacing";
 import { MessageNode } from "./utils";
 import { RelativeTime } from "./RelativeTime";
 import { MessageBadges } from "../badges/MessageBadges";
-import { UserBadgeType } from "../../types/graphql-api";
+import { parseMentionsInContent } from "./MentionChip";
+import { UserBadgeType, MentionedResourceType } from "../../types/graphql-api";
 
 interface MessageItemProps {
   message: MessageNode;
@@ -254,7 +255,11 @@ export function MessageItem({
         {isDeleted ? (
           <p>[This message has been deleted]</p>
         ) : (
-          <p>{message.content}</p>
+          // Render content with mention chips (Issue #623)
+          parseMentionsInContent(
+            message.content || "",
+            (message.mentionedResources as MentionedResourceType[]) || []
+          )
         )}
       </MessageContent>
 
