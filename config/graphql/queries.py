@@ -786,6 +786,55 @@ class Query(graphene.ObjectType):
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
 
+    # SEARCH RESOURCES FOR MENTIONS #####################################
+    search_corpuses_for_mention = DjangoConnectionField(
+        CorpusType,
+        text_search=graphene.String(
+            description="Search query to find corpuses by title or description"
+        ),
+    )
+    search_documents_for_mention = DjangoConnectionField(
+        DocumentType,
+        text_search=graphene.String(
+            description="Search query to find documents by title or description"
+        ),
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_corpuses_for_mention(self, info, text_search=None, **kwargs):
+        """
+        Search corpuses for @ mention autocomplete.
+        SECURITY: Only returns corpuses visible to the requesting user.
+        """
+        qs = Corpus.objects.visible_to_user(info.context.user)
+
+        if text_search:
+            qs = qs.filter(
+                Q(title__icontains=text_search) | Q(description__icontains=text_search)
+            )
+
+        # Order by relevance (title matches first, then description matches)
+        return qs.order_by("-modified")
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_documents_for_mention(self, info, text_search=None, **kwargs):
+        """
+        Search documents for @ mention autocomplete.
+        SECURITY: Only returns documents visible to the requesting user.
+        """
+        qs = Document.objects.visible_to_user(info.context.user)
+
+        if text_search:
+            qs = qs.filter(
+                Q(title__icontains=text_search) | Q(description__icontains=text_search)
+            )
+
+        # Prefetch corpus relationship for efficient mention rendering
+        qs = qs.prefetch_related("corpus_set", "corpus_set__creator")
+
+        # Order by relevance (title matches first, then description matches)
+        return qs.order_by("-modified")
+
     # DOCUMENT RESOLVERS #####################################
 
     documents = DjangoFilterConnectionField(
