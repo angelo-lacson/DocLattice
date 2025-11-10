@@ -270,7 +270,7 @@ export const GlobalDiscussions: React.FC = () => {
         </FilterBar>
       </Header>
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {showCorpusSection && (
           <SectionContainer
             key="corpus-section"

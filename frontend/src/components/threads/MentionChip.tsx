@@ -74,10 +74,13 @@ export interface MentionedResource {
   slug: string;
   title: string;
   url: string;
-  corpus?: {
-    slug: string;
-    title: string;
-  };
+  corpus?:
+    | {
+        slug: string;
+        title: string;
+      }
+    | null
+    | undefined;
 }
 
 export interface MentionChipProps {
