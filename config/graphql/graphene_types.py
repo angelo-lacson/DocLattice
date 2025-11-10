@@ -1706,13 +1706,11 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 # Permission denied or doesn't exist - silently ignore
                 continue
 
-        # Pattern 3: @document:slug (standalone, not part of corpus/document pattern)
+        # Pattern 3: @document:slug (standalone)
+        # The regex @document: will NOT match /document: in corpus/document patterns,
+        # so we can safely process all matches without checking for duplicates
         doc_pattern = r"@document:([a-z0-9-]+)"
         for doc_slug in re.findall(doc_pattern, content):
-            # Skip if this is part of a corpus/document pattern
-            if f"/document:{doc_slug}" in content:
-                continue
-
             try:
                 document = Document.objects.visible_to_user(user).get(slug=doc_slug)
                 url = f"/d/{document.creator.slug}/{document.slug}"

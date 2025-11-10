@@ -105,16 +105,14 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
-                    ... on MessageType {
-                        id
-                        content
-                        mentionedResources {
-                            type
-                            slug
-                            title
-                            url
-                        }
+                chatMessage(id: $id) {
+                    id
+                    content
+                    mentionedResources {
+                        type
+                        slug
+                        title
+                        url
                     }
                 }
             }
@@ -127,7 +125,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["type"], "corpus")
         self.assertEqual(mentioned[0]["slug"], "legal-corpus")
@@ -145,18 +143,16 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
-                    ... on MessageType {
-                        id
-                        mentionedResources {
+                chatMessage(id: $id) {
+                    id
+                    mentionedResources {
+                        type
+                        slug
+                        title
+                        url
+                        corpus {
                             type
                             slug
-                            title
-                            url
-                            corpus {
-                                type
-                                slug
-                            }
                         }
                     }
                 }
@@ -170,7 +166,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["type"], "document")
         self.assertEqual(mentioned[0]["slug"], "contract-template")
@@ -190,18 +186,16 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
-                    ... on MessageType {
-                        id
-                        mentionedResources {
+                chatMessage(id: $id) {
+                    id
+                    mentionedResources {
+                        type
+                        slug
+                        url
+                        corpus {
                             type
                             slug
                             url
-                            corpus {
-                                type
-                                slug
-                                url
-                            }
                         }
                     }
                 }
@@ -215,7 +209,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["type"], "document")
         self.assertEqual(mentioned[0]["slug"], "contract-template")
@@ -233,13 +227,11 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
-                    ... on MessageType {
-                        id
-                        mentionedResources {
-                            type
-                            slug
-                        }
+                chatMessage(id: $id) {
+                    id
+                    mentionedResources {
+                        type
+                        slug
                     }
                 }
             }
@@ -253,7 +245,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["slug"], "legal-corpus")
 
@@ -265,7 +257,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["slug"], "private-corpus")
 
@@ -280,13 +272,11 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
-                    ... on MessageType {
-                        id
-                        mentionedResources {
-                            type
-                            slug
-                        }
+                chatMessage(id: $id) {
+                    id
+                    mentionedResources {
+                        type
+                        slug
                     }
                 }
             }
@@ -300,7 +290,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["slug"], "contract-template")
 
@@ -319,13 +309,11 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
-                    ... on MessageType {
-                        id
-                        mentionedResources {
-                            type
-                            slug
-                        }
+                chatMessage(id: $id) {
+                    id
+                    mentionedResources {
+                        type
+                        slug
                     }
                 }
             }
@@ -338,7 +326,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         # Should have: corpus, corpus/doc, doc (3 mentions)
         self.assertEqual(len(mentioned), 3)
         types = [m["type"] for m in mentioned]
@@ -356,12 +344,10 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
-                    ... on MessageType {
-                        id
-                        mentionedResources {
-                            type
-                        }
+                chatMessage(id: $id) {
+                    id
+                    mentionedResources {
+                        type
                     }
                 }
             }
@@ -374,7 +360,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 0)
 
 
