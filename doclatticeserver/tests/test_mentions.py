@@ -105,7 +105,7 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
+                chatMessage(id: $id) {
                     ... on MessageType {
                         id
                         content
@@ -127,7 +127,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["type"], "corpus")
         self.assertEqual(mentioned[0]["slug"], "legal-corpus")
@@ -145,7 +145,7 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
+                chatMessage(id: $id) {
                     ... on MessageType {
                         id
                         mentionedResources {
@@ -170,7 +170,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["type"], "document")
         self.assertEqual(mentioned[0]["slug"], "contract-template")
@@ -190,7 +190,7 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
+                chatMessage(id: $id) {
                     ... on MessageType {
                         id
                         mentionedResources {
@@ -215,7 +215,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["type"], "document")
         self.assertEqual(mentioned[0]["slug"], "contract-template")
@@ -233,7 +233,7 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
+                chatMessage(id: $id) {
                     ... on MessageType {
                         id
                         mentionedResources {
@@ -253,7 +253,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["slug"], "legal-corpus")
 
@@ -265,7 +265,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["slug"], "private-corpus")
 
@@ -280,7 +280,7 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
+                chatMessage(id: $id) {
                     ... on MessageType {
                         id
                         mentionedResources {
@@ -300,7 +300,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 1)
         self.assertEqual(mentioned[0]["slug"], "contract-template")
 
@@ -319,7 +319,7 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
+                chatMessage(id: $id) {
                     ... on MessageType {
                         id
                         mentionedResources {
@@ -338,7 +338,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         # Should have: corpus, corpus/doc, doc (3 mentions)
         self.assertEqual(len(mentioned), 3)
         types = [m["type"] for m in mentioned]
@@ -356,7 +356,7 @@ class MentionParsingTestCase(TestCase):
 
         query = """
             query GetMessage($id: ID!) {
-                node(id: $id) {
+                chatMessage(id: $id) {
                     ... on MessageType {
                         id
                         mentionedResources {
@@ -374,7 +374,7 @@ class MentionParsingTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        mentioned = result["data"]["node"]["mentionedResources"]
+        mentioned = result["data"]["chatMessage"]["mentionedResources"]
         self.assertEqual(len(mentioned), 0)
 
 
@@ -451,7 +451,7 @@ class MentionSearchTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         edges = result["data"]["searchCorpusesForMention"]["edges"]
         self.assertEqual(len(edges), 1)
-        self.assertEqual(edges[0]["node"]["slug"], "legal-contracts")
+        self.assertEqual(edges[0]["chatMessage"]["slug"], "legal-contracts")
 
         # User1 should NOT see user2's private corpus
         result = self.client.execute(
@@ -493,7 +493,7 @@ class MentionSearchTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         edges = result["data"]["searchDocumentsForMention"]["edges"]
         self.assertEqual(len(edges), 1)
-        self.assertEqual(edges[0]["node"]["slug"], "employment-contract")
+        self.assertEqual(edges[0]["chatMessage"]["slug"], "employment-contract")
 
         # User1 should NOT see user2's private document
         result = self.client.execute(
@@ -529,4 +529,4 @@ class MentionSearchTestCase(TestCase):
         edges = result["data"]["searchCorpusesForMention"]["edges"]
         # Should return user's accessible corpuses (just corpus1)
         self.assertEqual(len(edges), 1)
-        self.assertEqual(edges[0]["node"]["slug"], "legal-contracts")
+        self.assertEqual(edges[0]["chatMessage"]["slug"], "legal-contracts")
