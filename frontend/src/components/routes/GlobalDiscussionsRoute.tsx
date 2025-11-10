@@ -1,7 +1,6 @@
 import React from "react";
 import { ErrorBoundary } from "../widgets/ErrorBoundary";
-import { MetaTags } from "../widgets/MetaTags";
-import { CardLayout } from "../layout/CardLayout";
+import { MetaTags } from "../seo/MetaTags";
 import { GlobalDiscussions } from "../../views/GlobalDiscussions";
 
 /**
@@ -16,11 +15,8 @@ export const GlobalDiscussionsRoute: React.FC = () => {
       <MetaTags
         title="Discussions - OpenContracts"
         description="Browse all platform discussions"
-        type="discussions"
       />
-      <CardLayout>
-        <GlobalDiscussions />
-      </CardLayout>
+      <GlobalDiscussions />
     </ErrorBoundary>
   );
 };
