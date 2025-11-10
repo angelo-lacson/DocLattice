@@ -1866,7 +1866,7 @@ The backend already had all necessary infrastructure:
 #### Implementation Summary
 
 **Backend Implementation (Complete ✅)**:
-- **Write-Permission-Required Mention System**: Users can only @mention corpuses/documents they have write access to
+- **Permission-Based Mention System**: Users can @mention resources they have write access to OR that are public (any authenticated user can mention public corpuses/documents)
 - **GraphQL Search Queries**: `searchCorpusesForMention` and `searchDocumentsForMention` with permission filtering
 - **IDOR Protection**: Silent filtering prevents information leakage (same error for non-existent and unauthorized resources)
 - **Comprehensive Test Suite**: 18/18 unit tests passing
@@ -1911,7 +1911,7 @@ Removed experimental GraphQL integration tests (7 tests) in favor of comprehensi
   - `opencontractserver/tests/test_mention_graphql_integration.py` (experimental, replaced by unit tests)
 
 **Key Architecture Decisions**:
-- **Permission Model**: Write-permission-required (prevents spam/low-quality mentions)
+- **Permission Model**: Write-permission for private resources OR public access (prevents spam/low-quality mentions while allowing public resource references)
 - **Security**: IDOR protection via silent filtering (no information leakage)
 - **Type Safety**: Full TypeScript coverage with GraphQL schema alignment
 - **Testing Strategy**: Unit tests preferred over integration tests (faster, more reliable)
