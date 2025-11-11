@@ -1,8 +1,9 @@
 import React, { useEffect } from "react";
-import { useSetAtom, useAtomValue } from "jotai";
+import { useSetAtom, useAtomValue, useAtom } from "jotai";
 import { useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { selectedFolderId as selectedFolderIdReactiveVar } from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
@@ -13,6 +14,7 @@ import { DeleteFolderModal } from "./DeleteFolderModal";
 import {
   folderCorpusIdAtom,
   selectedFolderIdAtom,
+  sidebarCollapsedAtom,
 } from "../../../atoms/folderAtoms";
 
 /**
@@ -45,28 +47,35 @@ interface FolderDocumentBrowserProps {
 }
 
 const BrowserContainer = styled.div`
+  position: relative;
   display: flex;
   height: 100%;
   overflow: hidden;
   background: #f8fafc;
 `;
 
-const Sidebar = styled.aside<{ $visible: boolean }>`
-  width: 320px;
-  min-width: 320px;
+const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
+  width: ${(props) => (props.$collapsed ? "0px" : "320px")};
+  min-width: ${(props) => (props.$collapsed ? "0px" : "320px")};
   height: 100%;
   display: ${(props) => (props.$visible ? "flex" : "none")};
   flex-direction: column;
-  border-right: 1px solid #e2e8f0;
+  border-right: ${(props) =>
+    props.$collapsed ? "none" : "1px solid #e2e8f0"};
   background: white;
-  transition: width 0.2s ease;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: 768px) {
     position: absolute;
-    left: ${(props) => (props.$visible ? "0" : "-320px")};
+    left: ${(props) => (props.$visible && !props.$collapsed ? "0" : "-320px")};
     z-index: 100;
+    width: 320px;
+    min-width: 320px;
     box-shadow: ${(props) =>
-      props.$visible ? "4px 0 12px rgba(0, 0, 0, 0.1)" : "none"};
+      props.$visible && !props.$collapsed
+        ? "4px 0 12px rgba(0, 0, 0, 0.1)"
+        : "none"};
   }
 `;
 
@@ -114,6 +123,42 @@ const ContentArea = styled.div`
   }
 `;
 
+const ToggleButton = styled.button<{ $collapsed: boolean }>`
+  position: absolute;
+  left: ${(props) => (props.$collapsed ? "0" : "320px")};
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 48px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-left: ${(props) => (props.$collapsed ? "1px solid #e2e8f0" : "none")};
+  border-radius: ${(props) =>
+    props.$collapsed ? "0 6px 6px 0" : "6px 0 0 6px"};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 101;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #64748b;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+
+  &:hover {
+    background: #f8fafc;
+    color: #3b82f6;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.95);
+  }
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+`;
+
 export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   corpusId,
   initialFolderId = null,
@@ -125,6 +170,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   const setCorpusId = useSetAtom(folderCorpusIdAtom);
   const setSelectedFolderId = useSetAtom(selectedFolderIdAtom);
   const selectedFolderId = useReactiveVar(selectedFolderIdReactiveVar);
+  const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -165,15 +211,31 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     <>
       <BrowserContainer>
         {/* Folder Tree Sidebar */}
-        <Sidebar $visible={showSidebar}>
+        <Sidebar $visible={showSidebar} $collapsed={sidebarCollapsed}>
           <FolderTreeSidebar
             corpusId={corpusId}
             onFolderSelect={handleFolderSelect}
           />
         </Sidebar>
 
+        {/* Toggle Button */}
+        {showSidebar && (
+          <ToggleButton
+            $collapsed={sidebarCollapsed}
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight size={16} />
+            ) : (
+              <ChevronLeft size={16} />
+            )}
+          </ToggleButton>
+        )}
+
         {/* Main Content Area */}
-        <MainContent $hasSidebar={showSidebar}>
+        <MainContent $hasSidebar={showSidebar && !sidebarCollapsed}>
           {/* Breadcrumb Navigation */}
           <BreadcrumbWrapper $visible={showBreadcrumb}>
             <FolderBreadcrumb onFolderSelect={handleFolderSelect} />

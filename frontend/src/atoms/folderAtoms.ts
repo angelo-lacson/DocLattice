@@ -127,6 +127,14 @@ export const expandedFolderIdsAtom = atomWithStorage<Set<string>>(
 );
 
 /**
+ * Sidebar collapsed state (persisted to localStorage)
+ */
+export const sidebarCollapsedAtom = atomWithStorage<boolean>(
+  "opencontracts:folderSidebarCollapsed",
+  false
+);
+
+/**
  * Show/hide folder creation modal
  */
 export const showCreateFolderModalAtom = atom<boolean>(false);
