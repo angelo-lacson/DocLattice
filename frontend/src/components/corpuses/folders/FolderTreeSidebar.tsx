@@ -170,12 +170,13 @@ const ActionButton = styled.button`
 const TreeContainer = styled.div`
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   padding: 8px 0;
 
-  /* Custom scrollbar */
+  /* Custom scrollbar - vertical */
   &::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
   }
 
   &::-webkit-scrollbar-track {
@@ -189,6 +190,10 @@ const TreeContainer = styled.div`
     &:hover {
       background: #94a3b8;
     }
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: #f1f5f9;
   }
 `;
 

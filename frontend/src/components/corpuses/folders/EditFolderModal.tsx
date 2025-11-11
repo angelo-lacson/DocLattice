@@ -111,7 +111,6 @@ export const EditFolderModal: React.FC = () => {
   const closeAllModals = useSetAtom(closeAllFolderModalsAtom);
 
   const folder = folderId ? folderMap.get(folderId) : null;
-  const parsedFolder = folder ? parseCorpusFolderTags(folder) : null;
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -120,9 +119,10 @@ export const EditFolderModal: React.FC = () => {
   const [tags, setTags] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Pre-populate form when folder changes
+  // Pre-populate form when folder ID changes (not on every render)
   useEffect(() => {
-    if (parsedFolder) {
+    if (folder) {
+      const parsedFolder = parseCorpusFolderTags(folder);
       setName(parsedFolder.name);
       setDescription(parsedFolder.description || "");
       setColor(parsedFolder.color || "#05313d");
@@ -130,7 +130,7 @@ export const EditFolderModal: React.FC = () => {
       setTags(parsedFolder.tags.join(", "));
       setValidationError(null);
     }
-  }, [parsedFolder]);
+  }, [folderId, folder]);
 
   const [updateFolder, { loading, error }] = useMutation<
     UpdateCorpusFolderOutputs,
