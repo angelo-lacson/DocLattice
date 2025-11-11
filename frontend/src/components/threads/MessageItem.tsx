@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
-import { User, MoreVertical } from "lucide-react";
+import { User, MoreVertical, Pin, ChevronDown, ChevronUp } from "lucide-react";
+import { useSetAtom } from "jotai";
 import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { MessageNode } from "./utils";
@@ -8,6 +9,12 @@ import { RelativeTime } from "./RelativeTime";
 import { MessageBadges } from "../badges/MessageBadges";
 import { parseMentionsInContent } from "./MentionChip";
 import { UserBadgeType, MentionedResourceType } from "../../types/graphql-api";
+import {
+  mapWebSocketSourcesToChatMessageSources,
+  ChatMessageSource,
+  chatSourcesAtom,
+} from "../annotator/context/ChatSourceAtom";
+import { WebSocketSources } from "../knowledge_base/document/right_tray/ChatTray";
 
 interface MessageItemProps {
   message: MessageNode;
@@ -190,6 +197,57 @@ const ReplyCount = styled.span`
   margin-left: auto;
 `;
 
+const SourcesContainer = styled.div`
+  margin-top: ${spacing.sm};
+  border-top: 1px solid ${color.N4};
+  padding-top: ${spacing.sm};
+`;
+
+const SourcesHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: ${spacing.xs} 0;
+  user-select: none;
+
+  &:hover {
+    opacity: 0.7;
+  }
+`;
+
+const SourcesTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${color.N7};
+`;
+
+const SourcesList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${spacing.xs};
+  margin-top: ${spacing.xs};
+`;
+
+const SourceItem = styled.div`
+  padding: ${spacing.xs} ${spacing.sm};
+  background: ${color.N2};
+  border: 1px solid ${color.N4};
+  border-radius: 4px;
+  font-size: 13px;
+  color: ${color.N8};
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${color.N3};
+    border-color: ${color.B5};
+  }
+`;
+
 /**
  * Individual message component with support for nested replies
  */
@@ -202,13 +260,59 @@ export function MessageItem({
   const isDeleted = !!message.deletedAt;
   const username =
     message.creator?.username || message.creator?.email || "Anonymous";
-  const userInitial = username.charAt(0).toUpperCase();
+
+  // State for sources expansion and selection
+  const [sourcesExpanded, setSourcesExpanded] = useState(false);
+  const [selectedSourceIndex, setSelectedSourceIndex] = useState<
+    number | undefined
+  >(undefined);
+  const setChatState = useSetAtom(chatSourcesAtom);
+
+  // Extract and map sources from message.data
+  const sources: ChatMessageSource[] = React.useMemo(() => {
+    if (!message.data?.sources) return [];
+    const mappedSources = mapWebSocketSourcesToChatMessageSources(
+      message.data.sources as WebSocketSources[],
+      message.id
+    );
+    // Update chat sources atom when sources change
+    if (mappedSources.length > 0) {
+      setChatState((prev) => ({
+        ...prev,
+        messages: [
+          ...prev.messages.filter((m) => m.messageId !== message.id),
+          {
+            messageId: message.id,
+            sources: mappedSources,
+          },
+        ],
+      }));
+    }
+    return mappedSources;
+  }, [message.data?.sources, message.id, setChatState]);
+
+  const hasSources = sources.length > 0;
 
   const handleReply = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onReply) {
       onReply(message.id);
     }
+  };
+
+  const toggleSources = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSourcesExpanded(!sourcesExpanded);
+  };
+
+  const handleSourceClick = (index: number) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedSourceIndex(index === selectedSourceIndex ? undefined : index);
+    setChatState((prev) => ({
+      ...prev,
+      selectedMessageId: message.id,
+      selectedSourceIndex: index === prev.selectedSourceIndex ? null : index,
+    }));
   };
 
   return (
@@ -262,6 +366,36 @@ export function MessageItem({
           )
         )}
       </MessageContent>
+
+      {/* PDF Annotation Sources */}
+      {!isDeleted && hasSources && (
+        <SourcesContainer className="source-preview-container">
+          <SourcesHeader onClick={toggleSources}>
+            <SourcesTitle>
+              <Pin size={14} />
+              {sources.length} {sources.length === 1 ? "Source" : "Sources"}
+            </SourcesTitle>
+            {sourcesExpanded ? (
+              <ChevronUp size={14} />
+            ) : (
+              <ChevronDown size={14} />
+            )}
+          </SourcesHeader>
+          {sourcesExpanded && (
+            <SourcesList>
+              {sources.map((source, index) => (
+                <SourceItem
+                  key={source.id}
+                  className="source-chip"
+                  onClick={handleSourceClick(index)}
+                >
+                  {source.rawText || `Source ${index + 1}`}
+                </SourceItem>
+              ))}
+            </SourcesList>
+          )}
+        </SourcesContainer>
+      )}
 
       {/* Footer */}
       {!isDeleted && (

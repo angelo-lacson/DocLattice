@@ -105,7 +105,7 @@ export const DocumentDiscussionsContent: React.FC<
   };
 
   return (
-    <Container>
+    <Container id="chat-container">
       <Header>
         {threadId ? (
           <BackButton onClick={handleBack} aria-label="Back to thread list">
