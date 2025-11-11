@@ -42,6 +42,9 @@ import {
   MOVE_CORPUS_FOLDER,
   MoveCorpusFolderInputs,
   MoveCorpusFolderOutputs,
+  MOVE_DOCUMENT_TO_FOLDER,
+  MoveDocumentToFolderInputs,
+  MoveDocumentToFolderOutputs,
 } from "../../../graphql/queries/folders";
 
 /**
@@ -323,6 +326,19 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
     ],
   });
 
+  // Move document to folder mutation
+  const [moveDocument] = useMutation<
+    MoveDocumentToFolderOutputs,
+    MoveDocumentToFolderInputs
+  >(MOVE_DOCUMENT_TO_FOLDER, {
+    refetchQueries: [
+      {
+        query: GET_CORPUS_FOLDERS,
+        variables: { corpusId },
+      },
+    ],
+  });
+
   // Fetch folders from server
   const { loading, error, data } = useQuery<
     GetCorpusFoldersOutputs,
@@ -399,39 +415,82 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
         return; // Dropped on itself or no drop target
       }
 
-      const draggedFolderId = active.id as string;
-      const targetFolderId = over.id as string;
+      const dragData = active.data.current;
+      const dropData = over.data.current;
 
-      // Prevent moving folder into itself or its descendants
-      // This check should ideally be more robust (checking full descendant tree)
-      if (draggedFolderId === targetFolderId) {
-        toast.error("Cannot move a folder into itself");
-        return;
+      // Determine what was dropped and where
+      const isDraggingDocument = dragData?.type === "document";
+      const isDraggingFolder = !isDraggingDocument;
+
+      // Extract target folder ID (handle both folder tree nodes and folder cards)
+      let targetFolderId: string | null;
+      if (over.id === "root") {
+        targetFolderId = null;
+      } else if (dropData?.type === "folder") {
+        targetFolderId = dropData.folderId;
+      } else {
+        targetFolderId = over.id as string;
       }
 
-      // Special case: dropping on "root" means moving to root level
-      const newParentId = targetFolderId === "root" ? null : targetFolderId;
+      if (isDraggingDocument) {
+        // Moving document to folder
+        const documentId = dragData.documentId;
 
-      moveFolder({
-        variables: {
-          folderId: draggedFolderId,
-          newParentId,
-        },
-      })
-        .then((result) => {
-          if (result.data?.moveCorpusFolder.ok) {
-            toast.success("Folder moved successfully");
-          } else {
-            toast.error(
-              result.data?.moveCorpusFolder.message || "Failed to move folder"
-            );
-          }
+        moveDocument({
+          variables: {
+            documentId,
+            corpusId,
+            folderId: targetFolderId,
+          },
         })
-        .catch((error) => {
-          toast.error(`Error moving folder: ${error.message}`);
-        });
+          .then((result) => {
+            if (result.data?.moveDocumentToFolder.ok) {
+              toast.success(
+                targetFolderId
+                  ? "Document moved to folder"
+                  : "Document moved to corpus root"
+              );
+            } else {
+              toast.error(
+                result.data?.moveDocumentToFolder.message ||
+                  "Failed to move document"
+              );
+            }
+          })
+          .catch((error) => {
+            toast.error(`Error moving document: ${error.message}`);
+          });
+      } else {
+        // Moving folder to folder
+        const draggedFolderId = active.id as string;
+
+        // Prevent moving folder into itself
+        if (draggedFolderId === targetFolderId) {
+          toast.error("Cannot move a folder into itself");
+          return;
+        }
+
+        moveFolder({
+          variables: {
+            folderId: draggedFolderId,
+            newParentId: targetFolderId,
+          },
+        })
+          .then((result) => {
+            if (result.data?.moveCorpusFolder.ok) {
+              toast.success("Folder moved successfully");
+            } else {
+              toast.error(
+                result.data?.moveCorpusFolder.message || "Failed to move folder"
+              );
+            }
+          })
+          .catch((error) => {
+            toast.error(`Error moving folder: ${error.message}`);
+          });
+      }
     },
-    [moveFolder]
+    [moveFolder, moveDocument, corpusId]
   );
 
   return (

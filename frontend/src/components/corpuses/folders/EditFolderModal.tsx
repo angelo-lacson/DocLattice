@@ -10,6 +10,7 @@ import {
   folderListAtom,
   folderMapAtom,
   closeAllFolderModalsAtom,
+  folderCorpusIdAtom,
 } from "../../../atoms/folderAtoms";
 import {
   UPDATE_CORPUS_FOLDER,
@@ -105,6 +106,7 @@ export const EditFolderModal: React.FC = () => {
   const folderId = useAtomValue(activeFolderModalIdAtom);
   const folderMap = useAtomValue(folderMapAtom);
   const folderList = useAtomValue(folderListAtom);
+  const corpusId = useAtomValue(folderCorpusIdAtom);
   const setFolderList = useSetAtom(folderListAtom);
   const closeAllModals = useSetAtom(closeAllFolderModalsAtom);
 
@@ -144,12 +146,14 @@ export const EditFolderModal: React.FC = () => {
       // Close modal
       handleClose();
     },
-    refetchQueries: [
-      {
-        query: GET_CORPUS_FOLDERS,
-        variables: { corpusId: folder?.corpus.id },
-      },
-    ],
+    refetchQueries: corpusId
+      ? [
+          {
+            query: GET_CORPUS_FOLDERS,
+            variables: { corpusId },
+          },
+        ]
+      : [],
   });
 
   const handleClose = useCallback(() => {

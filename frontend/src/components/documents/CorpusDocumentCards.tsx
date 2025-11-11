@@ -5,11 +5,21 @@ import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Icon, Popup, Segment } from "semantic-ui-react";
 import styled from "styled-components";
+import {
+  DndContext,
+  DragEndEvent,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from "@dnd-kit/core";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 
 import { DocumentCards } from "../../components/documents/DocumentCards";
 import { DocumentMetadataGrid } from "../../components/documents/DocumentMetadataGrid";
+import { FolderCard } from "../corpuses/folders/FolderCard";
 
 import {
   selectedDocumentIds,
@@ -22,6 +32,15 @@ import {
   openedCorpus,
   selectedFolderId,
 } from "../../graphql/cache";
+import {
+  GET_CORPUS_FOLDERS,
+  GetCorpusFoldersInputs,
+  GetCorpusFoldersOutputs,
+  MOVE_DOCUMENT_TO_FOLDER,
+  MoveDocumentToFolderInputs,
+  MoveDocumentToFolderOutputs,
+  buildFolderTree,
+} from "../../graphql/queries/folders";
 import {
   REMOVE_DOCUMENTS_FROM_CORPUS,
   RemoveDocumentsFromCorpusOutputs,
@@ -143,7 +162,9 @@ export const CorpusDocumentCards = ({
         : {}),
       ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
       ...(document_search_term ? { textSearch: document_search_term } : {}),
-      ...(selected_folder_id ? { inFolderId: selected_folder_id } : {}),
+      // ALWAYS pass inFolderId to filter by folder
+      // null = root level only, string = specific folder only
+      inFolderId: selected_folder_id,
     },
     fetchPolicy: "cache-and-network", // Ensure fresh results when search term changes
     notifyOnNetworkStatusChange: true, // necessary in order to trigger loading signal on fetchMore
@@ -151,6 +172,37 @@ export const CorpusDocumentCards = ({
   if (documents_error) {
     toast.error("ERROR\nCould not fetch documents for corpus.");
   }
+
+  // Fetch folders for current directory
+  const {
+    loading: folders_loading,
+    error: folders_error,
+    data: folders_response,
+  } = useQuery<GetCorpusFoldersOutputs, GetCorpusFoldersInputs>(
+    GET_CORPUS_FOLDERS,
+    {
+      variables: { corpusId: opened_corpus_id || "" },
+      skip: !opened_corpus_id,
+      fetchPolicy: "cache-and-network",
+    }
+  );
+
+  if (folders_error) {
+    toast.error("ERROR\nCould not fetch folders for corpus.");
+  }
+
+  // Filter folders to show only direct children of current folder
+  const current_folder_children =
+    folders_response?.corpusFolders.filter((folder) => {
+      if (selected_folder_id) {
+        return folder.parent?.id === selected_folder_id;
+      } else {
+        return !folder.parent; // Root level folders
+      }
+    }) || [];
+
+  // Build tree for folder cards
+  const current_folder_tree = buildFolderTree(current_folder_children);
 
   // REMOVED: All manual refetch effects
   // useQuery automatically refetches when variables change (document_search_term,
@@ -165,6 +217,82 @@ export const CorpusDocumentCards = ({
       refetchDocuments();
     },
   });
+
+  const [moveDocumentToFolder] = useMutation<
+    MoveDocumentToFolderOutputs,
+    MoveDocumentToFolderInputs
+  >(MOVE_DOCUMENT_TO_FOLDER, {
+    onCompleted: () => {
+      refetchDocuments();
+    },
+  });
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  // Drag-and-drop setup
+  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px movement before drag starts
+      },
+    })
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveDragId(null);
+
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const dragData = active.data.current;
+      const dropData = over.data.current;
+
+      // Only handle document drops on folder cards in this component
+      if (dragData?.type !== "document") {
+        return; // Folder-to-folder handled by sidebar
+      }
+
+      const documentId = dragData.documentId;
+      let targetFolderId: string | null;
+
+      if (dropData?.type === "folder") {
+        targetFolderId = dropData.folderId;
+      } else {
+        return; // Not a valid drop target
+      }
+
+      moveDocumentToFolder({
+        variables: {
+          documentId,
+          corpusId: opened_corpus_id || "",
+          folderId: targetFolderId,
+        },
+      })
+        .then((result) => {
+          if (result.data?.moveDocumentToFolder.ok) {
+            toast.success("Document moved to folder");
+          } else {
+            toast.error(
+              result.data?.moveDocumentToFolder.message ||
+                "Failed to move document"
+            );
+          }
+        })
+        .catch((error) => {
+          toast.error(`Error moving document: ${error.message}`);
+        });
+    },
+    [moveDocumentToFolder, opened_corpus_id]
+  );
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to shape item data
@@ -231,18 +359,33 @@ export const CorpusDocumentCards = ({
     uploadModalPreloadedFiles(filePackages);
   }, []);
 
+  // Build folder cards to show before documents
+  const folderCards = current_folder_tree.map((folder) => (
+    <FolderCard
+      key={folder.id}
+      folder={folder}
+      viewMode={viewMode === "modern-list" ? "modern-list" : "modern-card"}
+    />
+  ));
+
   return (
-    <div
-      style={{
-        flex: 1,
-        height: "100%",
-        width: "100%",
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
+      <div
+        style={{
+          flex: 1,
+          height: "100%",
+          width: "100%",
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
       <ViewToggleContainer>
         <Button.Group>
           <Popup
@@ -317,6 +460,7 @@ export const CorpusDocumentCards = ({
             }
             onDrop={onDrop}
             viewMode={viewMode}
+            prefixItems={folderCards}
           />
         ) : (
           <div
@@ -342,5 +486,6 @@ export const CorpusDocumentCards = ({
         )}
       </div>
     </div>
+    </DndContext>
   );
 };

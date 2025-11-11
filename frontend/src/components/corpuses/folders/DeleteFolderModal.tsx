@@ -11,6 +11,7 @@ import {
   folderMapAtom,
   selectedFolderIdAtom,
   closeAllFolderModalsAtom,
+  folderCorpusIdAtom,
 } from "../../../atoms/folderAtoms";
 import {
   DELETE_CORPUS_FOLDER,
@@ -127,6 +128,7 @@ export const DeleteFolderModal: React.FC = () => {
   const folderMap = useAtomValue(folderMapAtom);
   const folderList = useAtomValue(folderListAtom);
   const selectedFolderId = useAtomValue(selectedFolderIdAtom);
+  const corpusId = useAtomValue(folderCorpusIdAtom);
   const setFolderList = useSetAtom(folderListAtom);
   const setSelectedFolderId = useSetAtom(selectedFolderIdAtom);
   const closeAllModals = useSetAtom(closeAllFolderModalsAtom);
@@ -151,12 +153,14 @@ export const DeleteFolderModal: React.FC = () => {
       // Close modal
       handleClose();
     },
-    refetchQueries: [
-      {
-        query: GET_CORPUS_FOLDERS,
-        variables: { corpusId: folder?.corpus.id },
-      },
-    ],
+    refetchQueries: corpusId
+      ? [
+          {
+            query: GET_CORPUS_FOLDERS,
+            variables: { corpusId },
+          },
+        ]
+      : [],
   });
 
   const handleClose = useCallback(() => {
