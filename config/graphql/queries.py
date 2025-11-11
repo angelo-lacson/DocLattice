@@ -52,6 +52,7 @@ from config.graphql.graphene_types import (
     CommunityStatsType,
     ConversationType,
     CorpusActionType,
+    CorpusFolderType,
     CorpusQueryType,
     CorpusStatsType,
     CorpusType,
@@ -95,7 +96,12 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.conversations.models import ChatMessage, Conversation
-from opencontractserver.corpuses.models import Corpus, CorpusAction, CorpusQuery
+from opencontractserver.corpuses.models import (
+    Corpus,
+    CorpusAction,
+    CorpusFolder,
+    CorpusQuery,
+)
 from opencontractserver.documents.models import Document, DocumentRelationship
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.feedback.models import UserFeedback
@@ -785,6 +791,42 @@ class Query(graphene.ObjectType):
         return Corpus.objects.visible_to_user(info.context.user)
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
+
+    # CORPUS FOLDER RESOLVERS #####################################
+
+    corpus_folders = graphene.List(
+        CorpusFolderType,
+        corpus_id=graphene.ID(required=True),
+        description="Get all folders in a corpus (flat list for tree construction)",
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_corpus_folders(self, info, corpus_id):
+        """
+        Get all folders in a corpus.
+        Returns flat list - frontend reconstructs tree from parentId relationships.
+        """
+        _, corpus_pk = from_global_id(corpus_id)
+        return CorpusFolder.objects.filter(corpus_id=corpus_pk).visible_to_user(
+            info.context.user
+        )
+
+    corpus_folder = graphene.Field(
+        CorpusFolderType,
+        id=graphene.ID(required=True),
+        description="Get a single folder by ID",
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_corpus_folder(self, info, id):
+        """Get a single folder by ID with permission check."""
+        _, folder_pk = from_global_id(id)
+        try:
+            return CorpusFolder.objects.visible_to_user(info.context.user).get(
+                pk=folder_pk
+            )
+        except CorpusFolder.DoesNotExist:
+            return None
 
     # DOCUMENT RESOLVERS #####################################
 

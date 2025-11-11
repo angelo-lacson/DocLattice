@@ -44,6 +44,16 @@ from config.graphql.conversation_mutations import (
     DeleteMessageMutation,
     ReplyToMessageMutation,
 )
+
+# Import corpus folder mutations
+from config.graphql.corpus_folder_mutations import (
+    CreateCorpusFolderMutation,
+    DeleteCorpusFolderMutation,
+    MoveCorpusFolderMutation,
+    MoveDocumentToFolderMutation,
+    MoveDocumentsToFolderMutation,
+    UpdateCorpusFolderMutation,
+)
 from config.graphql.graphene_types import (
     AnalysisType,
     AnnotationLabelType,
@@ -3815,6 +3825,14 @@ class Mutation(graphene.ObjectType):
     remove_documents_from_corpus = RemoveDocumentsFromCorpus.Field()
     create_corpus_action = CreateCorpusAction.Field()
     delete_corpus_action = DeleteCorpusAction.Field()
+
+    # CORPUS FOLDER MUTATIONS ##################################################
+    create_corpus_folder = CreateCorpusFolderMutation.Field()
+    update_corpus_folder = UpdateCorpusFolderMutation.Field()
+    move_corpus_folder = MoveCorpusFolderMutation.Field()
+    delete_corpus_folder = DeleteCorpusFolderMutation.Field()
+    move_document_to_folder = MoveDocumentToFolderMutation.Field()
+    move_documents_to_folder = MoveDocumentsToFolderMutation.Field()
 
     # IMPORT MUTATIONS #########################################################
     import_open_contracts_zip = UploadCorpusImportZip.Field()

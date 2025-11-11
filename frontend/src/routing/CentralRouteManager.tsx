@@ -23,6 +23,7 @@ import {
   selectedAnalysesIds,
   selectedExtractIds,
   selectedThreadId,
+  selectedFolderId,
   routeLoading,
   routeError,
   authStatusVar,
@@ -610,6 +611,7 @@ export function CentralRouteManager() {
     const analysisIds = parseQueryParam(searchParams.get("analysis"));
     const extractIds = parseQueryParam(searchParams.get("extract"));
     const threadId = searchParams.get("thread");
+    const folderId = searchParams.get("folder");
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
@@ -622,6 +624,7 @@ export function CentralRouteManager() {
       analysisIds,
       extractIds,
       threadId,
+      folderId,
       structural,
       selectedOnly,
       boundingBoxes,
@@ -634,6 +637,7 @@ export function CentralRouteManager() {
     const currentAnalysisIds = selectedAnalysesIds();
     const currentExtractIds = selectedExtractIds();
     const currentThreadId = selectedThreadId();
+    const currentFolderId = selectedFolderId();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -666,6 +670,9 @@ export function CentralRouteManager() {
     }
     if (currentThreadId !== threadId) {
       updates.push(() => selectedThreadId(threadId));
+    }
+    if (currentFolderId !== folderId) {
+      updates.push(() => selectedFolderId(folderId));
     }
     if (currentStructural !== structural) {
       updates.push(() => showStructuralAnnotations(structural));
@@ -788,6 +795,7 @@ export function CentralRouteManager() {
   const analysisIds = useReactiveVar(selectedAnalysesIds);
   const extractIds = useReactiveVar(selectedExtractIds);
   const threadId = useReactiveVar(selectedThreadId);
+  const folderId = useReactiveVar(selectedFolderId);
   const structural = useReactiveVar(showStructuralAnnotations);
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
@@ -847,6 +855,7 @@ export function CentralRouteManager() {
         analysisIds,
         extractIds,
         threadId,
+        folderId,
         structural,
         selectedOnly,
         boundingBoxes,
@@ -859,6 +868,7 @@ export function CentralRouteManager() {
       analysisIds,
       extractIds,
       threadId,
+      folderId,
       showStructural: structural,
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
@@ -887,6 +897,7 @@ export function CentralRouteManager() {
     analysisIds,
     extractIds,
     threadId,
+    folderId,
     structural,
     selectedOnly,
     boundingBoxes,

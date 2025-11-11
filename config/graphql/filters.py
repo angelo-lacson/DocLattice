@@ -338,6 +338,7 @@ class DocumentFilter(django_filters.FilterSet):
         method="handle_has_annotations_with_ids"
     )
     in_corpus_with_id = filters.CharFilter(method="in_corpus")
+    in_folder_id = filters.CharFilter(method="in_folder")
     has_label_with_title = filters.CharFilter(method="has_label_title")
     has_label_with_id = filters.CharFilter(method="has_label_id")
     text_search = filters.CharFilter(method="naive_text_search")
@@ -362,6 +363,33 @@ class DocumentFilter(django_filters.FilterSet):
 
     def in_corpus(self, queryset, name, value):
         return queryset.filter(corpus=from_global_id(value)[1]).distinct()
+
+    def in_folder(self, queryset, name, value):
+        """
+        Filter documents by folder assignment.
+        Special handling: value="__root__" returns documents in corpus root (no folder).
+        Otherwise filters to specific folder ID.
+        """
+        from opencontractserver.corpuses.models import CorpusDocumentFolder
+
+        if value == "__root__":
+            # Get corpus_id from earlier filter (must have in_corpus_with_id set)
+            # For root documents, we need to exclude documents that have folder assignments
+            # This requires knowing the corpus context
+            return queryset.filter(
+                ~Q(
+                    id__in=CorpusDocumentFolder.objects.filter(
+                        folder__isnull=False
+                    ).values_list("document_id", flat=True)
+                )
+            )
+        else:
+            folder_pk = from_global_id(value)[1]
+            return queryset.filter(
+                id__in=CorpusDocumentFolder.objects.filter(folder_id=folder_pk).values_list(
+                    "document_id", flat=True
+                )
+            ).distinct()
 
     def has_label_title(self, queryset, name, value):
         return queryset.filter(annotation__annotation_label__title__contains=value)

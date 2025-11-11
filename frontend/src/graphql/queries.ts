@@ -32,6 +32,7 @@ import { WebSocketSources } from "../components/knowledge_base/document/right_tr
 export interface RequestDocumentsInputs {
   textSearch?: string;
   corpusId?: string;
+  inFolderId?: string; // Use "__root__" for root documents, folder ID, or omit for all
   annotateDocLabels?: boolean;
   hasLabelWithId?: string;
 }
@@ -46,6 +47,7 @@ export interface RequestDocumentsOutputs {
 export const GET_DOCUMENTS = gql`
   query (
     $inCorpusWithId: String
+    $inFolderId: String
     $cursor: String
     $limit: Int
     $textSearch: String
@@ -56,6 +58,7 @@ export const GET_DOCUMENTS = gql`
   ) {
     documents(
       inCorpusWithId: $inCorpusWithId
+      inFolderId: $inFolderId
       textSearch: $textSearch
       hasLabelWithId: $hasLabelWithId
       hasAnnotationsWithIds: $hasAnnotationsWithIds

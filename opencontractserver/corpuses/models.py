@@ -674,3 +674,212 @@ class CorpusEngagementMetrics(django.db.models.Model):
 
     def __str__(self):
         return f"Engagement Metrics for {self.corpus.title}"
+
+
+# --------------------------------------------------------------------------- #
+# Corpus Folder Structure
+# --------------------------------------------------------------------------- #
+
+
+class CorpusFolder(TreeNode):
+    """
+    Hierarchical folder structure within a corpus for organizing documents.
+    Uses TreeNode for efficient tree operations via CTEs.
+    """
+
+    # Basic fields
+    name = django.db.models.CharField(
+        max_length=255, help_text="Folder name (not full path)"
+    )
+
+    corpus = django.db.models.ForeignKey(
+        "Corpus",
+        on_delete=django.db.models.CASCADE,
+        related_name="folders",
+        help_text="Parent corpus this folder belongs to",
+    )
+
+    # Metadata
+    description = django.db.models.TextField(blank=True, default="")
+    color = django.db.models.CharField(
+        max_length=7,
+        blank=True,
+        default="#05313d",
+        help_text="Hex color for UI display",
+    )
+    icon = django.db.models.CharField(
+        max_length=50,
+        blank=True,
+        default="folder",
+        help_text="Icon identifier for UI",
+    )
+    tags = django.db.models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of tags for categorization",
+    )
+
+    # Sharing (inherits from corpus but can be set independently)
+    is_public = django.db.models.BooleanField(default=False)
+
+    # Timestamps and ownership
+    created = django.db.models.DateTimeField(default=timezone.now)
+    modified = django.db.models.DateTimeField(default=timezone.now)
+    creator = django.db.models.ForeignKey(
+        get_user_model(),
+        on_delete=django.db.models.CASCADE,
+    )
+
+    # Use permissioned tree queryset
+    objects = PermissionedTreeQuerySet.as_manager(with_tree_fields=True)
+
+    class Meta:
+        ordering = ("name",)
+        indexes = [
+            django.db.models.Index(fields=["corpus", "name"]),
+            django.db.models.Index(fields=["creator"]),
+            django.db.models.Index(fields=["corpus", "parent"]),
+        ]
+        constraints = [
+            # Unique folder names per parent within a corpus
+            django.db.models.UniqueConstraint(
+                fields=["corpus", "parent", "name"],
+                name="unique_folder_name_per_parent",
+            ),
+        ]
+        permissions = (
+            ("permission_corpusfolder", "permission corpusfolder"),
+            ("publish_corpusfolder", "publish corpusfolder"),
+            ("create_corpusfolder", "create corpusfolder"),
+            ("read_corpusfolder", "read corpusfolder"),
+            ("update_corpusfolder", "update corpusfolder"),
+            ("remove_corpusfolder", "delete corpusfolder"),
+        )
+
+    def save(self, *args, **kwargs):
+        """On save, update timestamps and validate parent corpus"""
+        if not self.pk:
+            self.created = timezone.now()
+        self.modified = timezone.now()
+
+        # Validate parent belongs to same corpus
+        if self.parent and self.parent.corpus_id != self.corpus_id:
+            raise ValidationError("Folder parent must belong to the same corpus")
+
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        """Validate the model before saving."""
+        super().clean()
+
+        # Validate tags is a list
+        if not isinstance(self.tags, list):
+            raise ValidationError({"tags": "Must be a list of strings"})
+
+        # Validate each tag is a string
+        for tag in self.tags:
+            if not isinstance(tag, str):
+                raise ValidationError({"tags": "Each tag must be a string"})
+
+    def get_path(self) -> str:
+        """Get full path from root to this folder."""
+        ancestors = self.ancestors(include_self=True)
+        return "/".join(f.name for f in ancestors)
+
+    def get_descendant_folders(self):
+        """Get all descendant folders efficiently using CTE."""
+        return self.descendants(include_self=True)
+
+    def get_document_count(self) -> int:
+        """Get count of documents directly in this folder (not including subfolders)."""
+        return self.document_assignments.count()
+
+    def get_descendant_document_count(self) -> int:
+        """Get count of documents in this folder and all subfolders."""
+        descendant_folders = self.get_descendant_folders()
+        return CorpusDocumentFolder.objects.filter(
+            folder__in=descendant_folders
+        ).count()
+
+    def __str__(self):
+        return f"{self.corpus.title}/{self.get_path()}"
+
+
+class CorpusFolderUserObjectPermission(UserObjectPermissionBase):
+    """Guardian permission model for per-user folder permissions."""
+
+    content_object = django.db.models.ForeignKey(
+        "CorpusFolder", on_delete=django.db.models.CASCADE
+    )
+
+
+class CorpusFolderGroupObjectPermission(GroupObjectPermissionBase):
+    """Guardian permission model for per-group folder permissions."""
+
+    content_object = django.db.models.ForeignKey(
+        "CorpusFolder", on_delete=django.db.models.CASCADE
+    )
+
+
+class CorpusDocumentFolder(django.db.models.Model):
+    """
+    Junction table linking documents to folders within a corpus.
+    Enforces one-folder-per-document-per-corpus constraint.
+    Null folder means document is in corpus "root".
+    """
+
+    document = django.db.models.ForeignKey(
+        "documents.Document",
+        on_delete=django.db.models.CASCADE,
+        related_name="corpus_folder_assignments",
+    )
+
+    corpus = django.db.models.ForeignKey(
+        "corpuses.Corpus",
+        on_delete=django.db.models.CASCADE,
+        related_name="document_folder_assignments",
+    )
+
+    folder = django.db.models.ForeignKey(
+        "CorpusFolder",
+        on_delete=django.db.models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="document_assignments",
+        help_text="Folder containing this document. Null = root of corpus.",
+    )
+
+    # Timestamps
+    added_to_folder = django.db.models.DateTimeField(
+        default=timezone.now,
+        help_text="When document was added to this folder",
+    )
+
+    class Meta:
+        indexes = [
+            django.db.models.Index(fields=["corpus", "folder"]),
+            django.db.models.Index(fields=["document", "corpus"]),
+            django.db.models.Index(fields=["folder"]),
+        ]
+        constraints = [
+            # One folder per document per corpus (null folder = root)
+            django.db.models.UniqueConstraint(
+                fields=["document", "corpus"],
+                name="unique_document_folder_per_corpus",
+            ),
+        ]
+
+    def clean(self):
+        """Validate folder belongs to same corpus."""
+        super().clean()
+        if self.folder and self.folder.corpus_id != self.corpus_id:
+            raise ValidationError("Folder must belong to the same corpus")
+
+    def save(self, *args, **kwargs):
+        """Validate before saving."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        folder_path = self.folder.get_path() if self.folder else "root"
+        return f"{self.document.title} in {self.corpus.title}/{folder_path}"
