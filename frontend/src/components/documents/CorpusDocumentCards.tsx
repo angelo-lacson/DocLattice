@@ -20,6 +20,7 @@ import {
   showUploadNewDocumentsModal,
   uploadModalPreloadedFiles,
   openedCorpus,
+  selectedFolderId,
 } from "../../graphql/cache";
 import {
   REMOVE_DOCUMENTS_FROM_CORPUS,
@@ -111,6 +112,7 @@ export const CorpusDocumentCards = ({
 
   const auth_token = useReactiveVar(authToken);
   const filter_to_label_id = useReactiveVar(filterToLabelId);
+  const selected_folder_id = useReactiveVar(selectedFolderId);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -141,6 +143,7 @@ export const CorpusDocumentCards = ({
         : {}),
       ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
       ...(document_search_term ? { textSearch: document_search_term } : {}),
+      ...(selected_folder_id ? { inFolderId: selected_folder_id } : {}),
     },
     fetchPolicy: "cache-and-network", // Ensure fresh results when search term changes
     notifyOnNetworkStatusChange: true, // necessary in order to trigger loading signal on fetchMore

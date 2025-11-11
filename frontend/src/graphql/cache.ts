@@ -448,6 +448,19 @@ export const openedQueryObj = makeVar<CorpusQueryType | null>(null);
 export const selectedThreadId = makeVar<string | null>(null);
 
 /**
+ * Folder navigation (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Tracks currently selected folder within a corpus for document filtering.
+ * - null: viewing corpus root (all documents)
+ * - string: viewing specific folder (filtered documents)
+ *
+ * URL Examples:
+ *   /c/user/corpus                    → selectedFolderId(null)
+ *   /c/user/corpus?folder=folder-123  → selectedFolderId("folder-123")
+ */
+export const selectedFolderId = makeVar<string | null>(null);
+
+/**
  * Auth-related global variables
  */
 export const userObj = makeVar<User | null>(null);

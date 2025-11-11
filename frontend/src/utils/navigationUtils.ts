@@ -30,6 +30,7 @@ export interface QueryParams {
   analysisIds?: string[];
   extractIds?: string[];
   threadId?: string | null;
+  folderId?: string | null;
   showStructural?: boolean;
   showSelectedOnly?: boolean;
   showBoundingBoxes?: boolean;
@@ -183,6 +184,9 @@ export function buildQueryParams(params: QueryParams): string {
   }
   if (params.threadId) {
     searchParams.set("thread", params.threadId);
+  }
+  if (params.folderId) {
+    searchParams.set("folder", params.folderId);
   }
 
   // Visualization state - only add non-default values to keep URLs clean
