@@ -9,7 +9,13 @@ import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
 import { color } from "../../theme/colors";
 import { MentionPicker, MentionPickerRef } from "./MentionPicker";
+import {
+  ResourceMentionPicker,
+  ResourceMentionPickerRef,
+  MentionResource,
+} from "./ResourceMentionPicker";
 import { useMentionUsers } from "./hooks/useMentionUsers";
+import { useResourceMentionSearch } from "./hooks/useResourceMentionSearch";
 
 const ComposerContainer = styled.div`
   display: flex;
@@ -101,11 +107,21 @@ const EditorContainer = styled.div`
 
     /* Mention styling */
     .mention {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 0.95em;
+    }
+
+    .mention-user {
       background-color: ${({ theme }) => color.B2};
       color: ${({ theme }) => color.B8};
-      padding: 2px 4px;
-      border-radius: 3px;
-      font-weight: 500;
+    }
+
+    .mention-resource {
+      background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+      color: ${({ theme }) => color.P8};
+      border: 1px solid ${({ theme }) => color.P4};
     }
   }
 `;
@@ -178,8 +194,10 @@ export interface MessageComposerProps {
   error?: string;
   /** Auto-focus on mount */
   autoFocus?: boolean;
-  /** Enable @ mentions (default: true) */
+  /** Enable @ mentions for users (default: true) */
   enableMentions?: boolean;
+  /** Enable @ mentions for resources (corpus/document) (default: true) */
+  enableResourceMentions?: boolean;
 }
 
 export function MessageComposer({
@@ -192,7 +210,10 @@ export function MessageComposer({
   error,
   autoFocus = false,
   enableMentions = true,
+  enableResourceMentions = true,
 }: MessageComposerProps) {
+  const [resourceSearchQuery, setResourceSearchQuery] = React.useState("");
+  const { resources } = useResourceMentionSearch(resourceSearchQuery);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -207,11 +228,12 @@ export function MessageComposer({
         ? [
             Mention.configure({
               HTMLAttributes: {
-                class: "mention",
+                class: "mention mention-user",
               },
               suggestion: {
+                char: "@",
                 items: ({ query }: { query: string }) => {
-                  // This will be handled by the suggestion plugin
+                  // User mentions - handled by suggestion plugin
                   return [];
                 },
                 render: () => {
@@ -263,6 +285,129 @@ export function MessageComposer({
                       component?.updateProps({
                         ...props,
                         users: [],
+                      });
+
+                      updatePosition(props);
+                    },
+
+                    onKeyDown(props: any) {
+                      if (props.event.key === "Escape") {
+                        return true;
+                      }
+
+                      return component?.ref?.onKeyDown(props) ?? false;
+                    },
+
+                    onExit() {
+                      popup?.remove();
+                      component?.destroy();
+                    },
+                  };
+                },
+              },
+            }),
+          ]
+        : []),
+      ...(enableResourceMentions
+        ? [
+            Mention.extend({ name: "resourceMention" }).configure({
+              HTMLAttributes: {
+                class: "mention mention-resource",
+              },
+              suggestion: {
+                char: "@",
+                items: ({ query }: { query: string }) => {
+                  // Trigger resource search
+                  setResourceSearchQuery(query);
+                  return resources;
+                },
+                render: () => {
+                  let component: ReactRenderer<ResourceMentionPickerRef> | null =
+                    null;
+                  let popup: HTMLDivElement | null = null;
+
+                  const updatePosition = (props: any) => {
+                    if (!popup || !props.clientRect) return;
+
+                    const virtualReference = {
+                      getBoundingClientRect: props.clientRect,
+                    };
+
+                    computePosition(virtualReference, popup, {
+                      placement: "bottom-start",
+                      middleware: [offset(8), flip(), shift({ padding: 8 })],
+                    }).then(({ x, y }) => {
+                      Object.assign(popup!.style, {
+                        left: `${x}px`,
+                        top: `${y}px`,
+                      });
+                    });
+                  };
+
+                  return {
+                    onStart: (props: any) => {
+                      // Check if query starts with "corpus:" or "document:"
+                      const query = props.query || "";
+                      if (
+                        !query.startsWith("corpus:") &&
+                        !query.startsWith("document:")
+                      ) {
+                        return; // Let user mention handle it
+                      }
+
+                      component = new ReactRenderer(ResourceMentionPicker, {
+                        props: {
+                          ...props,
+                          resources: resources,
+                          onSelect: (resource: MentionResource) => {
+                            // Generate mention format
+                            let mentionText = "";
+                            if (resource.type === "corpus") {
+                              mentionText = `@corpus:${resource.slug}`;
+                            } else if (resource.corpus) {
+                              mentionText = `@corpus:${resource.corpus.slug}/document:${resource.slug}`;
+                            } else {
+                              mentionText = `@document:${resource.slug}`;
+                            }
+
+                            // Insert the mention
+                            props.command({
+                              id: resource.id,
+                              label: mentionText,
+                            });
+                          },
+                        },
+                        editor: props.editor,
+                      });
+
+                      if (!props.clientRect) {
+                        return;
+                      }
+
+                      popup = document.createElement("div");
+                      popup.style.position = "absolute";
+                      popup.style.zIndex = "9999";
+                      popup.appendChild(component.element);
+                      document.body.appendChild(popup);
+
+                      updatePosition(props);
+                    },
+
+                    onUpdate(props: any) {
+                      const query = props.query || "";
+                      if (
+                        !query.startsWith("corpus:") &&
+                        !query.startsWith("document:")
+                      ) {
+                        // Close if not a resource mention
+                        popup?.remove();
+                        component?.destroy();
+                        return;
+                      }
+
+                      component?.updateProps({
+                        ...props,
+                        resources: resources,
                       });
 
                       updatePosition(props);
