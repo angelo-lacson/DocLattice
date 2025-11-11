@@ -1584,6 +1584,33 @@ class CorpusStatsType(graphene.ObjectType):
     total_threads = graphene.Int()
 
 
+class MentionedResourceType(graphene.ObjectType):
+    """
+    Represents a corpus or document mentioned in a message using @ syntax.
+
+    Examples:
+      @corpus:legal-contracts
+      @document:contract-template
+      @corpus:legal-contracts/document:contract-template
+
+    Permission-safe: Only returns resources visible to the requesting user.
+    """
+
+    type = graphene.String(
+        required=True, description='Resource type: "corpus" or "document"'
+    )
+    id = graphene.ID(required=True, description="Global ID of the resource")
+    slug = graphene.String(required=True, description="URL-safe slug of the resource")
+    title = graphene.String(required=True, description="Display title of the resource")
+    url = graphene.String(
+        required=True, description="Frontend URL path to navigate to the resource"
+    )
+    corpus = graphene.Field(
+        lambda: MentionedResourceType,
+        description="Parent corpus context (for documents within a corpus)",
+    )
+
+
 class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     data = GenericScalar()
@@ -1593,6 +1620,11 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     agent_configuration = graphene.Field(
         lambda: AgentConfigurationType,
         description="Agent configuration that generated this message",
+    )
+    mentioned_resources = graphene.List(
+        MentionedResourceType,
+        description="Corpuses and documents mentioned in this message using @ syntax. "
+        "Only includes resources visible to the requesting user.",
     )
 
     def resolve_agent_type(self, info):
@@ -1604,6 +1636,117 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_agent_configuration(self, info):
         """Resolve agent_configuration field."""
         return self.agent_configuration
+
+    def resolve_mentioned_resources(self, info):
+        """
+        Parse message content for @mentions and return structured resource references.
+
+        Patterns:
+          @corpus:slug → Corpus
+          @document:slug → Document
+          @corpus:corpus-slug/document:doc-slug → Document in Corpus
+
+        SECURITY: Uses .visible_to_user() to enforce permissions.
+        Mentions to inaccessible resources are silently ignored.
+        """
+        import re
+
+        content = self.content or ""
+        mentions = []
+        user = info.context.user
+
+        # Pattern 1: @corpus:slug/document:slug (must check first to avoid double-matching)
+        corpus_doc_pattern = r"@corpus:([a-z0-9-]+)/document:([a-z0-9-]+)"
+        for corpus_slug, doc_slug in re.findall(corpus_doc_pattern, content):
+            try:
+                corpus = Corpus.objects.visible_to_user(user).get(slug=corpus_slug)
+                # Use filter().first() instead of get() to handle case where doc not in corpus
+                document = (
+                    Document.objects.visible_to_user(user).filter(slug=doc_slug).first()
+                )
+
+                if document and corpus:
+                    # Check if document is actually in this corpus
+                    if corpus in document.corpus_set.all():
+                        mentions.append(
+                            MentionedResourceType(
+                                type="document",
+                                id=document.id,
+                                slug=document.slug,
+                                title=document.title,
+                                url=f"/d/{corpus.creator.slug}/{corpus.slug}/{document.slug}",
+                                corpus=MentionedResourceType(
+                                    type="corpus",
+                                    id=corpus.id,
+                                    slug=corpus.slug,
+                                    title=corpus.title,
+                                    url=f"/c/{corpus.creator.slug}/{corpus.slug}",
+                                ),
+                            )
+                        )
+            except (Corpus.DoesNotExist, Document.DoesNotExist):
+                # Permission denied or doesn't exist - silently ignore
+                continue
+
+        # Pattern 2: @corpus:slug (but not if followed by /document:)
+        corpus_pattern = r"@corpus:([a-z0-9-]+)(?!/document:)"
+        for corpus_slug in re.findall(corpus_pattern, content):
+            try:
+                corpus = Corpus.objects.visible_to_user(user).get(slug=corpus_slug)
+                mentions.append(
+                    MentionedResourceType(
+                        type="corpus",
+                        id=corpus.id,
+                        slug=corpus.slug,
+                        title=corpus.title,
+                        url=f"/c/{corpus.creator.slug}/{corpus.slug}",
+                    )
+                )
+            except Corpus.DoesNotExist:
+                # Permission denied or doesn't exist - silently ignore
+                continue
+
+        # Pattern 3: @document:slug (standalone)
+        # The regex @document: will NOT match /document: in corpus/document patterns,
+        # so we can safely process all matches without checking for duplicates
+        doc_pattern = r"@document:([a-z0-9-]+)"
+        for doc_slug in re.findall(doc_pattern, content):
+            try:
+                document = Document.objects.visible_to_user(user).get(slug=doc_slug)
+                url = f"/d/{document.creator.slug}/{document.slug}"
+
+                # Try to get corpus context (documents can be in multiple corpuses)
+                corpus = (
+                    document.corpus_set.first()
+                    if document.corpus_set.exists()
+                    else None
+                )
+
+                mentions.append(
+                    MentionedResourceType(
+                        type="document",
+                        id=document.id,
+                        slug=document.slug,
+                        title=document.title,
+                        url=url,
+                        corpus=(
+                            MentionedResourceType(
+                                type="corpus",
+                                id=corpus.id,
+                                slug=corpus.slug,
+                                title=corpus.title,
+                                url=f"/c/{corpus.creator.slug}/{corpus.slug}",
+                            )
+                            if corpus
+                            else None
+                        ),
+                    )
+                )
+            except Document.DoesNotExist:
+                # Permission denied or doesn't exist - silently ignore
+                continue
+
+        return mentions
 
     class Meta:
         model = ChatMessage
