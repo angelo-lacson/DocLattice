@@ -386,106 +386,106 @@ export const CorpusDocumentCards = ({
           overflow: "hidden",
         }}
       >
-      <ViewToggleContainer>
-        <Button.Group>
-          <Popup
-            content="Card View"
-            trigger={
-              <ViewToggleButton
-                icon="grid layout"
-                active={viewMode === "modern-card"}
-                onClick={() => setViewMode("modern-card")}
-                data-testid="card-view-button"
-              />
-            }
-          />
-          <Popup
-            content="List View"
-            trigger={
-              <ViewToggleButton
-                icon="list"
-                active={viewMode === "modern-list"}
-                onClick={() => setViewMode("modern-list")}
-                data-testid="list-view-button"
-              />
-            }
-          />
-          <Popup
-            content="Table View"
-            trigger={
-              <ViewToggleButton
-                icon="table"
-                active={viewMode === "grid"}
-                onClick={() => setViewMode("grid")}
-                data-testid="grid-view-button"
-              />
-            }
-          />
-        </Button.Group>
-      </ViewToggleContainer>
-
-      <div
-        id="corpus-document-card-content-container"
-        style={{
-          flex: 1,
-          position: "relative",
-          overflow: "hidden",
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {viewMode !== "grid" ? (
-          <DocumentCards
-            items={document_items}
-            loading={documents_loading}
-            loading_message="Documents Loading..."
-            pageInfo={documents_response?.documents.pageInfo}
-            containerStyle={{
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              paddingTop: "3.5rem", // Add padding to prevent overlap with view toggle buttons
-            }}
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-            }}
-            fetchMore={fetchMoreDocuments}
-            onShiftClick={onSelect}
-            onClick={onOpen}
-            removeFromCorpus={
-              opened_corpus_id ? handleRemoveContracts : undefined
-            }
-            onDrop={onDrop}
-            viewMode={viewMode}
-            prefixItems={folderCards}
-          />
-        ) : (
-          <div
-            style={{
-              paddingTop: "3.5rem",
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <DocumentMetadataGrid
-              corpusId={opened_corpus_id || ""}
-              documents={document_items}
-              loading={documents_loading}
-              onDocumentClick={onOpen}
-              pageInfo={documents_response?.documents.pageInfo}
-              fetchMore={fetchMoreDocuments}
-              hasMore={
-                documents_response?.documents.pageInfo?.hasNextPage ?? false
+        <ViewToggleContainer>
+          <Button.Group>
+            <Popup
+              content="Card View"
+              trigger={
+                <ViewToggleButton
+                  icon="grid layout"
+                  active={viewMode === "modern-card"}
+                  onClick={() => setViewMode("modern-card")}
+                  data-testid="card-view-button"
+                />
               }
             />
-          </div>
-        )}
+            <Popup
+              content="List View"
+              trigger={
+                <ViewToggleButton
+                  icon="list"
+                  active={viewMode === "modern-list"}
+                  onClick={() => setViewMode("modern-list")}
+                  data-testid="list-view-button"
+                />
+              }
+            />
+            <Popup
+              content="Table View"
+              trigger={
+                <ViewToggleButton
+                  icon="table"
+                  active={viewMode === "grid"}
+                  onClick={() => setViewMode("grid")}
+                  data-testid="grid-view-button"
+                />
+              }
+            />
+          </Button.Group>
+        </ViewToggleContainer>
+
+        <div
+          id="corpus-document-card-content-container"
+          style={{
+            flex: 1,
+            position: "relative",
+            overflow: "hidden",
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {viewMode !== "grid" ? (
+            <DocumentCards
+              items={document_items}
+              loading={documents_loading}
+              loading_message="Documents Loading..."
+              pageInfo={documents_response?.documents.pageInfo}
+              containerStyle={{
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "3.5rem", // Add padding to prevent overlap with view toggle buttons
+              }}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+              fetchMore={fetchMoreDocuments}
+              onShiftClick={onSelect}
+              onClick={onOpen}
+              removeFromCorpus={
+                opened_corpus_id ? handleRemoveContracts : undefined
+              }
+              onDrop={onDrop}
+              viewMode={viewMode}
+              prefixItems={folderCards}
+            />
+          ) : (
+            <div
+              style={{
+                paddingTop: "3.5rem",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <DocumentMetadataGrid
+                corpusId={opened_corpus_id || ""}
+                documents={document_items}
+                loading={documents_loading}
+                onDocumentClick={onOpen}
+                pageInfo={documents_response?.documents.pageInfo}
+                fetchMore={fetchMoreDocuments}
+                hasMore={
+                  documents_response?.documents.pageInfo?.hasNextPage ?? false
+                }
+              />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </DndContext>
   );
 };

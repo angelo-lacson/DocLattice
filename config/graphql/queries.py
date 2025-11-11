@@ -1887,12 +1887,18 @@ class Query(graphene.ObjectType):
         Authenticated users see public conversations, their own, or explicitly shared.
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
         conversation_id = kwargs.get("id", None)
         logger.info(f"🔍 resolve_conversation called with id: {conversation_id}")
         logger.info(f"   User: {info.context.user}")
-        logger.info(f"   Is authenticated: {info.context.user.is_authenticated if hasattr(info.context.user, 'is_authenticated') else 'N/A'}")
+        is_auth = (
+            info.context.user.is_authenticated
+            if hasattr(info.context.user, "is_authenticated")
+            else "N/A"
+        )
+        logger.info(f"   Is authenticated: {is_auth}")
 
         try:
             django_pk = from_global_id(conversation_id)[1]
@@ -1902,10 +1908,14 @@ class Query(graphene.ObjectType):
             logger.info(f"   Visible conversations count: {queryset.count()}")
 
             conversation = queryset.get(id=django_pk)
-            logger.info(f"   ✅ Found conversation: {conversation.id} - {conversation.title}")
+            logger.info(
+                f"   ✅ Found conversation: {conversation.id} - {conversation.title}"
+            )
             return conversation
         except Conversation.DoesNotExist:
-            logger.warning(f"   ❌ Conversation {django_pk} not found or not visible to user")
+            logger.warning(
+                f"   ❌ Conversation {django_pk} not found or not visible to user"
+            )
             return None
         except Exception as e:
             logger.error(f"   ❌ Error resolving conversation: {e}", exc_info=True)

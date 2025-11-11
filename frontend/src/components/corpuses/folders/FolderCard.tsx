@@ -420,7 +420,10 @@ export const FolderCard: React.FC<FolderCardProps> = ({
             </ListStats>
           </ListContent>
 
-          <ListActionButton className="action-button" onClick={handleActionClick}>
+          <ListActionButton
+            className="action-button"
+            onClick={handleActionClick}
+          >
             <MoreVertical size={16} />
           </ListActionButton>
         </ListContainer>
@@ -430,11 +433,15 @@ export const FolderCard: React.FC<FolderCardProps> = ({
           <>
             <ContextMenuOverlay onClick={closeContextMenu} />
             <ContextMenu $x={contextMenu.x} $y={contextMenu.y}>
-              <ContextMenuItem onClick={handleClick}>Open Folder</ContextMenuItem>
+              <ContextMenuItem onClick={handleClick}>
+                Open Folder
+              </ContextMenuItem>
               <ContextMenuItem onClick={handleCreateSubfolder}>
                 Create Subfolder
               </ContextMenuItem>
-              <ContextMenuItem onClick={handleEdit}>Edit Folder</ContextMenuItem>
+              <ContextMenuItem onClick={handleEdit}>
+                Edit Folder
+              </ContextMenuItem>
               <ContextMenuItem onClick={handleDelete} className="danger">
                 Delete Folder
               </ContextMenuItem>

@@ -31,7 +31,6 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusDescriptionRevision,
-    CorpusDocumentFolder,
     CorpusEngagementMetrics,
     CorpusFolder,
     CorpusQuery,
@@ -1858,19 +1857,27 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Authenticated users can see public, their own, or explicitly shared.
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
         logger.info(f"🔍 ConversationType.get_node called with id: {id}")
         logger.info(f"   User: {info.context.user}")
         logger.info(f"   User type: {type(info.context.user)}")
-        logger.info(f"   Is authenticated: {info.context.user.is_authenticated if hasattr(info.context.user, 'is_authenticated') else 'N/A'}")
+        is_auth = (
+            info.context.user.is_authenticated
+            if hasattr(info.context.user, "is_authenticated")
+            else "N/A"
+        )
+        logger.info(f"   Is authenticated: {is_auth}")
 
         try:
             queryset = Conversation.objects.visible_to_user(info.context.user)
             logger.info(f"   Queryset count: {queryset.count()}")
 
             conversation = queryset.get(pk=id)
-            logger.info(f"   ✅ Found conversation: {conversation.id} - {conversation.title}")
+            logger.info(
+                f"   ✅ Found conversation: {conversation.id} - {conversation.title}"
+            )
             return conversation
         except Conversation.DoesNotExist:
             logger.warning(f"   ❌ Conversation {id} not found or not visible to user")

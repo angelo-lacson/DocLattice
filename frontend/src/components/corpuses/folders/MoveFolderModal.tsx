@@ -185,7 +185,9 @@ export const MoveFolderModal: React.FC = () => {
 
     // Check for duplicate name at destination
     const siblings = newParentId
-      ? folderList.filter((f) => f.parent?.id === newParentId && f.id !== folder.id)
+      ? folderList.filter(
+          (f) => f.parent?.id === newParentId && f.id !== folder.id
+        )
       : folderList.filter((f) => !f.parent && f.id !== folder.id);
 
     if (siblings.some((f) => f.name === folder.name)) {

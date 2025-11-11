@@ -4,13 +4,7 @@ import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
 import { Loader, Input, Button } from "semantic-ui-react";
 import { toast } from "react-toastify";
-import {
-  FolderPlus,
-  Search,
-  ChevronDown,
-  ChevronUp,
-  Home,
-} from "lucide-react";
+import { FolderPlus, Search, ChevronDown, ChevronUp, Home } from "lucide-react";
 import {
   DndContext,
   DragEndEvent,
@@ -222,7 +216,9 @@ const RootFolderItem = styled.div<{ $isSelected: boolean; $isOver?: boolean }>`
 
   &:hover {
     background-color: ${(props) =>
-      props.$isSelected ? "rgba(59, 130, 246, 0.15)" : "rgba(148, 163, 184, 0.1)"};
+      props.$isSelected
+        ? "rgba(59, 130, 246, 0.15)"
+        : "rgba(148, 163, 184, 0.1)"};
   }
 `;
 
@@ -541,50 +537,48 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
             onClick={handleRootClick}
           />
 
-        {/* Loading State */}
-        {loading && (
-          <LoadingContainer>
-            <Loader active inline size="small" />
-            <div style={{ marginTop: "12px" }}>Loading folders...</div>
-          </LoadingContainer>
-        )}
+          {/* Loading State */}
+          {loading && (
+            <LoadingContainer>
+              <Loader active inline size="small" />
+              <div style={{ marginTop: "12px" }}>Loading folders...</div>
+            </LoadingContainer>
+          )}
 
-        {/* Error State */}
-        {error && (
-          <ErrorContainer>
-            Failed to load folders: {error.message}
-          </ErrorContainer>
-        )}
+          {/* Error State */}
+          {error && (
+            <ErrorContainer>
+              Failed to load folders: {error.message}
+            </ErrorContainer>
+          )}
 
-        {/* Empty State */}
-        {!loading && !error && filteredTree.length === 0 && !searchQuery && (
-          <EmptyState>
-            No folders yet. Click "New" to create your first folder.
-          </EmptyState>
-        )}
-
-        {/* Search Empty State */}
-        {!loading &&
-          !error &&
-          filteredTree.length === 0 &&
-          searchQuery &&
-          data?.corpusFolders.length > 0 && (
+          {/* Empty State */}
+          {!loading && !error && filteredTree.length === 0 && !searchQuery && (
             <EmptyState>
-              No folders match "{searchQuery}"
+              No folders yet. Click "New" to create your first folder.
             </EmptyState>
           )}
 
-        {/* Folder Tree */}
-        {!loading &&
-          !error &&
-          filteredTree.map((folder) => (
-            <FolderTreeNode
-              key={folder.id}
-              folder={folder}
-              depth={0}
-              onFolderSelect={onFolderSelect}
-            />
-          ))}
+          {/* Search Empty State */}
+          {!loading &&
+            !error &&
+            filteredTree.length === 0 &&
+            searchQuery &&
+            data?.corpusFolders.length > 0 && (
+              <EmptyState>No folders match "{searchQuery}"</EmptyState>
+            )}
+
+          {/* Folder Tree */}
+          {!loading &&
+            !error &&
+            filteredTree.map((folder) => (
+              <FolderTreeNode
+                key={folder.id}
+                folder={folder}
+                depth={0}
+                onFolderSelect={onFolderSelect}
+              />
+            ))}
         </TreeContainer>
       </DndContext>
     </SidebarContainer>

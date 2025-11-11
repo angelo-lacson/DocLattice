@@ -60,8 +60,7 @@ const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
   height: 100%;
   display: ${(props) => (props.$visible ? "flex" : "none")};
   flex-direction: column;
-  border-right: ${(props) =>
-    props.$collapsed ? "none" : "1px solid #e2e8f0"};
+  border-right: ${(props) => (props.$collapsed ? "none" : "1px solid #e2e8f0")};
   background: white;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -155,8 +154,8 @@ const ToggleButton = styled.button<{ $collapsed: boolean }>`
       props.$collapsed
         ? "4px 0 16px rgba(59, 130, 246, 0.5)"
         : "-4px 0 16px rgba(100, 116, 139, 0.4)"};
-    transform: translateY(-50%) ${(props) =>
-      props.$collapsed ? "translateX(2px)" : "translateX(-2px)"};
+    transform: translateY(-50%)
+      ${(props) => (props.$collapsed ? "translateX(2px)" : "translateX(-2px)")};
   }
 
   &:active {
@@ -241,11 +240,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
             aria-label={sidebarCollapsed ? "Open folders" : "Close folders"}
             title={sidebarCollapsed ? "Open folders" : "Close folders"}
           >
-            {sidebarCollapsed ? (
-              <Folder />
-            ) : (
-              <FolderOpen />
-            )}
+            {sidebarCollapsed ? <Folder /> : <FolderOpen />}
           </ToggleButton>
         )}
 

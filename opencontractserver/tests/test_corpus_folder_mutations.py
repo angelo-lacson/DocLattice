@@ -19,7 +19,11 @@ from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
-from opencontractserver.corpuses.models import Corpus, CorpusDocumentFolder, CorpusFolder
+from opencontractserver.corpuses.models import (
+    Corpus,
+    CorpusDocumentFolder,
+    CorpusFolder,
+)
 from opencontractserver.documents.models import Document
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -29,6 +33,7 @@ User = get_user_model()
 
 class TestContext:
     """Test context for GraphQL client."""
+
     def __init__(self, user):
         self.user = user
 
@@ -97,7 +102,9 @@ class TestCreateCorpusFolderMutation(TestCase):
             print(f"GraphQL Errors: {result['errors']}")
         if not result.get("data", {}).get("createCorpusFolder", {}).get("ok"):
             print(f"Full result: {result}")
-            print(f"Message: {result.get('data', {}).get('createCorpusFolder', {}).get('message')}")
+            print(
+                f"Message: {result.get('data', {}).get('createCorpusFolder', {}).get('message')}"
+            )
 
         assert result["data"]["createCorpusFolder"]["ok"] is True
         folder_data = result["data"]["createCorpusFolder"]["folder"]
@@ -106,7 +113,11 @@ class TestCreateCorpusFolderMutation(TestCase):
         assert folder_data["color"] == "#ff0000"
         assert folder_data["icon"] == "folder"
         # Tags come back as JSON string from GraphQL
-        tags = json.loads(folder_data["tags"]) if isinstance(folder_data["tags"], str) else folder_data["tags"]
+        tags = (
+            json.loads(folder_data["tags"])
+            if isinstance(folder_data["tags"], str)
+            else folder_data["tags"]
+        )
         assert tags == ["important", "review"]
         assert folder_data["parent"] is None
 
@@ -114,9 +125,7 @@ class TestCreateCorpusFolderMutation(TestCase):
         """Test creating a folder under a parent."""
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
-        parent = CorpusFolder.objects.create(
-            name="Parent", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Parent", corpus=corpus, creator=user)
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.CREATE])
 
@@ -159,9 +168,7 @@ class TestCreateCorpusFolderMutation(TestCase):
         """Test that duplicate folder names under same parent fail."""
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
-        parent = CorpusFolder.objects.create(
-            name="Parent", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Parent", corpus=corpus, creator=user)
 
         # Create first folder
         CorpusFolder.objects.create(
@@ -181,7 +188,9 @@ class TestCreateCorpusFolderMutation(TestCase):
         result = client.execute(self.MUTATION, variable_values=variables)
 
         assert result["data"]["createCorpusFolder"]["ok"] is False
-        assert "already exists" in result["data"]["createCorpusFolder"]["message"].lower()
+        assert (
+            "already exists" in result["data"]["createCorpusFolder"]["message"].lower()
+        )
 
 
 class TestUpdateCorpusFolderMutation(TestCase):
@@ -250,7 +259,11 @@ class TestUpdateCorpusFolderMutation(TestCase):
         assert folder_data["description"] == "New desc"
         assert folder_data["color"] == "#ffffff"
         assert folder_data["icon"] == "archive"
-        tags = json.loads(folder_data["tags"]) if isinstance(folder_data["tags"], str) else folder_data["tags"]
+        tags = (
+            json.loads(folder_data["tags"])
+            if isinstance(folder_data["tags"], str)
+            else folder_data["tags"]
+        )
         assert tags == ["updated"]
 
     def test_update_folder_without_permission(self):
@@ -258,9 +271,7 @@ class TestUpdateCorpusFolderMutation(TestCase):
         owner = User.objects.create_user(username="owner", password="test")
         other_user = User.objects.create_user(username="other", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=owner)
-        folder = CorpusFolder.objects.create(
-            name="Test", corpus=corpus, creator=owner
-        )
+        folder = CorpusFolder.objects.create(name="Test", corpus=corpus, creator=owner)
 
         # other_user has no permissions on corpus
 
@@ -328,9 +339,7 @@ class TestMoveCorpusFolderMutation(TestCase):
         """Test moving folder to corpus root."""
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
-        parent = CorpusFolder.objects.create(
-            name="Parent", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Parent", corpus=corpus, creator=user)
         folder = CorpusFolder.objects.create(
             name="Child", corpus=corpus, creator=user, parent=parent
         )
@@ -353,9 +362,7 @@ class TestMoveCorpusFolderMutation(TestCase):
         """Test that moving folder into its descendant fails."""
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
-        parent = CorpusFolder.objects.create(
-            name="Parent", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Parent", corpus=corpus, creator=user)
         child = CorpusFolder.objects.create(
             name="Child", corpus=corpus, creator=user, parent=parent
         )
@@ -394,9 +401,7 @@ class TestDeleteCorpusFolderMutation(TestCase):
         """Test deleting an empty folder."""
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
-        folder = CorpusFolder.objects.create(
-            name="Test", corpus=corpus, creator=user
-        )
+        folder = CorpusFolder.objects.create(name="Test", corpus=corpus, creator=user)
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.DELETE])
 
@@ -444,9 +449,7 @@ class TestDeleteCorpusFolderMutation(TestCase):
         """Test deleting folder with all contents when deleteContents=True."""
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
-        parent = CorpusFolder.objects.create(
-            name="Parent", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Parent", corpus=corpus, creator=user)
         child = CorpusFolder.objects.create(
             name="Child", corpus=corpus, creator=user, parent=parent
         )
@@ -511,9 +514,7 @@ class TestMoveDocumentToFolderMutation(TestCase):
         assert result["data"]["moveDocumentToFolder"]["ok"] is True
 
         # Verify assignment
-        assignment = CorpusDocumentFolder.objects.get(
-            document=doc, corpus=corpus
-        )
+        assignment = CorpusDocumentFolder.objects.get(document=doc, corpus=corpus)
         assert assignment.folder == folder
 
     def test_move_document_to_root(self):
@@ -527,9 +528,7 @@ class TestMoveDocumentToFolderMutation(TestCase):
         corpus.documents.add(doc)
 
         # Initially in folder
-        CorpusDocumentFolder.objects.create(
-            document=doc, corpus=corpus, folder=folder
-        )
+        CorpusDocumentFolder.objects.create(document=doc, corpus=corpus, folder=folder)
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 
@@ -578,8 +577,7 @@ class TestMoveDocumentsToFolderMutation(TestCase):
 
         # Create multiple documents
         docs = [
-            Document.objects.create(title=f"Doc {i}", creator=user)
-            for i in range(3)
+            Document.objects.create(title=f"Doc {i}", creator=user) for i in range(3)
         ]
         for doc in docs:
             corpus.documents.add(doc)
@@ -600,9 +598,7 @@ class TestMoveDocumentsToFolderMutation(TestCase):
 
         # Verify all documents are in folder
         for doc in docs:
-            assignment = CorpusDocumentFolder.objects.get(
-                document=doc, corpus=corpus
-            )
+            assignment = CorpusDocumentFolder.objects.get(document=doc, corpus=corpus)
             assert assignment.folder == folder
 
     def test_bulk_move_documents_to_root(self):
@@ -614,8 +610,7 @@ class TestMoveDocumentsToFolderMutation(TestCase):
         )
 
         docs = [
-            Document.objects.create(title=f"Doc {i}", creator=user)
-            for i in range(3)
+            Document.objects.create(title=f"Doc {i}", creator=user) for i in range(3)
         ]
         for doc in docs:
             corpus.documents.add(doc)

@@ -76,7 +76,9 @@ test.describe("FolderTreeSidebar", () => {
     await component.waitFor({ timeout: 3000 });
 
     // Wait for query to complete and UI to render
-    await expect(component.getByRole("heading", { name: "Folders" })).toBeVisible({ timeout: 5000 });
+    await expect(
+      component.getByRole("heading", { name: "Folders" })
+    ).toBeVisible({ timeout: 5000 });
 
     // Now check for New button - it may be styled, so look for any button with "New"
     const newButton = component.getByRole("button").filter({ hasText: "New" });
@@ -165,7 +167,9 @@ test.describe("FolderTreeSidebar", () => {
     await component.waitFor({ timeout: 3000 });
 
     await expect(
-      component.getByText("No folders yet. Click \"New\" to create your first folder.")
+      component.getByText(
+        'No folders yet. Click "New" to create your first folder.'
+      )
     ).toBeVisible({ timeout: 5000 });
   });
 
@@ -210,7 +214,9 @@ test.describe("FolderTreeSidebar", () => {
     await component.waitFor({ timeout: 1000 });
 
     // Only matching folder should be visible
-    await expect(component.getByText("Research")).toBeVisible({ timeout: 3000 });
+    await expect(component.getByText("Research")).toBeVisible({
+      timeout: 3000,
+    });
 
     // Documents should still show because it has child folders (tree includes parent if child matches)
     // But we can verify search worked by checking if "Research" is still visible
@@ -299,9 +305,9 @@ test.describe("FolderTreeSidebar", () => {
     await component.waitFor({ timeout: 3000 });
 
     // Check for error message - be flexible with format
-    await expect(
-      component.getByText(/Failed to load folders/i)
-    ).toBeVisible({ timeout: 5000 });
+    await expect(component.getByText(/Failed to load folders/i)).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test("Corpus Root is clickable", async ({ mount }) => {

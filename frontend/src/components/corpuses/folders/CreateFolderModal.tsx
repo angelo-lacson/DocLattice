@@ -205,7 +205,17 @@ export const CreateFolderModal: React.FC = () => {
         },
       });
     },
-    [name, description, color, icon, tags, corpusId, parentId, folderList, createFolder]
+    [
+      name,
+      description,
+      color,
+      icon,
+      tags,
+      corpusId,
+      parentId,
+      folderList,
+      createFolder,
+    ]
   );
 
   if (!showModal || !corpusId) return null;
@@ -285,7 +295,9 @@ export const CreateFolderModal: React.FC = () => {
               onChange={(e) => setIcon(e.target.value)}
               maxLength={50}
             />
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+            <div
+              style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}
+            >
               Use Lucide React icon names (e.g., folder, file-text, star)
             </div>
           </Form.Field>
@@ -299,7 +311,9 @@ export const CreateFolderModal: React.FC = () => {
                 setTags(e.target.value)
               }
             />
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+            <div
+              style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}
+            >
               Comma-separated tags for organization
             </div>
           </Form.Field>

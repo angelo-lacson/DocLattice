@@ -42,9 +42,7 @@ class CreateCorpusFolderMutation(graphene.Mutation):
             required=False,
             description="Parent folder ID (omit for root-level folder)",
         )
-        description = graphene.String(
-            required=False, description="Folder description"
-        )
+        description = graphene.String(required=False, description="Folder description")
         color = graphene.String(required=False, description="Folder color (hex code)")
         icon = graphene.String(required=False, description="Folder icon identifier")
         tags = graphene.List(graphene.String, description="List of tags")
@@ -178,7 +176,14 @@ class UpdateCorpusFolderMutation(graphene.Mutation):
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
     def mutate(
-        root, info, folder_id, name=None, description=None, color=None, icon=None, tags=None
+        root,
+        info,
+        folder_id,
+        name=None,
+        description=None,
+        color=None,
+        icon=None,
+        tags=None,
     ):
         user = info.context.user
 

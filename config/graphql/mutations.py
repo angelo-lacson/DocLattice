@@ -50,8 +50,8 @@ from config.graphql.corpus_folder_mutations import (
     CreateCorpusFolderMutation,
     DeleteCorpusFolderMutation,
     MoveCorpusFolderMutation,
-    MoveDocumentToFolderMutation,
     MoveDocumentsToFolderMutation,
+    MoveDocumentToFolderMutation,
     UpdateCorpusFolderMutation,
 )
 from config.graphql.graphene_types import (

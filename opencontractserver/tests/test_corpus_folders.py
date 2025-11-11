@@ -15,7 +15,11 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 
-from opencontractserver.corpuses.models import Corpus, CorpusDocumentFolder, CorpusFolder
+from opencontractserver.corpuses.models import (
+    Corpus,
+    CorpusDocumentFolder,
+    CorpusFolder,
+)
 from opencontractserver.documents.models import Document
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -56,9 +60,7 @@ class TestCorpusFolderModel:
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
 
         # Create parent folder
-        parent = CorpusFolder.objects.create(
-            name="Legal", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Legal", corpus=corpus, creator=user)
 
         # Create child folder
         child = CorpusFolder.objects.create(
@@ -79,9 +81,7 @@ class TestCorpusFolderModel:
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
 
-        parent = CorpusFolder.objects.create(
-            name="Legal", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Legal", corpus=corpus, creator=user)
         child = CorpusFolder.objects.create(
             name="Contracts", corpus=corpus, creator=user, parent=parent
         )
@@ -98,9 +98,7 @@ class TestCorpusFolderModel:
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
 
-        parent = CorpusFolder.objects.create(
-            name="Parent", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Parent", corpus=corpus, creator=user)
 
         # Create first child
         CorpusFolder.objects.create(
@@ -190,12 +188,8 @@ class TestCorpusFolderModel:
         corpus.documents.add(doc1, doc2, doc3)
 
         # Assign some to folder
-        CorpusDocumentFolder.objects.create(
-            document=doc1, corpus=corpus, folder=folder
-        )
-        CorpusDocumentFolder.objects.create(
-            document=doc2, corpus=corpus, folder=folder
-        )
+        CorpusDocumentFolder.objects.create(document=doc1, corpus=corpus, folder=folder)
+        CorpusDocumentFolder.objects.create(document=doc2, corpus=corpus, folder=folder)
 
         assert folder.get_document_count() == 2
 
@@ -204,9 +198,7 @@ class TestCorpusFolderModel:
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
 
-        parent = CorpusFolder.objects.create(
-            name="Parent", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Parent", corpus=corpus, creator=user)
         child = CorpusFolder.objects.create(
             name="Child", corpus=corpus, creator=user, parent=parent
         )
@@ -219,15 +211,9 @@ class TestCorpusFolderModel:
         corpus.documents.add(doc1, doc2, doc3)
 
         # Assign to folders
-        CorpusDocumentFolder.objects.create(
-            document=doc1, corpus=corpus, folder=parent
-        )
-        CorpusDocumentFolder.objects.create(
-            document=doc2, corpus=corpus, folder=child
-        )
-        CorpusDocumentFolder.objects.create(
-            document=doc3, corpus=corpus, folder=child
-        )
+        CorpusDocumentFolder.objects.create(document=doc1, corpus=corpus, folder=parent)
+        CorpusDocumentFolder.objects.create(document=doc2, corpus=corpus, folder=child)
+        CorpusDocumentFolder.objects.create(document=doc3, corpus=corpus, folder=child)
 
         # Parent should count all descendants
         assert parent.get_descendant_document_count() == 3
@@ -285,9 +271,7 @@ class TestCorpusDocumentFolderModel:
         corpus.documents.add(doc)
 
         # Assign to first folder
-        CorpusDocumentFolder.objects.create(
-            document=doc, corpus=corpus, folder=folder1
-        )
+        CorpusDocumentFolder.objects.create(document=doc, corpus=corpus, folder=folder1)
 
         # Try to assign to second folder - should fail with ValidationError
         # (model's save() calls full_clean() which raises ValidationError for duplicate)
@@ -429,9 +413,7 @@ class TestFolderTreeTraversal:
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
 
-        parent = CorpusFolder.objects.create(
-            name="Parent", corpus=corpus, creator=user
-        )
+        parent = CorpusFolder.objects.create(name="Parent", corpus=corpus, creator=user)
         child1 = CorpusFolder.objects.create(
             name="Child1", corpus=corpus, creator=user, parent=parent
         )

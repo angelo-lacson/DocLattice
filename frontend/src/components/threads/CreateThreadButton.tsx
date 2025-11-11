@@ -136,9 +136,7 @@ export function CreateThreadButton({
         );
       }
     } else {
-      console.warn(
-        "[CreateThreadButton] Cannot navigate - no corpus in state"
-      );
+      console.warn("[CreateThreadButton] Cannot navigate - no corpus in state");
     }
   };
 

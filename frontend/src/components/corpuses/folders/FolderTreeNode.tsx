@@ -40,7 +40,11 @@ interface FolderTreeNodeProps {
   onFolderSelect?: (folderId: string) => void;
 }
 
-const NodeContainer = styled.div<{ $depth: number; $isSelected: boolean; $isDropTarget: boolean }>`
+const NodeContainer = styled.div<{
+  $depth: number;
+  $isSelected: boolean;
+  $isDropTarget: boolean;
+}>`
   display: flex;
   align-items: center;
   padding: 6px 8px;
@@ -227,7 +231,12 @@ export const FolderTreeNode: React.FC<FolderTreeNodeProps> = ({
   const isDragging = draggingFolderId === folder.id;
 
   // Draggable setup
-  const { attributes, listeners, setNodeRef: setDraggableRef, transform } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+    transform,
+  } = useDraggable({
     id: folder.id,
   });
 
@@ -237,10 +246,13 @@ export const FolderTreeNode: React.FC<FolderTreeNodeProps> = ({
   });
 
   // Combine refs (node is both draggable and droppable)
-  const setRefs = useCallback((node: HTMLDivElement | null) => {
-    setDraggableRef(node);
-    setDroppableRef(node);
-  }, [setDraggableRef, setDroppableRef]);
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      setDraggableRef(node);
+      setDroppableRef(node);
+    },
+    [setDraggableRef, setDroppableRef]
+  );
 
   // Apply transform for drag preview
   const style = transform

@@ -403,13 +403,14 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   const longPressStartPos = useRef<{ x: number; y: number } | null>(null);
 
   // Draggable setup (documents can be dragged to folders)
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `document-${item.id}`,
-    data: {
-      type: "document",
-      documentId: item.id,
-    },
-  });
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: `document-${item.id}`,
+      data: {
+        type: "document",
+        documentId: item.id,
+      },
+    });
 
   // Apply transform for drag preview
   const style = transform
