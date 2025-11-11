@@ -1494,6 +1494,246 @@ user_has_permission_for_obj(
 **Problem**: Implementing custom permission logic that doesn't handle all cases
 **Solution**: ALWAYS use `user_has_permission_for_obj` - it's the single source of truth
 
+## @ Mention Permissions (NEW)
+
+### Overview
+
+The @ mention system allows users to reference corpuses and documents in discussions using patterns like `@corpus:slug`, `@document:slug`, or `@corpus:slug/document:slug`. Mention permissions follow a **write-permission-required** model to prevent information leakage and ensure users only mention resources in collaborative contexts.
+
+**See detailed specification:** `docs/permissioning/mention_permissioning_spec.md`
+
+### Core Principles
+
+1. **Write Permission Required (Private Resources)**: Users must have CREATE, UPDATE, or DELETE permission to mention private corpuses/documents
+2. **Read Permission Sufficient (Public Resources)**: Public resources can be mentioned by anyone with READ access
+3. **IDOR Protection**: Autocomplete searches never reveal existence of inaccessible resources
+4. **Viewer-Filtered Rendering**: Mention chips only render for viewers with appropriate permissions
+
+### Permission Rules
+
+#### Corpus Mentions (`@corpus:slug`)
+
+Users can autocomplete/mention a corpus if they have **at least one of**:
+- **Creator**: User created the corpus
+- **Write Permission**: User has `create_corpus`, `update_corpus`, or `delete_corpus` permission
+- **Public Corpus**: Corpus is marked `is_public=True`
+
+**Rationale**: Mentioning implies collaborative context; read-only viewers shouldn't draw attention to resources they can't contribute to.
+
+#### Document Mentions (`@document:slug` or `@corpus:slug/document:slug`)
+
+Users can autocomplete/mention a document if they have **at least one of**:
+- **Creator**: User created the document
+- **Write Permission on Document**: User has `create_document`, `update_document`, or `delete_document` on document
+- **Write Permission on Parent Corpus**: Document is in a corpus where user has write permission
+- **Public Document in Accessible Context**: Document is `is_public=True` AND (no corpus OR public corpus OR user has READ access to corpus)
+
+**Rationale**: Similar to corpuses, but public documents are included for open forum discussions.
+
+### Backend Implementation
+
+#### Autocomplete Filtering
+
+```python
+# In config/graphql/queries.py
+
+def resolve_search_corpuses_for_mention(self, info, text_search=None, **kwargs):
+    """Only returns corpuses where user can meaningfully contribute."""
+    from guardian.shortcuts import get_objects_for_user
+
+    user = info.context.user
+
+    if user.is_anonymous:
+        return Corpus.objects.none()
+
+    if user.is_superuser:
+        return Corpus.objects.all()
+
+    # Get corpuses user has write permission to
+    writable_corpuses = get_objects_for_user(
+        user,
+        ["corpuses.create_corpus", "corpuses.update_corpus", "corpuses.delete_corpus"],
+        klass=Corpus,
+        any_perm=True
+    )
+
+    # Combine: creator OR writable OR public
+    qs = Corpus.objects.filter(
+        Q(creator=user) | Q(id__in=writable_corpuses) | Q(is_public=True)
+    ).distinct()
+
+    return qs
+```
+
+#### Mention Rendering with Viewer Filtering
+
+The `mentionedResources` field on `MessageType` resolves mentioned resources **per viewer**:
+
+```python
+def resolve_mentioned_resources(self, info):
+    """
+    Parse message content and resolve mentioned resources.
+    SECURITY: Only returns resources visible to requesting user.
+    """
+    user = info.context.user
+    content = self.content or ""
+
+    # Parse mention patterns (regex)
+    resources = []
+
+    for corpus_slug in parse_corpus_mentions(content):
+        try:
+            corpus = Corpus.objects.get(slug=corpus_slug)
+            if user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
+                resources.append({
+                    'type': 'CORPUS',
+                    'slug': corpus_slug,
+                    'title': corpus.title,
+                    # ...
+                })
+        except Corpus.DoesNotExist:
+            # Resource doesn't exist or user can't see it - skip silently (IDOR protection)
+            pass
+
+    return resources
+```
+
+### Frontend Implementation
+
+The frontend **trusts backend filtering** and has no client-side permission logic:
+
+#### Autocomplete
+```typescript
+// useResourceMentionSearch hook
+export function useResourceMentionSearch(query: string) {
+  // Query backend with search text
+  const [searchCorpuses] = useLazyQuery(SEARCH_CORPUSES_FOR_MENTION);
+  const [searchDocuments] = useLazyQuery(SEARCH_DOCUMENTS_FOR_MENTION);
+
+  // Backend has already filtered - frontend displays results as-is
+  // No client-side permission checks
+}
+```
+
+#### Rendering
+```typescript
+// parseMentionsInContent function
+export function parseMentionsInContent(
+  content: string,
+  mentionedResources: MentionedResource[]  // Already viewer-filtered by backend
+): React.ReactNode {
+  const mentionMap = new Map();
+  mentionedResources.forEach(resource => {
+    mentionMap.set(getMentionPattern(resource), resource);
+  });
+
+  // Parse content for mention patterns
+  // If resource in mentionMap: render chip
+  // If not in mentionMap: render plain text (IDOR protection)
+}
+```
+
+### IDOR Protection Strategy
+
+1. **Autocomplete**: Only shows resources user has write permission to (or public resources)
+2. **Mention Parsing**: Backend filters `mentionedResources` per viewer
+3. **Chip Rendering**: Inaccessible mentions render as plain text, not chips
+4. **Error Messages**: Same message whether resource doesn't exist or user lacks permission
+5. **No Timing Attacks**: All resource lookups use same execution path
+
+### Example Scenarios
+
+#### Scenario 1: Private Corpus Mention
+```python
+# Setup
+owner = create_user("owner")
+viewer = create_user("viewer")
+
+private_corpus = Corpus.objects.create(
+    title="Private Legal Corpus",
+    creator=owner,
+    is_public=False
+)
+
+# Give viewer READ permission (not write)
+set_permissions_for_obj_to_user(viewer, private_corpus, [PermissionTypes.READ])
+
+# Autocomplete test
+owner_results = search_corpuses_for_mention(owner, "Legal")
+assert private_corpus in owner_results  # Owner can mention
+
+viewer_results = search_corpuses_for_mention(viewer, "Legal")
+assert private_corpus not in viewer_results  # Viewer cannot mention (read-only)
+```
+
+#### Scenario 2: Public Document Mention
+```python
+# Setup
+public_doc = Document.objects.create(
+    title="Public Contract Template",
+    is_public=True,
+    creator=owner
+)
+
+# Public documents are mentionable by anyone (even read-only users)
+viewer_results = search_documents_for_mention(viewer, "Contract")
+assert public_doc in viewer_results  # Viewer can mention public document
+```
+
+#### Scenario 3: Mention Rendering with Different Viewers
+```python
+# Message content
+content = "Check @corpus:private-legal for details"
+
+# Owner viewing message
+owner_resources = message.mentioned_resources(owner)
+assert len(owner_resources) == 1  # Owner sees mention
+
+# Viewer viewing same message
+viewer_resources = message.mentioned_resources(viewer)
+assert len(viewer_resources) == 0  # Viewer doesn't see mention
+
+# Frontend renders:
+# - For owner: Clickable chip "Private Legal Corpus"
+# - For viewer: Plain text "@corpus:private-legal" (no chip)
+```
+
+### Testing Requirements
+
+**Backend Tests** (`opencontractserver/tests/test_mention_permissions.py`):
+- [ ] Corpus autocomplete respects write permissions
+- [ ] Document autocomplete respects write + corpus permissions
+- [ ] Public resources are mentionable with read-only access
+- [ ] Anonymous users cannot mention anything
+- [ ] `mentionedResources` filters by viewer permissions
+- [ ] IDOR protection: same error for non-existent vs. inaccessible
+
+**Frontend Tests** (`frontend/tests/MentionPermissions.test.tsx`):
+- [ ] Autocomplete displays backend-filtered results
+- [ ] Inaccessible mentions render as plain text
+- [ ] Accessible mentions render as clickable chips
+- [ ] No client-side permission filtering
+
+### Migration Notes
+
+When deploying this feature:
+1. **No data migration needed** - permission checks are query-time only
+2. **Existing mentions gracefully degrade** - inaccessible mentions become plain text
+3. **Permission changes take effect immediately** - no caching of mention visibility
+
+### Security Audit Checklist
+
+- [x] Autocomplete uses write permission filtering (not just read)
+- [x] Backend filters `mentionedResources` per viewer
+- [x] Frontend trusts backend, no client-side permission logic
+- [x] Inaccessible mentions render as plain text (IDOR protection)
+- [ ] Backend tests cover permission edge cases
+- [ ] Frontend tests verify rendering behavior
+- [ ] Anonymous user handling tested
+- [ ] Public vs. private resource scenarios tested
+
+---
+
 ## resolve_oc_model_queryset Deprecation
 
 > The old `resolve_oc_model_queryset` function was duplicative and not uniformly implemented. Applicable logic was moved to custom base manager with a visible_to_user(user) function.

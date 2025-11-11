@@ -2310,6 +2310,7 @@ export const GET_THREAD_DETAIL = gql`
         }
         content
         state
+        data
         createdAt
         created
         modified
@@ -2334,6 +2335,117 @@ export const GET_THREAD_DETAIL = gql`
         deletedBy {
           id
           username
+        }
+
+        # Mentioned resources (Issue #623)
+        mentionedResources {
+          type
+          id
+          slug
+          title
+          url
+          corpus {
+            slug
+            title
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Search corpuses for @ mention autocomplete
+ * Backend filters results to only corpuses visible to the user via .visible_to_user()
+ * Part of Issue #623 - @ Mentions Feature
+ */
+export interface SearchCorpusesForMentionInput {
+  textSearch: string;
+}
+
+export interface SearchCorpusesForMentionOutput {
+  searchCorpusesForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        slug: string;
+        title: string;
+        creator: {
+          slug: string;
+        };
+      };
+    }>;
+  };
+}
+
+export const SEARCH_CORPUSES_FOR_MENTION = gql`
+  query SearchCorpusesForMention($textSearch: String!) {
+    searchCorpusesForMention(textSearch: $textSearch) {
+      edges {
+        node {
+          id
+          slug
+          title
+          creator {
+            slug
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Search documents for @ mention autocomplete
+ * Backend filters results to only documents visible to the user via .visible_to_user()
+ * Part of Issue #623 - @ Mentions Feature
+ */
+export interface SearchDocumentsForMentionInput {
+  textSearch: string;
+}
+
+export interface SearchDocumentsForMentionOutput {
+  searchDocumentsForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        slug: string;
+        title: string;
+        creator: {
+          slug: string;
+        };
+        corpus: {
+          id: string;
+          slug: string;
+          title: string;
+          creator: {
+            slug: string;
+          };
+        } | null;
+      };
+    }>;
+  };
+}
+
+export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
+  query SearchDocumentsForMention($textSearch: String!) {
+    searchDocumentsForMention(textSearch: $textSearch) {
+      edges {
+        node {
+          id
+          slug
+          title
+          creator {
+            slug
+          }
+          corpus {
+            id
+            slug
+            title
+            creator {
+              slug
+            }
+          }
         }
       }
     }

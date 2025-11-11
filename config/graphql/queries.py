@@ -786,6 +786,164 @@ class Query(graphene.ObjectType):
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
 
+    # SEARCH RESOURCES FOR MENTIONS #####################################
+    search_corpuses_for_mention = DjangoConnectionField(
+        CorpusType,
+        text_search=graphene.String(
+            description="Search query to find corpuses by title or description"
+        ),
+    )
+    search_documents_for_mention = DjangoConnectionField(
+        DocumentType,
+        text_search=graphene.String(
+            description="Search query to find documents by title or description"
+        ),
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_corpuses_for_mention(self, info, text_search=None, **kwargs):
+        """
+        Search corpuses for @ mention autocomplete.
+
+        SECURITY: Only returns corpuses where user can meaningfully contribute.
+        Requires write permission (CREATE/UPDATE/DELETE), creator status, or public corpus.
+
+        Rationale: Mentioning a corpus implies drawing attention to it for collaborative
+        purposes. Read-only viewers shouldn't be mentioning corpuses since they can't
+        contribute to them.
+
+        See: docs/permissioning/mention_permissioning_spec.md
+        """
+        from guardian.shortcuts import get_objects_for_user
+
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return Corpus.objects.none()
+
+        # Superusers see all corpuses
+        if user.is_superuser:
+            qs = Corpus.objects.all()
+        else:
+            # Get corpuses user has write permission to
+            writable_corpuses = get_objects_for_user(
+                user,
+                [
+                    "corpuses.create_corpus",
+                    "corpuses.update_corpus",
+                    "corpuses.remove_corpus",  # Note: PermissionTypes.DELETE maps to "remove"
+                ],
+                klass=Corpus,
+                accept_global_perms=False,
+                any_perm=True,  # Has ANY of these permissions
+            )
+
+            # Combine: creator OR writable OR public
+            qs = Corpus.objects.filter(
+                Q(creator=user) | Q(id__in=writable_corpuses) | Q(is_public=True)
+            ).distinct()
+
+        if text_search:
+            qs = qs.filter(
+                Q(title__icontains=text_search) | Q(description__icontains=text_search)
+            )
+
+        # Order by most recently modified first
+        return qs.order_by("-modified")
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_documents_for_mention(self, info, text_search=None, **kwargs):
+        """
+        Search documents for @ mention autocomplete.
+
+        SECURITY: Only returns documents where user can meaningfully contribute.
+        Requires one of:
+        - User is creator
+        - User has write permission on document
+        - Document is in a corpus where user has write permission
+        - Document is public AND (no corpus OR public corpus OR user has corpus access)
+
+        Rationale: Similar to corpuses, mentioning a document implies collaborative context.
+        However, public documents are included to allow discussion/reference in open forums.
+
+        See: docs/permissioning/mention_permissioning_spec.md
+        """
+        from guardian.shortcuts import get_objects_for_user
+
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return Document.objects.none()
+
+        # Superusers see all documents
+        if user.is_superuser:
+            qs = Document.objects.all()
+        else:
+            # Get documents user has write permission to
+            writable_documents = get_objects_for_user(
+                user,
+                [
+                    "documents.create_document",
+                    "documents.update_document",
+                    "documents.remove_document",  # Note: PermissionTypes.DELETE maps to "remove"
+                ],
+                klass=Document,
+                accept_global_perms=False,
+                any_perm=True,
+            )
+
+            # Get corpuses user has write permission to
+            writable_corpuses = get_objects_for_user(
+                user,
+                [
+                    "corpuses.create_corpus",
+                    "corpuses.update_corpus",
+                    "corpuses.remove_corpus",  # Note: PermissionTypes.DELETE maps to "remove"
+                ],
+                klass=Corpus,
+                accept_global_perms=False,
+                any_perm=True,
+            )
+
+            # Get corpuses user can at least read (for public document context)
+            readable_corpuses = Corpus.objects.visible_to_user(user)
+
+            # Build complex filter:
+            # 1. User is creator
+            # 2. User has write permission on document
+            # 3. Document is in a writable corpus (ManyToMany via 'corpus' reverse relation)
+            # 4. Document is public AND (not in any corpus OR in public corpus OR user has corpus access)
+            # Note: Documents have ManyToMany relationship to Corpus via Corpus.documents
+            #       The reverse relation is accessible via 'corpus' (not 'corpus_set')
+            qs = Document.objects.filter(
+                Q(creator=user)
+                | Q(id__in=writable_documents)
+                | Q(
+                    corpus__in=writable_corpuses
+                )  # Use 'corpus' for ManyToMany reverse relation
+                | (
+                    Q(is_public=True)
+                    & (
+                        Q(corpus__isnull=True)  # Not in any corpus (standalone)
+                        | Q(corpus__is_public=True)  # In a public corpus
+                        | Q(corpus__in=readable_corpuses)  # In a readable corpus
+                    )
+                )
+            ).distinct()
+
+        if text_search:
+            qs = qs.filter(
+                Q(title__icontains=text_search) | Q(description__icontains=text_search)
+            )
+
+        # Note: corpus field exists in model but not in current DB schema for select_related
+        # Documents use Many-to-Many relationship via Corpus.documents instead
+
+        # Order by most recently modified first
+        return qs.order_by("-modified")
+
     # DOCUMENT RESOLVERS #####################################
 
     documents = DjangoFilterConnectionField(
