@@ -2,9 +2,12 @@ import React, { useState } from "react";
 import styled from "styled-components";
 import { Plus, MessageSquarePlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useReactiveVar } from "@apollo/client";
 import { CreateThreadForm } from "./CreateThreadForm";
 import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
+import { openedCorpus } from "../../graphql/cache";
+import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 
 const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
   display: flex;
@@ -118,11 +121,25 @@ export function CreateThreadButton({
 }: CreateThreadButtonProps) {
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
+  const corpus = useReactiveVar(openedCorpus);
 
   const handleSuccess = (conversationId: string) => {
     setShowModal(false);
-    // Navigate to the newly created thread
-    navigate(`/corpus/${corpusId}/discussions/${conversationId}`);
+    // Navigate to the newly created thread using proper slug-based URL
+    if (corpus) {
+      const url = getCorpusThreadUrl(corpus, conversationId);
+      if (url !== "#") {
+        navigate(url);
+      } else {
+        console.warn(
+          "[CreateThreadButton] Cannot navigate - corpus missing slug data"
+        );
+      }
+    } else {
+      console.warn(
+        "[CreateThreadButton] Cannot navigate - no corpus in state"
+      );
+    }
   };
 
   const handleClose = () => {

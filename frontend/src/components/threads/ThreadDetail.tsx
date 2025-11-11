@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import styled from "styled-components";
-import { useQuery } from "@apollo/client";
+import { useQuery, useReactiveVar } from "@apollo/client";
 import { useAtom } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, MessageCircle } from "lucide-react";
@@ -20,6 +20,7 @@ import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { useMessageBadges } from "../../hooks/useMessageBadges";
+import { openedCorpus } from "../../graphql/cache";
 
 interface ThreadDetailProps {
   conversationId: string;
@@ -195,10 +196,13 @@ export function ThreadDetail({
   };
 
   // Handle back navigation
+  const corpus = useReactiveVar(openedCorpus);
   const handleBack = () => {
-    if (corpusId) {
-      navigate(`/corpus/${corpusId}/discussions`);
+    if (corpus?.creator?.slug && corpus?.slug) {
+      // Navigate back to corpus discussions tab using proper slug-based URL
+      navigate(`/c/${corpus.creator.slug}/${corpus.slug}?tab=discussions`);
     } else {
+      // Fallback to browser history
       navigate(-1);
     }
   };

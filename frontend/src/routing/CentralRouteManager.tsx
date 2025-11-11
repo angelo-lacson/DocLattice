@@ -12,13 +12,14 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { unstable_batchedUpdates } from "react-dom";
-import { useLazyQuery } from "@apollo/client";
+import { useLazyQuery, useApolloClient } from "@apollo/client";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import {
   openedCorpus,
   openedDocument,
   openedExtract,
+  openedThread,
   selectedAnnotationIds,
   selectedAnalysesIds,
   selectedExtractIds,
@@ -39,14 +40,22 @@ import {
   RESOLVE_EXTRACT_BY_ID,
   GET_CORPUS_BY_ID_FOR_REDIRECT,
   GET_DOCUMENT_BY_ID_FOR_REDIRECT,
+  GET_THREAD_DETAIL,
   GetCorpusByIdForRedirectInput,
   GetCorpusByIdForRedirectOutput,
   GetDocumentByIdForRedirectInput,
   GetDocumentByIdForRedirectOutput,
   ResolveExtractByIdInput,
   ResolveExtractByIdOutput,
+  GetThreadDetailInput,
+  GetThreadDetailOutput,
 } from "../graphql/queries";
-import { CorpusType, DocumentType, ExtractType } from "../types/graphql-api";
+import {
+  CorpusType,
+  DocumentType,
+  ExtractType,
+  ConversationType,
+} from "../types/graphql-api";
 import {
   ResolveCorpusFullQuery,
   ResolveCorpusFullVariables,
@@ -78,6 +87,7 @@ export function CentralRouteManager() {
   const location = useLocation();
   const baseNavigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const apolloClient = useApolloClient();
 
   // Track last processed route to prevent duplicate work
   const lastProcessedPath = useRef<string>("");
@@ -167,6 +177,13 @@ export function CentralRouteManager() {
     nextFetchPolicy: "cache-and-network",
   });
 
+  const [resolveThread] = useLazyQuery<
+    GetThreadDetailOutput,
+    GetThreadDetailInput
+  >(GET_THREAD_DETAIL, {
+    fetchPolicy: "network-only", // Always fetch fresh data for route resolution
+  });
+
   // ═══════════════════════════════════════════════════════════════
   // PHASE 1: URL Path → Entity Resolution
   // ═══════════════════════════════════════════════════════════════
@@ -188,6 +205,7 @@ export function CentralRouteManager() {
       openedCorpus(null);
       openedDocument(null);
       openedExtract(null);
+      openedThread(null);
       routeLoading(false);
       routeError(null);
       lastProcessedPath.current = currentPath;
@@ -223,13 +241,15 @@ export function CentralRouteManager() {
       const currentDoc = openedDocument();
       const currentCorpus = openedCorpus();
       const currentExtract = openedExtract();
+      const currentThread = openedThread();
 
       const hasEntitiesForRoute =
         (route.type === "document" &&
           currentDoc &&
           (!route.corpusIdent || currentCorpus)) ||
         (route.type === "corpus" && currentCorpus) ||
-        (route.type === "extract" && currentExtract);
+        (route.type === "extract" && currentExtract) ||
+        (route.type === "thread" && currentThread && currentCorpus);
 
       routingLogger.debug("[RouteManager] Phase 1 - Entity check:", {
         routeType: route.type,
@@ -250,14 +270,15 @@ export function CentralRouteManager() {
       }
       routeError(null);
 
-      // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" here
+      // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" | "thread" here
       // because "browse" and "unknown" are handled by early return above
       const requestKey = buildRequestKey(
-        route.type as "document" | "corpus" | "extract",
+        route.type as "document" | "corpus" | "extract" | "thread",
         route.userIdent,
         route.corpusIdent,
         route.documentIdent,
-        route.extractIdent
+        route.extractIdent,
+        route.threadIdent
       );
 
       // Prevent duplicate simultaneous requests
@@ -575,6 +596,113 @@ export function CentralRouteManager() {
             }
 
             console.warn("[RouteManager] Extract not found");
+            navigate("/404", { replace: true });
+            return;
+          }
+
+          // ────────────────────────────────────────────────────────
+          // THREAD (/c/user/corpus/discussions/thread-id)
+          // ────────────────────────────────────────────────────────
+          if (
+            route.type === "thread" &&
+            route.threadIdent &&
+            route.corpusIdent
+          ) {
+            routingLogger.debug("[RouteManager] Resolving thread");
+
+            // First, resolve the corpus (needed for context and navigation)
+            const { data: corpusData, error: corpusError } =
+              await resolveCorpus({
+                variables: {
+                  userSlug: route.userIdent || "",
+                  corpusSlug: route.corpusIdent,
+                },
+              });
+
+            if (corpusError) {
+              console.error(
+                "[RouteManager] ❌ GraphQL error resolving corpus for thread:",
+                corpusError
+              );
+            }
+
+            // Then resolve the thread
+            console.log(
+              "[RouteManager] 🔍 Attempting to resolve thread:",
+              route.threadIdent
+            );
+
+            // Evict conversation from cache to force fresh fetch
+            try {
+              apolloClient.cache.evict({
+                id: apolloClient.cache.identify({
+                  __typename: "ConversationType",
+                  id: route.threadIdent,
+                }),
+              });
+              apolloClient.cache.gc();
+              console.log("[RouteManager] 🗑️  Evicted conversation from cache");
+            } catch (e) {
+              console.warn("[RouteManager] ⚠️  Cache eviction failed:", e);
+            }
+
+            const { data, error } = await resolveThread({
+              variables: {
+                conversationId: route.threadIdent,
+              },
+            });
+
+            console.log("[RouteManager] 📦 Thread query response:", {
+              hasData: !!data,
+              hasConversation: !!data?.conversation,
+              hasError: !!error,
+              data: data,
+              error: error,
+            });
+
+            if (error) {
+              console.error(
+                "[RouteManager] ❌ GraphQL error resolving thread:",
+                error
+              );
+              console.error("[RouteManager] Variables:", {
+                conversationId: route.threadIdent,
+              });
+              console.error(
+                "[RouteManager] Full error details:",
+                JSON.stringify(error, null, 2)
+              );
+            }
+
+            if (!data?.conversation) {
+              console.warn(
+                "[RouteManager] ⚠️  conversation is null or undefined"
+              );
+              console.warn("[RouteManager] Full data received:", data);
+            }
+
+            if (!error && data?.conversation && corpusData?.corpusBySlugs) {
+              const thread = data.conversation as any as ConversationType;
+              const corpus = corpusData.corpusBySlugs as any as CorpusType;
+
+              routingLogger.debug(
+                "[RouteManager] ✅ Resolved thread:",
+                thread.id
+              );
+              routingLogger.debug(
+                "[RouteManager] ✅ Resolved corpus for thread:",
+                corpus.id
+              );
+
+              openedThread(thread);
+              openedCorpus(corpus);
+              openedDocument(null);
+              openedExtract(null);
+              routeLoading(false);
+              return;
+            }
+
+            console.warn("[RouteManager] Thread or corpus not found");
             navigate("/404", { replace: true });
             return;
           }
