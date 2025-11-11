@@ -106,7 +106,6 @@ class MentionParsingTestCase(TestCase):
         query = """
             query GetMessage($id: ID!) {
                 chatMessage(id: $id) {
-<<<<<<< HEAD
                     id
                     content
                     mentionedResources {
@@ -114,17 +113,6 @@ class MentionParsingTestCase(TestCase):
                         slug
                         title
                         url
-=======
-                    ... on MessageType {
-                        id
-                        content
-                        mentionedResources {
-                            type
-                            slug
-                            title
-                            url
-                        }
->>>>>>> e03e10fe59a8b0c1efa8c5d38c2bddf090fb06c0
                     }
                 }
             }
@@ -156,7 +144,6 @@ class MentionParsingTestCase(TestCase):
         query = """
             query GetMessage($id: ID!) {
                 chatMessage(id: $id) {
-<<<<<<< HEAD
                     id
                     mentionedResources {
                         type
@@ -164,13 +151,8 @@ class MentionParsingTestCase(TestCase):
                         title
                         url
                         corpus {
-=======
-                    ... on MessageType {
-                        id
-                        mentionedResources {
->>>>>>> e03e10fe59a8b0c1efa8c5d38c2bddf090fb06c0
-                            type
                             slug
+                            title
                         }
                     }
                 }
@@ -205,21 +187,14 @@ class MentionParsingTestCase(TestCase):
         query = """
             query GetMessage($id: ID!) {
                 chatMessage(id: $id) {
-<<<<<<< HEAD
                     id
                     mentionedResources {
                         type
                         slug
                         url
                         corpus {
-=======
-                    ... on MessageType {
-                        id
-                        mentionedResources {
->>>>>>> e03e10fe59a8b0c1efa8c5d38c2bddf090fb06c0
-                            type
                             slug
-                            url
+                            title
                         }
                     }
                 }
@@ -252,19 +227,10 @@ class MentionParsingTestCase(TestCase):
         query = """
             query GetMessage($id: ID!) {
                 chatMessage(id: $id) {
-<<<<<<< HEAD
                     id
                     mentionedResources {
                         type
                         slug
-=======
-                    ... on MessageType {
-                        id
-                        mentionedResources {
-                            type
-                            slug
-                        }
->>>>>>> e03e10fe59a8b0c1efa8c5d38c2bddf090fb06c0
                     }
                 }
             }
@@ -306,19 +272,10 @@ class MentionParsingTestCase(TestCase):
         query = """
             query GetMessage($id: ID!) {
                 chatMessage(id: $id) {
-<<<<<<< HEAD
                     id
                     mentionedResources {
                         type
                         slug
-=======
-                    ... on MessageType {
-                        id
-                        mentionedResources {
-                            type
-                            slug
-                        }
->>>>>>> e03e10fe59a8b0c1efa8c5d38c2bddf090fb06c0
                     }
                 }
             }
@@ -352,19 +309,10 @@ class MentionParsingTestCase(TestCase):
         query = """
             query GetMessage($id: ID!) {
                 chatMessage(id: $id) {
-<<<<<<< HEAD
                     id
                     mentionedResources {
                         type
                         slug
-=======
-                    ... on MessageType {
-                        id
-                        mentionedResources {
-                            type
-                            slug
-                        }
->>>>>>> e03e10fe59a8b0c1efa8c5d38c2bddf090fb06c0
                     }
                 }
             }
@@ -396,17 +344,9 @@ class MentionParsingTestCase(TestCase):
         query = """
             query GetMessage($id: ID!) {
                 chatMessage(id: $id) {
-<<<<<<< HEAD
                     id
                     mentionedResources {
                         type
-=======
-                    ... on MessageType {
-                        id
-                        mentionedResources {
-                            type
-                        }
->>>>>>> e03e10fe59a8b0c1efa8c5d38c2bddf090fb06c0
                     }
                 }
             }
@@ -496,7 +436,7 @@ class MentionSearchTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         edges = result["data"]["searchCorpusesForMention"]["edges"]
         self.assertEqual(len(edges), 1)
-        self.assertEqual(edges[0]["chatMessage"]["slug"], "legal-contracts")
+        self.assertEqual(edges[0]["node"]["slug"], "legal-contracts")
 
         # User1 should NOT see user2's private corpus
         result = self.client.execute(
@@ -538,7 +478,7 @@ class MentionSearchTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         edges = result["data"]["searchDocumentsForMention"]["edges"]
         self.assertEqual(len(edges), 1)
-        self.assertEqual(edges[0]["chatMessage"]["slug"], "employment-contract")
+        self.assertEqual(edges[0]["node"]["slug"], "employment-contract")
 
         # User1 should NOT see user2's private document
         result = self.client.execute(
@@ -574,4 +514,4 @@ class MentionSearchTestCase(TestCase):
         edges = result["data"]["searchCorpusesForMention"]["edges"]
         # Should return user's accessible corpuses (just corpus1)
         self.assertEqual(len(edges), 1)
-        self.assertEqual(edges[0]["chatMessage"]["slug"], "legal-contracts")
+        self.assertEqual(edges[0]["node"]["slug"], "legal-contracts")
