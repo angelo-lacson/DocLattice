@@ -14,11 +14,12 @@ import {
  * Route parsing types
  */
 export interface ParsedRoute {
-  type: "corpus" | "document" | "extract" | "browse" | "unknown";
+  type: "corpus" | "document" | "extract" | "thread" | "browse" | "unknown";
   userIdent?: string;
   corpusIdent?: string;
   documentIdent?: string;
   extractIdent?: string;
+  threadIdent?: string;
   browsePath?: string;
 }
 
@@ -41,6 +42,7 @@ export interface QueryParams {
  * Parses a URL pathname into route type and identifiers
  * Supports patterns:
  * - /c/:userIdent/:corpusIdent
+ * - /c/:userIdent/:corpusIdent/discussions/:threadId
  * - /d/:userIdent/:docIdent
  * - /d/:userIdent/:corpusIdent/:docIdent
  * - /e/:userIdent/:extractIdent
@@ -51,6 +53,20 @@ export interface QueryParams {
  */
 export function parseRoute(pathname: string): ParsedRoute {
   const segments = pathname.split("/").filter(Boolean);
+
+  // Thread route: /c/user/corpus/discussions/threadId
+  if (
+    segments[0] === "c" &&
+    segments.length === 5 &&
+    segments[3] === "discussions"
+  ) {
+    return {
+      type: "thread",
+      userIdent: segments[1],
+      corpusIdent: segments[2],
+      threadIdent: segments[4],
+    };
+  }
 
   // Corpus route: /c/user/corpus
   if (segments[0] === "c" && segments.length === 3) {
@@ -474,11 +490,12 @@ export const requestTracker = new RequestTracker();
  * Build a unique key for request deduplication
  */
 export function buildRequestKey(
-  type: "corpus" | "document" | "extract",
+  type: "corpus" | "document" | "extract" | "thread",
   userIdent?: string,
   corpusIdent?: string,
   documentIdent?: string,
-  extractIdent?: string
+  extractIdent?: string,
+  threadIdent?: string
 ): string {
   const parts = [
     type,
@@ -486,6 +503,7 @@ export function buildRequestKey(
     corpusIdent,
     documentIdent,
     extractIdent,
+    threadIdent,
   ].filter(Boolean);
   return parts.join("-");
 }
@@ -667,8 +685,20 @@ export function navigateToCorpusThread(
   currentPath: string
 ) {
   const url = getCorpusThreadUrl(corpus, threadId);
+  console.log("[navigationUtils] navigateToCorpusThread", {
+    threadId,
+    corpusSlug: corpus.slug,
+    creatorSlug: corpus.creator?.slug,
+    url,
+    currentPath,
+    willNavigate: url !== "#" && currentPath !== url,
+  });
   if (url !== "#" && currentPath !== url) {
     navigate(url);
+  } else if (url === "#") {
+    console.warn("[navigationUtils] Cannot navigate - invalid URL (missing corpus slugs)");
+  } else if (currentPath === url) {
+    console.log("[navigationUtils] Skipping navigation - already at target URL");
   }
 }
 

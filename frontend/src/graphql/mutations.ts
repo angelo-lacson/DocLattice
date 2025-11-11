@@ -2448,7 +2448,7 @@ export interface RevokeBadgeOutput {
 
 export const CREATE_THREAD = gql`
   mutation CreateThread(
-    $corpusId: ID!
+    $corpusId: String!
     $title: String!
     $description: String
     $initialMessage: String!
@@ -2463,23 +2463,8 @@ export const CREATE_THREAD = gql`
       message
       conversation {
         id
-        conversationType
         title
         description
-        createdAt
-        updatedAt
-        isPinned
-        isLocked
-        creator {
-          id
-          username
-          email
-        }
-        corpus {
-          id
-          title
-        }
-        messageCount
       }
     }
   }
@@ -2496,26 +2481,11 @@ export interface CreateThreadOutput {
   createThread: {
     ok: boolean;
     message: string;
-    conversation: {
+    conversation?: {
       id: string;
-      conversationType: string;
       title: string;
       description?: string;
-      createdAt: string;
-      updatedAt: string;
-      isPinned: boolean;
-      isLocked: boolean;
-      creator: {
-        id: string;
-        username: string;
-        email: string;
-      };
-      corpus: {
-        id: string;
-        title: string;
-      };
-      messageCount: number;
-    } | null;
+    };
   };
 }
 
@@ -2540,7 +2510,7 @@ export const CREATE_THREAD_MESSAGE = gql`
         }
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
       }
     }
   }
@@ -2605,7 +2575,7 @@ export const REPLY_TO_MESSAGE = gql`
         }
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
       }
     }
   }
@@ -2702,7 +2672,7 @@ export const UPVOTE_MESSAGE = gql`
         id
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
       }
     }
   }
@@ -2734,7 +2704,7 @@ export const DOWNVOTE_MESSAGE = gql`
         id
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
       }
     }
   }
@@ -2766,7 +2736,7 @@ export const REMOVE_VOTE = gql`
         id
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
       }
     }
   }

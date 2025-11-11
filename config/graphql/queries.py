@@ -1729,8 +1729,30 @@ class Query(graphene.ObjectType):
         Anonymous users can see public conversations.
         Authenticated users see public conversations, their own, or explicitly shared.
         """
-        django_pk = from_global_id(kwargs.get("id", None))[1]
-        return Conversation.objects.visible_to_user(info.context.user).get(id=django_pk)
+        import logging
+        logger = logging.getLogger(__name__)
+
+        conversation_id = kwargs.get("id", None)
+        logger.info(f"🔍 resolve_conversation called with id: {conversation_id}")
+        logger.info(f"   User: {info.context.user}")
+        logger.info(f"   Is authenticated: {info.context.user.is_authenticated if hasattr(info.context.user, 'is_authenticated') else 'N/A'}")
+
+        try:
+            django_pk = from_global_id(conversation_id)[1]
+            logger.info(f"   Decoded django_pk: {django_pk}")
+
+            queryset = Conversation.objects.visible_to_user(info.context.user)
+            logger.info(f"   Visible conversations count: {queryset.count()}")
+
+            conversation = queryset.get(id=django_pk)
+            logger.info(f"   ✅ Found conversation: {conversation.id} - {conversation.title}")
+            return conversation
+        except Conversation.DoesNotExist:
+            logger.warning(f"   ❌ Conversation {django_pk} not found or not visible to user")
+            return None
+        except Exception as e:
+            logger.error(f"   ❌ Error resolving conversation: {e}", exc_info=True)
+            return None
 
     # BULK DOCUMENT UPLOAD STATUS QUERY ###########################################
     bulk_document_upload_status = graphene.Field(

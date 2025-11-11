@@ -113,8 +113,15 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const handleThreadClick = (threadId: string) => {
+    console.log("[CorpusDiscussionsView] handleThreadClick called", {
+      threadId,
+      corpus,
+      pathname: location.pathname,
+    });
     if (corpus) {
       navigateToCorpusThread(corpus, threadId, navigate, location.pathname);
+    } else {
+      console.warn("[CorpusDiscussionsView] Cannot navigate - no corpus");
     }
   };
 
@@ -149,7 +156,11 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
       </Header>
 
       <ThreadListContainer>
-        <ThreadList corpusId={corpusId} embedded={false} />
+        <ThreadList
+          corpusId={corpusId}
+          embedded={false}
+          onThreadClick={handleThreadClick}
+        />
       </ThreadListContainer>
 
       {showCreateModal && (

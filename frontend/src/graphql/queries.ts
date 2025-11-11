@@ -2208,6 +2208,12 @@ export const GET_CONVERSATIONS = gql`
           chatWithCorpus {
             id
             title
+            slug
+            creator {
+              id
+              slug
+              username
+            }
           }
           chatWithDocument {
             id
@@ -2276,6 +2282,12 @@ export const GET_THREAD_DETAIL = gql`
       chatWithCorpus {
         id
         title
+        slug
+        creator {
+          id
+          slug
+          username
+        }
       }
       chatWithDocument {
         id
@@ -2330,14 +2342,14 @@ export const GET_THREAD_DETAIL = gql`
         # Voting
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
 
         # Soft delete
         deletedAt
-        deletedBy {
-          id
-          username
-        }
+        # deletedBy {  # TODO: Backend field not implemented yet
+        #   id
+        #   username
+        # }
       }
     }
   }
@@ -3290,8 +3302,8 @@ export interface GetDocumentByIdForRedirectOutput {
 
 export const GET_BADGES = gql`
   query GetBadges(
-    $badgeType: String
-    $corpusId: ID
+    $badgeType: BadgesBadgeBadgeTypeChoices
+    $corpusId: String
     $isAutoAwarded: Boolean
     $limit: Int
     $cursor: String
