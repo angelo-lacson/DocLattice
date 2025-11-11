@@ -283,13 +283,21 @@ export function MessageItem({
           ...prev.messages.filter((m) => m.messageId !== message.id),
           {
             messageId: message.id,
+            content: message.content || "",
+            timestamp: message.created || "",
             sources: mappedSources,
           },
         ],
       }));
     }
     return mappedSources;
-  }, [message.data?.sources, message.id, setChatState]);
+  }, [
+    message.data?.sources,
+    message.id,
+    message.content,
+    message.created,
+    setChatState,
+  ]);
 
   const hasSources = sources.length > 0;
 
