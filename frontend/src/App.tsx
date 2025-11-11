@@ -75,6 +75,7 @@ import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
 import { CorpusThreadRoute } from "./components/routes/CorpusThreadRoute";
 import { UserProfileRoute } from "./components/routes/UserProfileRoute";
 import { LeaderboardRoute } from "./components/routes/LeaderboardRoute";
+import { GlobalDiscussionsRoute } from "./components/routes/GlobalDiscussionsRoute";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
 import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
@@ -405,6 +406,12 @@ export const App = () => {
                   {/* List views */}
                   <Route path="/corpuses" element={<Corpuses />} />
                   <Route path="/documents" element={<Documents />} />
+
+                  {/* Global Discussions Route (Issue #623) */}
+                  <Route
+                    path="/discussions"
+                    element={<GlobalDiscussionsRoute />}
+                  />
 
                   {/* User Profile Routes (Issue #611) */}
                   <Route path="/profile" element={<UserProfileRoute />} />
