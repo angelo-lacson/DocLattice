@@ -139,9 +139,13 @@ export const EditFolderModal: React.FC = () => {
     onCompleted: (data) => {
       // Update local cache
       const updatedFolder = data.updateCorpusFolder.folder;
-      setFolderList(
-        folderList.map((f) => (f.id === updatedFolder.id ? updatedFolder : f))
-      );
+      if (updatedFolder) {
+        setFolderList(
+          folderList.map((f) =>
+            f.id === updatedFolder.id ? updatedFolder : f
+          )
+        );
+      }
 
       // Close modal
       handleClose();

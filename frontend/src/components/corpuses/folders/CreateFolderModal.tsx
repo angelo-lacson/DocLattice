@@ -132,10 +132,12 @@ export const CreateFolderModal: React.FC = () => {
     onCompleted: (data) => {
       // Update local cache
       const newFolder = data.createCorpusFolder.folder;
-      setFolderList([...folderList, newFolder]);
+      if (newFolder) {
+        setFolderList([...folderList, newFolder]);
 
-      // Select and expand the new folder
-      selectAndExpand(newFolder.id);
+        // Select and expand the new folder
+        selectAndExpand(newFolder.id);
+      }
 
       // Close modal and reset form
       handleClose();
@@ -197,7 +199,7 @@ export const CreateFolderModal: React.FC = () => {
         variables: {
           corpusId: corpusId!,
           name: name.trim(),
-          parentId: parentId,
+          parentId: parentId || undefined,
           description: description.trim(),
           color,
           icon,

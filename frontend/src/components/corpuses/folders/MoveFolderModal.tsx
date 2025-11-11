@@ -99,7 +99,7 @@ export const MoveFolderModal: React.FC = () => {
 
   const folder = folderId ? folderMap.get(folderId) : null;
 
-  const [newParentId, setNewParentId] = useState<string | null>(null);
+  const [newParentId, setNewParentId] = useState<string>("__root__");
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const [moveFolder, { loading, error }] = useMutation<
@@ -109,9 +109,11 @@ export const MoveFolderModal: React.FC = () => {
     onCompleted: (data) => {
       // Update local cache
       const movedFolder = data.moveCorpusFolder.folder;
-      setFolderList(
-        folderList.map((f) => (f.id === movedFolder.id ? movedFolder : f))
-      );
+      if (movedFolder) {
+        setFolderList(
+          folderList.map((f) => (f.id === movedFolder.id ? movedFolder : f))
+        );
+      }
 
       // Close modal
       handleClose();
@@ -146,7 +148,7 @@ export const MoveFolderModal: React.FC = () => {
     const options = [
       {
         key: "__root__",
-        value: null,
+        value: "__root__",
         text: "Corpus Root",
         icon: "home",
       },
@@ -169,7 +171,7 @@ export const MoveFolderModal: React.FC = () => {
   }, [folder, folderList]);
 
   const handleClose = useCallback(() => {
-    setNewParentId(null);
+    setNewParentId("__root__");
     setValidationError(null);
     closeAllModals();
   }, [closeAllModals]);
@@ -177,22 +179,25 @@ export const MoveFolderModal: React.FC = () => {
   const handleSubmit = useCallback(() => {
     if (!folder) return;
 
+    // Convert "__root__" to null for the mutation
+    const targetParentId = newParentId === "__root__" ? null : newParentId;
+
     // Check if trying to move to same parent
-    if (newParentId === (folder.parent?.id || null)) {
+    if (targetParentId === (folder.parent?.id || null)) {
       setValidationError("Folder is already in this location");
       return;
     }
 
     // Check for duplicate name at destination
-    const siblings = newParentId
+    const siblings = targetParentId
       ? folderList.filter(
-          (f) => f.parent?.id === newParentId && f.id !== folder.id
+          (f) => f.parent?.id === targetParentId && f.id !== folder.id
         )
       : folderList.filter((f) => !f.parent && f.id !== folder.id);
 
     if (siblings.some((f) => f.name === folder.name)) {
-      const destinationName = newParentId
-        ? folderMap.get(newParentId)?.name || "Unknown"
+      const destinationName = targetParentId
+        ? folderMap.get(targetParentId)?.name || "Unknown"
         : "Corpus Root";
       setValidationError(
         `A folder named "${folder.name}" already exists in ${destinationName}`
@@ -205,16 +210,14 @@ export const MoveFolderModal: React.FC = () => {
     moveFolder({
       variables: {
         folderId: folder.id,
-        newParentId,
+        newParentId: targetParentId,
       },
     });
   }, [folder, newParentId, folderList, folderMap, moveFolder]);
 
   if (!showModal || !folder) return null;
 
-  const currentLocation = folder.parent
-    ? folder.parent.path || folder.parent.name
-    : "Corpus Root";
+  const currentLocation = folder.parent ? folder.parent.name : "Corpus Root";
 
   return (
     <StyledModal open={showModal} onClose={handleClose}>
@@ -266,7 +269,7 @@ export const MoveFolderModal: React.FC = () => {
             options={validDestinations}
             value={newParentId}
             onChange={(_, data) => {
-              setNewParentId(data.value as string | null);
+              setNewParentId(data.value as string);
               setValidationError(null);
             }}
           />

@@ -827,6 +827,7 @@ class Query(graphene.ObjectType):
             )
         except CorpusFolder.DoesNotExist:
             return None
+
     # SEARCH RESOURCES FOR MENTIONS #####################################
     search_corpuses_for_mention = DjangoConnectionField(
         CorpusType,

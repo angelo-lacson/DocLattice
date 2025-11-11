@@ -564,7 +564,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
             !error &&
             filteredTree.length === 0 &&
             searchQuery &&
-            data?.corpusFolders.length > 0 && (
+            (data?.corpusFolders?.length ?? 0) > 0 && (
               <EmptyState>No folders match "{searchQuery}"</EmptyState>
             )}
 

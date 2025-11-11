@@ -185,9 +185,7 @@ export const DeleteFolderModal: React.FC = () => {
   const documentCount = folder.documentCount || 0;
   const descendantDocCount = folder.descendantDocumentCount || 0;
 
-  const parentName = folder.parent
-    ? folder.parent.path || folder.parent.name
-    : "Corpus Root";
+  const parentName = folder.parent ? folder.parent.name : "Corpus Root";
 
   return (
     <StyledModal open={showModal} onClose={handleClose} size="small">

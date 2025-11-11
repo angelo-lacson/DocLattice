@@ -164,7 +164,7 @@ export const CorpusDocumentCards = ({
       ...(document_search_term ? { textSearch: document_search_term } : {}),
       // ALWAYS pass inFolderId to filter by folder
       // null = root level only, string = specific folder only
-      inFolderId: selected_folder_id,
+      inFolderId: selected_folder_id ?? undefined,
     },
     fetchPolicy: "cache-and-network", // Ensure fresh results when search term changes
     notifyOnNetworkStatusChange: true, // necessary in order to trigger loading signal on fetchMore

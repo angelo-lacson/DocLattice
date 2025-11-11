@@ -431,7 +431,7 @@ export function buildFolderBreadcrumb(
   let current = folderMap.get(folderId);
   while (current) {
     path.unshift(parseCorpusFolderTags(current));
-    current = current.parent ? folderMap.get(current.parent.id) : null;
+    current = current.parent ? folderMap.get(current.parent.id) : undefined;
   }
 
   return path;
