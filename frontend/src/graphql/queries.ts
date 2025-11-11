@@ -2310,6 +2310,7 @@ export const GET_THREAD_DETAIL = gql`
         }
         content
         state
+        data
         createdAt
         created
         modified
