@@ -3,7 +3,7 @@ import { useSetAtom, useAtomValue, useAtom } from "jotai";
 import { useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Folder, FolderOpen } from "lucide-react";
 import { selectedFolderId as selectedFolderIdReactiveVar } from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
@@ -128,30 +128,45 @@ const ToggleButton = styled.button<{ $collapsed: boolean }>`
   left: ${(props) => (props.$collapsed ? "0" : "320px")};
   top: 50%;
   transform: translateY(-50%);
-  width: 24px;
-  height: 48px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-left: ${(props) => (props.$collapsed ? "1px solid #e2e8f0" : "none")};
+  width: ${(props) => (props.$collapsed ? "40px" : "32px")};
+  height: ${(props) => (props.$collapsed ? "80px" : "60px")};
+  background: ${(props) => (props.$collapsed ? "#3b82f6" : "#64748b")};
+  border: 1px solid ${(props) => (props.$collapsed ? "#3b82f6" : "#64748b")};
+  border-left: ${(props) => (props.$collapsed ? "1px solid #3b82f6" : "none")};
   border-radius: ${(props) =>
-    props.$collapsed ? "0 6px 6px 0" : "6px 0 0 6px"};
+    props.$collapsed ? "0 8px 8px 0" : "0 8px 8px 0"};
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 101;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  color: #64748b;
-  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  color: white;
+  box-shadow: ${(props) =>
+    props.$collapsed
+      ? "4px 0 12px rgba(59, 130, 246, 0.4)"
+      : "-4px 0 12px rgba(100, 116, 139, 0.3)"};
 
   &:hover {
-    background: #f8fafc;
-    color: #3b82f6;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    background: ${(props) => (props.$collapsed ? "#2563eb" : "#475569")};
+    border-color: ${(props) => (props.$collapsed ? "#2563eb" : "#475569")};
+    color: white;
+    box-shadow: ${(props) =>
+      props.$collapsed
+        ? "4px 0 16px rgba(59, 130, 246, 0.5)"
+        : "-4px 0 16px rgba(100, 116, 139, 0.4)"};
+    transform: translateY(-50%) ${(props) =>
+      props.$collapsed ? "translateX(2px)" : "translateX(-2px)"};
   }
 
   &:active {
     transform: translateY(-50%) scale(0.95);
+  }
+
+  svg {
+    width: ${(props) => (props.$collapsed ? "24px" : "18px")};
+    height: ${(props) => (props.$collapsed ? "24px" : "18px")};
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   @media (max-width: 768px) {
@@ -223,13 +238,13 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
           <ToggleButton
             $collapsed={sidebarCollapsed}
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={sidebarCollapsed ? "Open folders" : "Close folders"}
+            title={sidebarCollapsed ? "Open folders" : "Close folders"}
           >
             {sidebarCollapsed ? (
-              <ChevronRight size={16} />
+              <Folder />
             ) : (
-              <ChevronLeft size={16} />
+              <FolderOpen />
             )}
           </ToggleButton>
         )}
