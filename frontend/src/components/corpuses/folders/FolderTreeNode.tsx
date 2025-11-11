@@ -53,6 +53,7 @@ const NodeContainer = styled.div<{
   user-select: none;
   border-radius: 6px;
   margin: 2px 4px;
+  min-width: fit-content;
   transition: all 0.15s ease;
   background-color: ${(props) =>
     props.$isSelected
@@ -123,8 +124,7 @@ const FolderName = styled.span<{ $isSelected: boolean }>`
   color: ${(props) => (props.$isSelected ? "#1e40af" : "#1e293b")};
   font-weight: ${(props) => (props.$isSelected ? "600" : "400")};
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
 `;
 
 const DocumentCountBadge = styled.span`

@@ -15,6 +15,7 @@ import {
   folderCorpusIdAtom,
   selectedFolderIdAtom,
   sidebarCollapsedAtom,
+  openCreateFolderModalAtom,
 } from "../../../atoms/folderAtoms";
 
 /**
@@ -173,6 +174,52 @@ const ToggleButton = styled.button<{ $collapsed: boolean }>`
   }
 `;
 
+const ContextMenuOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+`;
+
+const ContextMenu = styled.div<{ $x: number; $y: number }>`
+  position: fixed;
+  top: ${(props) => props.$y}px;
+  left: ${(props) => props.$x}px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 24px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e2e8f0;
+  padding: 4px;
+  min-width: 180px;
+  z-index: 1000;
+`;
+
+const ContextMenuItem = styled.button`
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #334155;
+  text-align: left;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background-color: #f1f5f9;
+    color: #1e293b;
+  }
+
+  &:active {
+    background-color: #e2e8f0;
+  }
+`;
+
 export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   corpusId,
   initialFolderId = null,
@@ -185,8 +232,15 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   const setSelectedFolderId = useSetAtom(selectedFolderIdAtom);
   const selectedFolderId = useReactiveVar(selectedFolderIdReactiveVar);
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom);
+  const openCreateModal = useSetAtom(openCreateFolderModalAtom);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Context menu state for right-clicking in content area
+  const [contextMenu, setContextMenu] = React.useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Initialize corpus context
   useEffect(() => {
@@ -221,6 +275,39 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     navigate({ search: newSearch ? `?${newSearch}` : "" }, { replace: true });
   };
 
+  // Handle right-click in content area to create folder in current directory
+  const handleContentAreaContextMenu = React.useCallback(
+    (e: React.MouseEvent) => {
+      // Check if the right-click target is a card or interactive element
+      const target = e.target as HTMLElement;
+      const isCard =
+        target.closest('[role="button"]') ||
+        target.closest(".folder-card") ||
+        target.closest(".document-card") ||
+        target.closest("button") ||
+        target.closest("a");
+
+      // Only show context menu if NOT clicking on a card or interactive element
+      if (!isCard) {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu({ x: e.clientX, y: e.clientY });
+      }
+    },
+    []
+  );
+
+  const closeContextMenu = React.useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleCreateFolderInCurrentDir = React.useCallback(() => {
+    // Pass the current folder ID - creates subfolder of current directory
+    // If selectedFolderId is null, creates folder at root level
+    openCreateModal(selectedFolderId);
+    closeContextMenu();
+  }, [selectedFolderId, openCreateModal, closeContextMenu]);
+
   return (
     <>
       <BrowserContainer>
@@ -252,7 +339,9 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
           </BreadcrumbWrapper>
 
           {/* Document List or Custom Content */}
-          <ContentArea>{children}</ContentArea>
+          <ContentArea onContextMenu={handleContentAreaContextMenu}>
+            {children}
+          </ContentArea>
         </MainContent>
       </BrowserContainer>
 
@@ -261,6 +350,18 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       <EditFolderModal />
       <MoveFolderModal />
       <DeleteFolderModal />
+
+      {/* Context menu for content area */}
+      {contextMenu && (
+        <>
+          <ContextMenuOverlay onClick={closeContextMenu} />
+          <ContextMenu $x={contextMenu.x} $y={contextMenu.y}>
+            <ContextMenuItem onClick={handleCreateFolderInCurrentDir}>
+              Create Folder Here
+            </ContextMenuItem>
+          </ContextMenu>
+        </>
+      )}
     </>
   );
 };
