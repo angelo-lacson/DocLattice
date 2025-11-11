@@ -61,7 +61,9 @@ test.describe("FolderBreadcrumb", () => {
     const level1Buttons = component.getByRole("button", { name: "Level 1" });
     await expect(level1Buttons.first()).toBeVisible();
 
-    await expect(component.getByRole("button", { name: "Level 10" })).toBeVisible();
+    await expect(
+      component.getByRole("button", { name: "Level 10" })
+    ).toBeVisible();
   });
 
   test("shows Home icon for Corpus Root", async ({ mount }) => {
@@ -75,10 +77,7 @@ test.describe("FolderBreadcrumb", () => {
     await expect(corpusRoot).toBeVisible();
 
     // Check that an svg icon is present (Home icon from lucide-react)
-    const svg = await corpusRoot
-      .locator("..")
-      .locator("svg")
-      .first();
+    const svg = await corpusRoot.locator("..").locator("svg").first();
     await expect(svg).toBeVisible();
   });
 

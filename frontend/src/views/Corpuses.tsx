@@ -2108,9 +2108,11 @@ export const Corpuses = () => {
               <TabTitle>Documents</TabTitle>
             </TabNavigationHeader>
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <FolderDocumentBrowser corpusId={opened_corpus_id}>
-                <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />
-              </FolderDocumentBrowser>
+              {opened_corpus_id && (
+                <FolderDocumentBrowser corpusId={opened_corpus_id}>
+                  <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />
+                </FolderDocumentBrowser>
+              )}
             </div>
           </div>
         ),

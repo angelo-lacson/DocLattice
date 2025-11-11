@@ -383,9 +383,7 @@ export interface FolderTreeNode extends ParsedCorpusFolderType {
 /**
  * Build folder tree from flat list of folders
  */
-export function buildFolderTree(
-  folders: CorpusFolderType[]
-): FolderTreeNode[] {
+export function buildFolderTree(folders: CorpusFolderType[]): FolderTreeNode[] {
   // Parse tags and initialize children arrays
   const parsedFolders: FolderTreeNode[] = folders.map((folder) => ({
     ...parseCorpusFolderTags(folder),
@@ -433,7 +431,7 @@ export function buildFolderBreadcrumb(
   let current = folderMap.get(folderId);
   while (current) {
     path.unshift(parseCorpusFolderTags(current));
-    current = current.parent ? folderMap.get(current.parent.id) : null;
+    current = current.parent ? folderMap.get(current.parent.id) : undefined;
   }
 
   return path;

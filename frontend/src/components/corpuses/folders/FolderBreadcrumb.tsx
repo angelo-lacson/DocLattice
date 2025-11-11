@@ -136,7 +136,10 @@ export const FolderBreadcrumb: React.FC<FolderBreadcrumbProps> = ({
   if (!selectedFolderId) {
     return (
       <BreadcrumbContainer>
-        <BreadcrumbItem $isLast={true} onClick={() => handleBreadcrumbClick(null)}>
+        <BreadcrumbItem
+          $isLast={true}
+          onClick={() => handleBreadcrumbClick(null)}
+        >
           <HomeIcon size={16} />
           Corpus Root
         </BreadcrumbItem>
@@ -193,7 +196,9 @@ export const FolderBreadcrumb: React.FC<FolderBreadcrumbProps> = ({
           </BreadcrumbSeparator>
 
           {/* Ellipsis */}
-          <Ellipsis title={`${breadcrumbPath.length - maxDepth + 1} folders hidden`}>
+          <Ellipsis
+            title={`${breadcrumbPath.length - maxDepth + 1} folders hidden`}
+          >
             ...
           </Ellipsis>
 

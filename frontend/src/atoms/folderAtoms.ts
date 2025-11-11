@@ -210,9 +210,7 @@ export const canCreateFoldersAtom = atom<boolean>((get) => {
     const perms = currentFolder.myPermissions;
     // Handle case where permissions haven't loaded yet
     if (!perms || !Array.isArray(perms)) return true;
-    return (
-      perms.includes("update_corpus") || perms.includes("create_corpus")
-    );
+    return perms.includes("update_corpus") || perms.includes("create_corpus");
   }
 
   // TODO: Check corpus permissions from Apollo cache

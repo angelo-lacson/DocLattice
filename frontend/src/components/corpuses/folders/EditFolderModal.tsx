@@ -139,9 +139,13 @@ export const EditFolderModal: React.FC = () => {
     onCompleted: (data) => {
       // Update local cache
       const updatedFolder = data.updateCorpusFolder.folder;
-      setFolderList(
-        folderList.map((f) => (f.id === updatedFolder.id ? updatedFolder : f))
-      );
+      if (updatedFolder) {
+        setFolderList(
+          folderList.map((f) =>
+            f.id === updatedFolder.id ? updatedFolder : f
+          )
+        );
+      }
 
       // Close modal
       handleClose();
@@ -252,7 +256,9 @@ export const EditFolderModal: React.FC = () => {
             <ColorPickerWrapper>
               <ColorPreview
                 $color={color}
-                onClick={() => document.getElementById("edit-color-picker")?.click()}
+                onClick={() =>
+                  document.getElementById("edit-color-picker")?.click()
+                }
                 title="Click to open color picker"
               />
               <input
@@ -280,7 +286,9 @@ export const EditFolderModal: React.FC = () => {
               onChange={(e) => setIcon(e.target.value)}
               maxLength={50}
             />
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+            <div
+              style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}
+            >
               Use Lucide React icon names (e.g., folder, file-text, star)
             </div>
           </Form.Field>
@@ -292,7 +300,9 @@ export const EditFolderModal: React.FC = () => {
               value={tags}
               onChange={(e) => setTags(e.target.value)}
             />
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+            <div
+              style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}
+            >
               Comma-separated tags for organization
             </div>
           </Form.Field>

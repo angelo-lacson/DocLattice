@@ -696,9 +696,13 @@ export function navigateToCorpusThread(
   if (url !== "#" && currentPath !== url) {
     navigate(url);
   } else if (url === "#") {
-    console.warn("[navigationUtils] Cannot navigate - invalid URL (missing corpus slugs)");
+    console.warn(
+      "[navigationUtils] Cannot navigate - invalid URL (missing corpus slugs)"
+    );
   } else if (currentPath === url) {
-    console.log("[navigationUtils] Skipping navigation - already at target URL");
+    console.log(
+      "[navigationUtils] Skipping navigation - already at target URL"
+    );
   }
 }
 

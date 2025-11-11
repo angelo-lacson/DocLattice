@@ -179,13 +179,13 @@ export const DeleteFolderModal: React.FC = () => {
 
   if (!showModal || !folder) return null;
 
-  const childCount = folderList.filter((f) => f.parent?.id === folder.id).length;
+  const childCount = folderList.filter(
+    (f) => f.parent?.id === folder.id
+  ).length;
   const documentCount = folder.documentCount || 0;
   const descendantDocCount = folder.descendantDocumentCount || 0;
 
-  const parentName = folder.parent
-    ? folder.parent.path || folder.parent.name
-    : "Corpus Root";
+  const parentName = folder.parent ? folder.parent.name : "Corpus Root";
 
   return (
     <StyledModal open={showModal} onClose={handleClose} size="small">
@@ -209,14 +209,16 @@ export const DeleteFolderModal: React.FC = () => {
               <ul>
                 {childCount > 0 && (
                   <li>
-                    <strong>{childCount}</strong> subfolder{childCount !== 1 ? "s" : ""}{" "}
-                    will be moved to <strong>{parentName}</strong>
+                    <strong>{childCount}</strong> subfolder
+                    {childCount !== 1 ? "s" : ""} will be moved to{" "}
+                    <strong>{parentName}</strong>
                   </li>
                 )}
                 {documentCount > 0 && (
                   <li>
-                    <strong>{documentCount}</strong> document{documentCount !== 1 ? "s" : ""}{" "}
-                    will be moved to <strong>{parentName}</strong>
+                    <strong>{documentCount}</strong> document
+                    {documentCount !== 1 ? "s" : ""} will be moved to{" "}
+                    <strong>{parentName}</strong>
                   </li>
                 )}
               </ul>

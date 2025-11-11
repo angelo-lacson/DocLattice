@@ -16,7 +16,9 @@ test.describe("CreateFolderModal", () => {
     );
 
     // Modal renders to document.body (portal), so check page not component
-    await expect(page.getByText("Create New Folder")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Create New Folder")).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test("does not render when closed", async ({ mount, page }) => {
@@ -59,9 +61,9 @@ test.describe("CreateFolderModal", () => {
       </FolderTestWrapper>
     );
 
-    await expect(
-      page.getByText("Creating folder inside:")
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Creating folder inside:")).toBeVisible({
+      timeout: 5000,
+    });
     await expect(page.getByText("Parent Folder")).toBeVisible();
   });
 
@@ -137,9 +139,7 @@ test.describe("CreateFolderModal", () => {
       </FolderTestWrapper>
     );
 
-    await expect(
-      page.getByText("Use Lucide React icon names")
-    ).toBeVisible();
+    await expect(page.getByText("Use Lucide React icon names")).toBeVisible();
   });
 
   test("shows tags field with helper text", async ({ mount, page }) => {
@@ -296,8 +296,8 @@ test.describe("CreateFolderModal", () => {
     await createButton.click();
 
     // Wait for error message
-    await expect(
-      page.getByText("Error Creating Folder")
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Error Creating Folder")).toBeVisible({
+      timeout: 5000,
+    });
   });
 });

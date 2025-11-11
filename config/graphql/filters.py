@@ -386,9 +386,9 @@ class DocumentFilter(django_filters.FilterSet):
         else:
             folder_pk = from_global_id(value)[1]
             return queryset.filter(
-                id__in=CorpusDocumentFolder.objects.filter(folder_id=folder_pk).values_list(
-                    "document_id", flat=True
-                )
+                id__in=CorpusDocumentFolder.objects.filter(
+                    folder_id=folder_pk
+                ).values_list("document_id", flat=True)
             ).distinct()
 
     def has_label_title(self, queryset, name, value):
