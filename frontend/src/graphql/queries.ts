@@ -32,6 +32,7 @@ import { WebSocketSources } from "../components/knowledge_base/document/right_tr
 export interface RequestDocumentsInputs {
   textSearch?: string;
   corpusId?: string;
+  inFolderId?: string; // Use "__root__" for root documents, folder ID, or omit for all
   annotateDocLabels?: boolean;
   hasLabelWithId?: string;
 }
@@ -46,6 +47,7 @@ export interface RequestDocumentsOutputs {
 export const GET_DOCUMENTS = gql`
   query (
     $inCorpusWithId: String
+    $inFolderId: String
     $cursor: String
     $limit: Int
     $textSearch: String
@@ -56,6 +58,7 @@ export const GET_DOCUMENTS = gql`
   ) {
     documents(
       inCorpusWithId: $inCorpusWithId
+      inFolderId: $inFolderId
       textSearch: $textSearch
       hasLabelWithId: $hasLabelWithId
       hasAnnotationsWithIds: $hasAnnotationsWithIds
@@ -2205,6 +2208,12 @@ export const GET_CONVERSATIONS = gql`
           chatWithCorpus {
             id
             title
+            slug
+            creator {
+              id
+              slug
+              username
+            }
           }
           chatWithDocument {
             id
@@ -2273,6 +2282,12 @@ export const GET_THREAD_DETAIL = gql`
       chatWithCorpus {
         id
         title
+        slug
+        creator {
+          id
+          slug
+          username
+        }
       }
       chatWithDocument {
         id
@@ -2328,14 +2343,10 @@ export const GET_THREAD_DETAIL = gql`
         # Voting
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
 
         # Soft delete
         deletedAt
-        deletedBy {
-          id
-          username
-        }
 
         # Mentioned resources (Issue #623)
         mentionedResources {
@@ -3399,8 +3410,8 @@ export interface GetDocumentByIdForRedirectOutput {
 
 export const GET_BADGES = gql`
   query GetBadges(
-    $badgeType: String
-    $corpusId: ID
+    $badgeType: BadgesBadgeBadgeTypeChoices
+    $corpusId: String
     $isAutoAwarded: Boolean
     $limit: Int
     $cursor: String

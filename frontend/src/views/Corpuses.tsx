@@ -105,6 +105,7 @@ import { FilterToLabelSelector } from "../components/widgets/model-filters/Filte
 import { ensureValidCorpusId } from "../utils/graphqlGuards";
 import { CorpusAnnotationCards } from "../components/annotations/CorpusAnnotationCards";
 import { CorpusDocumentCards } from "../components/documents/CorpusDocumentCards";
+import { FolderDocumentBrowser } from "../components/corpuses/folders/FolderDocumentBrowser";
 import { CorpusAnalysesCards } from "../components/analyses/CorpusAnalysesCards";
 import { FilterToAnalysesSelector } from "../components/widgets/model-filters/FilterToAnalysesSelector";
 import useWindowDimensions from "../components/hooks/WindowDimensionHook";
@@ -2107,7 +2108,11 @@ export const Corpuses = () => {
               <TabTitle>Documents</TabTitle>
             </TabNavigationHeader>
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />
+              {opened_corpus_id && (
+                <FolderDocumentBrowser corpusId={opened_corpus_id}>
+                  <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />
+                </FolderDocumentBrowser>
+              )}
             </div>
           </div>
         ),

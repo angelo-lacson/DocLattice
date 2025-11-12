@@ -1,10 +1,17 @@
 import React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
 import { ArrowLeft } from "lucide-react";
-import { openedCorpus } from "../../graphql/cache";
+import {
+  openedCorpus,
+  openedThread,
+  routeLoading,
+  routeError,
+} from "../../graphql/cache";
 import { ThreadDetail } from "../threads/ThreadDetail";
+import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
+import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 
 const Container = styled.div`
   max-width: 1200px;
@@ -39,40 +46,69 @@ const BackButton = styled.button`
 `;
 
 /**
- * CorpusThreadRoute - Full-page route for viewing corpus discussion threads
+ * CorpusThreadRoute - DUMB CONSUMER route for viewing corpus discussion threads
  *
  * URL Pattern: /c/:userIdent/:corpusIdent/discussions/:threadId
  *
- * This component renders a full-page view of a discussion thread within a corpus context.
- * It provides navigation back to the corpus discussions tab and displays the thread detail.
+ * This component is a DUMB CONSUMER following the One True Routing Mantra:
+ * - NEVER uses useParams() to parse URLs (CentralRouteManager does this)
+ * - NEVER fetches entities (CentralRouteManager Phase 1 handles this)
+ * - ONLY READS reactive vars set by CentralRouteManager
+ * - Renders loading/error states and delegates to ThreadDetail
+ *
+ * CentralRouteManager Phase 1 handles:
+ * - Parsing /c/:userIdent/:corpusIdent/discussions/:threadId
+ * - Fetching thread entity via GET_THREAD_DETAIL
+ * - Fetching corpus entity for context
+ * - Setting openedThread() and openedCorpus()
  *
  * @example
  * URL: /c/john/legal-contracts/discussions/thread-123
- * Displays: Full thread view with back button to corpus discussions
+ * CentralRouteManager sets: openedThread(thread), openedCorpus(corpus)
+ * This component: Reads reactive vars, renders UI
  */
 export const CorpusThreadRoute: React.FC = () => {
-  const { threadId, userIdent, corpusIdent } = useParams<{
-    threadId: string;
-    userIdent: string;
-    corpusIdent: string;
-  }>();
   const navigate = useNavigate();
+
+  // ONLY READ reactive vars (set by CentralRouteManager Phase 1)
+  const thread = useReactiveVar(openedThread);
   const corpus = useReactiveVar(openedCorpus);
+  const loading = useReactiveVar(routeLoading);
+  const error = useReactiveVar(routeError);
 
   const handleBack = () => {
-    if (userIdent && corpusIdent) {
+    if (corpus?.creator?.slug && corpus?.slug) {
       // Navigate back to corpus discussions tab
-      navigate(`/c/${userIdent}/${corpusIdent}?tab=discussions`);
+      navigate(`/c/${corpus.creator.slug}/${corpus.slug}?tab=discussions`);
     } else {
       // Fallback to browser history
       navigate(-1);
     }
   };
 
-  if (!threadId) {
-    return <Container>Thread ID not found</Container>;
+  // Loading state
+  if (loading) {
+    return (
+      <Container>
+        <ModernLoadingDisplay type="default" message="Loading discussion..." />
+      </Container>
+    );
   }
 
+  // Error state
+  if (error || !thread) {
+    return (
+      <Container>
+        <ModernErrorDisplay
+          type="generic"
+          error={error?.message || "Thread not found"}
+          onRetry={() => window.location.reload()}
+        />
+      </Container>
+    );
+  }
+
+  // Success state - render thread detail
   return (
     <Container>
       <BackButton onClick={handleBack} aria-label="Back to Discussions">
@@ -80,7 +116,7 @@ export const CorpusThreadRoute: React.FC = () => {
         Back to Discussions
       </BackButton>
 
-      <ThreadDetail conversationId={threadId} corpusId={corpus?.id} />
+      <ThreadDetail conversationId={thread.id} corpusId={corpus?.id} />
     </Container>
   );
 };

@@ -32,6 +32,7 @@ from opencontractserver.corpuses.models import (
     CorpusAction,
     CorpusDescriptionRevision,
     CorpusEngagementMetrics,
+    CorpusFolder,
     CorpusQuery,
 )
 from opencontractserver.documents.models import (
@@ -1138,6 +1139,26 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             document_id=self.id, extract_id=extract_pk, user=user, use_cache=True
         )
 
+    # Folder assignment within a corpus
+    folder_in_corpus = graphene.Field(
+        lambda: CorpusFolderType,
+        corpus_id=graphene.ID(required=True),
+        description="Get the folder this document is in within a specific corpus (null = root)",
+    )
+
+    def resolve_folder_in_corpus(self, info, corpus_id):
+        """Get folder assignment for this document in a specific corpus."""
+        from opencontractserver.corpuses.models import CorpusDocumentFolder
+
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            assignment = CorpusDocumentFolder.objects.get(
+                document_id=self.id, corpus_id=corpus_pk
+            )
+            return assignment.folder
+        except CorpusDocumentFolder.DoesNotExist:
+            return None
+
     class Meta:
         model = Document
         interfaces = [relay.Node]
@@ -1207,6 +1228,55 @@ class CorpusEngagementMetricsType(graphene.ObjectType):
     last_updated = graphene.DateTime(
         description="Timestamp when metrics were last calculated"
     )
+
+
+class CorpusFolderType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """
+    GraphQL type for corpus folders.
+    Folders inherit permissions from their parent corpus.
+    """
+
+    path = graphene.String(description="Full path from root to this folder")
+    document_count = graphene.Int(
+        description="Number of documents directly in this folder"
+    )
+    descendant_document_count = graphene.Int(
+        description="Number of documents in this folder and all subfolders"
+    )
+    children = graphene.List(
+        lambda: CorpusFolderType, description="Immediate child folders"
+    )
+
+    def resolve_path(self, info):
+        """Get full path from root to this folder."""
+        return self.get_path()
+
+    def resolve_document_count(self, info):
+        """Get count of documents directly in this folder."""
+        return self.get_document_count()
+
+    def resolve_descendant_document_count(self, info):
+        """Get count of documents in this folder and all subfolders."""
+        return self.get_descendant_document_count()
+
+    def resolve_children(self, info):
+        """Get immediate child folders."""
+        return self.children.all().visible_to_user(info.context.user)
+
+    class Meta:
+        model = CorpusFolder
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        """Filter folders to only those the user can see (via corpus permissions)."""
+        if issubclass(type(queryset), QuerySet):
+            return queryset.visible_to_user(info.context.user)
+        elif "RelatedManager" in str(type(queryset)):
+            return queryset.all().visible_to_user(info.context.user)
+        else:
+            return queryset
 
 
 class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -1292,6 +1362,15 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_description_revisions(self, info):
         # Returns all revisions, ordered by version asc by default from model ordering
         return self.revisions.all() if hasattr(self, "revisions") else []
+
+    # Folder structure
+    folders = graphene.List(
+        CorpusFolderType, description="All folders in this corpus (flat list)"
+    )
+
+    def resolve_folders(self, info):
+        """Get all folders in this corpus with permission filtering."""
+        return self.folders.all().visible_to_user(info.context.user)
 
     # Engagement metrics (Epic #565)
     engagement_metrics = graphene.Field(CorpusEngagementMetricsType)
@@ -1777,9 +1856,34 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Anonymous users can only see public conversations.
         Authenticated users can see public, their own, or explicitly shared.
         """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"🔍 ConversationType.get_node called with id: {id}")
+        logger.info(f"   User: {info.context.user}")
+        logger.info(f"   User type: {type(info.context.user)}")
+        is_auth = (
+            info.context.user.is_authenticated
+            if hasattr(info.context.user, "is_authenticated")
+            else "N/A"
+        )
+        logger.info(f"   Is authenticated: {is_auth}")
+
         try:
-            return Conversation.objects.visible_to_user(info.context.user).get(pk=id)
+            queryset = Conversation.objects.visible_to_user(info.context.user)
+            logger.info(f"   Queryset count: {queryset.count()}")
+
+            conversation = queryset.get(pk=id)
+            logger.info(
+                f"   ✅ Found conversation: {conversation.id} - {conversation.title}"
+            )
+            return conversation
         except Conversation.DoesNotExist:
+            logger.warning(f"   ❌ Conversation {id} not found or not visible to user")
+            return None
+        except Exception as e:
+            logger.error(f"   ❌ Error in get_node: {e}", exc_info=True)
             return None
 
     class Meta:

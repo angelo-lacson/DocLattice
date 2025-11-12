@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { Icon } from "semantic-ui-react";
 import styled, { keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 
@@ -400,6 +402,24 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const longPressStartPos = useRef<{ x: number; y: number } | null>(null);
 
+  // Draggable setup (documents can be dragged to folders)
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: `document-${item.id}`,
+      data: {
+        type: "document",
+        documentId: item.id,
+      },
+    });
+
+  // Apply transform for drag preview
+  const style = transform
+    ? {
+        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0.5 : 1,
+      }
+    : undefined;
+
   const {
     id,
     icon,
@@ -686,6 +706,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
     return (
       <>
         <CardContainer
+          ref={setNodeRef}
           className={`${is_selected ? "is-selected" : ""} ${
             backendLock ? "backend-locked" : ""
           } ${isLongPressing ? "long-pressing" : ""}`}
@@ -694,6 +715,9 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          style={style}
+          {...attributes}
+          {...listeners}
         >
           {backendLock && (
             <LoadingOverlay
@@ -763,6 +787,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   return (
     <>
       <ListContainer
+        ref={setNodeRef}
         className={`${is_selected ? "is-selected" : ""} ${
           backendLock ? "backend-locked" : ""
         } ${isLongPressing ? "long-pressing" : ""}`}
@@ -771,6 +796,9 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        style={style}
+        {...attributes}
+        {...listeners}
       >
         {backendLock && (
           <LoadingOverlay
