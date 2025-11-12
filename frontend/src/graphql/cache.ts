@@ -19,6 +19,7 @@ import {
   FieldsetType,
   ColumnType,
   CorpusQueryType,
+  ConversationType,
   LabelType,
   UserType,
 } from "../types/graphql-api";
@@ -440,12 +441,32 @@ export const openedQueryObj = makeVar<CorpusQueryType | null>(null);
 /**
  * Thread/Discussion-related global variables
  *
- * URL-DRIVEN STATE: selectedThreadId is controlled by URL query parameter ?thread=
+ * ENTITY STATE (set by CentralRouteManager Phase 1):
+ * openedThread - The full thread entity for thread routes (/c/user/corpus/discussions/thread-id)
+ *
+ * URL-DRIVEN STATE (set by CentralRouteManager Phase 2):
+ * selectedThreadId - Controlled by URL query parameter ?thread= for sidebar thread selection
+ *
  * Examples:
- *   /c/user/corpus?thread=thread-123  → selectedThreadId("thread-123")
- *   /d/user/doc?thread=thread-456     → selectedThreadId("thread-456")
+ *   /c/user/corpus/discussions/thread-123  → openedThread(ThreadEntity), openedCorpus(CorpusEntity)
+ *   /c/user/corpus?thread=thread-456       → selectedThreadId("thread-456") (sidebar)
+ *   /d/user/doc?thread=thread-789          → selectedThreadId("thread-789") (sidebar)
  */
+export const openedThread = makeVar<ConversationType | null>(null);
 export const selectedThreadId = makeVar<string | null>(null);
+
+/**
+ * Folder navigation (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Tracks currently selected folder within a corpus for document filtering.
+ * - null: viewing corpus root (all documents)
+ * - string: viewing specific folder (filtered documents)
+ *
+ * URL Examples:
+ *   /c/user/corpus                    → selectedFolderId(null)
+ *   /c/user/corpus?folder=folder-123  → selectedFolderId("folder-123")
+ */
+export const selectedFolderId = makeVar<string | null>(null);
 
 /**
  * Auth-related global variables

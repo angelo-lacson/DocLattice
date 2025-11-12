@@ -386,15 +386,15 @@ export const App = () => {
                     element={<DocumentLandingRoute />}
                   />
 
+                  {/* Corpus discussion thread route (Issue #621) - MUST come before general corpus route */}
+                  <Route
+                    path="/c/:userIdent/:corpusIdent/discussions/:threadId"
+                    element={<CorpusThreadRoute />}
+                  />
                   {/* Corpus routes */}
                   <Route
                     path="/c/:userIdent/:corpusIdent"
                     element={<CorpusLandingRoute />}
-                  />
-                  {/* Corpus discussion thread route (Issue #621) */}
-                  <Route
-                    path="/c/:userIdent/:corpusIdent/discussions/:threadId"
-                    element={<CorpusThreadRoute />}
                   />
 
                   {/* Extract routes */}

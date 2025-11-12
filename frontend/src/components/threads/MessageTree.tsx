@@ -1,6 +1,7 @@
 import React from "react";
 import { MessageNode } from "./utils";
 import { MessageItem } from "./MessageItem";
+import { ReplyForm } from "./ReplyForm";
 import { UserBadgeType } from "../../types/graphql-api";
 
 interface MessageTreeProps {
@@ -8,6 +9,9 @@ interface MessageTreeProps {
   highlightedMessageId?: string | null;
   onReply?: (messageId: string) => void;
   badgesByUser?: Map<string, UserBadgeType[]>;
+  conversationId?: string;
+  replyingToMessageId?: string | null;
+  onCancelReply?: () => void;
 }
 
 /**
@@ -19,6 +23,9 @@ export function MessageTree({
   highlightedMessageId,
   onReply,
   badgesByUser = new Map(),
+  conversationId,
+  replyingToMessageId,
+  onCancelReply,
 }: MessageTreeProps) {
   if (!messages || messages.length === 0) {
     return null;
@@ -29,6 +36,7 @@ export function MessageTree({
       {messages.map((message) => {
         // Get badges for this message's creator
         const userBadges = badgesByUser.get(message.creator.id) || [];
+        const isReplyingToThisMessage = replyingToMessageId === message.id;
 
         return (
           <React.Fragment key={message.id}>
@@ -40,6 +48,30 @@ export function MessageTree({
               userBadges={userBadges}
             />
 
+            {/* Render reply form if replying to this message */}
+            {isReplyingToThisMessage && conversationId && onCancelReply && (
+              <div
+                style={{
+                  marginLeft: `${Math.min(message.depth * 24 + 24, 264)}px`,
+                  marginBottom: "12px",
+                }}
+              >
+                <ReplyForm
+                  conversationId={conversationId}
+                  parentMessageId={message.id}
+                  replyingToUsername={
+                    message.creator?.username || message.creator?.email
+                  }
+                  parentMessageContent={message.content || undefined}
+                  onSuccess={() => {
+                    onCancelReply();
+                  }}
+                  onCancel={onCancelReply}
+                  autoFocus
+                />
+              </div>
+            )}
+
             {/* Recursively render children */}
             {message.children && message.children.length > 0 && (
               <MessageTree
@@ -47,6 +79,9 @@ export function MessageTree({
                 highlightedMessageId={highlightedMessageId}
                 onReply={onReply}
                 badgesByUser={badgesByUser}
+                conversationId={conversationId}
+                replyingToMessageId={replyingToMessageId}
+                onCancelReply={onCancelReply}
               />
             )}
           </React.Fragment>

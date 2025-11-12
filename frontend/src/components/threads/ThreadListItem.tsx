@@ -7,6 +7,7 @@ import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { ThreadBadge } from "./ThreadBadge";
 import { RelativeTime } from "./RelativeTime";
+import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 
 interface ThreadListItemProps {
   thread: ConversationType;
@@ -125,9 +126,24 @@ export function ThreadListItem({
     if (onThreadClick) {
       onThreadClick(thread.id);
     } else {
-      const corpus = corpusId || thread.chatWithCorpus?.id;
+      // Use the corpus from thread's chatWithCorpus (has full data with slug)
+      const corpus = thread.chatWithCorpus;
       if (corpus) {
-        navigate(`/corpus/${corpus}/discussions/${thread.id}`);
+        // Use navigation utility for proper slug-based URL
+        const url = getCorpusThreadUrl(corpus, thread.id);
+        if (url !== "#") {
+          navigate(url);
+        } else {
+          console.warn(
+            "[ThreadListItem] Cannot navigate - corpus missing slug data",
+            corpus
+          );
+        }
+      } else {
+        console.warn(
+          "[ThreadListItem] Cannot navigate - thread has no corpus",
+          thread
+        );
       }
     }
   };
