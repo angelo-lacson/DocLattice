@@ -20,10 +20,17 @@ import { useResourceMentionSearch } from "./hooks/useResourceMentionSearch";
 const ComposerContainer = styled.div`
   display: flex;
   flex-direction: column;
-  border: 1px solid ${({ theme }) => color.N4};
-  border-radius: 8px;
-  background: ${({ theme }) => color.N1};
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  background: white;
   overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+
+  &:focus-within {
+    border-color: ${color.B5};
+    box-shadow: 0 6px 24px rgba(74, 144, 226, 0.15), 0 2px 8px rgba(74, 144, 226, 0.1);
+  }
 `;
 
 const Toolbar = styled.div`
@@ -143,29 +150,40 @@ const CharacterCount = styled.span`
 const SendButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: 8px;
+  padding: 10px 20px;
   border: none;
-  border-radius: 6px;
-  background: ${({ theme }) => color.B5};
+  border-radius: 10px;
+  background: linear-gradient(135deg, ${color.B6} 0%, ${color.B5} 100%);
   color: white;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.35);
+  letter-spacing: -0.01em;
 
   &:hover:not(:disabled) {
-    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(74, 144, 226, 0.45);
+    background: linear-gradient(135deg, #5a7ee2 0%, #4a90e2 100%);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
   }
 
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 2px 6px rgba(74, 144, 226, 0.2);
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
   }
 `;
 
@@ -213,6 +231,7 @@ export function MessageComposer({
   enableResourceMentions = true,
 }: MessageComposerProps) {
   const [resourceSearchQuery, setResourceSearchQuery] = React.useState("");
+  const [characterCount, setCharacterCount] = React.useState(0);
   const { resources } = useResourceMentionSearch(resourceSearchQuery);
   const editor = useEditor({
     extensions: [
@@ -435,16 +454,36 @@ export function MessageComposer({
     content: initialContent,
     editable: !disabled,
     onUpdate: ({ editor }) => {
+      const text = editor.getText();
+      setCharacterCount(text.length);
       onChange?.(editor.getHTML());
     },
   });
 
   // Update editor content when initialContent changes
   useEffect(() => {
-    if (editor && initialContent && editor.getHTML() !== initialContent) {
-      editor.commands.setContent(initialContent);
+    if (!editor || !initialContent) return;
+
+    try {
+      if (editor.getHTML() !== initialContent) {
+        editor.commands.setContent(initialContent);
+        setCharacterCount(editor.getText().length);
+      }
+    } catch (err) {
+      console.debug("Editor not ready for content update, will retry");
     }
   }, [editor, initialContent]);
+
+  // Initialize character count when editor is created
+  useEffect(() => {
+    if (!editor) return;
+
+    try {
+      setCharacterCount(editor.getText().length);
+    } catch (err) {
+      console.debug("Editor not ready for character count, will retry");
+    }
+  }, [editor]);
 
   // Update editor editable state when disabled changes
   useEffect(() => {
@@ -479,6 +518,7 @@ export function MessageComposer({
       await onSubmit(content);
       // Clear editor on success
       editor.commands.clearContent();
+      setCharacterCount(0);
     } catch (err) {
       // Parent component handles error display
       console.error("Failed to submit message:", err);
@@ -497,12 +537,20 @@ export function MessageComposer({
   );
 
   useEffect(() => {
-    const editorElement = editor?.view.dom;
-    if (editorElement) {
-      editorElement.addEventListener("keydown", handleKeyDown as any);
-      return () => {
-        editorElement.removeEventListener("keydown", handleKeyDown as any);
-      };
+    if (!editor) return;
+
+    try {
+      // TipTap's view.dom getter throws if editor isn't fully mounted
+      const editorElement = editor.view?.dom;
+      if (editorElement) {
+        editorElement.addEventListener("keydown", handleKeyDown as any);
+        return () => {
+          editorElement.removeEventListener("keydown", handleKeyDown as any);
+        };
+      }
+    } catch (err) {
+      // Editor not fully mounted yet, will retry on next render
+      console.debug("Editor view not ready yet, skipping keydown listener");
     }
   }, [editor, handleKeyDown]);
 
@@ -510,9 +558,17 @@ export function MessageComposer({
     return null;
   }
 
-  const characterCount = editor.getText().length;
-  const isEmpty = !editor.getText().trim();
-  const isOverLimit = characterCount > maxLength;
+  // Use state-based character count for reactivity
+  let isEmpty = characterCount === 0;
+  let isOverLimit = characterCount > maxLength;
+
+  // Safely check if editor has content (TipTap might not be ready yet)
+  try {
+    isEmpty = characterCount === 0 || !editor.getText().trim();
+  } catch (err) {
+    // Editor not fully mounted, default to empty
+    isEmpty = true;
+  }
 
   return (
     <ComposerContainer>
