@@ -141,9 +141,7 @@ export const EditFolderModal: React.FC = () => {
       const updatedFolder = data.updateCorpusFolder.folder;
       if (updatedFolder) {
         setFolderList(
-          folderList.map((f) =>
-            f.id === updatedFolder.id ? updatedFolder : f
-          )
+          folderList.map((f) => (f.id === updatedFolder.id ? updatedFolder : f))
         );
       }
 

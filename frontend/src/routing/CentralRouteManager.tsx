@@ -889,6 +889,15 @@ export function CentralRouteManager() {
       );
       return;
     }
+    // CRITICAL: Thread routes have their own URL structure - don't apply canonical redirects
+    // Thread routes: /c/user/corpus/discussions/thread-id
+    // buildCanonicalPath() only knows about corpus/document/extract, not threads
+    if (currentRoute.type === "thread") {
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Skipping redirect - thread route has its own URL structure"
+      );
+      return;
+    }
 
     const canonicalPath = buildCanonicalPath(document, corpus, extract);
     if (!canonicalPath) return;
