@@ -2347,10 +2347,6 @@ export const GET_THREAD_DETAIL = gql`
 
         # Soft delete
         deletedAt
-        deletedBy {
-          id
-          username
-        }
 
         # Mentioned resources (Issue #623)
         mentionedResources {

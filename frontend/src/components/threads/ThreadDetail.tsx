@@ -11,7 +11,10 @@ import {
 } from "../../graphql/queries";
 import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
-import { selectedMessageIdAtom } from "../../atoms/threadAtoms";
+import {
+  selectedMessageIdAtom,
+  replyingToMessageIdAtom,
+} from "../../atoms/threadAtoms";
 import { buildMessageTree } from "./utils";
 import { MessageTree } from "./MessageTree";
 import { ThreadBadge } from "./ThreadBadge";
@@ -138,6 +141,9 @@ export function ThreadDetail({
   const [selectedMessageId, setSelectedMessageId] = useAtom(
     selectedMessageIdAtom
   );
+  const [replyingToMessageId, setReplyingToMessageId] = useAtom(
+    replyingToMessageIdAtom
+  );
 
   // Fetch thread detail
   const { data, loading, error, refetch } = useQuery<
@@ -191,8 +197,8 @@ export function ThreadDetail({
 
   // Handle reply action
   const handleReply = (messageId: string) => {
-    // TODO: Implement reply form in #574
     console.log("Reply to message:", messageId);
+    setReplyingToMessageId(messageId);
   };
 
   // Handle back navigation
@@ -308,6 +314,9 @@ export function ThreadDetail({
             highlightedMessageId={selectedMessageId}
             onReply={handleReply}
             badgesByUser={badgesByUser}
+            conversationId={conversationId}
+            replyingToMessageId={replyingToMessageId}
+            onCancelReply={() => setReplyingToMessageId(null)}
           />
         </MessageListContainer>
       )}
