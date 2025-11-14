@@ -21,7 +21,7 @@ const ThreadCard = styled.div<{ $isPinned?: boolean; $isDeleted?: boolean }>`
   background: ${color.N2};
   border: 1px solid ${color.N4};
   border-radius: 8px;
-  padding: ${spacing.md};
+  padding: 1rem;
   cursor: pointer;
   transition: all 0.2s;
 
@@ -46,14 +46,14 @@ const ThreadCard = styled.div<{ $isPinned?: boolean; $isDeleted?: boolean }>`
   }
 
   @media (max-width: 640px) {
-    padding: ${spacing.sm};
+    padding: 0.875rem;
   }
 `;
 
 const BadgeRow = styled.div`
   display: flex;
-  gap: ${spacing.xs};
-  margin-bottom: ${spacing.sm};
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
   flex-wrap: wrap;
 `;
 
@@ -61,7 +61,7 @@ const ThreadTitle = styled.h3`
   font-size: 18px;
   font-weight: 600;
   color: ${color.N10};
-  margin: 0 0 ${spacing.xs} 0;
+  margin: 0 0 0.375rem 0;
   line-height: 1.4;
 
   @media (max-width: 640px) {
@@ -72,7 +72,7 @@ const ThreadTitle = styled.h3`
 const ThreadDescription = styled.p`
   font-size: 14px;
   color: ${color.N7};
-  margin: 0 0 ${spacing.md} 0;
+  margin: 0 0 1rem 0;
   line-height: 1.5;
 
   /* Truncate to 2 lines */
@@ -85,13 +85,13 @@ const ThreadDescription = styled.p`
 const ThreadMeta = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.md};
+  gap: 1rem;
   font-size: 13px;
   color: ${color.N6};
   flex-wrap: wrap;
 
   @media (max-width: 640px) {
-    gap: ${spacing.xs};
+    gap: 0.5rem;
     font-size: 12px;
   }
 `;

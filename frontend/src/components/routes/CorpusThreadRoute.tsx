@@ -17,30 +17,30 @@ const Container = styled.div`
   margin: 0 auto;
   padding: 0;
   height: 100%;
+  width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 `;
 
 const BackButtonWrapper = styled.div`
-  max-width: 1600px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 1.5rem 2rem 0;
+  padding: 1.5rem 10% 0;
 
-  @media (max-width: 1920px) {
-    max-width: 1400px;
-  }
-
-  @media (max-width: 1440px) {
-    max-width: 1200px;
+  @media (max-width: 1600px) {
+    padding: 1.5rem 5% 0;
   }
 
   @media (max-width: 1024px) {
-    max-width: 100%;
-    padding: 1rem 1.5rem 0;
+    padding: 1rem 3% 0;
   }
 
   @media (max-width: 768px) {
-    padding: 1rem 1rem 0;
+    padding: 1rem 2% 0;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.75rem 1% 0;
   }
 `;
 

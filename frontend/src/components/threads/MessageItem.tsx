@@ -29,23 +29,39 @@ const MessageContainer = styled.div<{
   $isHighlighted?: boolean;
   $isDeleted?: boolean;
 }>`
-  margin-left: ${(props) => Math.min(props.$depth * 32, 240)}px;
-  padding: ${spacing.xl};
+  /* CRITICAL: Block-level display to prevent shrinking */
+  display: block;
+
+  /* Simple indentation for nested messages */
+  margin-left: ${(props) => `${props.$depth * 40}px`};
+  margin-right: 0;
+
+  /* FORCE full width usage - no shrinking to content! */
+  width: calc(100% - ${(props) => props.$depth * 40}px) !important;
+  min-width: min(800px, calc(100% - ${(props) => props.$depth * 40}px));
+  max-width: none;
+  box-sizing: border-box;
+
+  /* Generous padding for readability */
+  padding: 1.5rem;
+
   background: ${(props) => {
-    if (props.$isDeleted) return color.N2;
+    if (props.$isDeleted) return "#f3f4f6";
     if (props.$isHighlighted)
-      return `linear-gradient(135deg, ${color.B1} 0%, #f0f9ff 100%)`;
-    return "white";
+      return `linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)`;
+    return "#ffffff";
   }};
+
   border: 1px solid
     ${(props) => {
-      if (props.$isHighlighted) return color.B4;
-      return "rgba(0, 0, 0, 0.06)";
+      if (props.$isHighlighted) return "#3b82f6";
+      return "#d1d5db";
     }};
-  border-radius: 16px;
+
+  border-radius: 12px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  margin-bottom: ${spacing.lg};
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08);
   position: relative;
 
   ${(props) =>
@@ -64,22 +80,42 @@ const MessageContainer = styled.div<{
   `}
 
   &:hover {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
-    transform: translateY(-2px);
-    border-color: ${(props) =>
-      props.$isHighlighted ? color.B5 : "rgba(0, 0, 0, 0.1)"};
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.05);
+    transform: translateY(-1px);
+    border-color: ${(props) => (props.$isHighlighted ? "#2563eb" : "#9ca3af")};
   }
 
   ${(props) =>
     props.$isDeleted &&
     `
-    opacity: 0.5;
-    background: ${color.N2};
+    opacity: 0.7;
+    background: #f3f4f6;
   `}
 
-  @media (max-width: 640px) {
-    margin-left: ${(props) => Math.min(props.$depth * 16, 64)}px;
-    padding: ${spacing.lg};
+  /* Tablet adjustments */
+  @media (max-width: 1024px) {
+    margin-left: ${(props) => `${props.$depth * 30}px`};
+    width: calc(100% - ${(props) => props.$depth * 30}px) !important;
+    min-width: min(650px, calc(100% - ${(props) => props.$depth * 30}px));
+    padding: 1.25rem;
+  }
+
+  /* Mobile adjustments */
+  @media (max-width: 768px) {
+    margin-left: ${(props) => `${props.$depth * 20}px`};
+    width: calc(100% - ${(props) => props.$depth * 20}px) !important;
+    min-width: min(450px, calc(100% - ${(props) => props.$depth * 20}px));
+    padding: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    margin-left: ${(props) => `${Math.min(props.$depth * 16, 32)}px`};
+    width: calc(
+      100% - ${(props) => Math.min(props.$depth * 16, 32)}px
+    ) !important;
+    min-width: 280px;
+    padding: 0.875rem;
+    border-radius: 12px;
   }
 `;
 
@@ -87,38 +123,44 @@ const MessageHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: ${spacing.sm};
-  margin-bottom: ${spacing.sm};
-  padding-bottom: ${spacing.sm};
-  border-bottom: 1px solid ${color.N4};
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+  padding-bottom: 0.875rem;
+  border-bottom: 1px solid #e5e7eb;
 `;
 
 const MessageHeaderLeft = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.sm};
+  gap: 0.75rem;
   flex: 1;
   min-width: 0;
 `;
 
 const UserAvatar = styled.div`
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 16px;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
   transition: all 0.2s ease;
 
   &:hover {
     transform: scale(1.05);
     box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+  }
+
+  @media (max-width: 480px) {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
   }
 `;
 
@@ -132,20 +174,20 @@ const UserInfo = styled.div`
 const UsernameRow = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.sm};
+  gap: 0.5rem;
   flex-wrap: wrap;
 `;
 
 const Username = styled.span`
   font-weight: 700;
-  color: ${color.N10};
-  font-size: 16px;
-  letter-spacing: -0.02em;
+  color: #111827;
+  font-size: 15px;
+  letter-spacing: -0.01em;
 `;
 
 const MessageTimestamp = styled.span`
   font-size: 13px;
-  color: ${color.N6};
+  color: #6b7280;
   font-weight: 500;
 `;
 
@@ -166,9 +208,9 @@ const MessageActions = styled.button`
 `;
 
 const MessageContent = styled.div<{ $isDeleted?: boolean }>`
-  color: ${color.N9};
-  line-height: 1.6;
-  margin-bottom: ${spacing.md};
+  color: #1f2937;
+  line-height: 1.65;
+  margin-bottom: 1rem;
   font-size: 14px;
   word-wrap: break-word;
 
@@ -176,33 +218,49 @@ const MessageContent = styled.div<{ $isDeleted?: boolean }>`
     props.$isDeleted &&
     `
     font-style: italic;
-    color: ${color.N6};
+    color: #6b7280;
   `}
 
   p {
-    margin: 0 0 ${spacing.sm} 0;
+    margin: 0 0 0.75rem 0;
+    line-height: inherit;
+    color: #1f2937;
   }
 
   code {
-    background: ${color.N3};
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
     padding: 2px 6px;
     border-radius: 3px;
     font-size: 0.9em;
     font-family: monospace;
+    color: #dc2626;
   }
 
   pre {
-    background: ${color.N3};
-    padding: ${spacing.sm};
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    padding: 0.75rem;
     border-radius: 4px;
     overflow-x: auto;
+    margin: 0.75rem 0;
   }
 
   blockquote {
-    border-left: 3px solid ${color.B5};
-    padding-left: ${spacing.md};
-    margin: ${spacing.sm} 0;
-    color: ${color.N7};
+    border-left: 3px solid #3b82f6;
+    padding-left: 1rem;
+    margin: 0.75rem 0;
+    color: #4b5563;
+  }
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 13px;
+    line-height: 1.5;
   }
 `;
 
@@ -218,31 +276,32 @@ const MessageFooter = styled.div`
 `;
 
 const FooterButton = styled.button`
-  background: linear-gradient(135deg, ${color.B1} 0%, #f0f9ff 100%);
-  border: 1px solid ${color.B3};
-  color: ${color.B7};
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #93c5fd;
+  color: #1e40af;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
   padding: 8px 16px;
-  border-radius: 10px;
-  display: flex;
+  border-radius: 8px;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 
   &:hover {
-    background: linear-gradient(135deg, ${color.B6} 0%, ${color.B5} 100%);
-    border-color: ${color.B6};
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-color: #2563eb;
     color: white;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
   }
 
   &:active {
     transform: translateY(0);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   }
 `;
 
