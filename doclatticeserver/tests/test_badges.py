@@ -131,7 +131,6 @@ class TestBadgeModel(TestCase):
             is_auto_awarded=True,
             criteria_config={
                 "type": BadgeCriteriaType.FIRST_POST,
-                "value": 1,
             },
             creator=self.admin_user,
             is_public=True,
@@ -731,7 +730,6 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             is_auto_awarded=True,
             criteria_config={
                 "type": BadgeCriteriaType.FIRST_POST,
-                "value": 1,
             },
             creator=self.admin_user,
             is_public=True,
@@ -744,14 +742,17 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             title="Test",
             creator=self.user,
         )
-        ChatMessage.objects.create(
+        # Create message without triggering automatic badge award
+        msg = ChatMessage(
             conversation=conversation,
             msg_type="HUMAN",
             content="First post!",
             creator=self.user,
         )
+        msg._skip_signals = True
+        msg.save()
 
-        # Run auto-badge check
+        # Run auto-badge check manually
         result = check_auto_badges(self.user.id)
 
         self.assertTrue(result["ok"])
@@ -771,12 +772,15 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             title="Test",
             creator=self.user,
         )
-        ChatMessage.objects.create(
+        # Create message without triggering automatic badge award
+        msg = ChatMessage(
             conversation=conversation,
             msg_type="HUMAN",
             content="First post!",
             creator=self.user,
         )
+        msg._skip_signals = True
+        msg.save()
 
         # Run auto-badge check twice
         result1 = check_auto_badges(self.user.id)
@@ -900,59 +904,64 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
         self.assertIn("Corpus not found", result["error"])
 
     def test_badge_without_criteria_config(self):
-        """Test badge with no criteria config."""
-        Badge.objects.create(
-            name="No Criteria",
-            description="Badge without criteria",
-            icon="Star",
-            badge_type=BadgeTypeChoices.GLOBAL,
-            is_auto_awarded=True,
-            criteria_config=None,
-            creator=self.admin_user,
-            is_public=True,
-        )
+        """Test badge with no criteria config raises validation error."""
+        from django.core.exceptions import ValidationError
 
-        result = check_auto_badges(self.user.id)
-        # Should check the badge but not award it
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["awards_count"], 0)
+        with self.assertRaises(ValidationError) as cm:
+            Badge.objects.create(
+                name="No Criteria",
+                description="Badge without criteria",
+                icon="Star",
+                badge_type=BadgeTypeChoices.GLOBAL,
+                is_auto_awarded=True,
+                criteria_config=None,
+                creator=self.admin_user,
+                is_public=True,
+            )
+
+        # Verify the validation error mentions missing criteria_config
+        self.assertIn("criteria_config", cm.exception.message_dict)
 
     def test_badge_with_incomplete_criteria_config(self):
-        """Test badge with incomplete criteria config."""
-        Badge.objects.create(
-            name="Incomplete Criteria",
-            description="Badge with incomplete criteria",
-            icon="Star",
-            badge_type=BadgeTypeChoices.GLOBAL,
-            is_auto_awarded=True,
-            criteria_config={"type": BadgeCriteriaType.MESSAGE_COUNT},  # Missing value
-            creator=self.admin_user,
-            is_public=True,
-        )
+        """Test badge with incomplete criteria config raises validation error."""
+        from django.core.exceptions import ValidationError
 
-        result = check_auto_badges(self.user.id)
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["awards_count"], 0)
+        with self.assertRaises(ValidationError) as cm:
+            Badge.objects.create(
+                name="Incomplete Criteria",
+                description="Badge with incomplete criteria",
+                icon="Star",
+                badge_type=BadgeTypeChoices.GLOBAL,
+                is_auto_awarded=True,
+                criteria_config={"type": BadgeCriteriaType.MESSAGE_COUNT},  # Missing count
+                creator=self.admin_user,
+                is_public=True,
+            )
+
+        # Verify the validation error mentions missing required field
+        self.assertIn("criteria_config", cm.exception.message_dict)
 
     def test_badge_with_unknown_criteria_type(self):
-        """Test badge with unknown criteria type."""
-        Badge.objects.create(
-            name="Unknown Criteria",
-            description="Badge with unknown criteria",
-            icon="Star",
-            badge_type=BadgeTypeChoices.GLOBAL,
-            is_auto_awarded=True,
-            criteria_config={
-                "type": "unknown_type",
-                "value": 10,
-            },
-            creator=self.admin_user,
-            is_public=True,
-        )
+        """Test badge with unknown criteria type raises validation error."""
+        from django.core.exceptions import ValidationError
 
-        result = check_auto_badges(self.user.id)
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["awards_count"], 0)
+        with self.assertRaises(ValidationError) as cm:
+            Badge.objects.create(
+                name="Unknown Criteria",
+                description="Badge with unknown criteria",
+                icon="Star",
+                badge_type=BadgeTypeChoices.GLOBAL,
+                is_auto_awarded=True,
+                criteria_config={
+                    "type": "unknown_type",
+                    "value": 10,
+                },
+                creator=self.admin_user,
+                is_public=True,
+            )
+
+        # Verify the validation error mentions unknown criteria type
+        self.assertIn("criteria_config", cm.exception.message_dict)
 
     def test_check_badges_for_all_users(self):
         """Test checking badges for all active users."""
@@ -966,18 +975,20 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             is_active=True,
         )
 
-        # Create messages for both users
+        # Create messages for both users without triggering automatic badge awards
         for user in [self.user, user2]:
             conversation = Conversation.objects.create(
                 title=f"Test {user.username}",
                 creator=user,
             )
-            ChatMessage.objects.create(
+            msg = ChatMessage(
                 conversation=conversation,
                 msg_type="HUMAN",
                 content="First post!",
                 creator=user,
             )
+            msg._skip_signals = True
+            msg.save()
 
         # Run task
         result = check_badges_for_all_users()
@@ -1018,20 +1029,26 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             title="Test",
             creator=self.user,
         )
-        ChatMessage.objects.create(
+        # Create messages without triggering badge signals
+        msg1 = ChatMessage(
             conversation=conversation,
             msg_type="HUMAN",
             content="Message 1",
             creator=self.user,
         )
-        msg2 = ChatMessage.objects.create(
+        msg1._skip_signals = True
+        msg1.save()
+
+        msg2 = ChatMessage(
             conversation=conversation,
             msg_type="HUMAN",
             content="Message 2",
             creator=self.user,
         )
+        msg2._skip_signals = True
+        msg2.save()
 
-        # Award badge
+        # Manually award badge
         UserBadge.objects.create(
             user=self.user,
             badge=badge,

@@ -2052,6 +2052,59 @@ class UserBadgeType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
 
 
+class CriteriaFieldType(graphene.ObjectType):
+    """GraphQL type for criteria field definition from the registry."""
+
+    name = graphene.String(
+        required=True, description="Field identifier used in criteria_config JSON"
+    )
+    label = graphene.String(
+        required=True, description="Human-readable label for UI display"
+    )
+    field_type = graphene.String(
+        required=True,
+        description="Field data type: 'number', 'text', or 'boolean'",
+    )
+    required = graphene.Boolean(
+        required=True, description="Whether this field must be present in configuration"
+    )
+    description = graphene.String(description="Help text explaining the field's purpose")
+    min_value = graphene.Int(
+        description="Minimum allowed value (for number fields only)"
+    )
+    max_value = graphene.Int(
+        description="Maximum allowed value (for number fields only)"
+    )
+    allowed_values = graphene.List(
+        graphene.String,
+        description="List of allowed values (for enum-like text fields)",
+    )
+
+
+class CriteriaTypeDefinitionType(graphene.ObjectType):
+    """GraphQL type for criteria type definition from the registry."""
+
+    type_id = graphene.String(
+        required=True, description="Unique identifier for this criteria type"
+    )
+    name = graphene.String(required=True, description="Display name for UI")
+    description = graphene.String(
+        required=True, description="Explanation of what this criteria checks"
+    )
+    scope = graphene.String(
+        required=True,
+        description="Where this criteria can be used: 'global', 'corpus', or 'both'",
+    )
+    fields = graphene.List(
+        graphene.NonNull(CriteriaFieldType),
+        required=True,
+        description="Configuration fields required for this criteria type",
+    )
+    implemented = graphene.Boolean(
+        required=True, description="Whether the evaluation logic is implemented"
+    )
+
+
 # ---------------- Agent Configuration Types ----------------
 class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for agent configurations."""

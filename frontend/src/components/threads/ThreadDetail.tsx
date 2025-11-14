@@ -84,7 +84,11 @@ const ThreadHeader = styled.div`
   border-bottom: 2px solid rgba(0, 0, 0, 0.06);
   padding-bottom: ${spacing.xl};
   margin-bottom: ${spacing.xl};
-  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(248,250,252,0.5) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(248, 250, 252, 0.5) 100%
+  );
   padding: ${spacing.xl} 0;
   border-radius: 12px;
 `;
@@ -299,7 +303,9 @@ export function ThreadDetail({
         <ThreadMeta>
           <MetaItem>
             Started by{" "}
-            <strong>{formatUsername(thread.creator?.username, thread.creator?.email)}</strong>
+            <strong>
+              {formatUsername(thread.creator?.username, thread.creator?.email)}
+            </strong>
           </MetaItem>
 
           <Separator>•</Separator>
@@ -347,7 +353,13 @@ export function ThreadDetail({
 
       {/* Bottom-level message composer */}
       {!thread.isLocked && (
-        <div style={{ marginTop: spacing.lg, paddingTop: spacing.lg, borderTop: `1px solid ${color.N4}` }}>
+        <div
+          style={{
+            marginTop: spacing.lg,
+            paddingTop: spacing.lg,
+            borderTop: `1px solid ${color.N4}`,
+          }}
+        >
           <ReplyForm
             conversationId={conversationId}
             onSuccess={() => {

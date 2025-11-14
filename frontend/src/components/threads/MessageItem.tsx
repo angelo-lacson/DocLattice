@@ -7,9 +7,9 @@ import { spacing } from "../../theme/spacing";
 import { MessageNode } from "./utils";
 import { RelativeTime } from "./RelativeTime";
 import { MessageBadges } from "../badges/MessageBadges";
-import { parseMentionsInContent } from "./MentionChip";
+import { MarkdownMessageRenderer } from "./MarkdownMessageRenderer";
 import { formatUsername } from "./userUtils";
-import { UserBadgeType, MentionedResourceType } from "../../types/graphql-api";
+import { UserBadgeType } from "../../types/graphql-api";
 import {
   mapWebSocketSourcesToChatMessageSources,
   ChatMessageSource,
@@ -33,20 +33,24 @@ const MessageContainer = styled.div<{
   padding: ${spacing.xl};
   background: ${(props) => {
     if (props.$isDeleted) return color.N2;
-    if (props.$isHighlighted) return `linear-gradient(135deg, ${color.B1} 0%, #f0f9ff 100%)`;
+    if (props.$isHighlighted)
+      return `linear-gradient(135deg, ${color.B1} 0%, #f0f9ff 100%)`;
     return "white";
   }};
-  border: 1px solid ${(props) => {
-    if (props.$isHighlighted) return color.B4;
-    return "rgba(0, 0, 0, 0.06)";
-  }};
+  border: 1px solid
+    ${(props) => {
+      if (props.$isHighlighted) return color.B4;
+      return "rgba(0, 0, 0, 0.06)";
+    }};
   border-radius: 16px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   margin-bottom: ${spacing.lg};
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
   position: relative;
 
-  ${(props) => props.$isHighlighted && `
+  ${(props) =>
+    props.$isHighlighted &&
+    `
     &::before {
       content: '';
       position: absolute;
@@ -62,7 +66,8 @@ const MessageContainer = styled.div<{
   &:hover {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
     transform: translateY(-2px);
-    border-color: ${(props) => (props.$isHighlighted ? color.B5 : "rgba(0, 0, 0, 0.1)")};
+    border-color: ${(props) =>
+      props.$isHighlighted ? color.B5 : "rgba(0, 0, 0, 0.1)"};
   }
 
   ${(props) =>
@@ -308,7 +313,10 @@ export function MessageItem({
   userBadges = [],
 }: MessageItemProps) {
   const isDeleted = !!message.deletedAt;
-  const username = formatUsername(message.creator?.username, message.creator?.email);
+  const username = formatUsername(
+    message.creator?.username,
+    message.creator?.email
+  );
 
   // State for sources expansion and selection
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
@@ -416,11 +424,8 @@ export function MessageItem({
         {isDeleted ? (
           <p>[This message has been deleted]</p>
         ) : (
-          // Render content with mention chips (Issue #623)
-          parseMentionsInContent(
-            message.content || "",
-            (message.mentionedResources as MentionedResourceType[]) || []
-          )
+          // Render markdown content with styled mentions (Issue #623)
+          <MarkdownMessageRenderer content={message.content || ""} />
         )}
       </MessageContent>
 

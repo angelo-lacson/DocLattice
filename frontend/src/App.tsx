@@ -35,6 +35,7 @@ import {
   backendUserObj,
   editingDocument,
   viewingDocument,
+  selectedFolderId,
 } from "./graphql/cache";
 import { GET_ME, GetMeOutputs } from "./graphql/queries";
 
@@ -98,6 +99,7 @@ export const App = () => {
   const opened_document = useReactiveVar(openedDocument);
   const document_to_edit = useReactiveVar(editingDocument);
   const document_to_view = useReactiveVar(viewingDocument);
+  const selected_folder_id = useReactiveVar(selectedFolderId);
   const show_corpus_analyzer_fieldset_modal = useReactiveVar(
     showSelectCorpusAnalyzerOrFieldsetModal
   );
@@ -328,6 +330,7 @@ export const App = () => {
                   uploadModalPreloadedFiles([]);
                 }}
                 corpusId={opened_corpus?.id || null}
+                folderId={selected_folder_id}
               />
               <CRUDModal
                 open={document_to_edit !== null}

@@ -81,24 +81,29 @@ export function useResourceMentionSearch(
       })) || [];
 
     const documentResults: MentionResource[] =
-      documentData?.searchDocumentsForMention?.edges?.map((edge) => ({
-        id: edge.node.id,
-        slug: edge.node.slug,
-        title: edge.node.title,
-        type: "document" as const,
-        creator: {
-          slug: edge.node.creator.slug,
-        },
-        corpus: edge.node.corpus
-          ? {
-              slug: edge.node.corpus.slug,
-              title: edge.node.corpus.title,
-              creator: {
-                slug: edge.node.corpus.creator.slug,
-              },
-            }
-          : undefined,
-      })) || [];
+      documentData?.searchDocumentsForMention?.edges?.map((edge) => {
+        // Documents use ManyToMany - take first corpus if available
+        const firstCorpus = edge.node.corpusSet?.edges?.[0]?.node;
+
+        return {
+          id: edge.node.id,
+          slug: edge.node.slug,
+          title: edge.node.title,
+          type: "document" as const,
+          creator: {
+            slug: edge.node.creator.slug,
+          },
+          corpus: firstCorpus
+            ? {
+                slug: firstCorpus.slug,
+                title: firstCorpus.title,
+                creator: {
+                  slug: firstCorpus.creator.slug,
+                },
+              }
+            : undefined,
+        };
+      }) || [];
 
     // Combine and limit to 10 total results
     const combined = [...corpusResults, ...documentResults].slice(0, 10);

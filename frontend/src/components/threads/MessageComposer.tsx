@@ -1,21 +1,24 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Mention from "@tiptap/extension-mention";
+import Link from "@tiptap/extension-link";
+import { Markdown } from "tiptap-markdown";
 import { ReactRenderer } from "@tiptap/react";
 import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
 import { color } from "../../theme/colors";
-import { MentionPicker, MentionPickerRef } from "./MentionPicker";
 import {
-  ResourceMentionPicker,
-  ResourceMentionPickerRef,
-  MentionResource,
-} from "./ResourceMentionPicker";
-import { useMentionUsers } from "./hooks/useMentionUsers";
-import { useResourceMentionSearch } from "./hooks/useResourceMentionSearch";
+  UnifiedMentionPicker,
+  UnifiedMentionPickerRef,
+} from "./UnifiedMentionPicker";
+import {
+  useUnifiedMentionSearch,
+  UnifiedMentionResource,
+} from "./hooks/useUnifiedMentionSearch";
+import type { MarkdownStorage } from "tiptap-markdown";
 
 const ComposerContainer = styled.div`
   display: flex;
@@ -29,7 +32,8 @@ const ComposerContainer = styled.div`
 
   &:focus-within {
     border-color: ${color.B5};
-    box-shadow: 0 6px 24px rgba(74, 144, 226, 0.15), 0 2px 8px rgba(74, 144, 226, 0.1);
+    box-shadow: 0 6px 24px rgba(74, 144, 226, 0.15),
+      0 2px 8px rgba(74, 144, 226, 0.1);
   }
 `;
 
@@ -212,10 +216,10 @@ export interface MessageComposerProps {
   error?: string;
   /** Auto-focus on mount */
   autoFocus?: boolean;
-  /** Enable @ mentions for users (default: true) */
+  /** Enable @ mentions (default: true) */
   enableMentions?: boolean;
-  /** Enable @ mentions for resources (corpus/document) (default: true) */
-  enableResourceMentions?: boolean;
+  /** Corpus ID for context-aware annotation search */
+  corpusId?: string;
 }
 
 export function MessageComposer({
@@ -228,17 +232,51 @@ export function MessageComposer({
   error,
   autoFocus = false,
   enableMentions = true,
-  enableResourceMentions = true,
+  corpusId,
 }: MessageComposerProps) {
-  const [resourceSearchQuery, setResourceSearchQuery] = React.useState("");
+  const [mentionSearchQuery, setMentionSearchQuery] = React.useState("");
   const [characterCount, setCharacterCount] = React.useState(0);
-  const { resources } = useResourceMentionSearch(resourceSearchQuery);
+
+  // Unified mention search for all resource types
+  const { allResults, loading } = useUnifiedMentionSearch(
+    mentionSearchQuery,
+    corpusId // Context-aware annotation search
+  );
+
+  // Use ref to always get latest results (TipTap captures closure)
+  const allResultsRef = useRef(allResults);
+  const loadingRef = useRef(loading);
+  const mentionComponentRef = useRef<any>(null);
+
+  useEffect(() => {
+    allResultsRef.current = allResults;
+    loadingRef.current = loading;
+
+    // Update the component props when results arrive
+    if (mentionComponentRef.current) {
+      mentionComponentRef.current.updateProps({
+        resources: allResults,
+        loading,
+      });
+    }
+  }, [allResults, loading]);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         // Disable code blocks and blockquotes for simpler UX
         codeBlock: false,
         blockquote: false,
+      }),
+      Markdown.configure({
+        html: false, // Disable HTML in markdown
+        linkify: true, // Auto-convert URLs to links
+        breaks: true, // Convert \n to <br>
+      }),
+      Link.configure({
+        openOnClick: false, // Don't open links while editing
+        HTMLAttributes: {
+          class: "mention-link", // Style mention links
+        },
       }),
       Placeholder.configure({
         placeholder,
@@ -247,101 +285,17 @@ export function MessageComposer({
         ? [
             Mention.configure({
               HTMLAttributes: {
-                class: "mention mention-user",
+                class: "mention mention-unified",
               },
               suggestion: {
                 char: "@",
                 items: ({ query }: { query: string }) => {
-                  // User mentions - handled by suggestion plugin
-                  return [];
+                  // Trigger unified search for all resource types
+                  setMentionSearchQuery(query);
+                  return allResultsRef.current;
                 },
                 render: () => {
-                  let component: ReactRenderer<MentionPickerRef> | null = null;
-                  let popup: HTMLDivElement | null = null;
-
-                  const updatePosition = (props: any) => {
-                    if (!popup || !props.clientRect) return;
-
-                    const virtualReference = {
-                      getBoundingClientRect: props.clientRect,
-                    };
-
-                    computePosition(virtualReference, popup, {
-                      placement: "bottom-start",
-                      middleware: [offset(8), flip(), shift({ padding: 8 })],
-                    }).then(({ x, y }) => {
-                      Object.assign(popup!.style, {
-                        left: `${x}px`,
-                        top: `${y}px`,
-                      });
-                    });
-                  };
-
-                  return {
-                    onStart: (props: any) => {
-                      component = new ReactRenderer(MentionPicker, {
-                        props: {
-                          ...props,
-                          users: [],
-                        },
-                        editor: props.editor,
-                      });
-
-                      if (!props.clientRect) {
-                        return;
-                      }
-
-                      popup = document.createElement("div");
-                      popup.style.position = "absolute";
-                      popup.style.zIndex = "9999";
-                      popup.appendChild(component.element);
-                      document.body.appendChild(popup);
-
-                      updatePosition(props);
-                    },
-
-                    onUpdate(props: any) {
-                      component?.updateProps({
-                        ...props,
-                        users: [],
-                      });
-
-                      updatePosition(props);
-                    },
-
-                    onKeyDown(props: any) {
-                      if (props.event.key === "Escape") {
-                        return true;
-                      }
-
-                      return component?.ref?.onKeyDown(props) ?? false;
-                    },
-
-                    onExit() {
-                      popup?.remove();
-                      component?.destroy();
-                    },
-                  };
-                },
-              },
-            }),
-          ]
-        : []),
-      ...(enableResourceMentions
-        ? [
-            Mention.extend({ name: "resourceMention" }).configure({
-              HTMLAttributes: {
-                class: "mention mention-resource",
-              },
-              suggestion: {
-                char: "@",
-                items: ({ query }: { query: string }) => {
-                  // Trigger resource search
-                  setResourceSearchQuery(query);
-                  return resources;
-                },
-                render: () => {
-                  let component: ReactRenderer<ResourceMentionPickerRef> | null =
+                  let component: ReactRenderer<UnifiedMentionPickerRef> | null =
                     null;
                   let popup: HTMLDivElement | null = null;
 
@@ -363,41 +317,105 @@ export function MessageComposer({
                     });
                   };
 
+                  /**
+                   * Generate mention format and deep link URL based on resource type
+                   */
+                  const getMentionData = (resource: UnifiedMentionResource) => {
+                    switch (resource.type) {
+                      case "user":
+                        // Use slug if available, fallback to ID (auto-redirects to slug)
+                        const userIdent =
+                          resource.user!.slug || resource.user!.id;
+                        return {
+                          label: `@${resource.user!.username}`,
+                          href: `/users/${userIdent}`,
+                          type: "user",
+                        };
+
+                      case "corpus":
+                        return {
+                          label: `@corpus:${resource.corpus!.slug}`,
+                          href: `/c/${resource.corpus!.creator.slug}/${
+                            resource.corpus!.slug
+                          }`,
+                          type: "corpus",
+                        };
+
+                      case "document":
+                        const doc = resource.document!;
+                        const corpus = doc.corpus;
+                        return {
+                          label: corpus
+                            ? `@corpus:${corpus.slug}/document:${doc.slug}`
+                            : `@document:${doc.slug}`,
+                          href: corpus
+                            ? `/d/${corpus.creator.slug}/${corpus.slug}/${doc.slug}`
+                            : `/d/${doc.creator.slug}/${doc.slug}`,
+                          type: "document",
+                        };
+
+                      case "annotation":
+                        const ann = resource.annotation!;
+                        const annDoc = ann.document;
+                        const annCorpus = ann.corpus;
+                        // Deep link to annotation in document with optimal viewer settings
+                        const baseUrl = annCorpus
+                          ? `/d/${annCorpus.title}/${annDoc.title}`
+                          : `/d/${annDoc.title}`;
+                        return {
+                          label: `@annotation:${resource.id}`,
+                          href: `${baseUrl}?ann=${resource.id}&structural=true`,
+                          type: "annotation",
+                        };
+
+                      default:
+                        return {
+                          label: `@${resource.title}`,
+                          href: null,
+                          type: "unknown",
+                        };
+                    }
+                  };
+
                   return {
                     onStart: (props: any) => {
-                      // Check if query starts with "corpus:" or "document:"
-                      const query = props.query || "";
-                      if (
-                        !query.startsWith("corpus:") &&
-                        !query.startsWith("document:")
-                      ) {
-                        return; // Let user mention handle it
-                      }
-
-                      component = new ReactRenderer(ResourceMentionPicker, {
+                      component = new ReactRenderer(UnifiedMentionPicker, {
                         props: {
                           ...props,
-                          resources: resources,
-                          onSelect: (resource: MentionResource) => {
-                            // Generate mention format
-                            let mentionText = "";
-                            if (resource.type === "corpus") {
-                              mentionText = `@corpus:${resource.slug}`;
-                            } else if (resource.corpus) {
-                              mentionText = `@corpus:${resource.corpus.slug}/document:${resource.slug}`;
-                            } else {
-                              mentionText = `@document:${resource.slug}`;
-                            }
+                          resources: allResultsRef.current,
+                          loading: loadingRef.current,
+                          onSelect: (resource: UnifiedMentionResource) => {
+                            // Generate mention with deep link as markdown [text](url)
+                            const mentionData = getMentionData(resource);
 
-                            // Insert the mention
-                            props.command({
-                              id: resource.id,
-                              label: mentionText,
-                            });
+                            // Delete the @ trigger character and insert link
+                            props.editor
+                              .chain()
+                              .focus()
+                              .deleteRange(props.range) // Delete @query
+                              .insertContent([
+                                {
+                                  type: "text",
+                                  marks: mentionData.href
+                                    ? [
+                                        {
+                                          type: "link",
+                                          attrs: { href: mentionData.href },
+                                        },
+                                      ]
+                                    : [],
+                                  text: mentionData.label,
+                                },
+                                { type: "text", text: " " }, // Add space after mention
+                              ])
+                              .run();
                           },
                         },
                         editor: props.editor,
                       });
+
+                      // Store component ref for updates when results arrive
+                      mentionComponentRef.current = component;
 
                       if (!props.clientRect) {
                         return;
@@ -413,20 +431,35 @@ export function MessageComposer({
                     },
 
                     onUpdate(props: any) {
-                      const query = props.query || "";
-                      if (
-                        !query.startsWith("corpus:") &&
-                        !query.startsWith("document:")
-                      ) {
-                        // Close if not a resource mention
-                        popup?.remove();
-                        component?.destroy();
-                        return;
-                      }
-
                       component?.updateProps({
                         ...props,
-                        resources: resources,
+                        resources: allResultsRef.current,
+                        loading: loadingRef.current,
+                        onSelect: (resource: UnifiedMentionResource) => {
+                          const mentionData = getMentionData(resource);
+
+                          // Delete the @ trigger character and insert link
+                          props.editor
+                            .chain()
+                            .focus()
+                            .deleteRange(props.range)
+                            .insertContent([
+                              {
+                                type: "text",
+                                marks: mentionData.href
+                                  ? [
+                                      {
+                                        type: "link",
+                                        attrs: { href: mentionData.href },
+                                      },
+                                    ]
+                                  : [],
+                                text: mentionData.label,
+                              },
+                              { type: "text", text: " " },
+                            ])
+                            .run();
+                        },
                       });
 
                       updatePosition(props);
@@ -443,6 +476,7 @@ export function MessageComposer({
                     onExit() {
                       popup?.remove();
                       component?.destroy();
+                      mentionComponentRef.current = null;
                     },
                   };
                 },
@@ -456,7 +490,9 @@ export function MessageComposer({
     onUpdate: ({ editor }) => {
       const text = editor.getText();
       setCharacterCount(text.length);
-      onChange?.(editor.getHTML());
+      // Export as Markdown instead of HTML
+      const markdown = (editor.storage as any).markdown.getMarkdown();
+      onChange?.(markdown);
     },
   });
 
@@ -502,7 +538,8 @@ export function MessageComposer({
   const handleSubmit = useCallback(async () => {
     if (!editor || disabled) return;
 
-    const content = editor.getHTML();
+    // Export as Markdown instead of HTML
+    const content = (editor.storage as any).markdown.getMarkdown();
     const text = editor.getText();
 
     // Validate
