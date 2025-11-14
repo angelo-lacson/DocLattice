@@ -115,17 +115,13 @@ const EmptyState = styled.div`
 // GraphQL query for recent user activity
 const GET_RECENT_ACTIVITY = gql`
   query GetRecentActivity($userId: ID!) {
-    chatMessages(creatorId: $userId, first: 5, msgType: "HUMAN") {
-      edges {
-        node {
-          id
-          content
-          created
-          conversation {
-            id
-            title
-          }
-        }
+    userMessages(creatorId: $userId, first: 5, msgType: "HUMAN") {
+      id
+      content
+      created
+      conversation {
+        id
+        title
       }
     }
   }
@@ -160,7 +156,7 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ userId }) => {
     );
   }
 
-  const messages = data?.chatMessages?.edges?.map((e: any) => e.node) || [];
+  const messages = data?.userMessages || [];
 
   if (messages.length === 0) {
     return <EmptyState>No recent activity to display</EmptyState>;

@@ -87,9 +87,15 @@ class CreateBadgeMutation(graphene.Mutation):
                         badge=None,
                     )
 
-                # Check if user has permission for this corpus
-                if not user.is_superuser and not user_has_permission_for_obj(
-                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
+                # Check if user can manage this corpus (creator or has UPDATE permission)
+                if not (
+                    corpus.creator == user
+                    or user_has_permission_for_obj(
+                        user,
+                        corpus,
+                        PermissionTypes.UPDATE,
+                        include_group_permissions=True,
+                    )
                 ):
                     return CreateBadgeMutation(
                         ok=False,
@@ -206,10 +212,26 @@ class UpdateBadgeMutation(graphene.Mutation):
                     badge=None,
                 )
 
-            # Permission check
-            if not user.is_superuser and not user_has_permission_for_obj(
-                user, badge, PermissionTypes.CRUD, include_group_permissions=True
-            ):
+            # Permission check: For corpus badges, check corpus permissions
+            # For global badges, must be superuser
+            if badge.corpus:
+                # Corpus badge - check if creator or has UPDATE permission
+                if not (
+                    badge.corpus.creator == user
+                    or user_has_permission_for_obj(
+                        user,
+                        badge.corpus,
+                        PermissionTypes.UPDATE,
+                        include_group_permissions=True,
+                    )
+                ):
+                    return UpdateBadgeMutation(
+                        ok=False,
+                        message="Badge not found",
+                        badge=None,
+                    )
+            elif not user.is_superuser:
+                # Global badge - must be superuser
                 return UpdateBadgeMutation(
                     ok=False,
                     message="Badge not found",
@@ -315,10 +337,25 @@ class DeleteBadgeMutation(graphene.Mutation):
                     message="Badge not found",
                 )
 
-            # Permission check
-            if not user.is_superuser and not user_has_permission_for_obj(
-                user, badge, PermissionTypes.CRUD, include_group_permissions=True
-            ):
+            # Permission check: For corpus badges, check corpus permissions
+            # For global badges, must be superuser
+            if badge.corpus:
+                # Corpus badge - check if creator or has UPDATE permission
+                if not (
+                    badge.corpus.creator == user
+                    or user_has_permission_for_obj(
+                        user,
+                        badge.corpus,
+                        PermissionTypes.UPDATE,
+                        include_group_permissions=True,
+                    )
+                ):
+                    return DeleteBadgeMutation(
+                        ok=False,
+                        message="Badge not found",
+                    )
+            elif not user.is_superuser:
+                # Global badge - must be superuser
                 return DeleteBadgeMutation(
                     ok=False,
                     message="Badge not found",
