@@ -15,6 +15,27 @@ The badge system allows admins to create badges (global or corpus-specific) that
 - **Signal-driven**: Automatic badge checks triggered by user actions (messages, annotations)
 - **Dynamic UI**: Frontend adapts to selected criteria type via GraphQL introspection
 
+## Default Badges
+
+The system automatically installs 9 default global badges via migration `0005_install_default_badges.py`:
+
+**Engagement Badges:**
+- **First Steps** (🟢 green) - First message posted
+- **Conversationalist** (🔵 blue) - 10 messages posted
+- **Active Contributor** (🟣 purple) - 50 messages posted
+- **Discussion Leader** (🎀 pink) - 100 messages posted
+
+**Reputation Badges:**
+- **Helpful** (🟢 green) - Earned 10 reputation points
+- **Valued Contributor** (🟡 yellow) - Earned 50 reputation points
+- **Expert** (🟠 orange) - Earned 100 reputation points
+- **Master** (🔴 red) - Earned 500 reputation points
+
+**Quality Badge:**
+- **Popular Post** (🟡 amber) - Received 10 upvotes on a single message
+
+All default badges are auto-awarded and created by a system user on first migration.
+
 ## Backend Implementation
 
 ### 1. Models (`doclatticeserver/badges/models.py`)
@@ -240,6 +261,7 @@ self.assertIn("criteria_config", cm.exception.message_dict)
 - GraphQL Types: `config/graphql/graphene_types.py`
 - GraphQL Queries: `config/graphql/queries.py`
 - GraphQL Mutations: `config/graphql/badge_mutations.py`
+- Default Badges Migration: `doclatticeserver/badges/migrations/0005_install_default_badges.py`
 - Tests: `doclatticeserver/tests/test_badges.py`
 
 **Frontend:**
