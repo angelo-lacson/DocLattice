@@ -1958,6 +1958,70 @@ class Query(graphene.ObjectType):
 
     chat_message = relay.Node.Field(MessageType)
 
+    # User messages query for profile/activity feeds
+    user_messages = graphene.Field(
+        graphene.List(MessageType),
+        creator_id=graphene.ID(required=True),
+        first=graphene.Int(required=False, default_value=10),
+        msg_type=graphene.String(required=False),
+        order_by=graphene.String(required=False),
+        description="Get messages created by a specific user, with optional filtering and pagination",
+    )
+
+    @login_required
+    def resolve_user_messages(
+        self,
+        info: graphene.ResolveInfo,
+        creator_id: str,
+        first: int = 10,
+        msg_type: Optional[str] = None,
+        order_by: Optional[str] = None,
+        **kwargs,
+    ):
+        """
+        Resolver for fetching ChatMessage objects by creator for user profiles.
+
+        Args:
+            info (graphene.ResolveInfo): GraphQL resolve info
+            creator_id (str): Global Relay ID for User
+            first (int): Number of messages to return (default 10)
+            msg_type (Optional[str]): Filter by message type (HUMAN, AI_AGENT, SYSTEM)
+            order_by (Optional[str]): Field to order by. Defaults to "-created"
+
+        Returns:
+            QuerySet[ChatMessage]: Filtered and ordered chat messages
+        """
+        queryset = (
+            ChatMessage.objects.visible_to_user(info.context.user)
+            .select_related("conversation", "creator")
+            .prefetch_related("votes")
+        )
+
+        # Apply creator filter
+        creator_pk = from_global_id(creator_id)[1]
+        queryset = queryset.filter(creator_id=creator_pk)
+
+        # Apply msg_type filter if provided
+        if msg_type:
+            # Validate msg_type against ChatMessage.TYPE_CHOICES
+            valid_types = [choice[0] for choice in ChatMessage.TYPE_CHOICES]
+            if msg_type in valid_types:
+                queryset = queryset.filter(msg_type=msg_type)
+
+        # Apply ordering
+        valid_order_fields = {
+            "created",
+            "-created",
+            "modified",
+            "-modified",
+        }
+
+        order_field = order_by if order_by in valid_order_fields else "-created"
+        queryset = queryset.order_by(order_field)
+
+        # Limit results
+        return queryset[:first]
+
     @login_required
     def resolve_chat_message(self, info: graphene.ResolveInfo, **kwargs) -> ChatMessage:
         """
