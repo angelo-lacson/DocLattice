@@ -25,7 +25,7 @@ Example usage:
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -51,7 +51,7 @@ class CriteriaField:
     description: str = ""
     min_value: Optional[int] = None
     max_value: Optional[int] = None
-    allowed_values: Optional[List[str]] = None
+    allowed_values: Optional[list[str]] = None
 
 
 @dataclass
@@ -72,7 +72,7 @@ class CriteriaTypeDefinition:
     name: str
     description: str
     scope: str  # "global", "corpus", "both"
-    fields: List[CriteriaField]
+    fields: list[CriteriaField]
     implemented: bool = True
 
 
@@ -84,7 +84,7 @@ class BadgeCriteriaRegistry:
     provides validation methods to ensure criteria configs are valid.
     """
 
-    _criteria_types: Dict[str, CriteriaTypeDefinition] = {}
+    _criteria_types: dict[str, CriteriaTypeDefinition] = {}
 
     @classmethod
     def register(cls, criteria_def: CriteriaTypeDefinition) -> None:
@@ -110,7 +110,7 @@ class BadgeCriteriaRegistry:
         return cls._criteria_types.get(type_id)
 
     @classmethod
-    def all(cls) -> List[CriteriaTypeDefinition]:
+    def all(cls) -> list[CriteriaTypeDefinition]:
         """
         Get all registered criteria types.
 
@@ -120,7 +120,7 @@ class BadgeCriteriaRegistry:
         return list(cls._criteria_types.values())
 
     @classmethod
-    def for_scope(cls, scope: str) -> List[CriteriaTypeDefinition]:
+    def for_scope(cls, scope: str) -> list[CriteriaTypeDefinition]:
         """
         Get criteria types available for a specific scope.
 
@@ -358,7 +358,8 @@ BadgeCriteriaRegistry.register(
     CriteriaTypeDefinition(
         type_id="message_upvotes",
         name="Message Upvotes",
-        description="Award when user has a message with a certain number of upvotes (NOT YET IMPLEMENTED - voting system needed)",
+        description="Award when user has a message with a certain number of "
+        "upvotes (NOT YET IMPLEMENTED - voting system needed)",
         scope="both",
         fields=[
             CriteriaField(

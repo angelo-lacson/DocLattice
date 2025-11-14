@@ -933,7 +933,9 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
                 icon="Star",
                 badge_type=BadgeTypeChoices.GLOBAL,
                 is_auto_awarded=True,
-                criteria_config={"type": BadgeCriteriaType.MESSAGE_COUNT},  # Missing count
+                criteria_config={
+                    "type": BadgeCriteriaType.MESSAGE_COUNT
+                },  # Missing count
                 creator=self.admin_user,
                 is_public=True,
             )

@@ -1054,7 +1054,7 @@ class Query(graphene.ObjectType):
 
         # Order by label match first (more relevant), then by created date
         # Annotations matching label text are usually more specific/useful
-        from django.db.models import Case, When, Value, IntegerField
+        from django.db.models import Case, IntegerField, Value, When
 
         if text_search:
             qs = qs.annotate(

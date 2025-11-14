@@ -2068,7 +2068,9 @@ class CriteriaFieldType(graphene.ObjectType):
     required = graphene.Boolean(
         required=True, description="Whether this field must be present in configuration"
     )
-    description = graphene.String(description="Help text explaining the field's purpose")
+    description = graphene.String(
+        description="Help text explaining the field's purpose"
+    )
     min_value = graphene.Int(
         description="Minimum allowed value (for number fields only)"
     )
