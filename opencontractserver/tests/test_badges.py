@@ -721,6 +721,11 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             is_public=True,
         )
 
+        # Delete default badges from migration to have a clean test environment
+        Badge.objects.filter(
+            badge_type=BadgeTypeChoices.GLOBAL, is_auto_awarded=True
+        ).delete()
+
         # Create auto-award badge for first post
         self.first_post_badge = Badge.objects.create(
             name="First Post",

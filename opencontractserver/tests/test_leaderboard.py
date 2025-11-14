@@ -50,6 +50,7 @@ class LeaderboardQueryTestCase(TestCase):
             badge_type="GLOBAL",
             color="#FFD700",
             is_auto_awarded=True,
+            criteria_config={"type": "first_post"},
         )
         self.badge2 = Badge.objects.create(
             creator=self.user1,
@@ -59,6 +60,7 @@ class LeaderboardQueryTestCase(TestCase):
             badge_type="GLOBAL",
             color="#C0C0C0",
             is_auto_awarded=True,
+            criteria_config={"type": "message_count", "value": 100},
         )
 
         # Award badges to users
