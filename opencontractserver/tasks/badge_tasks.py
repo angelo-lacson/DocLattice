@@ -131,11 +131,25 @@ def _check_badge_criteria(
         return False
 
     criteria_type = badge.criteria_config.get("type")
-    value = badge.criteria_config.get("value")
 
-    if not criteria_type or value is None:
+    if not criteria_type:
         logger.warning(f"Badge {badge.name} has incomplete criteria config")
         return False
+
+    # Validate criteria config against registry
+    from opencontractserver.badges.criteria_registry import BadgeCriteriaRegistry
+
+    is_valid, error_message = BadgeCriteriaRegistry.validate_config(
+        badge.criteria_config
+    )
+    if not is_valid:
+        logger.warning(
+            f"Badge {badge.name} has invalid criteria config: {error_message}"
+        )
+        return False
+
+    # Get value field if criteria type uses it
+    value = badge.criteria_config.get("value")
 
     try:
         if criteria_type == BadgeCriteriaType.REPUTATION:

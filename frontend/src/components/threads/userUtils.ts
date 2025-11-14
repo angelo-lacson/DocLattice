@@ -20,20 +20,25 @@
  * formatUsername("john_doe", "john@example.com") // "john_doe"
  * formatUsername("google-oauth2|123456", undefined) // "User"
  */
-export function formatUsername(username?: string | null, email?: string | null): string {
+export function formatUsername(
+  username?: string | null,
+  email?: string | null
+): string {
   if (!username && !email) return "Anonymous";
 
   const rawUsername = username || email;
   if (!rawUsername) return "Anonymous";
 
   // Detect OAuth ID patterns (e.g., "google-oauth2|114688257717759010643", "auth0|123456")
-  const isOAuthId = rawUsername.match(/^(google-oauth2|auth0|github|twitter|facebook|linkedin)\|/);
+  const isOAuthId = rawUsername.match(
+    /^(google-oauth2|auth0|github|twitter|facebook|linkedin)\|/
+  );
 
   if (isOAuthId && email) {
     // Extract local part of email (before @)
-    const emailLocal = email.split('@')[0];
+    const emailLocal = email.split("@")[0];
     // Clean up email local parts that might have dots or plus addressing
-    return emailLocal.replace(/\+.*$/, '').replace(/\./g, ' ');
+    return emailLocal.replace(/\+.*$/, "").replace(/\./g, " ");
   }
 
   if (isOAuthId) {

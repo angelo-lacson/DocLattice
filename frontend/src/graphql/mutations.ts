@@ -781,11 +781,14 @@ export interface UploadDocumentInputProps {
   description?: string;
   title?: string;
   addToCorpusId?: string;
+  addToFolderId?: string;
   slug?: string;
 }
 
 export interface UploadDocumentOutputProps {
   uploadDocument: {
+    ok: boolean;
+    message: string;
     document: {
       id: string;
       icon: string;
@@ -793,6 +796,7 @@ export interface UploadDocumentOutputProps {
       title: string;
       description: string;
       backendLock: boolean;
+      fileType: string;
       docAnnotations: {
         edges: {
           node: {
@@ -800,7 +804,7 @@ export interface UploadDocumentOutputProps {
           };
         };
       }[];
-    };
+    } | null;
   };
 }
 
@@ -814,6 +818,7 @@ export const UPLOAD_DOCUMENT = gql`
     $makePublic: Boolean!
     $addToCorpusId: ID
     $addToExtractId: ID
+    $addToFolderId: ID
     $slug: String
   ) {
     uploadDocument(
@@ -825,8 +830,11 @@ export const UPLOAD_DOCUMENT = gql`
       makePublic: $makePublic
       addToCorpusId: $addToCorpusId
       addToExtractId: $addToExtractId
+      addToFolderId: $addToFolderId
       slug: $slug
     ) {
+      ok
+      message
       document {
         id
         icon
@@ -2461,7 +2469,7 @@ export const CREATE_THREAD = gql`
     ) {
       ok
       message
-      conversation {
+      obj {
         id
         title
         description
@@ -2481,7 +2489,7 @@ export interface CreateThreadOutput {
   createThread: {
     ok: boolean;
     message: string;
-    conversation?: {
+    obj?: {
       id: string;
       title: string;
       description?: string;
