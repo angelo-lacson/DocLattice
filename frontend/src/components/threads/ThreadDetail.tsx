@@ -36,27 +36,27 @@ interface ThreadDetailProps {
 }
 
 const ThreadDetailContainer = styled.div<{ $compact?: boolean }>`
-  max-width: ${(props) => (props.$compact ? "100%" : "1600px")};
+  max-width: ${(props) => (props.$compact ? "100%" : "100%")};
   margin: 0 auto;
-  padding: ${(props) => (props.$compact ? spacing.md : "2rem")};
+  padding: ${(props) => (props.$compact ? "1.5rem" : "2rem 10%")};
   width: 100%;
-  background: ${color.N1};
+  background: #f5f7fa;
 
-  @media (max-width: 1920px) {
-    max-width: ${(props) => (props.$compact ? "100%" : "1400px")};
-  }
-
-  @media (max-width: 1440px) {
-    max-width: ${(props) => (props.$compact ? "100%" : "1200px")};
+  @media (max-width: 1600px) {
+    padding: ${(props) => (props.$compact ? "1.5rem" : "2rem 5%")};
   }
 
   @media (max-width: 1024px) {
     max-width: 100%;
-    padding: ${(props) => (props.$compact ? spacing.md : "1.5rem")};
+    padding: ${(props) => (props.$compact ? "1rem" : "1.5rem 3%")};
   }
 
   @media (max-width: 768px) {
-    padding: ${spacing.md};
+    padding: 1rem 2%;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.75rem 1%;
   }
 `;
 
@@ -64,61 +64,78 @@ const BackButton = styled.button`
   display: flex;
   align-items: center;
   gap: ${spacing.xs};
-  background: none;
-  border: none;
-  color: ${color.N7};
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #4b5563;
   cursor: pointer;
   font-size: 14px;
+  font-weight: 500;
   padding: ${spacing.xs} ${spacing.sm};
-  border-radius: 4px;
+  border-radius: 6px;
   margin-bottom: ${spacing.md};
   transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    background: ${color.N3};
-    color: ${color.N9};
+    background: #f9fafb;
+    color: #111827;
+    border-color: #9ca3af;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 `;
 
 const ThreadHeader = styled.div`
-  border-bottom: 2px solid rgba(0, 0, 0, 0.06);
-  padding-bottom: ${spacing.xl};
-  margin-bottom: ${spacing.xl};
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 1.75rem;
+  margin-bottom: 2rem;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(248, 250, 252, 0.5) 100%
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(249, 250, 251, 0.4) 100%
   );
-  padding: ${spacing.xl} 0;
+  padding: 1.75rem 0;
   border-radius: 12px;
 `;
 
 const BadgeRow = styled.div`
   display: flex;
-  gap: ${spacing.xs};
-  margin-bottom: ${spacing.sm};
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 `;
 
 const ThreadTitleLarge = styled.h1`
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 800;
-  color: ${color.N10};
-  margin: 0 0 ${spacing.md} 0;
+  color: #111827;
+  margin: 0 0 1rem 0;
   line-height: 1.2;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     font-size: 28px;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 24px;
   }
 `;
 
 const ThreadDescription = styled.p`
   font-size: 17px;
-  color: ${color.N7};
+  color: #4b5563;
   line-height: 1.7;
-  margin: 0 0 ${spacing.lg} 0;
+  margin: 0 0 1.25rem 0;
   font-weight: 400;
+
+  @media (max-width: 768px) {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 15px;
+  }
 `;
 
 const ThreadMeta = styled.div`
@@ -126,7 +143,7 @@ const ThreadMeta = styled.div`
   align-items: center;
   gap: ${spacing.md};
   font-size: 13px;
-  color: ${color.N6};
+  color: #6b7280;
   flex-wrap: wrap;
 `;
 
@@ -134,16 +151,22 @@ const MetaItem = styled.span`
   display: flex;
   align-items: center;
   gap: 4px;
+
+  strong {
+    color: #374151;
+    font-weight: 600;
+  }
 `;
 
 const Separator = styled.span`
-  color: ${color.N5};
+  color: #d1d5db;
 `;
 
 const MessageListContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: ${spacing.md};
+  width: 100%;
 `;
 
 const EmptyMessageState = styled.div`
@@ -338,7 +361,11 @@ export function ThreadDetail({
           />
         </EmptyMessageState>
       ) : (
-        <MessageListContainer role="list" aria-label="Discussion messages">
+        <MessageListContainer
+          role="list"
+          aria-label="Discussion messages"
+          style={{ width: "100%" }}
+        >
           <MessageTree
             messages={messageTree}
             highlightedMessageId={selectedMessageId}
