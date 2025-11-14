@@ -52,7 +52,17 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
    - Corpus-level permissions can provide additional context when viewing documents
    - **Anonymous users**: Read-only access if `is_public=True`
 
-2. **Annotations and Relationships - NO INDIVIDUAL PERMISSIONS**
+2. **CorpusFolder - INHERITS CORPUS PERMISSIONS**
+   - **NO individual permissions** - CorpusFolder objects do NOT have their own permission records
+   - Inherits ALL permissions from parent Corpus
+   - **Write operations** (create, update, move, delete folders) require:
+     - User is Corpus creator, OR
+     - User has `PermissionTypes.UPDATE` permission on parent Corpus (with `include_group_permissions=True`)
+   - **CRITICAL SECURITY**: `corpus.is_public=True` grants READ-ONLY access, NOT write access
+   - Never check `corpus.is_public` for write permission authorization
+   - Implementation: `config/graphql/corpus_folder_mutations.py`
+
+3. **Annotations and Relationships - NO INDIVIDUAL PERMISSIONS**
    - **IMPORTANT: Annotations and Relationships do NOT have individual permissions**
    - Both annotations and relationships inherit permissions from their parent document and corpus
    - **Document permissions are PRIMARY** (most restrictive)
@@ -63,7 +73,7 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
    - **CRITICAL**: Structural annotations and relationships are ALWAYS read-only except for superusers
    - Relationships use the same permission inheritance model as annotations (implemented at `permissioning.py:376-433`)
 
-3. **Analyses and Extracts - HYBRID MODEL**
+4. **Analyses and Extracts - HYBRID MODEL**
    - Have their own individual permissions (can be shared independently)
    - **Visibility requires THREE conditions**:
      1. Permission on the analysis/extract object itself

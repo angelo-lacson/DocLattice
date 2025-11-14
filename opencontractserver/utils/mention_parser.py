@@ -59,11 +59,10 @@ def parse_mentions_from_content(markdown_content: str) -> dict[str, set[str]]:
     }
 
     # Regex to find markdown links: [text](url)
-    link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+    link_pattern = r"\[([^\]]+)\]\(([^)]+)\)"
     matches = re.finditer(link_pattern, markdown_content)
 
     for match in matches:
-        text = match.group(1)
         url = match.group(2)
 
         # Parse URL to extract slugs/IDs
@@ -72,31 +71,31 @@ def parse_mentions_from_content(markdown_content: str) -> dict[str, set[str]]:
         query_params = parse_qs(parsed.query)
 
         # User: /users/{userSlug}
-        if path.startswith('/users/'):
-            parts = path.split('/')
+        if path.startswith("/users/"):
+            parts = path.split("/")
             if len(parts) >= 3:
                 user_slug = parts[2]
                 mentioned["users"].add(user_slug)
                 logger.debug(f"Found user mention: {user_slug}")
 
         # Corpus: /c/{userIdent}/{corpusIdent}
-        elif path.startswith('/c/'):
-            parts = path.split('/')
+        elif path.startswith("/c/"):
+            parts = path.split("/")
             if len(parts) >= 4:
                 corpus_slug = parts[3]
                 mentioned["corpuses"].add(corpus_slug)
                 logger.debug(f"Found corpus mention: {corpus_slug}")
 
         # Document or Annotation: /d/{userIdent}/...
-        elif path.startswith('/d/'):
+        elif path.startswith("/d/"):
             # Check for annotation query param
-            if 'ann' in query_params:
-                ann_id = query_params['ann'][0]
+            if "ann" in query_params:
+                ann_id = query_params["ann"][0]
                 mentioned["annotations"].add(ann_id)
                 logger.debug(f"Found annotation mention: {ann_id}")
             else:
                 # Document: /d/{userIdent}/{corpusIdent}/{docIdent} or /d/{userIdent}/{docIdent}
-                parts = path.split('/')
+                parts = path.split("/")
                 if len(parts) >= 5:
                     # With corpus: /d/{userIdent}/{corpusIdent}/{docIdent}
                     doc_slug = parts[4]
@@ -172,7 +171,9 @@ def link_message_to_resources(
             result["documents_linked"] = 1
             logger.debug(f"Linked message {chat_message.pk} to document {document.pk}")
         except Document.DoesNotExist:
-            logger.warning(f"Document with slug '{doc_slug}' not found or not accessible")
+            logger.warning(
+                f"Document with slug '{doc_slug}' not found or not accessible"
+            )
         except Exception as e:
             logger.error(f"Error linking document '{doc_slug}' to message: {e}")
 

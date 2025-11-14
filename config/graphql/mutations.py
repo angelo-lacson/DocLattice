@@ -1450,7 +1450,8 @@ class UploadDocument(graphene.Mutation):
         )
         add_to_folder_id = graphene.ID(
             required=False,
-            description="If provided along with add_to_corpus_id, the document will be assigned to this folder within the corpus",
+            description="If provided along with add_to_corpus_id, the document "
+            "will be assigned to this folder within the corpus",
         )
         make_public = graphene.Boolean(
             required=True,
@@ -1567,7 +1568,9 @@ class UploadDocument(graphene.Mutation):
                 try:
                     corpus = Corpus.objects.get(id=from_global_id(add_to_corpus_id)[1])
                     corpus.documents.add(document)
-                    logger.info(f"[UPLOAD] Added document {document.id} to corpus {corpus.id}")
+                    logger.info(
+                        f"[UPLOAD] Added document {document.id} to corpus {corpus.id}"
+                    )
 
                     # Handle folder assignment if folder_id provided
                     # This must happen synchronously (not in on_commit) so frontend refetch sees it
@@ -1577,14 +1580,20 @@ class UploadDocument(graphene.Mutation):
 
                         # Create or update the folder assignment
                         # Use update_or_create to handle case where document already has a folder assignment
-                        folder_assignment, created = CorpusDocumentFolder.objects.update_or_create(
-                            document=document,
-                            corpus=corpus,
-                            defaults={'folder': folder}
+                        folder_assignment, created = (
+                            CorpusDocumentFolder.objects.update_or_create(
+                                document=document,
+                                corpus=corpus,
+                                defaults={"folder": folder},
+                            )
                         )
-                        logger.info(f"[UPLOAD] Assigned document {document.id} to folder {folder.id} (created={created})")
+                        logger.info(
+                            f"[UPLOAD] Assigned document {document.id} to folder {folder.id} (created={created})"
+                        )
                     else:
-                        logger.info(f"[UPLOAD] No folder assignment for document {document.id}")
+                        logger.info(
+                            f"[UPLOAD] No folder assignment for document {document.id}"
+                        )
                 except Exception as e:
                     logger.error(f"[UPLOAD] Error adding to corpus: {e}")
                     message = f"Adding to corpus failed due to error: {e}"

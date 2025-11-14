@@ -233,10 +233,14 @@ class UpdateBadgeMutation(graphene.Mutation):
             # Validate criteria_config if badge will be auto-awarded
             # Check the final state after all updates
             final_is_auto_awarded = (
-                is_auto_awarded if is_auto_awarded is not None else badge.is_auto_awarded
+                is_auto_awarded
+                if is_auto_awarded is not None
+                else badge.is_auto_awarded
             )
             final_criteria_config = (
-                criteria_config if criteria_config is not None else badge.criteria_config
+                criteria_config
+                if criteria_config is not None
+                else badge.criteria_config
             )
 
             if final_is_auto_awarded:
