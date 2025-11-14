@@ -153,11 +153,27 @@ def _check_badge_criteria(
 
     try:
         if criteria_type == BadgeCriteriaType.REPUTATION:
-            # Check user's reputation
-            # Note: This assumes you have a reputation system in place
-            # For now, we'll use a placeholder
-            # TODO: Implement actual reputation check when reputation system is in place
-            return False
+            # Check user's reputation score
+            from opencontractserver.conversations.models import UserReputation
+
+            if corpus:
+                # Corpus-specific reputation
+                try:
+                    reputation = UserReputation.objects.get(user=user, corpus=corpus)
+                    return reputation.reputation_score >= int(value)
+                except UserReputation.DoesNotExist:
+                    # No reputation record means score is 0
+                    return int(value) <= 0
+            else:
+                # Global reputation (corpus=null)
+                try:
+                    reputation = UserReputation.objects.get(
+                        user=user, corpus__isnull=True
+                    )
+                    return reputation.reputation_score >= int(value)
+                except UserReputation.DoesNotExist:
+                    # No reputation record means score is 0
+                    return int(value) <= 0
 
         elif criteria_type == BadgeCriteriaType.MESSAGE_COUNT:
             # Check number of messages created
@@ -185,8 +201,27 @@ def _check_badge_criteria(
 
         elif criteria_type == BadgeCriteriaType.MESSAGE_UPVOTES:
             # Check if user has a message with N upvotes
-            # Note: This assumes you have a voting system in place
-            # TODO: Implement when voting system is available
+            from opencontractserver.conversations.models import MessageVote, VoteType
+
+            # Get user's messages in the appropriate scope
+            if corpus:
+                # Corpus-specific messages
+                user_messages = ChatMessage.objects.filter(
+                    creator=user, conversation__chat_with_corpus=corpus
+                )
+            else:
+                # All messages
+                user_messages = ChatMessage.objects.filter(creator=user)
+
+            # For each message, count upvotes and check if any meets threshold
+            for message in user_messages:
+                upvote_count = MessageVote.objects.filter(
+                    message=message, vote_type=VoteType.UPVOTE
+                ).count()
+
+                if upvote_count >= int(value):
+                    return True
+
             return False
 
         elif criteria_type == BadgeCriteriaType.CORPUS_CONTRIBUTION:
