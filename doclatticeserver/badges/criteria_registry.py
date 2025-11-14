@@ -337,7 +337,7 @@ BadgeCriteriaRegistry.register(
     CriteriaTypeDefinition(
         type_id="reputation_threshold",
         name="Reputation Threshold",
-        description="Award when user reaches a reputation score (NOT YET IMPLEMENTED - reputation system needed)",
+        description="Award when user reaches a reputation score based on upvotes/downvotes received",
         scope="both",
         fields=[
             CriteriaField(
@@ -350,7 +350,7 @@ BadgeCriteriaRegistry.register(
                 max_value=100000,
             )
         ],
-        implemented=False,  # Waiting for reputation system
+        implemented=True,
     )
 )
 
@@ -358,8 +358,7 @@ BadgeCriteriaRegistry.register(
     CriteriaTypeDefinition(
         type_id="message_upvotes",
         name="Message Upvotes",
-        description="Award when user has a message with a certain number of "
-        "upvotes (NOT YET IMPLEMENTED - voting system needed)",
+        description="Award when user has a message with a certain number of upvotes",
         scope="both",
         fields=[
             CriteriaField(
@@ -372,6 +371,6 @@ BadgeCriteriaRegistry.register(
                 max_value=10000,
             )
         ],
-        implemented=False,  # Waiting for voting system
+        implemented=True,
     )
 )

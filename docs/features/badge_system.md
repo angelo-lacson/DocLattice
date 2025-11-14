@@ -57,8 +57,8 @@ class CriteriaTypeDefinition:
 - `first_post`: User's first message (no config needed)
 - `message_count`: User reaches N messages (config: value)
 - `corpus_contribution`: User adds N documents/annotations to corpus (config: value)
-- `reputation_threshold`: User reaches reputation score (config: value) - NOT YET IMPLEMENTED
-- `message_upvotes`: User gets message with N upvotes (config: value) - NOT YET IMPLEMENTED
+- `reputation_threshold`: User reaches reputation score (config: value) - ✅ IMPLEMENTED
+- `message_upvotes`: User gets message with N upvotes (config: value) - ✅ IMPLEMENTED
 
 **Adding New Criteria:**
 1. Register in `criteria_registry.py`:
