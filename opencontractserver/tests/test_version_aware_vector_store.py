@@ -12,8 +12,11 @@ from django.test import TestCase
 
 from opencontractserver.annotations.models import Annotation, AnnotationLabel
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document, DocumentPath
-from opencontractserver.documents.versioning import import_document, delete_document, move_document
+from opencontractserver.documents.versioning import (
+    delete_document,
+    import_document,
+    move_document,
+)
 from opencontractserver.llms.vector_stores.core_vector_stores import (
     CoreAnnotationVectorStore,
     VectorSearchQuery,
@@ -35,23 +38,20 @@ class TestVersionAwareVectorStore(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(username="testuser", email="test@test.com")
         self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user,
-            is_public=False
+            title="Test Corpus", creator=self.user, is_public=False
         )
         self.label = AnnotationLabel.objects.create(text="Important", creator=self.user)
 
-    @patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text")
+    @patch(
+        "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+    )
     def test_vector_search_defaults_to_current_versions(self, mock_generate):
         """Test that vector search defaults to current versions only."""
         mock_generate.return_value = ("test-embedder", mock_embeddings())
 
         # Import v1
         doc_v1, _, _ = import_document(
-            corpus=self.corpus,
-            path="/test.pdf",
-            content=b"Old content",
-            user=self.user
+            corpus=self.corpus, path="/test.pdf", content=b"Old content", user=self.user
         )
 
         # Add public annotation to v1
@@ -63,15 +63,12 @@ class TestVersionAwareVectorStore(TestCase):
             creator=self.user,
             structural=False,
             is_public=True,  # Make searchable
-            embedding_384=mock_embeddings()  # Mock embedding
+            embedding_384=mock_embeddings(),  # Mock embedding
         )
 
         # Import v2 (becomes current)
         doc_v2, _, _ = import_document(
-            corpus=self.corpus,
-            path="/test.pdf",
-            content=b"New content",
-            user=self.user
+            corpus=self.corpus, path="/test.pdf", content=b"New content", user=self.user
         )
 
         # Add public annotation to v2
@@ -83,22 +80,19 @@ class TestVersionAwareVectorStore(TestCase):
             creator=self.user,
             structural=False,
             is_public=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Create vector store (defaults to current only)
         vector_store = CoreAnnotationVectorStore(
             corpus_id=self.corpus.id,
             user_id=None,  # Anonymous search
-            embedder_path="test-embedder"
+            embedder_path="test-embedder",
             # only_current_versions=True by default
         )
 
         # Search
-        query = VectorSearchQuery(
-            query_text="searchable content",
-            similarity_top_k=10
-        )
+        query = VectorSearchQuery(query_text="searchable content", similarity_top_k=10)
 
         results = vector_store.search(query)
 
@@ -109,17 +103,16 @@ class TestVersionAwareVectorStore(TestCase):
 
         logger.info("✓ Vector search defaults to current versions only")
 
-    @patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text")
+    @patch(
+        "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+    )
     def test_vector_search_can_include_old_versions(self, mock_generate):
         """Test that vector search can explicitly include old versions."""
         mock_generate.return_value = ("test-embedder", mock_embeddings())
 
         # Import v1
         doc_v1, _, _ = import_document(
-            corpus=self.corpus,
-            path="/test.pdf",
-            content=b"Version 1",
-            user=self.user
+            corpus=self.corpus, path="/test.pdf", content=b"Version 1", user=self.user
         )
 
         Annotation.objects.create(
@@ -130,15 +123,12 @@ class TestVersionAwareVectorStore(TestCase):
             creator=self.user,
             structural=False,
             is_public=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Import v2
         doc_v2, _, _ = import_document(
-            corpus=self.corpus,
-            path="/test.pdf",
-            content=b"Version 2",
-            user=self.user
+            corpus=self.corpus, path="/test.pdf", content=b"Version 2", user=self.user
         )
 
         Annotation.objects.create(
@@ -149,7 +139,7 @@ class TestVersionAwareVectorStore(TestCase):
             creator=self.user,
             structural=False,
             is_public=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Create vector store with old versions included
@@ -157,13 +147,10 @@ class TestVersionAwareVectorStore(TestCase):
             corpus_id=self.corpus.id,
             user_id=None,
             only_current_versions=False,  # Include all versions
-            embedder_path="test-embedder"
+            embedder_path="test-embedder",
         )
 
-        query = VectorSearchQuery(
-            query_text="content",
-            similarity_top_k=10
-        )
+        query = VectorSearchQuery(query_text="content", similarity_top_k=10)
 
         results = vector_store.search(query)
 
@@ -174,7 +161,9 @@ class TestVersionAwareVectorStore(TestCase):
 
         logger.info("✓ Vector search can include old versions when requested")
 
-    @patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text")
+    @patch(
+        "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+    )
     def test_vector_search_excludes_deleted_documents(self, mock_generate):
         """Test that vector search excludes deleted documents."""
         mock_generate.return_value = ("test-embedder", mock_embeddings())
@@ -184,7 +173,7 @@ class TestVersionAwareVectorStore(TestCase):
             corpus=self.corpus,
             path="/deleteme.pdf",
             content=b"Content to delete",
-            user=self.user
+            user=self.user,
         )
 
         Annotation.objects.create(
@@ -195,20 +184,15 @@ class TestVersionAwareVectorStore(TestCase):
             creator=self.user,
             structural=False,
             is_public=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Search before delete
         vector_store = CoreAnnotationVectorStore(
-            corpus_id=self.corpus.id,
-            user_id=None,
-            embedder_path="test-embedder"
+            corpus_id=self.corpus.id, user_id=None, embedder_path="test-embedder"
         )
 
-        query = VectorSearchQuery(
-            query_text="searchable",
-            similarity_top_k=10
-        )
+        query = VectorSearchQuery(query_text="searchable", similarity_top_k=10)
 
         results = vector_store.search(query)
         self.assertEqual(len(results), 1)
@@ -220,16 +204,20 @@ class TestVersionAwareVectorStore(TestCase):
         vector_store_after = CoreAnnotationVectorStore(
             corpus_id=self.corpus.id,
             user_id=None,
-            embedder_path="test-embedder"
+            embedder_path="test-embedder",
             # check_corpus_deletion=True by default
         )
 
         results = vector_store_after.search(query)
-        self.assertEqual(len(results), 0, "Should not find annotations in deleted documents")
+        self.assertEqual(
+            len(results), 0, "Should not find annotations in deleted documents"
+        )
 
         logger.info("✓ Vector search excludes deleted documents")
 
-    @patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text")
+    @patch(
+        "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+    )
     def test_vector_search_without_deletion_check(self, mock_generate):
         """Test that deletion check can be disabled for recovery scenarios."""
         mock_generate.return_value = ("test-embedder", mock_embeddings())
@@ -239,7 +227,7 @@ class TestVersionAwareVectorStore(TestCase):
             corpus=self.corpus,
             path="/deleted.pdf",
             content=b"Deleted content",
-            user=self.user
+            user=self.user,
         )
 
         Annotation.objects.create(
@@ -250,7 +238,7 @@ class TestVersionAwareVectorStore(TestCase):
             creator=self.user,
             structural=False,
             is_public=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         delete_document(self.corpus, "/deleted.pdf", self.user)
@@ -260,20 +248,19 @@ class TestVersionAwareVectorStore(TestCase):
             corpus_id=self.corpus.id,
             user_id=None,
             check_corpus_deletion=False,  # Disable deletion check
-            embedder_path="test-embedder"
+            embedder_path="test-embedder",
         )
 
-        query = VectorSearchQuery(
-            query_text="content",
-            similarity_top_k=10
-        )
+        query = VectorSearchQuery(query_text="content", similarity_top_k=10)
 
         results = vector_store.search(query)
         self.assertEqual(len(results), 1, "Can find deleted docs when check disabled")
 
         logger.info("✓ Deletion check can be disabled for recovery")
 
-    @patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text")
+    @patch(
+        "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+    )
     def test_vector_search_after_document_move(self, mock_generate):
         """Test that vector search works correctly after document move."""
         mock_generate.return_value = ("test-embedder", mock_embeddings())
@@ -283,7 +270,7 @@ class TestVersionAwareVectorStore(TestCase):
             corpus=self.corpus,
             path="/original/path.pdf",
             content=b"Moveable content",
-            user=self.user
+            user=self.user,
         )
 
         Annotation.objects.create(
@@ -294,7 +281,7 @@ class TestVersionAwareVectorStore(TestCase):
             creator=self.user,
             structural=False,
             is_public=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Move document
@@ -302,20 +289,15 @@ class TestVersionAwareVectorStore(TestCase):
             corpus=self.corpus,
             old_path="/original/path.pdf",
             new_path="/new/path.pdf",
-            user=self.user
+            user=self.user,
         )
 
         # Search should still find the annotation
         vector_store = CoreAnnotationVectorStore(
-            corpus_id=self.corpus.id,
-            user_id=None,
-            embedder_path="test-embedder"
+            corpus_id=self.corpus.id, user_id=None, embedder_path="test-embedder"
         )
 
-        query = VectorSearchQuery(
-            query_text="moved doc",
-            similarity_top_k=10
-        )
+        query = VectorSearchQuery(query_text="moved doc", similarity_top_k=10)
 
         results = vector_store.search(query)
         self.assertEqual(len(results), 1)
@@ -323,7 +305,9 @@ class TestVersionAwareVectorStore(TestCase):
 
         logger.info("✓ Vector search works after document move")
 
-    @patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text")
+    @patch(
+        "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+    )
     def test_structural_annotations_in_vector_search(self, mock_generate):
         """Test that structural annotations follow version filtering."""
         mock_generate.return_value = ("test-embedder", mock_embeddings())
@@ -333,7 +317,7 @@ class TestVersionAwareVectorStore(TestCase):
             corpus=self.corpus,
             path="/structural.pdf",
             content=b"Version 1",
-            user=self.user
+            user=self.user,
         )
 
         # Create structural annotation on v1
@@ -343,7 +327,7 @@ class TestVersionAwareVectorStore(TestCase):
             raw_text="V1 Header",
             creator=self.user,
             structural=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Import v2
@@ -351,7 +335,7 @@ class TestVersionAwareVectorStore(TestCase):
             corpus=self.corpus,
             path="/structural.pdf",
             content=b"Version 2",
-            user=self.user
+            user=self.user,
         )
 
         # Create structural annotation on v2
@@ -361,20 +345,17 @@ class TestVersionAwareVectorStore(TestCase):
             raw_text="V2 Header",
             creator=self.user,
             structural=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Search with document context
         vector_store = CoreAnnotationVectorStore(
             document_id=doc_v2.id,  # Specific document
             user_id=None,
-            embedder_path="test-embedder"
+            embedder_path="test-embedder",
         )
 
-        query = VectorSearchQuery(
-            query_text="header",
-            similarity_top_k=10
-        )
+        query = VectorSearchQuery(query_text="header", similarity_top_k=10)
 
         results = vector_store.search(query)
 
@@ -384,7 +365,9 @@ class TestVersionAwareVectorStore(TestCase):
 
         logger.info("✓ Structural annotations follow version filtering")
 
-    @patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text")
+    @patch(
+        "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+    )
     def test_empty_corpus_returns_no_results(self, mock_generate):
         """Test that corpus with all deleted documents returns empty results."""
         mock_generate.return_value = ("test-embedder", mock_embeddings())
@@ -395,7 +378,7 @@ class TestVersionAwareVectorStore(TestCase):
                 corpus=self.corpus,
                 path=f"/doc{i}.pdf",
                 content=f"Content {i}".encode(),
-                user=self.user
+                user=self.user,
             )
 
             Annotation.objects.create(
@@ -404,7 +387,7 @@ class TestVersionAwareVectorStore(TestCase):
                 raw_text=f"Searchable content {i}",
                 creator=self.user,
                 is_public=True,
-                embedding_384=mock_embeddings()
+                embedding_384=mock_embeddings(),
             )
 
             # Delete all documents
@@ -412,38 +395,34 @@ class TestVersionAwareVectorStore(TestCase):
 
         # Search in corpus with all deleted documents
         vector_store = CoreAnnotationVectorStore(
-            corpus_id=self.corpus.id,
-            user_id=None,
-            embedder_path="test-embedder"
+            corpus_id=self.corpus.id, user_id=None, embedder_path="test-embedder"
         )
 
-        query = VectorSearchQuery(
-            query_text="searchable",
-            similarity_top_k=10
-        )
+        query = VectorSearchQuery(query_text="searchable", similarity_top_k=10)
 
         results = vector_store.search(query)
-        self.assertEqual(len(results), 0, "Corpus with all deleted docs should return empty")
+        self.assertEqual(
+            len(results), 0, "Corpus with all deleted docs should return empty"
+        )
 
         logger.info("✓ Empty corpus returns no results")
 
-    @patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text")
+    @patch(
+        "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+    )
     def test_cross_corpus_search_independence(self, mock_generate):
         """Test that deletion in one corpus doesn't affect search in another."""
         mock_generate.return_value = ("test-embedder", mock_embeddings())
 
         # Create second corpus
-        corpus2 = Corpus.objects.create(
-            title="Corpus 2",
-            creator=self.user
-        )
+        corpus2 = Corpus.objects.create(title="Corpus 2", creator=self.user)
 
         # Import to corpus 1
         doc, _, _ = import_document(
             corpus=self.corpus,
             path="/shared.pdf",
             content=b"Shared content",
-            user=self.user
+            user=self.user,
         )
 
         Annotation.objects.create(
@@ -452,7 +431,7 @@ class TestVersionAwareVectorStore(TestCase):
             raw_text="Corpus 1 searchable",
             creator=self.user,
             is_public=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Import same content to corpus 2 (deduplication)
@@ -460,9 +439,9 @@ class TestVersionAwareVectorStore(TestCase):
             corpus=corpus2,
             path="/shared.pdf",
             content=b"Shared content",
-            user=self.user
+            user=self.user,
         )
-        self.assertEqual(status, 'cross_corpus_import')
+        self.assertEqual(status, "cross_corpus_import")
 
         Annotation.objects.create(
             document=doc,
@@ -470,7 +449,7 @@ class TestVersionAwareVectorStore(TestCase):
             raw_text="Corpus 2 searchable",
             creator=self.user,
             is_public=True,
-            embedding_384=mock_embeddings()
+            embedding_384=mock_embeddings(),
         )
 
         # Delete from corpus 1
@@ -478,9 +457,7 @@ class TestVersionAwareVectorStore(TestCase):
 
         # Search in corpus 1 - should find nothing
         vector_store1 = CoreAnnotationVectorStore(
-            corpus_id=self.corpus.id,
-            user_id=None,
-            embedder_path="test-embedder"
+            corpus_id=self.corpus.id, user_id=None, embedder_path="test-embedder"
         )
 
         query = VectorSearchQuery(query_text="searchable", similarity_top_k=10)
@@ -489,9 +466,7 @@ class TestVersionAwareVectorStore(TestCase):
 
         # Search in corpus 2 - should still find annotation
         vector_store2 = CoreAnnotationVectorStore(
-            corpus_id=corpus2.id,
-            user_id=None,
-            embedder_path="test-embedder"
+            corpus_id=corpus2.id, user_id=None, embedder_path="test-embedder"
         )
 
         results2 = vector_store2.search(query)
@@ -511,7 +486,7 @@ class TestVersionAwareVectorStore(TestCase):
                 corpus=self.corpus,
                 path="/perf.pdf",
                 content=f"Version {i+1}".encode(),
-                user=self.user
+                user=self.user,
             )
 
             # Add searchable annotations
@@ -522,23 +497,20 @@ class TestVersionAwareVectorStore(TestCase):
                     raw_text=f"V{i+1} searchable {j}",
                     creator=self.user,
                     is_public=True,
-                    embedding_384=mock_embeddings()
+                    embedding_384=mock_embeddings(),
                 )
 
         # Time the search with version filtering
-        with patch("opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text") as mock_gen:
+        with patch(
+            "opencontractserver.llms.vector_stores.core_vector_stores.generate_embeddings_from_text"
+        ) as mock_gen:
             mock_gen.return_value = ("test-embedder", mock_embeddings())
 
             vector_store = CoreAnnotationVectorStore(
-                corpus_id=self.corpus.id,
-                user_id=None,
-                embedder_path="test-embedder"
+                corpus_id=self.corpus.id, user_id=None, embedder_path="test-embedder"
             )
 
-            query = VectorSearchQuery(
-                query_text="searchable",
-                similarity_top_k=20
-            )
+            query = VectorSearchQuery(query_text="searchable", similarity_top_k=20)
 
             start = time.time()
             results = vector_store.search(query)
@@ -547,6 +519,10 @@ class TestVersionAwareVectorStore(TestCase):
             # Should only find current version (3 annotations)
             self.assertEqual(len(results), 3)
             # Should be fast
-            self.assertLess(duration, 0.2, f"Search took {duration:.3f}s, expected < 0.2s")
+            self.assertLess(
+                duration, 0.2, f"Search took {duration:.3f}s, expected < 0.2s"
+            )
 
-            logger.info(f"✓ Vector search performance: {duration:.3f}s for {len(results)} results")
+            logger.info(
+                f"✓ Vector search performance: {duration:.3f}s for {len(results)} results"
+            )

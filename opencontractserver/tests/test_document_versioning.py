@@ -1435,7 +1435,6 @@ class PerformanceTestCase(TestCase):
             )
 
         # Time-travel query
-        past = timezone.now() - timedelta(hours=1)
         start = time.time()
         duration = time.time() - start
 
