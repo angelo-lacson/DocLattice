@@ -27,7 +27,7 @@ Architecture Rules Implemented:
 import hashlib
 import logging
 import uuid
-from typing import Optional, Tuple
+from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -65,9 +65,9 @@ def import_document(
     content: bytes,
     user: User,
     folder: Optional[CorpusFolder] = None,
-    pdf_file = None,
-    **doc_kwargs
-) -> Tuple[Document, str, DocumentPath]:
+    pdf_file=None,
+    **doc_kwargs,
+) -> tuple[Document, str, DocumentPath]:
     """
     Import or update a document with dual-tree versioning logic.
 
@@ -96,17 +96,20 @@ def import_document(
 
     with transaction.atomic():
         # Step 1: Check Content Tree (Rules C1, C2)
-        existing_doc = Document.objects.filter(
-            pdf_file_hash=content_hash
-        ).select_for_update().first()
+        existing_doc = (
+            Document.objects.filter(pdf_file_hash=content_hash)
+            .select_for_update()
+            .first()
+        )
 
         # Step 2: Check Path Tree (Rules P1, P4)
-        current_path = DocumentPath.objects.filter(
-            corpus=corpus,
-            path=path,
-            is_current=True,
-            is_deleted=False
-        ).select_for_update().first()
+        current_path = (
+            DocumentPath.objects.filter(
+                corpus=corpus, path=path, is_current=True, is_deleted=False
+            )
+            .select_for_update()
+            .first()
+        )
 
         if current_path:
             # Path exists - check if content changed
@@ -114,7 +117,7 @@ def import_document(
                 logger.info(
                     f"No content change detected for {path} in corpus {corpus.id}"
                 )
-                return current_path.document, 'unchanged', current_path
+                return current_path.document, "unchanged", current_path
 
             # Content changed - apply Rule C2
             old_doc = current_path.document
@@ -134,28 +137,31 @@ def import_document(
                 )
 
                 # Rule C3: Mark old as not current
-                Document.objects.filter(
-                    version_tree_id=old_doc.version_tree_id
-                ).update(is_current=False)
+                Document.objects.filter(version_tree_id=old_doc.version_tree_id).update(
+                    is_current=False
+                )
 
                 # Create new document version
                 new_doc = Document.objects.create(
-                    title=doc_kwargs.get('title', old_doc.title),
-                    description=doc_kwargs.get('description', old_doc.description),
-                    file_type=doc_kwargs.get('file_type', old_doc.file_type),
+                    title=doc_kwargs.get("title", old_doc.title),
+                    description=doc_kwargs.get("description", old_doc.description),
+                    file_type=doc_kwargs.get("file_type", old_doc.file_type),
                     pdf_file=pdf_file or old_doc.pdf_file,
                     pdf_file_hash=content_hash,
                     version_tree_id=old_doc.version_tree_id,
                     parent=old_doc,  # Rule C2
                     is_current=True,  # Rule C3
                     creator=user,
-                    **{k: v for k, v in doc_kwargs.items()
-                       if k not in ['title', 'description', 'file_type']}
+                    **{
+                        k: v
+                        for k, v in doc_kwargs.items()
+                        if k not in ["title", "description", "file_type"]
+                    },
                 )
 
             # Apply Rules P1, P2, P3
             current_path.is_current = False
-            current_path.save(update_fields=['is_current'])
+            current_path.save(update_fields=["is_current"])
 
             new_path = DocumentPath.objects.create(
                 document=new_doc,
@@ -175,7 +181,7 @@ def import_document(
                 f"doc {new_doc.id} v{new_path.version_number}"
             )
 
-            return new_doc, 'updated', new_path
+            return new_doc, "updated", new_path
 
         else:
             # New path
@@ -184,7 +190,7 @@ def import_document(
                 doc = existing_doc
                 # Calculate actual content version from tree depth
                 version = calculate_content_version(doc)
-                status = 'cross_corpus_import'
+                status = "cross_corpus_import"
                 logger.info(
                     f"Cross-corpus import: doc {doc.id} v{version} "
                     f"to {path} in corpus {corpus.id}"
@@ -193,23 +199,24 @@ def import_document(
                 # Brand new content (Rule C1)
                 tree_id = uuid.uuid4()
                 doc = Document.objects.create(
-                    title=doc_kwargs.get('title', f"Document at {path}"),
-                    description=doc_kwargs.get('description', ''),
-                    file_type=doc_kwargs.get('file_type', 'application/pdf'),
+                    title=doc_kwargs.get("title", f"Document at {path}"),
+                    description=doc_kwargs.get("description", ""),
+                    file_type=doc_kwargs.get("file_type", "application/pdf"),
                     pdf_file=pdf_file,
                     pdf_file_hash=content_hash,
                     version_tree_id=tree_id,
                     is_current=True,
                     parent=None,  # Root of content tree
                     creator=user,
-                    **{k: v for k, v in doc_kwargs.items()
-                       if k not in ['title', 'description', 'file_type']}
+                    **{
+                        k: v
+                        for k, v in doc_kwargs.items()
+                        if k not in ["title", "description", "file_type"]
+                    },
                 )
                 version = 1  # First version of new content
-                status = 'created'
-                logger.info(
-                    f"Created new doc {doc.id} at {path} in corpus {corpus.id}"
-                )
+                status = "created"
+                logger.info(f"Created new doc {doc.id} at {path} in corpus {corpus.id}")
 
             # Create root of path tree (Rule P1)
             new_path = DocumentPath.objects.create(
@@ -232,7 +239,7 @@ def move_document(
     old_path: str,
     new_path: str,
     user: User,
-    new_folder: Optional[CorpusFolder] = 'UNSET'
+    new_folder: Optional[CorpusFolder] = "UNSET",
 ) -> DocumentPath:
     """
     Move document - creates new DocumentPath, Document unchanged.
@@ -244,18 +251,15 @@ def move_document(
     """
     with transaction.atomic():
         current = DocumentPath.objects.select_for_update().get(
-            corpus=corpus,
-            path=old_path,
-            is_current=True,
-            is_deleted=False
+            corpus=corpus, path=old_path, is_current=True, is_deleted=False
         )
 
         # Apply Rule P3
         current.is_current = False
-        current.save(update_fields=['is_current'])
+        current.save(update_fields=["is_current"])
 
         # Determine folder for new path
-        if new_folder == 'UNSET':
+        if new_folder == "UNSET":
             # Not specified, keep current folder
             folder_to_use = current.folder
         else:
@@ -291,14 +295,11 @@ def delete_document(corpus: Corpus, path: str, user: User) -> DocumentPath:
     """
     with transaction.atomic():
         current = DocumentPath.objects.select_for_update().get(
-            corpus=corpus,
-            path=path,
-            is_current=True,
-            is_deleted=False
+            corpus=corpus, path=path, is_current=True, is_deleted=False
         )
 
         current.is_current = False
-        current.save(update_fields=['is_current'])
+        current.save(update_fields=["is_current"])
 
         deleted_path = DocumentPath.objects.create(
             document=current.document,
@@ -328,14 +329,11 @@ def restore_document(corpus: Corpus, path: str, user: User) -> DocumentPath:
     """
     with transaction.atomic():
         deleted = DocumentPath.objects.select_for_update().get(
-            corpus=corpus,
-            path=path,
-            is_current=True,
-            is_deleted=True
+            corpus=corpus, path=path, is_current=True, is_deleted=True
         )
 
         deleted.is_current = False
-        deleted.save(update_fields=['is_current'])
+        deleted.save(update_fields=["is_current"])
 
         restored_path = DocumentPath.objects.create(
             document=deleted.document,
@@ -350,8 +348,7 @@ def restore_document(corpus: Corpus, path: str, user: User) -> DocumentPath:
         )
 
         logger.info(
-            f"Restored doc {deleted.document_id} at {path} "
-            f"in corpus {corpus.id}"
+            f"Restored doc {deleted.document_id} at {path} " f"in corpus {corpus.id}"
         )
 
         return restored_path
@@ -369,10 +366,8 @@ def get_current_filesystem(corpus: Corpus):
     Implements: Rule P3
     """
     return DocumentPath.objects.filter(
-        corpus=corpus,
-        is_current=True,
-        is_deleted=False
-    ).select_related('document', 'folder')
+        corpus=corpus, is_current=True, is_deleted=False
+    ).select_related("document", "folder")
 
 
 def get_content_history(document: Document):
@@ -399,32 +394,35 @@ def get_path_history(document_path: DocumentPath):
 
     Implements: Rule P2 traversal
     """
+
     def determine_action(current, previous):
         """Determine what action this path record represents."""
         if not previous:
-            return 'CREATED'
+            return "CREATED"
         if current.is_deleted and not previous.is_deleted:
-            return 'DELETED'
+            return "DELETED"
         if not current.is_deleted and previous.is_deleted:
-            return 'RESTORED'
+            return "RESTORED"
         if current.path != previous.path:
-            return 'MOVED'
+            return "MOVED"
         if current.document_id != previous.document_id:
-            return 'UPDATED'
-        return 'UNKNOWN'
+            return "UPDATED"
+        return "UNKNOWN"
 
     history = []
     current = document_path
     while current:
-        history.append({
-            'id': current.id,
-            'timestamp': current.created,
-            'path': current.path,
-            'version': current.version_number,
-            'deleted': current.is_deleted,
-            'document_id': current.document_id,
-            'action': determine_action(current, current.parent),
-        })
+        history.append(
+            {
+                "id": current.id,
+                "timestamp": current.created,
+                "path": current.path,
+                "version": current.version_number,
+                "deleted": current.is_deleted,
+                "document_id": current.document_id,
+                "action": determine_action(current, current.parent),
+            }
+        )
         current = current.parent
 
     return list(reversed(history))  # Oldest to newest
@@ -441,15 +439,19 @@ def get_filesystem_at_time(corpus: Corpus, timestamp):
     from django.db.models import OuterRef, Subquery
 
     # For each unique path, find the most recent DocumentPath before timestamp
-    newest_before_time = DocumentPath.objects.filter(
-        corpus=corpus,
-        created__lte=timestamp,
-        path=OuterRef('path')
-    ).order_by('-created').values('id')[:1]
+    newest_before_time = (
+        DocumentPath.objects.filter(
+            corpus=corpus, created__lte=timestamp, path=OuterRef("path")
+        )
+        .order_by("-created")
+        .values("id")[:1]
+    )
 
-    return DocumentPath.objects.filter(
-        id__in=Subquery(newest_before_time)
-    ).exclude(is_deleted=True).select_related('document', 'folder')
+    return (
+        DocumentPath.objects.filter(id__in=Subquery(newest_before_time))
+        .exclude(is_deleted=True)
+        .select_related("document", "folder")
+    )
 
 
 def is_content_truly_deleted(document: Document, corpus: Corpus) -> bool:
@@ -459,8 +461,5 @@ def is_content_truly_deleted(document: Document, corpus: Corpus) -> bool:
     Implements: Rule Q1
     """
     return not DocumentPath.objects.filter(
-        document=document,
-        corpus=corpus,
-        is_current=True,
-        is_deleted=False
+        document=document, corpus=corpus, is_current=True, is_deleted=False
     ).exists()
