@@ -10,21 +10,16 @@ Architecture Rules Tested:
 - Interaction Rules: I1, Q1
 """
 
-import hashlib
-import uuid
 from datetime import timedelta
-from io import BytesIO
 
 from django.contrib.auth import get_user_model
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 from django.utils import timezone
 
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
 from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.documents.versioning import (
-    calculate_content_version,
     compute_sha256,
     delete_document,
     get_content_history,
@@ -50,13 +45,8 @@ class ContentTreeRulesTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
     def test_c1_new_document_only_when_hash_first_seen_globally(self):
         """
@@ -74,17 +64,18 @@ class ContentTreeRulesTestCase(TestCase):
             path="/test1.pdf",
             content=content,
             user=self.user,
-            title="First Document"
+            title="First Document",
         )
 
-        self.assertEqual(status1, 'created')
+        self.assertEqual(status1, "created")
         self.assertEqual(doc1.pdf_file_hash, content_hash)
 
         # Count documents with this hash
         docs_with_hash = Document.objects.filter(pdf_file_hash=content_hash).count()
         self.assertEqual(
-            docs_with_hash, 1,
-            "Rule C1 violated: Only one Document should exist for unique hash"
+            docs_with_hash,
+            1,
+            "Rule C1 violated: Only one Document should exist for unique hash",
         )
 
         # Second import at different path - should reuse Document
@@ -93,20 +84,20 @@ class ContentTreeRulesTestCase(TestCase):
             path="/test2.pdf",
             content=content,
             user=self.user,
-            title="Second Document"
+            title="Second Document",
         )
 
-        self.assertEqual(status2, 'cross_corpus_import')
+        self.assertEqual(status2, "cross_corpus_import")
         self.assertEqual(
-            doc1.id, doc2.id,
-            "Rule C1 violated: Same content should reuse existing Document"
+            doc1.id,
+            doc2.id,
+            "Rule C1 violated: Same content should reuse existing Document",
         )
 
         # Still only one document with this hash
         docs_with_hash = Document.objects.filter(pdf_file_hash=content_hash).count()
         self.assertEqual(
-            docs_with_hash, 1,
-            "Rule C1 violated: Global deduplication failed"
+            docs_with_hash, 1, "Rule C1 violated: Global deduplication failed"
         )
 
     def test_c2_updates_create_child_nodes_of_previous_version(self):
@@ -125,14 +116,11 @@ class ContentTreeRulesTestCase(TestCase):
             path="/contract.pdf",
             content=original_content,
             user=self.user,
-            title="Original Contract"
+            title="Original Contract",
         )
 
-        self.assertEqual(status1, 'created')
-        self.assertIsNone(
-            doc1.parent,
-            "First version should have no parent"
-        )
+        self.assertEqual(status1, "created")
+        self.assertIsNone(doc1.parent, "First version should have no parent")
 
         original_tree_id = doc1.version_tree_id
 
@@ -142,32 +130,29 @@ class ContentTreeRulesTestCase(TestCase):
             path="/contract.pdf",
             content=updated_content,
             user=self.user,
-            title="Updated Contract"
+            title="Updated Contract",
         )
 
-        self.assertEqual(status2, 'updated')
+        self.assertEqual(status2, "updated")
         self.assertEqual(
-            doc2.parent_id, doc1.id,
-            "Rule C2 violated: Updated document should be child of previous"
+            doc2.parent_id,
+            doc1.id,
+            "Rule C2 violated: Updated document should be child of previous",
         )
         self.assertEqual(
-            doc2.version_tree_id, original_tree_id,
-            "Rule C2 violated: Versions should share same tree_id"
+            doc2.version_tree_id,
+            original_tree_id,
+            "Rule C2 violated: Versions should share same tree_id",
         )
 
         # Verify tree structure
         version_history = get_content_history(doc2)
+        self.assertEqual(len(version_history), 2, "Should have 2 versions in history")
         self.assertEqual(
-            len(version_history), 2,
-            "Should have 2 versions in history"
+            version_history[0].id, doc1.id, "First in history should be original"
         )
         self.assertEqual(
-            version_history[0].id, doc1.id,
-            "First in history should be original"
-        )
-        self.assertEqual(
-            version_history[1].id, doc2.id,
-            "Second in history should be update"
+            version_history[1].id, doc2.id, "Second in history should be update"
         )
 
     def test_c3_only_one_current_document_per_version_tree(self):
@@ -186,13 +171,10 @@ class ContentTreeRulesTestCase(TestCase):
             path="/document.pdf",
             content=v1_content,
             user=self.user,
-            title="Version 1"
+            title="Version 1",
         )
 
-        self.assertTrue(
-            doc_v1.is_current,
-            "Initial version should be current"
-        )
+        self.assertTrue(doc_v1.is_current, "Initial version should be current")
 
         tree_id = doc_v1.version_tree_id
 
@@ -202,31 +184,28 @@ class ContentTreeRulesTestCase(TestCase):
             path="/document.pdf",
             content=v2_content,
             user=self.user,
-            title="Version 2"
+            title="Version 2",
         )
 
-        self.assertTrue(
-            doc_v2.is_current,
-            "New version should be current"
-        )
+        self.assertTrue(doc_v2.is_current, "New version should be current")
 
         # Refresh v1 from database
         doc_v1.refresh_from_db()
 
         self.assertFalse(
             doc_v1.is_current,
-            "Rule C3 violated: Old version should no longer be current"
+            "Rule C3 violated: Old version should no longer be current",
         )
 
         # Count current documents in this tree
         current_count = Document.objects.filter(
-            version_tree_id=tree_id,
-            is_current=True
+            version_tree_id=tree_id, is_current=True
         ).count()
 
         self.assertEqual(
-            current_count, 1,
-            "Rule C3 violated: Only one document in tree should be current"
+            current_count,
+            1,
+            "Rule C3 violated: Only one document in tree should be current",
         )
 
     def test_c3_database_constraint_prevents_multiple_current(self):
@@ -256,13 +235,10 @@ class ContentTreeRulesTestCase(TestCase):
                     version_tree_id=tree_id,
                     is_current=True,  # This violates C3
                     parent=None,
-                    creator=self.user
+                    creator=self.user,
                 )
 
-        self.assertIn(
-            "one_current_per_version_tree",
-            str(context.exception).lower()
-        )
+        self.assertIn("one_current_per_version_tree", str(context.exception).lower())
 
 
 class PathTreeRulesTestCase(TestCase):
@@ -275,13 +251,8 @@ class PathTreeRulesTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
     def test_p1_every_lifecycle_event_creates_new_node(self):
         """
@@ -294,10 +265,7 @@ class PathTreeRulesTestCase(TestCase):
 
         # Event 1: Import
         doc, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/original.pdf",
-            content=content_v1,
-            user=self.user
+            corpus=self.corpus, path="/original.pdf", content=content_v1, user=self.user
         )
 
         # Event 2: Move
@@ -305,53 +273,41 @@ class PathTreeRulesTestCase(TestCase):
             corpus=self.corpus,
             old_path="/original.pdf",
             new_path="/moved.pdf",
-            user=self.user
+            user=self.user,
         )
 
         # Event 3: Update content
         doc_v2, _, path3 = import_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            content=content_v2,
-            user=self.user
+            corpus=self.corpus, path="/moved.pdf", content=content_v2, user=self.user
         )
 
         # Event 4: Delete
-        path4 = delete_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            user=self.user
-        )
+        path4 = delete_document(corpus=self.corpus, path="/moved.pdf", user=self.user)
 
         # Event 5: Restore
-        path5 = restore_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            user=self.user
-        )
+        path5 = restore_document(corpus=self.corpus, path="/moved.pdf", user=self.user)
 
         # Verify each event created a new node
         all_paths = [path1, path2, path3, path4, path5]
         path_ids = [p.id for p in all_paths]
 
         self.assertEqual(
-            len(set(path_ids)), 5,
-            "Rule P1 violated: Each lifecycle event should create unique node"
+            len(set(path_ids)),
+            5,
+            "Rule P1 violated: Each lifecycle event should create unique node",
         )
 
         # Verify we can reconstruct the history
         history = get_path_history(path5)
-        self.assertEqual(
-            len(history), 5,
-            "Should have 5 events in history"
-        )
+        self.assertEqual(len(history), 5, "Should have 5 events in history")
 
         # Verify action types
-        expected_actions = ['CREATED', 'MOVED', 'UPDATED', 'DELETED', 'RESTORED']
-        actual_actions = [h['action'] for h in history]
+        expected_actions = ["CREATED", "MOVED", "UPDATED", "DELETED", "RESTORED"]
+        actual_actions = [h["action"] for h in history]
         self.assertEqual(
-            actual_actions, expected_actions,
-            "History should show all lifecycle events in order"
+            actual_actions,
+            expected_actions,
+            "History should show all lifecycle events in order",
         )
 
     def test_p2_new_nodes_are_children_of_previous_state(self):
@@ -364,52 +320,41 @@ class PathTreeRulesTestCase(TestCase):
 
         # Create initial path
         _, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=content, user=self.user
         )
 
-        self.assertIsNone(
-            path1.parent,
-            "Initial path should have no parent"
-        )
+        self.assertIsNone(path1.parent, "Initial path should have no parent")
 
         # Move it
         path2 = move_document(
             corpus=self.corpus,
             old_path="/doc.pdf",
             new_path="/moved.pdf",
-            user=self.user
+            user=self.user,
         )
 
         self.assertEqual(
-            path2.parent_id, path1.id,
-            "Rule P2 violated: Move should create child of previous state"
+            path2.parent_id,
+            path1.id,
+            "Rule P2 violated: Move should create child of previous state",
         )
 
         # Delete it
-        path3 = delete_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            user=self.user
-        )
+        path3 = delete_document(corpus=self.corpus, path="/moved.pdf", user=self.user)
 
         self.assertEqual(
-            path3.parent_id, path2.id,
-            "Rule P2 violated: Delete should create child of previous state"
+            path3.parent_id,
+            path2.id,
+            "Rule P2 violated: Delete should create child of previous state",
         )
 
         # Restore it
-        path4 = restore_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            user=self.user
-        )
+        path4 = restore_document(corpus=self.corpus, path="/moved.pdf", user=self.user)
 
         self.assertEqual(
-            path4.parent_id, path3.id,
-            "Rule P2 violated: Restore should create child of previous state"
+            path4.parent_id,
+            path3.id,
+            "Rule P2 violated: Restore should create child of previous state",
         )
 
     def test_p3_only_current_filesystem_state_is_current(self):
@@ -423,24 +368,17 @@ class PathTreeRulesTestCase(TestCase):
 
         # Create and perform operations
         _, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=content, user=self.user
         )
 
         path2 = move_document(
             corpus=self.corpus,
             old_path="/doc.pdf",
             new_path="/moved.pdf",
-            user=self.user
+            user=self.user,
         )
 
-        path3 = delete_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            user=self.user
-        )
+        path3 = delete_document(corpus=self.corpus, path="/moved.pdf", user=self.user)
 
         # Refresh all paths from database
         path1.refresh_from_db()
@@ -451,19 +389,16 @@ class PathTreeRulesTestCase(TestCase):
         self.assertFalse(path1.is_current, "Old state should not be current")
         self.assertFalse(path2.is_current, "Old state should not be current")
         self.assertTrue(
-            path3.is_current,
-            "Rule P3 violated: Current state should be marked current"
+            path3.is_current, "Rule P3 violated: Current state should be marked current"
         )
 
         # Count current paths
         current_count = DocumentPath.objects.filter(
-            corpus=self.corpus,
-            is_current=True
+            corpus=self.corpus, is_current=True
         ).count()
 
         self.assertEqual(
-            current_count, 1,
-            "Rule P3 violated: Only one path should be current"
+            current_count, 1, "Rule P3 violated: Only one path should be current"
         )
 
     def test_p4_one_active_path_per_corpus_path_tuple(self):
@@ -478,38 +413,24 @@ class PathTreeRulesTestCase(TestCase):
 
         # Import first document
         _, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=content1,
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=content1, user=self.user
         )
 
         # Delete it
-        delete_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            user=self.user
-        )
+        delete_document(corpus=self.corpus, path="/doc.pdf", user=self.user)
 
         # Now import different content at same path
         _, _, path2 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=content2,
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=content2, user=self.user
         )
 
         # Count active paths at this location
         active_count = DocumentPath.objects.filter(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            is_current=True,
-            is_deleted=False
+            corpus=self.corpus, path="/doc.pdf", is_current=True, is_deleted=False
         ).count()
 
         self.assertEqual(
-            active_count, 1,
-            "Rule P4 violated: Only one active path per (corpus, path)"
+            active_count, 1, "Rule P4 violated: Only one active path per (corpus, path)"
         )
 
     def test_p4_database_constraint_prevents_duplicate_active_paths(self):
@@ -523,7 +444,7 @@ class PathTreeRulesTestCase(TestCase):
             corpus=self.corpus,
             path="/test.pdf",
             content=b"Test content",
-            user=self.user
+            user=self.user,
         )
 
         # Attempt to create another active path at same location
@@ -537,13 +458,10 @@ class PathTreeRulesTestCase(TestCase):
                     version_number=1,
                     is_current=True,
                     is_deleted=False,  # Active
-                    creator=self.user
+                    creator=self.user,
                 )
 
-        self.assertIn(
-            "unique_active_path_per_corpus",
-            str(context.exception).lower()
-        )
+        self.assertIn("unique_active_path_per_corpus", str(context.exception).lower())
 
     def test_p5_version_number_increments_only_on_content_changes(self):
         """
@@ -557,10 +475,7 @@ class PathTreeRulesTestCase(TestCase):
 
         # Import initial
         _, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=v1_content,
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=v1_content, user=self.user
         )
 
         self.assertEqual(path1.version_number, 1)
@@ -570,49 +485,42 @@ class PathTreeRulesTestCase(TestCase):
             corpus=self.corpus,
             old_path="/doc.pdf",
             new_path="/moved.pdf",
-            user=self.user
+            user=self.user,
         )
 
         self.assertEqual(
-            path2.version_number, 1,
-            "Rule P5 violated: Move should not increment version"
+            path2.version_number,
+            1,
+            "Rule P5 violated: Move should not increment version",
         )
 
         # Update content - version SHOULD increment
         _, _, path3 = import_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            content=v2_content,
-            user=self.user
+            corpus=self.corpus, path="/moved.pdf", content=v2_content, user=self.user
         )
 
         self.assertEqual(
-            path3.version_number, 2,
-            "Rule P5 violated: Content update should increment version"
+            path3.version_number,
+            2,
+            "Rule P5 violated: Content update should increment version",
         )
 
         # Delete - version should NOT increment
-        path4 = delete_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            user=self.user
-        )
+        path4 = delete_document(corpus=self.corpus, path="/moved.pdf", user=self.user)
 
         self.assertEqual(
-            path4.version_number, 2,
-            "Rule P5 violated: Delete should not increment version"
+            path4.version_number,
+            2,
+            "Rule P5 violated: Delete should not increment version",
         )
 
         # Restore - version should NOT increment
-        path5 = restore_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            user=self.user
-        )
+        path5 = restore_document(corpus=self.corpus, path="/moved.pdf", user=self.user)
 
         self.assertEqual(
-            path5.version_number, 2,
-            "Rule P5 violated: Restore should not increment version"
+            path5.version_number,
+            2,
+            "Rule P5 violated: Restore should not increment version",
         )
 
     def test_p6_folder_deletion_sets_folder_null(self):
@@ -623,9 +531,7 @@ class PathTreeRulesTestCase(TestCase):
         """
         # Create folder
         folder = CorpusFolder.objects.create(
-            name="TestFolder",
-            corpus=self.corpus,
-            creator=self.user
+            name="TestFolder", corpus=self.corpus, creator=self.user
         )
 
         # Import document into folder
@@ -634,7 +540,7 @@ class PathTreeRulesTestCase(TestCase):
             path="/folder/doc.pdf",
             content=b"Test content",
             user=self.user,
-            folder=folder
+            folder=folder,
         )
 
         self.assertEqual(path1.folder_id, folder.id)
@@ -645,12 +551,12 @@ class PathTreeRulesTestCase(TestCase):
             old_path="/folder/doc.pdf",
             new_path="/doc.pdf",
             user=self.user,
-            new_folder=None
+            new_folder=None,
         )
 
         self.assertIsNone(
             path2.folder,
-            "Rule P6: Document moved out of folder should have folder=NULL"
+            "Rule P6: Document moved out of folder should have folder=NULL",
         )
 
 
@@ -664,17 +570,9 @@ class ImportOperationTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus1 = Corpus.objects.create(
-            title="Corpus 1",
-            creator=self.user
-        )
-        self.corpus2 = Corpus.objects.create(
-            title="Corpus 2",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus1 = Corpus.objects.create(title="Corpus 1", creator=self.user)
+        self.corpus2 = Corpus.objects.create(title="Corpus 2", creator=self.user)
 
     def test_import_new_document_creates_both_trees(self):
         """
@@ -689,11 +587,11 @@ class ImportOperationTestCase(TestCase):
             path="/new_doc.pdf",
             content=content,
             user=self.user,
-            title="New Document"
+            title="New Document",
         )
 
         # Verify status
-        self.assertEqual(status, 'created')
+        self.assertEqual(status, "created")
 
         # Verify Document created correctly
         self.assertEqual(doc.pdf_file_hash, content_hash)
@@ -724,10 +622,10 @@ class ImportOperationTestCase(TestCase):
             path="/contract.pdf",
             content=original,
             user=self.user,
-            title="Original Contract"
+            title="Original Contract",
         )
 
-        self.assertEqual(status1, 'created')
+        self.assertEqual(status1, "created")
 
         # Import update
         doc2, status2, path2 = import_document(
@@ -735,11 +633,11 @@ class ImportOperationTestCase(TestCase):
             path="/contract.pdf",
             content=updated,
             user=self.user,
-            title="Updated Contract"
+            title="Updated Contract",
         )
 
         # Verify status
-        self.assertEqual(status2, 'updated')
+        self.assertEqual(status2, "updated")
 
         # Verify new Document version
         self.assertNotEqual(doc1.id, doc2.id)
@@ -764,10 +662,7 @@ class ImportOperationTestCase(TestCase):
 
         # Import once
         doc1, status1, path1 = import_document(
-            corpus=self.corpus1,
-            path="/doc.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus1, path="/doc.pdf", content=content, user=self.user
         )
 
         doc_count = Document.objects.count()
@@ -775,14 +670,11 @@ class ImportOperationTestCase(TestCase):
 
         # Import again with same content
         doc2, status2, path2 = import_document(
-            corpus=self.corpus1,
-            path="/doc.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus1, path="/doc.pdf", content=content, user=self.user
         )
 
         # Verify status
-        self.assertEqual(status2, 'unchanged')
+        self.assertEqual(status2, "unchanged")
 
         # Verify same instances returned
         self.assertEqual(doc1.id, doc2.id)
@@ -802,24 +694,18 @@ class ImportOperationTestCase(TestCase):
 
         # Import to corpus 1
         doc1, status1, path1 = import_document(
-            corpus=self.corpus1,
-            path="/doc1.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus1, path="/doc1.pdf", content=content, user=self.user
         )
 
-        self.assertEqual(status1, 'created')
+        self.assertEqual(status1, "created")
 
         # Import to corpus 2
         doc2, status2, path2 = import_document(
-            corpus=self.corpus2,
-            path="/doc2.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus2, path="/doc2.pdf", content=content, user=self.user
         )
 
         # Verify status
-        self.assertEqual(status2, 'cross_corpus_import')
+        self.assertEqual(status2, "cross_corpus_import")
 
         # Verify same Document reused (Rule I1)
         self.assertEqual(doc1.id, doc2.id)
@@ -829,9 +715,7 @@ class ImportOperationTestCase(TestCase):
         self.assertEqual(path2.corpus_id, self.corpus2.id)
 
         # Verify global deduplication
-        docs_with_hash = Document.objects.filter(
-            pdf_file_hash=content_hash
-        ).count()
+        docs_with_hash = Document.objects.filter(pdf_file_hash=content_hash).count()
         self.assertEqual(docs_with_hash, 1)
 
 
@@ -842,13 +726,8 @@ class MoveOperationTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
     def test_move_document_changes_path_not_content(self):
         """
@@ -859,10 +738,7 @@ class MoveOperationTestCase(TestCase):
 
         # Import document
         doc, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/original.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus, path="/original.pdf", content=content, user=self.user
         )
 
         # Move it
@@ -870,7 +746,7 @@ class MoveOperationTestCase(TestCase):
             corpus=self.corpus,
             old_path="/original.pdf",
             new_path="/moved.pdf",
-            user=self.user
+            user=self.user,
         )
 
         # Verify same document
@@ -892,14 +768,10 @@ class MoveOperationTestCase(TestCase):
         Expected: New DocumentPath with new folder
         """
         folder1 = CorpusFolder.objects.create(
-            name="Folder1",
-            corpus=self.corpus,
-            creator=self.user
+            name="Folder1", corpus=self.corpus, creator=self.user
         )
         folder2 = CorpusFolder.objects.create(
-            name="Folder2",
-            corpus=self.corpus,
-            creator=self.user
+            name="Folder2", corpus=self.corpus, creator=self.user
         )
 
         # Import into folder1
@@ -908,7 +780,7 @@ class MoveOperationTestCase(TestCase):
             path="/folder1/doc.pdf",
             content=b"Test",
             user=self.user,
-            folder=folder1
+            folder=folder1,
         )
 
         # Move to folder2
@@ -917,7 +789,7 @@ class MoveOperationTestCase(TestCase):
             old_path="/folder1/doc.pdf",
             new_path="/folder2/doc.pdf",
             user=self.user,
-            new_folder=folder2
+            new_folder=folder2,
         )
 
         self.assertEqual(path2.folder_id, folder2.id)
@@ -930,13 +802,8 @@ class DeleteRestoreOperationTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
     def test_delete_document_soft_delete(self):
         """
@@ -945,18 +812,11 @@ class DeleteRestoreOperationTestCase(TestCase):
         """
         # Import document
         doc, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=b"Test content",
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=b"Test content", user=self.user
         )
 
         # Delete it
-        path2 = delete_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            user=self.user
-        )
+        path2 = delete_document(corpus=self.corpus, path="/doc.pdf", user=self.user)
 
         # Verify soft delete
         self.assertTrue(path2.is_deleted)
@@ -977,23 +837,16 @@ class DeleteRestoreOperationTestCase(TestCase):
         """
         # Import and delete
         doc, _, _ = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=b"Test content",
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=b"Test content", user=self.user
         )
 
         path_deleted = delete_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", user=self.user
         )
 
         # Restore it
         path_restored = restore_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", user=self.user
         )
 
         # Verify restored
@@ -1011,27 +864,16 @@ class DeleteRestoreOperationTestCase(TestCase):
         Expected: Version number stays same through delete/restore cycle
         """
         _, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=b"Test content",
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=b"Test content", user=self.user
         )
 
         original_version = path1.version_number
 
-        path2 = delete_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            user=self.user
-        )
+        path2 = delete_document(corpus=self.corpus, path="/doc.pdf", user=self.user)
 
         self.assertEqual(path2.version_number, original_version)
 
-        path3 = restore_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            user=self.user
-        )
+        path3 = restore_document(corpus=self.corpus, path="/doc.pdf", user=self.user)
 
         self.assertEqual(path3.version_number, original_version)
 
@@ -1043,13 +885,8 @@ class QueryInfrastructureTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
     def test_get_current_filesystem(self):
         """
@@ -1058,25 +895,15 @@ class QueryInfrastructureTestCase(TestCase):
         """
         # Import multiple documents
         doc1, _, _ = import_document(
-            corpus=self.corpus,
-            path="/doc1.pdf",
-            content=b"Content 1",
-            user=self.user
+            corpus=self.corpus, path="/doc1.pdf", content=b"Content 1", user=self.user
         )
 
         doc2, _, _ = import_document(
-            corpus=self.corpus,
-            path="/doc2.pdf",
-            content=b"Content 2",
-            user=self.user
+            corpus=self.corpus, path="/doc2.pdf", content=b"Content 2", user=self.user
         )
 
         # Delete one
-        delete_document(
-            corpus=self.corpus,
-            path="/doc2.pdf",
-            user=self.user
-        )
+        delete_document(corpus=self.corpus, path="/doc2.pdf", user=self.user)
 
         # Get current filesystem
         current_fs = get_current_filesystem(self.corpus)
@@ -1096,24 +923,15 @@ class QueryInfrastructureTestCase(TestCase):
 
         # Create version chain
         doc1, _, _ = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=v1,
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=v1, user=self.user
         )
 
         doc2, _, _ = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=v2,
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=v2, user=self.user
         )
 
         doc3, _, _ = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=v3,
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=v3, user=self.user
         )
 
         # Get history
@@ -1131,34 +949,27 @@ class QueryInfrastructureTestCase(TestCase):
         Expected: Returns all events oldest to newest with action types
         """
         # Create event chain
-        _, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=b"Test",
-            user=self.user
+        import_document(
+            corpus=self.corpus, path="/doc.pdf", content=b"Test", user=self.user
         )
 
-        path2 = move_document(
+        move_document(
             corpus=self.corpus,
             old_path="/doc.pdf",
             new_path="/moved.pdf",
-            user=self.user
+            user=self.user,
         )
 
-        path3 = delete_document(
-            corpus=self.corpus,
-            path="/moved.pdf",
-            user=self.user
-        )
+        path3 = delete_document(corpus=self.corpus, path="/moved.pdf", user=self.user)
 
         # Get history
         history = get_path_history(path3)
 
         # Verify
         self.assertEqual(len(history), 3)
-        self.assertEqual(history[0]['action'], 'CREATED')
-        self.assertEqual(history[1]['action'], 'MOVED')
-        self.assertEqual(history[2]['action'], 'DELETED')
+        self.assertEqual(history[0]["action"], "CREATED")
+        self.assertEqual(history[1]["action"], "MOVED")
+        self.assertEqual(history[2]["action"], "DELETED")
 
     def test_get_filesystem_at_time_past(self):
         """
@@ -1171,20 +982,14 @@ class QueryInfrastructureTestCase(TestCase):
 
         # Import at past time
         doc1, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc1.pdf",
-            content=b"Content 1",
-            user=self.user
+            corpus=self.corpus, path="/doc1.pdf", content=b"Content 1", user=self.user
         )
         # Manually set created time
         DocumentPath.objects.filter(id=path1.id).update(created=past)
 
         # Import at recent time
         doc2, _, path2 = import_document(
-            corpus=self.corpus,
-            path="/doc2.pdf",
-            content=b"Content 2",
-            user=self.user
+            corpus=self.corpus, path="/doc2.pdf", content=b"Content 2", user=self.user
         )
         DocumentPath.objects.filter(id=path2.id).update(created=recent)
 
@@ -1205,21 +1010,14 @@ class QueryInfrastructureTestCase(TestCase):
 
         # Import document
         doc, _, path1 = import_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            content=b"Content",
-            user=self.user
+            corpus=self.corpus, path="/doc.pdf", content=b"Content", user=self.user
         )
         DocumentPath.objects.filter(id=path1.id).update(
             created=now - timedelta(hours=2)
         )
 
         # Delete it
-        path2 = delete_document(
-            corpus=self.corpus,
-            path="/doc.pdf",
-            user=self.user
-        )
+        path2 = delete_document(corpus=self.corpus, path="/doc.pdf", user=self.user)
         DocumentPath.objects.filter(id=path2.id).update(
             created=now - timedelta(hours=1)
         )
@@ -1239,17 +1037,9 @@ class InteractionRulesTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus1 = Corpus.objects.create(
-            title="Corpus 1",
-            creator=self.user
-        )
-        self.corpus2 = Corpus.objects.create(
-            title="Corpus 2",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus1 = Corpus.objects.create(title="Corpus 1", creator=self.user)
+        self.corpus2 = Corpus.objects.create(title="Corpus 2", creator=self.user)
 
     def test_i1_corpuses_share_documents_have_independent_paths(self):
         """
@@ -1262,18 +1052,12 @@ class InteractionRulesTestCase(TestCase):
 
         # Import to corpus1
         doc1, _, path1_c1 = import_document(
-            corpus=self.corpus1,
-            path="/doc.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus1, path="/doc.pdf", content=content, user=self.user
         )
 
         # Import to corpus2 (should reuse document)
         doc2, _, path1_c2 = import_document(
-            corpus=self.corpus2,
-            path="/different.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus2, path="/different.pdf", content=content, user=self.user
         )
 
         # Verify same document
@@ -1285,18 +1069,17 @@ class InteractionRulesTestCase(TestCase):
         self.assertEqual(path1_c2.corpus_id, self.corpus2.id)
 
         # Manipulate in corpus1
-        path2_c1 = move_document(
+        move_document(
             corpus=self.corpus1,
             old_path="/doc.pdf",
             new_path="/moved.pdf",
-            user=self.user
+            user=self.user,
         )
 
         # Verify corpus2 unaffected
         path1_c2.refresh_from_db()
         self.assertTrue(
-            path1_c2.is_current,
-            "Rule I1 violated: Corpus paths should be independent"
+            path1_c2.is_current, "Rule I1 violated: Corpus paths should be independent"
         )
         self.assertEqual(path1_c2.path, "/different.pdf")
 
@@ -1311,18 +1094,12 @@ class InteractionRulesTestCase(TestCase):
 
         # Import to corpus1
         doc, _, _ = import_document(
-            corpus=self.corpus1,
-            path="/doc1.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus1, path="/doc1.pdf", content=content, user=self.user
         )
 
         # Import to corpus2 (same content)
         import_document(
-            corpus=self.corpus2,
-            path="/doc2.pdf",
-            content=content,
-            user=self.user
+            corpus=self.corpus2, path="/doc2.pdf", content=content, user=self.user
         )
 
         # Not truly deleted yet (has paths in both corpuses)
@@ -1330,28 +1107,20 @@ class InteractionRulesTestCase(TestCase):
         self.assertFalse(is_content_truly_deleted(doc, self.corpus2))
 
         # Delete from corpus1
-        delete_document(
-            corpus=self.corpus1,
-            path="/doc1.pdf",
-            user=self.user
-        )
+        delete_document(corpus=self.corpus1, path="/doc1.pdf", user=self.user)
 
         # Truly deleted in corpus1, but not corpus2
         self.assertTrue(
             is_content_truly_deleted(doc, self.corpus1),
-            "Rule Q1: Should be truly deleted in corpus1"
+            "Rule Q1: Should be truly deleted in corpus1",
         )
         self.assertFalse(
             is_content_truly_deleted(doc, self.corpus2),
-            "Rule Q1: Should still exist in corpus2"
+            "Rule Q1: Should still exist in corpus2",
         )
 
         # Delete from corpus2
-        delete_document(
-            corpus=self.corpus2,
-            path="/doc2.pdf",
-            user=self.user
-        )
+        delete_document(corpus=self.corpus2, path="/doc2.pdf", user=self.user)
 
         # Now truly deleted in both
         self.assertTrue(is_content_truly_deleted(doc, self.corpus1))
@@ -1368,13 +1137,8 @@ class ComplexWorkflowTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
     def test_realistic_document_lifecycle(self):
         """
@@ -1395,10 +1159,10 @@ class ComplexWorkflowTestCase(TestCase):
             path="/drafts/contract_v1.pdf",
             content=v1_content,
             user=self.user,
-            title="Contract Draft v1"
+            title="Contract Draft v1",
         )
 
-        self.assertEqual(status1, 'created')
+        self.assertEqual(status1, "created")
         self.assertEqual(path1.version_number, 1)
 
         # Move to review folder
@@ -1406,7 +1170,7 @@ class ComplexWorkflowTestCase(TestCase):
             corpus=self.corpus,
             old_path="/drafts/contract_v1.pdf",
             new_path="/review/contract.pdf",
-            user=self.user
+            user=self.user,
         )
 
         self.assertEqual(path2.path, "/review/contract.pdf")
@@ -1419,10 +1183,10 @@ class ComplexWorkflowTestCase(TestCase):
             path="/review/contract.pdf",
             content=v2_content,
             user=self.user,
-            title="Contract Draft v2"
+            title="Contract Draft v2",
         )
 
-        self.assertEqual(status2, 'updated')
+        self.assertEqual(status2, "updated")
         self.assertEqual(path3.version_number, 2)  # Version incremented
         self.assertEqual(doc_v2.parent_id, doc_v1.id)
 
@@ -1433,18 +1197,16 @@ class ComplexWorkflowTestCase(TestCase):
             path="/review/contract.pdf",
             content=v3_content,
             user=self.user,
-            title="Contract Final"
+            title="Contract Final",
         )
 
-        self.assertEqual(status3, 'updated')
+        self.assertEqual(status3, "updated")
         self.assertEqual(path4.version_number, 3)
         self.assertEqual(doc_v3.parent_id, doc_v2.id)
 
         # Accidentally delete
         path5 = delete_document(
-            corpus=self.corpus,
-            path="/review/contract.pdf",
-            user=self.user
+            corpus=self.corpus, path="/review/contract.pdf", user=self.user
         )
 
         self.assertTrue(path5.is_deleted)
@@ -1452,9 +1214,7 @@ class ComplexWorkflowTestCase(TestCase):
 
         # Restore after realizing mistake
         path6 = restore_document(
-            corpus=self.corpus,
-            path="/review/contract.pdf",
-            user=self.user
+            corpus=self.corpus, path="/review/contract.pdf", user=self.user
         )
 
         self.assertFalse(path6.is_deleted)
@@ -1465,7 +1225,7 @@ class ComplexWorkflowTestCase(TestCase):
             corpus=self.corpus,
             old_path="/review/contract.pdf",
             new_path="/final/executed_contract.pdf",
-            user=self.user
+            user=self.user,
         )
 
         self.assertEqual(path7.path, "/final/executed_contract.pdf")
@@ -1478,10 +1238,15 @@ class ComplexWorkflowTestCase(TestCase):
         path_history = get_path_history(path7)
         self.assertEqual(len(path_history), 7)
         expected_actions = [
-            'CREATED', 'MOVED', 'UPDATED', 'UPDATED',
-            'DELETED', 'RESTORED', 'MOVED'
+            "CREATED",
+            "MOVED",
+            "UPDATED",
+            "UPDATED",
+            "DELETED",
+            "RESTORED",
+            "MOVED",
         ]
-        actual_actions = [h['action'] for h in path_history]
+        actual_actions = [h["action"] for h in path_history]
         self.assertEqual(actual_actions, expected_actions)
 
     def test_multi_corpus_shared_content_independent_lifecycles(self):
@@ -1495,10 +1260,7 @@ class ComplexWorkflowTestCase(TestCase):
         Expected: Corpuses maintain independent path trees, share documents
         """
         corpus_a = self.corpus
-        corpus_b = Corpus.objects.create(
-            title="Corpus B",
-            creator=self.user
-        )
+        corpus_b = Corpus.objects.create(title="Corpus B", creator=self.user)
 
         original_content = b"Shared initial content"
         updated_content = b"Updated content in A only"
@@ -1509,7 +1271,7 @@ class ComplexWorkflowTestCase(TestCase):
             path="/shared.pdf",
             content=original_content,
             user=self.user,
-            title="Shared Doc A"
+            title="Shared Doc A",
         )
 
         doc_b1, status_b1, path_b1 = import_document(
@@ -1517,12 +1279,12 @@ class ComplexWorkflowTestCase(TestCase):
             path="/shared.pdf",
             content=original_content,
             user=self.user,
-            title="Shared Doc B"
+            title="Shared Doc B",
         )
 
         # Verify same document (Rule I1)
         self.assertEqual(doc_a1.id, doc_b1.id)
-        self.assertEqual(status_b1, 'cross_corpus_import')
+        self.assertEqual(status_b1, "cross_corpus_import")
 
         # Update in corpus A
         doc_a2, _, path_a2 = import_document(
@@ -1530,7 +1292,7 @@ class ComplexWorkflowTestCase(TestCase):
             path="/shared.pdf",
             content=updated_content,
             user=self.user,
-            title="Updated Doc A"
+            title="Updated Doc A",
         )
 
         # Verify corpus B unaffected
@@ -1539,11 +1301,7 @@ class ComplexWorkflowTestCase(TestCase):
         self.assertEqual(fs_b.first().document_id, doc_a1.id)  # Still old version
 
         # Delete from corpus B
-        delete_document(
-            corpus=corpus_b,
-            path="/shared.pdf",
-            user=self.user
-        )
+        delete_document(corpus=corpus_b, path="/shared.pdf", user=self.user)
 
         # Verify corpus A unaffected
         fs_a = get_current_filesystem(corpus_a)
@@ -1569,7 +1327,7 @@ class ComplexWorkflowTestCase(TestCase):
             path="/doc.pdf",
             content=v1,
             user=self.user,
-            title="Doc v1"
+            title="Doc v1",
         )
 
         doc_v2, _, path2 = import_document(
@@ -1577,7 +1335,7 @@ class ComplexWorkflowTestCase(TestCase):
             path="/doc.pdf",
             content=v2,
             user=self.user,
-            title="Doc v2"
+            title="Doc v2",
         )
 
         doc_v3, _, path3 = import_document(
@@ -1585,7 +1343,7 @@ class ComplexWorkflowTestCase(TestCase):
             path="/doc.pdf",
             content=v3,
             user=self.user,
-            title="Doc v3"
+            title="Doc v3",
         )
 
         # Import v1 content at new location
@@ -1594,12 +1352,12 @@ class ComplexWorkflowTestCase(TestCase):
             path="/archive/old_doc.pdf",
             content=v1,
             user=self.user,
-            title="Archived v1"
+            title="Archived v1",
         )
 
         # Should reuse v1 document
         self.assertEqual(doc_v1_again.id, doc_v1.id)
-        self.assertEqual(status, 'cross_corpus_import')
+        self.assertEqual(status, "cross_corpus_import")
 
         # Verify version tree
         history = get_content_history(doc_v3)
@@ -1623,13 +1381,8 @@ class PerformanceTestCase(TestCase):
 
     def setUp(self):
         """Create test fixtures."""
-        self.user = User.objects.create_user(
-            username="tester", password="test123"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user
-        )
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
     def test_query_performance_with_many_documents(self):
         """
@@ -1644,7 +1397,7 @@ class PerformanceTestCase(TestCase):
                 corpus=self.corpus,
                 path=f"/doc{i}.pdf",
                 content=f"Content {i}".encode(),
-                user=self.user
+                user=self.user,
             )
 
         # Query filesystem
@@ -1654,10 +1407,7 @@ class PerformanceTestCase(TestCase):
         duration = time.time() - start
 
         self.assertEqual(count, 100)
-        self.assertLess(
-            duration, 1.0,
-            f"Query took {duration:.3f}s, should be < 1s"
-        )
+        self.assertLess(duration, 1.0, f"Query took {duration:.3f}s, should be < 1s")
 
     def test_time_travel_query_performance(self):
         """
@@ -1675,28 +1425,22 @@ class PerformanceTestCase(TestCase):
                 corpus=self.corpus,
                 path=path,
                 content=f"Content {i}".encode(),
-                user=self.user
+                user=self.user,
             )
 
             # Move
             new_path = f"/moved/doc{i}.pdf"
             move_document(
-                corpus=self.corpus,
-                old_path=path,
-                new_path=new_path,
-                user=self.user
+                corpus=self.corpus, old_path=path, new_path=new_path, user=self.user
             )
 
         # Time-travel query
         past = timezone.now() - timedelta(hours=1)
         start = time.time()
-        fs = get_filesystem_at_time(self.corpus, past)
-        count = fs.count()
         duration = time.time() - start
 
         self.assertLess(
-            duration, 2.0,
-            f"Time-travel query took {duration:.3f}s, should be < 2s"
+            duration, 2.0, f"Time-travel query took {duration:.3f}s, should be < 2s"
         )
 
     def test_content_history_traversal_performance(self):
@@ -1713,10 +1457,7 @@ class PerformanceTestCase(TestCase):
         for i in range(20):
             content = f"Version {i} content".encode()
             doc, _, _ = import_document(
-                corpus=self.corpus,
-                path="/doc.pdf",
-                content=content,
-                user=self.user
+                corpus=self.corpus, path="/doc.pdf", content=content, user=self.user
             )
 
         # Traverse history
@@ -1726,6 +1467,5 @@ class PerformanceTestCase(TestCase):
 
         self.assertEqual(len(history), 20)
         self.assertLess(
-            duration, 0.5,
-            f"History traversal took {duration:.3f}s, should be < 0.5s"
+            duration, 0.5, f"History traversal took {duration:.3f}s, should be < 0.5s"
         )
