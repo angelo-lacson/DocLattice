@@ -163,7 +163,7 @@ test.describe("CreateThreadForm", () => {
             corpusId: "corpus-1",
             title: "Test Thread",
             description: "Test description",
-            initialMessage: "<p>Test message content</p>",
+            initialMessage: "Test message content",
           },
         },
         result: {
@@ -171,25 +171,10 @@ test.describe("CreateThreadForm", () => {
             createThread: {
               ok: true,
               message: "Thread created successfully",
-              conversation: {
+              obj: {
                 id: "thread-1",
-                conversationType: "THREAD",
                 title: "Test Thread",
                 description: "Test description",
-                createdAt: "2025-01-01T00:00:00Z",
-                updatedAt: "2025-01-01T00:00:00Z",
-                isPinned: false,
-                isLocked: false,
-                creator: {
-                  id: "user-1",
-                  username: "testuser",
-                  email: "test@example.com",
-                },
-                corpus: {
-                  id: "corpus-1",
-                  title: "Test Corpus",
-                },
-                messageCount: 1,
               },
             },
           } as CreateThreadOutput,
@@ -228,7 +213,6 @@ test.describe("CreateThreadForm", () => {
             expect(id).toBe("thread-1");
           }}
           onClose={() => {}}
-          initialMessage="<p>Test message content</p>"
         />
       </MockedProvider>
     );
@@ -240,12 +224,19 @@ test.describe("CreateThreadForm", () => {
     const descriptionInput = page.getByLabel(/description/i);
     await descriptionInput.fill("Test description");
 
-    // Submit
+    // Type the message content into the editor
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+    await editor.fill("Test message content");
+
+    // Wait for send button to be enabled
     const sendButton = page.getByRole("button", { name: /send/i });
+    await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
-    // Wait for mutation
-    await page.waitForTimeout(500);
+    // Wait for mutation and Apollo cache updates
+    // Apollo MockedProvider needs time to process mutation and call onCompleted
+    await page.waitForTimeout(1000);
 
     expect(successCallbackFired).toBe(true);
   });
@@ -261,7 +252,8 @@ test.describe("CreateThreadForm", () => {
           variables: {
             corpusId: "corpus-1",
             title: "Test Thread",
-            initialMessage: "<p>Test message content</p>",
+            description: undefined,
+            initialMessage: "Test message content",
           },
         },
         result: {
@@ -269,25 +261,10 @@ test.describe("CreateThreadForm", () => {
             createThread: {
               ok: true,
               message: "Thread created successfully",
-              conversation: {
+              obj: {
                 id: "thread-1",
-                conversationType: "THREAD",
                 title: "Test Thread",
-                description: null,
-                createdAt: "2025-01-01T00:00:00Z",
-                updatedAt: "2025-01-01T00:00:00Z",
-                isPinned: false,
-                isLocked: false,
-                creator: {
-                  id: "user-1",
-                  username: "testuser",
-                  email: "test@example.com",
-                },
-                corpus: {
-                  id: "corpus-1",
-                  title: "Test Corpus",
-                },
-                messageCount: 1,
+                description: undefined,
               },
             },
           } as CreateThreadOutput,
@@ -325,7 +302,6 @@ test.describe("CreateThreadForm", () => {
             successCallbackFired = true;
           }}
           onClose={() => {}}
-          initialMessage="<p>Test message content</p>"
         />
       </MockedProvider>
     );
@@ -334,12 +310,19 @@ test.describe("CreateThreadForm", () => {
     const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
 
-    // Submit
+    // Type the message content into the editor
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+    await editor.fill("Test message content");
+
+    // Wait for send button to be enabled
     const sendButton = page.getByRole("button", { name: /send/i });
+    await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
-    // Wait for mutation
-    await page.waitForTimeout(500);
+    // Wait for mutation and Apollo cache updates
+    // Apollo MockedProvider needs time to process mutation and call onCompleted
+    await page.waitForTimeout(1000);
 
     expect(successCallbackFired).toBe(true);
   });
@@ -352,7 +335,8 @@ test.describe("CreateThreadForm", () => {
           variables: {
             corpusId: "corpus-1",
             title: "Test Thread",
-            initialMessage: "<p>Test message content</p>",
+            description: undefined,
+            initialMessage: "Test message content",
           },
         },
         result: {
@@ -360,7 +344,7 @@ test.describe("CreateThreadForm", () => {
             createThread: {
               ok: false,
               message: "You don't have permission to create threads",
-              conversation: null,
+              obj: null,
             },
           } as CreateThreadOutput,
         },
@@ -373,7 +357,6 @@ test.describe("CreateThreadForm", () => {
           corpusId="corpus-1"
           onSuccess={() => {}}
           onClose={() => {}}
-          initialMessage="<p>Test message content</p>"
         />
       </MockedProvider>
     );
@@ -382,12 +365,18 @@ test.describe("CreateThreadForm", () => {
     const titleInput = page.getByLabel(/title/i);
     await titleInput.fill("Test Thread");
 
-    // Submit
+    // Type the message content into the editor
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+    await editor.fill("Test message content");
+
+    // Wait for send button to be enabled
     const sendButton = page.getByRole("button", { name: /send/i });
+    await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
-    // Wait for mutation
-    await page.waitForTimeout(500);
+    // Wait for mutation and error handling
+    await page.waitForTimeout(1000);
 
     // Should show error
     await expect(page.getByText(/you don't have permission/i)).toBeVisible();

@@ -32,15 +32,21 @@ test.describe("MessageComposer", () => {
   });
 
   test("shows character count", async ({ mount, page }) => {
-    // Mount with initialContent to properly set TipTap's internal state
     await mount(
       <MessageComposer
         placeholder="Write your message..."
         onSubmit={async () => {}}
         maxLength={100}
-        initialContent="<p>Test message</p>"
       />
     );
+
+    // Type content into the editor to trigger character count update
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+    await editor.fill("Test message");
+
+    // Wait for character count to update
+    await page.waitForTimeout(100);
 
     // Should show character count (12 chars in "Test message")
     await expect(page.getByText(/12 \/ 100/)).toBeVisible();

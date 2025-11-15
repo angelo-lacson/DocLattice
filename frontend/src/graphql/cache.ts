@@ -236,7 +236,15 @@ export const cache = new InMemoryCache({
           ],
           merge: true,
         },
-        documents: relayStylePagination(),
+        // CRITICAL: Specify keyArgs to isolate cache entries by folder/corpus/search
+        // Without this, refetchQueries pollutes cache across different filter contexts
+        documents: relayStylePagination([
+          "inCorpusWithId",
+          "inFolderId",
+          "textSearch",
+          "hasLabelWithId",
+          "hasAnnotationsWithIds",
+        ]),
         corpuses: relayStylePagination(),
         userexports: relayStylePagination(),
         labelsets: relayStylePagination(),

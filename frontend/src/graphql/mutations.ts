@@ -781,11 +781,14 @@ export interface UploadDocumentInputProps {
   description?: string;
   title?: string;
   addToCorpusId?: string;
+  addToFolderId?: string;
   slug?: string;
 }
 
 export interface UploadDocumentOutputProps {
   uploadDocument: {
+    ok: boolean;
+    message: string;
     document: {
       id: string;
       icon: string;
@@ -793,6 +796,7 @@ export interface UploadDocumentOutputProps {
       title: string;
       description: string;
       backendLock: boolean;
+      fileType: string;
       docAnnotations: {
         edges: {
           node: {
@@ -800,7 +804,7 @@ export interface UploadDocumentOutputProps {
           };
         };
       }[];
-    };
+    } | null;
   };
 }
 
@@ -814,6 +818,7 @@ export const UPLOAD_DOCUMENT = gql`
     $makePublic: Boolean!
     $addToCorpusId: ID
     $addToExtractId: ID
+    $addToFolderId: ID
     $slug: String
   ) {
     uploadDocument(
@@ -825,8 +830,11 @@ export const UPLOAD_DOCUMENT = gql`
       makePublic: $makePublic
       addToCorpusId: $addToCorpusId
       addToExtractId: $addToExtractId
+      addToFolderId: $addToFolderId
       slug: $slug
     ) {
+      ok
+      message
       document {
         id
         icon
@@ -2461,7 +2469,7 @@ export const CREATE_THREAD = gql`
     ) {
       ok
       message
-      conversation {
+      obj {
         id
         title
         description
@@ -2481,7 +2489,7 @@ export interface CreateThreadOutput {
   createThread: {
     ok: boolean;
     message: string;
-    conversation?: {
+    obj?: {
       id: string;
       title: string;
       description?: string;
@@ -2490,16 +2498,16 @@ export interface CreateThreadOutput {
 }
 
 export const CREATE_THREAD_MESSAGE = gql`
-  mutation CreateThreadMessage($conversationId: ID!, $content: String!) {
+  mutation CreateThreadMessage($conversationId: String!, $content: String!) {
     createThreadMessage(conversationId: $conversationId, content: $content) {
       ok
       message
-      chatMessage {
+      obj {
         id
         content
-        createdAt
-        updatedAt
-        sender {
+        created
+        modified
+        creator {
           id
           username
           email
@@ -2525,12 +2533,12 @@ export interface CreateThreadMessageOutput {
   createThreadMessage: {
     ok: boolean;
     message: string;
-    chatMessage: {
+    obj: {
       id: string;
       content: string;
-      createdAt: string;
-      updatedAt: string;
-      sender: {
+      created: string;
+      modified: string;
+      creator: {
         id: string;
         username: string;
         email: string;
@@ -2547,16 +2555,16 @@ export interface CreateThreadMessageOutput {
 }
 
 export const REPLY_TO_MESSAGE = gql`
-  mutation ReplyToMessage($parentMessageId: ID!, $content: String!) {
+  mutation ReplyToMessage($parentMessageId: String!, $content: String!) {
     replyToMessage(parentMessageId: $parentMessageId, content: $content) {
       ok
       message
-      chatMessage {
+      obj {
         id
         content
-        createdAt
-        updatedAt
-        sender {
+        created
+        modified
+        creator {
           id
           username
           email
@@ -2564,7 +2572,7 @@ export const REPLY_TO_MESSAGE = gql`
         parentMessage {
           id
           content
-          sender {
+          creator {
             id
             username
           }
@@ -2590,12 +2598,12 @@ export interface ReplyToMessageOutput {
   replyToMessage: {
     ok: boolean;
     message: string;
-    chatMessage: {
+    obj: {
       id: string;
       content: string;
-      createdAt: string;
-      updatedAt: string;
-      sender: {
+      created: string;
+      modified: string;
+      creator: {
         id: string;
         username: string;
         email: string;
@@ -2603,7 +2611,7 @@ export interface ReplyToMessageOutput {
       parentMessage: {
         id: string;
         content: string;
-        sender: {
+        creator: {
           id: string;
           username: string;
         };

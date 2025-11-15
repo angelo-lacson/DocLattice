@@ -186,8 +186,8 @@ export function CreateThreadForm({
       },
     ],
     onCompleted: (data) => {
-      if (data.createThread.ok && data.createThread.conversation) {
-        onSuccess(data.createThread.conversation.id);
+      if (data.createThread.ok && data.createThread.obj) {
+        onSuccess(data.createThread.obj.id);
       } else {
         setError(
           data.createThread.message ||

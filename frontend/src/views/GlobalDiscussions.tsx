@@ -10,9 +10,19 @@ import { spacing } from "../theme/spacing";
 
 // Styled components
 const Container = styled.div`
-  max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2rem 4rem;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  @media (max-width: 1400px) {
+    padding: 2rem 3rem;
+  }
+
+  @media (max-width: 1024px) {
+    padding: 1.5rem 2rem;
+  }
 
   @media (max-width: 768px) {
     padding: 1rem;

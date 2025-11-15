@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useAtom } from "jotai";
@@ -24,6 +24,8 @@ import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { useMessageBadges } from "../../hooks/useMessageBadges";
 import { openedCorpus } from "../../graphql/cache";
+import { ReplyForm } from "./ReplyForm";
+import { formatUsername } from "./userUtils";
 
 interface ThreadDetailProps {
   conversationId: string;
@@ -34,13 +36,27 @@ interface ThreadDetailProps {
 }
 
 const ThreadDetailContainer = styled.div<{ $compact?: boolean }>`
-  max-width: ${(props) => (props.$compact ? "100%" : "1000px")};
+  max-width: ${(props) => (props.$compact ? "100%" : "1600px")};
   margin: 0 auto;
-  padding: ${(props) => (props.$compact ? spacing.md : spacing.lg)};
+  padding: ${(props) => (props.$compact ? spacing.md : "2rem")};
   width: 100%;
+  background: ${color.N1};
 
-  @media (max-width: 640px) {
-    padding: ${spacing.sm};
+  @media (max-width: 1920px) {
+    max-width: ${(props) => (props.$compact ? "100%" : "1400px")};
+  }
+
+  @media (max-width: 1440px) {
+    max-width: ${(props) => (props.$compact ? "100%" : "1200px")};
+  }
+
+  @media (max-width: 1024px) {
+    max-width: 100%;
+    padding: ${(props) => (props.$compact ? spacing.md : "1.5rem")};
+  }
+
+  @media (max-width: 768px) {
+    padding: ${spacing.md};
   }
 `;
 
@@ -65,9 +81,16 @@ const BackButton = styled.button`
 `;
 
 const ThreadHeader = styled.div`
-  border-bottom: 1px solid ${color.N4};
-  padding-bottom: ${spacing.lg};
-  margin-bottom: ${spacing.lg};
+  border-bottom: 2px solid rgba(0, 0, 0, 0.06);
+  padding-bottom: ${spacing.xl};
+  margin-bottom: ${spacing.xl};
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(248, 250, 252, 0.5) 100%
+  );
+  padding: ${spacing.xl} 0;
+  border-radius: 12px;
 `;
 
 const BadgeRow = styled.div`
@@ -78,22 +101,24 @@ const BadgeRow = styled.div`
 `;
 
 const ThreadTitleLarge = styled.h1`
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 36px;
+  font-weight: 800;
   color: ${color.N10};
-  margin: 0 0 ${spacing.sm} 0;
-  line-height: 1.3;
+  margin: 0 0 ${spacing.md} 0;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
 
   @media (max-width: 640px) {
-    font-size: 24px;
+    font-size: 28px;
   }
 `;
 
 const ThreadDescription = styled.p`
-  font-size: 16px;
+  font-size: 17px;
   color: ${color.N7};
-  line-height: 1.6;
-  margin: 0 0 ${spacing.md} 0;
+  line-height: 1.7;
+  margin: 0 0 ${spacing.lg} 0;
+  font-weight: 400;
 `;
 
 const ThreadMeta = styled.div`
@@ -118,6 +143,7 @@ const Separator = styled.span`
 const MessageListContainer = styled.div`
   display: flex;
   flex-direction: column;
+  gap: ${spacing.md};
 `;
 
 const EmptyMessageState = styled.div`
@@ -244,11 +270,13 @@ export function ThreadDetail({
 
   return (
     <ThreadDetailContainer $compact={compact}>
-      {/* Back button */}
-      <BackButton onClick={handleBack} aria-label="Back to discussions">
-        <ArrowLeft size={16} />
-        <span>Back to Discussions</span>
-      </BackButton>
+      {/* Back button - only show in compact mode (sidebar), route provides its own back button in full-page mode */}
+      {compact && (
+        <BackButton onClick={handleBack} aria-label="Back to discussions">
+          <ArrowLeft size={16} />
+          <span>Back to Discussions</span>
+        </BackButton>
+      )}
 
       {/* Thread header */}
       <ThreadHeader>
@@ -275,7 +303,9 @@ export function ThreadDetail({
         <ThreadMeta>
           <MetaItem>
             Started by{" "}
-            <strong>{thread.creator?.username || thread.creator?.email}</strong>
+            <strong>
+              {formatUsername(thread.creator?.username, thread.creator?.email)}
+            </strong>
           </MetaItem>
 
           <Separator>•</Separator>
@@ -321,8 +351,27 @@ export function ThreadDetail({
         </MessageListContainer>
       )}
 
-      {/* TODO: Add message composer at bottom in #574 */}
-      {/* {!thread.isLocked && <MessageComposer conversationId={conversationId} />} */}
+      {/* Bottom-level message composer */}
+      {!thread.isLocked && (
+        <div
+          style={{
+            marginTop: spacing.lg,
+            paddingTop: spacing.lg,
+            borderTop: `1px solid ${color.N4}`,
+          }}
+        >
+          <ReplyForm
+            conversationId={conversationId}
+            onSuccess={() => {
+              refetch();
+            }}
+            onCancel={() => {
+              // No-op for bottom composer - it's always visible
+            }}
+            autoFocus={false}
+          />
+        </div>
+      )}
     </ThreadDetailContainer>
   );
 }

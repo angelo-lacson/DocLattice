@@ -18,6 +18,7 @@ import {
 } from "semantic-ui-react";
 import styled from "styled-components";
 import { Badge } from "./Badge";
+import { BadgeCriteriaConfig } from "./BadgeCriteriaConfig";
 import {
   GET_BADGES,
   GetBadgesInput,
@@ -85,6 +86,8 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
   const [color, setColor] = useState("#05313d");
   const [badgeType, setBadgeType] = useState<"GLOBAL" | "CORPUS">("GLOBAL");
   const [isAutoAwarded, setIsAutoAwarded] = useState(false);
+  const [criteriaConfig, setCriteriaConfig] = useState<any>(null);
+  const [criteriaValid, setCriteriaValid] = useState<boolean>(false);
 
   const { loading, error, data, refetch } = useQuery<
     GetBadgesOutput,
@@ -125,6 +128,8 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
     setColor("#05313d");
     setBadgeType("GLOBAL");
     setIsAutoAwarded(false);
+    setCriteriaConfig(null);
+    setCriteriaValid(false);
   };
 
   const handleCreate = () => {
@@ -137,6 +142,9 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
         color,
         corpusId: badgeType === "CORPUS" ? corpusId : undefined,
         isAutoAwarded,
+        criteriaConfig: isAutoAwarded
+          ? JSON.stringify(criteriaConfig)
+          : undefined,
       },
     });
   };
@@ -330,11 +338,27 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
               <Checkbox
                 label="Auto-award this badge"
                 checked={isAutoAwarded}
-                onChange={(_, { checked }) =>
-                  setIsAutoAwarded(checked || false)
-                }
+                onChange={(_, { checked }) => {
+                  setIsAutoAwarded(checked || false);
+                  if (!checked) {
+                    setCriteriaConfig(null);
+                    setCriteriaValid(false);
+                  }
+                }}
               />
             </Form.Field>
+
+            {/* Show criteria configuration when auto-award is enabled */}
+            {isAutoAwarded && (
+              <BadgeCriteriaConfig
+                badgeType={badgeType}
+                criteriaConfig={criteriaConfig}
+                onChange={(data) => {
+                  setCriteriaConfig(data.config);
+                  setCriteriaValid(data.isValid);
+                }}
+              />
+            )}
           </Form>
         </Modal.Content>
         <Modal.Actions>
@@ -343,7 +367,11 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
             primary
             onClick={handleCreate}
             loading={creating}
-            disabled={!name || !description}
+            disabled={
+              !name ||
+              !description ||
+              (isAutoAwarded && (!criteriaConfig || !criteriaValid))
+            }
           >
             Create Badge
           </Button>

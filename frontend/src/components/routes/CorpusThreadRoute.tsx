@@ -14,12 +14,33 @@ import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 
 const Container = styled.div`
-  max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+`;
+
+const BackButtonWrapper = styled.div`
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 0;
+
+  @media (max-width: 1920px) {
+    max-width: 1400px;
+  }
+
+  @media (max-width: 1440px) {
+    max-width: 1200px;
+  }
+
+  @media (max-width: 1024px) {
+    max-width: 100%;
+    padding: 1rem 1.5rem 0;
+  }
 
   @media (max-width: 768px) {
-    padding: 1rem;
+    padding: 1rem 1rem 0;
   }
 `;
 
@@ -28,7 +49,6 @@ const BackButton = styled.button`
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  margin-bottom: 1.5rem;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: white;
@@ -111,10 +131,12 @@ export const CorpusThreadRoute: React.FC = () => {
   // Success state - render thread detail
   return (
     <Container>
-      <BackButton onClick={handleBack} aria-label="Back to Discussions">
-        <ArrowLeft size={16} />
-        Back to Discussions
-      </BackButton>
+      <BackButtonWrapper>
+        <BackButton onClick={handleBack} aria-label="Back to Discussions">
+          <ArrowLeft size={16} />
+          Back to Discussions
+        </BackButton>
+      </BackButtonWrapper>
 
       <ThreadDetail conversationId={thread.id} corpusId={corpus?.id} />
     </Container>
