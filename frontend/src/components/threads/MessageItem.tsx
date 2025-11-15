@@ -7,8 +7,9 @@ import { spacing } from "../../theme/spacing";
 import { MessageNode } from "./utils";
 import { RelativeTime } from "./RelativeTime";
 import { MessageBadges } from "../badges/MessageBadges";
-import { parseMentionsInContent } from "./MentionChip";
-import { UserBadgeType, MentionedResourceType } from "../../types/graphql-api";
+import { MarkdownMessageRenderer } from "./MarkdownMessageRenderer";
+import { formatUsername } from "./userUtils";
+import { UserBadgeType } from "../../types/graphql-api";
 import {
   mapWebSocketSourcesToChatMessageSources,
   ChatMessageSource,
@@ -28,24 +29,57 @@ const MessageContainer = styled.div<{
   $isHighlighted?: boolean;
   $isDeleted?: boolean;
 }>`
-  margin-left: ${(props) => Math.min(props.$depth * 24, 240)}px;
-  padding: ${spacing.md};
-  background: ${(props) => (props.$isHighlighted ? color.B1 : color.N2)};
-  border: 1px solid ${(props) => (props.$isHighlighted ? color.B5 : color.N4)};
-  border-radius: 8px;
-  transition: all 0.3s;
-  margin-bottom: ${spacing.sm};
+  margin-left: ${(props) => Math.min(props.$depth * 32, 240)}px;
+  padding: ${spacing.xl};
+  background: ${(props) => {
+    if (props.$isDeleted) return color.N2;
+    if (props.$isHighlighted)
+      return `linear-gradient(135deg, ${color.B1} 0%, #f0f9ff 100%)`;
+    return "white";
+  }};
+  border: 1px solid
+    ${(props) => {
+      if (props.$isHighlighted) return color.B4;
+      return "rgba(0, 0, 0, 0.06)";
+    }};
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: ${spacing.lg};
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  position: relative;
+
+  ${(props) =>
+    props.$isHighlighted &&
+    `
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: linear-gradient(180deg, ${color.B6} 0%, ${color.B5} 100%);
+      border-radius: 16px 0 0 16px;
+    }
+  `}
+
+  &:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+    transform: translateY(-2px);
+    border-color: ${(props) =>
+      props.$isHighlighted ? color.B5 : "rgba(0, 0, 0, 0.1)"};
+  }
 
   ${(props) =>
     props.$isDeleted &&
     `
-    opacity: 0.6;
-    background: ${color.N3};
+    opacity: 0.5;
+    background: ${color.N2};
   `}
 
   @media (max-width: 640px) {
-    margin-left: ${(props) => Math.min(props.$depth * 12, 48)}px;
-    padding: ${spacing.sm};
+    margin-left: ${(props) => Math.min(props.$depth * 16, 64)}px;
+    padding: ${spacing.lg};
   }
 `;
 
@@ -68,15 +102,24 @@ const MessageHeaderLeft = styled.div`
 `;
 
 const UserAvatar = styled.div`
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: ${color.B5};
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
+  font-weight: 700;
+  font-size: 18px;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+  }
 `;
 
 const UserInfo = styled.div`
@@ -89,19 +132,21 @@ const UserInfo = styled.div`
 const UsernameRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: ${spacing.sm};
   flex-wrap: wrap;
 `;
 
 const Username = styled.span`
-  font-weight: 600;
+  font-weight: 700;
   color: ${color.N10};
-  font-size: 14px;
+  font-size: 16px;
+  letter-spacing: -0.02em;
 `;
 
 const MessageTimestamp = styled.span`
-  font-size: 12px;
+  font-size: 13px;
   color: ${color.N6};
+  font-weight: 500;
 `;
 
 const MessageActions = styled.button`
@@ -173,21 +218,31 @@ const MessageFooter = styled.div`
 `;
 
 const FooterButton = styled.button`
-  background: none;
-  border: none;
-  color: ${color.N6};
+  background: linear-gradient(135deg, ${color.B1} 0%, #f0f9ff 100%);
+  border: 1px solid ${color.B3};
+  color: ${color.B7};
   cursor: pointer;
-  font-size: 13px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.2s;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    background: ${color.N3};
-    color: ${color.N9};
+    background: linear-gradient(135deg, ${color.B6} 0%, ${color.B5} 100%);
+    border-color: ${color.B6};
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 `;
 
@@ -258,8 +313,10 @@ export function MessageItem({
   userBadges = [],
 }: MessageItemProps) {
   const isDeleted = !!message.deletedAt;
-  const username =
-    message.creator?.username || message.creator?.email || "Anonymous";
+  const username = formatUsername(
+    message.creator?.username,
+    message.creator?.email
+  );
 
   // State for sources expansion and selection
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
@@ -367,11 +424,8 @@ export function MessageItem({
         {isDeleted ? (
           <p>[This message has been deleted]</p>
         ) : (
-          // Render content with mention chips (Issue #623)
-          parseMentionsInContent(
-            message.content || "",
-            (message.mentionedResources as MentionedResourceType[]) || []
-          )
+          // Render markdown content with styled mentions (Issue #623)
+          <MarkdownMessageRenderer content={message.content || ""} />
         )}
       </MessageContent>
 

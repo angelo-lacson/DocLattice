@@ -24,6 +24,7 @@ from opencontractserver.corpuses.models import (
     CorpusFolder,
 )
 from opencontractserver.documents.models import Document
+from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
 User = get_user_model()
@@ -70,11 +71,13 @@ class CreateCorpusFolderMutation(graphene.Mutation):
             corpus_pk = from_global_id(corpus_id)[1]
 
             # Check corpus permissions - user must have UPDATE permission or be creator
+            # Note: is_public grants READ-ONLY access, not write access
             corpus = Corpus.objects.get(pk=corpus_pk)
             if not (
                 corpus.creator == user
-                or corpus.is_public
-                or user_has_permission_for_obj(user, corpus, "update")
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
+                )
             ):
                 return CreateCorpusFolderMutation(
                     ok=False,
@@ -192,10 +195,15 @@ class UpdateCorpusFolderMutation(graphene.Mutation):
             folder = CorpusFolder.objects.get(pk=folder_pk)
 
             # Check permission - user must have UPDATE permission or be creator
+            # Note: is_public grants READ-ONLY access, not write access
             if not (
                 folder.corpus.creator == user
-                or folder.corpus.is_public
-                or user_has_permission_for_obj(user, folder.corpus, "update")
+                or user_has_permission_for_obj(
+                    user,
+                    folder.corpus,
+                    PermissionTypes.UPDATE,
+                    include_group_permissions=True,
+                )
             ):
                 return UpdateCorpusFolderMutation(
                     ok=False,
@@ -282,10 +290,15 @@ class MoveCorpusFolderMutation(graphene.Mutation):
             folder = CorpusFolder.objects.get(pk=folder_pk)
 
             # Check permission - user must have UPDATE permission or be creator
+            # Note: is_public grants READ-ONLY access, not write access
             if not (
                 folder.corpus.creator == user
-                or folder.corpus.is_public
-                or user_has_permission_for_obj(user, folder.corpus, "update")
+                or user_has_permission_for_obj(
+                    user,
+                    folder.corpus,
+                    PermissionTypes.UPDATE,
+                    include_group_permissions=True,
+                )
             ):
                 return MoveCorpusFolderMutation(
                     ok=False,
@@ -457,10 +470,12 @@ class MoveDocumentToFolderMutation(graphene.Mutation):
             corpus = Corpus.objects.get(pk=corpus_pk)
 
             # Check permissions - user must have UPDATE permission or be creator
+            # Note: is_public grants READ-ONLY access, not write access
             if not (
                 corpus.creator == user
-                or corpus.is_public
-                or user_has_permission_for_obj(user, corpus, "update")
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
+                )
             ):
                 return MoveDocumentToFolderMutation(
                     ok=False,
@@ -568,10 +583,12 @@ class MoveDocumentsToFolderMutation(graphene.Mutation):
             corpus = Corpus.objects.get(pk=corpus_pk)
 
             # Check permissions - user must have UPDATE permission or be creator
+            # Note: is_public grants READ-ONLY access, not write access
             if not (
                 corpus.creator == user
-                or corpus.is_public
-                or user_has_permission_for_obj(user, corpus, "update")
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
+                )
             ):
                 return MoveDocumentsToFolderMutation(
                     ok=False,

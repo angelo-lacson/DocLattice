@@ -2366,6 +2366,43 @@ export const GET_THREAD_DETAIL = gql`
 `;
 
 /**
+ * Search users for @ mention autocomplete
+ * Backend filters results to active users only
+ * Part of Issue #623 - @ Mentions Feature (Extended)
+ */
+export interface SearchUsersForMentionInput {
+  textSearch: string;
+}
+
+export interface SearchUsersForMentionOutput {
+  searchUsersForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        username: string;
+        email: string | null;
+        slug: string | null;
+      };
+    }>;
+  };
+}
+
+export const SEARCH_USERS_FOR_MENTION = gql`
+  query SearchUsersForMention($textSearch: String!) {
+    searchUsersForMention(textSearch: $textSearch, first: 10) {
+      edges {
+        node {
+          id
+          username
+          email
+          slug
+        }
+      }
+    }
+  }
+`;
+
+/**
  * Search corpuses for @ mention autocomplete
  * Backend filters results to only corpuses visible to the user via .visible_to_user()
  * Part of Issue #623 - @ Mentions Feature
@@ -2391,7 +2428,7 @@ export interface SearchCorpusesForMentionOutput {
 
 export const SEARCH_CORPUSES_FOR_MENTION = gql`
   query SearchCorpusesForMention($textSearch: String!) {
-    searchCorpusesForMention(textSearch: $textSearch) {
+    searchCorpusesForMention(textSearch: $textSearch, first: 10) {
       edges {
         node {
           id
@@ -2425,14 +2462,18 @@ export interface SearchDocumentsForMentionOutput {
         creator: {
           slug: string;
         };
-        corpus: {
-          id: string;
-          slug: string;
-          title: string;
-          creator: {
-            slug: string;
-          };
-        } | null;
+        corpusSet: {
+          edges: Array<{
+            node: {
+              id: string;
+              slug: string;
+              title: string;
+              creator: {
+                slug: string;
+              };
+            };
+          }>;
+        };
       };
     }>;
   };
@@ -2440,7 +2481,7 @@ export interface SearchDocumentsForMentionOutput {
 
 export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
   query SearchDocumentsForMention($textSearch: String!) {
-    searchDocumentsForMention(textSearch: $textSearch) {
+    searchDocumentsForMention(textSearch: $textSearch, first: 10) {
       edges {
         node {
           id
@@ -2449,13 +2490,83 @@ export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
           creator {
             slug
           }
+          corpusSet(first: 1) {
+            edges {
+              node {
+                id
+                slug
+                title
+                creator {
+                  slug
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Search annotations for @ mention autocomplete
+ * Backend filters results to only annotations visible to the user via .visible_to_user()
+ * Part of Issue #623 - @ Mentions Feature (Extended)
+ */
+export interface SearchAnnotationsForMentionInput {
+  textSearch: string;
+  corpusId?: string;
+}
+
+export interface SearchAnnotationsForMentionOutput {
+  searchAnnotationsForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        rawText: string | null;
+        page: number;
+        annotationLabel: {
+          id: string;
+          text: string;
+          color: string;
+        };
+        document: {
+          id: string;
+          title: string;
+        };
+        corpus: {
+          id: string;
+          title: string;
+        } | null;
+      };
+    }>;
+  };
+}
+
+export const SEARCH_ANNOTATIONS_FOR_MENTION = gql`
+  query SearchAnnotationsForMention($textSearch: String!, $corpusId: ID) {
+    searchAnnotationsForMention(
+      textSearch: $textSearch
+      corpusId: $corpusId
+      first: 10
+    ) {
+      edges {
+        node {
+          id
+          rawText
+          page
+          annotationLabel {
+            id
+            text
+            color
+          }
+          document {
+            id
+            title
+          }
           corpus {
             id
-            slug
             title
-            creator {
-              slug
-            }
           }
         }
       }
@@ -3498,9 +3609,9 @@ export interface GetBadgesOutput {
 
 export const GET_USER_BADGES = gql`
   query GetUserBadges(
-    $userId: ID
-    $badgeId: ID
-    $corpusId: ID
+    $userId: String
+    $badgeId: String
+    $corpusId: String
     $limit: Int
     $cursor: String
   ) {
@@ -3594,6 +3705,56 @@ export interface GetUserBadgesOutput {
       endCursor: string;
     };
   };
+}
+
+export const GET_BADGE_CRITERIA_TYPES = gql`
+  query GetBadgeCriteriaTypes($scope: String) {
+    badgeCriteriaTypes(scope: $scope) {
+      typeId
+      name
+      description
+      scope
+      fields {
+        name
+        label
+        fieldType
+        required
+        description
+        minValue
+        maxValue
+        allowedValues
+      }
+      implemented
+    }
+  }
+`;
+
+export interface GetBadgeCriteriaTypesInput {
+  scope?: string;
+}
+
+export interface CriteriaField {
+  name: string;
+  label: string;
+  fieldType: string;
+  required: boolean;
+  description?: string;
+  minValue?: number;
+  maxValue?: number;
+  allowedValues?: string[];
+}
+
+export interface CriteriaTypeDefinition {
+  typeId: string;
+  name: string;
+  description: string;
+  scope: string;
+  fields: CriteriaField[];
+  implemented: boolean;
+}
+
+export interface GetBadgeCriteriaTypesOutput {
+  badgeCriteriaTypes: CriteriaTypeDefinition[];
 }
 
 /**

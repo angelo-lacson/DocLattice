@@ -40,7 +40,7 @@ test.describe("ReplyForm - Top-level Message", () => {
           query: CREATE_THREAD_MESSAGE,
           variables: {
             conversationId: "conv-1",
-            content: "<p>Test message content</p>",
+            content: "Test message content",
           },
         },
         result: {
@@ -48,12 +48,12 @@ test.describe("ReplyForm - Top-level Message", () => {
             createThreadMessage: {
               ok: true,
               message: "Message created successfully",
-              chatMessage: {
+              obj: {
                 id: "msg-1",
                 content: "<p>Test message</p>",
-                createdAt: "2025-01-01T00:00:00Z",
-                updatedAt: "2025-01-01T00:00:00Z",
-                sender: {
+                created: "2025-01-01T00:00:00Z",
+                modified: "2025-01-01T00:00:00Z",
+                creator: {
                   id: "user-1",
                   username: "testuser",
                   email: "test@example.com",
@@ -98,15 +98,21 @@ test.describe("ReplyForm - Top-level Message", () => {
             successCalled = true;
           }}
           onCancel={() => {}}
-          initialContent="<p>Test message content</p>"
         />
       </MockedProvider>
     );
 
+    // Type the message content into the editor
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+    await editor.fill("Test message content");
+
     const sendButton = page.getByRole("button", { name: /send/i });
+    await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
-    await page.waitForTimeout(500);
+    // Wait for mutation and Apollo cache updates
+    await page.waitForTimeout(1000);
 
     expect(successCalled).toBe(true);
   });
@@ -179,7 +185,7 @@ test.describe("ReplyForm - Nested Reply", () => {
           query: REPLY_TO_MESSAGE,
           variables: {
             parentMessageId: "msg-1",
-            content: "<p>Test reply content</p>",
+            content: "Test reply content",
           },
         },
         result: {
@@ -187,12 +193,12 @@ test.describe("ReplyForm - Nested Reply", () => {
             replyToMessage: {
               ok: true,
               message: "Reply created successfully",
-              chatMessage: {
+              obj: {
                 id: "msg-2",
                 content: "<p>Test reply</p>",
-                createdAt: "2025-01-01T00:00:00Z",
-                updatedAt: "2025-01-01T00:00:00Z",
-                sender: {
+                created: "2025-01-01T00:00:00Z",
+                modified: "2025-01-01T00:00:00Z",
+                creator: {
                   id: "user-2",
                   username: "replier",
                   email: "replier@example.com",
@@ -200,7 +206,7 @@ test.describe("ReplyForm - Nested Reply", () => {
                 parentMessage: {
                   id: "msg-1",
                   content: "<p>Original message</p>",
-                  sender: {
+                  creator: {
                     id: "user-1",
                     username: "testuser",
                   },
@@ -247,15 +253,21 @@ test.describe("ReplyForm - Nested Reply", () => {
             successCalled = true;
           }}
           onCancel={() => {}}
-          initialContent="<p>Test reply content</p>"
         />
       </MockedProvider>
     );
 
+    // Type the reply content into the editor
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+    await editor.fill("Test reply content");
+
     const sendButton = page.getByRole("button", { name: /send/i });
+    await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
-    await page.waitForTimeout(500);
+    // Wait for mutation and Apollo cache updates
+    await page.waitForTimeout(1000);
 
     expect(successCalled).toBe(true);
   });
@@ -267,7 +279,7 @@ test.describe("ReplyForm - Nested Reply", () => {
           query: REPLY_TO_MESSAGE,
           variables: {
             parentMessageId: "msg-1",
-            content: "<p>Test reply content</p>",
+            content: "Test reply content",
           },
         },
         result: {
@@ -275,7 +287,7 @@ test.describe("ReplyForm - Nested Reply", () => {
             replyToMessage: {
               ok: false,
               message: "Parent message not found",
-              chatMessage: null,
+              obj: null,
             },
           } as ReplyToMessageOutput,
         },
@@ -290,15 +302,21 @@ test.describe("ReplyForm - Nested Reply", () => {
           replyingToUsername="testuser"
           onSuccess={() => {}}
           onCancel={() => {}}
-          initialContent="<p>Test reply content</p>"
         />
       </MockedProvider>
     );
 
+    // Type the reply content into the editor
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+    await editor.fill("Test reply content");
+
     const sendButton = page.getByRole("button", { name: /send/i });
+    await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
-    await page.waitForTimeout(500);
+    // Wait for mutation and error handling
+    await page.waitForTimeout(1000);
 
     // Error message appears (use .first() since it may appear in multiple places)
     await expect(
@@ -330,7 +348,7 @@ test.describe("ReplyForm - Nested Reply", () => {
           query: REPLY_TO_MESSAGE,
           variables: {
             parentMessageId: "msg-1",
-            content: "<p>Test reply content</p>",
+            content: "Test reply content",
           },
         },
         // Delay response to test loading state
@@ -340,12 +358,12 @@ test.describe("ReplyForm - Nested Reply", () => {
             replyToMessage: {
               ok: true,
               message: "Reply created successfully",
-              chatMessage: {
+              obj: {
                 id: "msg-2",
                 content: "<p>Test reply</p>",
-                createdAt: "2025-01-01T00:00:00Z",
-                updatedAt: "2025-01-01T00:00:00Z",
-                sender: {
+                created: "2025-01-01T00:00:00Z",
+                modified: "2025-01-01T00:00:00Z",
+                creator: {
                   id: "user-2",
                   username: "replier",
                   email: "replier@example.com",
@@ -353,7 +371,7 @@ test.describe("ReplyForm - Nested Reply", () => {
                 parentMessage: {
                   id: "msg-1",
                   content: "<p>Original message</p>",
-                  sender: {
+                  creator: {
                     id: "user-1",
                     username: "testuser",
                   },

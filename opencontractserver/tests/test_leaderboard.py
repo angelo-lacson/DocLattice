@@ -50,6 +50,7 @@ class LeaderboardQueryTestCase(TestCase):
             badge_type="GLOBAL",
             color="#FFD700",
             is_auto_awarded=True,
+            criteria_config={"type": "first_post"},
         )
         self.badge2 = Badge.objects.create(
             creator=self.user1,
@@ -59,6 +60,7 @@ class LeaderboardQueryTestCase(TestCase):
             badge_type="GLOBAL",
             color="#C0C0C0",
             is_auto_awarded=True,
+            criteria_config={"type": "message_count", "value": 100},
         )
 
         # Award badges to users
@@ -73,40 +75,46 @@ class LeaderboardQueryTestCase(TestCase):
         self.corpus.is_public = True
         self.corpus.save()
 
-        # Create conversations
-        self.conversation1 = Conversation.objects.create(
+        # Create conversations (skip signals to prevent auto-badge awards)
+        self.conversation1 = Conversation(
             creator=self.user1,
             conversation_type="thread",
             title="Test Thread 1",
             chat_with_corpus=self.corpus,
+            is_public=True,
         )
-        self.conversation1.is_public = True
+        self.conversation1._skip_signals = True
         self.conversation1.save()
 
-        self.conversation2 = Conversation.objects.create(
+        self.conversation2 = Conversation(
             creator=self.user2,
             conversation_type="thread",
             title="Test Thread 2",
             chat_with_corpus=self.corpus,
+            is_public=True,
         )
-        self.conversation2.is_public = True
+        self.conversation2._skip_signals = True
         self.conversation2.save()
 
-        # Create messages
+        # Create messages (skip signals to prevent auto-badge awards)
         for i in range(5):
-            ChatMessage.objects.create(
+            msg = ChatMessage(
                 creator=self.user1,
                 conversation=self.conversation1,
                 msg_type="HUMAN",
                 content=f"Message {i} from user1",
             )
+            msg._skip_signals = True
+            msg.save()
         for i in range(3):
-            ChatMessage.objects.create(
+            msg = ChatMessage(
                 creator=self.user2,
                 conversation=self.conversation2,
                 msg_type="HUMAN",
                 content=f"Message {i} from user2",
             )
+            msg._skip_signals = True
+            msg.save()
 
         # NOTE: We skip creating actual documents and annotations for these tests
         # since the leaderboard queries work without them. The annotation metric

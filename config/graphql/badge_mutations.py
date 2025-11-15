@@ -87,9 +87,15 @@ class CreateBadgeMutation(graphene.Mutation):
                         badge=None,
                     )
 
-                # Check if user has permission for this corpus
-                if not user.is_superuser and not user_has_permission_for_obj(
-                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
+                # Check if user can manage this corpus (creator or has UPDATE permission)
+                if not (
+                    corpus.creator == user
+                    or user_has_permission_for_obj(
+                        user,
+                        corpus,
+                        PermissionTypes.UPDATE,
+                        include_group_permissions=True,
+                    )
                 ):
                     return CreateBadgeMutation(
                         ok=False,
@@ -98,6 +104,37 @@ class CreateBadgeMutation(graphene.Mutation):
                     )
             elif not user.is_superuser:
                 raise GraphQLError("You must be a superuser to create global badges.")
+
+            # Validate criteria_config before attempting to create
+            if is_auto_awarded:
+                if not criteria_config:
+                    return CreateBadgeMutation(
+                        ok=False,
+                        message="Auto-awarded badges must have criteria configuration",
+                        badge=None,
+                    )
+
+                # Validate against registry
+                from opencontractserver.badges.criteria_registry import (
+                    BadgeCriteriaRegistry,
+                )
+
+                is_valid, error_message = BadgeCriteriaRegistry.validate_config(
+                    criteria_config
+                )
+                if not is_valid:
+                    return CreateBadgeMutation(
+                        ok=False,
+                        message=f"Invalid criteria configuration: {error_message}",
+                        badge=None,
+                    )
+
+            elif criteria_config:
+                return CreateBadgeMutation(
+                    ok=False,
+                    message="Only auto-awarded badges can have criteria configuration",
+                    badge=None,
+                )
 
             # Create the badge
             badge = Badge.objects.create(
@@ -175,10 +212,26 @@ class UpdateBadgeMutation(graphene.Mutation):
                     badge=None,
                 )
 
-            # Permission check
-            if not user.is_superuser and not user_has_permission_for_obj(
-                user, badge, PermissionTypes.CRUD, include_group_permissions=True
-            ):
+            # Permission check: For corpus badges, check corpus permissions
+            # For global badges, must be superuser
+            if badge.corpus:
+                # Corpus badge - check if creator or has UPDATE permission
+                if not (
+                    badge.corpus.creator == user
+                    or user_has_permission_for_obj(
+                        user,
+                        badge.corpus,
+                        PermissionTypes.UPDATE,
+                        include_group_permissions=True,
+                    )
+                ):
+                    return UpdateBadgeMutation(
+                        ok=False,
+                        message="Badge not found",
+                        badge=None,
+                    )
+            elif not user.is_superuser:
+                # Global badge - must be superuser
                 return UpdateBadgeMutation(
                     ok=False,
                     message="Badge not found",
@@ -198,6 +251,49 @@ class UpdateBadgeMutation(graphene.Mutation):
                 badge.is_auto_awarded = is_auto_awarded
             if criteria_config is not None:
                 badge.criteria_config = criteria_config
+
+            # Validate criteria_config if badge will be auto-awarded
+            # Check the final state after all updates
+            final_is_auto_awarded = (
+                is_auto_awarded
+                if is_auto_awarded is not None
+                else badge.is_auto_awarded
+            )
+            final_criteria_config = (
+                criteria_config
+                if criteria_config is not None
+                else badge.criteria_config
+            )
+
+            if final_is_auto_awarded:
+                if not final_criteria_config:
+                    return UpdateBadgeMutation(
+                        ok=False,
+                        message="Auto-awarded badges must have criteria configuration",
+                        badge=None,
+                    )
+
+                # Validate against registry
+                from opencontractserver.badges.criteria_registry import (
+                    BadgeCriteriaRegistry,
+                )
+
+                is_valid, error_message = BadgeCriteriaRegistry.validate_config(
+                    final_criteria_config
+                )
+                if not is_valid:
+                    return UpdateBadgeMutation(
+                        ok=False,
+                        message=f"Invalid criteria configuration: {error_message}",
+                        badge=None,
+                    )
+
+            elif final_criteria_config:
+                return UpdateBadgeMutation(
+                    ok=False,
+                    message="Only auto-awarded badges can have criteria configuration",
+                    badge=None,
+                )
 
             badge.save()
 
@@ -241,10 +337,25 @@ class DeleteBadgeMutation(graphene.Mutation):
                     message="Badge not found",
                 )
 
-            # Permission check
-            if not user.is_superuser and not user_has_permission_for_obj(
-                user, badge, PermissionTypes.CRUD, include_group_permissions=True
-            ):
+            # Permission check: For corpus badges, check corpus permissions
+            # For global badges, must be superuser
+            if badge.corpus:
+                # Corpus badge - check if creator or has UPDATE permission
+                if not (
+                    badge.corpus.creator == user
+                    or user_has_permission_for_obj(
+                        user,
+                        badge.corpus,
+                        PermissionTypes.UPDATE,
+                        include_group_permissions=True,
+                    )
+                ):
+                    return DeleteBadgeMutation(
+                        ok=False,
+                        message="Badge not found",
+                    )
+            elif not user.is_superuser:
+                # Global badge - must be superuser
                 return DeleteBadgeMutation(
                     ok=False,
                     message="Badge not found",

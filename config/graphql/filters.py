@@ -370,26 +370,40 @@ class DocumentFilter(django_filters.FilterSet):
         Special handling: value="__root__" returns documents in corpus root (no folder).
         Otherwise filters to specific folder ID.
         """
+        import logging
+
         from opencontractserver.corpuses.models import CorpusDocumentFolder
+
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"[QUERY] in_folder filter called with value: {value}")
 
         if value == "__root__":
             # Get corpus_id from earlier filter (must have in_corpus_with_id set)
             # For root documents, we need to exclude documents that have folder assignments
             # This requires knowing the corpus context
-            return queryset.filter(
+            result = queryset.filter(
                 ~Q(
                     id__in=CorpusDocumentFolder.objects.filter(
                         folder__isnull=False
                     ).values_list("document_id", flat=True)
                 )
             )
+            logger.info(f"[QUERY] Filtered to root folder, count: {result.count()}")
+            return result
         else:
             folder_pk = from_global_id(value)[1]
-            return queryset.filter(
-                id__in=CorpusDocumentFolder.objects.filter(
-                    folder_id=folder_pk
-                ).values_list("document_id", flat=True)
-            ).distinct()
+            doc_ids = list(
+                CorpusDocumentFolder.objects.filter(folder_id=folder_pk).values_list(
+                    "document_id", flat=True
+                )
+            )
+            logger.info(
+                f"[QUERY] Filtering to folder {folder_pk}, found {len(doc_ids)} document assignments"
+            )
+            result = queryset.filter(id__in=doc_ids).distinct()
+            logger.info(f"[QUERY] After filter, result count: {result.count()}")
+            return result
 
     def has_label_title(self, queryset, name, value):
         return queryset.filter(annotation__annotation_label__title__contains=value)

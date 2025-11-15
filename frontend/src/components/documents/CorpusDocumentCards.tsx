@@ -142,6 +142,26 @@ export const CorpusDocumentCards = ({
   // Note: openedCorpus is set by CentralRouteManager when on /c/:user/:corpus route
   // This component just reads it for context (e.g., file uploads)
 
+  const queryVariables = {
+    ...(opened_corpus_id
+      ? {
+          annotateDocLabels: true,
+          inCorpusWithId: opened_corpus_id,
+          includeMetadata: true,
+        }
+      : { annotateDocLabels: false, includeMetadata: false }),
+    ...(selected_metadata_id_to_filter_on
+      ? { hasAnnotationsWithIds: selected_metadata_id_to_filter_on }
+      : {}),
+    ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
+    ...(document_search_term ? { textSearch: document_search_term } : {}),
+    // ALWAYS pass inFolderId to filter by folder
+    // null = root level only, string = specific folder only
+    inFolderId: selected_folder_id ?? undefined,
+  };
+
+  console.log("[QUERY] GET_DOCUMENTS variables:", queryVariables);
+
   const {
     refetch: refetchDocuments,
     loading: documents_loading,
@@ -149,23 +169,7 @@ export const CorpusDocumentCards = ({
     data: documents_response,
     fetchMore: fetchMoreDocuments,
   } = useQuery<RequestDocumentsOutputs, RequestDocumentsInputs>(GET_DOCUMENTS, {
-    variables: {
-      ...(opened_corpus_id
-        ? {
-            annotateDocLabels: true,
-            inCorpusWithId: opened_corpus_id,
-            includeMetadata: true,
-          }
-        : { annotateDocLabels: false, includeMetadata: false }),
-      ...(selected_metadata_id_to_filter_on
-        ? { hasAnnotationsWithIds: selected_metadata_id_to_filter_on }
-        : {}),
-      ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
-      ...(document_search_term ? { textSearch: document_search_term } : {}),
-      // ALWAYS pass inFolderId to filter by folder
-      // null = root level only, string = specific folder only
-      inFolderId: selected_folder_id ?? undefined,
-    },
+    variables: queryVariables,
     fetchPolicy: "cache-and-network", // Ensure fresh results when search term changes
     notifyOnNetworkStatusChange: true, // necessary in order to trigger loading signal on fetchMore
   });
@@ -303,6 +307,13 @@ export const CorpusDocumentCards = ({
   const document_items = document_data
     .map((edge) => (edge?.node ? edge.node : undefined))
     .filter((item): item is DocumentType => !!item);
+
+  console.log(
+    "[QUERY] GET_DOCUMENTS returned",
+    document_items.length,
+    "documents for folderId:",
+    selected_folder_id
+  );
 
   const handleRemoveContracts = (delete_ids: string[]) => {
     removeDocumentsFromCorpus({

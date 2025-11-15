@@ -124,6 +124,8 @@ from opencontractserver.annotations.models import (
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
+    CorpusDocumentFolder,
+    CorpusFolder,
     CorpusQuery,
     TemporaryFileHandle,
 )
@@ -1446,6 +1448,11 @@ class UploadDocument(graphene.Mutation):
             required=False,
             description="If provided, successfully uploaded document will be added to extract with specified id",
         )
+        add_to_folder_id = graphene.ID(
+            required=False,
+            description="If provided along with add_to_corpus_id, the document "
+            "will be assigned to this folder within the corpus",
+        )
         make_public = graphene.Boolean(
             required=True,
             description="If True, document is immediately public. "
@@ -1470,6 +1477,7 @@ class UploadDocument(graphene.Mutation):
         make_public,
         add_to_corpus_id=None,
         add_to_extract_id=None,
+        add_to_folder_id=None,
         slug=None,
     ):
         if add_to_corpus_id is not None and add_to_extract_id is not None:
@@ -1559,8 +1567,35 @@ class UploadDocument(graphene.Mutation):
             if add_to_corpus_id is not None:
                 try:
                     corpus = Corpus.objects.get(id=from_global_id(add_to_corpus_id)[1])
-                    transaction.on_commit(lambda: corpus.documents.add(document))
+                    corpus.documents.add(document)
+                    logger.info(
+                        f"[UPLOAD] Added document {document.id} to corpus {corpus.id}"
+                    )
+
+                    # Handle folder assignment if folder_id provided
+                    # This must happen synchronously (not in on_commit) so frontend refetch sees it
+                    if add_to_folder_id is not None:
+                        folder_pk = from_global_id(add_to_folder_id)[1]
+                        folder = CorpusFolder.objects.get(pk=folder_pk, corpus=corpus)
+
+                        # Create or update the folder assignment
+                        # Use update_or_create to handle case where document already has a folder assignment
+                        folder_assignment, created = (
+                            CorpusDocumentFolder.objects.update_or_create(
+                                document=document,
+                                corpus=corpus,
+                                defaults={"folder": folder},
+                            )
+                        )
+                        logger.info(
+                            f"[UPLOAD] Assigned document {document.id} to folder {folder.id} (created={created})"
+                        )
+                    else:
+                        logger.info(
+                            f"[UPLOAD] No folder assignment for document {document.id}"
+                        )
                 except Exception as e:
+                    logger.error(f"[UPLOAD] Error adding to corpus: {e}")
                     message = f"Adding to corpus failed due to error: {e}"
             elif add_to_extract_id is not None:
                 try:

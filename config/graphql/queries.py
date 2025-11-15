@@ -56,6 +56,7 @@ from config.graphql.graphene_types import (
     CorpusQueryType,
     CorpusStatsType,
     CorpusType,
+    CriteriaTypeDefinitionType,
     DatacellType,
     DocumentCorpusActionsType,
     DocumentRelationshipType,
@@ -94,6 +95,7 @@ from opencontractserver.annotations.models import (
     Note,
     Relationship,
 )
+from opencontractserver.badges.criteria_registry import BadgeCriteriaRegistry
 from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.corpuses.models import (
@@ -841,6 +843,21 @@ class Query(graphene.ObjectType):
             description="Search query to find documents by title or description"
         ),
     )
+    search_annotations_for_mention = DjangoConnectionField(
+        AnnotationType,
+        text_search=graphene.String(
+            description="Search query to find annotations by label text or raw content"
+        ),
+        corpus_id=graphene.ID(
+            description="Optional corpus ID to scope search to specific corpus"
+        ),
+    )
+    search_users_for_mention = DjangoConnectionField(
+        UserType,
+        text_search=graphene.String(
+            description="Search query to find users by username or email"
+        ),
+    )
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_search_corpuses_for_mention(self, info, text_search=None, **kwargs):
@@ -985,6 +1002,121 @@ class Query(graphene.ObjectType):
 
         # Order by most recently modified first
         return qs.order_by("-modified")
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_annotations_for_mention(
+        self, info, text_search=None, corpus_id=None, **kwargs
+    ):
+        """
+        Search annotations for @ mention autocomplete.
+
+        SECURITY: Annotations inherit permissions from document + corpus.
+        Uses .visible_to_user() which applies composite permission logic.
+
+        PERFORMANCE NOTES:
+        - Prioritizes annotation_label.text matches (indexed, fast)
+        - Falls back to raw_text search (full-text, slower)
+        - Corpus scoping significantly reduces search space
+        - Limits to 10 results to prevent overwhelming UI
+
+        Rationale: Mentioning annotations allows precise reference to specific
+        content sections. Useful for discussions, citations, and cross-references.
+
+        @param text_search: Search query for label text or content
+        @param corpus_id: Optional corpus to scope search (recommended for performance)
+        """
+        from opencontractserver.annotations.models import Annotation
+
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return Annotation.objects.none()
+
+        # Use visible_to_user() which handles composite document+corpus permissions
+        qs = Annotation.objects.visible_to_user(user)
+
+        # Scope to specific corpus if provided (major performance boost)
+        if corpus_id:
+            qs = qs.filter(corpus_id=corpus_id)
+
+        if text_search:
+            # Search priority:
+            # 1. annotation_label.text (indexed CharField - fast)
+            # 2. raw_text (TextField - slower but comprehensive)
+            qs = qs.filter(
+                Q(annotation_label__text__icontains=text_search)
+                | Q(raw_text__icontains=text_search)
+            )
+
+        # Select related for efficient queries
+        qs = qs.select_related("annotation_label", "document", "corpus")
+
+        # Order by label match first (more relevant), then by created date
+        # Annotations matching label text are usually more specific/useful
+        from django.db.models import Case, IntegerField, Value, When
+
+        if text_search:
+            qs = qs.annotate(
+                label_match=Case(
+                    When(
+                        annotation_label__text__icontains=text_search,
+                        then=Value(0),
+                    ),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            ).order_by("label_match", "-created")
+        else:
+            qs = qs.order_by("-created")
+
+        # Note: DjangoConnectionField handles pagination automatically
+        # Slicing here would prevent GraphQL from applying filters
+        return qs
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_users_for_mention(self, info, text_search=None, **kwargs):
+        """
+        Search users for @ mention autocomplete.
+
+        SECURITY: All authenticated users can search for other users.
+        This is necessary for @mentions to work in collaborative contexts.
+        User data exposed is minimal (username, email) - no sensitive info.
+
+        PERFORMANCE NOTES:
+        - Searches username (indexed, fast)
+        - Searches email (indexed, fast)
+        - Limits to 10 results to prevent overwhelming UI
+
+        Rationale: Mentioning users is fundamental to collaboration.
+        Users can already see each other in shared corpuses, so this doesn't
+        expose additional information.
+
+        @param text_search: Search query for username or email
+        """
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return User.objects.none()
+
+        # All authenticated users can search for users
+        qs = User.objects.filter(is_active=True)
+
+        if text_search:
+            # Search username and email
+            qs = qs.filter(
+                Q(username__icontains=text_search) | Q(email__icontains=text_search)
+            )
+
+        # Order by username for consistent results
+        qs = qs.order_by("username")
+
+        # Note: DjangoConnectionField handles pagination automatically
+        return qs
 
     # DOCUMENT RESOLVERS #####################################
 
@@ -1826,6 +1958,70 @@ class Query(graphene.ObjectType):
 
     chat_message = relay.Node.Field(MessageType)
 
+    # User messages query for profile/activity feeds
+    user_messages = graphene.Field(
+        graphene.List(MessageType),
+        creator_id=graphene.ID(required=True),
+        first=graphene.Int(required=False, default_value=10),
+        msg_type=graphene.String(required=False),
+        order_by=graphene.String(required=False),
+        description="Get messages created by a specific user, with optional filtering and pagination",
+    )
+
+    @login_required
+    def resolve_user_messages(
+        self,
+        info: graphene.ResolveInfo,
+        creator_id: str,
+        first: int = 10,
+        msg_type: Optional[str] = None,
+        order_by: Optional[str] = None,
+        **kwargs,
+    ):
+        """
+        Resolver for fetching ChatMessage objects by creator for user profiles.
+
+        Args:
+            info (graphene.ResolveInfo): GraphQL resolve info
+            creator_id (str): Global Relay ID for User
+            first (int): Number of messages to return (default 10)
+            msg_type (Optional[str]): Filter by message type (HUMAN, AI_AGENT, SYSTEM)
+            order_by (Optional[str]): Field to order by. Defaults to "-created"
+
+        Returns:
+            QuerySet[ChatMessage]: Filtered and ordered chat messages
+        """
+        queryset = (
+            ChatMessage.objects.visible_to_user(info.context.user)
+            .select_related("conversation", "creator")
+            .prefetch_related("votes")
+        )
+
+        # Apply creator filter
+        creator_pk = from_global_id(creator_id)[1]
+        queryset = queryset.filter(creator_id=creator_pk)
+
+        # Apply msg_type filter if provided
+        if msg_type:
+            # Validate msg_type against ChatMessage.TYPE_CHOICES
+            valid_types = [choice[0] for choice in ChatMessage.TYPE_CHOICES]
+            if msg_type in valid_types:
+                queryset = queryset.filter(msg_type=msg_type)
+
+        # Apply ordering
+        valid_order_fields = {
+            "created",
+            "-created",
+            "modified",
+            "-modified",
+        }
+
+        order_field = order_by if order_by in valid_order_fields else "-created"
+        queryset = queryset.order_by(order_field)
+
+        # Limit results
+        return queryset[:first]
+
     @login_required
     def resolve_chat_message(self, info: graphene.ResolveInfo, **kwargs) -> ChatMessage:
         """
@@ -2189,6 +2385,57 @@ class Query(graphene.ObjectType):
         """Resolve a single user badge by ID."""
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return UserBadge.objects.get(id=django_pk)
+
+    badge_criteria_types = graphene.List(
+        CriteriaTypeDefinitionType,
+        scope=graphene.String(
+            required=False,
+            description="Filter by scope: 'global', 'corpus', or 'both'",
+        ),
+        description="Get available badge criteria types from the registry",
+    )
+
+    def resolve_badge_criteria_types(self, info, scope=None):
+        """
+        Resolve available badge criteria types from the registry.
+
+        Args:
+            info: GraphQL resolve info
+            scope: Optional scope filter ('global', 'corpus', or 'both')
+
+        Returns:
+            List of criteria type definitions with their field schemas
+        """
+        # Get criteria types from registry
+        if scope:
+            criteria_types = BadgeCriteriaRegistry.for_scope(scope)
+        else:
+            criteria_types = BadgeCriteriaRegistry.all()
+
+        # Convert dataclass instances to dicts for GraphQL
+        return [
+            {
+                "type_id": ct.type_id,
+                "name": ct.name,
+                "description": ct.description,
+                "scope": ct.scope,
+                "fields": [
+                    {
+                        "name": f.name,
+                        "label": f.label,
+                        "field_type": f.field_type,
+                        "required": f.required,
+                        "description": f.description,
+                        "min_value": f.min_value,
+                        "max_value": f.max_value,
+                        "allowed_values": f.allowed_values,
+                    }
+                    for f in ct.fields
+                ],
+                "implemented": ct.implemented,
+            }
+            for ct in criteria_types
+        ]
 
     # AGENT CONFIGURATION QUERIES ########################################
     agents = DjangoFilterConnectionField(

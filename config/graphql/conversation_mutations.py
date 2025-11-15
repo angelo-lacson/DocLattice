@@ -21,6 +21,10 @@ from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.mention_parser import (
+    link_message_to_resources,
+    parse_mentions_from_content,
+)
 from opencontractserver.utils.permissioning import (
     set_permissions_for_obj_to_user,
     user_has_permission_for_obj,
@@ -33,8 +37,10 @@ class CreateThreadMutation(graphene.Mutation):
     """
     Create a new discussion thread in a corpus.
 
-    Security Note: Message content is stored as HTML from TipTap editor.
-    Frontend MUST sanitize on display (e.g., with DOMPurify) to prevent XSS.
+    Security Note: Message content is stored as Markdown from TipTap editor.
+    Markdown is safer than HTML (no script injection), and mention links use
+    standard Markdown syntax [text](url) which is parsed to create database relationships.
+    Part of Issue #623 - @ Mentions Feature (Extended)
     """
 
     class Arguments:
@@ -86,12 +92,23 @@ class CreateThreadMutation(graphene.Mutation):
             set_permissions_for_obj_to_user(user, conversation, [PermissionTypes.CRUD])
 
             # Create the initial message
-            ChatMessage.objects.create(
+            chat_message = ChatMessage.objects.create(
                 conversation=conversation,
                 msg_type="HUMAN",
                 content=initial_message,
                 creator=user,
             )
+
+            # Parse and link mentioned resources (documents, annotations, etc.)
+            try:
+                mentioned_ids = parse_mentions_from_content(initial_message)
+                link_result = link_message_to_resources(chat_message, mentioned_ids)
+                logger.debug(
+                    f"Thread {conversation.pk} initial message linked: {link_result}"
+                )
+            except Exception as e:
+                # Don't fail the whole mutation if mention parsing fails
+                logger.error(f"Error parsing mentions in initial message: {e}")
 
             ok = True
             message = "Thread created successfully"
@@ -159,6 +176,15 @@ class CreateThreadMessageMutation(graphene.Mutation):
 
             # Set permissions for the creator
             set_permissions_for_obj_to_user(user, chat_message, [PermissionTypes.CRUD])
+
+            # Parse and link mentioned resources (documents, annotations, etc.)
+            try:
+                mentioned_ids = parse_mentions_from_content(content)
+                link_result = link_message_to_resources(chat_message, mentioned_ids)
+                logger.debug(f"Message {chat_message.pk} linked: {link_result}")
+            except Exception as e:
+                # Don't fail the whole mutation if mention parsing fails
+                logger.error(f"Error parsing mentions in message: {e}")
 
             ok = True
             message = "Message posted successfully"
@@ -240,6 +266,15 @@ class ReplyToMessageMutation(graphene.Mutation):
 
             # Set permissions for the creator
             set_permissions_for_obj_to_user(user, reply_message, [PermissionTypes.CRUD])
+
+            # Parse and link mentioned resources (documents, annotations, etc.)
+            try:
+                mentioned_ids = parse_mentions_from_content(content)
+                link_result = link_message_to_resources(reply_message, mentioned_ids)
+                logger.debug(f"Reply {reply_message.pk} linked: {link_result}")
+            except Exception as e:
+                # Don't fail the whole mutation if mention parsing fails
+                logger.error(f"Error parsing mentions in reply: {e}")
 
             ok = True
             message = "Reply posted successfully"

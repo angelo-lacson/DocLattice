@@ -89,8 +89,11 @@ class Badge(BaseOCModel):
     def clean(self):
         """
         Validate that corpus-specific badges have a corpus and global badges don't.
-        Also validate criteria_config structure for auto-awarded badges.
+        Also validate criteria_config structure for auto-awarded badges using the registry.
         """
+        from opencontractserver.badges.criteria_registry import BadgeCriteriaRegistry
+
+        # Validate badge_type and corpus relationship
         if self.badge_type == BadgeTypeChoices.CORPUS and not self.corpus:
             raise ValidationError(
                 {"corpus": "Corpus-specific badges must have a corpus assigned."}
@@ -100,18 +103,61 @@ class Badge(BaseOCModel):
                 {"corpus": "Global badges cannot be associated with a corpus."}
             )
 
-        # Validate criteria_config for auto-awarded badges
-        if self.is_auto_awarded and self.criteria_config:
-            if not isinstance(self.criteria_config, dict):
-                raise ValidationError(
-                    {"criteria_config": "Must be a JSON object (dictionary)."}
-                )
-            if "type" not in self.criteria_config:
+        # Enhanced validation for auto-awarded badges
+        if self.is_auto_awarded:
+            if not self.criteria_config:
                 raise ValidationError(
                     {
-                        "criteria_config": 'Must include "type" field specifying award criteria.'
+                        "criteria_config": "Auto-awarded badges must have criteria configuration. "
+                        "Either provide criteria_config or set is_auto_awarded to False."
                     }
                 )
+
+            # Validate criteria config against registry
+            is_valid, error_message = BadgeCriteriaRegistry.validate_config(
+                self.criteria_config
+            )
+            if not is_valid:
+                raise ValidationError(
+                    {
+                        "criteria_config": f"Invalid criteria configuration: {error_message}"
+                    }
+                )
+
+            # Validate scope compatibility between criteria type and badge type
+            criteria_type = self.criteria_config.get("type")
+            criteria_def = BadgeCriteriaRegistry.get(criteria_type)
+            if criteria_def:
+                # Check if criteria scope matches badge type
+                if (
+                    criteria_def.scope == "corpus"
+                    and self.badge_type != BadgeTypeChoices.CORPUS
+                ):
+                    raise ValidationError(
+                        {
+                            "criteria_config": f"Criteria type '{criteria_type}' can only be used "
+                            f"with corpus-specific badges (CORPUS), not {self.badge_type} badges"
+                        }
+                    )
+                if (
+                    criteria_def.scope == "global"
+                    and self.badge_type != BadgeTypeChoices.GLOBAL
+                ):
+                    raise ValidationError(
+                        {
+                            "criteria_config": f"Criteria type '{criteria_type}' can only be used "
+                            f"with global badges (GLOBAL), not {self.badge_type} badges"
+                        }
+                    )
+
+        # Validate that non-auto-awarded badges don't have criteria_config
+        elif self.criteria_config:
+            raise ValidationError(
+                {
+                    "criteria_config": "Only auto-awarded badges can have criteria configuration. "
+                    "Either set is_auto_awarded to True or remove criteria_config."
+                }
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()
