@@ -278,7 +278,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             path="/shared_doc.pdf",
             version_number=1,
             is_current=True,
-            is_deleted=False
+            is_deleted=False,
         )
 
         # Convert to global IDs for GraphQL
@@ -356,7 +356,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             path="/shared_doc.pdf",
             version_number=1,
             is_current=True,
-            is_deleted=False
+            is_deleted=False,
         )
 
         # Convert to global IDs for GraphQL
@@ -431,7 +431,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             path="/shared_doc.pdf",
             version_number=1,
             is_current=True,
-            is_deleted=False
+            is_deleted=False,
         )
 
         # Convert to global IDs for GraphQL
@@ -508,7 +508,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             path="/shared_doc.pdf",
             version_number=1,
             is_current=True,
-            is_deleted=False
+            is_deleted=False,
         )
 
         # Convert to global IDs for GraphQL
@@ -582,7 +582,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             path="/shared_doc.pdf",
             version_number=1,
             is_current=True,
-            is_deleted=False
+            is_deleted=False,
         )
 
         # Convert to global IDs for GraphQL
