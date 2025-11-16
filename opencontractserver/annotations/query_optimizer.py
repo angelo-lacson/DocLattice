@@ -150,6 +150,7 @@ class AnnotationQueryOptimizer:
         extract_id: Optional[int] = None,
         structural: Optional[bool] = None,  # Filter for structural annotations
         use_cache: bool = True,  # Kept for backward compatibility, ignored
+        check_current_version: bool = True,  # NEW: Check if document is current and has active path
     ) -> QuerySet:
         """
         Get annotations with permission filtering and optimized queries.
@@ -164,6 +165,21 @@ class AnnotationQueryOptimizer:
         # No read permission = no annotations
         if not can_read:
             return Annotation.objects.none()
+
+        # Check if document has active path in corpus (version awareness)
+        if check_current_version and corpus_id:
+            from opencontractserver.documents.models import DocumentPath
+
+            has_active_path = DocumentPath.objects.filter(
+                document_id=document_id,
+                corpus_id=corpus_id,
+                is_current=True,
+                is_deleted=False,
+            ).exists()
+
+            if not has_active_path:
+                # Document is deleted or not current in this corpus
+                return Annotation.objects.none()
 
         # Build optimized query
         qs = Annotation.objects.filter(document_id=document_id)
@@ -303,6 +319,55 @@ class AnnotationQueryOptimizer:
         )
 
         return qs
+
+    @classmethod
+    def get_annotations_for_path(
+        cls, corpus_id: int, path: str, user, version: Optional[int] = None, **kwargs
+    ) -> QuerySet:
+        """
+        Get annotations for document at a specific path (defaults to current version).
+        This is the recommended method for corpus-scoped annotation queries.
+
+        Args:
+            corpus_id: The corpus ID
+            path: The document path in the corpus
+            user: The requesting user
+            version: Optional specific version number (defaults to current)
+            **kwargs: Additional arguments passed to get_document_annotations
+
+        Returns:
+            QuerySet of annotations for the document at this path
+        """
+        from opencontractserver.annotations.models import Annotation
+        from opencontractserver.documents.models import DocumentPath
+
+        # Find the document at this path
+        path_query = DocumentPath.objects.filter(corpus_id=corpus_id, path=path)
+
+        if version is not None:
+            # Specific version requested
+            path_query = path_query.filter(version_number=version)
+        else:
+            # Default to current, non-deleted
+            path_query = path_query.filter(is_current=True, is_deleted=False)
+
+        try:
+            document_path = path_query.get()
+        except DocumentPath.DoesNotExist:
+            # Path doesn't exist or is deleted
+            return Annotation.objects.none()
+        except DocumentPath.MultipleObjectsReturned:
+            # Shouldn't happen with constraints, but handle safely
+            document_path = path_query.first()
+
+        # Use existing method with resolved document_id
+        return cls.get_document_annotations(
+            document_id=document_path.document_id,
+            user=user,
+            corpus_id=corpus_id,
+            check_current_version=False,  # Already checked via path
+            **kwargs
+        )
 
     # TODO - in-use?
     @classmethod

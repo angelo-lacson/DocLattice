@@ -36,31 +36,44 @@ interface ThreadListProps {
 const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: ${spacing.md};
-  padding: ${(props) => (props.$embedded ? spacing.md : spacing.lg)};
-  max-width: 1200px;
+  gap: 1rem;
+  padding: ${(props) => (props.$embedded ? "1rem" : "1.5rem")};
+  max-width: ${(props) => (props.$embedded ? "100%" : "1200px")};
   margin: 0 auto;
   width: 100%;
 
-  @media (max-width: 640px) {
-    padding: ${spacing.sm};
-    gap: ${spacing.sm};
+  @media (max-width: 768px) {
+    padding: ${(props) => (props.$embedded ? "0.75rem" : "1rem")};
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+    gap: 0.625rem;
   }
 `;
 
 const ThreadGrid = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${spacing.sm};
+  gap: 0.75rem;
+
+  @media (max-width: 480px) {
+    gap: 0.5rem;
+  }
 `;
 
 const ThreadListHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: ${spacing.md};
+  margin-bottom: 1rem;
   flex-wrap: wrap;
-  gap: ${spacing.sm};
+  gap: 0.75rem;
+
+  @media (max-width: 768px) {
+    margin-bottom: 0.75rem;
+  }
 `;
 
 const Title = styled.h2`
@@ -77,13 +90,18 @@ const Title = styled.h2`
 const HeaderActions = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.md};
+  gap: 1rem;
   flex-wrap: wrap;
 
   @media (max-width: 900px) {
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 640px) {
     flex-direction: column;
     align-items: stretch;
     width: 100%;
+    gap: 0.5rem;
   }
 `;
 

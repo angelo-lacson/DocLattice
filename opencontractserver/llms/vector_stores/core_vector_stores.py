@@ -100,6 +100,8 @@ class CoreAnnotationVectorStore:
         embedder_path: Optional[str] = None,
         must_have_text: Optional[str] = None,
         embed_dim: int = 384,
+        only_current_versions: bool = True,  # NEW: Default to current versions only
+        check_corpus_deletion: bool = True,  # NEW: Check DocumentPath for deletion status
     ):
         # ------------------------------------------------------------------ #
         # Validation – we need a corpus context unless the caller overrides
@@ -115,6 +117,8 @@ class CoreAnnotationVectorStore:
         self.document_id = document_id
         self.must_have_text = must_have_text
         self.embed_dim = embed_dim
+        self.only_current_versions = only_current_versions
+        self.check_corpus_deletion = check_corpus_deletion
 
         # Auto-detect embedder configuration
         embedder_class, detected_embedder_path = get_embedder(
@@ -160,6 +164,34 @@ class CoreAnnotationVectorStore:
         )
 
         active_filters = Q()
+
+        # Filter to current document versions if requested
+        if self.only_current_versions:
+            active_filters &= Q(document__is_current=True)
+            _logger.debug("Filtering to current document versions only")
+
+        # Check for deleted documents in corpus
+        if self.check_corpus_deletion and self.corpus_id and not self.document_id:
+            from asgiref.sync import sync_to_async
+
+            from opencontractserver.documents.models import DocumentPath
+
+            # Get documents with active (non-deleted) paths in corpus
+            active_doc_ids = await sync_to_async(
+                lambda: list(
+                    DocumentPath.objects.filter(
+                        corpus_id=self.corpus_id, is_current=True, is_deleted=False
+                    ).values_list("document_id", flat=True)
+                )
+            )()
+
+            if active_doc_ids:
+                # Ensure we only search documents with active paths
+                active_filters &= Q(document_id__in=active_doc_ids)
+                _logger.debug(f"Found {len(active_doc_ids)} active documents in corpus")
+            else:
+                _logger.warning(f"No active documents found in corpus {self.corpus_id}")
+                return Annotation.objects.none()
 
         if self.document_id is not None:
             # --- Document-specific context ---
