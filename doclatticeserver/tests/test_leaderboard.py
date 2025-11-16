@@ -96,7 +96,7 @@ class LeaderboardQueryTestCase(TestCase):
         self.conversation2._skip_signals = True
         self.conversation2.save()
 
-        # Create messages (skip signals to prevent auto-badge awards)
+        # Create messages (skip signals to avoid auto-badge awards during test setup)
         for i in range(5):
             msg = ChatMessage(
                 creator=self.user1,
