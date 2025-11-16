@@ -4,7 +4,14 @@ import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
 import { Loader, Input, Button } from "semantic-ui-react";
 import { toast } from "react-toastify";
-import { FolderPlus, Search, ChevronDown, ChevronUp, Home } from "lucide-react";
+import {
+  FolderPlus,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Home,
+  Trash2,
+} from "lucide-react";
 import {
   DndContext,
   DragEndEvent,
@@ -287,6 +294,21 @@ const CorpusRootDropTarget: React.FC<{
   );
 };
 
+// Component for Trash folder (virtual folder for deleted documents)
+const TrashFolderItem: React.FC<{
+  isSelected: boolean;
+  onClick: () => void;
+}> = ({ isSelected, onClick }) => {
+  return (
+    <RootFolderItem $isSelected={isSelected} onClick={onClick}>
+      <RootFolderIcon>
+        <Trash2 size={18} />
+      </RootFolderIcon>
+      <RootFolderName $isSelected={isSelected}>Trash</RootFolderName>
+    </RootFolderItem>
+  );
+};
+
 export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
   corpusId,
   onFolderSelect,
@@ -540,6 +562,15 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
           <CorpusRootDropTarget
             isSelected={selectedFolderId === null}
             onClick={handleRootClick}
+          />
+
+          {/* Trash Folder Item */}
+          <TrashFolderItem
+            isSelected={selectedFolderId === "trash"}
+            onClick={() => {
+              setSelectedFolderId("trash");
+              onFolderSelect?.("trash");
+            }}
           />
 
           {/* Loading State */}

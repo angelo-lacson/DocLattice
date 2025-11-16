@@ -362,6 +362,14 @@ export type RawDocumentType = Node & {
   conversations?: ConversationTypeConnection;
   chatMessages?: ChatMessageTypeConnection;
   allNotes?: NoteType[];
+  // Version metadata fields
+  hasVersionHistory?: Maybe<Scalars["Boolean"]>;
+  versionCount?: Maybe<Scalars["Int"]>;
+  isLatestVersion?: Maybe<Scalars["Boolean"]>;
+  canViewHistory?: Maybe<Scalars["Boolean"]>;
+  canRestore?: Maybe<Scalars["Boolean"]>;
+  versionNumber?: Maybe<Scalars["Int"]>;
+  lastModified?: Maybe<Scalars["DateTime"]>;
 };
 
 export type DocumentType = Omit<RawDocumentType, "myPermissions"> & {

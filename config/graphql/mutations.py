@@ -129,7 +129,10 @@ from opencontractserver.corpuses.models import (
     CorpusQuery,
     TemporaryFileHandle,
 )
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.documents.versioning import (
+    restore_document as restore_document_func,
+)
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.tasks import (
@@ -3797,6 +3800,284 @@ class CreateNote(graphene.Mutation):
             )
 
 
+# DOCUMENT VERSIONING MUTATIONS ################################################
+
+
+class RestoreDeletedDocument(graphene.Mutation):
+    """
+    Restore a soft-deleted document path within a corpus.
+    Creates a new path entry with is_deleted=False.
+    """
+
+    class Arguments:
+        document_id = graphene.String(
+            required=True, description="Global ID of the document to restore"
+        )
+        corpus_id = graphene.String(
+            required=True, description="Global ID of the corpus"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    document = graphene.Field(DocumentType)
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.MUTATION)
+    def mutate(root, info, document_id, corpus_id):
+        user = info.context.user
+
+        try:
+            doc_pk = from_global_id(document_id)[1]
+            corpus_pk = from_global_id(corpus_id)[1]
+
+            document = Document.objects.get(pk=doc_pk)
+            corpus = Corpus.objects.get(pk=corpus_pk)
+
+            # Check UPDATE permission on both document and corpus
+            if not user_has_permission_for_obj(
+                user, document, PermissionTypes.UPDATE, include_group_permissions=True
+            ):
+                return RestoreDeletedDocument(
+                    ok=False,
+                    message="You don't have permission to restore this document",
+                    document=None,
+                )
+
+            if not user_has_permission_for_obj(
+                user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
+            ):
+                return RestoreDeletedDocument(
+                    ok=False,
+                    message="You don't have permission to modify this corpus",
+                    document=None,
+                )
+
+            # Find the deleted path entry
+            deleted_path = (
+                DocumentPath.objects.filter(
+                    document=document, corpus=corpus, is_deleted=True, is_current=True
+                )
+                .order_by("-created")
+                .first()
+            )
+
+            if not deleted_path:
+                return RestoreDeletedDocument(
+                    ok=False,
+                    message="Document is not deleted in this corpus",
+                    document=None,
+                )
+
+            # Restore the document using the versioning function
+            new_path = restore_document_func(
+                path_record=deleted_path,
+                user=user,
+            )
+
+            logger.info(
+                f"User {user.id} restored document {doc_pk} in corpus {corpus_pk}"
+            )
+
+            return RestoreDeletedDocument(
+                ok=True,
+                message=f"Document restored successfully to {new_path.path}",
+                document=document,
+            )
+
+        except Document.DoesNotExist:
+            return RestoreDeletedDocument(
+                ok=False, message="Document not found", document=None
+            )
+        except Corpus.DoesNotExist:
+            return RestoreDeletedDocument(
+                ok=False, message="Corpus not found", document=None
+            )
+        except Exception as e:
+            logger.error(f"Failed to restore document: {str(e)}")
+            return RestoreDeletedDocument(
+                ok=False,
+                message=f"Failed to restore document: {str(e)}",
+                document=None,
+            )
+
+
+class RestoreDocumentToVersion(graphene.Mutation):
+    """
+    Restore a document to a previous content version.
+    Creates a new version that is a copy of the specified version.
+    """
+
+    class Arguments:
+        document_id = graphene.String(
+            required=True,
+            description="Global ID of the document version to restore to",
+        )
+        corpus_id = graphene.String(
+            required=True, description="Global ID of the corpus"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    document = graphene.Field(DocumentType)
+    new_version_number = graphene.Int()
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.MUTATION)
+    def mutate(root, info, document_id, corpus_id):
+        user = info.context.user
+
+        try:
+            doc_pk = from_global_id(document_id)[1]
+            corpus_pk = from_global_id(corpus_id)[1]
+
+            old_version = Document.objects.get(pk=doc_pk)
+            corpus = Corpus.objects.get(pk=corpus_pk)
+
+            # Check UPDATE permission on both document and corpus
+            if not user_has_permission_for_obj(
+                user,
+                old_version,
+                PermissionTypes.UPDATE,
+                include_group_permissions=True,
+            ):
+                return RestoreDocumentToVersion(
+                    ok=False,
+                    message="You don't have permission to restore this document",
+                    document=None,
+                    new_version_number=None,
+                )
+
+            if not user_has_permission_for_obj(
+                user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
+            ):
+                return RestoreDocumentToVersion(
+                    ok=False,
+                    message="You don't have permission to modify this corpus",
+                    document=None,
+                    new_version_number=None,
+                )
+
+            # Find the current version in the same version tree
+            current_version = Document.objects.filter(
+                version_tree_id=old_version.version_tree_id, is_current=True
+            ).first()
+
+            if not current_version:
+                return RestoreDocumentToVersion(
+                    ok=False,
+                    message="Cannot find current version of this document",
+                    document=None,
+                    new_version_number=None,
+                )
+
+            if old_version.id == current_version.id:
+                return RestoreDocumentToVersion(
+                    ok=False,
+                    message="Cannot restore to current version",
+                    document=None,
+                    new_version_number=None,
+                )
+
+            # Find the current path in the corpus
+            current_path = DocumentPath.objects.filter(
+                document__version_tree_id=old_version.version_tree_id,
+                corpus=corpus,
+                is_current=True,
+                is_deleted=False,
+            ).first()
+
+            if not current_path:
+                return RestoreDocumentToVersion(
+                    ok=False,
+                    message="Document not found in this corpus",
+                    document=None,
+                    new_version_number=None,
+                )
+
+            # Create a new document version as a copy of the old version
+            with transaction.atomic():
+                # Mark old current as not current
+                current_version.is_current = False
+                current_version.save()
+
+                # Create new document version
+                new_document = Document.objects.create(
+                    title=old_version.title,
+                    description=old_version.description,
+                    custom_meta=old_version.custom_meta,
+                    pdf_file=old_version.pdf_file,
+                    txt_extract_file=old_version.txt_extract_file,
+                    pawls_parse_file=old_version.pawls_parse_file,
+                    icon=old_version.icon,
+                    page_count=old_version.page_count,
+                    doc_label=old_version.doc_label,
+                    file_type=old_version.file_type,
+                    pdf_file_hash=old_version.pdf_file_hash,
+                    creator=user,
+                    # Versioning fields
+                    version_tree_id=old_version.version_tree_id,
+                    is_current=True,
+                    parent=current_version,  # Parent is the old current, not the restored version
+                )
+
+                # Copy permissions from old version
+                set_permissions_for_obj_to_user(
+                    user, new_document, [PermissionTypes.CRUD]
+                )
+
+                # Create new path entry with incremented version number
+                new_path = DocumentPath.objects.create(
+                    document=new_document,
+                    corpus=corpus,
+                    folder=current_path.folder,
+                    path=current_path.path,
+                    version_number=current_path.version_number + 1,
+                    is_current=True,
+                    is_deleted=False,
+                    parent=current_path,
+                    creator=user,
+                )
+
+                # Mark old path as not current
+                current_path.is_current = False
+                current_path.save()
+
+            logger.info(
+                f"User {user.id} restored document to version {old_version.id} "
+                f"in corpus {corpus_pk}, new version number: {new_path.version_number}"
+            )
+
+            return RestoreDocumentToVersion(
+                ok=True,
+                message="Document restored to version successfully",
+                document=new_document,
+                new_version_number=new_path.version_number,
+            )
+
+        except Document.DoesNotExist:
+            return RestoreDocumentToVersion(
+                ok=False,
+                message="Document version not found",
+                document=None,
+                new_version_number=None,
+            )
+        except Corpus.DoesNotExist:
+            return RestoreDocumentToVersion(
+                ok=False,
+                message="Corpus not found",
+                document=None,
+                new_version_number=None,
+            )
+        except Exception as e:
+            logger.error(f"Failed to restore document to version: {str(e)}")
+            return RestoreDocumentToVersion(
+                ok=False,
+                message=f"Failed to restore document: {str(e)}",
+                document=None,
+                new_version_number=None,
+            )
+
+
 class Mutation(graphene.ObjectType):
     # TOKEN MUTATIONS (IF WE'RE NOT OUTSOURCING JWT CREATION TO AUTH0) #######
     if not settings.USE_AUTH0:
@@ -3847,6 +4128,10 @@ class Mutation(graphene.ObjectType):
     delete_document = DeleteDocument.Field()
     delete_multiple_documents = DeleteMultipleDocuments.Field()
     upload_documents_zip = UploadDocumentsZip.Field()  # Bulk document upload via zip
+
+    # DOCUMENT VERSIONING MUTATIONS ############################################
+    restore_deleted_document = RestoreDeletedDocument.Field()
+    restore_document_to_version = RestoreDocumentToVersion.Field()
 
     # CORPUS MUTATIONS #########################################################
     fork_corpus = StartCorpusFork.Field()
