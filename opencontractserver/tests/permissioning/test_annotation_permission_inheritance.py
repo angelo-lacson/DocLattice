@@ -276,6 +276,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             document=self.doc_shared,
             corpus=self.corpus_shared,
             path="/shared_doc.pdf",
+            version_number=1,
             is_current=True,
             is_deleted=False
         )
@@ -353,6 +354,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             document=self.doc_shared,
             corpus=self.corpus_shared,
             path="/shared_doc.pdf",
+            version_number=1,
             is_current=True,
             is_deleted=False
         )
@@ -427,6 +429,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             document=self.doc_shared,
             corpus=self.corpus_shared,
             path="/shared_doc.pdf",
+            version_number=1,
             is_current=True,
             is_deleted=False
         )
@@ -503,6 +506,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             document=self.doc_shared,
             corpus=self.corpus_shared,
             path="/shared_doc.pdf",
+            version_number=1,
             is_current=True,
             is_deleted=False
         )
@@ -576,6 +580,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             document=self.doc_shared,
             corpus=self.corpus_shared,
             path="/shared_doc.pdf",
+            version_number=1,
             is_current=True,
             is_deleted=False
         )
