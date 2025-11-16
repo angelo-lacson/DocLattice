@@ -56,6 +56,43 @@ class VersioningMigrationTestCase(TestCase):
         self.corpus1.documents.add(self.doc1, self.doc2)
         self.corpus2.documents.add(self.doc2, self.doc3)  # doc2 in both corpuses
 
+        # Simulate the migration behavior by creating DocumentPath records
+        # This is what the migration (0024) would have done for existing data
+        self._create_document_paths_for_corpus(self.corpus1)
+        self._create_document_paths_for_corpus(self.corpus2)
+
+    def _create_document_paths_for_corpus(self, corpus):
+        """
+        Simulate the migration's DocumentPath creation logic.
+
+        This helper replicates what the 0024_initialize_dual_tree_versioning
+        migration does for existing corpus-document relationships.
+        """
+        for doc in corpus.documents.all():
+            # Check if DocumentPath already exists (safeguard like in migration)
+            existing = DocumentPath.objects.filter(
+                document=doc, corpus=corpus, is_current=True, is_deleted=False
+            ).exists()
+
+            if not existing:
+                # Generate path from document title (fallback to id if no title)
+                path = f"/{doc.title or f'document-{doc.id}'}"
+
+                # Create initial DocumentPath (matches migration logic)
+                DocumentPath.objects.create(
+                    document=doc,
+                    corpus=corpus,
+                    folder=None,  # Root level by default
+                    path=path,
+                    version_number=1,  # All existing docs are v1
+                    parent=None,  # All are roots initially
+                    is_current=True,
+                    is_deleted=False,
+                    creator=doc.creator,
+                    backend_lock=False,
+                    is_public=doc.is_public if hasattr(doc, "is_public") else False,
+                )
+
     def test_migration_initializes_document_trees(self):
         """
         Test that migration correctly initializes Document version trees.

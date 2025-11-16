@@ -94,21 +94,25 @@ class LeaderboardQueryTestCase(TestCase):
         self.conversation2.is_public = True
         self.conversation2.save()
 
-        # Create messages
+        # Create messages (skip signals to avoid auto-badge awards during test setup)
         for i in range(5):
-            ChatMessage.objects.create(
+            msg = ChatMessage(
                 creator=self.user1,
                 conversation=self.conversation1,
                 msg_type="HUMAN",
                 content=f"Message {i} from user1",
             )
+            msg._skip_signals = True
+            msg.save()
         for i in range(3):
-            ChatMessage.objects.create(
+            msg = ChatMessage(
                 creator=self.user2,
                 conversation=self.conversation2,
                 msg_type="HUMAN",
                 content=f"Message {i} from user2",
             )
+            msg._skip_signals = True
+            msg.save()
 
         # NOTE: We skip creating actual documents and annotations for these tests
         # since the leaderboard queries work without them. The annotation metric

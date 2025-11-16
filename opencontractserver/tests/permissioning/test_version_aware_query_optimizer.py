@@ -54,6 +54,10 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             title="Test Doc V1",
         )
         self.assertEqual(status, "created")
+        # Grant user permissions on the document
+        set_permissions_for_obj_to_user(
+            self.user, doc_v1, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         # Create annotation on v1
         Annotation.objects.create(
@@ -75,6 +79,10 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             title="Test Doc V2",
         )
         self.assertEqual(status, "updated")
+        # Grant user permissions on the new document version
+        set_permissions_for_obj_to_user(
+            self.user, doc_v2, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         # Create annotation on v2
         anno_v2 = Annotation.objects.create(
@@ -121,6 +129,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
         doc_v1, _, _ = import_document(
             corpus=self.corpus, path="/test.pdf", content=b"Version 1", user=self.user
         )
+        set_permissions_for_obj_to_user(
+            self.user, doc_v1, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         anno_v1 = Annotation.objects.create(
             document=doc_v1,
@@ -133,6 +144,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
         # Import v2
         doc_v2, _, _ = import_document(
             corpus=self.corpus, path="/test.pdf", content=b"Version 2", user=self.user
+        )
+        set_permissions_for_obj_to_user(
+            self.user, doc_v2, [PermissionTypes.READ, PermissionTypes.UPDATE]
         )
 
         # Explicitly query old version with check disabled
@@ -156,6 +170,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             content=b"Version 1",
             user=self.user,
         )
+        set_permissions_for_obj_to_user(
+            self.user, doc_v1, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         Annotation.objects.create(
             document=doc_v1,
@@ -170,6 +187,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             path="/contract.pdf",
             content=b"Version 2",
             user=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, doc_v2, [PermissionTypes.READ, PermissionTypes.UPDATE]
         )
 
         anno_v2 = Annotation.objects.create(
@@ -200,6 +220,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             content=b"Version 1",
             user=self.user,
         )
+        set_permissions_for_obj_to_user(
+            self.user, doc_v1, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         anno_v1 = Annotation.objects.create(
             document=doc_v1,
@@ -214,6 +237,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             path="/evolving.pdf",
             content=b"Version 2",
             user=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, doc_v2, [PermissionTypes.READ, PermissionTypes.UPDATE]
         )
 
         anno_v2 = Annotation.objects.create(
@@ -256,6 +282,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             path="/deleteme.pdf",
             content=b"Content to delete",
             user=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, doc, [PermissionTypes.READ, PermissionTypes.UPDATE]
         )
 
         Annotation.objects.create(
@@ -316,6 +345,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             content=b"Document content",
             user=self.user,
         )
+        set_permissions_for_obj_to_user(
+            self.user, doc, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         anno = Annotation.objects.create(
             document=doc,
@@ -357,6 +389,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             content=b"Version 1 with headers",
             user=self.user,
         )
+        set_permissions_for_obj_to_user(
+            self.user, doc_v1, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         # Create structural annotation on v1
         Annotation.objects.create(
@@ -375,6 +410,9 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             content=b"Version 2 with different headers",
             user=self.user,
         )
+        set_permissions_for_obj_to_user(
+            self.user, doc_v2, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         # Create structural annotation on v2
         structural_v2 = Annotation.objects.create(
@@ -387,10 +425,12 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
         )
 
         # Query for current version should only return v2 structural
+        # Note: Structural annotations have corpus=None, so we query without corpus_id
+        # The version-awareness is based on the document version itself
         result = AnnotationQueryOptimizer.get_document_annotations(
             document_id=doc_v2.id,
             user=self.user,
-            corpus_id=self.corpus.id,
+            corpus_id=None,  # Structural annotations don't have corpus
             structural=True,
         )
 
@@ -398,6 +438,17 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
         anno_ids = list(result.values_list("id", flat=True))
         self.assertEqual(len(anno_ids), 1)
         self.assertEqual(anno_ids[0], structural_v2.id)
+
+        # Verify that querying v1 (old version) returns v1's structural annotation
+        result_v1 = AnnotationQueryOptimizer.get_document_annotations(
+            document_id=doc_v1.id,
+            user=self.user,
+            corpus_id=None,
+            structural=True,
+        )
+        # Should get v1 structural annotation (version-specific)
+        self.assertEqual(result_v1.count(), 1)
+        self.assertNotEqual(result_v1.first().id, structural_v2.id)
 
         logger.info("✓ Structural annotations are version-specific")
 
@@ -407,6 +458,10 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
         corpus2 = Corpus.objects.create(
             title="Corpus 2", creator=self.user, is_public=False
         )
+        # Grant user permissions on the second corpus
+        set_permissions_for_obj_to_user(
+            self.user, corpus2, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         # Import document to corpus 1
         doc, _, _ = import_document(
@@ -414,6 +469,10 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             path="/shared.pdf",
             content=b"Shared content",
             user=self.user,
+        )
+        # Grant user permissions on the document
+        set_permissions_for_obj_to_user(
+            self.user, doc, [PermissionTypes.READ, PermissionTypes.UPDATE]
         )
 
         # Add annotation in corpus 1
@@ -488,6 +547,10 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
                 path="/perf_test.pdf",
                 content=f"Version {i+1}".encode(),
                 user=self.user,
+            )
+            # Grant user permissions on each document version
+            set_permissions_for_obj_to_user(
+                self.user, doc, [PermissionTypes.READ, PermissionTypes.UPDATE]
             )
 
             # Add 5 annotations per version

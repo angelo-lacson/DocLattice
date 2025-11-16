@@ -46,132 +46,108 @@ class MentionParserTestCase(TestCase):
 
     def test_parse_document_mention(self):
         """Should extract document mention from link."""
-        html = """
-        <p>Check out this
-        <a href="/d/user/doc-slug"
-           class="mention mention-link"
-           data-mention-type="document"
-           data-mention-id="123">@document:doc-slug</a>
-        </p>
+        markdown = """
+        Check out this
+        [@document:doc-slug](/d/user/doc-slug)
         """
-        result = parse_mentions_from_content(html)
-        self.assertEqual(result["documents"], {"123"})
+        result = parse_mentions_from_content(markdown)
+        self.assertEqual(result["documents"], {"doc-slug"})
         self.assertEqual(result["annotations"], set())
         self.assertEqual(result["users"], set())
 
     def test_parse_annotation_mention(self):
         """Should extract annotation mention from link."""
-        html = """
-        <p>See annotation
-        <a href="/d/user/doc?ann=456&structural=true"
-           class="mention mention-link"
-           data-mention-type="annotation"
-           data-mention-id="456">@annotation:456</a>
-        </p>
+        markdown = """
+        See annotation
+        [@annotation:456](/d/user/doc?ann=456&structural=true)
         """
-        result = parse_mentions_from_content(html)
+        result = parse_mentions_from_content(markdown)
         self.assertEqual(result["documents"], set())
         self.assertEqual(result["annotations"], {"456"})
         self.assertEqual(result["users"], set())
 
     def test_parse_user_mention(self):
-        """Should extract user mention from span (no href)."""
-        html = """
-        <p>Hey
-        <span class="mention"
-              data-mention-type="user"
-              data-mention-id="789">@john</span>
-        </p>
+        """Should extract user mention from markdown link."""
+        markdown = """
+        Hey
+        [@john](/users/john-doe)
         """
-        result = parse_mentions_from_content(html)
+        result = parse_mentions_from_content(markdown)
         self.assertEqual(result["documents"], set())
         self.assertEqual(result["annotations"], set())
-        self.assertEqual(result["users"], {"789"})
+        self.assertEqual(result["users"], {"john-doe"})
 
     def test_parse_corpus_mention(self):
         """Should extract corpus mention from link."""
-        html = """
-        <p>Check
-        <a href="/c/user/my-corpus"
-           class="mention mention-link"
-           data-mention-type="corpus"
-           data-mention-id="101">@corpus:my-corpus</a>
-        </p>
+        markdown = """
+        Check
+        [@corpus:my-corpus](/c/user/my-corpus)
         """
-        result = parse_mentions_from_content(html)
-        self.assertEqual(result["corpuses"], {"101"})
+        result = parse_mentions_from_content(markdown)
+        self.assertEqual(result["corpuses"], {"my-corpus"})
         self.assertEqual(result["documents"], set())
         self.assertEqual(result["annotations"], set())
         self.assertEqual(result["users"], set())
 
     def test_parse_multiple_mentions(self):
         """Should extract all mention types from mixed content."""
-        html = """
-        <p>Hey
-        <span data-mention-type="user" data-mention-id="1">@john</span>,
+        markdown = """
+        Hey
+        [@john](/users/john-doe),
         check out
-        <a href="/d/user/doc" data-mention-type="document" data-mention-id="2">@document:doc</a>
+        [@document:doc](/d/user/doc)
         and especially
-        <a href="/d/user/doc?ann=3" data-mention-type="annotation" data-mention-id="3">@annotation:3</a>
+        [@annotation:3](/d/user/doc?ann=3)
         in
-        <a href="/c/user/corpus" data-mention-type="corpus" data-mention-id="4">@corpus:corpus</a>
-        </p>
+        [@corpus:corpus](/c/user/corpus)
         """
-        result = parse_mentions_from_content(html)
-        self.assertEqual(result["users"], {"1"})
-        self.assertEqual(result["documents"], {"2"})
+        result = parse_mentions_from_content(markdown)
+        self.assertEqual(result["users"], {"john-doe"})
+        self.assertEqual(result["documents"], {"doc"})
         self.assertEqual(result["annotations"], {"3"})
-        self.assertEqual(result["corpuses"], {"4"})
+        self.assertEqual(result["corpuses"], {"corpus"})
 
     def test_parse_duplicate_mentions(self):
         """Should deduplicate multiple mentions of same resource."""
-        html = """
-        <p>
-        <a data-mention-type="document" data-mention-id="123">@doc</a>
+        markdown = """
+        [@doc](/d/user/doc-slug)
         some text
-        <a data-mention-type="document" data-mention-id="123">@doc</a>
-        </p>
+        [@doc](/d/user/doc-slug)
         """
-        result = parse_mentions_from_content(html)
-        self.assertEqual(result["documents"], {"123"})  # Only one ID
+        result = parse_mentions_from_content(markdown)
+        self.assertEqual(result["documents"], {"doc-slug"})  # Only one slug
 
-    def test_parse_mention_without_id(self):
-        """Should skip mentions without data-mention-id attribute."""
-        html = """
-        <p>
-        <a href="/d/user/doc"
-           data-mention-type="document">@document:no-id</a>
-        </p>
+    def test_parse_mention_with_incomplete_path(self):
+        """Should skip mentions with incomplete URL paths."""
+        markdown = """
+        [@document:no-slug](/d/user)
         """
-        result = parse_mentions_from_content(html)
+        result = parse_mentions_from_content(markdown)
+        # Path has only 3 parts (/d/user), needs at least 4 for standalone doc
         self.assertEqual(result["documents"], set())  # Skipped
 
-    def test_parse_mention_with_unknown_type(self):
-        """Should log warning but not crash on unknown mention type."""
-        html = """
-        <p>
-        <a data-mention-type="unknown-type" data-mention-id="999">@unknown</a>
-        </p>
+    def test_parse_mention_with_unknown_path_pattern(self):
+        """Should ignore links that don't match known patterns."""
+        markdown = """
+        [@unknown](/unknown/path/here)
         """
         # Should not raise exception
-        result = parse_mentions_from_content(html)
-        # Unknown type not added to any set
+        result = parse_mentions_from_content(markdown)
+        # Unknown pattern not added to any set
         self.assertEqual(result["documents"], set())
         self.assertEqual(result["annotations"], set())
         self.assertEqual(result["users"], set())
         self.assertEqual(result["corpuses"], set())
 
     def test_extract_mentioned_user_ids_convenience(self):
-        """Should extract only user IDs for notifications."""
-        html = """
-        <p>
-        <span data-mention-type="user" data-mention-id="1">@alice</span>
-        <span data-mention-type="user" data-mention-id="2">@bob</span>
-        <a data-mention-type="document" data-mention-id="3">@doc</a>
-        </p>
+        """Should extract only user slugs for notifications."""
+        markdown = """
+        [@alice](/users/alice-smith)
+        [@bob](/users/bob-jones)
+        [@doc](/d/user/doc-slug)
         """
-        user_ids = extract_mentioned_user_ids(html)
-        self.assertEqual(user_ids, {"1", "2"})  # Only users
+        user_slugs = extract_mentioned_user_ids(markdown)
+        self.assertEqual(user_slugs, {"alice-smith", "bob-jones"})  # Only users
 
 
 @pytest.mark.django_db
@@ -196,6 +172,7 @@ class MentionLinkingTestCase(TestCase):
             title="Test Document",
             creator=self.user,
             description="Test doc",
+            slug="test-document-slug",
         )
 
         # Create annotation (requires document with PDF file)
@@ -236,7 +213,7 @@ class MentionLinkingTestCase(TestCase):
         )
 
         mentioned_ids = {
-            "documents": {str(self.document.pk)},
+            "documents": {self.document.slug},
             "annotations": set(),
             "users": set(),
         }
@@ -249,7 +226,10 @@ class MentionLinkingTestCase(TestCase):
     def test_link_multiple_documents_takes_first(self):
         """Should link only first document when multiple mentioned."""
         doc2 = Document.objects.create(
-            title="Second Document", creator=self.user, description="Test"
+            title="Second Document",
+            creator=self.user,
+            description="Test",
+            slug="second-document-slug",
         )
 
         message = ChatMessage.objects.create(
@@ -260,7 +240,7 @@ class MentionLinkingTestCase(TestCase):
         )
 
         mentioned_ids = {
-            "documents": {str(self.document.pk), str(doc2.pk)},
+            "documents": {self.document.slug, doc2.slug},
             "annotations": set(),
             "users": set(),
         }
@@ -331,7 +311,7 @@ class MentionLinkingTestCase(TestCase):
         )
 
         mentioned_ids = {
-            "documents": {"99999"},  # Non-existent ID
+            "documents": {"nonexistent-document-slug"},  # Non-existent slug
             "annotations": set(),
             "users": set(),
         }
@@ -370,7 +350,7 @@ class MentionLinkingTestCase(TestCase):
         )
 
         mentioned_ids = {
-            "documents": {str(self.document.pk)},
+            "documents": {self.document.slug},
             "annotations": {str(self.annotation.pk)},
             "users": set(),
         }
