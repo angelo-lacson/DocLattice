@@ -11,6 +11,7 @@ import { CreateFolderModal } from "./CreateFolderModal";
 import { EditFolderModal } from "./EditFolderModal";
 import { MoveFolderModal } from "./MoveFolderModal";
 import { DeleteFolderModal } from "./DeleteFolderModal";
+import { TrashFolderView } from "./TrashFolderView";
 import {
   folderCorpusIdAtom,
   selectedFolderIdAtom,
@@ -333,14 +334,29 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
 
         {/* Main Content Area */}
         <MainContent $hasSidebar={showSidebar && !sidebarCollapsed}>
-          {/* Breadcrumb Navigation */}
-          <BreadcrumbWrapper $visible={showBreadcrumb}>
+          {/* Breadcrumb Navigation - hide for trash folder */}
+          <BreadcrumbWrapper
+            $visible={showBreadcrumb && selectedFolderId !== "trash"}
+          >
             <FolderBreadcrumb onFolderSelect={handleFolderSelect} />
           </BreadcrumbWrapper>
 
           {/* Document List or Custom Content */}
-          <ContentArea onContextMenu={handleContentAreaContextMenu}>
-            {children}
+          <ContentArea
+            onContextMenu={
+              selectedFolderId === "trash"
+                ? undefined
+                : handleContentAreaContextMenu
+            }
+          >
+            {selectedFolderId === "trash" ? (
+              <TrashFolderView
+                corpusId={corpusId}
+                onBack={() => handleFolderSelect(null)}
+              />
+            ) : (
+              children
+            )}
           </ContentArea>
         </MainContent>
       </BrowserContainer>
