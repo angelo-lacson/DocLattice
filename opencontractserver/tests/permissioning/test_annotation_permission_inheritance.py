@@ -279,6 +279,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             version_number=1,
             is_current=True,
             is_deleted=False,
+            creator=self.user_alice,
         )
 
         # Convert to global IDs for GraphQL
@@ -357,6 +358,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             version_number=1,
             is_current=True,
             is_deleted=False,
+            creator=self.user_alice,
         )
 
         # Convert to global IDs for GraphQL
@@ -432,6 +434,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             version_number=1,
             is_current=True,
             is_deleted=False,
+            creator=self.user_alice,
         )
 
         # Convert to global IDs for GraphQL
@@ -509,6 +512,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             version_number=1,
             is_current=True,
             is_deleted=False,
+            creator=self.user_alice,
         )
 
         # Convert to global IDs for GraphQL
@@ -583,6 +587,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             version_number=1,
             is_current=True,
             is_deleted=False,
+            creator=self.user_alice,
         )
 
         # Convert to global IDs for GraphQL
