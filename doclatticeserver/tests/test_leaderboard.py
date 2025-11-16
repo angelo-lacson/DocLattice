@@ -75,23 +75,25 @@ class LeaderboardQueryTestCase(TestCase):
         self.corpus.is_public = True
         self.corpus.save()
 
-        # Create conversations
-        self.conversation1 = Conversation.objects.create(
+        # Create conversations (skip signals to prevent auto-badge awards)
+        self.conversation1 = Conversation(
             creator=self.user1,
             conversation_type="thread",
             title="Test Thread 1",
             chat_with_corpus=self.corpus,
+            is_public=True,
         )
-        self.conversation1.is_public = True
+        self.conversation1._skip_signals = True
         self.conversation1.save()
 
-        self.conversation2 = Conversation.objects.create(
+        self.conversation2 = Conversation(
             creator=self.user2,
             conversation_type="thread",
             title="Test Thread 2",
             chat_with_corpus=self.corpus,
+            is_public=True,
         )
-        self.conversation2.is_public = True
+        self.conversation2._skip_signals = True
         self.conversation2.save()
 
         # Create messages (skip signals to avoid auto-badge awards during test setup)

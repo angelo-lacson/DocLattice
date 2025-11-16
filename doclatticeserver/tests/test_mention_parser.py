@@ -384,3 +384,45 @@ class MentionLinkingTestCase(TestCase):
         # No actual linking for these types yet
         self.assertEqual(result["documents_linked"], 0)
         self.assertEqual(result["annotations_linked"], 0)
+
+    def test_link_handles_invalid_document_slug_gracefully(self):
+        """Should handle invalid document slug without crashing."""
+        message = ChatMessage.objects.create(
+            conversation=self.conversation,
+            msg_type="HUMAN",
+            content="<p>Test message</p>",
+            creator=self.user,
+        )
+
+        # Use a slug that doesn't exist
+        mentioned_ids = {
+            "documents": {"nonexistent-slug-12345"},
+            "annotations": set(),
+            "users": set(),
+        }
+        result = link_message_to_resources(message, mentioned_ids)
+
+        message.refresh_from_db()
+        self.assertEqual(result["documents_linked"], 0)
+        self.assertIsNone(message.source_document)
+
+    def test_link_handles_annotation_errors_gracefully(self):
+        """Should handle annotation linking errors without crashing."""
+        message = ChatMessage.objects.create(
+            conversation=self.conversation,
+            msg_type="HUMAN",
+            content="<p>Test message</p>",
+            creator=self.user,
+        )
+
+        # Mix of valid and invalid annotation IDs
+        mentioned_ids = {
+            "documents": set(),
+            "annotations": {str(self.annotation.pk), "99999", "88888"},
+            "users": set(),
+        }
+        result = link_message_to_resources(message, mentioned_ids)
+
+        # Should link the valid one
+        self.assertEqual(result["annotations_linked"], 1)
+        self.assertIn(self.annotation, message.source_annotations.all())
