@@ -794,7 +794,9 @@ class AddDocumentsToCorpus(graphene.Mutation):
                 Q(pk=from_global_id(corpus_id)[1])
                 & (Q(creator=user) | Q(is_public=True))
             )
-            corpus.documents.add(*doc_objs)
+            # Use new DocumentPath-based method with audit trail
+            for doc in doc_objs:
+                corpus.add_document(document=doc, user=user)
             ok = True
 
         except Exception as e:
@@ -835,8 +837,10 @@ class RemoveDocumentsFromCorpus(graphene.Mutation):
                 Q(pk=from_global_id(corpus_id)[1])
                 & (Q(creator=user) | Q(is_public=True))
             )
-            corpus_docs = corpus.documents.filter(pk__in=doc_pks)
-            corpus.documents.remove(*corpus_docs)
+            # Use new DocumentPath-based method with soft-delete and audit trail
+            corpus_docs = corpus.get_documents().filter(pk__in=doc_pks)
+            for doc in corpus_docs:
+                corpus.remove_document(document=doc, user=user)
             ok = True
 
         except Exception as e:
@@ -1021,7 +1025,8 @@ class StartCorpusFork(graphene.Mutation):
             corpus = Corpus.objects.get(pk=corpus_pk)
 
             # Get ids to related objects that need copyin'
-            doc_ids = list(corpus.documents.all().values_list("id", flat=True))
+            # Use new DocumentPath-based method to get active documents
+            doc_ids = list(corpus.get_documents().values_list("id", flat=True))
             label_set_id = corpus.label_set.pk if corpus.label_set else None
 
             # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
@@ -1041,6 +1046,7 @@ class StartCorpusFork(graphene.Mutation):
             )
 
             # Now remove references to related objects on our new object, as these point to original docs and labels
+            # Note: New corpus has no DocumentPath records yet, so this is safe
             corpus.documents.clear()
             corpus.label_set = None
 
@@ -1567,7 +1573,8 @@ class UploadDocument(graphene.Mutation):
             if add_to_corpus_id is not None:
                 try:
                     corpus = Corpus.objects.get(id=from_global_id(add_to_corpus_id)[1])
-                    corpus.documents.add(document)
+                    # Use new DocumentPath-based method with audit trail
+                    corpus.add_document(document=document, user=user)
                     logger.info(
                         f"[UPLOAD] Added document {document.id} to corpus {corpus.id}"
                     )
@@ -3244,8 +3251,8 @@ class CreateExtract(graphene.Mutation):
         extract.save()
 
         if corpus is not None:
-            # print(f"Try to add corpus docs: {corpus.documents.all()}")
-            extract.documents.add(*corpus.documents.all())
+            # Use new DocumentPath-based method to get active documents in corpus
+            extract.documents.add(*corpus.get_documents())
         else:
             logger.info("Corpus IS still None... no docs to add.")
 

@@ -1397,7 +1397,8 @@ class Query(graphene.ObjectType):
 
         if corpuses.count() == 1:
             corpus = corpuses[0]
-            total_docs = corpus.documents.all().count()
+            # Use DocumentPath-based method for accurate count
+            total_docs = corpus.document_count()
             total_annotations = corpus.annotations.all().count()
             total_comments = UserFeedback.objects.filter(
                 commented_annotation__corpus=corpus

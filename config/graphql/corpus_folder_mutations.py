@@ -483,8 +483,8 @@ class MoveDocumentToFolderMutation(graphene.Mutation):
                     document=None,
                 )
 
-            # Verify document is in corpus
-            if not corpus.documents.filter(pk=document.pk).exists():
+            # Verify document is in corpus (using DocumentPath source of truth)
+            if not corpus.get_documents().filter(pk=document.pk).exists():
                 return MoveDocumentToFolderMutation(
                     ok=False,
                     message="Document is not in this corpus",
@@ -613,8 +613,8 @@ class MoveDocumentsToFolderMutation(graphene.Mutation):
             # Convert document IDs
             doc_pks = [from_global_id(doc_id)[1] for doc_id in document_ids]
 
-            # Verify all documents are in corpus
-            corpus_doc_ids = set(corpus.documents.values_list("id", flat=True))
+            # Verify all documents are in corpus (using DocumentPath source of truth)
+            corpus_doc_ids = set(corpus.get_documents().values_list("id", flat=True))
             invalid_docs = [pk for pk in doc_pks if int(pk) not in corpus_doc_ids]
             if invalid_docs:
                 return MoveDocumentsToFolderMutation(

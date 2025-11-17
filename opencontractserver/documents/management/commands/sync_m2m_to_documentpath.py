@@ -9,10 +9,11 @@ Usage:
 """
 
 import logging
+
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentPath
@@ -92,9 +93,9 @@ class Command(BaseCommand):
                 raise CommandError(f"Error fetching corpus: {e}")
         else:
             # Get all corpuses with documents
-            corpuses = Corpus.objects.annotate(
-                doc_count=Count("documents")
-            ).filter(doc_count__gt=0)
+            corpuses = Corpus.objects.annotate(doc_count=Count("documents")).filter(
+                doc_count__gt=0
+            )
 
         total_corpuses = corpuses.count()
         self.stdout.write(f"Found {total_corpuses} corpus(es) to process\n")
@@ -132,6 +133,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(error_msg))
                 if verbose:
                     import traceback
+
                     self.stdout.write(traceback.format_exc())
 
         # Print summary
@@ -150,11 +152,13 @@ class Command(BaseCommand):
         m2m_count = m2m_documents.count()
 
         # Get documents via DocumentPath
-        path_doc_ids = DocumentPath.objects.filter(
-            corpus=corpus,
-            is_current=True,
-            is_deleted=False
-        ).values_list("document_id", flat=True).distinct()
+        path_doc_ids = (
+            DocumentPath.objects.filter(
+                corpus=corpus, is_current=True, is_deleted=False
+            )
+            .values_list("document_id", flat=True)
+            .distinct()
+        )
 
         documentpath_count = len(set(path_doc_ids))
 
@@ -164,14 +168,20 @@ class Command(BaseCommand):
         )
 
         # Find documents that need DocumentPath records
-        missing_doc_ids = set(m2m_documents.values_list("id", flat=True)) - set(path_doc_ids)
+        missing_doc_ids = set(m2m_documents.values_list("id", flat=True)) - set(
+            path_doc_ids
+        )
 
         if not missing_doc_ids:
-            self.stdout.write(self.style.SUCCESS("  All documents already have DocumentPath records"))
+            self.stdout.write(
+                self.style.SUCCESS("  All documents already have DocumentPath records")
+            )
             stats["paths_already_existed"] = m2m_count
             return stats
 
-        self.stdout.write(f"  Found {len(missing_doc_ids)} documents needing DocumentPath records")
+        self.stdout.write(
+            f"  Found {len(missing_doc_ids)} documents needing DocumentPath records"
+        )
 
         # Process documents missing DocumentPath records
         for doc_id in missing_doc_ids:
@@ -181,10 +191,7 @@ class Command(BaseCommand):
 
                 # Check if document already has a path in this corpus (shouldn't happen but be safe)
                 existing_path = DocumentPath.objects.filter(
-                    corpus=corpus,
-                    document=document,
-                    is_current=True,
-                    is_deleted=False
+                    corpus=corpus, document=document, is_current=True, is_deleted=False
                 ).first()
 
                 if existing_path:
@@ -210,10 +217,7 @@ class Command(BaseCommand):
                         path_counter = 0
                         original_path = path
                         while DocumentPath.objects.filter(
-                            corpus=corpus,
-                            path=path,
-                            is_current=True,
-                            is_deleted=False
+                            corpus=corpus, path=path, is_current=True, is_deleted=False
                         ).exists():
                             path_counter += 1
                             path = f"{original_path}_{path_counter}"
@@ -234,7 +238,9 @@ class Command(BaseCommand):
 
                         if verbose:
                             self.stdout.write(
-                                self.style.SUCCESS(f"      Created DocumentPath: {path}")
+                                self.style.SUCCESS(
+                                    f"      Created DocumentPath: {path}"
+                                )
                             )
                 else:
                     stats["paths_created"] += 1  # Count what would be created
@@ -249,6 +255,7 @@ class Command(BaseCommand):
                 )
                 if verbose:
                     import traceback
+
                     self.stdout.write(traceback.format_exc())
 
         return stats
@@ -259,8 +266,7 @@ class Command(BaseCommand):
         if document.title:
             # Sanitize title for filesystem
             safe_title = "".join(
-                c if c.isalnum() or c in "-_." else "_"
-                for c in document.title[:100]
+                c if c.isalnum() or c in "-_." else "_" for c in document.title[:100]
             ).strip("_")
 
             if safe_title:
@@ -285,10 +291,14 @@ class Command(BaseCommand):
         self.stdout.write(f"Corpuses processed: {stats['corpuses_processed']}")
         self.stdout.write(f"Documents processed: {stats['documents_processed']}")
         self.stdout.write(f"DocumentPaths created: {stats['paths_created']}")
-        self.stdout.write(f"Documents already had paths: {stats['paths_already_existed']}")
+        self.stdout.write(
+            f"Documents already had paths: {stats['paths_already_existed']}"
+        )
 
         if stats["errors"]:
-            self.stdout.write("\n" + self.style.ERROR(f"Errors ({len(stats['errors'])}):"))
+            self.stdout.write(
+                "\n" + self.style.ERROR(f"Errors ({len(stats['errors'])}):")
+            )
             for error in stats["errors"]:
                 self.stdout.write(f"  - {error}")
 

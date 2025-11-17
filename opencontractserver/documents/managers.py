@@ -15,7 +15,6 @@ from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.db import models, transaction
-from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 User = get_user_model()

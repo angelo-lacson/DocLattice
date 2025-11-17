@@ -10,23 +10,20 @@ This test file covers:
 """
 
 import io
-import tempfile
-from unittest.mock import Mock, patch, MagicMock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.test import TestCase, TransactionTestCase
-from django.db import transaction
 
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.documents.managers import (
-    DocumentPathContext,
     DocumentCorpusRelationshipManager,
+    DocumentPathContext,
     install_custom_manager,
     uninstall_custom_manager,
 )
+from opencontractserver.documents.models import Document, DocumentPath
 
 User = get_user_model()
 
@@ -37,9 +34,7 @@ class TestDocumentPathContext(TestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.document = Document.objects.create(
             title="Test Document",
@@ -65,21 +60,17 @@ class TestDocumentPathContext(TestCase):
         from opencontractserver.corpuses.models import Corpus, CorpusFolder
 
         corpus = Corpus.objects.create(
-            title="Test Corpus",
-            description="Test",
-            creator=self.user
+            title="Test Corpus", description="Test", creator=self.user
         )
         folder = CorpusFolder.objects.create(
-            name="Test Folder",
-            corpus=corpus,
-            creator=self.user
+            name="Test Folder", corpus=corpus, creator=self.user
         )
 
         with DocumentPathContext(
             user=self.user,
             default_folder=folder,
             default_path_prefix="/custom",
-            auto_generate_paths=False
+            auto_generate_paths=False,
         ) as ctx:
             self.assertEqual(ctx.default_folder, folder)
             self.assertEqual(ctx.default_path_prefix, "/custom")
@@ -94,8 +85,7 @@ class TestDocumentPathContext(TestCase):
     def test_path_generation_without_title(self):
         """Test path generation for document without title."""
         doc_no_title = Document.objects.create(
-            description="No title",
-            creator=self.user
+            description="No title", creator=self.user
         )
 
         with DocumentPathContext(user=self.user) as ctx:
@@ -105,8 +95,7 @@ class TestDocumentPathContext(TestCase):
     def test_path_generation_sanitizes_special_characters(self):
         """Test that special characters are sanitized in paths."""
         doc_special = Document.objects.create(
-            title="Test@Document#With$Special%Chars!",
-            creator=self.user
+            title="Test@Document#With$Special%Chars!", creator=self.user
         )
 
         with DocumentPathContext(user=self.user) as ctx:
@@ -115,18 +104,15 @@ class TestDocumentPathContext(TestCase):
 
     def test_nested_contexts(self):
         """Test that nested contexts work correctly."""
-        user2 = User.objects.create_user(
-            username="user2",
-            email="user2@example.com"
-        )
+        user2 = User.objects.create_user(username="user2", email="user2@example.com")
 
-        with DocumentPathContext(user=self.user) as ctx1:
+        with DocumentPathContext(user=self.user):
             self.assertEqual(DocumentPathContext.get_current().user, self.user)
 
-            with DocumentPathContext(user=user2) as ctx2:
+            with DocumentPathContext(user=user2):
                 self.assertEqual(DocumentPathContext.get_current().user, user2)
 
-            # Should restore to ctx1 after inner context exits
+            # Should restore to outer context after inner context exits
             self.assertEqual(DocumentPathContext.get_current().user, self.user)
 
         self.assertIsNone(DocumentPathContext.get_current())
@@ -138,15 +124,13 @@ class TestDocumentCorpusRelationshipManager(TransactionTestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
 
         self.corpus = Corpus.objects.create(
             title="Test Corpus",
             description="Test corpus for manager",
-            creator=self.user
+            creator=self.user,
         )
 
         # Create test documents with PDF content
@@ -154,7 +138,7 @@ class TestDocumentCorpusRelationshipManager(TransactionTestCase):
             title="Document 1",
             description="First test document",
             creator=self.user,
-            pdf_file_hash="hash1"
+            pdf_file_hash="hash1",
         )
         self.doc1.pdf_file.save("doc1.pdf", ContentFile(b"PDF content 1"))
 
@@ -162,7 +146,7 @@ class TestDocumentCorpusRelationshipManager(TransactionTestCase):
             title="Document 2",
             description="Second test document",
             creator=self.user,
-            pdf_file_hash="hash2"
+            pdf_file_hash="hash2",
         )
         self.doc2.pdf_file.save("doc2.pdf", ContentFile(b"PDF content 2"))
 
@@ -193,7 +177,7 @@ class TestDocumentCorpusRelationshipManager(TransactionTestCase):
             version_number=1,
             is_current=True,
             is_deleted=False,
-            creator=self.user
+            creator=self.user,
         )
 
         # Should now see the document
@@ -204,10 +188,12 @@ class TestDocumentCorpusRelationshipManager(TransactionTestCase):
         """Test that add() creates DocumentPath records."""
         with DocumentPathContext(user=self.user):
             with self.assertWarns(DeprecationWarning):
-                count = self.corpus.documents.add(self.doc1, self.doc2)
+                self.corpus.documents.add(self.doc1, self.doc2)
 
         # Check that DocumentPath records were created
-        paths = DocumentPath.objects.filter(corpus=self.corpus, is_current=True, is_deleted=False)
+        paths = DocumentPath.objects.filter(
+            corpus=self.corpus, is_current=True, is_deleted=False
+        )
         self.assertEqual(paths.count(), 2)
 
         # Check documents are accessible
@@ -230,10 +216,7 @@ class TestDocumentCorpusRelationshipManager(TransactionTestCase):
             self.corpus.documents.add(self.doc1)
 
         paths = DocumentPath.objects.filter(
-            corpus=self.corpus,
-            document=self.doc1,
-            is_current=True,
-            is_deleted=False
+            corpus=self.corpus, document=self.doc1, is_current=True, is_deleted=False
         )
         self.assertEqual(paths.count(), 1)
 
@@ -257,9 +240,7 @@ class TestDocumentCorpusRelationshipManager(TransactionTestCase):
 
         # Check that DocumentPath was soft-deleted, not removed
         deleted_path = DocumentPath.objects.get(
-            corpus=self.corpus,
-            document=self.doc1,
-            is_current=True
+            corpus=self.corpus, document=self.doc1, is_current=True
         )
         self.assertTrue(deleted_path.is_deleted)
 
@@ -279,18 +260,13 @@ class TestDocumentCorpusRelationshipManager(TransactionTestCase):
         self.assertEqual(self.corpus.documents.count(), 0)
 
         # Check all paths are soft-deleted
-        deleted_paths = DocumentPath.objects.filter(
-            corpus=self.corpus,
-            is_current=True
-        )
+        deleted_paths = DocumentPath.objects.filter(corpus=self.corpus, is_current=True)
         self.assertTrue(all(p.is_deleted for p in deleted_paths))
 
     def test_set_replaces_documents(self):
         """Test that set() replaces all documents."""
         doc3 = Document.objects.create(
-            title="Document 3",
-            creator=self.user,
-            pdf_file_hash="hash3"
+            title="Document 3", creator=self.user, pdf_file_hash="hash3"
         )
         doc3.pdf_file.save("doc3.pdf", ContentFile(b"PDF content 3"))
 
@@ -337,30 +313,25 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         DocumentPath.objects.all().delete()
 
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
 
         self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            description="Test corpus",
-            creator=self.user
+            title="Test Corpus", description="Test corpus", creator=self.user
         )
 
         self.document = Document.objects.create(
             title="Test Document",
             description="A test document",
             creator=self.user,
-            pdf_file_hash="testhash"
+            pdf_file_hash="testhash",
         )
         self.document.pdf_file.save("test.pdf", ContentFile(b"Test PDF content"))
 
     def test_add_document_creates_path(self):
         """Test that add_document creates DocumentPath record."""
         doc, status, path = self.corpus.add_document(
-            document=self.document,
-            user=self.user
+            document=self.document, user=self.user
         )
 
         # Status can be either 'created' or 'cross_corpus_import' depending on whether
@@ -378,9 +349,7 @@ class TestCorpusDocumentMethods(TransactionTestCase):
     def test_add_document_with_custom_path(self):
         """Test add_document with custom path."""
         doc, status, path = self.corpus.add_document(
-            document=self.document,
-            path="/custom/path/document.pdf",
-            user=self.user
+            document=self.document, path="/custom/path/document.pdf", user=self.user
         )
 
         self.assertEqual(path.path, "/custom/path/document.pdf")
@@ -388,8 +357,7 @@ class TestCorpusDocumentMethods(TransactionTestCase):
     def test_add_document_auto_generates_path(self):
         """Test that add_document auto-generates path from title."""
         doc, status, path = self.corpus.add_document(
-            document=self.document,
-            user=self.user
+            document=self.document, user=self.user
         )
 
         self.assertIn("Test_Document", path.path)
@@ -404,20 +372,21 @@ class TestCorpusDocumentMethods(TransactionTestCase):
     def test_remove_document_by_document(self):
         """Test removing document by document object."""
         # First add the document
-        doc, status, path = self.corpus.add_document(document=self.document, user=self.user)
+        doc, status, path = self.corpus.add_document(
+            document=self.document, user=self.user
+        )
 
         # Verify it was added
         self.assertIsNotNone(path)
         active_paths = DocumentPath.objects.filter(
             corpus=self.corpus, is_current=True, is_deleted=False
         )
-        self.assertGreater(active_paths.count(), 0, "No active paths found after add_document")
+        self.assertGreater(
+            active_paths.count(), 0, "No active paths found after add_document"
+        )
 
         # Then remove it - use the actual document that was added (might be versioned)
-        deleted_paths = self.corpus.remove_document(
-            document=doc,
-            user=self.user
-        )
+        deleted_paths = self.corpus.remove_document(document=doc, user=self.user)
 
         self.assertGreater(len(deleted_paths), 0, "No paths were deleted")
         self.assertTrue(deleted_paths[0].is_deleted)
@@ -429,15 +398,12 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         """Test removing document by path."""
         # Add document with known path
         doc, status, path_record = self.corpus.add_document(
-            document=self.document,
-            path="/test/document.pdf",
-            user=self.user
+            document=self.document, path="/test/document.pdf", user=self.user
         )
 
         # Remove by path
         deleted_paths = self.corpus.remove_document(
-            path="/test/document.pdf",
-            user=self.user
+            path="/test/document.pdf", user=self.user
         )
 
         self.assertEqual(len(deleted_paths), 1)
@@ -461,13 +427,13 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         """Test that get_documents returns only active documents."""
         # Add two documents
         doc2 = Document.objects.create(
-            title="Document 2",
-            creator=self.user,
-            pdf_file_hash="hash2"
+            title="Document 2", creator=self.user, pdf_file_hash="hash2"
         )
         doc2.pdf_file.save("doc2.pdf", ContentFile(b"Content 2"))
 
-        doc1_added, _, _ = self.corpus.add_document(document=self.document, user=self.user)
+        doc1_added, _, _ = self.corpus.add_document(
+            document=self.document, user=self.user
+        )
         doc2_added, _, _ = self.corpus.add_document(document=doc2, user=self.user)
 
         # Should have 2 documents (or more if there are leftovers)
@@ -504,15 +470,11 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         from opencontractserver.corpuses.models import CorpusFolder
 
         folder = CorpusFolder.objects.create(
-            name="Test Folder",
-            corpus=self.corpus,
-            creator=self.user
+            name="Test Folder", corpus=self.corpus, creator=self.user
         )
 
         doc, status, path = self.corpus.add_document(
-            document=self.document,
-            user=self.user,
-            folder=folder
+            document=self.document, user=self.user, folder=folder
         )
 
         self.assertEqual(path.folder, folder)
@@ -524,30 +486,22 @@ class TestMigrationCommand(TransactionTestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
 
         # Create corpus with documents using OLD M2M method
         # (bypassing the custom manager)
         self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            description="Test",
-            creator=self.user
+            title="Test Corpus", description="Test", creator=self.user
         )
 
         # Create documents
         self.doc1 = Document.objects.create(
-            title="Document One",
-            description="First document",
-            creator=self.user
+            title="Document One", description="First document", creator=self.user
         )
 
         self.doc2 = Document.objects.create(
-            title="Document Two",
-            description="Second document",
-            creator=self.user
+            title="Document Two", description="Second document", creator=self.user
         )
 
         # Add documents using direct M2M (simulating legacy data)
@@ -561,8 +515,7 @@ class TestMigrationCommand(TransactionTestCase):
         """Test that dry-run mode doesn't make changes."""
         # Ensure system user exists
         system_user, _ = User.objects.get_or_create(
-            id=1,
-            defaults={"username": "system", "email": "system@example.com"}
+            id=1, defaults={"username": "system", "email": "system@example.com"}
         )
 
         # Verify no DocumentPath records exist
@@ -573,8 +526,9 @@ class TestMigrationCommand(TransactionTestCase):
         call_command(
             "sync_m2m_to_documentpath",
             "--dry-run",
-            "--system-user-id", system_user.id,
-            stdout=out
+            "--system-user-id",
+            system_user.id,
+            stdout=out,
         )
 
         output = out.getvalue()
@@ -588,8 +542,7 @@ class TestMigrationCommand(TransactionTestCase):
         """Test actual migration creates DocumentPath records."""
         # Ensure system user exists
         system_user, _ = User.objects.get_or_create(
-            id=1,
-            defaults={"username": "system", "email": "system@example.com"}
+            id=1, defaults={"username": "system", "email": "system@example.com"}
         )
 
         # Verify no DocumentPath records exist
@@ -598,16 +551,16 @@ class TestMigrationCommand(TransactionTestCase):
         # Run command
         out = io.StringIO()
         call_command(
-            "sync_m2m_to_documentpath",
-            "--system-user-id", system_user.id,
-            stdout=out
+            "sync_m2m_to_documentpath", "--system-user-id", system_user.id, stdout=out
         )
 
         output = out.getvalue()
         self.assertIn("Successfully created 2 DocumentPath records", output)
 
         # Verify DocumentPath records were created
-        paths = DocumentPath.objects.filter(corpus=self.corpus, is_current=True, is_deleted=False)
+        paths = DocumentPath.objects.filter(
+            corpus=self.corpus, is_current=True, is_deleted=False
+        )
         self.assertEqual(paths.count(), 2)
 
         # Verify documents are linked correctly
@@ -618,15 +571,12 @@ class TestMigrationCommand(TransactionTestCase):
         """Test migration of specific corpus only."""
         # Ensure system user exists
         system_user, _ = User.objects.get_or_create(
-            id=1,
-            defaults={"username": "system", "email": "system@example.com"}
+            id=1, defaults={"username": "system", "email": "system@example.com"}
         )
 
         # Create another corpus
         corpus2 = Corpus.objects.create(
-            title="Corpus 2",
-            description="Second corpus",
-            creator=self.user
+            title="Corpus 2", description="Second corpus", creator=self.user
         )
         corpus2.documents.add(self.doc1)
 
@@ -634,25 +584,22 @@ class TestMigrationCommand(TransactionTestCase):
         out = io.StringIO()
         call_command(
             "sync_m2m_to_documentpath",
-            "--corpus-id", corpus2.id,
-            "--system-user-id", system_user.id,
-            stdout=out
+            "--corpus-id",
+            corpus2.id,
+            "--system-user-id",
+            system_user.id,
+            stdout=out,
         )
 
         # Only corpus2 should have DocumentPath records
-        self.assertEqual(
-            DocumentPath.objects.filter(corpus=corpus2).count(), 1
-        )
-        self.assertEqual(
-            DocumentPath.objects.filter(corpus=self.corpus).count(), 0
-        )
+        self.assertEqual(DocumentPath.objects.filter(corpus=corpus2).count(), 1)
+        self.assertEqual(DocumentPath.objects.filter(corpus=self.corpus).count(), 0)
 
     def test_migration_idempotent(self):
         """Test that running migration twice is safe."""
         # Ensure system user exists
         system_user, _ = User.objects.get_or_create(
-            id=1,
-            defaults={"username": "system", "email": "system@example.com"}
+            id=1, defaults={"username": "system", "email": "system@example.com"}
         )
 
         # Run migration once
@@ -661,7 +608,9 @@ class TestMigrationCommand(TransactionTestCase):
 
         # Run migration again
         out = io.StringIO()
-        call_command("sync_m2m_to_documentpath", "--system-user-id", system_user.id, stdout=out)
+        call_command(
+            "sync_m2m_to_documentpath", "--system-user-id", system_user.id, stdout=out
+        )
 
         output = out.getvalue()
         self.assertIn("All documents already have DocumentPath records", output)
@@ -673,16 +622,17 @@ class TestMigrationCommand(TransactionTestCase):
         """Test migration with custom path prefix."""
         # Ensure system user exists
         system_user, _ = User.objects.get_or_create(
-            id=1,
-            defaults={"username": "system", "email": "system@example.com"}
+            id=1, defaults={"username": "system", "email": "system@example.com"}
         )
 
         out = io.StringIO()
         call_command(
             "sync_m2m_to_documentpath",
-            "--path-prefix", "/imported",
-            "--system-user-id", system_user.id,
-            stdout=out
+            "--path-prefix",
+            "/imported",
+            "--system-user-id",
+            system_user.id,
+            stdout=out,
         )
 
         # Check that paths use the custom prefix
@@ -693,10 +643,7 @@ class TestMigrationCommand(TransactionTestCase):
     def test_migration_handles_missing_user(self):
         """Test that migration fails gracefully with invalid user ID."""
         with self.assertRaises(Exception) as cm:
-            call_command(
-                "sync_m2m_to_documentpath",
-                "--system-user-id", 99999
-            )
+            call_command("sync_m2m_to_documentpath", "--system-user-id", 99999)
 
         self.assertIn("User with ID 99999 not found", str(cm.exception))
 
@@ -704,16 +651,16 @@ class TestMigrationCommand(TransactionTestCase):
         """Test verbose mode provides detailed output."""
         # Ensure system user exists
         system_user, _ = User.objects.get_or_create(
-            id=1,
-            defaults={"username": "system", "email": "system@example.com"}
+            id=1, defaults={"username": "system", "email": "system@example.com"}
         )
 
         out = io.StringIO()
         call_command(
             "sync_m2m_to_documentpath",
             "--verbose",
-            "--system-user-id", system_user.id,
-            stdout=out
+            "--system-user-id",
+            system_user.id,
+            stdout=out,
         )
 
         output = out.getvalue()
@@ -725,15 +672,14 @@ class TestMigrationCommand(TransactionTestCase):
         """Test that migration handles path conflicts."""
         # Ensure system user exists
         system_user, _ = User.objects.get_or_create(
-            id=1,
-            defaults={"username": "system", "email": "system@example.com"}
+            id=1, defaults={"username": "system", "email": "system@example.com"}
         )
 
         # Create two documents with same title
         doc3 = Document.objects.create(
             title="Document One",  # Same as doc1
             description="Duplicate title",
-            creator=self.user
+            creator=self.user,
         )
         self.corpus.documents.add(doc3)
 
@@ -754,19 +700,13 @@ class TestBackwardCompatibility(TransactionTestCase):
     def setUp(self):
         """Set up test environment."""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com"
+            username="testuser", email="test@example.com"
         )
 
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            creator=self.user
-        )
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
         self.document = Document.objects.create(
-            title="Test Doc",
-            creator=self.user,
-            pdf_file_hash="hash1"
+            title="Test Doc", creator=self.user, pdf_file_hash="hash1"
         )
         self.document.pdf_file.save("test.pdf", ContentFile(b"content"))
 
