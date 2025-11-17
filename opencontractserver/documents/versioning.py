@@ -7,7 +7,7 @@ within the corpus filesystem.
 
 Architecture Rules Implemented:
 - Content Tree (Document model):
-  - C1: New Document only when hash first seen globally
+  - C1: New Document only when hash first seen in THIS corpus
   - C2: Updates create child nodes of previous version
   - C3: Only one current Document per version tree
 
@@ -19,8 +19,10 @@ Architecture Rules Implemented:
   - P5: Version number increments only on content changes
   - P6: Folder deletion sets folder=NULL
 
-- Interaction Rules:
-  - I1: Corpuses share Documents but have independent paths
+- Interaction Rules (Updated for Corpus Isolation):
+  - I1: Corpuses have completely isolated Documents with independent version trees
+  - I2: Provenance tracked via source_document field
+  - I3: File storage can be deduplicated by hash (blob sharing, not Document sharing)
   - Q1: Content "truly deleted" when no active paths point to it
 """
 
@@ -71,8 +73,9 @@ def import_document(
     """
     Import or update a document with dual-tree versioning logic.
 
-    This implements the interaction rules for document import according to
-    the dual-tree architecture specification.
+    This implements corpus-isolated document management. Documents are isolated
+    within each corpus with independent version trees. Provenance is tracked
+    via source_document field for traceability.
 
     Args:
         corpus: The corpus to import into
@@ -85,24 +88,18 @@ def import_document(
 
     Returns:
         Tuple of (document, status, path_record) where status is one of:
-        - 'created': Brand new document
-        - 'updated': Content changed at existing path
+        - 'created': Brand new document (first time this content seen globally)
+        - 'updated': Content changed at existing path (version increment)
         - 'unchanged': No change detected
-        - 'cross_corpus_import': Content exists elsewhere, new path created
+        - 'linked': Same content already exists in THIS corpus at different path
+        - 'created_from_existing': New corpus-isolated doc, content exists elsewhere
 
-    Implements: Rules C1, C2, C3, P1, P2, P4, P5, I1
+    Implements: Rules C1, C2, C3, P1, P2, P4, P5, I1 (NEW), I2, I3
     """
     content_hash = compute_sha256(content)
 
     with transaction.atomic():
-        # Step 1: Check Content Tree (Rules C1, C2)
-        existing_doc = (
-            Document.objects.filter(pdf_file_hash=content_hash)
-            .select_for_update()
-            .first()
-        )
-
-        # Step 2: Check Path Tree (Rules P1, P4)
+        # Step 1: Check if this path already exists in THIS corpus
         current_path = (
             DocumentPath.objects.filter(
                 corpus=corpus, path=path, is_current=True, is_deleted=False
@@ -112,43 +109,55 @@ def import_document(
         )
 
         if current_path:
-            # Path exists - check if content changed
+            # Path exists in this corpus - check if content changed
             if current_path.document.pdf_file_hash == content_hash:
                 logger.info(
                     f"No content change detected for {path} in corpus {corpus.id}"
                 )
                 return current_path.document, "unchanged", current_path
 
-            # Content changed - apply Rule C2
+            # Content changed - apply Rule C2 (update within corpus version tree)
             old_doc = current_path.document
 
-            if existing_doc:
-                # Content exists elsewhere - use it (Rule I1)
-                new_doc = existing_doc
+            # Check if this exact content already exists in THIS corpus
+            # (Rule I1: corpus isolation - only check within this corpus)
+            # Check both current AND historical paths (for content reuse within corpus)
+            corpus_doc_with_hash = (
+                DocumentPath.objects.filter(
+                    corpus=corpus,
+                    document__pdf_file_hash=content_hash,
+                )
+                .select_related("document")
+                .first()
+            )
+
+            if corpus_doc_with_hash:
+                # Content already exists in THIS corpus (current or historical) - reuse
+                new_doc = corpus_doc_with_hash.document
                 logger.info(
-                    f"Content already exists as doc {existing_doc.id}, "
-                    f"reusing for {path} in corpus {corpus.id}"
+                    f"Content already exists in corpus {corpus.id} as doc "
+                    f"{new_doc.id}, reusing for {path}"
                 )
             else:
-                # Create new version (Rule C2)
+                # Create new version (Rule C2) - within this corpus's version tree
                 logger.info(
                     f"Creating new version of doc {old_doc.id} for {path} "
                     f"in corpus {corpus.id}"
                 )
 
-                # Rule C3: Mark old as not current
+                # Rule C3: Mark old as not current in this version tree
                 Document.objects.filter(version_tree_id=old_doc.version_tree_id).update(
                     is_current=False
                 )
 
-                # Create new document version
+                # Create new document version (isolated within corpus)
                 new_doc = Document.objects.create(
                     title=doc_kwargs.get("title", old_doc.title),
                     description=doc_kwargs.get("description", old_doc.description),
                     file_type=doc_kwargs.get("file_type", old_doc.file_type),
                     pdf_file=pdf_file or old_doc.pdf_file,
                     pdf_file_hash=content_hash,
-                    version_tree_id=old_doc.version_tree_id,
+                    version_tree_id=old_doc.version_tree_id,  # Same tree
                     parent=old_doc,  # Rule C2
                     is_current=True,  # Rule C3
                     creator=user,
@@ -184,39 +193,88 @@ def import_document(
             return new_doc, "updated", new_path
 
         else:
-            # New path
-            if existing_doc:
-                # Content exists elsewhere (Rule I1)
-                doc = existing_doc
-                # Calculate actual content version from tree depth
+            # New path in this corpus
+            # Step 2: Check if this content already exists in THIS corpus
+            # (Rule I1: corpus isolation)
+            # Check both current AND historical paths (for content reuse within corpus)
+            corpus_doc_with_hash = (
+                DocumentPath.objects.filter(
+                    corpus=corpus,
+                    document__pdf_file_hash=content_hash,
+                )
+                .select_related("document")
+                .first()
+            )
+
+            if corpus_doc_with_hash:
+                # Same content already in THIS corpus (current or historical)
+                doc = corpus_doc_with_hash.document
                 version = calculate_content_version(doc)
-                status = "cross_corpus_import"
+                status = "linked"
                 logger.info(
-                    f"Cross-corpus import: doc {doc.id} v{version} "
-                    f"to {path} in corpus {corpus.id}"
+                    f"Content already in corpus {corpus.id} as doc {doc.id}, "
+                    f"linking to new path {path}"
                 )
             else:
-                # Brand new content (Rule C1)
-                tree_id = uuid.uuid4()
-                doc = Document.objects.create(
-                    title=doc_kwargs.get("title", f"Document at {path}"),
-                    description=doc_kwargs.get("description", ""),
-                    file_type=doc_kwargs.get("file_type", "application/pdf"),
-                    pdf_file=pdf_file,
-                    pdf_file_hash=content_hash,
-                    version_tree_id=tree_id,
-                    is_current=True,
-                    parent=None,  # Root of content tree
-                    creator=user,
-                    **{
-                        k: v
-                        for k, v in doc_kwargs.items()
-                        if k not in ["title", "description", "file_type"]
-                    },
+                # Content not in this corpus - create new corpus-isolated document
+                # Check if content exists globally (for provenance tracking - Rule I2)
+                global_doc_with_hash = (
+                    Document.objects.filter(pdf_file_hash=content_hash)
+                    .select_for_update()
+                    .first()
                 )
-                version = 1  # First version of new content
-                status = "created"
-                logger.info(f"Created new doc {doc.id} at {path} in corpus {corpus.id}")
+
+                tree_id = uuid.uuid4()  # Always new tree for corpus isolation
+
+                if global_doc_with_hash:
+                    # Content exists elsewhere - track provenance (Rule I2)
+                    doc = Document.objects.create(
+                        title=doc_kwargs.get("title", f"Document at {path}"),
+                        description=doc_kwargs.get("description", ""),
+                        file_type=doc_kwargs.get("file_type", "application/pdf"),
+                        pdf_file=pdf_file or global_doc_with_hash.pdf_file,  # Rule I3
+                        pdf_file_hash=content_hash,
+                        version_tree_id=tree_id,  # New isolated tree
+                        is_current=True,
+                        parent=None,  # Root of NEW content tree
+                        source_document=global_doc_with_hash,  # Rule I2: provenance
+                        creator=user,
+                        **{
+                            k: v
+                            for k, v in doc_kwargs.items()
+                            if k not in ["title", "description", "file_type"]
+                        },
+                    )
+                    version = 1
+                    status = "created_from_existing"
+                    logger.info(
+                        f"Created corpus-isolated doc {doc.id} from existing "
+                        f"doc {global_doc_with_hash.id} at {path} in corpus {corpus.id}"
+                    )
+                else:
+                    # Brand new content globally (Rule C1)
+                    doc = Document.objects.create(
+                        title=doc_kwargs.get("title", f"Document at {path}"),
+                        description=doc_kwargs.get("description", ""),
+                        file_type=doc_kwargs.get("file_type", "application/pdf"),
+                        pdf_file=pdf_file,
+                        pdf_file_hash=content_hash,
+                        version_tree_id=tree_id,
+                        is_current=True,
+                        parent=None,  # Root of content tree
+                        source_document=None,  # No provenance
+                        creator=user,
+                        **{
+                            k: v
+                            for k, v in doc_kwargs.items()
+                            if k not in ["title", "description", "file_type"]
+                        },
+                    )
+                    version = 1
+                    status = "created"
+                    logger.info(
+                        f"Created new doc {doc.id} at {path} in corpus {corpus.id}"
+                    )
 
             # Create root of path tree (Rule P1)
             new_path = DocumentPath.objects.create(

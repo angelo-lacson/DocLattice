@@ -352,23 +352,28 @@ class Corpus(TreeNode):
         **doc_kwargs,
     ):
         """
-        Add a document to this corpus, creating a DocumentPath link.
+        Add a document to this corpus, creating a corpus-isolated copy.
 
-        This preserves document identity - the same document object is returned.
-        For content-based imports with deduplication, use import_content() instead.
+        This implements Phase 2 corpus isolation. When adding a document to a corpus,
+        a NEW corpus-isolated document is created with:
+        - Its own version_tree_id (independent version tree)
+        - source_document pointing to original (provenance tracking)
+        - DocumentPath linking to this corpus
+
+        This ensures no cross-corpus version tree conflicts.
 
         Args:
-            document: The Document to add (required)
+            document: The source Document to copy into corpus (required)
             path: The filesystem path within the corpus (auto-generated if not provided)
             user: The user performing the operation (required)
             folder: Optional CorpusFolder to place the document in
             content: DEPRECATED - use import_content() for content-based imports
-            **doc_kwargs: DEPRECATED - document properties are not modified
+            **doc_kwargs: Override properties for the corpus copy
 
         Returns:
             Tuple of (document, status, document_path) where:
-            - document: The SAME document that was passed in (identity preserved)
-            - status: 'added' (new link) or 'already_exists' (path already has this doc)
+            - document: The NEW corpus-isolated document (NOT the original)
+            - status: 'added' (new copy created) or 'already_exists' (content already in corpus)
             - document_path: The DocumentPath record created or existing
 
         Raises:
@@ -383,13 +388,13 @@ class Corpus(TreeNode):
             )
 
         # Handle deprecated content parameter
-        if content is not None or doc_kwargs:
+        if content is not None:
             logger.warning(
-                "content and doc_kwargs parameters are deprecated in add_document(). "
-                "Use import_content() for content-based imports with deduplication."
+                "content parameter is deprecated in add_document(). "
+                "Use import_content() for content-based imports."
             )
 
-        from opencontractserver.documents.models import DocumentPath
+        from opencontractserver.documents.models import Document, DocumentPath
 
         # Generate path if not provided
         if not path:
@@ -403,22 +408,55 @@ class Corpus(TreeNode):
                 path = f"/documents/doc_{document.pk}"
 
         with transaction.atomic():
-            # Check if this exact document is already at this path
-            existing_path = DocumentPath.objects.filter(
-                corpus=self,
-                path=path,
-                document=document,
-                is_current=True,
-                is_deleted=False,
-            ).first()
-
-            if existing_path:
-                logger.info(
-                    f"Document {document.pk} already exists at {path} in corpus {self.pk}"
+            # Check if this content already exists in THIS corpus (by hash)
+            # This implements corpus isolation - we check within corpus, not globally
+            corpus_doc_with_hash = (
+                DocumentPath.objects.filter(
+                    corpus=self,
+                    document__pdf_file_hash=document.pdf_file_hash,
+                    is_current=True,
+                    is_deleted=False,
                 )
-                return document, "already_exists", existing_path
+                .select_related("document")
+                .first()
+            )
 
-            # Check if path is occupied by a different document
+            if corpus_doc_with_hash:
+                # Content already exists in THIS corpus
+                existing_doc = corpus_doc_with_hash.document
+                logger.info(
+                    f"Content from doc {document.pk} already exists in corpus {self.pk} "
+                    f"as doc {existing_doc.pk}"
+                )
+                # Return the existing corpus-isolated document
+                return existing_doc, "already_exists", corpus_doc_with_hash
+
+            # Create corpus-isolated copy with new version tree
+            tree_id = uuid.uuid4()
+            corpus_copy = Document.objects.create(
+                title=doc_kwargs.get("title", document.title),
+                description=doc_kwargs.get("description", document.description),
+                file_type=doc_kwargs.get("file_type", document.file_type),
+                pdf_file=document.pdf_file,  # Share file blob (Rule I3)
+                pdf_file_hash=document.pdf_file_hash,
+                version_tree_id=tree_id,  # NEW isolated version tree
+                is_current=True,
+                parent=None,  # Root of NEW content tree
+                source_document=document,  # Provenance tracking (Rule I2)
+                creator=user,
+                **{
+                    k: v
+                    for k, v in doc_kwargs.items()
+                    if k not in ["title", "description", "file_type"]
+                },
+            )
+
+            logger.info(
+                f"Created corpus-isolated copy {corpus_copy.pk} from doc {document.pk} "
+                f"in corpus {self.pk}"
+            )
+
+            # Check if path is occupied
             occupied_path = DocumentPath.objects.filter(
                 corpus=self, path=path, is_current=True, is_deleted=False
             ).first()
@@ -430,16 +468,16 @@ class Corpus(TreeNode):
                 parent = occupied_path
                 version_number = occupied_path.version_number + 1
                 logger.info(
-                    f"Replacing doc {occupied_path.document_id} with {document.pk} "
+                    f"Replacing doc {occupied_path.document_id} with {corpus_copy.pk} "
                     f"at {path} in corpus {self.pk}"
                 )
             else:
                 parent = None
                 version_number = 1
 
-            # Create DocumentPath linking this document to the corpus
+            # Create DocumentPath linking corpus-isolated document
             new_path = DocumentPath.objects.create(
-                document=document,
+                document=corpus_copy,
                 corpus=self,
                 folder=folder,
                 path=path,
@@ -450,9 +488,11 @@ class Corpus(TreeNode):
                 creator=user,
             )
 
-            logger.info(f"Added document {document.pk} to corpus {self.pk} at {path}")
+            logger.info(
+                f"Added corpus-isolated doc {corpus_copy.pk} to corpus {self.pk} at {path}"
+            )
 
-            return document, "added", new_path
+            return corpus_copy, "added", new_path
 
     def import_content(
         self,
@@ -463,10 +503,11 @@ class Corpus(TreeNode):
         **doc_kwargs,
     ):
         """
-        Import content into this corpus with content-based deduplication.
+        Import content into this corpus with corpus-isolated deduplication.
 
-        This uses SHA-256 hashing to detect duplicate content. If the same content
-        exists elsewhere, it will be reused (cross-corpus deduplication).
+        This uses SHA-256 hashing to detect duplicate content within THIS corpus.
+        Documents are isolated within the corpus with independent version trees.
+        Provenance is tracked via source_document field when content exists elsewhere.
 
         Args:
             content: PDF content bytes (required)
@@ -477,10 +518,11 @@ class Corpus(TreeNode):
 
         Returns:
             Tuple of (document, status, document_path) where status is one of:
-            - 'created': Brand new document (content hash first seen)
-            - 'updated': Content changed at existing path
+            - 'created': Brand new document (content hash first seen globally)
+            - 'updated': Content changed at existing path (version increment)
             - 'unchanged': No change detected at path
-            - 'cross_corpus_import': Content exists elsewhere, reused
+            - 'linked': Same content already exists in THIS corpus at different path
+            - 'created_from_existing': New corpus-isolated doc, content exists elsewhere
 
         Raises:
             ValueError: If user or content is not provided

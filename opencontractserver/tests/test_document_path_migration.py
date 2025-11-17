@@ -144,13 +144,17 @@ class TestCorpusDocumentMethods(TransactionTestCase):
             document=self.document, user=self.user
         )
 
-        # Status should be 'added' for new link
+        # Status should be 'added' for new corpus-isolated copy
         self.assertEqual(status, "added")
-        # Document identity is preserved - same object returned
-        self.assertEqual(doc.id, self.document.id)
+        # Document is corpus-isolated copy (different ID)
+        self.assertNotEqual(doc.id, self.document.id)
+        # Content is the same (hash matches)
+        self.assertEqual(doc.pdf_file_hash, self.document.pdf_file_hash)
+        # Provenance tracked via source_document
+        self.assertEqual(doc.source_document, self.document)
         self.assertIsInstance(path, DocumentPath)
         self.assertEqual(path.corpus, self.corpus)
-        self.assertEqual(path.document, self.document)
+        self.assertEqual(path.document, doc)  # Points to isolated copy
         self.assertTrue(path.is_current)
         self.assertFalse(path.is_deleted)
 
@@ -262,15 +266,22 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         # Initial count should be 0 (we clean up in setUp)
         initial_count = self.corpus.document_count()
 
-        self.corpus.add_document(document=self.document, user=self.user)
+        # Add document - creates corpus-isolated copy
+        corpus_doc, status, path = self.corpus.add_document(
+            document=self.document, user=self.user
+        )
+        self.assertEqual(status, "added")
         self.assertEqual(self.corpus.document_count(), initial_count + 1)
 
-        # Add same document again (should not increase count)
-        self.corpus.add_document(document=self.document, user=self.user)
+        # Add same source document again (should return already_exists)
+        corpus_doc2, status2, path2 = self.corpus.add_document(
+            document=self.document, user=self.user
+        )
+        self.assertEqual(status2, "already_exists")
         self.assertEqual(self.corpus.document_count(), initial_count + 1)
 
-        # Remove document
-        self.corpus.remove_document(document=self.document, user=self.user)
+        # Remove the corpus-isolated document (not the original)
+        self.corpus.remove_document(document=corpus_doc, user=self.user)
         self.assertEqual(self.corpus.document_count(), initial_count)
 
     def test_add_document_with_folder(self):
@@ -328,63 +339,72 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         excluded = self.corpus.get_documents().exclude(title="Test Document")
         self.assertEqual(excluded.count(), 1)
 
-    def test_document_identity_preserved(self):
-        """Test that add_document preserves document identity (same ID)."""
+    def test_corpus_isolation_with_provenance(self):
+        """Test that add_document creates corpus-isolated copy with provenance tracking."""
         original_id = self.document.id
         original_title = self.document.title
+        original_hash = self.document.pdf_file_hash
 
         returned_doc, status, path = self.corpus.add_document(
             document=self.document, user=self.user
         )
 
-        # Same exact object should be returned
-        self.assertEqual(returned_doc.id, original_id)
+        # Should be a NEW corpus-isolated copy
+        self.assertNotEqual(returned_doc.id, original_id)
+        self.assertIsNot(returned_doc, self.document)  # Different object
+        # But same content
         self.assertEqual(returned_doc.title, original_title)
-        self.assertIs(returned_doc, self.document)  # Same object in memory
+        self.assertEqual(returned_doc.pdf_file_hash, original_hash)
+        # Provenance tracked
+        self.assertEqual(returned_doc.source_document, self.document)
+        self.assertEqual(returned_doc.source_document_id, original_id)
+        # Independent version tree
+        self.assertNotEqual(returned_doc.version_tree_id, self.document.version_tree_id)
 
     def test_same_document_multiple_paths(self):
-        """Test that same document can exist at multiple paths in same corpus."""
-        # Add at first path
+        """Test that same content can exist at multiple paths in same corpus."""
+        # Add at first path - creates corpus-isolated copy
         doc1, status1, path1 = self.corpus.add_document(
             document=self.document, path="/path/one.pdf", user=self.user
         )
         self.assertEqual(status1, "added")
+        self.assertNotEqual(doc1.id, self.document.id)  # Corpus-isolated copy
 
-        # Add at second path - same document, different path
+        # Add at second path - same source document, but corpus already has this content
         doc2, status2, path2 = self.corpus.add_document(
             document=self.document, path="/path/two.pdf", user=self.user
         )
-        self.assertEqual(status2, "added")
+        # Should return 'already_exists' since content hash already in corpus
+        self.assertEqual(status2, "already_exists")
 
-        # Both should return the same document
+        # Both should return the same corpus-isolated document
         self.assertEqual(doc1.id, doc2.id)
-        self.assertEqual(doc1.id, self.document.id)
+        self.assertNotEqual(doc1.id, self.document.id)  # Not the original
 
-        # But different DocumentPath records
-        self.assertNotEqual(path1.id, path2.id)
-        self.assertEqual(path1.path, "/path/one.pdf")
-        self.assertEqual(path2.path, "/path/two.pdf")
+        # Same path record returned (content already exists at that hash)
+        self.assertEqual(path1.id, path2.id)
 
         # Document appears once in get_documents() (distinct)
         docs = list(self.corpus.get_documents())
         self.assertEqual(len(docs), 1)
-        self.assertEqual(docs[0].id, self.document.id)
+        self.assertEqual(docs[0].id, doc1.id)  # The corpus-isolated copy
 
     def test_add_document_already_exists_at_same_path(self):
         """Test adding same document at same path returns 'already_exists'."""
-        # First add
+        # First add - creates corpus-isolated copy
         doc1, status1, path1 = self.corpus.add_document(
             document=self.document, path="/same/path.pdf", user=self.user
         )
         self.assertEqual(status1, "added")
+        self.assertNotEqual(doc1.id, self.document.id)  # Isolated copy
 
-        # Second add at same path
+        # Second add at same path - content already exists
         doc2, status2, path2 = self.corpus.add_document(
             document=self.document, path="/same/path.pdf", user=self.user
         )
         self.assertEqual(status2, "already_exists")
 
-        # Same document and path returned
+        # Same corpus-isolated document and path returned
         self.assertEqual(doc1.id, doc2.id)
         self.assertEqual(path1.id, path2.id)
 
@@ -395,20 +415,22 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         )
         doc2.pdf_file.save("doc2.pdf", ContentFile(b"Content 2"))
 
-        # Add first document at path
+        # Add first document at path - creates corpus-isolated copy
         doc1_ret, status1, path1 = self.corpus.add_document(
             document=self.document, path="/shared/path.pdf", user=self.user
         )
         self.assertEqual(status1, "added")
         self.assertEqual(path1.version_number, 1)
+        self.assertNotEqual(doc1_ret.id, self.document.id)  # Isolated copy
 
-        # Add second document at same path
+        # Add second document at same path - creates another isolated copy
         doc2_ret, status2, path2 = self.corpus.add_document(
             document=doc2, path="/shared/path.pdf", user=self.user
         )
         self.assertEqual(status2, "added")
         self.assertEqual(path2.version_number, 2)
         self.assertEqual(path2.parent, path1)
+        self.assertNotEqual(doc2_ret.id, doc2.id)  # Isolated copy
 
         # Old path should no longer be current
         path1.refresh_from_db()
@@ -417,10 +439,10 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         # New path should be current
         self.assertTrue(path2.is_current)
 
-        # get_documents should return only doc2 at that path
+        # get_documents should return only doc2_ret at that path
         docs = list(self.corpus.get_documents())
         self.assertEqual(len(docs), 1)
-        self.assertEqual(docs[0].id, doc2.id)
+        self.assertEqual(docs[0].id, doc2_ret.id)  # The corpus-isolated copy
 
     def test_import_content_creates_new_document(self):
         """Test import_content creates new document with content deduplication."""
@@ -435,8 +457,8 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         self.assertEqual(doc.title, "Imported")
         self.assertEqual(path.path, "/imported/doc.pdf")
 
-    def test_import_content_deduplicates(self):
-        """Test import_content reuses document with same content hash."""
+    def test_import_content_corpus_isolation(self):
+        """Test import_content creates corpus-isolated documents with provenance."""
         content = b"Same content for deduplication test"
 
         # Import to first corpus
@@ -444,6 +466,7 @@ class TestCorpusDocumentMethods(TransactionTestCase):
             content=content, path="/first.pdf", user=self.user, title="First"
         )
         self.assertEqual(status1, "created")
+        self.assertIsNone(doc1.source_document)  # No provenance for first
 
         # Create second corpus
         corpus2 = Corpus.objects.create(title="Second Corpus", creator=self.user)
@@ -453,9 +476,14 @@ class TestCorpusDocumentMethods(TransactionTestCase):
             content=content, path="/second.pdf", user=self.user, title="Second"
         )
 
-        # Should reuse the same document (cross-corpus deduplication)
-        self.assertEqual(status2, "cross_corpus_import")
-        self.assertEqual(doc1.id, doc2.id)
+        # Should create corpus-isolated document with provenance tracking
+        self.assertEqual(status2, "created_from_existing")
+        self.assertNotEqual(doc1.id, doc2.id)  # Different documents
+        self.assertEqual(doc2.source_document, doc1)  # Provenance tracked
+        self.assertEqual(doc1.pdf_file_hash, doc2.pdf_file_hash)  # Same content
+        self.assertNotEqual(
+            doc1.version_tree_id, doc2.version_tree_id
+        )  # Isolated trees
 
     def test_add_document_requires_document_object(self):
         """Test that add_document requires a document object."""
