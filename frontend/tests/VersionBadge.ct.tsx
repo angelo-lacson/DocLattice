@@ -211,7 +211,7 @@ test.describe("VersionBadge", () => {
       timeout: 5000,
     });
     await expect(
-      page.getByText("A newer version (v3) is available")
+      page.getByText("A newer version is available (you are viewing v2 of 3)")
     ).toBeVisible();
   });
 

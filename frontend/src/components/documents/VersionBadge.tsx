@@ -163,7 +163,8 @@ export const VersionBadge: React.FC<VersionBadgeProps> = ({
       )}
       {isOutdated && (
         <div className="tooltip-info">
-          A newer version (v{versionCount}) is available
+          A newer version is available (you are viewing v{versionNumber} of{" "}
+          {versionCount})
         </div>
       )}
       {hasHistory && (

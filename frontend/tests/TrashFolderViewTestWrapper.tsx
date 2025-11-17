@@ -57,7 +57,7 @@ const defaultDeletedDocuments: DeletedDocumentPathType[] = [
 interface TrashFolderViewTestWrapperProps {
   corpusId?: string;
   mockType?: "success" | "empty" | "error";
-  restoreMockType?: "success" | "failure" | "error";
+  restoreMockType?: "success" | "failure" | "error" | "partial";
   onBack?: () => void;
 }
 
@@ -154,6 +154,54 @@ export const TrashFolderViewTestWrapper: React.FC<
           variables: { documentId: "doc-1", corpusId },
         },
         error: new Error("Network error"),
+      });
+    } else if (restoreMockType === "partial") {
+      // First doc succeeds
+      mocks.push({
+        request: {
+          query: RESTORE_DELETED_DOCUMENT,
+          variables: { documentId: "doc-1", corpusId },
+        },
+        result: {
+          data: {
+            restoreDeletedDocument: {
+              ok: true,
+              message: "Document restored successfully",
+              document: {
+                id: "doc-1",
+                title: "Deleted Document 1",
+              },
+            },
+          },
+        },
+      });
+      // Second doc fails
+      mocks.push({
+        request: {
+          query: RESTORE_DELETED_DOCUMENT,
+          variables: { documentId: "doc-2", corpusId },
+        },
+        result: {
+          data: {
+            restoreDeletedDocument: {
+              ok: false,
+              message: "Permission denied",
+              document: null,
+            },
+          },
+        },
+      });
+      // Add refetch mock after partial restore
+      mocks.push({
+        request: {
+          query: GET_DELETED_DOCUMENTS_IN_CORPUS,
+          variables: { corpusId },
+        },
+        result: {
+          data: {
+            deletedDocumentsInCorpus: [defaultDeletedDocuments[1]], // Only second doc remains
+          },
+        },
       });
     }
 

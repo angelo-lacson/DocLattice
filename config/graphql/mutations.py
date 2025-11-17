@@ -3822,7 +3822,7 @@ class RestoreDeletedDocument(graphene.Mutation):
     document = graphene.Field(DocumentType)
 
     @login_required
-    @graphql_ratelimit(rate=RateLimits.MUTATION)
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
     def mutate(root, info, document_id, corpus_id):
         user = info.context.user
 
@@ -3864,13 +3864,14 @@ class RestoreDeletedDocument(graphene.Mutation):
             if not deleted_path:
                 return RestoreDeletedDocument(
                     ok=False,
-                    message="Document is not deleted in this corpus",
+                    message="Cannot restore document - it may not be deleted or may not exist in this corpus",
                     document=None,
                 )
 
             # Restore the document using the versioning function
             new_path = restore_document_func(
-                path_record=deleted_path,
+                corpus=corpus,
+                path=deleted_path.path,
                 user=user,
             )
 
@@ -3922,7 +3923,7 @@ class RestoreDocumentToVersion(graphene.Mutation):
     new_version_number = graphene.Int()
 
     @login_required
-    @graphql_ratelimit(rate=RateLimits.MUTATION)
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
     def mutate(root, info, document_id, corpus_id):
         user = info.context.user
 
@@ -4010,7 +4011,6 @@ class RestoreDocumentToVersion(graphene.Mutation):
                     pawls_parse_file=old_version.pawls_parse_file,
                     icon=old_version.icon,
                     page_count=old_version.page_count,
-                    doc_label=old_version.doc_label,
                     file_type=old_version.file_type,
                     pdf_file_hash=old_version.pdf_file_hash,
                     creator=user,
@@ -4025,6 +4025,10 @@ class RestoreDocumentToVersion(graphene.Mutation):
                     user, new_document, [PermissionTypes.CRUD]
                 )
 
+                # Mark old path as not current FIRST to avoid unique constraint violation
+                current_path.is_current = False
+                current_path.save()
+
                 # Create new path entry with incremented version number
                 new_path = DocumentPath.objects.create(
                     document=new_document,
@@ -4037,10 +4041,6 @@ class RestoreDocumentToVersion(graphene.Mutation):
                     parent=current_path,
                     creator=user,
                 )
-
-                # Mark old path as not current
-                current_path.is_current = False
-                current_path.save()
 
             logger.info(
                 f"User {user.id} restored document to version {old_version.id} "

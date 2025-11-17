@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useLazyQuery, useMutation, gql } from "@apollo/client";
 import styled from "styled-components";
 import { Modal, Button, Icon, Loader, Message } from "semantic-ui-react";
@@ -290,25 +290,46 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     }
   );
 
-  const handleRestore = (versionId: string) => {
-    setRestoreError(null);
-    setRestoreSuccess(null);
-    restoreToVersion({
-      variables: {
-        documentId: versionId,
-        corpusId: corpusId,
-      },
-    });
-    // Also call the external callback if provided
-    onRestore?.(versionId);
-  };
+  const handleRestore = useCallback(
+    (versionId: string) => {
+      setRestoreError(null);
+      setRestoreSuccess(null);
+      restoreToVersion({
+        variables: {
+          documentId: versionId,
+          corpusId: corpusId,
+        },
+      });
+      // Also call the external callback if provided
+      onRestore?.(versionId);
+    },
+    [corpusId, onRestore, restoreToVersion]
+  );
 
   // Fetch history when panel opens
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen && documentId) {
       fetchHistory({ variables: { documentId } });
     }
-  }, [isOpen, documentId, fetchHistory]);
+    // fetchHistory is stable from useLazyQuery, but we only care about isOpen and documentId changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, documentId]);
+
+  // Auto-dismiss success messages after 5 seconds
+  useEffect(() => {
+    if (restoreSuccess) {
+      const timer = setTimeout(() => setRestoreSuccess(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [restoreSuccess]);
+
+  // Auto-dismiss error messages after 10 seconds
+  useEffect(() => {
+    if (restoreError) {
+      const timer = setTimeout(() => setRestoreError(null), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [restoreError]);
 
   const versionHistory: VersionHistoryData | null =
     data?.document?.versionHistory;

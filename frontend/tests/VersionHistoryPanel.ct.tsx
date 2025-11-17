@@ -383,4 +383,34 @@ test.describe("VersionHistoryPanel", () => {
     // Message should be gone
     await expect(page.getByText("Restore Failed")).not.toBeVisible();
   });
+
+  test("success message auto-dismisses after 5 seconds", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <VersionHistoryPanelTestWrapper
+        isOpen={true}
+        mutationMockType="success"
+      />
+    );
+
+    await page.waitForSelector("text=Version 3", { timeout: 10000 });
+
+    // Trigger restore
+    await page.getByText("Version 2").click();
+    await page.waitForTimeout(100);
+    await page.getByText("Restore This Version").click();
+
+    // Wait for success message
+    await expect(page.getByText("Version Restored")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Wait for auto-dismiss (5 seconds + buffer)
+    await page.waitForTimeout(6000);
+
+    // Message should be gone
+    await expect(page.getByText("Version Restored")).not.toBeVisible();
+  });
 });

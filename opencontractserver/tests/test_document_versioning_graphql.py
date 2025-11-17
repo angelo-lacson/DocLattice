@@ -563,6 +563,18 @@ class TestVersioningPermissions(TestCase):
             title="Test Doc",
         )
 
+        # Grant CRUD permission to owner (document creator)
+        set_permissions_for_obj_to_user(
+            self.owner,
+            self.doc,
+            [PermissionTypes.CRUD],
+        )
+        set_permissions_for_obj_to_user(
+            self.owner,
+            self.corpus,
+            [PermissionTypes.CRUD],
+        )
+
         # Grant UPDATE permission to editor
         set_permissions_for_obj_to_user(
             self.editor,
@@ -854,7 +866,9 @@ class TestRestoreDeletedDocumentMutation(TestCase):
         set_permissions_for_obj_to_user(self.user, self.doc, [PermissionTypes.CRUD])
 
         # Delete the document
-        self.deleted_path = delete_document(self.path, self.user)
+        self.deleted_path = delete_document(
+            corpus=self.corpus, path="/deletable_doc.pdf", user=self.user
+        )
 
     def test_restore_deleted_document_success(self):
         """Test successful restoration of deleted document."""
@@ -879,6 +893,11 @@ class TestRestoreDeletedDocumentMutation(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
+        # Debug output
+        if not result["data"]["restoreDeletedDocument"]["ok"]:
+            print(
+                f"Error message: {result['data']['restoreDeletedDocument']['message']}"
+            )
         self.assertTrue(result["data"]["restoreDeletedDocument"]["ok"])
         self.assertIn("restored", result["data"]["restoreDeletedDocument"]["message"])
         self.assertEqual(
@@ -924,7 +943,8 @@ class TestRestoreDeletedDocumentMutation(TestCase):
         self.assertIsNone(result.get("errors"))
         self.assertFalse(result["data"]["restoreDeletedDocument"]["ok"])
         self.assertIn(
-            "not deleted", result["data"]["restoreDeletedDocument"]["message"]
+            "Cannot restore document",
+            result["data"]["restoreDeletedDocument"]["message"],
         )
 
     def test_restore_without_document_permission_fails(self):
@@ -1053,6 +1073,11 @@ class TestRestoreDocumentToVersionMutation(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
+        # Debug output to see actual error
+        if not result["data"]["restoreDocumentToVersion"]["ok"]:
+            print(
+                f"Error message: {result['data']['restoreDocumentToVersion']['message']}"
+            )
         self.assertTrue(result["data"]["restoreDocumentToVersion"]["ok"])
         self.assertEqual(
             result["data"]["restoreDocumentToVersion"]["newVersionNumber"], 4

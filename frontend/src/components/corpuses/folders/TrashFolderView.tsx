@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
 import {
@@ -282,23 +282,68 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     setRestoreError(null);
     setRestoreSuccess(null);
 
-    // Restore each selected document
+    // Restore each selected document using Promise.allSettled for better error handling
     const pathsToRestore = deletedDocuments.filter((doc) =>
       selectedDocuments.has(doc.id)
     );
 
-    for (const docPath of pathsToRestore) {
-      try {
-        await restoreDocument({
+    const results = await Promise.allSettled(
+      pathsToRestore.map((docPath) =>
+        restoreDocument({
           variables: {
             documentId: docPath.document.id,
             corpusId: corpusId,
           },
-        });
-      } catch (err) {
-        // Error handled by onError callback
-        break;
-      }
+        })
+      )
+    );
+
+    // Count successes and failures
+    const successCount = results.filter(
+      (r) =>
+        r.status === "fulfilled" && r.value.data?.restoreDeletedDocument?.ok
+    ).length;
+    const failureCount = results.length - successCount;
+
+    // Clear only successfully restored documents from selection
+    if (successCount > 0) {
+      const successfulIds = new Set<string>();
+      results.forEach((result, index) => {
+        if (
+          result.status === "fulfilled" &&
+          result.value.data?.restoreDeletedDocument?.ok
+        ) {
+          successfulIds.add(pathsToRestore[index].id);
+        }
+      });
+      setSelectedDocuments(
+        (prev) => new Set([...prev].filter((id) => !successfulIds.has(id)))
+      );
+      refetch();
+    }
+
+    // Set appropriate messages
+    if (successCount > 0 && failureCount === 0) {
+      setRestoreSuccess(
+        `Successfully restored ${successCount} document${
+          successCount === 1 ? "" : "s"
+        }`
+      );
+    } else if (successCount > 0 && failureCount > 0) {
+      setRestoreSuccess(
+        `Restored ${successCount} document${successCount === 1 ? "" : "s"}`
+      );
+      setRestoreError(
+        `Failed to restore ${failureCount} document${
+          failureCount === 1 ? "" : "s"
+        }. Please try again.`
+      );
+    } else if (failureCount > 0) {
+      setRestoreError(
+        `Failed to restore ${failureCount} document${
+          failureCount === 1 ? "" : "s"
+        }. Please check permissions and try again.`
+      );
     }
   };
 
@@ -313,24 +358,43 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     });
   };
 
-  const renderThumbnail = (doc: DeletedDocumentPathType["document"]) => (
-    <Thumbnail>
-      {doc.icon ? (
-        <img src={doc.icon} alt={doc.title} />
-      ) : (
-        <>
-          <div
-            style={{ width: "100%", height: "100%", background: "#f8fafc" }}
-          />
-          <img
-            src={fallback_doc_icon}
-            alt="Document"
-            className="fallback-icon"
-          />
-        </>
-      )}
-    </Thumbnail>
+  const renderThumbnail = useCallback(
+    (doc: DeletedDocumentPathType["document"]) => (
+      <Thumbnail>
+        {doc.icon ? (
+          <img src={doc.icon} alt={doc.title} />
+        ) : (
+          <>
+            <div
+              style={{ width: "100%", height: "100%", background: "#f8fafc" }}
+            />
+            <img
+              src={fallback_doc_icon}
+              alt="Document"
+              className="fallback-icon"
+            />
+          </>
+        )}
+      </Thumbnail>
+    ),
+    []
   );
+
+  // Auto-dismiss success messages after 5 seconds
+  useEffect(() => {
+    if (restoreSuccess) {
+      const timer = setTimeout(() => setRestoreSuccess(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [restoreSuccess]);
+
+  // Auto-dismiss error messages after 10 seconds
+  useEffect(() => {
+    if (restoreError) {
+      const timer = setTimeout(() => setRestoreError(null), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [restoreError]);
 
   if (loading && !data) {
     return (
@@ -386,7 +450,8 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               basic
               color="red"
               onClick={() => setConfirmEmptyTrash(true)}
-              disabled={restoreLoading}
+              disabled={true} // Permanent deletion not yet implemented
+              title="Permanent deletion feature coming soon"
             >
               <Icon name="trash" />
               Empty Trash
@@ -557,23 +622,22 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
       >
         <Modal.Header>Empty Trash</Modal.Header>
         <Modal.Content>
+          <Message warning>
+            <Message.Header>Feature Not Yet Available</Message.Header>
+            <p>
+              Permanent deletion of documents is not yet implemented. Documents
+              in the trash can be restored but cannot be permanently deleted at
+              this time.
+            </p>
+          </Message>
           <p>
-            <strong>Warning:</strong> This will permanently delete all{" "}
+            <strong>Planned Behavior:</strong> This will permanently delete all{" "}
             {deletedDocuments.length} documents in the trash. This action cannot
             be undone.
           </p>
         </Modal.Content>
         <Modal.Actions>
-          <Button onClick={() => setConfirmEmptyTrash(false)}>Cancel</Button>
-          <Button
-            negative
-            onClick={() => {
-              // TODO: Implement permanent deletion
-              setConfirmEmptyTrash(false);
-            }}
-          >
-            Permanently Delete All
-          </Button>
+          <Button onClick={() => setConfirmEmptyTrash(false)}>Close</Button>
         </Modal.Actions>
       </Modal>
     </Container>
