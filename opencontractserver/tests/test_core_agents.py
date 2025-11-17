@@ -132,8 +132,8 @@ class TestAgentContexts(TestCoreAgentComponentsSetup):
             description="First document for this specific test",
             is_public=True,
         )
-        # Explicitly add to the ManyToManyField
-        await sync_to_async(test_corpus.add_document)(
+        # add_document returns corpus-isolated copy (not the original)
+        corpus_doc1, _, _ = await sync_to_async(test_corpus.add_document)(
             document=doc1_for_this_test, user=self.user
         )
 
@@ -144,8 +144,8 @@ class TestAgentContexts(TestCoreAgentComponentsSetup):
             description="Second document for this specific test",
             is_public=True,
         )
-        # Explicitly add to the ManyToManyField
-        await sync_to_async(test_corpus.add_document)(
+        # add_document returns corpus-isolated copy (not the original)
+        corpus_doc2, _, _ = await sync_to_async(test_corpus.add_document)(
             document=doc2_for_this_test, user=self.user
         )
 
@@ -166,9 +166,9 @@ class TestAgentContexts(TestCoreAgentComponentsSetup):
 
         doc_ids_in_context = {doc.id for doc in context.documents}
 
-        # Check that both documents created for this test are found in the context
-        self.assertIn(doc1_for_this_test.id, doc_ids_in_context)
-        self.assertIn(doc2_for_this_test.id, doc_ids_in_context)
+        # Check that corpus-isolated copies are found in the context
+        self.assertIn(corpus_doc1.id, doc_ids_in_context)
+        self.assertIn(corpus_doc2.id, doc_ids_in_context)
         self.assertEqual(len(context.documents), 2)  # Expecting two documents
 
         # Check if corpus preferred embedder was used (this part of the logic remains)

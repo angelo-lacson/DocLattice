@@ -75,15 +75,18 @@ class ComprehensivePermissionTestCase(TestCase):
         )
 
         # Create Annotations
-        # Mark as structural since they're not in a corpus (per new permission model)
+        # Mark as structural since they're in a corpus (per new permission model)
+        # Include corpus field for proper permission inheritance
         self.public_annotation = Annotation.objects.create(
             document=self.public_doc,
+            corpus=self.public_corpus,
             creator=self.owner,
             is_public=True,
             structural=True,
         )
         self.private_annotation = Annotation.objects.create(
             document=self.public_doc,
+            corpus=self.public_corpus,
             creator=self.owner,
             is_public=False,
             structural=True,

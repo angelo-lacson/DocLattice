@@ -614,10 +614,10 @@ class TestMoveDocumentsToFolderMutation(TestCase):
             Document.objects.create(title=f"Doc {i}", creator=user) for i in range(3)
         ]
         for i, doc in enumerate(docs):
-            docs[i], _, _ = corpus.add_document(document=doc, user=user)
-            CorpusDocumentFolder.objects.create(
-                document=docs[i], corpus=corpus, folder=folder
-            )
+            # add_document returns corpus-isolated copy and creates DocumentPath
+            docs[i], _, _ = corpus.add_document(document=doc, user=user, folder=folder)
+            # Don't manually create CorpusDocumentFolder - add_document handles this
+            # via DocumentPath folder parameter
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 

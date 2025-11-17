@@ -187,25 +187,22 @@ class PermissionBasedVisibilityTest(TestCase):
             )
 
         # Associate documents with corpuses
-        # Store the versioned documents returned by add_document()
+        # With corpus isolation, each corpus gets its own copy of the document.
+        # Don't add the same document to multiple corpuses to avoid duplicate copies.
         cls.public_doc, _, _ = cls.public_corpus.add_document(
             document=cls.public_doc, user=cls.owner
         )
-        cls.private_doc, _, _ = cls.public_corpus.add_document(
-            document=cls.private_doc, user=cls.owner
-        )
-        cls.shared_doc, _, _ = cls.public_corpus.add_document(
-            document=cls.shared_doc, user=cls.owner
-        )
+        # private_doc goes only to private_corpus
         cls.private_doc, _, _ = cls.private_corpus.add_document(
             document=cls.private_doc, user=cls.owner
-        )  # Only private doc
+        )
+        # shared_doc goes only to shared_corpus
         cls.shared_doc, _, _ = cls.shared_corpus.add_document(
             document=cls.shared_doc, user=cls.owner
-        )  # Only shared doc
+        )
         cls.collaborator_doc, _, _ = cls.collaborator_corpus.add_document(
             document=cls.collaborator_doc, user=cls.collaborator
-        )  # Only collaborator doc
+        )
 
         # Create Annotations (need an AnnotationLabel)
         cls.test_label = AnnotationLabel.objects.create(
