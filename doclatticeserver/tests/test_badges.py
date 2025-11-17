@@ -876,7 +876,7 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
                 description="Test",
                 creator=self.user,
             )
-            self.corpus.documents.add(doc)
+            doc, _, _ = self.corpus.add_document(document=doc, user=self.user)
 
         check_auto_badges(self.user.id, self.corpus.id)
         self.assertEqual(
@@ -889,7 +889,7 @@ class TestBadgeAutoAwardTasks(TransactionTestCase):
             description="Test",
             creator=self.user,
         )
-        self.corpus.documents.add(doc)
+        doc, _, _ = self.corpus.add_document(document=doc, user=self.user)
 
         check_auto_badges(self.user.id, self.corpus.id)
         self.assertEqual(

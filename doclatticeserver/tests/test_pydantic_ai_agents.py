@@ -144,7 +144,8 @@ class TestPydanticAIAgents(TestCase):
             )
 
             # Add documents to corpus
-            cls.corpus.documents.add(cls.doc1, cls.doc2)
+            cls.corpus.add_document(document=cls.doc1, user=cls.user)
+            cls.corpus.add_document(document=cls.doc2, user=cls.user)
 
             # Create DocumentPath records for dual-tree versioning
             # This is required for the vector store to find documents
@@ -700,7 +701,7 @@ class TestPydanticAIAgentsCoverage(TestCase):
                 creator=cls.user,
                 is_public=True,
             )
-            cls.corpus.documents.add(cls.doc1)
+            cls.corpus.add_document(document=cls.doc1, user=cls.user)
 
     # ========================================================================
     # Group 1: Helper function tests (_to_source_node)

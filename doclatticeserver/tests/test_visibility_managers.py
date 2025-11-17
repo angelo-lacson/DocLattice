@@ -199,11 +199,24 @@ class PermissionBasedVisibilityTest(TestCase):
             )
 
         # Associate documents with corpuses
-        cls.public_corpus.documents.add(cls.public_doc, cls.private_doc, cls.shared_doc)
-        cls.private_corpus.documents.add(cls.private_doc)  # Only private doc
-        cls.shared_corpus.documents.add(cls.shared_doc)  # Only shared doc
-        cls.collaborator_corpus.documents.add(
-            cls.collaborator_doc
+        # Store the versioned documents returned by add_document()
+        cls.public_doc, _, _ = cls.public_corpus.add_document(
+            document=cls.public_doc, user=cls.owner
+        )
+        cls.private_doc, _, _ = cls.public_corpus.add_document(
+            document=cls.private_doc, user=cls.owner
+        )
+        cls.shared_doc, _, _ = cls.public_corpus.add_document(
+            document=cls.shared_doc, user=cls.owner
+        )
+        cls.private_doc, _, _ = cls.private_corpus.add_document(
+            document=cls.private_doc, user=cls.owner
+        )  # Only private doc
+        cls.shared_doc, _, _ = cls.shared_corpus.add_document(
+            document=cls.shared_doc, user=cls.owner
+        )  # Only shared doc
+        cls.collaborator_doc, _, _ = cls.collaborator_corpus.add_document(
+            document=cls.collaborator_doc, user=cls.collaborator
         )  # Only collaborator doc
 
         # Create Annotations (need an AnnotationLabel)

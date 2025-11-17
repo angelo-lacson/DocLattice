@@ -314,7 +314,9 @@ class DocumentMentionPermissionTestCase(TestCase):
             creator=self.owner,
             is_public=False,
         )
-        self.private_corpus.documents.add(self.private_doc_in_private_corpus)
+        self.private_doc_in_private_corpus, _, _ = self.private_corpus.add_document(
+            document=self.private_doc_in_private_corpus, user=self.owner
+        )
 
         # Private document in public corpus (using ManyToMany)
         self.private_doc_in_public_corpus = Document.objects.create(
@@ -323,7 +325,9 @@ class DocumentMentionPermissionTestCase(TestCase):
             creator=self.owner,
             is_public=False,
         )
-        self.public_corpus.documents.add(self.private_doc_in_public_corpus)
+        self.private_doc_in_public_corpus, _, _ = self.public_corpus.add_document(
+            document=self.private_doc_in_public_corpus, user=self.owner
+        )
 
         # Public document in public corpus (using ManyToMany)
         self.public_doc_in_public_corpus = Document.objects.create(
@@ -332,7 +336,9 @@ class DocumentMentionPermissionTestCase(TestCase):
             creator=self.owner,
             is_public=True,
         )
-        self.public_corpus.documents.add(self.public_doc_in_public_corpus)
+        self.public_doc_in_public_corpus, _, _ = self.public_corpus.add_document(
+            document=self.public_doc_in_public_corpus, user=self.owner
+        )
 
         # Standalone public document (no corpus)
         self.standalone_public_doc = Document.objects.create(
