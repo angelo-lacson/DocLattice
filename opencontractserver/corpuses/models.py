@@ -352,76 +352,158 @@ class Corpus(TreeNode):
         **doc_kwargs,
     ):
         """
-        Add a document to this corpus with full versioning support.
+        Add a document to this corpus, creating a DocumentPath link.
 
-        This is the recommended way to add documents, replacing corpus.documents.add().
-        It creates proper DocumentPath records with audit trail.
+        This preserves document identity - the same document object is returned.
+        For content-based imports with deduplication, use import_content() instead.
 
         Args:
-            document: The Document to add (optional if content provided)
+            document: The Document to add (required)
             path: The filesystem path within the corpus (auto-generated if not provided)
             user: The user performing the operation (required)
             folder: Optional CorpusFolder to place the document in
-            content: Optional PDF content bytes (for new documents)
-            **doc_kwargs: Additional arguments for document creation
+            content: DEPRECATED - use import_content() for content-based imports
+            **doc_kwargs: DEPRECATED - document properties are not modified
 
         Returns:
-            Tuple of (document, status, document_path) where status is one of:
-            - 'created': Brand new document
-            - 'updated': Content changed at existing path
-            - 'unchanged': No change detected
-            - 'cross_corpus_import': Content exists elsewhere, new path created
+            Tuple of (document, status, document_path) where:
+            - document: The SAME document that was passed in (identity preserved)
+            - status: 'added' (new link) or 'already_exists' (path already has this doc)
+            - document_path: The DocumentPath record created or existing
 
         Raises:
-            ValueError: If user is not provided
-            RuntimeError: If operation fails
+            ValueError: If user or document is not provided
         """
         if not user:
             raise ValueError("User is required for document operations (audit trail)")
 
-        from opencontractserver.documents.versioning import import_document
+        if not document:
+            raise ValueError(
+                "Document is required. For content-based imports, use import_content()"
+            )
+
+        # Handle deprecated content parameter
+        if content is not None or doc_kwargs:
+            logger.warning(
+                "content and doc_kwargs parameters are deprecated in add_document(). "
+                "Use import_content() for content-based imports with deduplication."
+            )
+
+        from opencontractserver.documents.models import DocumentPath
 
         # Generate path if not provided
         if not path:
-            if document and document.title:
-                # Generate path from document title
+            if document.title:
                 safe_title = "".join(
                     c if c.isalnum() or c in "-_." else "_"
                     for c in document.title[:100]
                 )
                 path = f"/documents/{safe_title or f'doc_{document.pk}'}"
             else:
-                path = f"/documents/doc_{uuid.uuid4().hex[:8]}"
+                path = f"/documents/doc_{document.pk}"
 
-        # If we have a document but no content, read its PDF
-        if document and not content and document.pdf_file:
-            try:
-                document.pdf_file.open("rb")
-                content = document.pdf_file.read()
-                document.pdf_file.close()
-            except Exception:
-                content = b""  # Empty content for documents without PDFs
+        with transaction.atomic():
+            # Check if this exact document is already at this path
+            existing_path = DocumentPath.objects.filter(
+                corpus=self,
+                path=path,
+                document=document,
+                is_current=True,
+                is_deleted=False,
+            ).first()
 
-        # Use the versioning system to properly import
+            if existing_path:
+                logger.info(
+                    f"Document {document.pk} already exists at {path} in corpus {self.pk}"
+                )
+                return document, "already_exists", existing_path
+
+            # Check if path is occupied by a different document
+            occupied_path = DocumentPath.objects.filter(
+                corpus=self, path=path, is_current=True, is_deleted=False
+            ).first()
+
+            if occupied_path:
+                # Path exists with different document - mark as not current
+                occupied_path.is_current = False
+                occupied_path.save(update_fields=["is_current"])
+                parent = occupied_path
+                version_number = occupied_path.version_number + 1
+                logger.info(
+                    f"Replacing doc {occupied_path.document_id} with {document.pk} "
+                    f"at {path} in corpus {self.pk}"
+                )
+            else:
+                parent = None
+                version_number = 1
+
+            # Create DocumentPath linking this document to the corpus
+            new_path = DocumentPath.objects.create(
+                document=document,
+                corpus=self,
+                folder=folder,
+                path=path,
+                version_number=version_number,
+                parent=parent,
+                is_current=True,
+                is_deleted=False,
+                creator=user,
+            )
+
+            logger.info(f"Added document {document.pk} to corpus {self.pk} at {path}")
+
+            return document, "added", new_path
+
+    def import_content(
+        self,
+        content: bytes,
+        path: str = None,
+        user=None,
+        folder=None,
+        **doc_kwargs,
+    ):
+        """
+        Import content into this corpus with content-based deduplication.
+
+        This uses SHA-256 hashing to detect duplicate content. If the same content
+        exists elsewhere, it will be reused (cross-corpus deduplication).
+
+        Args:
+            content: PDF content bytes (required)
+            path: The filesystem path within the corpus (auto-generated if not provided)
+            user: The user performing the operation (required)
+            folder: Optional CorpusFolder to place the document in
+            **doc_kwargs: Additional arguments for document creation (title, description, etc.)
+
+        Returns:
+            Tuple of (document, status, document_path) where status is one of:
+            - 'created': Brand new document (content hash first seen)
+            - 'updated': Content changed at existing path
+            - 'unchanged': No change detected at path
+            - 'cross_corpus_import': Content exists elsewhere, reused
+
+        Raises:
+            ValueError: If user or content is not provided
+        """
+        if not user:
+            raise ValueError("User is required for document operations (audit trail)")
+
+        if content is None:
+            raise ValueError("Content is required for import_content()")
+
+        from opencontractserver.documents.versioning import import_document
+
+        # Generate path if not provided
+        if not path:
+            path = f"/documents/doc_{uuid.uuid4().hex[:8]}"
+
         return import_document(
             corpus=self,
             path=path,
-            content=content or b"",
+            content=content,
             user=user,
             folder=folder,
-            pdf_file=document.pdf_file if document else None,
-            title=doc_kwargs.get("title", document.title if document else ""),
-            description=doc_kwargs.get(
-                "description", document.description if document else ""
-            ),
-            file_type=doc_kwargs.get(
-                "file_type", document.file_type if document else "application/pdf"
-            ),
-            **{
-                k: v
-                for k, v in doc_kwargs.items()
-                if k not in ["title", "description", "file_type"]
-            },
+            **doc_kwargs,
         )
 
     def remove_document(self, document=None, path: str = None, user=None):

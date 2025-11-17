@@ -126,7 +126,9 @@ class PermissioningTestCase(TestCase):
 
         # Link docs to corpus
         with transaction.atomic():
-            self.corpus.documents.add(*self.doc_ids)
+            for doc_id in self.doc_ids:
+                doc = Document.objects.get(id=doc_id)
+                self.corpus.add_document(document=doc, user=self.user)
 
         #############################################################################################
         # Analysis-Related Dummy Objects to Test "Make Public" Logic                                #
@@ -776,7 +778,7 @@ class PermissioningTestCase(TestCase):
             # Feedback with public annotation
             public_annotation = Annotation.objects.create(
                 creator=self.superuser,
-                document=self.corpus.documents.first(),
+                document=self.corpus.get_documents().first(),
                 is_public=True,
             )
             feedback3 = UserFeedback.objects.create(
@@ -789,7 +791,7 @@ class PermissioningTestCase(TestCase):
             # Feedback with private annotation
             private_annotation = Annotation.objects.create(
                 creator=self.superuser,
-                document=self.corpus.documents.first(),
+                document=self.corpus.get_documents().first(),
                 is_public=False,
             )
             feedback4 = UserFeedback.objects.create(

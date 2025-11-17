@@ -43,7 +43,7 @@ class AnalysisAnnotationImportTestCase(TestCase):
         self.corpus = Corpus.objects.create(
             title="Test Corpus", creator=self.user, is_public=False
         )
-        self.corpus.documents.add(self.doc)
+        self.corpus.add_document(document=self.doc, user=self.user)
 
         # Create DocumentPath to link document to corpus in dual-tree versioning
         DocumentPath.objects.create(

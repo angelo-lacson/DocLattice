@@ -66,7 +66,7 @@ class CommentPermissionTestCase(TestCase):
             description="Test",
             creator=self.owner,
         )
-        self.corpus.documents.add(self.document)
+        self.corpus.add_document(document=self.document, user=self.owner)
 
         # Create DocumentPath to link document to corpus in dual-tree versioning
         DocumentPath.objects.create(

@@ -1,12 +1,13 @@
 """
-Comprehensive tests for Issue #654: M2M to DocumentPath migration.
+Comprehensive tests for Issue #654: DocumentPath as single source of truth.
 
 This test file covers:
-1. DocumentPathContext functionality
-2. DocumentCorpusRelationshipManager operations
-3. New Corpus methods (add_document, remove_document)
-4. Migration command (sync_m2m_to_documentpath)
-5. Backward compatibility
+1. DocumentPathContext utility class
+2. New Corpus methods (add_document, remove_document, get_documents, document_count)
+3. Migration command (sync_m2m_to_documentpath)
+
+Note: Backward compatibility layer has been removed. All corpus-document
+relationships must now use DocumentPath-based methods.
 """
 
 import io
@@ -17,19 +18,14 @@ from django.core.management import call_command
 from django.test import TestCase, TransactionTestCase
 
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.managers import (
-    DocumentCorpusRelationshipManager,
-    DocumentPathContext,
-    install_custom_manager,
-    uninstall_custom_manager,
-)
+from opencontractserver.documents.managers import DocumentPathContext
 from opencontractserver.documents.models import Document, DocumentPath
 
 User = get_user_model()
 
 
 class TestDocumentPathContext(TestCase):
-    """Test the DocumentPathContext context manager."""
+    """Test the DocumentPathContext context manager utility."""
 
     def setUp(self):
         """Set up test data."""
@@ -118,192 +114,6 @@ class TestDocumentPathContext(TestCase):
         self.assertIsNone(DocumentPathContext.get_current())
 
 
-class TestDocumentCorpusRelationshipManager(TransactionTestCase):
-    """Test the custom M2M manager that uses DocumentPath."""
-
-    def setUp(self):
-        """Set up test data."""
-        self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpass123"
-        )
-
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus",
-            description="Test corpus for manager",
-            creator=self.user,
-        )
-
-        # Create test documents with PDF content
-        self.doc1 = Document.objects.create(
-            title="Document 1",
-            description="First test document",
-            creator=self.user,
-            pdf_file_hash="hash1",
-        )
-        self.doc1.pdf_file.save("doc1.pdf", ContentFile(b"PDF content 1"))
-
-        self.doc2 = Document.objects.create(
-            title="Document 2",
-            description="Second test document",
-            creator=self.user,
-            pdf_file_hash="hash2",
-        )
-        self.doc2.pdf_file.save("doc2.pdf", ContentFile(b"PDF content 2"))
-
-        # Install custom manager
-        install_custom_manager()
-
-    def tearDown(self):
-        """Clean up after tests."""
-        # Restore original manager
-        uninstall_custom_manager()
-        super().tearDown()
-
-    def test_manager_installation(self):
-        """Test that custom manager is properly installed."""
-        self.assertTrue(hasattr(Corpus, "_custom_manager_installed"))
-        self.assertIsInstance(self.corpus.documents, DocumentCorpusRelationshipManager)
-
-    def test_get_queryset_returns_documentpath_documents(self):
-        """Test that get_queryset returns documents based on DocumentPath."""
-        # Initially no documents
-        self.assertEqual(self.corpus.documents.count(), 0)
-
-        # Create DocumentPath records
-        DocumentPath.objects.create(
-            document=self.doc1,
-            corpus=self.corpus,
-            path="/test/doc1",
-            version_number=1,
-            is_current=True,
-            is_deleted=False,
-            creator=self.user,
-        )
-
-        # Should now see the document
-        self.assertEqual(self.corpus.documents.count(), 1)
-        self.assertIn(self.doc1, self.corpus.documents.all())
-
-    def test_add_creates_documentpath_records(self):
-        """Test that add() creates DocumentPath records."""
-        with DocumentPathContext(user=self.user):
-            with self.assertWarns(DeprecationWarning):
-                self.corpus.documents.add(self.doc1, self.doc2)
-
-        # Check that DocumentPath records were created
-        paths = DocumentPath.objects.filter(
-            corpus=self.corpus, is_current=True, is_deleted=False
-        )
-        self.assertEqual(paths.count(), 2)
-
-        # Check documents are accessible
-        self.assertEqual(self.corpus.documents.count(), 2)
-        self.assertIn(self.doc1, self.corpus.documents.all())
-        self.assertIn(self.doc2, self.corpus.documents.all())
-
-    def test_add_requires_context(self):
-        """Test that add() requires DocumentPathContext."""
-        with self.assertRaises(RuntimeError) as cm:
-            self.corpus.documents.add(self.doc1)
-
-        self.assertIn("DocumentPathContext required", str(cm.exception))
-
-    def test_add_idempotent(self):
-        """Test that adding the same document multiple times is safe."""
-        with DocumentPathContext(user=self.user):
-            self.corpus.documents.add(self.doc1)
-            # Adding again should not create duplicate
-            self.corpus.documents.add(self.doc1)
-
-        paths = DocumentPath.objects.filter(
-            corpus=self.corpus, document=self.doc1, is_current=True, is_deleted=False
-        )
-        self.assertEqual(paths.count(), 1)
-
-    def test_remove_soft_deletes_documentpath(self):
-        """Test that remove() soft-deletes DocumentPath records."""
-        # First add documents
-        with DocumentPathContext(user=self.user):
-            self.corpus.documents.add(self.doc1, self.doc2)
-
-        self.assertEqual(self.corpus.documents.count(), 2)
-
-        # Now remove one
-        with DocumentPathContext(user=self.user):
-            with self.assertWarns(DeprecationWarning):
-                self.corpus.documents.remove(self.doc1)
-
-        # Check that document is no longer visible
-        self.assertEqual(self.corpus.documents.count(), 1)
-        self.assertNotIn(self.doc1, self.corpus.documents.all())
-        self.assertIn(self.doc2, self.corpus.documents.all())
-
-        # Check that DocumentPath was soft-deleted, not removed
-        deleted_path = DocumentPath.objects.get(
-            corpus=self.corpus, document=self.doc1, is_current=True
-        )
-        self.assertTrue(deleted_path.is_deleted)
-
-    def test_clear_removes_all_documents(self):
-        """Test that clear() removes all documents from corpus."""
-        # Add documents
-        with DocumentPathContext(user=self.user):
-            self.corpus.documents.add(self.doc1, self.doc2)
-        self.assertEqual(self.corpus.documents.count(), 2)
-
-        # Clear all
-        with DocumentPathContext(user=self.user):
-            with self.assertWarns(DeprecationWarning):
-                self.corpus.documents.clear()
-
-        # Check all removed
-        self.assertEqual(self.corpus.documents.count(), 0)
-
-        # Check all paths are soft-deleted
-        deleted_paths = DocumentPath.objects.filter(corpus=self.corpus, is_current=True)
-        self.assertTrue(all(p.is_deleted for p in deleted_paths))
-
-    def test_set_replaces_documents(self):
-        """Test that set() replaces all documents."""
-        doc3 = Document.objects.create(
-            title="Document 3", creator=self.user, pdf_file_hash="hash3"
-        )
-        doc3.pdf_file.save("doc3.pdf", ContentFile(b"PDF content 3"))
-
-        # Start with doc1 and doc2
-        with DocumentPathContext(user=self.user):
-            self.corpus.documents.add(self.doc1, self.doc2)
-        self.assertEqual(self.corpus.documents.count(), 2)
-
-        # Replace with doc2 and doc3
-        with DocumentPathContext(user=self.user):
-            with self.assertWarns(DeprecationWarning):
-                self.corpus.documents.set([self.doc2, doc3])
-
-        # Check results
-        docs = list(self.corpus.documents.all())
-        self.assertEqual(len(docs), 2)
-        self.assertIn(self.doc2, docs)
-        self.assertIn(doc3, docs)
-        self.assertNotIn(self.doc1, docs)
-
-    def test_filter_and_exclude_work(self):
-        """Test that filter() and exclude() work with DocumentPath backend."""
-        # Add documents
-        with DocumentPathContext(user=self.user):
-            self.corpus.documents.add(self.doc1, self.doc2)
-
-        # Test filter
-        filtered = self.corpus.documents.filter(title="Document 1")
-        self.assertEqual(filtered.count(), 1)
-        self.assertEqual(filtered.first(), self.doc1)
-
-        # Test exclude
-        excluded = self.corpus.documents.exclude(title="Document 1")
-        self.assertEqual(excluded.count(), 1)
-        self.assertEqual(excluded.first(), self.doc2)
-
-
 class TestCorpusDocumentMethods(TransactionTestCase):
     """Test the new explicit Corpus methods for document management."""
 
@@ -334,15 +144,13 @@ class TestCorpusDocumentMethods(TransactionTestCase):
             document=self.document, user=self.user
         )
 
-        # Status can be either 'created' or 'cross_corpus_import' depending on whether
-        # the document already exists in another corpus
-        self.assertIn(status, ["created", "cross_corpus_import"])
-        # If it's created, the doc might be a new version, otherwise it's the same
-        self.assertIsNotNone(doc)
+        # Status should be 'added' for new link
+        self.assertEqual(status, "added")
+        # Document identity is preserved - same object returned
+        self.assertEqual(doc.id, self.document.id)
         self.assertIsInstance(path, DocumentPath)
         self.assertEqual(path.corpus, self.corpus)
-        # The document in the path might be different if versioned
-        self.assertIsNotNone(path.document)
+        self.assertEqual(path.document, self.document)
         self.assertTrue(path.is_current)
         self.assertFalse(path.is_deleted)
 
@@ -479,6 +287,190 @@ class TestCorpusDocumentMethods(TransactionTestCase):
 
         self.assertEqual(path.folder, folder)
 
+    def test_get_documents_excludes_deleted(self):
+        """Test that get_documents excludes soft-deleted documents."""
+        # Add document
+        doc, status, path = self.corpus.add_document(
+            document=self.document, user=self.user
+        )
+
+        # Should be visible
+        self.assertIn(doc, self.corpus.get_documents())
+
+        # Soft-delete via remove_document
+        self.corpus.remove_document(document=doc, user=self.user)
+
+        # Should not be visible
+        self.assertNotIn(doc, self.corpus.get_documents())
+
+        # But DocumentPath should still exist (soft-deleted)
+        deleted_path = DocumentPath.objects.filter(
+            corpus=self.corpus, document=doc, is_deleted=True
+        )
+        self.assertTrue(deleted_path.exists())
+
+    def test_get_documents_filtering(self):
+        """Test that get_documents returns a filterable queryset."""
+        # Add multiple documents
+        doc2 = Document.objects.create(
+            title="Another Document", creator=self.user, pdf_file_hash="hash2"
+        )
+        doc2.pdf_file.save("doc2.pdf", ContentFile(b"Content 2"))
+
+        self.corpus.add_document(document=self.document, user=self.user)
+        self.corpus.add_document(document=doc2, user=self.user)
+
+        # Filter by title
+        filtered = self.corpus.get_documents().filter(title="Test Document")
+        self.assertEqual(filtered.count(), 1)
+
+        # Exclude by title
+        excluded = self.corpus.get_documents().exclude(title="Test Document")
+        self.assertEqual(excluded.count(), 1)
+
+    def test_document_identity_preserved(self):
+        """Test that add_document preserves document identity (same ID)."""
+        original_id = self.document.id
+        original_title = self.document.title
+
+        returned_doc, status, path = self.corpus.add_document(
+            document=self.document, user=self.user
+        )
+
+        # Same exact object should be returned
+        self.assertEqual(returned_doc.id, original_id)
+        self.assertEqual(returned_doc.title, original_title)
+        self.assertIs(returned_doc, self.document)  # Same object in memory
+
+    def test_same_document_multiple_paths(self):
+        """Test that same document can exist at multiple paths in same corpus."""
+        # Add at first path
+        doc1, status1, path1 = self.corpus.add_document(
+            document=self.document, path="/path/one.pdf", user=self.user
+        )
+        self.assertEqual(status1, "added")
+
+        # Add at second path - same document, different path
+        doc2, status2, path2 = self.corpus.add_document(
+            document=self.document, path="/path/two.pdf", user=self.user
+        )
+        self.assertEqual(status2, "added")
+
+        # Both should return the same document
+        self.assertEqual(doc1.id, doc2.id)
+        self.assertEqual(doc1.id, self.document.id)
+
+        # But different DocumentPath records
+        self.assertNotEqual(path1.id, path2.id)
+        self.assertEqual(path1.path, "/path/one.pdf")
+        self.assertEqual(path2.path, "/path/two.pdf")
+
+        # Document appears once in get_documents() (distinct)
+        docs = list(self.corpus.get_documents())
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].id, self.document.id)
+
+    def test_add_document_already_exists_at_same_path(self):
+        """Test adding same document at same path returns 'already_exists'."""
+        # First add
+        doc1, status1, path1 = self.corpus.add_document(
+            document=self.document, path="/same/path.pdf", user=self.user
+        )
+        self.assertEqual(status1, "added")
+
+        # Second add at same path
+        doc2, status2, path2 = self.corpus.add_document(
+            document=self.document, path="/same/path.pdf", user=self.user
+        )
+        self.assertEqual(status2, "already_exists")
+
+        # Same document and path returned
+        self.assertEqual(doc1.id, doc2.id)
+        self.assertEqual(path1.id, path2.id)
+
+    def test_add_document_replaces_at_occupied_path(self):
+        """Test that adding document at occupied path replaces the old one."""
+        doc2 = Document.objects.create(
+            title="Another Document", creator=self.user, pdf_file_hash="hash2"
+        )
+        doc2.pdf_file.save("doc2.pdf", ContentFile(b"Content 2"))
+
+        # Add first document at path
+        doc1_ret, status1, path1 = self.corpus.add_document(
+            document=self.document, path="/shared/path.pdf", user=self.user
+        )
+        self.assertEqual(status1, "added")
+        self.assertEqual(path1.version_number, 1)
+
+        # Add second document at same path
+        doc2_ret, status2, path2 = self.corpus.add_document(
+            document=doc2, path="/shared/path.pdf", user=self.user
+        )
+        self.assertEqual(status2, "added")
+        self.assertEqual(path2.version_number, 2)
+        self.assertEqual(path2.parent, path1)
+
+        # Old path should no longer be current
+        path1.refresh_from_db()
+        self.assertFalse(path1.is_current)
+
+        # New path should be current
+        self.assertTrue(path2.is_current)
+
+        # get_documents should return only doc2 at that path
+        docs = list(self.corpus.get_documents())
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].id, doc2.id)
+
+    def test_import_content_creates_new_document(self):
+        """Test import_content creates new document with content deduplication."""
+        content = b"Brand new PDF content"
+
+        doc, status, path = self.corpus.import_content(
+            content=content, path="/imported/doc.pdf", user=self.user, title="Imported"
+        )
+
+        self.assertEqual(status, "created")
+        self.assertIsNotNone(doc.id)
+        self.assertEqual(doc.title, "Imported")
+        self.assertEqual(path.path, "/imported/doc.pdf")
+
+    def test_import_content_deduplicates(self):
+        """Test import_content reuses document with same content hash."""
+        content = b"Same content for deduplication test"
+
+        # Import to first corpus
+        doc1, status1, path1 = self.corpus.import_content(
+            content=content, path="/first.pdf", user=self.user, title="First"
+        )
+        self.assertEqual(status1, "created")
+
+        # Create second corpus
+        corpus2 = Corpus.objects.create(title="Second Corpus", creator=self.user)
+
+        # Import same content to second corpus
+        doc2, status2, path2 = corpus2.import_content(
+            content=content, path="/second.pdf", user=self.user, title="Second"
+        )
+
+        # Should reuse the same document (cross-corpus deduplication)
+        self.assertEqual(status2, "cross_corpus_import")
+        self.assertEqual(doc1.id, doc2.id)
+
+    def test_add_document_requires_document_object(self):
+        """Test that add_document requires a document object."""
+        with self.assertRaises(ValueError) as cm:
+            self.corpus.add_document(document=None, user=self.user)
+
+        self.assertIn("Document is required", str(cm.exception))
+
+    def test_import_content_requires_content(self):
+        """Test that import_content requires content bytes."""
+        with self.assertRaises(ValueError) as cm:
+            self.corpus.import_content(content=None, user=self.user)
+
+        self.assertIn("Content is required", str(cm.exception))
+
 
 class TestMigrationCommand(TransactionTestCase):
     """Test the sync_m2m_to_documentpath management command."""
@@ -490,7 +482,7 @@ class TestMigrationCommand(TransactionTestCase):
         )
 
         # Create corpus with documents using OLD M2M method
-        # (bypassing the custom manager)
+        # (bypassing DocumentPath for legacy data simulation)
         self.corpus = Corpus.objects.create(
             title="Test Corpus", description="Test", creator=self.user
         )
@@ -505,10 +497,7 @@ class TestMigrationCommand(TransactionTestCase):
         )
 
         # Add documents using direct M2M (simulating legacy data)
-        # Temporarily uninstall custom manager if installed
-        if hasattr(Corpus, "_custom_manager_installed"):
-            uninstall_custom_manager()
-
+        # This is the old way that doesn't create DocumentPath records
         self.corpus.documents.add(self.doc1, self.doc2)
 
     def test_dry_run_mode(self):
@@ -692,82 +681,3 @@ class TestMigrationCommand(TransactionTestCase):
 
         # All paths should be unique
         self.assertEqual(len(path_values), len(set(path_values)))
-
-
-class TestBackwardCompatibility(TransactionTestCase):
-    """Test that existing code continues to work with the custom manager."""
-
-    def setUp(self):
-        """Set up test environment."""
-        self.user = User.objects.create_user(
-            username="testuser", email="test@example.com"
-        )
-
-        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
-
-        self.document = Document.objects.create(
-            title="Test Doc", creator=self.user, pdf_file_hash="hash1"
-        )
-        self.document.pdf_file.save("test.pdf", ContentFile(b"content"))
-
-        # Install custom manager
-        install_custom_manager()
-
-    def tearDown(self):
-        """Clean up."""
-        uninstall_custom_manager()
-        super().tearDown()
-
-    def test_legacy_add_still_works(self):
-        """Test that legacy corpus.documents.add() still works."""
-        with DocumentPathContext(user=self.user):
-            # Should work but show deprecation warning
-            with self.assertWarns(DeprecationWarning):
-                self.corpus.documents.add(self.document)
-
-        # Document should be in corpus
-        self.assertIn(self.document, self.corpus.documents.all())
-
-    def test_legacy_remove_still_works(self):
-        """Test that legacy corpus.documents.remove() still works."""
-        # Add document
-        with DocumentPathContext(user=self.user):
-            self.corpus.documents.add(self.document)
-
-        # Remove document
-        with DocumentPathContext(user=self.user):
-            with self.assertWarns(DeprecationWarning):
-                self.corpus.documents.remove(self.document)
-
-        # Document should not be in corpus
-        self.assertNotIn(self.document, self.corpus.documents.all())
-
-    def test_legacy_all_works(self):
-        """Test that corpus.documents.all() works."""
-        # Add via new method
-        self.corpus.add_document(document=self.document, user=self.user)
-
-        # Query via legacy method
-        docs = self.corpus.documents.all()
-        self.assertEqual(docs.count(), 1)
-        self.assertEqual(docs.first(), self.document)
-
-    def test_legacy_filter_works(self):
-        """Test that corpus.documents.filter() works."""
-        self.corpus.add_document(document=self.document, user=self.user)
-
-        # Filter via legacy method
-        filtered = self.corpus.documents.filter(title="Test Doc")
-        self.assertEqual(filtered.count(), 1)
-
-    def test_manager_uninstall_restores_original(self):
-        """Test that uninstalling manager restores original M2M."""
-        # Uninstall custom manager
-        uninstall_custom_manager()
-
-        # Should no longer have custom manager flag
-        self.assertFalse(hasattr(Corpus, "_custom_manager_installed"))
-
-        # M2M operations should work normally
-        self.corpus.documents.add(self.document)
-        self.assertIn(self.document, self.corpus.documents.all())

@@ -90,7 +90,8 @@ class AnnotationQueryOptimizerTestCase(TestCase):
         self.corpus = Corpus.objects.create(
             title="Test Corpus", creator=self.owner, is_public=False
         )
-        self.corpus.documents.add(self.doc1, self.doc2)
+        self.corpus.add_document(document=self.doc1, user=self.owner)
+        self.corpus.add_document(document=self.doc2, user=self.owner)
 
         # Create annotation labels
         self.label1 = AnnotationLabel.objects.create(
@@ -549,7 +550,7 @@ class RelationshipQueryOptimizerTestCase(TestCase):
         self.corpus = Corpus.objects.create(
             title="Test Corpus", creator=self.owner, is_public=False
         )
-        self.corpus.documents.add(self.doc1)
+        self.corpus.add_document(document=self.doc1, user=self.owner)
 
         # Create labels
         self.token_label = AnnotationLabel.objects.create(
@@ -1189,17 +1190,18 @@ class ExtractQueryOptimizerTestCase(TestCase):
         self.corpus1 = Corpus.objects.create(
             title="Corpus 1", creator=self.owner, is_public=False
         )
-        self.corpus1.documents.add(self.doc1)
+        self.corpus1.add_document(document=self.doc1, user=self.owner)
 
         self.corpus2 = Corpus.objects.create(
             title="Corpus 2", creator=self.owner, is_public=False
         )
-        self.corpus2.documents.add(self.doc2)
+        self.corpus2.add_document(document=self.doc2, user=self.owner)
 
         self.public_corpus = Corpus.objects.create(
             title="Public Corpus", creator=self.owner, is_public=True
         )
-        self.public_corpus.documents.add(self.doc1, self.doc2)
+        self.public_corpus.add_document(document=self.doc1, user=self.owner)
+        self.public_corpus.add_document(document=self.doc2, user=self.owner)
 
         # Create fieldsets
         self.fieldset1 = Fieldset.objects.create(name="Fieldset 1", creator=self.owner)

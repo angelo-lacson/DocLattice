@@ -4,6 +4,7 @@ Tests for core agent components: AgentConfig, Contexts, and CoreConversationMana
 
 from unittest.mock import MagicMock, patch
 
+from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
@@ -132,7 +133,9 @@ class TestAgentContexts(TestCoreAgentComponentsSetup):
             is_public=True,
         )
         # Explicitly add to the ManyToManyField
-        await test_corpus.documents.aadd(doc1_for_this_test)
+        await sync_to_async(test_corpus.add_document)(
+            document=doc1_for_this_test, user=self.user
+        )
 
         # This is the second document expected by the original test logic
         doc2_for_this_test = await Document.objects.acreate(
@@ -142,7 +145,9 @@ class TestAgentContexts(TestCoreAgentComponentsSetup):
             is_public=True,
         )
         # Explicitly add to the ManyToManyField
-        await test_corpus.documents.aadd(doc2_for_this_test)
+        await sync_to_async(test_corpus.add_document)(
+            document=doc2_for_this_test, user=self.user
+        )
 
         config = AgentConfig(embedder_path=None)  # Test corpus default embedder
         config.user_id = self.user.id

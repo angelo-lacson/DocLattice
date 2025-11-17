@@ -197,6 +197,8 @@ class Query(graphene.ObjectType):
     ):
         from django.contrib.auth import get_user_model
 
+        from opencontractserver.documents.models import DocumentPath
+
         User = get_user_model()
         try:
             owner = User.objects.get(slug=user_slug)
@@ -216,8 +218,10 @@ class Query(graphene.ObjectType):
         )
         if not doc:
             return None
-        # Validate membership
-        if not doc.corpus_set.filter(pk=corpus.pk).exists():
+        # Validate membership via DocumentPath (dual-tree versioning model)
+        if not DocumentPath.objects.filter(
+            document=doc, corpus=corpus, is_current=True, is_deleted=False
+        ).exists():
             return None
         return doc
 

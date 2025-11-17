@@ -168,9 +168,9 @@ class AnnotationPrivacyScopingTestCase(TestCase):
         self.doc_contract3 = self._create_document("Contract Gamma", self.admin)
 
         # Add documents to the shared corpus
-        self.shared_corpus.documents.add(
-            self.doc_contract1, self.doc_contract2, self.doc_contract3
-        )
+        self.shared_corpus.add_document(document=self.doc_contract1, user=self.admin)
+        self.shared_corpus.add_document(document=self.doc_contract2, user=self.admin)
+        self.shared_corpus.add_document(document=self.doc_contract3, user=self.admin)
 
         # Create DocumentPath records for versioning system
         DocumentPath.objects.create(
@@ -1319,7 +1319,7 @@ class AnnotationPrivacyMutationTestCase(TestCase):
         self.doc = Document.objects.create(
             title="Test Doc", creator=self.admin, is_public=False
         )
-        self.corpus.documents.add(self.doc)
+        self.corpus.add_document(document=self.doc, user=self.admin)
 
         # Create DocumentPath for versioning system
         DocumentPath.objects.create(

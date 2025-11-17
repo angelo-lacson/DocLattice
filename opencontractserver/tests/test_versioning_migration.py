@@ -32,7 +32,7 @@ class VersioningMigrationTestCase(TestCase):
         self.corpus1 = Corpus.objects.create(title="Test Corpus 1", creator=self.user)
         self.corpus2 = Corpus.objects.create(title="Test Corpus 2", creator=self.user)
 
-        # Create documents
+        # Create documents with unique content hashes
         self.doc1 = Document.objects.create(
             title="Document 1",
             description="Test document 1",
@@ -52,14 +52,38 @@ class VersioningMigrationTestCase(TestCase):
             creator=self.user,
         )
 
-        # Add documents to corpuses (simulating pre-migration M2M relationships)
-        self.corpus1.documents.add(self.doc1, self.doc2)
-        self.corpus2.documents.add(self.doc2, self.doc3)  # doc2 in both corpuses
-
-        # Simulate the migration behavior by creating DocumentPath records
+        # Simulate pre-migration state by directly creating DocumentPath records
         # This is what the migration (0024) would have done for existing data
-        self._create_document_paths_for_corpus(self.corpus1)
-        self._create_document_paths_for_corpus(self.corpus2)
+        # We're NOT using add_document() here because that's for new additions,
+        # and this test is simulating what a migration does for existing M2M relationships
+        self._create_document_path(self.doc1, self.corpus1)
+        self._create_document_path(self.doc2, self.corpus1)
+        self._create_document_path(self.doc2, self.corpus2)  # doc2 in both corpuses
+        self._create_document_path(self.doc3, self.corpus2)
+
+    def _create_document_path(self, doc, corpus):
+        """
+        Create a DocumentPath record for a document in a corpus.
+
+        This simulates what the migration would do for existing M2M relationships.
+        """
+        # Generate path from document title (fallback to id if no title)
+        path = f"/{doc.title or f'document-{doc.id}'}"
+
+        # Create initial DocumentPath (matches migration logic)
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            folder=None,  # Root level by default
+            path=path,
+            version_number=1,  # All existing docs are v1
+            parent=None,  # All are roots initially
+            is_current=True,
+            is_deleted=False,
+            creator=doc.creator,
+            backend_lock=False,
+            is_public=doc.is_public if hasattr(doc, "is_public") else False,
+        )
 
     def _create_document_paths_for_corpus(self, corpus):
         """
@@ -68,7 +92,7 @@ class VersioningMigrationTestCase(TestCase):
         This helper replicates what the 0024_initialize_dual_tree_versioning
         migration does for existing corpus-document relationships.
         """
-        for doc in corpus.documents.all():
+        for doc in corpus.get_documents():
             # Check if DocumentPath already exists (safeguard like in migration)
             existing = DocumentPath.objects.filter(
                 document=doc, corpus=corpus, is_current=True, is_deleted=False

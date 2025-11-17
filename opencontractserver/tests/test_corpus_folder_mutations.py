@@ -498,7 +498,7 @@ class TestMoveDocumentToFolderMutation(TestCase):
             name="Research", corpus=corpus, creator=user
         )
         doc = Document.objects.create(title="Test Doc", creator=user)
-        corpus.documents.add(doc)
+        doc, _, _ = corpus.add_document(document=doc, user=user)
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 
@@ -525,7 +525,7 @@ class TestMoveDocumentToFolderMutation(TestCase):
             name="Research", corpus=corpus, creator=user
         )
         doc = Document.objects.create(title="Test Doc", creator=user)
-        corpus.documents.add(doc)
+        doc, _, _ = corpus.add_document(document=doc, user=user)
 
         # Initially in folder
         CorpusDocumentFolder.objects.create(document=doc, corpus=corpus, folder=folder)
@@ -579,8 +579,9 @@ class TestMoveDocumentsToFolderMutation(TestCase):
         docs = [
             Document.objects.create(title=f"Doc {i}", creator=user) for i in range(3)
         ]
-        for doc in docs:
-            corpus.documents.add(doc)
+        # Update docs list with returned documents from add_document
+        for i, doc in enumerate(docs):
+            docs[i], _, _ = corpus.add_document(document=doc, user=user)
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 
@@ -612,10 +613,10 @@ class TestMoveDocumentsToFolderMutation(TestCase):
         docs = [
             Document.objects.create(title=f"Doc {i}", creator=user) for i in range(3)
         ]
-        for doc in docs:
-            corpus.documents.add(doc)
+        for i, doc in enumerate(docs):
+            docs[i], _, _ = corpus.add_document(document=doc, user=user)
             CorpusDocumentFolder.objects.create(
-                document=doc, corpus=corpus, folder=folder
+                document=docs[i], corpus=corpus, folder=folder
             )
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
