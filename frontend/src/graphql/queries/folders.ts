@@ -84,6 +84,66 @@ export const GET_CORPUS_FOLDER = gql`
   }
 `;
 
+export interface DeletedDocumentPathType {
+  id: string;
+  path: string;
+  versionNumber: number;
+  modified: string;
+  createdBy: {
+    id: string;
+    username: string;
+  };
+  document: {
+    id: string;
+    title: string;
+    description: string;
+    icon: string;
+    fileType: string;
+    pageCount: number;
+    pdfFile: string;
+  };
+  folder: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+export interface GetDeletedDocumentsInputs {
+  corpusId: string;
+}
+
+export interface GetDeletedDocumentsOutputs {
+  deletedDocumentsInCorpus: DeletedDocumentPathType[];
+}
+
+export const GET_DELETED_DOCUMENTS_IN_CORPUS = gql`
+  query GetDeletedDocumentsInCorpus($corpusId: ID!) {
+    deletedDocumentsInCorpus(corpusId: $corpusId) {
+      id
+      path
+      versionNumber
+      modified
+      createdBy {
+        id
+        username
+      }
+      document {
+        id
+        title
+        description
+        icon
+        fileType
+        pageCount
+        pdfFile
+      }
+      folder {
+        id
+        name
+      }
+    }
+  }
+`;
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// MUTATIONS
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

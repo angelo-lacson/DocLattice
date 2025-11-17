@@ -59,6 +59,7 @@ from config.graphql.graphene_types import (
     CriteriaTypeDefinitionType,
     DatacellType,
     DocumentCorpusActionsType,
+    DocumentPathType,
     DocumentRelationshipType,
     DocumentType,
     ExtractType,
@@ -829,6 +830,37 @@ class Query(graphene.ObjectType):
             )
         except CorpusFolder.DoesNotExist:
             return None
+
+    deleted_documents_in_corpus = graphene.List(
+        DocumentPathType,
+        corpus_id=graphene.ID(required=True),
+        description="Get all soft-deleted documents in a corpus (trash folder view)",
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_deleted_documents_in_corpus(self, info, corpus_id):
+        """
+        Get all soft-deleted documents in a corpus for trash folder view.
+
+        Returns DocumentPath records where is_deleted=True and is_current=True,
+        which represents the current soft-deleted state in the path tree.
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        _, corpus_pk = from_global_id(corpus_id)
+
+        # First check user has access to the corpus
+        try:
+            corpus = Corpus.objects.visible_to_user(info.context.user).get(pk=corpus_pk)
+        except Corpus.DoesNotExist:
+            return []
+
+        # Return soft-deleted documents (is_deleted=True, is_current=True)
+        return (
+            DocumentPath.objects.filter(corpus=corpus, is_current=True, is_deleted=True)
+            .select_related("document", "folder", "created_by")
+            .order_by("-modified")
+        )
 
     # SEARCH RESOURCES FOR MENTIONS #####################################
     search_corpuses_for_mention = DjangoConnectionField(

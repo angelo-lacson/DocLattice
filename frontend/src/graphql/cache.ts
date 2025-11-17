@@ -93,6 +93,26 @@ export const cache = new InMemoryCache({
             return openedDocument() && openedDocument()?.id === readField("id");
           },
         },
+        // Version history fields - cache separately to enable lazy loading
+        versionHistory: {
+          // Don't merge with existing data, replace entirely
+          merge: false,
+        },
+        pathHistory: {
+          // Key by corpusId since path history is corpus-specific
+          keyArgs: ["corpusId"],
+          merge: false,
+        },
+        // Version metadata fields with corpus context
+        versionNumber: {
+          keyArgs: ["corpusId"],
+        },
+        lastModified: {
+          keyArgs: ["corpusId"],
+        },
+        canRestore: {
+          keyArgs: ["corpusId"],
+        },
         // CRITICAL: Handle all Connection types properly to prevent infinite loops
         // Without these, Apollo creates new object references on every query,
         // triggering cache updates and infinite re-renders

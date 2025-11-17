@@ -38,6 +38,7 @@ from opencontractserver.corpuses.models import (
 from opencontractserver.documents.models import (
     Document,
     DocumentAnalysisRow,
+    DocumentPath,
     DocumentRelationship,
     DocumentSummaryRevision,
 )
@@ -455,6 +456,153 @@ class AgentTypeEnum(graphene.Enum):
 
     DOCUMENT_AGENT = "document_agent"
     CORPUS_AGENT = "corpus_agent"
+
+
+# -------------------- Versioning Types (Phase 1) -------------------- #
+
+
+class PathActionEnum(graphene.Enum):
+    """Enum for document path lifecycle actions."""
+
+    IMPORTED = "IMPORTED"
+    MOVED = "MOVED"
+    RENAMED = "RENAMED"
+    DELETED = "DELETED"
+    RESTORED = "RESTORED"
+    UPDATED = "UPDATED"
+
+
+class VersionChangeTypeEnum(graphene.Enum):
+    """Enum for types of version changes."""
+
+    INITIAL = "INITIAL"
+    CONTENT_UPDATE = "CONTENT_UPDATE"
+    MINOR_EDIT = "MINOR_EDIT"
+    MAJOR_REVISION = "MAJOR_REVISION"
+
+
+class DocumentVersionType(graphene.ObjectType):
+    """Represents a single version in the document's content history."""
+
+    id = graphene.ID(required=True, description="Global ID of the document version")
+    version_number = graphene.Int(
+        required=True, description="Sequential version number"
+    )
+    hash = graphene.String(required=True, description="SHA-256 hash of PDF content")
+    created_at = graphene.DateTime(
+        required=True, description="When version was created"
+    )
+    created_by = graphene.Field(
+        lambda: UserType, required=True, description="User who created this version"
+    )
+    size_bytes = graphene.Int(description="File size in bytes")
+    change_type = graphene.Field(
+        VersionChangeTypeEnum,
+        required=True,
+        description="Type of change from previous version",
+    )
+    parent_version = graphene.Field(
+        lambda: DocumentVersionType, description="Previous version in content tree"
+    )
+
+
+class VersionHistoryType(graphene.ObjectType):
+    """Complete version history for a document."""
+
+    versions = graphene.List(
+        graphene.NonNull(DocumentVersionType),
+        required=True,
+        description="All versions of this document",
+    )
+    current_version = graphene.Field(
+        DocumentVersionType, required=True, description="The current active version"
+    )
+    version_tree = GenericScalar(description="Tree structure of version relationships")
+
+
+class PathEventType(graphene.ObjectType):
+    """A single event in the document's path history."""
+
+    id = graphene.ID(required=True, description="Global ID of the path event")
+    action = graphene.Field(
+        PathActionEnum, required=True, description="Type of path action"
+    )
+    path = graphene.String(required=True, description="Path at time of event")
+    folder = graphene.Field(
+        lambda: CorpusFolderType,
+        description="Folder at time of event (null if at root)",
+    )
+    timestamp = graphene.DateTime(required=True, description="When this event occurred")
+    user = graphene.Field(
+        lambda: UserType, required=True, description="User who performed the action"
+    )
+    version_number = graphene.Int(
+        required=True, description="Content version at time of event"
+    )
+
+
+class PathHistoryType(graphene.ObjectType):
+    """Complete path history for a document in a corpus."""
+
+    events = graphene.List(
+        graphene.NonNull(PathEventType),
+        required=True,
+        description="All path events in chronological order",
+    )
+    current_path = graphene.String(
+        required=True, description="Current path of document"
+    )
+    original_path = graphene.String(required=True, description="Original import path")
+    move_count = graphene.Int(
+        required=True, description="Number of move/rename operations"
+    )
+
+
+class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for DocumentPath model - represents filesystem lifecycle events."""
+
+    action = graphene.Field(PathActionEnum, description="Inferred action type")
+
+    def resolve_action(self, info):
+        """Infer action type from path state."""
+        if self.is_deleted:
+            return "DELETED"
+        elif self.parent is None:
+            return "IMPORTED"
+        else:
+            # Check if this is an update vs move
+            if hasattr(self, "parent") and self.parent:
+                if self.parent.path != self.path:
+                    return "MOVED"
+                elif self.parent.version_number != self.version_number:
+                    return "UPDATED"
+            return "UPDATED"
+
+    class Meta:
+        model = DocumentPath
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        """Filter paths to only those in corpuses the user can see."""
+        if issubclass(type(queryset), QuerySet):
+            # Filter by corpus visibility
+            from opencontractserver.corpuses.models import Corpus
+
+            visible_corpus_ids = Corpus.objects.visible_to_user(
+                info.context.user
+            ).values_list("id", flat=True)
+            return queryset.filter(corpus_id__in=visible_corpus_ids)
+        elif "RelatedManager" in str(type(queryset)):
+            from opencontractserver.corpuses.models import Corpus
+
+            visible_corpus_ids = Corpus.objects.visible_to_user(
+                info.context.user
+            ).values_list("id", flat=True)
+            return queryset.all().filter(corpus_id__in=visible_corpus_ids)
+        else:
+            return queryset
 
 
 class DocumentRelationshipType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -909,6 +1057,243 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return self.get_summary_for_corpus(corpus)
         except Corpus.DoesNotExist:
             return ""
+
+    # -------------------- Version Metadata Fields (Phase 1.1) -------------------- #
+    # These are lightweight fields that are always loaded with documents
+
+    version_number = graphene.Int(
+        corpus_id=graphene.ID(required=True),
+        description="Content version number in this corpus (from DocumentPath)",
+    )
+    has_version_history = graphene.Boolean(
+        description="True if this document has multiple versions (parent exists)"
+    )
+    version_count = graphene.Int(
+        description="Total number of versions in this document's version tree"
+    )
+    is_latest_version = graphene.Boolean(
+        description="True if this is the current version (Document.is_current)"
+    )
+    last_modified = graphene.DateTime(
+        corpus_id=graphene.ID(required=True),
+        description="When the document was last modified in this corpus",
+    )
+
+    # Lazy-loaded version history fields
+    version_history = graphene.Field(
+        VersionHistoryType,
+        description="Complete version history (lazy-loaded on request)",
+    )
+    path_history = graphene.Field(
+        PathHistoryType,
+        corpus_id=graphene.ID(required=True),
+        description="Path/location history in corpus (lazy-loaded on request)",
+    )
+
+    # Permission helpers for versioning features
+    can_restore = graphene.Boolean(
+        corpus_id=graphene.ID(required=True),
+        description="Whether user can restore this document (requires UPDATE permission)",
+    )
+    can_view_history = graphene.Boolean(
+        description="Whether user can view version history (requires READ permission)"
+    )
+
+    def resolve_version_number(self, info, corpus_id):
+        """Get version number from DocumentPath for this corpus."""
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            path_record = DocumentPath.objects.filter(
+                document_id=self.id, corpus_id=corpus_pk, is_current=True
+            ).first()
+            return path_record.version_number if path_record else 1
+        except Exception:
+            return 1
+
+    def resolve_has_version_history(self, info):
+        """Check if document has parent (i.e., multiple versions exist)."""
+        return self.parent is not None
+
+    def resolve_version_count(self, info):
+        """Count total versions in this document's version tree."""
+        # Count all documents with same version_tree_id
+        return Document.objects.filter(version_tree_id=self.version_tree_id).count()
+
+    def resolve_is_latest_version(self, info):
+        """Check if this is the current version."""
+        return self.is_current
+
+    def resolve_last_modified(self, info, corpus_id):
+        """Get last modification time from DocumentPath."""
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            path_record = DocumentPath.objects.filter(
+                document_id=self.id, corpus_id=corpus_pk, is_current=True
+            ).first()
+            return path_record.created if path_record else self.modified
+        except Exception:
+            return self.modified
+
+    def resolve_version_history(self, info):
+        """
+        Lazy-load complete version history.
+        Returns all versions in the document's version tree.
+        """
+        from graphql_relay import to_global_id
+
+        # Get all documents in the version tree, ordered by creation
+        versions = Document.objects.filter(
+            version_tree_id=self.version_tree_id
+        ).order_by("created")
+
+        version_list = []
+        for idx, doc in enumerate(versions, start=1):
+            # Determine change type
+            if doc.parent is None:
+                change_type = "INITIAL"
+            else:
+                # Could be enhanced to detect minor vs major changes
+                change_type = "CONTENT_UPDATE"
+
+            version_data = {
+                "id": to_global_id("DocumentType", doc.id),
+                "version_number": idx,
+                "hash": doc.pdf_file_hash or "",
+                "created_at": doc.created,
+                "created_by": doc.creator,
+                "size_bytes": doc.pdf_file.size if doc.pdf_file else None,
+                "change_type": change_type,
+                "parent_version": None,  # Could be resolved if needed
+            }
+            version_list.append(version_data)
+
+        # Find current version
+        current = next(
+            (
+                v
+                for v in version_list
+                if v["id"] == to_global_id("DocumentType", self.id)
+            ),
+            version_list[-1] if version_list else None,
+        )
+
+        return {
+            "versions": version_list,
+            "current_version": current,
+            "version_tree": None,  # Could build tree structure if needed
+        }
+
+    def resolve_path_history(self, info, corpus_id):
+        """
+        Lazy-load path history for this document in a corpus.
+        Returns all lifecycle events (import, move, delete, restore).
+        """
+        from graphql_relay import to_global_id
+
+        _, corpus_pk = from_global_id(corpus_id)
+
+        # Get all path records for this document in this corpus
+        path_records = DocumentPath.objects.filter(
+            document__version_tree_id=self.version_tree_id, corpus_id=corpus_pk
+        ).order_by("created")
+
+        events = []
+        original_path = None
+        current_path = None
+        move_count = 0
+
+        for path_record in path_records:
+            # Infer action type
+            if path_record.is_deleted:
+                action = "DELETED"
+            elif path_record.parent is None:
+                action = "IMPORTED"
+                original_path = path_record.path
+            else:
+                # Check if path changed vs version changed
+                if hasattr(path_record, "parent") and path_record.parent:
+                    if path_record.parent.path != path_record.path:
+                        action = "MOVED"
+                        move_count += 1
+                    elif (
+                        path_record.parent.version_number != path_record.version_number
+                    ):
+                        action = "UPDATED"
+                    else:
+                        action = "RESTORED"
+                else:
+                    action = "UPDATED"
+
+            if path_record.is_current and not path_record.is_deleted:
+                current_path = path_record.path
+
+            event = {
+                "id": to_global_id("DocumentPathType", path_record.id),
+                "action": action,
+                "path": path_record.path,
+                "folder": path_record.folder,
+                "timestamp": path_record.created,
+                "user": path_record.creator,
+                "version_number": path_record.version_number,
+            }
+            events.append(event)
+
+        return {
+            "events": events,
+            "current_path": current_path or original_path or "",
+            "original_path": original_path or "",
+            "move_count": move_count,
+        }
+
+    def resolve_can_restore(self, info, corpus_id):
+        """Check if user has UPDATE permission for restore operations."""
+        from django.contrib.auth.models import AnonymousUser
+
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        user = info.context.user
+        if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+            return False
+
+        # Check document permission
+        has_doc_update = user_has_permission_for_obj(
+            user, self, PermissionTypes.UPDATE, include_group_permissions=True
+        )
+        if not has_doc_update:
+            return False
+
+        # Check corpus permission
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            corpus = Corpus.objects.get(pk=corpus_pk)
+            has_corpus_update = user_has_permission_for_obj(
+                user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
+            )
+            return has_corpus_update
+        except Corpus.DoesNotExist:
+            return False
+
+    def resolve_can_view_history(self, info):
+        """Check if user has READ permission for viewing history."""
+        from django.contrib.auth.models import AnonymousUser
+
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        user = info.context.user
+
+        # Public documents can be viewed by anyone
+        if self.is_public:
+            return True
+
+        if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+            return False
+
+        return user_has_permission_for_obj(
+            user, self, PermissionTypes.READ, include_group_permissions=True
+        )
 
     page_annotations = graphene.List(
         AnnotationType,
