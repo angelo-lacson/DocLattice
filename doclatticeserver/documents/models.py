@@ -106,6 +106,16 @@ class Document(TreeNode, BaseOCModel, HasEmbeddingMixin):
         help_text="True for newest content in this version tree. Implements Rule C3.",
     )
 
+    # Provenance tracking for corpus-isolated documents (Phase 2)
+    source_document = django.db.models.ForeignKey(
+        "self",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="corpus_copies",
+        help_text="Original document this was copied from (cross-corpus provenance). Implements Rule I2.",
+    )
+
     processing_started = django.db.models.DateTimeField(null=True)
     processing_finished = django.db.models.DateTimeField(null=True)
 
