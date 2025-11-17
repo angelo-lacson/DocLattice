@@ -36,5 +36,12 @@ class DocumentsConfig(AppConfig):
 
             warm_storage_backend()
 
+            # CUSTOM M2M MANAGER - Issue #654 ##########################################################################
+            # Install custom manager that uses DocumentPath as source of truth for corpus.documents
+            # This provides backward compatibility while migrating to the dual-tree versioning system
+            from opencontractserver.documents.managers import install_custom_manager
+
+            install_custom_manager()
+
         except ImportError:
             pass

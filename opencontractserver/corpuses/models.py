@@ -339,6 +339,217 @@ class Corpus(TreeNode):
         return generate_embeddings_from_text(text, corpus_id=self.pk)
 
     # --------------------------------------------------------------------- #
+    # Document Management - Issue #654                                     #
+    # --------------------------------------------------------------------- #
+
+    def add_document(
+        self,
+        document=None,
+        path: str = None,
+        user=None,
+        folder=None,
+        content: bytes = None,
+        **doc_kwargs,
+    ):
+        """
+        Add a document to this corpus with full versioning support.
+
+        This is the recommended way to add documents, replacing corpus.documents.add().
+        It creates proper DocumentPath records with audit trail.
+
+        Args:
+            document: The Document to add (optional if content provided)
+            path: The filesystem path within the corpus (auto-generated if not provided)
+            user: The user performing the operation (required)
+            folder: Optional CorpusFolder to place the document in
+            content: Optional PDF content bytes (for new documents)
+            **doc_kwargs: Additional arguments for document creation
+
+        Returns:
+            Tuple of (document, status, document_path) where status is one of:
+            - 'created': Brand new document
+            - 'updated': Content changed at existing path
+            - 'unchanged': No change detected
+            - 'cross_corpus_import': Content exists elsewhere, new path created
+
+        Raises:
+            ValueError: If user is not provided
+            RuntimeError: If operation fails
+        """
+        if not user:
+            raise ValueError("User is required for document operations (audit trail)")
+
+        from opencontractserver.documents.versioning import import_document
+
+        # Generate path if not provided
+        if not path:
+            if document and document.title:
+                # Generate path from document title
+                safe_title = "".join(
+                    c if c.isalnum() or c in "-_." else "_"
+                    for c in document.title[:100]
+                )
+                path = f"/documents/{safe_title or f'doc_{document.pk}'}"
+            else:
+                path = f"/documents/doc_{uuid.uuid4().hex[:8]}"
+
+        # If we have a document but no content, read its PDF
+        if document and not content and document.pdf_file:
+            try:
+                document.pdf_file.open("rb")
+                content = document.pdf_file.read()
+                document.pdf_file.close()
+            except Exception:
+                content = b""  # Empty content for documents without PDFs
+
+        # Use the versioning system to properly import
+        return import_document(
+            corpus=self,
+            path=path,
+            content=content or b"",
+            user=user,
+            folder=folder,
+            pdf_file=document.pdf_file if document else None,
+            title=doc_kwargs.get("title", document.title if document else ""),
+            description=doc_kwargs.get(
+                "description", document.description if document else ""
+            ),
+            file_type=doc_kwargs.get(
+                "file_type", document.file_type if document else "application/pdf"
+            ),
+            **{
+                k: v
+                for k, v in doc_kwargs.items()
+                if k not in ["title", "description", "file_type"]
+            },
+        )
+
+    def remove_document(self, document=None, path: str = None, user=None):
+        """
+        Remove a document from this corpus (soft delete).
+
+        This is the recommended way to remove documents, replacing corpus.documents.remove().
+        It creates a soft-delete DocumentPath record maintaining history.
+
+        Args:
+            document: The Document to remove (optional if path provided)
+            path: The filesystem path to remove (optional if document provided)
+            user: The user performing the operation (required)
+
+        Returns:
+            List of DocumentPath records that were soft-deleted
+
+        Raises:
+            ValueError: If neither document nor path provided, or if user not provided
+            RuntimeError: If operation fails
+        """
+        if not user:
+            raise ValueError("User is required for document operations (audit trail)")
+
+        if not document and not path:
+            raise ValueError("Either document or path must be provided")
+
+        from opencontractserver.documents.models import DocumentPath
+
+        deleted_paths = []
+
+        with transaction.atomic():
+            if path:
+                # Delete specific path
+                active_path = DocumentPath.objects.filter(
+                    corpus=self, path=path, is_current=True, is_deleted=False
+                ).first()
+
+                if active_path:
+                    # Mark current as not current
+                    active_path.is_current = False
+                    active_path.save(update_fields=["is_current"])
+
+                    # Create soft-deleted record
+                    deleted_path = DocumentPath.objects.create(
+                        document=active_path.document,
+                        corpus=self,
+                        folder=active_path.folder,
+                        path=active_path.path,
+                        version_number=active_path.version_number,
+                        parent=active_path,
+                        is_deleted=True,
+                        is_current=True,
+                        creator=user,
+                    )
+                    deleted_paths.append(deleted_path)
+                    logger.info(
+                        f"Removed document at path {path} from corpus {self.pk}"
+                    )
+                else:
+                    logger.warning(
+                        f"Path {path} not found in corpus {self.pk} for deletion"
+                    )
+            else:
+                # Delete all paths for this document
+                active_paths = DocumentPath.objects.filter(
+                    corpus=self, document=document, is_current=True, is_deleted=False
+                )
+
+                for path_record in active_paths:
+                    # Mark current as not current
+                    path_record.is_current = False
+                    path_record.save(update_fields=["is_current"])
+
+                    # Create soft-deleted record
+                    deleted_path = DocumentPath.objects.create(
+                        document=path_record.document,
+                        corpus=self,
+                        folder=path_record.folder,
+                        path=path_record.path,
+                        version_number=path_record.version_number,
+                        parent=path_record,
+                        is_deleted=True,
+                        is_current=True,
+                        creator=user,
+                    )
+                    deleted_paths.append(deleted_path)
+                    logger.info(
+                        f"Removed document {document.pk} at path "
+                        f"{path_record.path} from corpus {self.pk}"
+                    )
+
+        return deleted_paths
+
+    def get_documents(self):
+        """
+        Get all documents with active paths in this corpus.
+
+        This method uses DocumentPath as the source of truth.
+
+        Returns:
+            QuerySet of Document objects with active paths in this corpus
+        """
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        active_doc_ids = DocumentPath.objects.filter(
+            corpus=self, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
+
+        return Document.objects.filter(id__in=active_doc_ids).distinct()
+
+    def document_count(self):
+        """
+        Get count of documents with active paths in this corpus.
+
+        Returns:
+            Integer count of active documents
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        return (
+            DocumentPath.objects.filter(corpus=self, is_current=True, is_deleted=False)
+            .values("document_id")
+            .distinct()
+            .count()
+        )
+
+    # --------------------------------------------------------------------- #
     # Label helper                                                         #
     # --------------------------------------------------------------------- #
 
