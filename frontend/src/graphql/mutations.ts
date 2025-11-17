@@ -3102,3 +3102,38 @@ export interface DeleteNotificationOutput {
     message: string;
   };
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///
+/// DOCUMENT VERSIONING MUTATIONS
+///
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const RESTORE_DELETED_DOCUMENT = gql`
+  mutation RestoreDeletedDocument($documentId: ID!, $corpusId: ID!) {
+    restoreDeletedDocument(documentId: $documentId, corpusId: $corpusId) {
+      ok
+      message
+      document {
+        id
+        title
+      }
+    }
+  }
+`;
+
+export interface RestoreDeletedDocumentInput {
+  documentId: string;
+  corpusId: string;
+}
+
+export interface RestoreDeletedDocumentOutput {
+  restoreDeletedDocument: {
+    ok: boolean;
+    message: string;
+    document: {
+      id: string;
+      title: string;
+    } | null;
+  };
+}

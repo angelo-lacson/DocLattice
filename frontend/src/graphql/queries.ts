@@ -84,6 +84,10 @@ export const GET_DOCUMENTS = gql`
           }
           is_selected @client
           is_open @client
+          hasVersionHistory
+          versionCount
+          isLatestVersion
+          canViewHistory
           doc_label_annotations: docAnnotations(
             annotationLabel_LabelType: DOC_TYPE_LABEL
           ) @include(if: $annotateDocLabels) {
