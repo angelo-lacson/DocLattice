@@ -15,6 +15,7 @@ from typing import (
     runtime_checkable,
 )
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.utils import timezone
 
@@ -308,7 +309,8 @@ class CorpusAgentContext:
     async def __post_init__(self):
         """Initialize documents list if not provided."""
         if self.documents is None:
-            self.documents = [doc async for doc in self.corpus.documents.all()]
+            # Use DocumentPath-based method to get active documents
+            self.documents = await sync_to_async(list)(self.corpus.get_documents())
 
 
 @runtime_checkable
@@ -1038,7 +1040,8 @@ class CoreCorpusAgentFactory:
         # Permission check – anonymous sessions cannot access private corpuses
         _assert_access(corpus, config.user_id)
 
-        documents = [doc async for doc in corpus.documents.all()]
+        # Use DocumentPath-based method to get active documents
+        documents = await sync_to_async(list)(corpus.get_documents())
 
         # Set default system prompt if not provided
         if config.system_prompt is None:
