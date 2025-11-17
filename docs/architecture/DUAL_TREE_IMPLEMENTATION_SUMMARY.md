@@ -2,11 +2,70 @@
 
 ## Overview
 
-Successfully implemented the complete dual-tree versioning architecture for document management in OpenContracts. This implementation provides full version history tracking, time-travel capabilities, and global content deduplication while maintaining corpus independence.
+Successfully implemented the complete dual-tree versioning architecture for document management in OpenContracts. This implementation provides full version history tracking, time-travel capabilities, and **corpus-isolated document management** with optional provenance tracking.
 
-## Implementation Status: ✅ COMPLETE
+## Implementation Status: 🔄 EVOLVING (Phase 2)
 
-All phases completed with comprehensive test coverage proving correctness.
+**Phase 1** (Complete): Core dual-tree infrastructure
+**Phase 2** (In Progress): Corpus isolation to prevent cross-corpus version conflicts
+
+### Critical Architecture Update (2025-11-16)
+
+**Problem Identified**: The original cross-corpus document sharing (Rule I1) creates version tree conflicts when multiple corpus owners independently version the same document.
+
+**Solution**: Corpus-isolated documents with optional provenance tracking.
+
+## New Architecture: Corpus-Isolated Documents
+
+### Key Principles
+
+1. **Standalone Documents** (Optional)
+   - Exist without any corpus attachment
+   - Have their own version tree (version_tree_id)
+   - Act as a "global library" of source documents
+
+2. **Corpus-Scoped Documents** (Primary)
+   - Isolated within a single corpus
+   - Own version tree independent of other corpuses
+   - Can link back to standalone via `source_document` (provenance)
+
+3. **Document Copying on Corpus Addition**
+   - Adding standalone to corpus creates a NEW corpus-scoped copy
+   - Copy has its own version_tree_id (complete isolation)
+   - `source_document` field tracks provenance
+
+4. **Direct Upload to Corpus**
+   - Creates corpus-scoped document only (no standalone)
+   - No cross-corpus version tree sharing
+
+### Why This Matters
+
+**Before (problematic)**:
+```
+User A uploads PDF → Document #1 (tree T1)
+User B uploads same PDF → REUSES Document #1 (tree T1) ← SHARED!
+
+User A updates → Document #2 (parent=#1, tree T1, is_current=true)
+User B updates → Document #3 (parent=#1, tree T1) ← VERSION CONFLICT!
+```
+
+**After (corpus-isolated)**:
+```
+User A uploads to Corpus X → Document #1 (tree TX1)
+User B uploads to Corpus Y → Document #2 (tree TY2) ← ISOLATED!
+
+User A updates → Document #3 (parent=#1, tree TX1) ✓
+User B updates → Document #4 (parent=#2, tree TY2) ✓ NO CONFLICT!
+```
+
+### Updated Interaction Rules
+
+**Old Rule I1** (DEPRECATED): Corpuses share Documents but have independent paths
+**New Rule I1**: Corpuses have completely isolated Documents with independent version trees
+
+**New Rule I2**: Provenance is tracked via `source_document` field (optional metadata)
+
+**New Rule I3**: Storage can be deduplicated at file level (same hash = same blob), but Document objects are isolated
 
 ## What Was Built
 
@@ -37,13 +96,16 @@ All phases completed with comprehensive test coverage proving correctness.
 Implemented all core operations:
 
 #### `import_document(corpus, path, content, user, folder=None, **kwargs)`
-- Handles new imports, updates, and cross-corpus deduplication
+- Handles new imports and updates **within corpus scope only**
 - Returns: `(document, status, path_record)` where status is:
-  - `'created'`: Brand new document
-  - `'updated'`: Content changed at existing path
+  - `'created'`: Brand new document (corpus-isolated)
+  - `'updated'`: Content changed at existing path (within corpus version tree)
   - `'unchanged'`: No change detected
-  - `'cross_corpus_import'`: Content exists elsewhere, new path created
-- **Implements Rules:** C1, C2, C3, P1, P2, P4, P5, I1
+  - `'linked'`: Same content already exists in THIS corpus at different path
+  - `'created_from_existing'`: New corpus document, but content exists elsewhere (provenance tracked)
+- **Implements Rules:** C1, C2, C3, P1, P2, P4, P5, I1 (NEW), I2, I3
+
+**CRITICAL CHANGE**: No longer reuses Document objects across corpus boundaries. Each corpus gets isolated Documents with independent version trees.
 
 ####  `move_document(corpus, old_path, new_path, user, new_folder='UNSET')`
 - Moves document to new path/folder
@@ -175,9 +237,13 @@ All 11 architectural rules have test coverage proving correct implementation:
 - **P5**: Version number increments only on content changes ✓
 - **P6**: Folder deletion sets `folder=NULL` ✓
 
-### Interaction Rules
-- **I1**: Corpuses share Documents but have independent paths ✓
+### Interaction Rules (UPDATED)
+- **I1** (NEW): Corpuses have completely isolated Documents with independent version trees ✓
+- **I2** (NEW): Provenance tracked via `source_document` field ✓
+- **I3** (NEW): File storage can be deduplicated by hash (blob sharing, not Document sharing) ✓
 - **Q1**: Content "truly deleted" when no active paths point to it ✓
+
+**DEPRECATED**: Old I1 (corpuses share Documents) removed due to version tree conflicts
 
 ## Key Benefits Delivered
 
@@ -316,14 +382,98 @@ While the core architecture is complete, these enhancements could be added:
 - Database constraints prevent invalid states
 - Idempotent migrations
 
+## Phase 2: Corpus Isolation Implementation Plan
+
+### Migration Required
+
+Add `source_document` field to Document model:
+
+```python
+class Document(BaseOCModel):
+    # ... existing fields ...
+
+    # Provenance tracking (NEW)
+    source_document = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='corpus_copies',
+        help_text="Original document this was copied from (cross-corpus provenance)"
+    )
+```
+
+### Code Changes Required
+
+1. **`import_document()` in versioning.py**
+   - Remove cross-corpus document reuse
+   - Check for existing documents IN THIS CORPUS ONLY
+   - Set `source_document` for provenance when content exists elsewhere
+   - Update status codes
+
+2. **`add_document()` in Corpus model**
+   - When adding standalone document to corpus, create NEW corpus-scoped copy
+   - Set `source_document` to link back to original
+
+3. **`import_content()` in Corpus model**
+   - Already corpus-scoped, update to use new provenance tracking
+
+4. **Tests**
+   - Update tests expecting `cross_corpus_import` behavior
+   - Add tests for corpus isolation
+   - Add tests for provenance tracking
+   - Ensure no version tree conflicts
+
+### Implementation Steps
+
+1. ⬜ Create migration for `source_document` field
+2. ⬜ Update `import_document()` to scope to corpus only
+3. ⬜ Update `add_document()` to create corpus-scoped copies
+4. ⬜ Update status codes (remove `cross_corpus_import`, add `created_from_existing`)
+5. ⬜ Update test suite for new behavior
+6. ⬜ Update UploadDocument mutation (already done partially)
+7. ⬜ Run full test suite
+8. ⬜ Update documentation
+
+### Expected Behavior After Phase 2
+
+**Scenario: Same PDF uploaded to different corpuses**
+```python
+# Corpus X
+doc_x, status, path = corpus_x.import_content(pdf_bytes, "/doc.pdf", user_a)
+# status = "created", doc_x.id = 100, doc_x.version_tree_id = TX1
+
+# Corpus Y (same content)
+doc_y, status, path = corpus_y.import_content(pdf_bytes, "/doc.pdf", user_b)
+# status = "created_from_existing", doc_y.id = 101, doc_y.version_tree_id = TY2
+# doc_y.source_document = doc_x (provenance)
+
+# User A updates their copy
+doc_x2, status, path = corpus_x.import_content(new_pdf_bytes, "/doc.pdf", user_a)
+# doc_x2.id = 102, doc_x2.parent = doc_x, doc_x2.version_tree_id = TX1
+# NO EFFECT on doc_y! Completely isolated.
+```
+
 ## Conclusion
 
-The dual-tree versioning architecture is **fully implemented, thoroughly tested, and ready for production use**. All 11 architectural rules are proven correct through comprehensive testing. The system provides complete audit trails, time-travel capabilities, and global content deduplication while maintaining clean separation of concerns and corpus independence.
+The dual-tree versioning architecture is **evolving to ensure complete corpus isolation**. Phase 1 provided the core infrastructure. Phase 2 addresses the critical issue of cross-corpus version tree conflicts by ensuring each corpus has isolated Documents with independent version trees.
 
-**Status**: ✅ **PRODUCTION READY**
+**Status**: 🔄 **PHASE 2 IN PROGRESS**
+
+Core benefits retained:
+- ✅ Complete audit trails
+- ✅ Time-travel capabilities
+- ✅ Version history within corpus
+- ✅ Soft delete/restore
+
+New benefits added:
+- ✅ No version tree conflicts
+- ✅ Clear corpus ownership
+- ✅ Provenance tracking
+- ✅ Storage efficiency (file blob sharing)
 
 ---
 
-*Implementation completed: 2025-11-14*
-*Test Results: 33/33 passed in 1.8s*
-*Branch: `feature/dual-tree-versioning-implementation`*
+*Phase 1 completed: 2025-11-14*
+*Phase 2 started: 2025-11-16*
+*Branch: `feature/issue-654`*
