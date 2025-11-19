@@ -117,18 +117,25 @@ class PermissioningTestCase(TestCase):
                     creator=self.user,
                 )
                 document.pdf_file.save("dummy_file.pdf", pdf_contents)
-                set_permissions_for_obj_to_user(
-                    self.user, document, [PermissionTypes.READ]
-                )
+                # Note: Don't assign permission here - do it after add_document()
+                # because corpus isolation creates a copy
 
             self.doc_ids.append(document.id)
             logger.info(f"Created document with id: {document.id}")
 
-        # Link docs to corpus
+        # Link docs to corpus and assign permissions to corpus copies
+        self.corpus_doc_ids = []
         with transaction.atomic():
             for doc_id in self.doc_ids:
                 doc = Document.objects.get(id=doc_id)
-                self.corpus.add_document(document=doc, user=self.user)
+                corpus_doc, status, path = self.corpus.add_document(document=doc, user=self.user)
+                self.corpus_doc_ids.append(corpus_doc.id)
+                # Assign permission to the corpus copy (not the original)
+                set_permissions_for_obj_to_user(
+                    self.user, corpus_doc, [PermissionTypes.READ]
+                )
+        # Update doc_ids to point to corpus copies for annotation creation
+        self.doc_ids = self.corpus_doc_ids
 
         #############################################################################################
         # Analysis-Related Dummy Objects to Test "Make Public" Logic                                #

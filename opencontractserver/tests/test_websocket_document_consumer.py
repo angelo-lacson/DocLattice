@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from typing import Any
+from unittest.mock import patch
 from urllib.parse import quote
 
 import vcr
@@ -86,8 +87,8 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
         while True:
             try:
                 msg = await communicator.receive_from(
-                    timeout=30
-                )  # Increased timeout for potentially longer summaries
+                    timeout=60
+                )  # Increased timeout for agentic workflows with multiple tool calls
             except Exception as e:
                 self.fail(
                     f"Timed-out waiting for websocket messages for query '{query_text}': {e}"
@@ -205,7 +206,7 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
     @vcr.use_cassette(
         "fixtures/vcr_cassettes/test_document_conversation_ws.yaml",
         filter_headers=["authorization"],
-        record_mode="once",  # Change to "rewrite" or remove cassette to re-record
+        record_mode="once",
     )
     async def test_multiturn_streaming_flow__all_default_frameworks(self) -> None:
         """
@@ -689,33 +690,38 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
     ) -> None:
         """Helper method to test sources for a specific framework."""
 
+        # Create fake 384-dimensional embedding to avoid VCR issues with embedder microservice
+        fake_embedding = [0.0] * 384
+
         @vcr.use_cassette(
             cassette_name,
-            filter_headers=["authorization"],
-            record_mode="once",
+            filter_headers=["authorization", "x-api-key"],
+            match_on=["method", "scheme", "host", "port", "path"],
+            record_mode="all",
         )
         async def run_test():
-            with override_settings(
-                LLMS_DEFAULT_AGENT_FRAMEWORK=framework,
-                LLMS_DOCUMENT_AGENT_FRAMEWORK=framework,
-                LLMS_CORPUS_AGENT_FRAMEWORK=framework,
+            # Patch the embedder's _embed_text_impl to return fake embeddings
+            # This avoids VCR interception issues with requests to local Docker services
+            with patch(
+                "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder._embed_text_impl",
+                return_value=fake_embedding,
             ):
-                if test_type == "new":
-                    conversation = await self._run_full_conversation_flow(framework)
-                elif test_type == "loaded":
-                    conversation = await self._run_loaded_conversation_flow(framework)
-                else:
-                    raise ValueError(f"Unknown test_type: {test_type}")
+                with override_settings(
+                    LLMS_DEFAULT_AGENT_FRAMEWORK=framework,
+                    LLMS_DOCUMENT_AGENT_FRAMEWORK=framework,
+                    LLMS_CORPUS_AGENT_FRAMEWORK=framework,
+                ):
+                    if test_type == "new":
+                        conversation = await self._run_full_conversation_flow(framework)
+                    elif test_type == "loaded":
+                        conversation = await self._run_loaded_conversation_flow(framework)
+                    else:
+                        raise ValueError(f"Unknown test_type: {test_type}")
 
-                await self._assert_sources_persisted(conversation, framework)
+                    await self._assert_sources_persisted(conversation, framework)
 
         await run_test()
 
-    @vcr.use_cassette(
-        "fixtures/vcr_cassettes/test_document_conversation_sources_ws.yaml",
-        filter_headers=["authorization"],
-        record_mode="once",
-    )
     async def test_sources_are_logged_for_new_conversation(self) -> None:
         """Test sources are logged for new conversation across all frameworks."""
         for framework in ("pydantic_ai",):
@@ -726,11 +732,6 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
                     test_type="new",
                 )
 
-    @vcr.use_cassette(
-        "fixtures/vcr_cassettes/test_document_conversation_sources_ws_loaded.yaml",
-        filter_headers=["authorization"],
-        record_mode="once",
-    )
     async def test_sources_are_logged_for_loaded_conversation(self) -> None:
         """Test sources are logged for loaded conversation across all frameworks."""
         for framework in ("pydantic_ai",):

@@ -302,7 +302,15 @@ class BulkDocumentUploadTests(TestCase):
             self.assertGreater(corpus_docs, 0)
 
             # Verify document titles and content
-            documents = Document.objects.filter(creator=self.user).order_by("-created")
+            # With corpus isolation, we need to check corpus copies (have DocumentPath), not originals
+            from opencontractserver.documents.models import DocumentPath
+
+            corpus_doc_ids = DocumentPath.objects.filter(
+                corpus=self.corpus, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+            documents = Document.objects.filter(
+                id__in=corpus_doc_ids, creator=self.user
+            ).order_by("-created")
 
             # Filter to only documents that should match the pattern and check the first 3 of those
             test_docs = [

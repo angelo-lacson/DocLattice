@@ -160,6 +160,7 @@ def import_document(
                     version_tree_id=old_doc.version_tree_id,  # Same tree
                     parent=old_doc,  # Rule C2
                     is_current=True,  # Rule C3
+                    structural_annotation_set=old_doc.structural_annotation_set,  # Inherit structural annotations
                     creator=user,
                     **{
                         k: v
@@ -234,10 +235,18 @@ def import_document(
                         file_type=doc_kwargs.get("file_type", "application/pdf"),
                         pdf_file=pdf_file or global_doc_with_hash.pdf_file,  # Rule I3
                         pdf_file_hash=content_hash,
+                        # Share parsing artifacts (file blobs, not duplicated)
+                        pawls_parse_file=global_doc_with_hash.pawls_parse_file,
+                        txt_extract_file=global_doc_with_hash.txt_extract_file,
+                        icon=global_doc_with_hash.icon,
+                        md_summary_file=global_doc_with_hash.md_summary_file,
+                        page_count=global_doc_with_hash.page_count,
+                        is_public=global_doc_with_hash.is_public,  # Inherit public status
                         version_tree_id=tree_id,  # New isolated tree
                         is_current=True,
                         parent=None,  # Root of NEW content tree
                         source_document=global_doc_with_hash,  # Rule I2: provenance
+                        structural_annotation_set=global_doc_with_hash.structural_annotation_set,  # Share structural annotations
                         creator=user,
                         **{
                             k: v
@@ -249,7 +258,8 @@ def import_document(
                     status = "created_from_existing"
                     logger.info(
                         f"Created corpus-isolated doc {doc.id} from existing "
-                        f"doc {global_doc_with_hash.id} at {path} in corpus {corpus.id}"
+                        f"doc {global_doc_with_hash.id} at {path} in corpus {corpus.id} "
+                        f"(structural_set={global_doc_with_hash.structural_annotation_set_id})"
                     )
                 else:
                     # Brand new content globally (Rule C1)
