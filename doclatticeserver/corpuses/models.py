@@ -410,16 +410,19 @@ class Corpus(TreeNode):
         with transaction.atomic():
             # Check if this content already exists in THIS corpus (by hash)
             # This implements corpus isolation - we check within corpus, not globally
-            corpus_doc_with_hash = (
-                DocumentPath.objects.filter(
-                    corpus=self,
-                    document__pdf_file_hash=document.pdf_file_hash,
-                    is_current=True,
-                    is_deleted=False,
+            # IMPORTANT: Only deduplicate if hash is not None (avoid treating all NULL hashes as same)
+            corpus_doc_with_hash = None
+            if document.pdf_file_hash is not None:
+                corpus_doc_with_hash = (
+                    DocumentPath.objects.filter(
+                        corpus=self,
+                        document__pdf_file_hash=document.pdf_file_hash,
+                        is_current=True,
+                        is_deleted=False,
+                    )
+                    .select_related("document")
+                    .first()
                 )
-                .select_related("document")
-                .first()
-            )
 
             if corpus_doc_with_hash:
                 # Content already exists in THIS corpus
@@ -439,10 +442,18 @@ class Corpus(TreeNode):
                 file_type=doc_kwargs.get("file_type", document.file_type),
                 pdf_file=document.pdf_file,  # Share file blob (Rule I3)
                 pdf_file_hash=document.pdf_file_hash,
+                # Share parsing artifacts (file blobs, not duplicated)
+                pawls_parse_file=document.pawls_parse_file,
+                txt_extract_file=document.txt_extract_file,
+                icon=document.icon,
+                md_summary_file=document.md_summary_file,
+                page_count=document.page_count,
+                is_public=document.is_public,  # Inherit public status
                 version_tree_id=tree_id,  # NEW isolated version tree
                 is_current=True,
                 parent=None,  # Root of NEW content tree
                 source_document=document,  # Provenance tracking (Rule I2)
+                structural_annotation_set=document.structural_annotation_set,  # Share structural annotations
                 creator=user,
                 **{
                     k: v
@@ -453,7 +464,7 @@ class Corpus(TreeNode):
 
             logger.info(
                 f"Created corpus-isolated copy {corpus_copy.pk} from doc {document.pk} "
-                f"in corpus {self.pk}"
+                f"in corpus {self.pk} (structural_set={document.structural_annotation_set_id})"
             )
 
             # Check if path is occupied

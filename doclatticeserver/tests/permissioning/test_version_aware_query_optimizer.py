@@ -493,6 +493,10 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
         )
         self.assertEqual(status, "created_from_existing")
         self.assertNotEqual(doc.id, doc2.id)  # Corpus-isolated copy
+        # Grant user permissions on the corpus-isolated copy
+        set_permissions_for_obj_to_user(
+            self.user, doc2, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         # Add annotation in corpus 2
         anno2 = Annotation.objects.create(

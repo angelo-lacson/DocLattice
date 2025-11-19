@@ -1176,6 +1176,14 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return queryset
 
 
+# Explicit Connection class for DocumentType to use in relay.ConnectionField
+class DocumentTypeConnection(CountableConnection):
+    """Connection class for DocumentType used in Corpus.documents field."""
+
+    class Meta:
+        node = DocumentType
+
+
 # ---------------- Engagement Metrics Types (Epic #565) ----------------
 class CorpusEngagementMetricsType(graphene.ObjectType):
     """
@@ -1284,6 +1292,13 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         AnnotationType,
         analysis_id=graphene.ID(),
         label_types=graphene.List(LabelTypeEnum),
+    )
+
+    # Explicit documents field to use custom resolver via DocumentPath
+    # This is necessary because Corpus model no longer has M2M documents field
+    # (corpus isolation moved to DocumentPath-based relationships)
+    documents = relay.ConnectionField(
+        DocumentTypeConnection, description="Documents in this corpus via DocumentPath"
     )
 
     def resolve_documents(self, info):
