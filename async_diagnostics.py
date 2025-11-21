@@ -45,23 +45,25 @@ class AsyncResourceTracker:
         """Set current test being run."""
         self.test_context = test_name
         timestamp = datetime.now().isoformat()
-        test_timeline.append({
-            'timestamp': timestamp,
-            'test': test_name,
-            'event': 'start',
-            'active_generators': len(self.active_generators),
-            'active_coroutines': len(self.active_coroutines),
-        })
+        test_timeline.append(
+            {
+                "timestamp": timestamp,
+                "test": test_name,
+                "event": "start",
+                "active_generators": len(self.active_generators),
+                "active_coroutines": len(self.active_coroutines),
+            }
+        )
 
     def track_generator_created(self, gen, source_info):
         """Track async generator creation."""
         gen_id = id(gen)
         self.active_generators[gen_id] = {
-            'generator': gen,
-            'source': source_info,
-            'test': self.test_context,
-            'created_at': datetime.now().isoformat(),
-            'stack_trace': ''.join(traceback.format_stack()),
+            "generator": gen,
+            "source": source_info,
+            "test": self.test_context,
+            "created_at": datetime.now().isoformat(),
+            "stack_trace": "".join(traceback.format_stack()),
         }
         async_generators_created.append(self.active_generators[gen_id])
 
@@ -70,18 +72,18 @@ class AsyncResourceTracker:
         gen_id = id(gen)
         if gen_id in self.active_generators:
             info = self.active_generators.pop(gen_id)
-            info['closed_at'] = datetime.now().isoformat()
+            info["closed_at"] = datetime.now().isoformat()
             async_generators_closed.append(info)
 
     def track_coroutine_created(self, coro, source_info):
         """Track coroutine creation."""
         coro_id = id(coro)
         self.active_coroutines[coro_id] = {
-            'coroutine': coro,
-            'source': source_info,
-            'test': self.test_context,
-            'created_at': datetime.now().isoformat(),
-            'stack_trace': ''.join(traceback.format_stack()),
+            "coroutine": coro,
+            "source": source_info,
+            "test": self.test_context,
+            "created_at": datetime.now().isoformat(),
+            "stack_trace": "".join(traceback.format_stack()),
         }
 
     def track_coroutine_completed(self, coro):
@@ -104,8 +106,8 @@ class AsyncResourceTracker:
                 report.append(f"  Test: {info['test']}")
                 report.append(f"  Created: {info['created_at']}")
                 report.append(f"  Stack trace (last 5 frames):")
-                stack_lines = info['stack_trace'].split('\n')
-                report.append('\n'.join(stack_lines[-6:-1]))
+                stack_lines = info["stack_trace"].split("\n")
+                report.append("\n".join(stack_lines[-6:-1]))
 
         if self.active_coroutines:
             report.append(f"\n{'='*80}")
@@ -117,10 +119,10 @@ class AsyncResourceTracker:
                 report.append(f"  Test: {info['test']}")
                 report.append(f"  Created: {info['created_at']}")
                 report.append(f"  Stack trace (last 5 frames):")
-                stack_lines = info['stack_trace'].split('\n')
-                report.append('\n'.join(stack_lines[-6:-1]))
+                stack_lines = info["stack_trace"].split("\n")
+                report.append("\n".join(stack_lines[-6:-1]))
 
-        return '\n'.join(report)
+        return "\n".join(report)
 
 
 # Global tracker
@@ -131,22 +133,26 @@ def setup_warnings():
     """Setup warning filters to catch async issues."""
 
     # Convert coroutine warnings to errors
-    warnings.filterwarnings('error', category=RuntimeWarning, message='.*was never awaited')
+    warnings.filterwarnings(
+        "error", category=RuntimeWarning, message=".*was never awaited"
+    )
 
     # Convert resource warnings to errors
-    warnings.filterwarnings('error', category=ResourceWarning)
+    warnings.filterwarnings("error", category=ResourceWarning)
 
     # Custom warning handler for unawaited coroutines
     original_warn = warnings.warn
 
     def custom_warn(message, category=UserWarning, stacklevel=1):
-        if 'was never awaited' in str(message):
-            unawaited_coroutines.append({
-                'message': str(message),
-                'test': tracker.test_context,
-                'timestamp': datetime.now().isoformat(),
-                'stack_trace': ''.join(traceback.format_stack()),
-            })
+        if "was never awaited" in str(message):
+            unawaited_coroutines.append(
+                {
+                    "message": str(message),
+                    "test": tracker.test_context,
+                    "timestamp": datetime.now().isoformat(),
+                    "stack_trace": "".join(traceback.format_stack()),
+                }
+            )
         original_warn(message, category, stacklevel)
 
     warnings.warn = custom_warn
@@ -201,23 +207,23 @@ def analyze_test_timeline():
 
         # Check for resource accumulation
         if i > 0:
-            prev = test_timeline[i-1]
-            gen_delta = event['active_generators'] - prev['active_generators']
-            coro_delta = event['active_coroutines'] - prev['active_coroutines']
+            prev = test_timeline[i - 1]
+            gen_delta = event["active_generators"] - prev["active_generators"]
+            coro_delta = event["active_coroutines"] - prev["active_coroutines"]
 
             if gen_delta > 0:
                 report.append(f"   ⚠️  +{gen_delta} leaked generators")
             if coro_delta > 0:
                 report.append(f"   ⚠️  +{coro_delta} leaked coroutines")
 
-    return '\n'.join(report)
+    return "\n".join(report)
 
 
 def generate_report():
     """Generate comprehensive diagnostic report."""
-    report_path = Path('/tmp/async_diagnostics_report.txt')
+    report_path = Path("/tmp/async_diagnostics_report.txt")
 
-    with open(report_path, 'w') as f:
+    with open(report_path, "w") as f:
         f.write(f"ASYNC DIAGNOSTICS REPORT\n")
         f.write(f"{'='*80}\n")
         f.write(f"Generated: {datetime.now().isoformat()}\n\n")
@@ -250,8 +256,8 @@ def generate_report():
                 f.write(f"   Test: {info['test']}\n")
                 f.write(f"   Timestamp: {info['timestamp']}\n")
                 f.write(f"   Stack trace (last 5 frames):\n")
-                stack_lines = info['stack_trace'].split('\n')
-                f.write('\n'.join(stack_lines[-6:-1]))
+                stack_lines = info["stack_trace"].split("\n")
+                f.write("\n".join(stack_lines[-6:-1]))
                 f.write("\n")
 
     print(f"\n{'='*80}")
@@ -272,7 +278,7 @@ def generate_report():
         return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("Setting up async diagnostics...")
     setup_warnings()
     patch_asyncio()
@@ -285,16 +291,26 @@ if __name__ == '__main__':
 
     result = subprocess.run(
         [
-            'docker', 'compose', '-f', 'test.yml', 'run', '--rm', 'django',
-            'python', 'manage.py', 'test',
-            'opencontractserver.tests.test_admin',
-            'opencontractserver.tests.test_agent_api',
-            'opencontractserver.tests.test_agent_factory',
-            'opencontractserver.tests.test_agent_framework_api',
-            '--noinput', '--keepdb', '--verbosity=2'
+            "docker",
+            "compose",
+            "-f",
+            "test.yml",
+            "run",
+            "--rm",
+            "django",
+            "python",
+            "manage.py",
+            "test",
+            "opencontractserver.tests.test_admin",
+            "opencontractserver.tests.test_agent_api",
+            "opencontractserver.tests.test_agent_factory",
+            "opencontractserver.tests.test_agent_framework_api",
+            "--noinput",
+            "--keepdb",
+            "--verbosity=2",
         ],
         timeout=300,
-        capture_output=False
+        capture_output=False,
     )
 
     # Generate report after tests

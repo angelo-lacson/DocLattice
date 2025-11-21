@@ -128,7 +128,9 @@ class PermissioningTestCase(TestCase):
         with transaction.atomic():
             for doc_id in self.doc_ids:
                 doc = Document.objects.get(id=doc_id)
-                corpus_doc, status, path = self.corpus.add_document(document=doc, user=self.user)
+                corpus_doc, status, path = self.corpus.add_document(
+                    document=doc, user=self.user
+                )
                 self.corpus_doc_ids.append(corpus_doc.id)
                 # Assign permission to the corpus copy (not the original)
                 set_permissions_for_obj_to_user(

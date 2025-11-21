@@ -122,7 +122,9 @@ class QueryOptimizerStructuralSetTests(TestCase):
         set_permissions_for_obj_to_user(
             self.user, self.corpus_a_doc, [PermissionTypes.READ]
         )
-        set_permissions_for_obj_to_user(self.user, self.corpus_a, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(
+            self.user, self.corpus_a, [PermissionTypes.READ]
+        )
 
     def test_query_optimizer_returns_structural_set_annotations(self):
         """
@@ -215,10 +217,10 @@ class QueryOptimizerStructuralSetTests(TestCase):
         )
 
         # Grant permissions
+        set_permissions_for_obj_to_user(self.user, corpus_b_doc, [PermissionTypes.READ])
         set_permissions_for_obj_to_user(
-            self.user, corpus_b_doc, [PermissionTypes.READ]
+            self.user, self.corpus_b, [PermissionTypes.READ]
         )
-        set_permissions_for_obj_to_user(self.user, self.corpus_b, [PermissionTypes.READ])
 
         # Both should reference the same structural set
         self.assertEqual(
@@ -266,9 +268,7 @@ class QueryOptimizerStructuralSetTests(TestCase):
         )
 
         # Grant permissions
-        set_permissions_for_obj_to_user(
-            self.user, corpus_doc, [PermissionTypes.READ]
-        )
+        set_permissions_for_obj_to_user(self.user, corpus_doc, [PermissionTypes.READ])
 
         # Query should work and return only direct annotation
         annotations = list(

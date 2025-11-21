@@ -209,8 +209,12 @@ class PermissionFilteringTestCase(TestCase):
         """
 
         # Add documents to corpuses using add_document (corpus isolation)
-        doc1_copy, _, _ = self.corpus1.add_document(document=self.document1, user=self.user1)
-        doc2_copy, _, _ = self.corpus2.add_document(document=self.document2, user=self.user2)
+        doc1_copy, _, _ = self.corpus1.add_document(
+            document=self.document1, user=self.user1
+        )
+        doc2_copy, _, _ = self.corpus2.add_document(
+            document=self.document2, user=self.user2
+        )
 
         # Test for user1
         result1 = self.client1.execute(query)

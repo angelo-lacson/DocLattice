@@ -975,6 +975,7 @@ class Query(graphene.ObjectType):
 
             # Get documents in writable corpuses via DocumentPath (corpus isolation)
             from opencontractserver.documents.models import DocumentPath
+
             docs_in_writable_corpuses = DocumentPath.objects.filter(
                 corpus__in=writable_corpuses, is_current=True, is_deleted=False
             ).values_list("document_id", flat=True)
@@ -991,9 +992,11 @@ class Query(graphene.ObjectType):
             ).values_list("document_id", flat=True)
 
             # Get standalone documents (not in any corpus via DocumentPath)
-            docs_with_paths = DocumentPath.objects.filter(
-                is_current=True, is_deleted=False
-            ).values_list("document_id", flat=True).distinct()
+            docs_with_paths = (
+                DocumentPath.objects.filter(is_current=True, is_deleted=False)
+                .values_list("document_id", flat=True)
+                .distinct()
+            )
 
             # Build complex filter:
             # 1. User is creator

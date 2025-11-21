@@ -171,18 +171,28 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         """Finalize LLM message with content, sources, and metadata."""
         logger.error(f"[DIAGNOSTIC _finalise_llm_message] Called with:")
         logger.error(f"[DIAGNOSTIC _finalise_llm_message]   llm_id: {llm_id}")
-        logger.error(f"[DIAGNOSTIC _finalise_llm_message]   final_content length: {len(final_content)}")
-        logger.error(f"[DIAGNOSTIC _finalise_llm_message]   sources count: {len(sources)}")
+        logger.error(
+            f"[DIAGNOSTIC _finalise_llm_message]   final_content length: {len(final_content)}"
+        )
+        logger.error(
+            f"[DIAGNOSTIC _finalise_llm_message]   sources count: {len(sources)}"
+        )
         if sources:
-            logger.error(f"[DIAGNOSTIC _finalise_llm_message]   First source: {sources[0].to_dict()}")
-        logger.error(f"[DIAGNOSTIC _finalise_llm_message]   About to call complete_message()...")
+            logger.error(
+                f"[DIAGNOSTIC _finalise_llm_message]   First source: {sources[0].to_dict()}"
+            )
+        logger.error(
+            f"[DIAGNOSTIC _finalise_llm_message]   About to call complete_message()..."
+        )
         await self.complete_message(
             llm_id,
             final_content,
             sources=sources,
             metadata={"usage": usage, "framework": "pydantic_ai", "timeline": timeline},
         )
-        logger.error(f"[DIAGNOSTIC _finalise_llm_message]   complete_message() returned successfully")
+        logger.error(
+            f"[DIAGNOSTIC _finalise_llm_message]   complete_message() returned successfully"
+        )
 
     async def _get_message_history(self) -> Optional[list[ModelMessage]]:
         """
@@ -335,12 +345,16 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         builder = TimelineBuilder()
 
         try:
-            logger.error(f"[DIAGNOSTIC] Entering pydantic_ai agent.iter() for message: {message!r}")
+            logger.error(
+                f"[DIAGNOSTIC] Entering pydantic_ai agent.iter() for message: {message!r}"
+            )
             async with self.pydantic_ai_agent.iter(
                 message, **stream_kwargs
             ) as agent_run:
                 async for node in agent_run:
-                    logger.error(f"[DIAGNOSTIC] Processing node type: {type(node).__name__}")
+                    logger.error(
+                        f"[DIAGNOSTIC] Processing node type: {type(node).__name__}"
+                    )
 
                     # ------------------------------------------------------------------
                     # USER PROMPT NODE – This is the very first node in the graph.
@@ -358,7 +372,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     # MODEL REQUEST NODE – We can stream raw model deltas from here.
                     # ------------------------------------------------------------------
                     elif isinstance(node, ModelRequestNode):
-                        logger.error(f"[DIAGNOSTIC] Entering ModelRequestNode - will stream model deltas")
+                        logger.error(
+                            f"[DIAGNOSTIC] Entering ModelRequestNode - will stream model deltas"
+                        )
                         event_obj = ThoughtEvent(
                             thought="Sending request to language model…",
                             user_message_id=user_msg_id,
@@ -372,15 +388,21 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                             async with node.stream(agent_run.ctx) as model_stream:
                                 async for event in model_stream:
                                     model_event_count += 1
-                                    logger.error(f"[DIAGNOSTIC] Model stream event #{model_event_count}: {type(event).__name__}")
+                                    logger.error(
+                                        f"[DIAGNOSTIC] Model stream event #{model_event_count}: {type(event).__name__}"
+                                    )
                                     text, is_answer, meta = _event_to_text_and_meta(
                                         event
                                     )
-                                    logger.error(f"[DIAGNOSTIC] _event_to_text_and_meta returned: text={text!r}, is_answer={is_answer}, meta={meta}")
+                                    logger.error(
+                                        f"[DIAGNOSTIC] _event_to_text_and_meta returned: text={text!r}, is_answer={is_answer}, meta={meta}"
+                                    )
                                     if text:
                                         if is_answer:
                                             accumulated_content += text
-                                            logger.error(f"[DIAGNOSTIC] Accumulated content now: {accumulated_content!r}")
+                                            logger.error(
+                                                f"[DIAGNOSTIC] Accumulated content now: {accumulated_content!r}"
+                                            )
                                             # Content timeline now handled by TimelineStreamMixin
 
                                         # Merge any source nodes attached to event (unlikely here but future-proof)
@@ -400,11 +422,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                             metadata=meta,
                                         )
                                         builder.add(content_ev)
-                                        logger.error(f"[DIAGNOSTIC] Yielding ContentEvent with text: {text!r}")
+                                        logger.error(
+                                            f"[DIAGNOSTIC] Yielding ContentEvent with text: {text!r}"
+                                        )
                                         yield content_ev
                                     else:
-                                        logger.error(f"[DIAGNOSTIC] No text extracted from event - skipping ContentEvent")
-                            logger.error(f"[DIAGNOSTIC] Exited ModelRequestNode stream - total events: {model_event_count}, accumulated_content length: {len(accumulated_content)}")
+                                        logger.error(
+                                            f"[DIAGNOSTIC] No text extracted from event - skipping ContentEvent"
+                                        )
+                            logger.error(
+                                f"[DIAGNOSTIC] Exited ModelRequestNode stream - total events: {model_event_count}, accumulated_content length: {len(accumulated_content)}"
+                            )
                         except Exception:
                             # Already handled by outer error handler – stop processing this node
                             raise
@@ -413,7 +441,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     # CALL TOOLS NODE – Capture tool call & result events.
                     # ------------------------------------------------------------------
                     elif isinstance(node, CallToolsNode):
-                        logger.error(f"[DIAGNOSTIC] Entering CallToolsNode - will process tool calls")
+                        logger.error(
+                            f"[DIAGNOSTIC] Entering CallToolsNode - will process tool calls"
+                        )
                         event_obj = ThoughtEvent(
                             thought="Processing model response – may invoke tools…",
                             user_message_id=user_msg_id,
@@ -424,16 +454,26 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
                         try:
                             tool_event_count = 0
-                            logger.error(f"[DIAGNOSTIC] About to start node.stream(agent_run.ctx) for CallToolsNode")
+                            logger.error(
+                                f"[DIAGNOSTIC] About to start node.stream(agent_run.ctx) for CallToolsNode"
+                            )
                             async with node.stream(agent_run.ctx) as tool_stream:
-                                logger.error(f"[DIAGNOSTIC] Entered tool_stream context - starting iteration")
+                                logger.error(
+                                    f"[DIAGNOSTIC] Entered tool_stream context - starting iteration"
+                                )
                                 async for event in tool_stream:
                                     tool_event_count += 1
-                                    logger.error(f"[DIAGNOSTIC] Tool stream event #{tool_event_count}: event_kind={event.event_kind}")
-                                    logger.error(f"[DIAGNOSTIC] Event type: {type(event).__name__}")
+                                    logger.error(
+                                        f"[DIAGNOSTIC] Tool stream event #{tool_event_count}: event_kind={event.event_kind}"
+                                    )
+                                    logger.error(
+                                        f"[DIAGNOSTIC] Event type: {type(event).__name__}"
+                                    )
 
                                     if event.event_kind == "function_tool_call":
-                                        logger.error(f"[DIAGNOSTIC] Processing function_tool_call event")
+                                        logger.error(
+                                            f"[DIAGNOSTIC] Processing function_tool_call event"
+                                        )
                                         tool_name = event.part.tool_name
                                         tool_args = event.part.args
                                         tool_call_id = getattr(
@@ -504,7 +544,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                             return  # Exit the stream
 
                                         # If no approval needed, emit the tool call event normally
-                                        logger.error(f"[DIAGNOSTIC] Tool '{tool_name}' does not require approval - emitting ThoughtEvent")
+                                        logger.error(
+                                            f"[DIAGNOSTIC] Tool '{tool_name}' does not require approval - emitting ThoughtEvent"
+                                        )
                                         tool_ev = ThoughtEvent(
                                             thought=f"Calling tool `{tool_name}` with args {event.part.args}",
                                             user_message_id=user_msg_id,
@@ -516,23 +558,33 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                         )
                                         builder.add(tool_ev)
                                         yield tool_ev
-                                        logger.error(f"[DIAGNOSTIC] Finished processing function_tool_call for '{tool_name}' - continuing iteration")
+                                        logger.error(
+                                            f"[DIAGNOSTIC] Finished processing function_tool_call for '{tool_name}' - continuing iteration"
+                                        )
 
                                     elif event.event_kind == "function_tool_result":
-                                        logger.error(f"[DIAGNOSTIC] Processing function_tool_result event")
+                                        logger.error(
+                                            f"[DIAGNOSTIC] Processing function_tool_result event"
+                                        )
                                         tool_name = event.result.tool_name  # type: ignore[attr-defined]
-                                        logger.error(f"[DIAGNOSTIC] Tool result received: tool_name={tool_name}")
+                                        logger.error(
+                                            f"[DIAGNOSTIC] Tool result received: tool_name={tool_name}"
+                                        )
                                         # Capture vector-search results (our canonical source provider)
                                         if tool_name == "similarity_search":
                                             raw_sources = event.result.content  # type: ignore[attr-defined]
-                                            logger.error(f"[DIAGNOSTIC] similarity_search returned {len(raw_sources) if isinstance(raw_sources, list) else 'non-list'} sources")
+                                            logger.error(
+                                                f"[DIAGNOSTIC] similarity_search returned {len(raw_sources) if isinstance(raw_sources, list) else 'non-list'} sources"
+                                            )
                                             if isinstance(raw_sources, list):
                                                 new_sources = [
                                                     _to_source_node(s)
                                                     for s in raw_sources
                                                 ]
                                                 accumulated_sources.extend(new_sources)
-                                                logger.error(f"[DIAGNOSTIC] Accumulated {len(new_sources)} sources from similarity_search. Total accumulated_sources now: {len(accumulated_sources)}")
+                                                logger.error(
+                                                    f"[DIAGNOSTIC] Accumulated {len(new_sources)} sources from similarity_search. Total accumulated_sources now: {len(accumulated_sources)}"
+                                                )
 
                                                 # Emit a dedicated SourceEvent so the client
                                                 # can update citations in real-time.
@@ -542,7 +594,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                     llm_message_id=llm_msg_id,
                                                 )
                                                 builder.add(src_ev)
-                                                logger.error(f"[DIAGNOSTIC] Yielding SourceEvent with {len(new_sources)} sources")
+                                                logger.error(
+                                                    f"[DIAGNOSTIC] Yielding SourceEvent with {len(new_sources)} sources"
+                                                )
                                                 yield src_ev
 
                                         # Capture exact text search results (similar to similarity_search)
@@ -687,14 +741,26 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                             )
                                             builder.add(tool_ev)
                                             yield tool_ev
-                                        logger.error(f"[DIAGNOSTIC] Finished processing event kind: {event.event_kind}")
-                                        logger.error(f"[DIAGNOSTIC] About to continue to next iteration of tool_stream")
-                                logger.error(f"[DIAGNOSTIC] Exited tool_stream loop normally - processed {tool_event_count} events total")
+                                        logger.error(
+                                            f"[DIAGNOSTIC] Finished processing event kind: {event.event_kind}"
+                                        )
+                                        logger.error(
+                                            f"[DIAGNOSTIC] About to continue to next iteration of tool_stream"
+                                        )
+                                logger.error(
+                                    f"[DIAGNOSTIC] Exited tool_stream loop normally - processed {tool_event_count} events total"
+                                )
                         except Exception as tool_exc:
                             # Already handled by outer error handler – stop processing this node
-                            logger.error(f"[DIAGNOSTIC] EXCEPTION in CallToolsNode processing: {type(tool_exc).__name__}: {str(tool_exc)}")
-                            logger.error(f"[DIAGNOSTIC] Exception traceback:", exc_info=True)
-                            logger.error(f"[DIAGNOSTIC] Breaking out of tool processing due to exception")
+                            logger.error(
+                                f"[DIAGNOSTIC] EXCEPTION in CallToolsNode processing: {type(tool_exc).__name__}: {str(tool_exc)}"
+                            )
+                            logger.error(
+                                f"[DIAGNOSTIC] Exception traceback:", exc_info=True
+                            )
+                            logger.error(
+                                f"[DIAGNOSTIC] Breaking out of tool processing due to exception"
+                            )
                             break
 
                     # ------------------------------------------------------------------
@@ -710,16 +776,22 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         yield end_ev
 
                 # After exiting the for-loop, the agent_run is complete and contains the final result.
-                logger.error(f"[DIAGNOSTIC] Exited all nodes. Checking agent_run.result...")
+                logger.error(
+                    f"[DIAGNOSTIC] Exited all nodes. Checking agent_run.result..."
+                )
                 if agent_run.result:
                     result_content = str(agent_run.result.output)
-                    logger.error(f"[DIAGNOSTIC] agent_run.result.output: {result_content!r}")
+                    logger.error(
+                        f"[DIAGNOSTIC] agent_run.result.output: {result_content!r}"
+                    )
                     # If we failed to stream tokens (e.g. provider buffered) or the
                     # final result is longer (more complete), prefer it.
                     if not accumulated_content or len(result_content) > len(
                         accumulated_content
                     ):
-                        logger.error(f"[DIAGNOSTIC] Using result_content as accumulated_content (streamed content was empty or shorter)")
+                        logger.error(
+                            f"[DIAGNOSTIC] Using result_content as accumulated_content (streamed content was empty or shorter)"
+                        )
                         accumulated_content = result_content
                     final_usage_data = _usage_to_dict(agent_run.result.usage())
                     # builder will add run_finished status
@@ -731,10 +803,16 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             # --------------------------------------------------------------
 
             logger.error(f"[DIAGNOSTIC] About to persist message:")
-            logger.error(f"[DIAGNOSTIC]   accumulated_content length: {len(accumulated_content)}")
-            logger.error(f"[DIAGNOSTIC]   accumulated_sources count: {len(accumulated_sources)}")
+            logger.error(
+                f"[DIAGNOSTIC]   accumulated_content length: {len(accumulated_content)}"
+            )
+            logger.error(
+                f"[DIAGNOSTIC]   accumulated_sources count: {len(accumulated_sources)}"
+            )
             if accumulated_sources:
-                logger.error(f"[DIAGNOSTIC]   First source: {accumulated_sources[0].to_dict()}")
+                logger.error(
+                    f"[DIAGNOSTIC]   First source: {accumulated_sources[0].to_dict()}"
+                )
 
             final_event = FinalEvent(
                 accumulated_content=accumulated_content,

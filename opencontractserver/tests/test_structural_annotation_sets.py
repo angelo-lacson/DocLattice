@@ -195,9 +195,7 @@ class AnnotationStructuralSetConstraintTests(TestCase):
 
         # Check the error contains the constraint violation message
         error_str = str(context.exception)
-        self.assertTrue(
-            "must belong to either" in error_str or "__all__" in error_str
-        )
+        self.assertTrue("must belong to either" in error_str or "__all__" in error_str)
 
 
 class RelationshipStructuralSetConstraintTests(TestCase):
@@ -366,8 +364,12 @@ class DocumentStructuralAnnotationSetTests(TestCase):
         )
 
         # Both documents should see the same structural annotations
-        doc1_struct_annots = list(doc1.structural_annotation_set.structural_annotations.all())
-        doc2_struct_annots = list(doc2.structural_annotation_set.structural_annotations.all())
+        doc1_struct_annots = list(
+            doc1.structural_annotation_set.structural_annotations.all()
+        )
+        doc2_struct_annots = list(
+            doc2.structural_annotation_set.structural_annotations.all()
+        )
 
         self.assertEqual(len(doc1_struct_annots), 2)
         self.assertEqual(len(doc2_struct_annots), 2)
@@ -412,9 +414,7 @@ class StructuralAnnotationSetProtectionTests(TestCase):
         sas.delete()
 
         # Verify it's gone
-        self.assertFalse(
-            StructuralAnnotationSet.objects.filter(id=sas_id).exists()
-        )
+        self.assertFalse(StructuralAnnotationSet.objects.filter(id=sas_id).exists())
 
     def test_deleting_document_does_not_delete_structural_set(self):
         """Deleting a document should not delete its structural set."""
@@ -433,9 +433,7 @@ class StructuralAnnotationSetProtectionTests(TestCase):
         doc.delete()
 
         # Structural set should still exist
-        self.assertTrue(
-            StructuralAnnotationSet.objects.filter(id=sas_id).exists()
-        )
+        self.assertTrue(StructuralAnnotationSet.objects.filter(id=sas_id).exists())
 
 
 class StructuralAnnotationImmutabilityTests(TestCase):

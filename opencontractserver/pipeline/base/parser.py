@@ -118,6 +118,7 @@ class BaseParser(PipelineComponentBase, ABC):
 
         # Get user for corpus operations
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         user = User.objects.get(pk=user_id)
 
@@ -130,7 +131,9 @@ class BaseParser(PipelineComponentBase, ABC):
             corpus_obj = Corpus.objects.get(id=corpus_id)
             # Use add_document for corpus isolation (creates DocumentPath)
             document, status, _ = corpus_obj.add_document(document=document, user=user)
-            logger.info(f"Associated document with corpus: {corpus_obj.title} (status: {status})")
+            logger.info(
+                f"Associated document with corpus: {corpus_obj.title} (status: {status})"
+            )
         else:
             corpus_obj = None
 

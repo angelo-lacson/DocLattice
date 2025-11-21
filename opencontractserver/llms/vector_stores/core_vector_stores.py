@@ -270,9 +270,9 @@ class CoreAnnotationVectorStore:
             from opencontractserver.documents.models import Document
 
             document = await sync_to_async(
-                lambda: Document.objects.select_related("structural_annotation_set").get(
-                    pk=self.document_id
-                )
+                lambda: Document.objects.select_related(
+                    "structural_annotation_set"
+                ).get(pk=self.document_id)
             )()
 
             # Build filter for annotations from BOTH sources:
