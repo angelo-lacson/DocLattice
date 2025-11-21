@@ -138,9 +138,15 @@ class StructuralAnnotationPortabilityTests(TestCase):
         )
 
         # All should have access to the same structural annotations
-        annots_a = list(corpus_a_doc.structural_annotation_set.structural_annotations.all())
-        annots_b = list(corpus_b_doc.structural_annotation_set.structural_annotations.all())
-        annots_c = list(corpus_c_doc.structural_annotation_set.structural_annotations.all())
+        annots_a = list(
+            corpus_a_doc.structural_annotation_set.structural_annotations.all()
+        )
+        annots_b = list(
+            corpus_b_doc.structural_annotation_set.structural_annotations.all()
+        )
+        annots_c = list(
+            corpus_c_doc.structural_annotation_set.structural_annotations.all()
+        )
 
         self.assertEqual(set(annots_a), set(annots_b))
         self.assertEqual(set(annots_b), set(annots_c))
@@ -160,8 +166,12 @@ class StructuralAnnotationPortabilityTests(TestCase):
         )
 
         # Both should have access to the same structural relationships
-        rels_a = list(corpus_a_doc.structural_annotation_set.structural_relationships.all())
-        rels_b = list(corpus_b_doc.structural_annotation_set.structural_relationships.all())
+        rels_a = list(
+            corpus_a_doc.structural_annotation_set.structural_relationships.all()
+        )
+        rels_b = list(
+            corpus_b_doc.structural_annotation_set.structural_relationships.all()
+        )
 
         self.assertEqual(set(rels_a), set(rels_b))
         self.assertEqual(len(rels_a), 1)
@@ -228,12 +238,20 @@ class StructuralAnnotationPortabilityTests(TestCase):
         )
 
         # This annotation should only be accessible via corpus_a_doc
-        self.assertEqual(corpus_a_doc.doc_annotations.filter(structural=False).count(), 1)
-        self.assertEqual(corpus_b_doc.doc_annotations.filter(structural=False).count(), 0)
+        self.assertEqual(
+            corpus_a_doc.doc_annotations.filter(structural=False).count(), 1
+        )
+        self.assertEqual(
+            corpus_b_doc.doc_annotations.filter(structural=False).count(), 0
+        )
 
         # But both should have access to structural annotations via the set
-        self.assertEqual(corpus_a_doc.structural_annotation_set.structural_annotations.count(), 2)
-        self.assertEqual(corpus_b_doc.structural_annotation_set.structural_annotations.count(), 2)
+        self.assertEqual(
+            corpus_a_doc.structural_annotation_set.structural_annotations.count(), 2
+        )
+        self.assertEqual(
+            corpus_b_doc.structural_annotation_set.structural_annotations.count(), 2
+        )
 
     def test_structural_set_with_no_annotations(self):
         """Document with structural set but no annotations should still share the set."""
@@ -253,7 +271,9 @@ class StructuralAnnotationPortabilityTests(TestCase):
 
         # Should share the empty set
         self.assertEqual(corpus_doc.structural_annotation_set, empty_set)
-        self.assertEqual(corpus_doc.structural_annotation_set.structural_annotations.count(), 0)
+        self.assertEqual(
+            corpus_doc.structural_annotation_set.structural_annotations.count(), 0
+        )
 
 
 class ImportContentStructuralSetTests(TransactionTestCase):

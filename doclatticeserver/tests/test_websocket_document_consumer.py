@@ -649,16 +649,28 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
         )()
 
         # Enhanced diagnostics
-        logger.error(f"[DIAGNOSTIC] Total LLM messages in conversation: {len(all_llm_messages)}")
+        logger.error(
+            f"[DIAGNOSTIC] Total LLM messages in conversation: {len(all_llm_messages)}"
+        )
         for idx, msg in enumerate(all_llm_messages):
-            logger.error(f"[DIAGNOSTIC] Message {idx}: id={msg.id}, msg_type={msg.msg_type}")
-            logger.error(f"[DIAGNOSTIC]   content preview: {msg.content[:100] if msg.content else 'NONE'}...")
+            logger.error(
+                f"[DIAGNOSTIC] Message {idx}: id={msg.id}, msg_type={msg.msg_type}"
+            )
+            logger.error(
+                f"[DIAGNOSTIC]   content preview: {msg.content[:100] if msg.content else 'NONE'}..."
+            )
             logger.error(f"[DIAGNOSTIC]   data field type: {type(msg.data)}")
-            logger.error(f"[DIAGNOSTIC]   data field keys: {msg.data.keys() if isinstance(msg.data, dict) else 'NOT A DICT'}")
+            logger.error(
+                f"[DIAGNOSTIC]   data field keys: {msg.data.keys() if isinstance(msg.data, dict) else 'NOT A DICT'}"
+            )
             if isinstance(msg.data, dict):
-                logger.error(f"[DIAGNOSTIC]   data['sources'] exists: {'sources' in msg.data}")
-                if 'sources' in msg.data:
-                    logger.error(f"[DIAGNOSTIC]   data['sources'] value: {msg.data['sources']}")
+                logger.error(
+                    f"[DIAGNOSTIC]   data['sources'] exists: {'sources' in msg.data}"
+                )
+                if "sources" in msg.data:
+                    logger.error(
+                        f"[DIAGNOSTIC]   data['sources'] value: {msg.data['sources']}"
+                    )
                 else:
                     logger.error(f"[DIAGNOSTIC]   Full data field: {msg.data}")
 
@@ -671,7 +683,9 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
             )
         )()
 
-        logger.error(f"[DIAGNOSTIC] LLM messages with non-empty sources: {len(llm_messages)}")
+        logger.error(
+            f"[DIAGNOSTIC] LLM messages with non-empty sources: {len(llm_messages)}"
+        )
 
         self.assertTrue(
             llm_messages,
@@ -749,7 +763,9 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
                     if test_type == "new":
                         conversation = await self._run_full_conversation_flow(framework)
                     elif test_type == "loaded":
-                        conversation = await self._run_loaded_conversation_flow(framework)
+                        conversation = await self._run_loaded_conversation_flow(
+                            framework
+                        )
                     else:
                         raise ValueError(f"Unknown test_type: {test_type}")
 

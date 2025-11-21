@@ -488,6 +488,7 @@ class Embedding(BaseOCModel):
     def __str__(self):
         return f"Embedding (ID={self.pk}) [{self.embedder_path or 'Unknown Model'}]"
 
+
 class StructuralAnnotationSet(BaseOCModel):
     """
     Immutable set of structural annotations for a specific document content.

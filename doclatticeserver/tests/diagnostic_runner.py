@@ -25,34 +25,40 @@ class AsyncResourceTracker:
     """Track async resources created during tests."""
 
     def __init__(self):
-        self.resources_by_test = defaultdict(lambda: {
-            'generators_created': [],
-            'generators_closed': [],
-            'coroutines_created': [],
-            'coroutines_completed': [],
-            'warnings': [],
-        })
+        self.resources_by_test = defaultdict(
+            lambda: {
+                "generators_created": [],
+                "generators_closed": [],
+                "coroutines_created": [],
+                "coroutines_completed": [],
+                "warnings": [],
+            }
+        )
         self.current_test = None
         self.event_loop_states = []
 
     def start_test(self, test_name):
         """Mark start of a test."""
         self.current_test = test_name
-        self.event_loop_states.append({
-            'test': test_name,
-            'event': 'start',
-            'timestamp': datetime.now().isoformat(),
-            'loop_state': self._get_loop_state(),
-        })
+        self.event_loop_states.append(
+            {
+                "test": test_name,
+                "event": "start",
+                "timestamp": datetime.now().isoformat(),
+                "loop_state": self._get_loop_state(),
+            }
+        )
 
     def end_test(self, test_name):
         """Mark end of a test."""
-        self.event_loop_states.append({
-            'test': test_name,
-            'event': 'end',
-            'timestamp': datetime.now().isoformat(),
-            'loop_state': self._get_loop_state(),
-        })
+        self.event_loop_states.append(
+            {
+                "test": test_name,
+                "event": "end",
+                "timestamp": datetime.now().isoformat(),
+                "loop_state": self._get_loop_state(),
+            }
+        )
 
         # Force garbage collection and check for leaks
         gc.collect()
@@ -60,8 +66,8 @@ class AsyncResourceTracker:
         leaked_coros = self._find_leaked_coroutines()
 
         if leaked_gens or leaked_coros:
-            self.resources_by_test[test_name]['leaked_generators'] = leaked_gens
-            self.resources_by_test[test_name]['leaked_coroutines'] = leaked_coros
+            self.resources_by_test[test_name]["leaked_generators"] = leaked_gens
+            self.resources_by_test[test_name]["leaked_coroutines"] = leaked_coros
 
     def _get_loop_state(self):
         """Get current event loop state."""
@@ -89,11 +95,13 @@ class AsyncResourceTracker:
     def record_warning(self, message, test_name=None):
         """Record a warning."""
         test = test_name or self.current_test
-        self.resources_by_test[test]['warnings'].append({
-            'message': str(message),
-            'timestamp': datetime.now().isoformat(),
-            'stack': traceback.format_stack(),
-        })
+        self.resources_by_test[test]["warnings"].append(
+            {
+                "message": str(message),
+                "timestamp": datetime.now().isoformat(),
+                "stack": traceback.format_stack(),
+            }
+        )
 
     def generate_report(self):
         """Generate diagnostic report."""
@@ -106,12 +114,12 @@ class AsyncResourceTracker:
         # Summary
         total_tests = len(self.resources_by_test)
         tests_with_leaks = sum(
-            1 for data in self.resources_by_test.values()
-            if data.get('leaked_generators') or data.get('leaked_coroutines')
+            1
+            for data in self.resources_by_test.values()
+            if data.get("leaked_generators") or data.get("leaked_coroutines")
         )
         tests_with_warnings = sum(
-            1 for data in self.resources_by_test.values()
-            if data.get('warnings')
+            1 for data in self.resources_by_test.values() if data.get("warnings")
         )
 
         report.append("SUMMARY")
@@ -126,9 +134,9 @@ class AsyncResourceTracker:
             report.append("-" * 80)
 
             for test_name, data in sorted(self.resources_by_test.items()):
-                leaked_gens = data.get('leaked_generators', [])
-                leaked_coros = data.get('leaked_coroutines', [])
-                warnings_list = data.get('warnings', [])
+                leaked_gens = data.get("leaked_generators", [])
+                leaked_coros = data.get("leaked_coroutines", [])
+                warnings_list = data.get("warnings", [])
 
                 if leaked_gens or leaked_coros or warnings_list:
                     report.append(f"\n{test_name}:")
@@ -188,7 +196,7 @@ class DiagnosticTestRunner(DiscoverRunner):
         self.original_warn = warnings.warn
 
         def custom_warn(message, category=UserWarning, stacklevel=1):
-            if 'was never awaited' in str(message) or 'async' in str(message).lower():
+            if "was never awaited" in str(message) or "async" in str(message).lower():
                 self.tracker.record_warning(message)
             self.original_warn(message, category, stacklevel)
 
@@ -219,7 +227,7 @@ class DiagnosticTestRunner(DiscoverRunner):
 
         # Generate and save report
         report = self.tracker.generate_report()
-        report_path = Path('/tmp/async_diagnostic_report.txt')
+        report_path = Path("/tmp/async_diagnostic_report.txt")
         report_path.write_text(report)
 
         print(f"\n{'='*80}")

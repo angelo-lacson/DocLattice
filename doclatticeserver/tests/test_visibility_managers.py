@@ -367,7 +367,9 @@ class PermissionBasedVisibilityTest(TestCase):
         # Let's count: owner created 3 docs, each was copied = 6 docs total for owner
         owner_qs = Document.objects.visible_to_user(self.owner)
         self.assertEqual(
-            owner_qs.count(), 6, f"Owner should see 6 documents (3 originals + 3 corpus copies), saw {owner_qs.count()}"
+            owner_qs.count(),
+            6,
+            f"Owner should see 6 documents (3 originals + 3 corpus copies), saw {owner_qs.count()}",
         )
 
         # Collaborator sees:
