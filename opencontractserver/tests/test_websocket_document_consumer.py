@@ -39,16 +39,16 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
     # Expected responses for new (not loaded from history) conversations
     expected_responses_new = {
         AgentFramework.PYDANTIC_AI.value: [
-            'According to U.S. Code Title 1, the rule of construction for "words importing the masculine gender" indicates that such words include the feminine gender as well. This means that when a law or statute uses masculine terms, it is intended to encompass both male and female references.',  # noqa: E501
-            'U.S. Code Title 1, Section 3 defines the term "vessel" to include every description of watercraft or other artificial contrivance used, or capable of being used, as a means of transportation on water. This broad definition encompasses various types of watercraft, ensuring that the term applies to a wide range of vessels used for navigation and transportation.',  # noqa: E501
+            'According to **U.S. Code Title 1**, the rule of construction for "words importing the masculine gender" is as follows:\n\n- "Words importing the masculine gender include the feminine as well."\n\nThis means that any references made using masculine terms are intended to be inclusive of feminine references unless the context specifies otherwise. This is part of a broader set of rules concerning the interpretation of legislation, emphasizing inclusivity in legal language.\n\n**Citation:** U.S. Code Title 1, Chapter 1, Section 1 (page 2).',  # noqa: E501
+            'According to **U.S. Code Title 1, Section 3**, the term "vessel" is defined as follows:\n\n- The term "vessel" includes all means of water transportation.\n\nThis broad definition ensures that various types of watercraft, such as boats, ships, and other floating structures, are encompassed under the term "vessel" for legal and regulatory purposes.\n\n**Citation:** U.S. Code Title 1, Section 3.',  # noqa: E501
         ],
     }
 
     # Expected responses for conversations loaded from history
     expected_responses_loaded = {
         AgentFramework.PYDANTIC_AI.value: [
-            'In the U.S. Code, Title 1, Section 1 states that "words importing the masculine gender include the feminine as well." This means that any legal language that uses masculine pronouns or terms is to be interpreted inclusively to also apply to the feminine gender. This rule of construction is intended to ensure that legal texts are gender-neutral and that women are included in the scope of any laws or regulations that use masculine terminology.',  # noqa: E501
-            'U.S. Code Title 1, Section 3 defines the term "vessel" as "every description of watercraft or other artificial contrivance used, or capable of being used, as a means of transportation on water." This definition encompasses a wide range of watercraft, including ships, boats, barges, and other similar vehicles that are designed for navigation on bodies of water. The inclusive nature of this definition is significant for legal interpretations and applications involving maritime law and regulations.',  # noqa: E501
+            'According to U.S. Code Title 1, the rule of construction states that "words importing the masculine gender include the feminine as well." This means that any references made using masculine terms are intended to be inclusive of feminine references unless the context indicates otherwise.',  # noqa: E501
+            'U.S. Code Title 1, Section 3 defines the term "vessel" as follows: \n\nThe term "vessel" includes every description of watercraft or other artificial contrivance used, or capable of being used, as a means of transportation on water.\n\nThis definition is broad and encompasses various types of watercraft, highlighting their function as vehicles for transportation over water.',  # noqa: E501
         ],
     }
 
@@ -118,9 +118,21 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
         )
 
         content_msgs = [m for m in received if m["type"] == "ASYNC_CONTENT"]
+
+        # Enhanced diagnostics for troubleshooting
+        if not content_msgs:
+            all_message_types = [m.get("type") for m in received]
+            logger.error(
+                f"[DIAGNOSTIC] No ASYNC_CONTENT messages found for query '{query_text}'"
+            )
+            logger.error(f"[DIAGNOSTIC] Total messages received: {len(received)}")
+            logger.error(f"[DIAGNOSTIC] All message types: {all_message_types}")
+            logger.error(f"[DIAGNOSTIC] First 3 messages (full): {received[:3]}")
+
         self.assertTrue(
             content_msgs,
-            f"At least one ASYNC_CONTENT expected for query '{query_text}'.",
+            f"At least one ASYNC_CONTENT expected for query '{query_text}'. "
+            f"Received {len(received)} messages with types: {[m.get('type') for m in received]}",
         )
 
         full_text = "".join(msg["content"] for msg in content_msgs).strip()
@@ -631,6 +643,25 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
     async def _assert_sources_persisted(
         self, conversation: Conversation, framework: str
     ) -> None:
+        # First, fetch ALL LLM messages to see what we have
+        all_llm_messages = await database_sync_to_async(
+            lambda: list(conversation.chat_messages.filter(msg_type="LLM"))
+        )()
+
+        # Enhanced diagnostics
+        logger.error(f"[DIAGNOSTIC] Total LLM messages in conversation: {len(all_llm_messages)}")
+        for idx, msg in enumerate(all_llm_messages):
+            logger.error(f"[DIAGNOSTIC] Message {idx}: id={msg.id}, msg_type={msg.msg_type}")
+            logger.error(f"[DIAGNOSTIC]   content preview: {msg.content[:100] if msg.content else 'NONE'}...")
+            logger.error(f"[DIAGNOSTIC]   data field type: {type(msg.data)}")
+            logger.error(f"[DIAGNOSTIC]   data field keys: {msg.data.keys() if isinstance(msg.data, dict) else 'NOT A DICT'}")
+            if isinstance(msg.data, dict):
+                logger.error(f"[DIAGNOSTIC]   data['sources'] exists: {'sources' in msg.data}")
+                if 'sources' in msg.data:
+                    logger.error(f"[DIAGNOSTIC]   data['sources'] value: {msg.data['sources']}")
+                else:
+                    logger.error(f"[DIAGNOSTIC]   Full data field: {msg.data}")
+
         # Fetch only LLM messages created in the conversation
         llm_messages = await database_sync_to_async(
             lambda: list(
@@ -639,9 +670,13 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
                 )
             )
         )()
+
+        logger.error(f"[DIAGNOSTIC] LLM messages with non-empty sources: {len(llm_messages)}")
+
         self.assertTrue(
             llm_messages,
-            "Expected at least one LLM message with non-empty `data['sources']`",
+            f"Expected at least one LLM message with non-empty `data['sources']`. "
+            f"Found {len(all_llm_messages)} total LLM messages, {len(llm_messages)} with sources.",
         )
 
         # Make sure every retrieved message has a sources list **and** a reasoning timeline.
