@@ -516,6 +516,9 @@ class CoreAnnotationVectorStore:
         results = []
         for annotation in annotations:
             similarity_score = getattr(annotation, "similarity_score", 1.0)
+            # Handle NaN values (can occur when annotations lack computed similarity)
+            if similarity_score != similarity_score:  # NaN check (NaN != NaN is True)
+                similarity_score = 1.0
             results.append(
                 VectorSearchResult(
                     annotation=annotation, similarity_score=similarity_score
@@ -551,11 +554,15 @@ class CoreAnnotationVectorStore:
                 f"Performing vector search with embedder: {self.embedder_path}"
             )
 
-            queryset = queryset.search_by_embedding(
-                query_vector=vector,
-                embedder_path=self.embedder_path,
-                top_k=query.similarity_top_k,
-            )
+            # search_by_embedding is a sync method that materializes the queryset
+            # Wrap it with sync_to_async to make it safe for async contexts
+            queryset = await sync_to_async(
+                lambda: queryset.search_by_embedding(
+                    query_vector=vector,
+                    embedder_path=self.embedder_path,
+                    top_k=query.similarity_top_k,
+                )
+            )()
             _logger.debug(await _safe_queryset_info(queryset, "After vector search"))
         else:
             # Fallback to standard filtering with limit
@@ -580,6 +587,9 @@ class CoreAnnotationVectorStore:
         results = []
         for annotation in annotations:
             similarity_score = getattr(annotation, "similarity_score", 1.0)
+            # Handle NaN values (can occur when annotations lack computed similarity)
+            if similarity_score != similarity_score:  # NaN check (NaN != NaN is True)
+                similarity_score = 1.0
             results.append(
                 VectorSearchResult(
                     annotation=annotation, similarity_score=similarity_score
