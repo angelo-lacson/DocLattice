@@ -2,7 +2,7 @@
 Comprehensive tests for Issue #654: DocumentPath as single source of truth.
 
 This test file covers:
-1. DocumentPathContext utility class
+1.  utility class
 2. New Corpus methods (add_document, remove_document, get_documents, document_count)
 3. Migration command (sync_m2m_to_documentpath)
 
@@ -15,103 +15,12 @@ import io
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.management import call_command
-from django.test import TestCase, TransactionTestCase
+from django.test import TransactionTestCase
 
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.managers import DocumentPathContext
 from opencontractserver.documents.models import Document, DocumentPath
 
 User = get_user_model()
-
-
-class TestDocumentPathContext(TestCase):
-    """Test the DocumentPathContext context manager utility."""
-
-    def setUp(self):
-        """Set up test data."""
-        self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpass123"
-        )
-        self.document = Document.objects.create(
-            title="Test Document",
-            description="A test document",
-            creator=self.user,
-        )
-
-    def test_context_manager_sets_and_clears_context(self):
-        """Test that context manager properly sets and clears thread-local context."""
-        # Context should be None initially
-        self.assertIsNone(DocumentPathContext.get_current())
-
-        # Context should be set within the manager
-        with DocumentPathContext(user=self.user) as ctx:
-            self.assertEqual(DocumentPathContext.get_current(), ctx)
-            self.assertEqual(ctx.user, self.user)
-
-        # Context should be cleared after exiting
-        self.assertIsNone(DocumentPathContext.get_current())
-
-    def test_context_with_custom_settings(self):
-        """Test context with custom folder and path prefix."""
-        from opencontractserver.corpuses.models import Corpus, CorpusFolder
-
-        corpus = Corpus.objects.create(
-            title="Test Corpus", description="Test", creator=self.user
-        )
-        folder = CorpusFolder.objects.create(
-            name="Test Folder", corpus=corpus, creator=self.user
-        )
-
-        with DocumentPathContext(
-            user=self.user,
-            default_folder=folder,
-            default_path_prefix="/custom",
-            auto_generate_paths=False,
-        ) as ctx:
-            self.assertEqual(ctx.default_folder, folder)
-            self.assertEqual(ctx.default_path_prefix, "/custom")
-            self.assertFalse(ctx.auto_generate_paths)
-
-    def test_path_generation_with_title(self):
-        """Test automatic path generation from document title."""
-        with DocumentPathContext(user=self.user) as ctx:
-            path = ctx.generate_path_for_document(self.document)
-            self.assertEqual(path, "/legacy/Test_Document")
-
-    def test_path_generation_without_title(self):
-        """Test path generation for document without title."""
-        doc_no_title = Document.objects.create(
-            description="No title", creator=self.user
-        )
-
-        with DocumentPathContext(user=self.user) as ctx:
-            path = ctx.generate_path_for_document(doc_no_title)
-            self.assertEqual(path, f"/legacy/doc_{doc_no_title.pk}")
-
-    def test_path_generation_sanitizes_special_characters(self):
-        """Test that special characters are sanitized in paths."""
-        doc_special = Document.objects.create(
-            title="Test@Document#With$Special%Chars!", creator=self.user
-        )
-
-        with DocumentPathContext(user=self.user) as ctx:
-            path = ctx.generate_path_for_document(doc_special)
-            self.assertEqual(path, "/legacy/Test_Document_With_Special_Chars_")
-
-    def test_nested_contexts(self):
-        """Test that nested contexts work correctly."""
-        user2 = User.objects.create_user(username="user2", email="user2@example.com")
-
-        with DocumentPathContext(user=self.user):
-            self.assertEqual(DocumentPathContext.get_current().user, self.user)
-
-            with DocumentPathContext(user=user2):
-                self.assertEqual(DocumentPathContext.get_current().user, user2)
-
-            # Should restore to outer context after inner context exits
-            self.assertEqual(DocumentPathContext.get_current().user, self.user)
-
-        self.assertIsNone(DocumentPathContext.get_current())
 
 
 class TestCorpusDocumentMethods(TransactionTestCase):

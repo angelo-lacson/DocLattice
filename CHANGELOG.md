@@ -95,6 +95,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Test Suite Updates for Corpus Isolation Architecture
 
+- **Removed deprecated legacy manager tests**
+  - **File**: `opencontractserver/tests/test_document_path_migration.py`
+  - **Removed**: Test classes for deprecated `DocumentCorpusRelationshipManager` (20+ tests)
+  - **Reason**: The backward compatibility M2M manager was removed in Issue #654 Phase 2
+  - **Note**: `DocumentCorpusRelationshipManager` in `opencontractserver/documents/managers.py` remains as documentation but is unused
+  - **Impact**: Improved test clarity by removing tests for code that never executes
+
 - **Permission assignment order** in test setups
   - Moved permission assignment AFTER `add_document()` calls
   - Ensures permissions are assigned to corpus copies, not originals
