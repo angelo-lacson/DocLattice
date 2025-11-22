@@ -218,7 +218,7 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
     @vcr.use_cassette(
         "fixtures/vcr_cassettes/test_document_conversation_ws.yaml",
         filter_headers=["authorization"],
-        record_mode="once",
+        record_mode="none",
     )
     async def test_multiturn_streaming_flow__all_default_frameworks(self) -> None:
         """
