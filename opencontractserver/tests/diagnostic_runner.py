@@ -11,7 +11,6 @@ Usage:
 
 import asyncio
 import gc
-import sys
 import traceback
 import warnings
 from collections import defaultdict

@@ -746,13 +746,14 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
             cassette_name,
             filter_headers=["authorization", "x-api-key"],
             match_on=["method", "scheme", "host", "port", "path"],
-            record_mode="all",
+            record_mode="none",
         )
         async def run_test():
             # Patch the embedder's _embed_text_impl to return fake embeddings
             # This avoids VCR interception issues with requests to local Docker services
             with patch(
-                "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder._embed_text_impl",
+                "opencontractserver.pipeline.embedders.sent_transformer_microservice."
+                "MicroserviceEmbedder._embed_text_impl",
                 return_value=fake_embedding,
             ):
                 with override_settings(

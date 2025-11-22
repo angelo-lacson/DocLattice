@@ -325,7 +325,7 @@ class QueryOptimizerStructuralSetTests(TestCase):
         Verify page filtering works for structural_set annotations.
         """
         # Create structural annotation on page 2
-        page2_annot = Annotation.objects.create(
+        _page2_annot = Annotation.objects.create(  # noqa: F841
             structural_set=self.structural_set,
             annotation_label=self.header_label,
             creator=self.user,

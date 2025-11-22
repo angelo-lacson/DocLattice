@@ -228,7 +228,7 @@ class StructuralAnnotationPortabilityTests(TestCase):
 
         # Create corpus-specific annotations
         label = AnnotationLabel.objects.create(text="UserNote", creator=self.user)
-        corpus_a_annot = Annotation.objects.create(
+        _corpus_a_annot = Annotation.objects.create(  # noqa: F841
             document=corpus_a_doc,
             corpus=self.corpus_a,
             annotation_label=label,
@@ -332,7 +332,7 @@ class ImportContentStructuralSetTests(TransactionTestCase):
         content_v1 = b"test pdf content v1"
         content_v2 = b"test pdf content v2"
         hash_v1 = hashlib.sha256(content_v1).hexdigest()
-        hash_v2 = hashlib.sha256(content_v2).hexdigest()
+        _hash_v2 = hashlib.sha256(content_v2).hexdigest()  # noqa: F841
 
         # Create structural set for v1
         structural_set_v1 = StructuralAnnotationSet.objects.create(

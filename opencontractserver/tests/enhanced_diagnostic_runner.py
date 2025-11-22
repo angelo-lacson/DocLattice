@@ -8,7 +8,6 @@ Usage:
     TEST_RUNNER = 'opencontractserver.tests.enhanced_diagnostic_runner.EnhancedDiagnosticTestRunner'
 """
 
-import asyncio
 import sys
 import traceback
 import warnings
@@ -198,7 +197,7 @@ class AsyncResourceDiagnostics:
 
         # Accumulation pattern analysis
         if self.global_async_gen_count > 0:
-            report.append(f"\n\nACCUMULATION PATTERN ANALYSIS")
+            report.append("\n\nACCUMULATION PATTERN ANALYSIS")
             report.append("-" * 80)
 
             cumulative_created = 0
