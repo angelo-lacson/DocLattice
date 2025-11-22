@@ -500,7 +500,7 @@ class CoreAgentBase(ABC):
         metadata: dict[str, Any] = None,
     ) -> None:
         """Complete a message atomically with content, sources, and metadata."""
-        logger.error(f"[DIAGNOSTIC complete_message] Called with:")
+        logger.error("[DIAGNOSTIC complete_message] Called with:")
         logger.error(f"[DIAGNOSTIC complete_message]   message_id: {message_id}")
         logger.error(f"[DIAGNOSTIC complete_message]   content length: {len(content)}")
         logger.error(
@@ -514,13 +514,13 @@ class CoreAgentBase(ABC):
             f"[DIAGNOSTIC complete_message]   metadata keys: {metadata.keys() if metadata else 'None'}"
         )
         logger.error(
-            f"[DIAGNOSTIC complete_message]   Calling conversation_manager.complete_message()..."
+            "[DIAGNOSTIC complete_message]   Calling conversation_manager.complete_message()..."
         )
         await self.conversation_manager.complete_message(
             message_id, content, sources, metadata
         )
         logger.error(
-            f"[DIAGNOSTIC complete_message]   conversation_manager.complete_message() returned successfully"
+            "[DIAGNOSTIC complete_message]   conversation_manager.complete_message() returned successfully"
         )
 
     async def cancel_message(self, message_id: int, reason: str = "Cancelled") -> None:

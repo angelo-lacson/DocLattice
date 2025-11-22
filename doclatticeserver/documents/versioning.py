@@ -246,7 +246,8 @@ def import_document(
                         is_current=True,
                         parent=None,  # Root of NEW content tree
                         source_document=global_doc_with_hash,  # Rule I2: provenance
-                        structural_annotation_set=global_doc_with_hash.structural_annotation_set,  # Share structural annotations
+                        # Share structural annotations
+                        structural_annotation_set=global_doc_with_hash.structural_annotation_set,
                         creator=user,
                         **{
                             k: v

@@ -292,7 +292,10 @@ class Relationship(BaseOCModel):
                     )
                 ),
                 name="relationship_has_single_parent",
-                violation_error_message="A relationship must belong to either a document or a structural set, not both or neither",
+                violation_error_message=(
+                    "A relationship must belong to either a document or a "
+                    "structural set, not both or neither"
+                ),
             ),
         ]
 
@@ -894,7 +897,10 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
                     )
                 ),
                 name="annotation_has_single_parent",
-                violation_error_message="An annotation must belong to either a document or a structural set, not both or neither",
+                violation_error_message=(
+                    "An annotation must belong to either a document or a "
+                    "structural set, not both or neither"
+                ),
             ),
         ]
 
