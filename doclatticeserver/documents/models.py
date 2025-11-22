@@ -106,6 +106,26 @@ class Document(TreeNode, BaseOCModel, HasEmbeddingMixin):
         help_text="True for newest content in this version tree. Implements Rule C3.",
     )
 
+    # Provenance tracking for corpus-isolated documents (Phase 2)
+    source_document = django.db.models.ForeignKey(
+        "self",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="corpus_copies",
+        help_text="Original document this was copied from (cross-corpus provenance). Implements Rule I2.",
+    )
+
+    # Shared structural annotations (Phase 2.5)
+    structural_annotation_set = django.db.models.ForeignKey(
+        "annotations.StructuralAnnotationSet",
+        on_delete=django.db.models.PROTECT,  # Never delete if documents reference it
+        null=True,
+        blank=True,
+        related_name="documents",
+        help_text="Shared structural annotations for this document's content",
+    )
+
     processing_started = django.db.models.DateTimeField(null=True)
     processing_finished = django.db.models.DateTimeField(null=True)
 

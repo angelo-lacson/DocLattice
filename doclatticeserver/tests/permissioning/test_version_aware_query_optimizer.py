@@ -484,19 +484,23 @@ class TestVersionAwareAnnotationQueryOptimizer(TestCase):
             creator=self.user,
         )
 
-        # Import same content to corpus 2 (cross-corpus deduplication)
+        # Import same content to corpus 2 (corpus-isolated copy with provenance)
         doc2, status, _ = import_document(
             corpus=corpus2,
             path="/shared.pdf",
             content=b"Shared content",  # Same content
             user=self.user,
         )
-        self.assertEqual(status, "cross_corpus_import")
-        self.assertEqual(doc.id, doc2.id)  # Same document
+        self.assertEqual(status, "created_from_existing")
+        self.assertNotEqual(doc.id, doc2.id)  # Corpus-isolated copy
+        # Grant user permissions on the corpus-isolated copy
+        set_permissions_for_obj_to_user(
+            self.user, doc2, [PermissionTypes.READ, PermissionTypes.UPDATE]
+        )
 
         # Add annotation in corpus 2
         anno2 = Annotation.objects.create(
-            document=doc,
+            document=doc2,
             corpus=corpus2,
             annotation_label=self.label,
             raw_text="Corpus 2 annotation",

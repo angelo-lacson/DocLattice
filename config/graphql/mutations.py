@@ -797,7 +797,9 @@ class AddDocumentsToCorpus(graphene.Mutation):
                 Q(pk=from_global_id(corpus_id)[1])
                 & (Q(creator=user) | Q(is_public=True))
             )
-            corpus.documents.add(*doc_objs)
+            # Use new DocumentPath-based method with audit trail
+            for doc in doc_objs:
+                corpus.add_document(document=doc, user=user)
             ok = True
 
         except Exception as e:
@@ -838,8 +840,10 @@ class RemoveDocumentsFromCorpus(graphene.Mutation):
                 Q(pk=from_global_id(corpus_id)[1])
                 & (Q(creator=user) | Q(is_public=True))
             )
-            corpus_docs = corpus.documents.filter(pk__in=doc_pks)
-            corpus.documents.remove(*corpus_docs)
+            # Use new DocumentPath-based method with soft-delete and audit trail
+            corpus_docs = corpus.get_documents().filter(pk__in=doc_pks)
+            for doc in corpus_docs:
+                corpus.remove_document(document=doc, user=user)
             ok = True
 
         except Exception as e:
@@ -1024,7 +1028,8 @@ class StartCorpusFork(graphene.Mutation):
             corpus = Corpus.objects.get(pk=corpus_pk)
 
             # Get ids to related objects that need copyin'
-            doc_ids = list(corpus.documents.all().values_list("id", flat=True))
+            # Use new DocumentPath-based method to get active documents
+            doc_ids = list(corpus.get_documents().values_list("id", flat=True))
             label_set_id = corpus.label_set.pk if corpus.label_set else None
 
             # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
@@ -1044,6 +1049,7 @@ class StartCorpusFork(graphene.Mutation):
             )
 
             # Now remove references to related objects on our new object, as these point to original docs and labels
+            # Note: New corpus has no DocumentPath records yet, so this is safe
             corpus.documents.clear()
             corpus.label_set = None
 
@@ -1530,59 +1536,73 @@ class UploadDocument(graphene.Mutation):
 
             user = info.context.user
 
-            if kind in [
+            # If uploading directly to a corpus, use import_content() for deduplication
+            if add_to_corpus_id is not None and kind in [
                 "application/pdf",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ]:
-                pdf_file = ContentFile(file_bytes, name=filename)
-                document = Document(
-                    creator=user,
-                    title=title,
-                    description=description,
-                    custom_meta=custom_meta,
-                    pdf_file=pdf_file,
-                    backend_lock=True,
-                    is_public=make_public,
-                    file_type=kind,  # Store filetype
-                    slug=slug,
-                )
-                document.save()
-            elif kind in ["text/plain", "application/txt"]:
-                txt_extract_file = ContentFile(file_bytes, name=filename)
-                document = Document(
-                    creator=user,
-                    title=title,
-                    description=description,
-                    custom_meta=custom_meta,
-                    txt_extract_file=txt_extract_file,
-                    backend_lock=True,
-                    is_public=make_public,
-                    file_type=kind,
-                    slug=slug,
-                )
-                document.save()
-
-            set_permissions_for_obj_to_user(user, document, [PermissionTypes.CRUD])
-
-            # Handle linking to corpus or extract
-            if add_to_corpus_id is not None:
                 try:
                     corpus = Corpus.objects.get(id=from_global_id(add_to_corpus_id)[1])
-                    corpus.documents.add(document)
-                    logger.info(
-                        f"[UPLOAD] Added document {document.id} to corpus {corpus.id}"
-                    )
 
-                    # Handle folder assignment if folder_id provided
-                    # This must happen synchronously (not in on_commit) so frontend refetch sees it
+                    # Resolve folder if provided
+                    folder = None
                     if add_to_folder_id is not None:
                         folder_pk = from_global_id(add_to_folder_id)[1]
                         folder = CorpusFolder.objects.get(pk=folder_pk, corpus=corpus)
 
-                        # Create or update the folder assignment
-                        # Use update_or_create to handle case where document already has a folder assignment
+                    # Generate path from filename
+                    safe_filename = "".join(
+                        c if c.isalnum() or c in "-_." else "_" for c in filename[:100]
+                    )
+                    doc_path = f"/documents/{safe_filename}"
+
+                    # Use import_content for content-based deduplication
+                    document, status, path_record = corpus.import_content(
+                        content=file_bytes,
+                        path=doc_path,
+                        user=user,
+                        folder=folder,
+                        title=title,
+                        description=description,
+                        file_type=kind,
+                        custom_meta=custom_meta,
+                        backend_lock=True,
+                        is_public=make_public,
+                        slug=slug,
+                    )
+
+                    # Set permissions on the document (may be new or reused)
+                    set_permissions_for_obj_to_user(
+                        user, document, [PermissionTypes.CRUD]
+                    )
+
+                    if status == "created":
+                        logger.info(
+                            f"[UPLOAD] Created new document {document.id} in corpus {corpus.id}"
+                        )
+                    elif status == "created_from_existing":
+                        logger.info(
+                            f"[UPLOAD] Created corpus-isolated document {document.id} "
+                            f"with provenance from {document.source_document_id} in corpus {corpus.id}"
+                        )
+                    elif status == "linked":
+                        logger.info(
+                            f"[UPLOAD] Linked to existing document {document.id} "
+                            f"(same content already in corpus) in corpus {corpus.id}"
+                        )
+                    elif status == "updated":
+                        logger.info(
+                            f"[UPLOAD] Updated document at path {doc_path} in corpus {corpus.id}"
+                        )
+                    else:
+                        logger.info(
+                            f"[UPLOAD] Document {document.id} status: {status} in corpus {corpus.id}"
+                        )
+
+                    # Handle folder assignment via CorpusDocumentFolder for backward compatibility
+                    if folder is not None:
                         folder_assignment, created = (
                             CorpusDocumentFolder.objects.update_or_create(
                                 document=document,
@@ -1593,24 +1613,63 @@ class UploadDocument(graphene.Mutation):
                         logger.info(
                             f"[UPLOAD] Assigned document {document.id} to folder {folder.id} (created={created})"
                         )
-                    else:
-                        logger.info(
-                            f"[UPLOAD] No folder assignment for document {document.id}"
-                        )
+
                 except Exception as e:
-                    logger.error(f"[UPLOAD] Error adding to corpus: {e}")
-                    message = f"Adding to corpus failed due to error: {e}"
-            elif add_to_extract_id is not None:
-                try:
-                    extract = Extract.objects.get(
-                        Q(pk=from_global_id(add_to_extract_id)[1])
-                        & (Q(creator=user) | Q(is_public=True))
+                    logger.error(f"[UPLOAD] Error importing to corpus: {e}")
+                    message = f"Importing to corpus failed due to error: {e}"
+                    return UploadDocument(message=message, ok=False, document=None)
+            else:
+                # Standalone document upload (no corpus) - create directly
+                if kind in [
+                    "application/pdf",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ]:
+                    pdf_file = ContentFile(file_bytes, name=filename)
+                    document = Document(
+                        creator=user,
+                        title=title,
+                        description=description,
+                        custom_meta=custom_meta,
+                        pdf_file=pdf_file,
+                        backend_lock=True,
+                        is_public=make_public,
+                        file_type=kind,
+                        slug=slug,
                     )
-                    if extract.finished is not None:
-                        raise ValueError("Cannot add document to a finished extract")
-                    transaction.on_commit(lambda: extract.documents.add(document))
-                except Exception as e:
-                    message = f"Adding to extract failed due to error: {e}"
+                    document.save()
+                elif kind in ["text/plain", "application/txt"]:
+                    txt_extract_file = ContentFile(file_bytes, name=filename)
+                    document = Document(
+                        creator=user,
+                        title=title,
+                        description=description,
+                        custom_meta=custom_meta,
+                        txt_extract_file=txt_extract_file,
+                        backend_lock=True,
+                        is_public=make_public,
+                        file_type=kind,
+                        slug=slug,
+                    )
+                    document.save()
+
+                set_permissions_for_obj_to_user(user, document, [PermissionTypes.CRUD])
+
+                # Handle linking to extract (corpus case already handled above)
+                if add_to_extract_id is not None:
+                    try:
+                        extract = Extract.objects.get(
+                            Q(pk=from_global_id(add_to_extract_id)[1])
+                            & (Q(creator=user) | Q(is_public=True))
+                        )
+                        if extract.finished is not None:
+                            raise ValueError(
+                                "Cannot add document to a finished extract"
+                            )
+                        transaction.on_commit(lambda: extract.documents.add(document))
+                    except Exception as e:
+                        message = f"Adding to extract failed due to error: {e}"
 
             ok = True
 
@@ -3247,8 +3306,8 @@ class CreateExtract(graphene.Mutation):
         extract.save()
 
         if corpus is not None:
-            # print(f"Try to add corpus docs: {corpus.documents.all()}")
-            extract.documents.add(*corpus.documents.all())
+            # Use new DocumentPath-based method to get active documents in corpus
+            extract.documents.add(*corpus.get_documents())
         else:
             logger.info("Corpus IS still None... no docs to add.")
 

@@ -66,7 +66,7 @@ class ConversationVectorSearchTest(TestCase):
             pdf_file=pdf_file,
             backend_lock=True,
         )
-        self.corpus.documents.add(self.doc)
+        self.corpus.add_document(document=self.doc, user=self.user)
 
         # Create conversations with different content
         self.conv1 = Conversation.objects.create(

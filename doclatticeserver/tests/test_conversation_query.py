@@ -57,7 +57,7 @@ class GraphQLConversationTestCase(TestCase):
             pdf_file=pdf_file,
             backend_lock=True,
         )
-        self.corpus.documents.add(self.doc)
+        self.corpus.add_document(document=self.doc, user=self.user)
         self.corpus.save()
 
         # Create a conversation linked to the corpus

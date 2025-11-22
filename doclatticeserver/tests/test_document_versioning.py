@@ -78,7 +78,7 @@ class ContentTreeRulesTestCase(TestCase):
             "Rule C1 violated: Only one Document should exist for unique hash",
         )
 
-        # Second import at different path - should reuse Document
+        # Second import at different path - should link to existing Document
         doc2, status2, path2 = import_document(
             corpus=self.corpus,
             path="/test2.pdf",
@@ -87,17 +87,17 @@ class ContentTreeRulesTestCase(TestCase):
             title="Second Document",
         )
 
-        self.assertEqual(status2, "cross_corpus_import")
+        self.assertEqual(status2, "linked")
         self.assertEqual(
             doc1.id,
             doc2.id,
-            "Rule C1 violated: Same content should reuse existing Document",
+            "Rule C1 violated: Same content in same corpus should reuse Document",
         )
 
-        # Still only one document with this hash
+        # Still only one document with this hash in this corpus
         docs_with_hash = Document.objects.filter(pdf_file_hash=content_hash).count()
         self.assertEqual(
-            docs_with_hash, 1, "Rule C1 violated: Global deduplication failed"
+            docs_with_hash, 1, "Rule C1 violated: Corpus deduplication failed"
         )
 
     def test_c2_updates_create_child_nodes_of_previous_version(self):
@@ -684,10 +684,10 @@ class ImportOperationTestCase(TestCase):
         self.assertEqual(Document.objects.count(), doc_count)
         self.assertEqual(DocumentPath.objects.count(), path_count)
 
-    def test_import_cross_corpus_deduplication(self):
+    def test_import_cross_corpus_isolation(self):
         """
         Scenario: Import same content into different corpus
-        Expected: Reuses Document, creates new DocumentPath (Rule I1)
+        Expected: Creates corpus-isolated Document with provenance (Rule I1 NEW)
         """
         content = b"Shared content across corpuses"
         content_hash = compute_sha256(content)
@@ -698,25 +698,36 @@ class ImportOperationTestCase(TestCase):
         )
 
         self.assertEqual(status1, "created")
+        self.assertIsNone(doc1.source_document)  # No provenance for first
 
         # Import to corpus 2
         doc2, status2, path2 = import_document(
             corpus=self.corpus2, path="/doc2.pdf", content=content, user=self.user
         )
 
-        # Verify status
-        self.assertEqual(status2, "cross_corpus_import")
+        # Verify status - corpus-isolated with provenance
+        self.assertEqual(status2, "created_from_existing")
 
-        # Verify same Document reused (Rule I1)
-        self.assertEqual(doc1.id, doc2.id)
+        # Verify different Documents (corpus isolation - Rule I1 NEW)
+        self.assertNotEqual(doc1.id, doc2.id)
+
+        # Verify provenance tracking (Rule I2)
+        self.assertEqual(doc2.source_document, doc1)
+        self.assertEqual(doc2.source_document_id, doc1.id)
+
+        # Verify independent version trees (Rule I1 NEW)
+        self.assertNotEqual(doc1.version_tree_id, doc2.version_tree_id)
+
+        # Verify same content hash (file storage deduplication - Rule I3)
+        self.assertEqual(doc1.pdf_file_hash, doc2.pdf_file_hash)
 
         # Verify separate DocumentPath created
         self.assertNotEqual(path1.id, path2.id)
         self.assertEqual(path2.corpus_id, self.corpus2.id)
 
-        # Verify global deduplication
+        # Verify two documents with same hash exist (corpus isolation)
         docs_with_hash = Document.objects.filter(pdf_file_hash=content_hash).count()
-        self.assertEqual(docs_with_hash, 1)
+        self.assertEqual(docs_with_hash, 2)
 
 
 class MoveOperationTestCase(TestCase):
@@ -1041,27 +1052,33 @@ class InteractionRulesTestCase(TestCase):
         self.corpus1 = Corpus.objects.create(title="Corpus 1", creator=self.user)
         self.corpus2 = Corpus.objects.create(title="Corpus 2", creator=self.user)
 
-    def test_i1_corpuses_share_documents_have_independent_paths(self):
+    def test_i1_corpuses_have_isolated_documents_independent_trees(self):
         """
-        Rule I1: Multiple corpuses sharing same Document have independent
-        DocumentPath trees.
+        Rule I1 (NEW): Multiple corpuses have completely isolated Documents
+        with independent version trees.
 
-        Scenario: Import same content to two corpuses, manipulate independently
+        Scenario: Import same content to two corpuses creates separate Documents
         """
         content = b"Shared content"
 
         # Import to corpus1
-        doc1, _, path1_c1 = import_document(
+        doc1, status1, path1_c1 = import_document(
             corpus=self.corpus1, path="/doc.pdf", content=content, user=self.user
         )
+        self.assertEqual(status1, "created")
 
-        # Import to corpus2 (should reuse document)
-        doc2, _, path1_c2 = import_document(
+        # Import to corpus2 (creates isolated document with provenance)
+        doc2, status2, path1_c2 = import_document(
             corpus=self.corpus2, path="/different.pdf", content=content, user=self.user
         )
+        self.assertEqual(status2, "created_from_existing")
 
-        # Verify same document
-        self.assertEqual(doc1.id, doc2.id)
+        # Verify different documents (corpus isolation)
+        self.assertNotEqual(doc1.id, doc2.id)
+        self.assertEqual(doc2.source_document, doc1)  # Provenance tracked
+
+        # Verify independent version trees
+        self.assertNotEqual(doc1.version_tree_id, doc2.version_tree_id)
 
         # Verify independent paths
         self.assertNotEqual(path1_c1.id, path1_c2.id)
@@ -1093,38 +1110,40 @@ class InteractionRulesTestCase(TestCase):
         content = b"Test content"
 
         # Import to corpus1
-        doc, _, _ = import_document(
+        doc1, _, _ = import_document(
             corpus=self.corpus1, path="/doc1.pdf", content=content, user=self.user
         )
 
-        # Import to corpus2 (same content)
-        import_document(
+        # Import to corpus2 (creates isolated copy with provenance)
+        doc2, status2, _ = import_document(
             corpus=self.corpus2, path="/doc2.pdf", content=content, user=self.user
         )
+        self.assertEqual(status2, "created_from_existing")
+        self.assertNotEqual(doc1.id, doc2.id)  # Corpus isolation
 
-        # Not truly deleted yet (has paths in both corpuses)
-        self.assertFalse(is_content_truly_deleted(doc, self.corpus1))
-        self.assertFalse(is_content_truly_deleted(doc, self.corpus2))
+        # Not truly deleted yet (each doc has paths in their respective corpus)
+        self.assertFalse(is_content_truly_deleted(doc1, self.corpus1))
+        self.assertFalse(is_content_truly_deleted(doc2, self.corpus2))
 
         # Delete from corpus1
         delete_document(corpus=self.corpus1, path="/doc1.pdf", user=self.user)
 
-        # Truly deleted in corpus1, but not corpus2
+        # Truly deleted in corpus1, but doc2 still exists in corpus2
         self.assertTrue(
-            is_content_truly_deleted(doc, self.corpus1),
+            is_content_truly_deleted(doc1, self.corpus1),
             "Rule Q1: Should be truly deleted in corpus1",
         )
         self.assertFalse(
-            is_content_truly_deleted(doc, self.corpus2),
-            "Rule Q1: Should still exist in corpus2",
+            is_content_truly_deleted(doc2, self.corpus2),
+            "Rule Q1: Doc2 should still exist in corpus2",
         )
 
         # Delete from corpus2
         delete_document(corpus=self.corpus2, path="/doc2.pdf", user=self.user)
 
         # Now truly deleted in both
-        self.assertTrue(is_content_truly_deleted(doc, self.corpus1))
-        self.assertTrue(is_content_truly_deleted(doc, self.corpus2))
+        self.assertTrue(is_content_truly_deleted(doc1, self.corpus1))
+        self.assertTrue(is_content_truly_deleted(doc2, self.corpus2))
 
 
 class ComplexWorkflowTestCase(TestCase):
@@ -1257,7 +1276,7 @@ class ComplexWorkflowTestCase(TestCase):
         - Delete from Corpus B
         - Verify independence
 
-        Expected: Corpuses maintain independent path trees, share documents
+        Expected: Corpuses have isolated documents with independent version trees
         """
         corpus_a = self.corpus
         corpus_b = Corpus.objects.create(title="Corpus B", creator=self.user)
@@ -1266,13 +1285,14 @@ class ComplexWorkflowTestCase(TestCase):
         updated_content = b"Updated content in A only"
 
         # Import to both corpuses
-        doc_a1, _, path_a1 = import_document(
+        doc_a1, status_a1, path_a1 = import_document(
             corpus=corpus_a,
             path="/shared.pdf",
             content=original_content,
             user=self.user,
             title="Shared Doc A",
         )
+        self.assertEqual(status_a1, "created")
 
         doc_b1, status_b1, path_b1 = import_document(
             corpus=corpus_b,
@@ -1282,9 +1302,11 @@ class ComplexWorkflowTestCase(TestCase):
             title="Shared Doc B",
         )
 
-        # Verify same document (Rule I1)
-        self.assertEqual(doc_a1.id, doc_b1.id)
-        self.assertEqual(status_b1, "cross_corpus_import")
+        # Verify different documents with provenance (corpus isolation - Rule I1 NEW)
+        self.assertNotEqual(doc_a1.id, doc_b1.id)
+        self.assertEqual(status_b1, "created_from_existing")
+        self.assertEqual(doc_b1.source_document, doc_a1)
+        self.assertNotEqual(doc_a1.version_tree_id, doc_b1.version_tree_id)
 
         # Update in corpus A
         doc_a2, _, path_a2 = import_document(
@@ -1295,10 +1317,10 @@ class ComplexWorkflowTestCase(TestCase):
             title="Updated Doc A",
         )
 
-        # Verify corpus B unaffected
+        # Verify corpus B unaffected - still has its own isolated document
         fs_b = get_current_filesystem(corpus_b)
         self.assertEqual(fs_b.count(), 1)
-        self.assertEqual(fs_b.first().document_id, doc_a1.id)  # Still old version
+        self.assertEqual(fs_b.first().document_id, doc_b1.id)  # Its own document
 
         # Delete from corpus B
         delete_document(corpus=corpus_b, path="/shared.pdf", user=self.user)
@@ -1346,7 +1368,7 @@ class ComplexWorkflowTestCase(TestCase):
             title="Doc v3",
         )
 
-        # Import v1 content at new location
+        # Import v1 content at new location (within same corpus)
         doc_v1_again, status, path4 = import_document(
             corpus=self.corpus,
             path="/archive/old_doc.pdf",
@@ -1355,9 +1377,9 @@ class ComplexWorkflowTestCase(TestCase):
             title="Archived v1",
         )
 
-        # Should reuse v1 document
+        # Should link to v1 document (same content in same corpus)
         self.assertEqual(doc_v1_again.id, doc_v1.id)
-        self.assertEqual(status, "cross_corpus_import")
+        self.assertEqual(status, "linked")
 
         # Verify version tree
         history = get_content_history(doc_v3)
