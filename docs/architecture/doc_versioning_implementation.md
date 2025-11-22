@@ -2,11 +2,71 @@
 
 ## Overview
 
-Successfully implemented the complete dual-tree versioning architecture for document management in OpenContracts. This implementation provides full version history tracking, time-travel capabilities, and global content deduplication while maintaining corpus independence.
+Successfully implemented the complete dual-tree versioning architecture for document management in OpenContracts. This implementation provides full version history tracking, time-travel capabilities, **corpus-isolated document management** with optional provenance tracking, and **shared structural annotations** for storage efficiency.
 
-## Implementation Status: ✅ COMPLETE
+## Implementation Status: ✅ COMPLETE (Phases 1, 2, and 2.5)
 
-All phases completed with comprehensive test coverage proving correctness.
+**Phase 1** (Complete): Core dual-tree infrastructure with DocumentPath and version trees
+**Phase 2** (Complete): Corpus isolation to prevent cross-corpus version conflicts
+**Phase 2.5** (Complete): Structural Annotation Sets for efficient annotation sharing
+
+### Critical Architecture Update (2025-11-16)
+
+**Problem Identified**: The original cross-corpus document sharing (Rule I1) creates version tree conflicts when multiple corpus owners independently version the same document.
+
+**Solution**: Corpus-isolated documents with optional provenance tracking.
+
+## New Architecture: Corpus-Isolated Documents
+
+### Key Principles
+
+1. **Standalone Documents** (Optional)
+   - Exist without any corpus attachment
+   - Have their own version tree (version_tree_id)
+   - Act as a "global library" of source documents
+
+2. **Corpus-Scoped Documents** (Primary)
+   - Isolated within a single corpus
+   - Own version tree independent of other corpuses
+   - Can link back to standalone via `source_document` (provenance)
+
+3. **Document Copying on Corpus Addition**
+   - Adding standalone to corpus creates a NEW corpus-scoped copy
+   - Copy has its own version_tree_id (complete isolation)
+   - `source_document` field tracks provenance
+
+4. **Direct Upload to Corpus**
+   - Creates corpus-scoped document only (no standalone)
+   - No cross-corpus version tree sharing
+
+### Why This Matters
+
+**Before (problematic)**:
+```
+User A uploads PDF → Document #1 (tree T1)
+User B uploads same PDF → REUSES Document #1 (tree T1) ← SHARED!
+
+User A updates → Document #2 (parent=#1, tree T1, is_current=true)
+User B updates → Document #3 (parent=#1, tree T1) ← VERSION CONFLICT!
+```
+
+**After (corpus-isolated)**:
+```
+User A uploads to Corpus X → Document #1 (tree TX1)
+User B uploads to Corpus Y → Document #2 (tree TY2) ← ISOLATED!
+
+User A updates → Document #3 (parent=#1, tree TX1) ✓
+User B updates → Document #4 (parent=#2, tree TY2) ✓ NO CONFLICT!
+```
+
+### Updated Interaction Rules
+
+**Old Rule I1** (DEPRECATED): Corpuses share Documents but have independent paths
+**New Rule I1**: Corpuses have completely isolated Documents with independent version trees
+
+**New Rule I2**: Provenance is tracked via `source_document` field (optional metadata)
+
+**New Rule I3**: Storage can be deduplicated at file level (same hash = same blob), but Document objects are isolated
 
 ## What Was Built
 
@@ -37,13 +97,16 @@ All phases completed with comprehensive test coverage proving correctness.
 Implemented all core operations:
 
 #### `import_document(corpus, path, content, user, folder=None, **kwargs)`
-- Handles new imports, updates, and cross-corpus deduplication
+- Handles new imports and updates **within corpus scope only**
 - Returns: `(document, status, path_record)` where status is:
-  - `'created'`: Brand new document
-  - `'updated'`: Content changed at existing path
+  - `'created'`: Brand new document (corpus-isolated)
+  - `'updated'`: Content changed at existing path (within corpus version tree)
   - `'unchanged'`: No change detected
-  - `'cross_corpus_import'`: Content exists elsewhere, new path created
-- **Implements Rules:** C1, C2, C3, P1, P2, P4, P5, I1
+  - `'linked'`: Same content already exists in THIS corpus at different path
+  - `'created_from_existing'`: New corpus document, but content exists elsewhere (provenance tracked)
+- **Implements Rules:** C1, C2, C3, P1, P2, P4, P5, I1 (NEW), I2, I3
+
+**CRITICAL CHANGE**: No longer reuses Document objects across corpus boundaries. Each corpus gets isolated Documents with independent version trees.
 
 ####  `move_document(corpus, old_path, new_path, user, new_folder='UNSET')`
 - Moves document to new path/folder
@@ -175,9 +238,13 @@ All 11 architectural rules have test coverage proving correct implementation:
 - **P5**: Version number increments only on content changes ✓
 - **P6**: Folder deletion sets `folder=NULL` ✓
 
-### Interaction Rules
-- **I1**: Corpuses share Documents but have independent paths ✓
+### Interaction Rules (UPDATED)
+- **I1** (NEW): Corpuses have completely isolated Documents with independent version trees ✓
+- **I2** (NEW): Provenance tracked via `source_document` field ✓
+- **I3** (NEW): File storage can be deduplicated by hash (blob sharing, not Document sharing) ✓
 - **Q1**: Content "truly deleted" when no active paths point to it ✓
+
+**DEPRECATED**: Old I1 (corpuses share Documents) removed due to version tree conflicts
 
 ## Key Benefits Delivered
 
@@ -316,14 +383,128 @@ While the core architecture is complete, these enhancements could be added:
 - Database constraints prevent invalid states
 - Idempotent migrations
 
+## Phase 2.5: Structural Annotation Sets (Complete)
+
+### Problem Solved
+
+With corpus isolation (Phase 2), each corpus gets its own Document copy. However, structural annotations (headers, sections, paragraphs extracted during parsing) are immutable and identical across all copies. Duplicating thousands of structural annotations per corpus copy is wasteful and conceptually incorrect.
+
+### Solution: StructuralAnnotationSet Model
+
+Structural annotations are now separated from Document instances and stored in shared `StructuralAnnotationSet` objects that multiple Documents can reference.
+
+#### New Model: StructuralAnnotationSet
+
+```python
+class StructuralAnnotationSet(models.Model):
+    """Immutable set of structural annotations shared across document copies"""
+    content_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    parser_name = models.CharField(max_length=255, null=True)
+    parser_version = models.CharField(max_length=50, null=True)
+    page_count = models.IntegerField(null=True)
+    token_count = models.IntegerField(null=True)
+    pawls_parse_file = models.FileField(...)  # Shared PAWLS data
+    txt_extract_file = models.FileField(...)   # Shared text extraction
+```
+
+#### Updated Models
+
+- **Document**: Added `structural_annotation_set` FK (PROTECT on delete)
+- **Annotation**: Added `structural_set` FK with XOR constraint (`document` OR `structural_set`, not both)
+- **Relationship**: Added `structural_set` FK with XOR constraint
+
+#### Key Features
+
+1. **Content-based deduplication**: Structural annotations tied to content hash, not document ID
+2. **XOR constraints**: Database-level enforcement that annotations belong to either a document or a structural set
+3. **Storage efficiency**: Structural annotations stored once (O(1)) instead of per corpus copy (O(n))
+4. **Immutability guarantee**: PROTECT on delete prevents modification/deletion while documents reference the set
+5. **Query optimizer support**: Dual-query logic in `AnnotationQueryOptimizer` and `RelationshipQueryOptimizer` to fetch from both sources
+
+#### Behavior
+
+**When document copied to multiple corpuses:**
+```python
+# Original document parsed
+doc1 = Document.objects.create(pdf_file_hash="abc123")
+# Creates StructuralAnnotationSet with 5000 structural annotations
+struct_set = StructuralAnnotationSet.objects.create(content_hash="abc123")
+doc1.structural_annotation_set = struct_set
+
+# Add to Corpus X
+corpus_x.add_document(doc1, user_x)  # Creates doc_copy_x
+# doc_copy_x.structural_annotation_set = struct_set (SHARED!)
+
+# Add to Corpus Y
+corpus_y.add_document(doc1, user_y)  # Creates doc_copy_y
+# doc_copy_y.structural_annotation_set = struct_set (SHARED!)
+
+# Result: 3 documents, 1 StructuralAnnotationSet, 5000 annotations (not 15000!)
+```
+
+#### Database Migrations
+
+- `opencontractserver/annotations/migrations/0048_add_structural_annotation_set.py` - Adds model and XOR constraints
+- `opencontractserver/documents/migrations/0026_add_structural_annotation_set.py` - Adds FK to Document
+
+#### Test Coverage
+
+- `test_structural_annotation_sets.py` - 22 tests for model behavior and constraints
+- `test_structural_annotation_portability.py` - 10 tests for cross-corpus sharing
+- `test_query_optimizer_structural_sets.py` - 10 tests for query optimizer integration
+
+**All 42 structural annotation tests passing**
+
 ## Conclusion
 
-The dual-tree versioning architecture is **fully implemented, thoroughly tested, and ready for production use**. All 11 architectural rules are proven correct through comprehensive testing. The system provides complete audit trails, time-travel capabilities, and global content deduplication while maintaining clean separation of concerns and corpus independence.
+The dual-tree versioning architecture with structural annotation sets provides a complete, production-ready document management system.
 
-**Status**: ✅ **PRODUCTION READY**
+**Status**: ✅ **COMPLETE** (Phases 1, 2, and 2.5)
+
+### Benefits Delivered
+
+**Core Versioning (Phase 1)**:
+- ✅ Complete audit trails with immutable history
+- ✅ Time-travel capabilities (reconstruct any past state)
+- ✅ Soft delete/restore operations
+- ✅ Version history within corpus
+
+**Corpus Isolation (Phase 2)**:
+- ✅ No cross-corpus version tree conflicts
+- ✅ Clear corpus ownership of documents
+- ✅ Provenance tracking via `source_document` field
+- ✅ File storage deduplication (blob sharing)
+
+**Structural Annotation Sharing (Phase 2.5)**:
+- ✅ O(1) storage for structural annotations (not O(n) per corpus)
+- ✅ Immutability guarantee with database constraints
+- ✅ Content-based deduplication across all documents
+- ✅ Seamless query integration (transparent to application)
+
+### Files Created/Modified
+
+**Phase 1**:
+- `opencontractserver/documents/models.py` - Added TreeNode, DocumentPath model
+- `opencontractserver/documents/versioning.py` - All operations (367 lines)
+- `opencontractserver/tests/test_document_versioning.py` - 33 tests
+
+**Phase 2**:
+- `opencontractserver/documents/models.py` - Added `source_document` field
+- `opencontractserver/corpuses/models.py` - Updated `add_document()`, `import_content()`
+- `opencontractserver/tests/test_document_path_migration.py` - Migration tests
+
+**Phase 2.5**:
+- `opencontractserver/annotations/models.py` - Added StructuralAnnotationSet, XOR constraints
+- `opencontractserver/annotations/query_optimizer.py` - Dual-query support
+- `opencontractserver/llms/vector_stores/core_vector_stores.py` - Version filtering updates
+- `opencontractserver/tests/test_structural_annotation_sets.py` - 22 tests
+- `opencontractserver/tests/test_structural_annotation_portability.py` - 10 tests
+- `opencontractserver/tests/test_query_optimizer_structural_sets.py` - 10 tests
 
 ---
 
-*Implementation completed: 2025-11-14*
-*Test Results: 33/33 passed in 1.8s*
-*Branch: `feature/dual-tree-versioning-implementation`*
+*Phase 1 completed: 2025-11-14*
+*Phase 2 completed: 2025-11-16*
+*Phase 2.5 completed: 2025-11-17*
+*Branch: `feature/issue-654`*
+*Related Issue: #654*

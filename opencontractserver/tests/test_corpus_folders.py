@@ -185,7 +185,9 @@ class TestCorpusFolderModel:
         doc2 = Document.objects.create(title="Doc 2", creator=user)
         doc3 = Document.objects.create(title="Doc 3", creator=user)
 
-        corpus.documents.add(doc1, doc2, doc3)
+        corpus.add_document(document=doc1, user=user)
+        corpus.add_document(document=doc2, user=user)
+        corpus.add_document(document=doc3, user=user)
 
         # Assign some to folder
         CorpusDocumentFolder.objects.create(document=doc1, corpus=corpus, folder=folder)
@@ -208,7 +210,9 @@ class TestCorpusFolderModel:
         doc2 = Document.objects.create(title="Doc 2", creator=user)
         doc3 = Document.objects.create(title="Doc 3", creator=user)
 
-        corpus.documents.add(doc1, doc2, doc3)
+        corpus.add_document(document=doc1, user=user)
+        corpus.add_document(document=doc2, user=user)
+        corpus.add_document(document=doc3, user=user)
 
         # Assign to folders
         CorpusDocumentFolder.objects.create(document=doc1, corpus=corpus, folder=parent)
@@ -233,7 +237,7 @@ class TestCorpusDocumentFolderModel:
             name="Research", corpus=corpus, creator=user
         )
         doc = Document.objects.create(title="Test Doc", creator=user)
-        corpus.documents.add(doc)
+        corpus.add_document(document=doc, user=user)
 
         assignment = CorpusDocumentFolder.objects.create(
             document=doc, corpus=corpus, folder=folder
@@ -248,7 +252,7 @@ class TestCorpusDocumentFolderModel:
         user = User.objects.create_user(username="testuser", password="test")
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
         doc = Document.objects.create(title="Test Doc", creator=user)
-        corpus.documents.add(doc)
+        corpus.add_document(document=doc, user=user)
 
         # Assign to root (folder=None)
         assignment = CorpusDocumentFolder.objects.create(
@@ -268,7 +272,7 @@ class TestCorpusDocumentFolderModel:
             name="Folder2", corpus=corpus, creator=user
         )
         doc = Document.objects.create(title="Test Doc", creator=user)
-        corpus.documents.add(doc)
+        corpus.add_document(document=doc, user=user)
 
         # Assign to first folder
         CorpusDocumentFolder.objects.create(document=doc, corpus=corpus, folder=folder1)
@@ -293,8 +297,8 @@ class TestCorpusDocumentFolderModel:
         )
         doc = Document.objects.create(title="Test Doc", creator=user)
 
-        corpus1.documents.add(doc)
-        corpus2.documents.add(doc)
+        corpus1.add_document(document=doc, user=user)
+        corpus2.add_document(document=doc, user=user)
 
         # Should be able to assign to different folders in different corpuses
         assignment1 = CorpusDocumentFolder.objects.create(

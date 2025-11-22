@@ -233,8 +233,8 @@ def _check_badge_criteria(
                 return False
 
             # Count documents uploaded to corpus
-            # Note: Corpus has a ManyToManyField to Document, so we query through corpus.documents
-            doc_count = corpus.documents.filter(creator=user).count()
+            # Note: Uses DocumentPath-based source of truth via get_documents()
+            doc_count = corpus.get_documents().filter(creator=user).count()
 
             # Count annotations in corpus
             from opencontractserver.annotations.models import Annotation

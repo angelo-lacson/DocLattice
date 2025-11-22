@@ -198,6 +198,8 @@ class Query(graphene.ObjectType):
     ):
         from django.contrib.auth import get_user_model
 
+        from opencontractserver.documents.models import DocumentPath
+
         User = get_user_model()
         try:
             owner = User.objects.get(slug=user_slug)
@@ -217,8 +219,10 @@ class Query(graphene.ObjectType):
         )
         if not doc:
             return None
-        # Validate membership
-        if not doc.corpus_set.filter(pk=corpus.pk).exists():
+        # Validate membership via DocumentPath (dual-tree versioning model)
+        if not DocumentPath.objects.filter(
+            document=doc, corpus=corpus, is_current=True, is_deleted=False
+        ).exists():
             return None
         return doc
 
@@ -1001,25 +1005,46 @@ class Query(graphene.ObjectType):
             # Get corpuses user can at least read (for public document context)
             readable_corpuses = Corpus.objects.visible_to_user(user)
 
+            # Get documents in writable corpuses via DocumentPath (corpus isolation)
+            from opencontractserver.documents.models import DocumentPath
+
+            docs_in_writable_corpuses = DocumentPath.objects.filter(
+                corpus__in=writable_corpuses, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+
+            # Get documents in readable corpuses for public document context
+            docs_in_readable_corpuses = DocumentPath.objects.filter(
+                corpus__in=readable_corpuses, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+
+            # Get documents in public corpuses for public document context
+            public_corpuses = Corpus.objects.filter(is_public=True)
+            docs_in_public_corpuses = DocumentPath.objects.filter(
+                corpus__in=public_corpuses, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+
+            # Get standalone documents (not in any corpus via DocumentPath)
+            docs_with_paths = (
+                DocumentPath.objects.filter(is_current=True, is_deleted=False)
+                .values_list("document_id", flat=True)
+                .distinct()
+            )
+
             # Build complex filter:
             # 1. User is creator
             # 2. User has write permission on document
-            # 3. Document is in a writable corpus (ManyToMany via 'corpus' reverse relation)
+            # 3. Document is in a writable corpus (via DocumentPath)
             # 4. Document is public AND (not in any corpus OR in public corpus OR user has corpus access)
-            # Note: Documents have ManyToMany relationship to Corpus via Corpus.documents
-            #       The reverse relation is accessible via 'corpus' (not 'corpus_set')
             qs = Document.objects.filter(
                 Q(creator=user)
                 | Q(id__in=writable_documents)
-                | Q(
-                    corpus__in=writable_corpuses
-                )  # Use 'corpus' for ManyToMany reverse relation
+                | Q(id__in=docs_in_writable_corpuses)  # Via DocumentPath
                 | (
                     Q(is_public=True)
                     & (
-                        Q(corpus__isnull=True)  # Not in any corpus (standalone)
-                        | Q(corpus__is_public=True)  # In a public corpus
-                        | Q(corpus__in=readable_corpuses)  # In a readable corpus
+                        ~Q(id__in=docs_with_paths)  # Not in any corpus (standalone)
+                        | Q(id__in=docs_in_public_corpuses)  # In a public corpus
+                        | Q(id__in=docs_in_readable_corpuses)  # In a readable corpus
                     )
                 )
             ).distinct()
@@ -1429,7 +1454,8 @@ class Query(graphene.ObjectType):
 
         if corpuses.count() == 1:
             corpus = corpuses[0]
-            total_docs = corpus.documents.all().count()
+            # Use DocumentPath-based method for accurate count
+            total_docs = corpus.document_count()
             total_annotations = corpus.annotations.all().count()
             total_comments = UserFeedback.objects.filter(
                 commented_annotation__corpus=corpus

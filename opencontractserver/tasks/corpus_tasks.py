@@ -67,7 +67,7 @@ def run_task_name_analyzer(
             )
 
         document_ids = list(
-            analysis.analyzed_corpus.documents.values_list("id", flat=True)
+            analysis.analyzed_corpus.get_documents().values_list("id", flat=True)
         )
 
     logger.info(f"Added task {task_name} to queue: {task_func}")

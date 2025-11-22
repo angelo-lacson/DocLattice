@@ -250,6 +250,42 @@ const component = await mount(
 - Use feature branches: `feature/description-issue-number`
 - Commit message format: Descriptive with issue references (e.g., "Closes #562")
 
+## Changelog Maintenance
+
+**IMPORTANT**: Always update `CHANGELOG.md` when making significant changes to the codebase.
+
+The changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
+
+```markdown
+## [Unreleased] - YYYY-MM-DD
+
+### Added
+- New features
+
+### Fixed
+- Bug fixes with file locations and line numbers
+
+### Changed
+- Changes to existing functionality
+
+### Technical Details
+- Implementation specifics, architectural notes
+```
+
+**When to update**:
+- New features or models added
+- Production code bugs fixed (document file location, line numbers, and impact)
+- Breaking changes to APIs or data models
+- Test suite fixes that reveal production issues
+- Database migrations
+- Architecture changes
+
+**What to include**:
+- File paths and line numbers for code changes
+- Clear description of the issue and fix
+- Impact on system behavior
+- Migration notes if applicable
+
 ## Pre-commit Hooks
 
 Automatically run on commit:

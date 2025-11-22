@@ -498,7 +498,7 @@ class TestMoveDocumentToFolderMutation(TestCase):
             name="Research", corpus=corpus, creator=user
         )
         doc = Document.objects.create(title="Test Doc", creator=user)
-        corpus.documents.add(doc)
+        doc, _, _ = corpus.add_document(document=doc, user=user)
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 
@@ -525,7 +525,7 @@ class TestMoveDocumentToFolderMutation(TestCase):
             name="Research", corpus=corpus, creator=user
         )
         doc = Document.objects.create(title="Test Doc", creator=user)
-        corpus.documents.add(doc)
+        doc, _, _ = corpus.add_document(document=doc, user=user)
 
         # Initially in folder
         CorpusDocumentFolder.objects.create(document=doc, corpus=corpus, folder=folder)
@@ -579,8 +579,9 @@ class TestMoveDocumentsToFolderMutation(TestCase):
         docs = [
             Document.objects.create(title=f"Doc {i}", creator=user) for i in range(3)
         ]
-        for doc in docs:
-            corpus.documents.add(doc)
+        # Update docs list with returned documents from add_document
+        for i, doc in enumerate(docs):
+            docs[i], _, _ = corpus.add_document(document=doc, user=user)
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 
@@ -612,11 +613,11 @@ class TestMoveDocumentsToFolderMutation(TestCase):
         docs = [
             Document.objects.create(title=f"Doc {i}", creator=user) for i in range(3)
         ]
-        for doc in docs:
-            corpus.documents.add(doc)
-            CorpusDocumentFolder.objects.create(
-                document=doc, corpus=corpus, folder=folder
-            )
+        for i, doc in enumerate(docs):
+            # add_document returns corpus-isolated copy and creates DocumentPath
+            docs[i], _, _ = corpus.add_document(document=doc, user=user, folder=folder)
+            # Don't manually create CorpusDocumentFolder - add_document handles this
+            # via DocumentPath folder parameter
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 

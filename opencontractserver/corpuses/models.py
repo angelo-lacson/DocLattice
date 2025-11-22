@@ -339,6 +339,352 @@ class Corpus(TreeNode):
         return generate_embeddings_from_text(text, corpus_id=self.pk)
 
     # --------------------------------------------------------------------- #
+    # Document Management - Issue #654                                     #
+    # --------------------------------------------------------------------- #
+
+    def add_document(
+        self,
+        document=None,
+        path: str = None,
+        user=None,
+        folder=None,
+        content: bytes = None,
+        **doc_kwargs,
+    ):
+        """
+        Add a document to this corpus, creating a corpus-isolated copy.
+
+        This implements Phase 2 corpus isolation. When adding a document to a corpus,
+        a NEW corpus-isolated document is created with:
+        - Its own version_tree_id (independent version tree)
+        - source_document pointing to original (provenance tracking)
+        - DocumentPath linking to this corpus
+
+        This ensures no cross-corpus version tree conflicts.
+
+        Args:
+            document: The source Document to copy into corpus (required)
+            path: The filesystem path within the corpus (auto-generated if not provided)
+            user: The user performing the operation (required)
+            folder: Optional CorpusFolder to place the document in
+            content: DEPRECATED - use import_content() for content-based imports
+            **doc_kwargs: Override properties for the corpus copy
+
+        Returns:
+            Tuple of (document, status, document_path) where:
+            - document: The NEW corpus-isolated document (NOT the original)
+            - status: 'added' (new copy created) or 'already_exists' (content already in corpus)
+            - document_path: The DocumentPath record created or existing
+
+        Raises:
+            ValueError: If user or document is not provided
+        """
+        if not user:
+            raise ValueError("User is required for document operations (audit trail)")
+
+        if not document:
+            raise ValueError(
+                "Document is required. For content-based imports, use import_content()"
+            )
+
+        # Handle deprecated content parameter
+        if content is not None:
+            logger.warning(
+                "content parameter is deprecated in add_document(). "
+                "Use import_content() for content-based imports."
+            )
+
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        # Generate path if not provided
+        if not path:
+            if document.title:
+                safe_title = "".join(
+                    c if c.isalnum() or c in "-_." else "_"
+                    for c in document.title[:100]
+                )
+                path = f"/documents/{safe_title or f'doc_{document.pk}'}"
+            else:
+                path = f"/documents/doc_{document.pk}"
+
+        with transaction.atomic():
+            # Check if this content already exists in THIS corpus (by hash)
+            # This implements corpus isolation - we check within corpus, not globally
+            # IMPORTANT: Only deduplicate if hash is not None (avoid treating all NULL hashes as same)
+            corpus_doc_with_hash = None
+            if document.pdf_file_hash is not None:
+                corpus_doc_with_hash = (
+                    DocumentPath.objects.filter(
+                        corpus=self,
+                        document__pdf_file_hash=document.pdf_file_hash,
+                        is_current=True,
+                        is_deleted=False,
+                    )
+                    .select_related("document")
+                    .first()
+                )
+
+            if corpus_doc_with_hash:
+                # Content already exists in THIS corpus
+                existing_doc = corpus_doc_with_hash.document
+                logger.info(
+                    f"Content from doc {document.pk} already exists in corpus {self.pk} "
+                    f"as doc {existing_doc.pk}"
+                )
+                # Return the existing corpus-isolated document
+                return existing_doc, "already_exists", corpus_doc_with_hash
+
+            # Create corpus-isolated copy with new version tree
+            tree_id = uuid.uuid4()
+            corpus_copy = Document.objects.create(
+                title=doc_kwargs.get("title", document.title),
+                description=doc_kwargs.get("description", document.description),
+                file_type=doc_kwargs.get("file_type", document.file_type),
+                pdf_file=document.pdf_file,  # Share file blob (Rule I3)
+                pdf_file_hash=document.pdf_file_hash,
+                # Share parsing artifacts (file blobs, not duplicated)
+                pawls_parse_file=document.pawls_parse_file,
+                txt_extract_file=document.txt_extract_file,
+                icon=document.icon,
+                md_summary_file=document.md_summary_file,
+                page_count=document.page_count,
+                is_public=document.is_public,  # Inherit public status
+                version_tree_id=tree_id,  # NEW isolated version tree
+                is_current=True,
+                parent=None,  # Root of NEW content tree
+                source_document=document,  # Provenance tracking (Rule I2)
+                structural_annotation_set=document.structural_annotation_set,  # Share structural annotations
+                creator=user,
+                **{
+                    k: v
+                    for k, v in doc_kwargs.items()
+                    if k not in ["title", "description", "file_type"]
+                },
+            )
+
+            logger.info(
+                f"Created corpus-isolated copy {corpus_copy.pk} from doc {document.pk} "
+                f"in corpus {self.pk} (structural_set={document.structural_annotation_set_id})"
+            )
+
+            # Check if path is occupied
+            occupied_path = DocumentPath.objects.filter(
+                corpus=self, path=path, is_current=True, is_deleted=False
+            ).first()
+
+            if occupied_path:
+                # Path exists with different document - mark as not current
+                occupied_path.is_current = False
+                occupied_path.save(update_fields=["is_current"])
+                parent = occupied_path
+                version_number = occupied_path.version_number + 1
+                logger.info(
+                    f"Replacing doc {occupied_path.document_id} with {corpus_copy.pk} "
+                    f"at {path} in corpus {self.pk}"
+                )
+            else:
+                parent = None
+                version_number = 1
+
+            # Create DocumentPath linking corpus-isolated document
+            new_path = DocumentPath.objects.create(
+                document=corpus_copy,
+                corpus=self,
+                folder=folder,
+                path=path,
+                version_number=version_number,
+                parent=parent,
+                is_current=True,
+                is_deleted=False,
+                creator=user,
+            )
+
+            logger.info(
+                f"Added corpus-isolated doc {corpus_copy.pk} to corpus {self.pk} at {path}"
+            )
+
+            return corpus_copy, "added", new_path
+
+    def import_content(
+        self,
+        content: bytes,
+        path: str = None,
+        user=None,
+        folder=None,
+        **doc_kwargs,
+    ):
+        """
+        Import content into this corpus with corpus-isolated deduplication.
+
+        This uses SHA-256 hashing to detect duplicate content within THIS corpus.
+        Documents are isolated within the corpus with independent version trees.
+        Provenance is tracked via source_document field when content exists elsewhere.
+
+        Args:
+            content: PDF content bytes (required)
+            path: The filesystem path within the corpus (auto-generated if not provided)
+            user: The user performing the operation (required)
+            folder: Optional CorpusFolder to place the document in
+            **doc_kwargs: Additional arguments for document creation (title, description, etc.)
+
+        Returns:
+            Tuple of (document, status, document_path) where status is one of:
+            - 'created': Brand new document (content hash first seen globally)
+            - 'updated': Content changed at existing path (version increment)
+            - 'unchanged': No change detected at path
+            - 'linked': Same content already exists in THIS corpus at different path
+            - 'created_from_existing': New corpus-isolated doc, content exists elsewhere
+
+        Raises:
+            ValueError: If user or content is not provided
+        """
+        if not user:
+            raise ValueError("User is required for document operations (audit trail)")
+
+        if content is None:
+            raise ValueError("Content is required for import_content()")
+
+        from opencontractserver.documents.versioning import import_document
+
+        # Generate path if not provided
+        if not path:
+            path = f"/documents/doc_{uuid.uuid4().hex[:8]}"
+
+        return import_document(
+            corpus=self,
+            path=path,
+            content=content,
+            user=user,
+            folder=folder,
+            **doc_kwargs,
+        )
+
+    def remove_document(self, document=None, path: str = None, user=None):
+        """
+        Remove a document from this corpus (soft delete).
+
+        This is the recommended way to remove documents, replacing corpus.documents.remove().
+        It creates a soft-delete DocumentPath record maintaining history.
+
+        Args:
+            document: The Document to remove (optional if path provided)
+            path: The filesystem path to remove (optional if document provided)
+            user: The user performing the operation (required)
+
+        Returns:
+            List of DocumentPath records that were soft-deleted
+
+        Raises:
+            ValueError: If neither document nor path provided, or if user not provided
+            RuntimeError: If operation fails
+        """
+        if not user:
+            raise ValueError("User is required for document operations (audit trail)")
+
+        if not document and not path:
+            raise ValueError("Either document or path must be provided")
+
+        from opencontractserver.documents.models import DocumentPath
+
+        deleted_paths = []
+
+        with transaction.atomic():
+            if path:
+                # Delete specific path
+                active_path = DocumentPath.objects.filter(
+                    corpus=self, path=path, is_current=True, is_deleted=False
+                ).first()
+
+                if active_path:
+                    # Mark current as not current
+                    active_path.is_current = False
+                    active_path.save(update_fields=["is_current"])
+
+                    # Create soft-deleted record
+                    deleted_path = DocumentPath.objects.create(
+                        document=active_path.document,
+                        corpus=self,
+                        folder=active_path.folder,
+                        path=active_path.path,
+                        version_number=active_path.version_number,
+                        parent=active_path,
+                        is_deleted=True,
+                        is_current=True,
+                        creator=user,
+                    )
+                    deleted_paths.append(deleted_path)
+                    logger.info(
+                        f"Removed document at path {path} from corpus {self.pk}"
+                    )
+                else:
+                    logger.warning(
+                        f"Path {path} not found in corpus {self.pk} for deletion"
+                    )
+            else:
+                # Delete all paths for this document
+                active_paths = DocumentPath.objects.filter(
+                    corpus=self, document=document, is_current=True, is_deleted=False
+                )
+
+                for path_record in active_paths:
+                    # Mark current as not current
+                    path_record.is_current = False
+                    path_record.save(update_fields=["is_current"])
+
+                    # Create soft-deleted record
+                    deleted_path = DocumentPath.objects.create(
+                        document=path_record.document,
+                        corpus=self,
+                        folder=path_record.folder,
+                        path=path_record.path,
+                        version_number=path_record.version_number,
+                        parent=path_record,
+                        is_deleted=True,
+                        is_current=True,
+                        creator=user,
+                    )
+                    deleted_paths.append(deleted_path)
+                    logger.info(
+                        f"Removed document {document.pk} at path "
+                        f"{path_record.path} from corpus {self.pk}"
+                    )
+
+        return deleted_paths
+
+    def get_documents(self):
+        """
+        Get all documents with active paths in this corpus.
+
+        This method uses DocumentPath as the source of truth.
+
+        Returns:
+            QuerySet of Document objects with active paths in this corpus
+        """
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        active_doc_ids = DocumentPath.objects.filter(
+            corpus=self, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
+
+        return Document.objects.filter(id__in=active_doc_ids).distinct()
+
+    def document_count(self):
+        """
+        Get count of documents with active paths in this corpus.
+
+        Returns:
+            Integer count of active documents
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        return (
+            DocumentPath.objects.filter(corpus=self, is_current=True, is_deleted=False)
+            .values("document_id")
+            .distinct()
+            .count()
+        )
+
+    # --------------------------------------------------------------------- #
     # Label helper                                                         #
     # --------------------------------------------------------------------- #
 
