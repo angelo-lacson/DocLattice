@@ -16,11 +16,10 @@ from django.core.files.base import ContentFile, File
 
 from config import celery_app
 from opencontractserver.annotations.models import (
-    DOC_TYPE_LABEL,
     TOKEN_LABEL,
     Annotation,
 )
-from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
+from opencontractserver.corpuses.models import TemporaryFileHandle
 from opencontractserver.documents.models import Document
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.importing import import_annotations, load_or_create_labels
@@ -404,12 +403,19 @@ def _import_corpus_v2(
 
         # ===== PART 6: Import DocumentPaths =====
         paths_data = data_json.get("document_paths", [])
-        import_document_paths(paths_data, corpus_obj, document_map, folder_map, user_obj)
+        import_document_paths(
+            paths_data, corpus_obj, document_map, folder_map, user_obj
+        )
 
         # ===== PART 7: Import Relationships =====
         relationships_data = data_json.get("relationships", [])
         import_relationships(
-            relationships_data, corpus_obj, document_map, annot_id_map, label_lookup, user_obj
+            relationships_data,
+            corpus_obj,
+            document_map,
+            annot_id_map,
+            label_lookup,
+            user_obj,
         )
 
         # ===== PART 8: Import Agent Config =====

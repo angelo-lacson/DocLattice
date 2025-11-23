@@ -20,13 +20,10 @@ from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.db import transaction
 from django.utils import timezone
 
 from opencontractserver.annotations.models import (
     Annotation,
-    AnnotationLabel,
-    LabelSet,
     Relationship,
     StructuralAnnotationSet,
 )
@@ -44,8 +41,6 @@ from opencontractserver.types.dicts import (
     OpenContractsRelationshipPythonType,
     StructuralAnnotationSetExport,
 )
-from opencontractserver.types.enums import PermissionTypes
-from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -81,9 +76,7 @@ def import_structural_annotation_set(
         ).first()
 
         if existing_set:
-            logger.info(
-                f"Structural set {content_hash} already exists, reusing it"
-            )
+            logger.info(f"Structural set {content_hash} already exists, reusing it")
             return existing_set
 
         logger.info(f"Creating new structural annotation set {content_hash}")
@@ -162,9 +155,7 @@ def import_structural_annotation_set(
             label_obj = label_lookup.get(label_text)
 
             if not label_obj:
-                logger.warning(
-                    f"Relationship label '{label_text}' not found, skipping"
-                )
+                logger.warning(f"Relationship label '{label_text}' not found, skipping")
                 continue
 
             # Map old annotation IDs to new ones
@@ -293,11 +284,13 @@ def import_document_paths(
             folder_path = path_data.get("folder_path")
             if folder_path:
                 # Find folder by path
-                folder = CorpusFolder.objects.filter(
-                    corpus=corpus
-                ).filter(
-                    # Match by reconstructing path
-                ).first()
+                folder = (
+                    CorpusFolder.objects.filter(corpus=corpus)
+                    .filter(
+                        # Match by reconstructing path
+                    )
+                    .first()
+                )
                 # Simplified: use folder_map if we have exact match
                 for fpath, fobj in folder_map.items():
                     if fobj.get_path() == folder_path:
@@ -410,9 +403,7 @@ def import_agent_config(
         corpus: Target Corpus instance
     """
     try:
-        corpus.corpus_agent_instructions = agent_config.get(
-            "corpus_agent_instructions"
-        )
+        corpus.corpus_agent_instructions = agent_config.get("corpus_agent_instructions")
         corpus.document_agent_instructions = agent_config.get(
             "document_agent_instructions"
         )
@@ -446,7 +437,7 @@ def import_md_description_revisions(
     try:
         # Import current description
         if md_description:
-            filename = f"description.md"
+            filename = "description.md"
             corpus.md_description.save(
                 filename, ContentFile(md_description.encode("utf-8")), save=True
             )
@@ -463,7 +454,7 @@ def import_md_description_revisions(
             if created_str:
                 try:
                     created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                except:
+                except Exception:
                     pass
 
             CorpusDescriptionRevision.objects.create(
@@ -557,9 +548,7 @@ def import_conversations(
             if approved_email:
                 approved_by = User.objects.filter(email=approved_email).first()
 
-            created = datetime.fromisoformat(
-                msg_data["created"].replace("Z", "+00:00")
-            )
+            created = datetime.fromisoformat(msg_data["created"].replace("Z", "+00:00"))
 
             message = ChatMessage.objects.create(
                 conversation=conversation,
@@ -598,9 +587,11 @@ def import_conversations(
             )
 
         logger.info(
-            f"Imported {len(conversations_data)} conversations, "
-            f"{len(messages_data)} messages, {len(votes_data)} votes"
+            "Imported %d conversations, %d messages, %d votes",
+            len(conversations_data),
+            len(messages_data),
+            len(votes_data),
         )
 
     except Exception as e:
-        logger.error(f"Error importing conversations: {e}")
+        logger.error("Error importing conversations: %s", e)

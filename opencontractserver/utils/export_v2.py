@@ -20,11 +20,10 @@ from typing import Optional
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 
-from opencontractserver.annotations.models import Annotation, Relationship
+from opencontractserver.annotations.models import Relationship
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusDescriptionRevision,
-    CorpusFolder,
 )
 from opencontractserver.documents.models import DocumentPath
 from opencontractserver.types.dicts import (
@@ -32,7 +31,6 @@ from opencontractserver.types.dicts import (
     CorpusFolderExport,
     DescriptionRevisionExport,
     DocumentPathExport,
-    OpenContractsAnnotationPythonType,
     OpenContractsRelationshipPythonType,
     StructuralAnnotationSetExport,
 )
@@ -74,9 +72,9 @@ def package_structural_annotation_set(
             structural_annotations.append(
                 {
                     "id": str(annot.id),
-                    "annotationLabel": annot.annotation_label.text
-                    if annot.annotation_label
-                    else "",
+                    "annotationLabel": (
+                        annot.annotation_label.text if annot.annotation_label else ""
+                    ),
                     "rawText": annot.raw_text or "",
                     "page": annot.page or 0,
                     "annotation_json": annot.json or {},
@@ -92,9 +90,9 @@ def package_structural_annotation_set(
             structural_relationships.append(
                 {
                     "id": str(rel.id),
-                    "relationshipLabel": rel.relationship_label.text
-                    if rel.relationship_label
-                    else "",
+                    "relationshipLabel": (
+                        rel.relationship_label.text if rel.relationship_label else ""
+                    ),
                     "source_annotation_ids": [
                         str(a.id) for a in rel.source_annotations.all()
                     ],
@@ -230,9 +228,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             )
 
     except Exception as e:
-        logger.error(
-            f"Error packaging document paths for corpus {corpus.id}: {e}"
-        )
+        logger.error(f"Error packaging document paths for corpus {corpus.id}: {e}")
 
     return paths_export
 
@@ -265,9 +261,9 @@ def package_relationships(
             relationships_export.append(
                 {
                     "id": str(rel.id),
-                    "relationshipLabel": rel.relationship_label.text
-                    if rel.relationship_label
-                    else "",
+                    "relationshipLabel": (
+                        rel.relationship_label.text if rel.relationship_label else ""
+                    ),
                     "source_annotation_ids": [
                         str(a.id) for a in rel.source_annotations.all()
                     ],
@@ -412,9 +408,9 @@ def package_conversations(
                     "state": msg.state or "completed",
                     "role": msg.role or "user",
                     "tool_name": msg.tool_name,
-                    "approved_by_email": msg.approved_by.email
-                    if msg.approved_by
-                    else None,
+                    "approved_by_email": (
+                        msg.approved_by.email if msg.approved_by else None
+                    ),
                     "creator_email": msg.creator.email if msg.creator else "",
                     "created": msg.created.isoformat(),
                 }
