@@ -2319,6 +2319,14 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return queryset
 
 
+# Explicit Connection class for ConversationType to use in relay.ConnectionField
+class ConversationConnection(CountableConnection):
+    """Connection class for ConversationType used in searchConversations query."""
+
+    class Meta:
+        node = ConversationType
+
+
 class UserFeedbackType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     class Meta:
         model = UserFeedback
