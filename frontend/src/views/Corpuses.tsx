@@ -27,6 +27,7 @@ import {
   Send,
   History,
   Trophy,
+  BarChart3,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -124,6 +125,7 @@ import { CorpusHome } from "../components/corpuses/CorpusHome";
 import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptionEditor";
 import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
 import { BadgeManagement } from "../components/badges/BadgeManagement";
+import { CorpusEngagementDashboard } from "../components/analytics/CorpusEngagementDashboard";
 
 // Add these styled components near your other styled components
 const DashboardContainer = styled.div`
@@ -2202,6 +2204,14 @@ export const Corpuses = () => {
         badge: stats.totalThreads || 0,
         component: opened_corpus?.id ? (
           <CorpusDiscussionsView corpusId={opened_corpus.id} />
+        ) : null,
+      },
+      {
+        id: "analytics",
+        label: "Analytics",
+        icon: <BarChart3 />,
+        component: opened_corpus?.id ? (
+          <CorpusEngagementDashboard corpusId={opened_corpus.id} />
         ) : null,
       },
       ...(opened_corpus && canUpdateCorpus
