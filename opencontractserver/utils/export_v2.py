@@ -380,11 +380,10 @@ def package_conversations(
                     "id": conv_export_id,
                     "title": conv.title or "",
                     "conversation_type": conv.conversation_type or "chat",
-                    "agent_type": conv.agent_type,
                     "is_public": conv.is_public,
                     "creator_email": conv.creator.email if conv.creator else "",
-                    "created": conv.created.isoformat(),
-                    "modified": conv.modified.isoformat(),
+                    "created": conv.created_at.isoformat(),
+                    "modified": conv.updated_at.isoformat(),
                 }
             )
 
@@ -403,15 +402,11 @@ def package_conversations(
                     "id": msg_export_id,
                     "conversation_id": conv_id_map.get(msg.conversation_id, ""),
                     "content": msg.content or "",
-                    "message_type": msg.message_type or "SYNC_CONTENT",
-                    "state": msg.state or "completed",
-                    "role": msg.role or "user",
-                    "tool_name": msg.tool_name,
-                    "approved_by_email": (
-                        msg.approved_by.email if msg.approved_by else None
-                    ),
+                    "msg_type": msg.msg_type,
+                    "state": msg.state,
+                    "agent_type": msg.agent_type or None,
                     "creator_email": msg.creator.email if msg.creator else "",
-                    "created": msg.created.isoformat(),
+                    "created": msg.created_at.isoformat(),
                 }
             )
 

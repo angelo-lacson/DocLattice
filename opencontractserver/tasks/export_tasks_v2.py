@@ -26,6 +26,7 @@ from django.utils import timezone
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import DocumentPath
 from opencontractserver.types.dicts import OpenContractsExportDataJsonV2Type
+from opencontractserver.types.enums import AnnotationFilterMode
 from opencontractserver.users.models import UserExport
 from opencontractserver.utils.etl import build_document_export, build_label_lookups
 from opencontractserver.utils.export_v2 import (
@@ -55,7 +56,7 @@ def package_corpus_export_v2(
     corpus_pk: int,
     include_conversations: bool = False,
     analysis_pk_list: list[int] | None = None,
-    annotation_filter_mode: str = "CORPUS_LABELSET_ONLY",
+    annotation_filter_mode: AnnotationFilterMode = AnnotationFilterMode.CORPUS_LABELSET_ONLY,
 ):
     """
     Package a complete V2 corpus export.

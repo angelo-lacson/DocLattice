@@ -79,6 +79,7 @@ class TestV2ExportUtilities(TransactionTestCase):
         # Create labels
         self.text_label = AnnotationLabel.objects.create(
             text="Test Label",
+            description="Test label description",
             label_type=TOKEN_LABEL,
             creator=self.user,
         )
@@ -303,6 +304,7 @@ class TestV2ImportUtilities(TransactionTestCase):
         # Create labels
         self.text_label = AnnotationLabel.objects.create(
             text="Test Label",
+            description="Test label description",
             label_type=TOKEN_LABEL,
             creator=self.user,
         )
@@ -459,7 +461,10 @@ class TestV2FullRoundTrip(TransactionTestCase):
         )
 
         self.text_label = AnnotationLabel.objects.create(
-            text="Test Label", label_type=TOKEN_LABEL, creator=self.user
+            text="Test Label",
+            description="Test label description",
+            label_type=TOKEN_LABEL,
+            creator=self.user,
         )
         self.labelset.annotation_labels.add(self.text_label)
 
@@ -504,9 +509,18 @@ class TestV2FullRoundTrip(TransactionTestCase):
         )
 
         # Create document with structural set
+        # Create a minimal valid PDF
+        minimal_pdf = (
+            b"%PDF-1.4\n"
+            b"1 0 obj <</Type/Catalog/Pages 2 0 R>>endobj\n"
+            b"2 0 obj <</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n"
+            b"3 0 obj <</Type/Page/Parent 2 0 R/Resources<<>>/MediaBox[0 0 612 792]>>endobj\n"
+            b"xref\n0 4\n0000000000 65535 f\n0000000009 00000 n\n0000000056 00000 n\n"
+            b"0000000115 00000 n\ntrailer <</Size 4/Root 1 0 R>>\nstartxref\n204\n%%EOF\n"
+        )
         self.doc = Document.objects.create(
             title="Test Document",
-            pdf_file=ContentFile(b"fake pdf", name="test.pdf"),
+            pdf_file=ContentFile(minimal_pdf, name="test.pdf"),
             pdf_file_hash="test_content_hash",
             structural_annotation_set=self.struct_set,
             creator=self.user,
@@ -700,6 +714,7 @@ class TestV2EdgeCases(TransactionTestCase):
             include_conversations=False,
         )
 
+        # Refresh export to get saved file
         export.refresh_from_db()
         self.assertIsNotNone(export.file)
 
@@ -755,6 +770,9 @@ class TestV2EdgeCases(TransactionTestCase):
             corpus_pk=corpus.id,
             include_conversations=False,
         )
+
+        # Refresh export to get saved file
+        export.refresh_from_db()
 
         # Import
         temp_file = TemporaryFileHandle.objects.create()

@@ -6,6 +6,7 @@ Handles backward compatibility with V1 format while supporting all V2 features.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import zipfile
@@ -345,6 +346,20 @@ def _import_corpus_v2(
                         creator=user_obj,
                         page_count=doc_data["page_count"],
                     )
+
+                    # Set PDF hash - use structural set content_hash if available,
+                    # otherwise calculate from PDF content
+                    if not doc_obj.pdf_file_hash:
+                        if structural_set:
+                            # Use structural set's content hash as document hash
+                            doc_obj.pdf_file_hash = structural_set.content_hash
+                        else:
+                            # Calculate from PDF content
+                            doc_obj.pdf_file.open("rb")
+                            pdf_content = doc_obj.pdf_file.read()
+                            doc_obj.pdf_file_hash = hashlib.md5(pdf_content).hexdigest()
+                            doc_obj.pdf_file.close()
+                        doc_obj.save()
 
                     set_permissions_for_obj_to_user(
                         user_obj, doc_obj, [PermissionTypes.ALL]
