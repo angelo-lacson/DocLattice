@@ -844,8 +844,12 @@ class GraphQLConversationSearchTest(TestCase):
         query = """
             query SearchConversations($query: String!, $documentId: ID) {
                 searchConversations(query: $query, documentId: $documentId) {
-                    id
-                    title
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
                 }
             }
         """
