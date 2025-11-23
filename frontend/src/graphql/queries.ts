@@ -3869,3 +3869,111 @@ export interface GetNotificationsOutput {
 export interface GetUnreadNotificationCountOutput {
   unreadNotificationCount: number;
 }
+
+// ============================================================================
+// Corpus Engagement Metrics Queries (Issue #579)
+// ============================================================================
+
+export interface CorpusEngagementMetrics {
+  totalThreads: number;
+  activeThreads: number;
+  totalMessages: number;
+  messagesLast7Days: number;
+  messagesLast30Days: number;
+  uniqueContributors: number;
+  activeContributors30Days: number;
+  totalUpvotes: number;
+  avgMessagesPerThread: number;
+  lastUpdated: string;
+}
+
+export interface GetCorpusEngagementMetricsInput {
+  corpusId: string;
+}
+
+export interface GetCorpusEngagementMetricsOutput {
+  corpus: {
+    id: string;
+    title: string;
+    engagementMetrics: CorpusEngagementMetrics | null;
+  };
+}
+
+export const GET_CORPUS_ENGAGEMENT_METRICS = gql`
+  query GetCorpusEngagementMetrics($corpusId: ID!) {
+    corpus(id: $corpusId) {
+      id
+      title
+      engagementMetrics {
+        totalThreads
+        activeThreads
+        totalMessages
+        messagesLast7Days
+        messagesLast30Days
+        uniqueContributors
+        activeContributors30Days
+        totalUpvotes
+        avgMessagesPerThread
+        lastUpdated
+      }
+    }
+  }
+`;
+
+// ============================================================================
+// Conversation Search Queries (Issue #580)
+// ============================================================================
+
+export interface SearchConversationsInput {
+  query: string;
+  corpusId?: string;
+  documentId?: string;
+  conversationType?: string;
+  topK?: number;
+}
+
+export interface ConversationSearchResult {
+  id: string;
+  title: string;
+  description: string;
+  conversationType: string;
+  createdAt: string;
+  updatedAt: string;
+  creator: {
+    id: string;
+    username: string;
+  };
+}
+
+export interface SearchConversationsOutput {
+  searchConversations: ConversationSearchResult[];
+}
+
+export const SEARCH_CONVERSATIONS = gql`
+  query SearchConversations(
+    $query: String!
+    $corpusId: ID
+    $documentId: ID
+    $conversationType: String
+    $topK: Int
+  ) {
+    searchConversations(
+      query: $query
+      corpusId: $corpusId
+      documentId: $documentId
+      conversationType: $conversationType
+      topK: $topK
+    ) {
+      id
+      title
+      description
+      conversationType
+      createdAt
+      updatedAt
+      creator {
+        id
+        username
+      }
+    }
+  }
+`;

@@ -5,9 +5,42 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-11-17
+## [Unreleased] - 2025-11-22
 
 ### Added
+
+#### Corpus Engagement Analytics Dashboard (Issue #579)
+- **New CorpusEngagementDashboard component** displaying comprehensive engagement metrics
+  - Thread metrics: total threads, active threads, average messages per thread
+  - Message activity: total messages, 7-day and 30-day message counts with bar chart visualization
+  - Community engagement: unique contributors, active contributors (30d), total upvotes
+  - Auto-refresh every 5 minutes with last updated timestamp
+  - Mobile-responsive design with conditional layouts and grid systems
+  - Location: `frontend/src/components/analytics/CorpusEngagementDashboard.tsx`
+
+- **GraphQL integration for engagement metrics**
+  - New query: `GET_CORPUS_ENGAGEMENT_METRICS` with TypeScript interfaces
+  - Leverages existing backend `CorpusEngagementMetrics` model (already tested)
+  - Location: `frontend/src/graphql/queries.ts:3873-3979`
+
+- **Analytics tab in Corpus view**
+  - New tab with BarChart3 icon next to Discussions tab
+  - Conditionally rendered based on corpus ID availability
+  - Location: `frontend/src/views/Corpuses.tsx:2209-2216`
+
+- **Dependencies**
+  - Added recharts@3.4.1 for data visualization (BarChart, ResponsiveContainer, Tooltip, Legend)
+  - Added react-countup for animated number counters
+
+#### Thread Search Infrastructure (Issue #580 - Partial)
+- **GraphQL queries and TypeScript types for conversation search**
+  - New query: `SEARCH_CONVERSATIONS` with vector similarity search support
+  - Supports filtering by corpus, document, conversation type, and topK results
+  - TypeScript interfaces: `SearchConversationsInput`, `ConversationSearchResult`, `SearchConversationsOutput`
+  - Leverages existing backend `searchConversations` query (already tested)
+  - Location: `frontend/src/graphql/queries.ts:3923-3979`
+
+> **Note**: Full search UI integration into CorpusDiscussionsView is planned for future work
 
 #### Structural Annotation Sets (Phase 2.5)
 - **New `StructuralAnnotationSet` model** for shared, immutable structural annotations
