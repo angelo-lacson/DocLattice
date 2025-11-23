@@ -3930,6 +3930,10 @@ export interface SearchConversationsInput {
   documentId?: string;
   conversationType?: string;
   topK?: number;
+  first?: number;
+  after?: string;
+  last?: number;
+  before?: string;
 }
 
 export interface ConversationSearchResult {
@@ -3943,10 +3947,44 @@ export interface ConversationSearchResult {
     id: string;
     username: string;
   };
+  chatMessages: {
+    totalCount: number;
+  };
+  isPinned: boolean;
+  isLocked: boolean;
+  deletedAt: string | null;
+  chatWithCorpus?: {
+    id: string;
+    title: string;
+    slug: string;
+    creator: {
+      slug: string;
+    };
+  };
+  chatWithDocument?: {
+    id: string;
+    title: string;
+    slug: string;
+    creator: {
+      slug: string;
+    };
+  };
 }
 
 export interface SearchConversationsOutput {
-  searchConversations: ConversationSearchResult[];
+  searchConversations: {
+    edges: Array<{
+      node: ConversationSearchResult;
+      cursor: string;
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string | null;
+      endCursor: string | null;
+    };
+    totalCount: number;
+  };
 }
 
 export const SEARCH_CONVERSATIONS = gql`
@@ -3956,6 +3994,10 @@ export const SEARCH_CONVERSATIONS = gql`
     $documentId: ID
     $conversationType: String
     $topK: Int
+    $first: Int
+    $after: String
+    $last: Int
+    $before: String
   ) {
     searchConversations(
       query: $query
@@ -3963,17 +4005,55 @@ export const SEARCH_CONVERSATIONS = gql`
       documentId: $documentId
       conversationType: $conversationType
       topK: $topK
+      first: $first
+      after: $after
+      last: $last
+      before: $before
     ) {
-      id
-      title
-      description
-      conversationType
-      createdAt
-      updatedAt
-      creator {
-        id
-        username
+      edges {
+        node {
+          id
+          title
+          description
+          conversationType
+          createdAt
+          updatedAt
+          creator {
+            id
+            username
+          }
+          chatMessages {
+            totalCount
+          }
+          isPinned
+          isLocked
+          deletedAt
+          chatWithCorpus {
+            id
+            title
+            slug
+            creator {
+              slug
+            }
+          }
+          chatWithDocument {
+            id
+            title
+            slug
+            creator {
+              slug
+            }
+          }
+        }
+        cursor
       }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      totalCount
     }
   }
 `;

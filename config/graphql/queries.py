@@ -1656,16 +1656,19 @@ class Query(graphene.ObjectType):
         )
 
     # CONVERSATION SEARCH RESOLVERS #######################################
-    search_conversations = graphene.List(
-        ConversationType,
+    search_conversations = relay.ConnectionField(
+        "config.graphql.graphene_types.ConversationConnection",
         query=graphene.String(required=True, description="Search query text"),
         corpus_id=graphene.ID(required=False, description="Filter by corpus ID"),
         document_id=graphene.ID(required=False, description="Filter by document ID"),
         conversation_type=graphene.String(
             required=False, description="Filter by conversation type (chat/thread)"
         ),
-        top_k=graphene.Int(default_value=10, description="Number of results to return"),
-        description="Search conversations using vector similarity",
+        top_k=graphene.Int(
+            default_value=100,
+            description="Maximum number of results to fetch from vector store",
+        ),
+        description="Search conversations using vector similarity with pagination",
     )
 
     def resolve_search_conversations(
@@ -1675,10 +1678,11 @@ class Query(graphene.ObjectType):
         corpus_id=None,
         document_id=None,
         conversation_type=None,
-        top_k=10,
+        top_k=100,
+        **kwargs
     ):
         """
-        Search conversations using vector similarity.
+        Search conversations using vector similarity with cursor-based pagination.
 
         Anonymous users can search public conversations.
         Authenticated users can search public, their own, or explicitly shared conversations.
@@ -1689,10 +1693,11 @@ class Query(graphene.ObjectType):
             corpus_id: Optional corpus ID filter
             document_id: Optional document ID filter
             conversation_type: Optional conversation type filter
-            top_k: Number of results to return
+            top_k: Maximum results to fetch from vector store (default 100)
+            **kwargs: Pagination args (first, after, last, before) handled by ConnectionField
 
         Returns:
-            List[Conversation]: List of matching conversations
+            Connection with edges and pageInfo for pagination
         """
         from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
             CoreConversationVectorStore,
@@ -1737,8 +1742,10 @@ class Query(graphene.ObjectType):
         # Perform search (sync in GraphQL context)
         results = vector_store.search(search_query)
 
-        # Extract conversations from results
-        return [result.conversation for result in results]
+        # Extract conversations from results and return as queryset-like list
+        # ConnectionField will handle pagination automatically
+        conversations = [result.conversation for result in results]
+        return conversations
 
     search_messages = graphene.List(
         "config.graphql.graphene_types.MessageType",

@@ -5,7 +5,7 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-11-22
+## [Unreleased] - 2025-11-23
 
 ### Added
 
@@ -32,15 +32,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added recharts@3.4.1 for data visualization (BarChart, ResponsiveContainer, Tooltip, Legend)
   - Added react-countup for animated number counters
 
-#### Thread Search Infrastructure (Issue #580 - Partial)
-- **GraphQL queries and TypeScript types for conversation search**
-  - New query: `SEARCH_CONVERSATIONS` with vector similarity search support
-  - Supports filtering by corpus, document, conversation type, and topK results
-  - TypeScript interfaces: `SearchConversationsInput`, `ConversationSearchResult`, `SearchConversationsOutput`
-  - Leverages existing backend `searchConversations` query (already tested)
-  - Location: `frontend/src/graphql/queries.ts:3923-3979`
+#### Thread Search UI (Issue #580)
+- **Backend pagination support for conversation search**
+  - Updated `searchConversations` resolver to use `relay.ConnectionField` with cursor-based pagination
+  - Supports `first`, `after`, `last`, `before` parameters for efficient result pagination
+  - Returns paginated structure with `edges`, `pageInfo`, and `totalCount`
+  - Location: `config/graphql/queries.py:1659-1748`
 
-> **Note**: Full search UI integration into CorpusDiscussionsView is planned for future work
+- **GraphQL queries and TypeScript types with pagination**
+  - Updated `SEARCH_CONVERSATIONS` query to support paginated results
+  - Added pagination parameters: `first`, `after`, `last`, `before`
+  - Enhanced TypeScript interfaces with connection structure (edges, nodes, cursors, pageInfo)
+  - Includes full thread metadata: chatMessages count, isPinned, isLocked, corpus/document references
+  - Location: `frontend/src/graphql/queries.ts:3923-4059`
+
+- **New search components** (`frontend/src/components/search/`)
+  - `SearchBar.tsx`: Search input with clear button and Enter key support
+  - `SearchFilters.tsx`: Filter by conversation type with clear filters button
+  - `SearchResults.tsx`: Results display with pagination, reuses ThreadListItem component
+  - `ThreadSearch.tsx`: Main search container with debounced query (300ms) and pagination
+  - All components follow existing design patterns and are mobile-responsive
+
+- **Embedded search in Corpus Discussions view**
+  - Added tab navigation to switch between "All Threads" and "Search"
+  - Search scoped to current corpus when embedded
+  - Location: `frontend/src/components/discussions/CorpusDiscussionsView.tsx`
+
+- **Standalone /threads route**
+  - New dedicated search page accessible at `/threads`
+  - Global search across all accessible discussions
+  - Location: `frontend/src/views/ThreadSearchRoute.tsx`, `frontend/src/App.tsx:421`
+
+- **Backend tests for paginated search**
+  - Tests verify pagination structure (edges, pageInfo, totalCount)
+  - Tests verify cursor-based pagination with multiple pages
+  - Location: `opencontractserver/tests/test_conversation_search.py:609-743`
 
 #### Structural Annotation Sets (Phase 2.5)
 - **New `StructuralAnnotationSet` model** for shared, immutable structural annotations

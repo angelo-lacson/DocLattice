@@ -607,14 +607,26 @@ class GraphQLConversationSearchTest(TestCase):
         )
 
     def test_search_conversations_query(self):
-        """Test the searchConversations GraphQL query."""
+        """Test the searchConversations GraphQL query with pagination."""
         query = """
-            query SearchConversations($query: String!, $corpusId: ID, $topK: Int) {
-                searchConversations(query: $query, corpusId: $corpusId, topK: $topK) {
-                    id
-                    title
-                    description
-                    conversationType
+            query SearchConversations($query: String!, $corpusId: ID, $topK: Int, $first: Int, $after: String) {
+                searchConversations(query: $query, corpusId: $corpusId, topK: $topK, first: $first, after: $after) {
+                    edges {
+                        node {
+                            id
+                            title
+                            description
+                            conversationType
+                        }
+                        cursor
+                    }
+                    pageInfo {
+                        hasNextPage
+                        hasPreviousPage
+                        startCursor
+                        endCursor
+                    }
+                    totalCount
                 }
             }
         """
@@ -627,6 +639,7 @@ class GraphQLConversationSearchTest(TestCase):
                 "query": "test search query",
                 "corpusId": corpus_global_id,
                 "topK": 5,
+                "first": 2,
             },
         )
 
@@ -643,8 +656,91 @@ class GraphQLConversationSearchTest(TestCase):
         else:
             # If embedder service is available, verify response structure
             self.assertIsNotNone(result.get("data"))
-            conversations = result["data"]["searchConversations"]
-            self.assertIsInstance(conversations, list)
+            search_result = result["data"]["searchConversations"]
+
+            # Verify pagination structure
+            self.assertIn("edges", search_result)
+            self.assertIn("pageInfo", search_result)
+            self.assertIn("totalCount", search_result)
+
+            # Verify pageInfo fields
+            page_info = search_result["pageInfo"]
+            self.assertIn("hasNextPage", page_info)
+            self.assertIn("hasPreviousPage", page_info)
+            self.assertIn("startCursor", page_info)
+            self.assertIn("endCursor", page_info)
+
+            # Verify edges structure
+            edges = search_result["edges"]
+            self.assertIsInstance(edges, list)
+            if len(edges) > 0:
+                self.assertIn("node", edges[0])
+                self.assertIn("cursor", edges[0])
+
+    def test_search_conversations_pagination_with_cursor(self):
+        """Test searchConversations pagination with after cursor."""
+        query = """
+            query SearchConversations($query: String!, $corpusId: ID, $first: Int, $after: String) {
+                searchConversations(query: $query, corpusId: $corpusId, first: $first, after: $after) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                        cursor
+                    }
+                    pageInfo {
+                        hasNextPage
+                        endCursor
+                    }
+                }
+            }
+        """
+
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+
+        # First request - get first page
+        first_result = self.client.execute(
+            query,
+            variables={
+                "query": "test query",
+                "corpusId": corpus_global_id,
+                "first": 1,
+            },
+        )
+
+        # Skip test if embedder not available (expected in test environment)
+        if first_result.get("errors"):
+            error_message = first_result["errors"][0]["message"]
+            self.assertTrue(
+                "len()" in error_message or "embedder" in error_message.lower(),
+                f"Unexpected error: {error_message}",
+            )
+            return
+
+        # If results available, test cursor pagination
+        if first_result["data"]["searchConversations"]["pageInfo"]["hasNextPage"]:
+            end_cursor = first_result["data"]["searchConversations"]["pageInfo"]["endCursor"]
+
+            # Second request - get next page using cursor
+            second_result = self.client.execute(
+                query,
+                variables={
+                    "query": "test query",
+                    "corpusId": corpus_global_id,
+                    "first": 1,
+                    "after": end_cursor,
+                },
+            )
+
+            self.assertIsNotNone(second_result.get("data"))
+            second_edges = second_result["data"]["searchConversations"]["edges"]
+
+            # Verify second page has different results than first page
+            if len(second_edges) > 0:
+                first_id = first_result["data"]["searchConversations"]["edges"][0]["node"]["id"]
+                second_id = second_edges[0]["node"]["id"]
+                self.assertNotEqual(first_id, second_id, "Cursor pagination should return different results")
 
     def test_search_messages_query(self):
         """Test the searchMessages GraphQL query."""
