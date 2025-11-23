@@ -797,8 +797,12 @@ class GraphQLConversationSearchTest(TestCase):
         query = """
             query SearchConversations($query: String!) {
                 searchConversations(query: $query) {
-                    id
-                    title
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
                 }
             }
         """
@@ -941,8 +945,12 @@ class GraphQLConversationSearchTest(TestCase):
         query = """
             query SearchConversations($query: String!, $corpusId: ID, $topK: Int) {
                 searchConversations(query: $query, corpusId: $corpusId, topK: $topK) {
-                    id
-                    title
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
                 }
             }
         """
