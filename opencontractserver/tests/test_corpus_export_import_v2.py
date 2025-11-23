@@ -20,24 +20,24 @@ from django.test import TransactionTestCase
 from django.utils import timezone
 
 from opencontractserver.annotations.models import (
+    DOC_TYPE_LABEL,
+    RELATIONSHIP_LABEL,
+    TOKEN_LABEL,
     Annotation,
     AnnotationLabel,
     LabelSet,
     StructuralAnnotationSet,
-    TOKEN_LABEL,
-    DOC_TYPE_LABEL,
-    RELATIONSHIP_LABEL,
+)
+from opencontractserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    MessageVote,
 )
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusDescriptionRevision,
     CorpusFolder,
     TemporaryFileHandle,
-)
-from opencontractserver.conversations.models import (
-    ChatMessage,
-    Conversation,
-    MessageVote,
 )
 from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.tasks.export_tasks_v2 import package_corpus_export_v2

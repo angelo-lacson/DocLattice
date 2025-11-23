@@ -21,7 +21,6 @@ from opencontractserver.annotations.models import (
 from opencontractserver.corpuses.models import TemporaryFileHandle
 from opencontractserver.documents.models import Document
 from opencontractserver.types.enums import PermissionTypes
-from opencontractserver.utils.importing import import_annotations, load_or_create_labels
 from opencontractserver.utils.import_v2 import (
     import_agent_config,
     import_conversations,
@@ -31,6 +30,7 @@ from opencontractserver.utils.import_v2 import (
     import_relationships,
     import_structural_annotation_set,
 )
+from opencontractserver.utils.importing import import_annotations, load_or_create_labels
 from opencontractserver.utils.packaging import (
     unpack_corpus_from_export,
     unpack_label_set_from_export,
