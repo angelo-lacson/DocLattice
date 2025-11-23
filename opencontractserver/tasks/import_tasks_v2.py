@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import logging
 import zipfile
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile, File
@@ -48,8 +47,8 @@ User = get_user_model()
 def import_corpus_v2(
     temporary_file_handle_id: str | int,
     user_id: int,
-    seed_corpus_id: Optional[int],
-) -> Optional[str]:
+    seed_corpus_id: int | None,
+) -> str | None:
     """
     Import corpus with support for both V1 and V2 export formats.
 
@@ -108,8 +107,8 @@ def _import_corpus_v1(
     data_json: dict,
     import_zip: zipfile.ZipFile,
     user_obj: User,
-    seed_corpus_id: Optional[int],
-) -> Optional[str]:
+    seed_corpus_id: int | None,
+) -> str | None:
     """
     Import V1 format corpus (original format).
 
@@ -240,8 +239,8 @@ def _import_corpus_v2(
     data_json: dict,
     import_zip: zipfile.ZipFile,
     user_obj: User,
-    seed_corpus_id: Optional[int],
-) -> Optional[str]:
+    seed_corpus_id: int | None,
+) -> str | None:
     """
     Import V2 format corpus (new comprehensive format).
     """

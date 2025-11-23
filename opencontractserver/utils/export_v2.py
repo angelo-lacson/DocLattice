@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -43,7 +42,7 @@ User = get_user_model()
 
 def package_structural_annotation_set(
     structural_set,
-) -> Optional[StructuralAnnotationSetExport]:
+) -> StructuralAnnotationSetExport | None:
     """
     Package a StructuralAnnotationSet for export.
 
@@ -298,7 +297,7 @@ def package_agent_config(corpus: Corpus) -> AgentConfigExport:
 
 def package_md_description_revisions(
     corpus: Corpus,
-) -> tuple[Optional[str], list[DescriptionRevisionExport]]:
+) -> tuple[str | None, list[DescriptionRevisionExport]]:
     """
     Package markdown description and revision history for export.
 

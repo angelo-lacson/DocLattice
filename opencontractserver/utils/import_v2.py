@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -52,7 +51,7 @@ def import_structural_annotation_set(
     struct_data: StructuralAnnotationSetExport,
     label_lookup: dict,
     user_obj: User,
-) -> Optional[StructuralAnnotationSet]:
+) -> StructuralAnnotationSet | None:
     """
     Import or retrieve existing StructuralAnnotationSet.
 
@@ -420,7 +419,7 @@ def import_agent_config(
 
 
 def import_md_description_revisions(
-    md_description: Optional[str],
+    md_description: str | None,
     revisions_data: list[DescriptionRevisionExport],
     corpus: Corpus,
     user_obj: User,
