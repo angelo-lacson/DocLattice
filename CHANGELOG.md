@@ -68,6 +68,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tests verify cursor-based pagination with multiple pages
   - Location: `opencontractserver/tests/test_conversation_search.py:609-743`
 
+- **Frontend component tests** (18 tests, 100% passing)
+  - SearchBar component tests (5 tests): input rendering, search icon, clear button, Enter key submission
+  - SearchFilters component tests (5 tests): filter rendering, option counting, selected state, clear filters button
+  - SearchResults component tests (4 tests): loading state, empty state, no results state, results rendering
+  - ThreadSearch component tests (4 tests): search bar integration, filters toggle, corpus-scoped search
+  - Location: `frontend/tests/search-components.ct.tsx`
+
 #### Structural Annotation Sets (Phase 2.5)
 - **New `StructuralAnnotationSet` model** for shared, immutable structural annotations
   - Content-hash based uniqueness (`content_hash` field)
