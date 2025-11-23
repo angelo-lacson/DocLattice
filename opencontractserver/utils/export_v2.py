@@ -136,8 +136,8 @@ def package_corpus_folders(corpus: Corpus) -> list[CorpusFolderExport]:
     folders_export = []
 
     try:
-        # Get all folders for this corpus, ordered by tree structure
-        folders = corpus.folders.all().order_by("tree_path")
+        # Get all folders for this corpus, ordered by ID (parents before children)
+        folders = corpus.folders.all().order_by("id")
 
         # Build export ID mapping (db_id -> export_id)
         folder_id_map = {}
@@ -366,7 +366,7 @@ def package_conversations(
 
     try:
         # Get all conversations for this corpus
-        conversations = Conversation.objects.filter(corpus=corpus)
+        conversations = Conversation.objects.filter(chat_with_corpus=corpus)
 
         # Build conversation ID mapping
         conv_id_map = {}

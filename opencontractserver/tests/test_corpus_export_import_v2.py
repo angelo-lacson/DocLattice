@@ -260,7 +260,7 @@ class TestV2ExportUtilities(TransactionTestCase):
         """Test exporting conversations and messages."""
         # Create conversation
         conv = Conversation.objects.create(
-            corpus=self.corpus,
+            chat_with_corpus=self.corpus,
             title="Test Thread",
             conversation_type="thread",
             creator=self.user,
@@ -270,7 +270,7 @@ class TestV2ExportUtilities(TransactionTestCase):
         msg = ChatMessage.objects.create(
             conversation=conv,
             content="Test message",
-            role="user",
+            msg_type="HUMAN",
             creator=self.user,
         )
 
@@ -714,7 +714,7 @@ class TestV2EdgeCases(TransactionTestCase):
 
         # Create conversation
         Conversation.objects.create(
-            corpus=corpus,
+            chat_with_corpus=corpus,
             title="Test Thread",
             creator=self.user,
         )
