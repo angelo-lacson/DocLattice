@@ -135,7 +135,7 @@ export function SearchResults({
         {results.map((thread) => (
           <ThreadListItem
             key={thread.id}
-            thread={thread}
+            thread={thread as any}
             corpusId={thread.chatWithCorpus?.id}
           />
         ))}

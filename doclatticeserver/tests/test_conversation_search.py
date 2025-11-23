@@ -720,7 +720,9 @@ class GraphQLConversationSearchTest(TestCase):
 
         # If results available, test cursor pagination
         if first_result["data"]["searchConversations"]["pageInfo"]["hasNextPage"]:
-            end_cursor = first_result["data"]["searchConversations"]["pageInfo"]["endCursor"]
+            end_cursor = first_result["data"]["searchConversations"]["pageInfo"][
+                "endCursor"
+            ]
 
             # Second request - get next page using cursor
             second_result = self.client.execute(
@@ -738,9 +740,15 @@ class GraphQLConversationSearchTest(TestCase):
 
             # Verify second page has different results than first page
             if len(second_edges) > 0:
-                first_id = first_result["data"]["searchConversations"]["edges"][0]["node"]["id"]
+                first_id = first_result["data"]["searchConversations"]["edges"][0][
+                    "node"
+                ]["id"]
                 second_id = second_edges[0]["node"]["id"]
-                self.assertNotEqual(first_id, second_id, "Cursor pagination should return different results")
+                self.assertNotEqual(
+                    first_id,
+                    second_id,
+                    "Cursor pagination should return different results",
+                )
 
     def test_search_messages_query(self):
         """Test the searchMessages GraphQL query."""
