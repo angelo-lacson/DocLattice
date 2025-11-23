@@ -15,16 +15,14 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 
-from doclatticeserver.annotations.models import Annotation, Relationship
+from doclatticeserver.annotations.models import Relationship
 from doclatticeserver.corpuses.models import (
     Corpus,
     CorpusDescriptionRevision,
-    CorpusFolder,
 )
 from doclatticeserver.documents.models import DocumentPath
 from doclatticeserver.types.dicts import (
@@ -32,7 +30,6 @@ from doclatticeserver.types.dicts import (
     CorpusFolderExport,
     DescriptionRevisionExport,
     DocumentPathExport,
-    DocLatticeAnnotationPythonType,
     DocLatticeRelationshipPythonType,
     StructuralAnnotationSetExport,
 )
@@ -45,7 +42,7 @@ User = get_user_model()
 
 def package_structural_annotation_set(
     structural_set,
-) -> Optional[StructuralAnnotationSetExport]:
+) -> StructuralAnnotationSetExport | None:
     """
     Package a StructuralAnnotationSet for export.
 
@@ -74,9 +71,9 @@ def package_structural_annotation_set(
             structural_annotations.append(
                 {
                     "id": str(annot.id),
-                    "annotationLabel": annot.annotation_label.text
-                    if annot.annotation_label
-                    else "",
+                    "annotationLabel": (
+                        annot.annotation_label.text if annot.annotation_label else ""
+                    ),
                     "rawText": annot.raw_text or "",
                     "page": annot.page or 0,
                     "annotation_json": annot.json or {},
@@ -92,9 +89,9 @@ def package_structural_annotation_set(
             structural_relationships.append(
                 {
                     "id": str(rel.id),
-                    "relationshipLabel": rel.relationship_label.text
-                    if rel.relationship_label
-                    else "",
+                    "relationshipLabel": (
+                        rel.relationship_label.text if rel.relationship_label else ""
+                    ),
                     "source_annotation_ids": [
                         str(a.id) for a in rel.source_annotations.all()
                     ],
@@ -230,9 +227,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             )
 
     except Exception as e:
-        logger.error(
-            f"Error packaging document paths for corpus {corpus.id}: {e}"
-        )
+        logger.error(f"Error packaging document paths for corpus {corpus.id}: {e}")
 
     return paths_export
 
@@ -265,9 +260,9 @@ def package_relationships(
             relationships_export.append(
                 {
                     "id": str(rel.id),
-                    "relationshipLabel": rel.relationship_label.text
-                    if rel.relationship_label
-                    else "",
+                    "relationshipLabel": (
+                        rel.relationship_label.text if rel.relationship_label else ""
+                    ),
                     "source_annotation_ids": [
                         str(a.id) for a in rel.source_annotations.all()
                     ],
@@ -302,7 +297,7 @@ def package_agent_config(corpus: Corpus) -> AgentConfigExport:
 
 def package_md_description_revisions(
     corpus: Corpus,
-) -> tuple[Optional[str], list[DescriptionRevisionExport]]:
+) -> tuple[str | None, list[DescriptionRevisionExport]]:
     """
     Package markdown description and revision history for export.
 
@@ -412,9 +407,9 @@ def package_conversations(
                     "state": msg.state or "completed",
                     "role": msg.role or "user",
                     "tool_name": msg.tool_name,
-                    "approved_by_email": msg.approved_by.email
-                    if msg.approved_by
-                    else None,
+                    "approved_by_email": (
+                        msg.approved_by.email if msg.approved_by else None
+                    ),
                     "creator_email": msg.creator.email if msg.creator else "",
                     "created": msg.created.isoformat(),
                 }

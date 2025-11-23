@@ -9,21 +9,18 @@ from __future__ import annotations
 import json
 import logging
 import zipfile
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile, File
 
 from config import celery_app
 from doclatticeserver.annotations.models import (
-    DOC_TYPE_LABEL,
     TOKEN_LABEL,
     Annotation,
 )
-from doclatticeserver.corpuses.models import Corpus, TemporaryFileHandle
+from doclatticeserver.corpuses.models import TemporaryFileHandle
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.enums import PermissionTypes
-from doclatticeserver.utils.importing import import_annotations, load_or_create_labels
 from doclatticeserver.utils.import_v2 import (
     import_agent_config,
     import_conversations,
@@ -33,6 +30,7 @@ from doclatticeserver.utils.import_v2 import (
     import_relationships,
     import_structural_annotation_set,
 )
+from doclatticeserver.utils.importing import import_annotations, load_or_create_labels
 from doclatticeserver.utils.packaging import (
     unpack_corpus_from_export,
     unpack_label_set_from_export,
@@ -49,8 +47,8 @@ User = get_user_model()
 def import_corpus_v2(
     temporary_file_handle_id: str | int,
     user_id: int,
-    seed_corpus_id: Optional[int],
-) -> Optional[str]:
+    seed_corpus_id: int | None,
+) -> str | None:
     """
     Import corpus with support for both V1 and V2 export formats.
 
@@ -109,8 +107,8 @@ def _import_corpus_v1(
     data_json: dict,
     import_zip: zipfile.ZipFile,
     user_obj: User,
-    seed_corpus_id: Optional[int],
-) -> Optional[str]:
+    seed_corpus_id: int | None,
+) -> str | None:
     """
     Import V1 format corpus (original format).
 
@@ -241,8 +239,8 @@ def _import_corpus_v2(
     data_json: dict,
     import_zip: zipfile.ZipFile,
     user_obj: User,
-    seed_corpus_id: Optional[int],
-) -> Optional[str]:
+    seed_corpus_id: int | None,
+) -> str | None:
     """
     Import V2 format corpus (new comprehensive format).
     """
@@ -404,12 +402,19 @@ def _import_corpus_v2(
 
         # ===== PART 6: Import DocumentPaths =====
         paths_data = data_json.get("document_paths", [])
-        import_document_paths(paths_data, corpus_obj, document_map, folder_map, user_obj)
+        import_document_paths(
+            paths_data, corpus_obj, document_map, folder_map, user_obj
+        )
 
         # ===== PART 7: Import Relationships =====
         relationships_data = data_json.get("relationships", [])
         import_relationships(
-            relationships_data, corpus_obj, document_map, annot_id_map, label_lookup, user_obj
+            relationships_data,
+            corpus_obj,
+            document_map,
+            annot_id_map,
+            label_lookup,
+            user_obj,
         )
 
         # ===== PART 8: Import Agent Config =====

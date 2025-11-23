@@ -9,30 +9,29 @@ Tests cover:
 - Edge cases and data integrity
 """
 
-import base64
-import io
 import json
 import pathlib
-import uuid
 import zipfile
-from datetime import datetime
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.db import transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import TransactionTestCase
 from django.utils import timezone
 
 from doclatticeserver.annotations.models import (
+    DOC_TYPE_LABEL,
+    RELATIONSHIP_LABEL,
+    TOKEN_LABEL,
     Annotation,
     AnnotationLabel,
     LabelSet,
-    Relationship,
     StructuralAnnotationSet,
-    TOKEN_LABEL,
-    DOC_TYPE_LABEL,
-    RELATIONSHIP_LABEL,
+)
+from doclatticeserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    MessageVote,
 )
 from doclatticeserver.corpuses.models import (
     Corpus,
@@ -40,7 +39,6 @@ from doclatticeserver.corpuses.models import (
     CorpusFolder,
     TemporaryFileHandle,
 )
-from doclatticeserver.conversations.models import ChatMessage, Conversation, MessageVote
 from doclatticeserver.documents.models import Document, DocumentPath
 from doclatticeserver.tasks.export_tasks_v2 import package_corpus_export_v2
 from doclatticeserver.tasks.import_tasks_v2 import import_corpus_v2
@@ -52,16 +50,12 @@ from doclatticeserver.utils.export_v2 import (
     package_corpus_folders,
     package_document_paths,
     package_md_description_revisions,
-    package_relationships,
     package_structural_annotation_set,
 )
 from doclatticeserver.utils.import_v2 import (
     import_agent_config,
-    import_conversations,
     import_corpus_folders,
-    import_document_paths,
     import_md_description_revisions,
-    import_relationships,
     import_structural_annotation_set,
 )
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -136,7 +130,7 @@ class TestV2ExportUtilities(TransactionTestCase):
         )
 
         # Create structural annotations
-        annot = Annotation.objects.create(
+        Annotation.objects.create(
             structural_set=struct_set,
             annotation_label=self.text_label,
             raw_text="Test annotation",
@@ -167,7 +161,7 @@ class TestV2ExportUtilities(TransactionTestCase):
             creator=self.user,
         )
 
-        child_folder = CorpusFolder.objects.create(
+        CorpusFolder.objects.create(
             corpus=self.corpus,
             name="Child Folder",
             parent=root_folder,
@@ -204,7 +198,7 @@ class TestV2ExportUtilities(TransactionTestCase):
             creator=self.user,
         )
 
-        path2 = DocumentPath.objects.create(
+        DocumentPath.objects.create(
             document=doc,
             corpus=self.corpus,
             path="/documents/test.pdf",
@@ -228,7 +222,9 @@ class TestV2ExportUtilities(TransactionTestCase):
         """Test exporting agent configuration."""
         result = package_agent_config(self.corpus)
 
-        self.assertEqual(result["corpus_agent_instructions"], "Test corpus instructions")
+        self.assertEqual(
+            result["corpus_agent_instructions"], "Test corpus instructions"
+        )
         self.assertEqual(
             result["document_agent_instructions"], "Test document instructions"
         )
@@ -279,9 +275,7 @@ class TestV2ExportUtilities(TransactionTestCase):
         )
 
         # Create vote
-        MessageVote.objects.create(
-            message=msg, vote_type="upvote", creator=self.user
-        )
+        MessageVote.objects.create(message=msg, vote_type="upvote", creator=self.user)
 
         # Export
         conversations, messages, votes = package_conversations(self.corpus)
@@ -577,7 +571,9 @@ class TestV2FullRoundTrip(TransactionTestCase):
 
                     # Verify structural set exported
                     self.assertEqual(len(data["structural_annotation_sets"]), 1)
-                    self.assertIn("test_content_hash", data["structural_annotation_sets"])
+                    self.assertIn(
+                        "test_content_hash", data["structural_annotation_sets"]
+                    )
 
                     # Verify folder exported
                     self.assertEqual(len(data["folders"]), 1)

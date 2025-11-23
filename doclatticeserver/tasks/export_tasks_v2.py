@@ -20,7 +20,6 @@ import logging
 import zipfile
 
 from celery import shared_task
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
@@ -123,9 +122,9 @@ def package_corpus_export_v2(
 
             # Add structural set reference if present
             if doc.structural_annotation_set:
-                doc_export_data[
-                    "structural_set_hash"
-                ] = doc.structural_annotation_set.content_hash
+                doc_export_data["structural_set_hash"] = (
+                    doc.structural_annotation_set.content_hash
+                )
                 structural_sets_seen.add(doc.structural_annotation_set)
 
             # Add PDF to ZIP
@@ -228,6 +227,6 @@ def package_corpus_export_v2(
             export.error = True
             export.backend_lock = False
             export.save()
-        except:
+        except Exception:
             pass
         raise
