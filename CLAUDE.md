@@ -307,7 +307,12 @@ Run manually: `pre-commit run --all-files`
 6. **Missing signal imports**: Import signal handlers in `apps.py` `ready()` method
 7. **PDF rendering slow in tests**: Increase timeouts to 20s+ for Chromium
 8. **Cache serialization crashes**: Keep InMemoryCache definition inside wrapper, not test file
-9. **Backend Tests Waiting > 10 seconds on Postgres to be Ready**: Usually indicates somehow docker network has gotten fubared. Destroy and recreate network
+9. **Backend Tests Waiting > 10 seconds on Postgres to be Ready**: Docker network issue. Fix with: `docker compose -f test.yml down && docker kill $(docker ps -q) && docker compose -f test.yml down`
 10. **Empty lists on direct navigation**: AuthGate pattern solves this (don't check auth status, it's always ready)
 11. **URL desynchronization**: Use CentralRouteManager, don't bypass routing system
 12. **Jotai state not updating**: Ensure atoms are properly imported and used with useAtom hook
+13. **Corrupted Docker iptables chains** (RARE): If you see `Chain 'DOCKER-ISOLATION-STAGE-2' does not exist` errors, Docker's iptables chains have been corrupted during docker cycling. Run this nuclear fix:
+    ```bash
+    sudo systemctl stop docker && sudo systemctl stop docker.socket && sudo ip link delete docker0 2>/dev/null || true && sudo iptables -t nat -F && sudo iptables -t nat -X && sudo iptables -t filter -F && sudo iptables -t filter -X 2>/dev/null || true && sudo iptables -t mangle -F && sudo iptables -t mangle -X && sudo iptables -t filter -N INPUT 2>/dev/null || true && sudo iptables -t filter -N FORWARD 2>/dev/null || true && sudo iptables -t filter -N OUTPUT 2>/dev/null || true && sudo iptables -P INPUT ACCEPT && sudo iptables -P FORWARD ACCEPT && sudo iptables -P OUTPUT ACCEPT && sudo systemctl start docker
+    ```
+    This completely resets Docker's networking and iptables state. Docker will recreate all required chains on startup.

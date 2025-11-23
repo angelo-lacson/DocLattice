@@ -1,4 +1,5 @@
 import difflib
+import functools
 import hashlib
 import uuid
 
@@ -530,7 +531,7 @@ class StructuralAnnotationSet(BaseOCModel):
 
     # PAWLS data for PDFs (shared across all documents with this content)
     pawls_parse_file = django.db.models.FileField(
-        upload_to=calc_oc_file_path,
+        upload_to=functools.partial(calc_oc_file_path, sub_folder="pawls_layers_files"),
         null=True,
         blank=True,
         max_length=1024,
@@ -539,7 +540,7 @@ class StructuralAnnotationSet(BaseOCModel):
 
     # Text extract for text-based documents
     txt_extract_file = django.db.models.FileField(
-        upload_to=calc_oc_file_path,
+        upload_to=functools.partial(calc_oc_file_path, sub_folder="txt_layers_files"),
         null=True,
         blank=True,
         max_length=1024,

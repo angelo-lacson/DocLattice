@@ -26,6 +26,7 @@ from django.utils import timezone
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import DocumentPath
 from doclatticeserver.types.dicts import DocLatticeExportDataJsonV2Type
+from doclatticeserver.types.enums import AnnotationFilterMode
 from doclatticeserver.users.models import UserExport
 from doclatticeserver.utils.etl import build_document_export, build_label_lookups
 from doclatticeserver.utils.export_v2 import (
@@ -55,7 +56,7 @@ def package_corpus_export_v2(
     corpus_pk: int,
     include_conversations: bool = False,
     analysis_pk_list: list[int] | None = None,
-    annotation_filter_mode: str = "CORPUS_LABELSET_ONLY",
+    annotation_filter_mode: AnnotationFilterMode = AnnotationFilterMode.CORPUS_LABELSET_ONLY,
 ):
     """
     Package a complete V2 corpus export.
