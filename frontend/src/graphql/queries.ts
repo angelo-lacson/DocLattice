@@ -20,6 +20,7 @@ import {
   AnalysisRowType,
   ConversationType,
   ConversationTypeConnection,
+  ConversationTypeEnum,
   PipelineComponentType,
   ChatMessageType,
   UserType,
@@ -3940,9 +3941,11 @@ export interface ConversationSearchResult {
   id: string;
   title: string;
   description: string;
-  conversationType: string;
+  conversationType?: ConversationTypeEnum;
   createdAt: string;
   updatedAt: string;
+  created: string; // Alias for compatibility with ConversationType
+  modified: string; // Alias for compatibility with ConversationType
   creator: {
     id: string;
     username: string;
@@ -4018,6 +4021,8 @@ export const SEARCH_CONVERSATIONS = gql`
           conversationType
           createdAt
           updatedAt
+          created
+          modified
           creator {
             id
             username

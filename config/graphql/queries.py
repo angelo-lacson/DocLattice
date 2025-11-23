@@ -1679,7 +1679,7 @@ class Query(graphene.ObjectType):
         document_id=None,
         conversation_type=None,
         top_k=100,
-        **kwargs
+        **kwargs,
     ):
         """
         Search conversations using vector similarity with cursor-based pagination.
