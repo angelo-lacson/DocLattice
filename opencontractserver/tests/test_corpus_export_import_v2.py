@@ -12,6 +12,7 @@ Tests cover:
 import json
 import pathlib
 import zipfile
+from unittest import mock
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -1107,6 +1108,166 @@ class TestV2ImportUtilities(TransactionTestCase):
         self.assertEqual(
             relationships.count(), 0
         )  # No relationship due to missing label
+
+
+class TestV2ImportExceptionHandling(TransactionTestCase):
+    """Test exception handling in V2 import functions."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.labelset = LabelSet.objects.create(
+            title="Test LabelSet", creator=self.user
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", label_set=self.labelset, creator=self.user
+        )
+        self.text_label = AnnotationLabel.objects.create(
+            text="Test Label", label_type=TOKEN_LABEL, creator=self.user
+        )
+        self.labelset.annotation_labels.add(self.text_label)
+
+    @mock.patch(
+        "opencontractserver.utils.import_v2.StructuralAnnotationSet.objects.create"
+    )
+    def test_import_structural_set_exception(self, mock_create):
+        """Test import_structural_annotation_set exception handler (lines 185-187)."""
+        from opencontractserver.utils.import_v2 import import_structural_annotation_set
+
+        # Force an exception when creating StructuralAnnotationSet
+        mock_create.side_effect = Exception("Database error")
+
+        struct_data = {
+            "content_hash": "hash123",
+            "parser_name": "test_parser",
+            "parser_version": "1.0",
+            "page_count": 1,
+            "token_count": 100,
+            "pawls_file_content": [],
+            "txt_content": "test",
+            "structural_annotations": [],
+            "structural_relationships": [],
+        }
+
+        label_lookup = {}
+        result = import_structural_annotation_set(struct_data, label_lookup, self.user)
+
+        # Should return None on exception
+        self.assertIsNone(result)
+
+    @mock.patch("opencontractserver.utils.import_v2.CorpusFolder.objects.create")
+    def test_import_corpus_folders_exception(self, mock_create):
+        """Test import_corpus_folders exception handler (lines 239-240)."""
+        from opencontractserver.utils.import_v2 import import_corpus_folders
+
+        # Force an exception when creating folder
+        mock_create.side_effect = Exception("Database error")
+
+        folders_data = [
+            {
+                "id": "folder1",
+                "name": "Test Folder",
+                "description": "Test",
+                "color": "#05313d",
+                "icon": "folder",
+                "tags": [],
+                "is_public": False,
+                "parent_id": None,
+                "path": "/Test Folder",
+            }
+        ]
+
+        result = import_corpus_folders(folders_data, self.corpus, self.user)
+
+        # Should return empty dict on exception
+        self.assertEqual(result, {})
+
+    @mock.patch("opencontractserver.utils.import_v2.DocumentPath.objects.create")
+    def test_import_document_paths_exception(self, mock_create):
+        """Test import_document_paths exception handler (lines 327-328)."""
+        from opencontractserver.utils.import_v2 import import_document_paths
+
+        # Create a document
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+            page_count=1,
+            pdf_file_hash="hash123",
+        )
+
+        # Force an exception when creating DocumentPath
+        mock_create.side_effect = Exception("Database error")
+
+        paths_data = [
+            {
+                "document_ref": "hash123",
+                "folder_path": None,
+                "path": "/test.pdf",
+                "version_number": 1,
+                "parent_version_number": None,
+                "is_current": True,
+                "is_deleted": False,
+                "created": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+        document_map = {"hash123": doc}
+        folder_map = {}
+
+        # Should not raise exception - handles it gracefully
+        import_document_paths(
+            paths_data, self.corpus, document_map, folder_map, self.user
+        )
+
+    @mock.patch("opencontractserver.utils.import_v2.Relationship.objects.create")
+    def test_import_relationships_exception(self, mock_create):
+        """Test import_relationships exception handler (lines 394-395)."""
+        from opencontractserver.utils.import_v2 import import_relationships
+
+        # Create annotation for ID mapping
+        doc = Document.objects.create(title="Test Doc", creator=self.user, page_count=1)
+        annot = Annotation.objects.create(
+            annotation_label=self.text_label,
+            document=doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+        # Force an exception when creating Relationship
+        mock_create.side_effect = Exception("Database error")
+
+        relationships_data = [
+            {
+                "id": "rel1",
+                "relationshipLabel": "Test Label",
+                "source_annotation_ids": ["old_id1"],
+                "target_annotation_ids": ["old_id2"],
+                "structural": False,
+            }
+        ]
+
+        annot_id_map = {"old_id1": annot.id, "old_id2": annot.id}
+        label_lookup = {"Test Label": self.text_label}
+
+        # Should not raise exception - handles it gracefully
+        import_relationships(
+            relationships_data, self.corpus, {}, annot_id_map, label_lookup, self.user
+        )
+
+    @mock.patch("opencontractserver.corpuses.models.Corpus.save")
+    def test_import_agent_config_exception(self, mock_save):
+        """Test import_agent_config exception handler (lines 422-423)."""
+        from opencontractserver.utils.import_v2 import import_agent_config
+
+        # Force an exception when saving corpus
+        mock_save.side_effect = Exception("Database error")
+
+        agent_config = {
+            "corpus_agent_instructions": "Test instructions",
+            "document_agent_instructions": "Test doc instructions",
+        }
+
+        # Should not raise exception - handles it gracefully
+        import_agent_config(agent_config, self.corpus)
 
 
 class TestV2FullRoundTrip(TransactionTestCase):
