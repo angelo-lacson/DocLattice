@@ -809,6 +809,305 @@ class TestV2ImportUtilities(TransactionTestCase):
         path2 = paths.get(path="/missing_folder/doc.pdf")
         self.assertIsNone(path2.folder)
 
+    def test_import_structural_annotations_with_parents(self):
+        """Test importing structural annotations with parent-child relationships."""
+        struct_data = {
+            "content_hash": "test_parent_hash_123",
+            "pawls_file_content": [{"page": {"width": 612, "height": 792, "index": 0}}],
+            "txt_content": "Parent and child annotations",
+            "structural_annotations": [
+                {
+                    "id": "parent_annot_1",
+                    "annotationLabel": "Test Label",
+                    "rawText": "Parent annotation",
+                    "page": 0,
+                    "annotation_json": {},
+                    "annotation_type": "TOKEN_LABEL",
+                    "structural": True,
+                    "parent_id": None,
+                },
+                {
+                    "id": "child_annot_2",
+                    "annotationLabel": "Test Label",
+                    "rawText": "Child annotation",
+                    "page": 0,
+                    "annotation_json": {},
+                    "annotation_type": "TOKEN_LABEL",
+                    "structural": True,
+                    "parent_id": "parent_annot_1",  # References parent
+                },
+            ],
+        }
+
+        label_lookup = {"Test Label": self.text_label}
+        result = import_structural_annotation_set(struct_data, label_lookup, self.user)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.content_hash, "test_parent_hash_123")
+
+        # Check that parent-child relationship was set
+        annots = Annotation.objects.filter(structural_set=result).order_by("id")
+        self.assertEqual(annots.count(), 2)
+
+        parent_annot = annots[0]
+        child_annot = annots[1]
+
+        # Child should have parent set
+        self.assertEqual(child_annot.parent_id, parent_annot.id)
+        # Parent should have no parent
+        self.assertIsNone(parent_annot.parent_id)
+
+    def test_import_structural_relationships(self):
+        """Test importing structural relationships between annotations."""
+        # Create a relationship label
+        rel_label = AnnotationLabel.objects.create(
+            text="Causes",
+            label_type="RELATIONSHIP_LABEL",
+            color="blue",
+            description="Causal relationship",
+            creator=self.user,
+        )
+        self.labelset.annotation_labels.add(rel_label)
+
+        struct_data = {
+            "content_hash": "test_rel_hash_456",
+            "pawls_file_content": [{"page": {"width": 612, "height": 792, "index": 0}}],
+            "txt_content": "Annotations with relationships",
+            "structural_annotations": [
+                {
+                    "id": "source_annot_1",
+                    "annotationLabel": "Test Label",
+                    "rawText": "Source annotation",
+                    "page": 0,
+                    "annotation_json": {},
+                    "annotation_type": "TOKEN_LABEL",
+                    "structural": True,
+                },
+                {
+                    "id": "target_annot_2",
+                    "annotationLabel": "Test Label",
+                    "rawText": "Target annotation",
+                    "page": 0,
+                    "annotation_json": {},
+                    "annotation_type": "TOKEN_LABEL",
+                    "structural": True,
+                },
+            ],
+            "structural_relationships": [
+                {
+                    "relationshipLabel": "Causes",
+                    "source_annotation_ids": ["source_annot_1"],
+                    "target_annotation_ids": ["target_annot_2"],
+                }
+            ],
+        }
+
+        label_lookup = {"Test Label": self.text_label, "Causes": rel_label}
+        result = import_structural_annotation_set(struct_data, label_lookup, self.user)
+
+        self.assertIsNotNone(result)
+
+        # Check that relationship was created
+        relationships = Relationship.objects.filter(structural_set=result)
+        self.assertEqual(relationships.count(), 1)
+
+        rel = relationships.first()
+        self.assertEqual(rel.relationship_label, rel_label)
+        self.assertTrue(rel.structural)
+
+        # Check source and target annotations are linked
+        self.assertEqual(rel.source_annotations.count(), 1)
+        self.assertEqual(rel.target_annotations.count(), 1)
+
+    def test_import_structural_set_missing_label(self):
+        """Test importing structural annotations with missing label (should skip)."""
+        struct_data = {
+            "content_hash": "test_missing_label_789",
+            "pawls_file_content": [{"page": {"width": 612, "height": 792, "index": 0}}],
+            "txt_content": "Test content",
+            "structural_annotations": [
+                {
+                    "id": "annot_1",
+                    "annotationLabel": "NonexistentLabel",  # This label doesn't exist
+                    "rawText": "Test",
+                    "page": 0,
+                    "annotation_json": {},
+                    "annotation_type": "TOKEN_LABEL",
+                    "structural": True,
+                },
+                {
+                    "id": "annot_2",
+                    "annotationLabel": "Test Label",  # This one exists
+                    "rawText": "Valid",
+                    "page": 0,
+                    "annotation_json": {},
+                    "annotation_type": "TOKEN_LABEL",
+                    "structural": True,
+                },
+            ],
+        }
+
+        label_lookup = {"Test Label": self.text_label}  # Missing "NonexistentLabel"
+        result = import_structural_annotation_set(struct_data, label_lookup, self.user)
+
+        self.assertIsNotNone(result)
+
+        # Should only have 1 annotation (the one with valid label)
+        annots = Annotation.objects.filter(structural_set=result)
+        self.assertEqual(annots.count(), 1)
+        self.assertEqual(annots.first().raw_text, "Valid")
+
+    def test_import_relationships_missing_label(self):
+        """Test importing relationships with missing label (should skip)."""
+        # Create a document first
+        doc = Document.objects.create(title="Test Doc", creator=self.user, page_count=1)
+
+        # Create some annotations
+        annot1 = Annotation.objects.create(
+            annotation_label=self.text_label,
+            document=doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+        annot2 = Annotation.objects.create(
+            annotation_label=self.text_label,
+            document=doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+        relationships_data = [
+            {
+                "relationshipLabel": "NonexistentRelLabel",  # Missing label
+                "source_annotation_ids": [str(annot1.id)],
+                "target_annotation_ids": [str(annot2.id)],
+                "structural": False,
+            }
+        ]
+
+        doc.pdf_file_hash = "test_doc_hash_123"
+        doc.save()
+
+        document_map = {doc.pdf_file_hash: doc}
+        annot_id_map = {str(annot1.id): annot1.id, str(annot2.id): annot2.id}
+        label_lookup = {"Test Label": self.text_label}  # Missing "NonexistentRelLabel"
+
+        # Should not raise error, just log warning and skip
+        import_relationships(
+            relationships_data,
+            self.corpus,
+            document_map,
+            annot_id_map,
+            label_lookup,
+            self.user,
+        )
+
+        # No relationships should be created
+        relationships = Relationship.objects.filter(corpus=self.corpus)
+        self.assertEqual(relationships.count(), 0)
+
+    def test_import_document_paths_with_parent_version(self):
+        """Test importing DocumentPath with parent version reference."""
+        # Create two versions of the same document
+        doc_v1 = Document.objects.create(
+            title="Document V1",
+            creator=self.user,
+            pdf_file_hash="doc_hash_v1",
+        )
+        doc_v2 = Document.objects.create(
+            title="Document V2",
+            creator=self.user,
+            pdf_file_hash="doc_hash_v2",
+        )
+
+        paths_data = [
+            {
+                "path": "/test/document.pdf",
+                "document_ref": "doc_hash_v1",
+                "version_number": 1,
+                "parent_version_number": None,  # First version
+                "is_current": False,
+                "is_deleted": False,
+            },
+            {
+                "path": "/test/document.pdf",
+                "document_ref": "doc_hash_v2",
+                "version_number": 2,
+                "parent_version_number": 1,  # References version 1
+                "is_current": True,
+                "is_deleted": False,
+            },
+        ]
+
+        document_map = {"doc_hash_v1": doc_v1, "doc_hash_v2": doc_v2}
+        folder_map = {}
+
+        import_document_paths(
+            paths_data, self.corpus, document_map, folder_map, self.user
+        )
+
+        # Check both paths were created
+        paths = DocumentPath.objects.filter(corpus=self.corpus).order_by(
+            "version_number"
+        )
+        self.assertEqual(paths.count(), 2)
+
+        path_v1 = paths[0]
+        path_v2 = paths[1]
+
+        # Check version 2 has version 1 as parent
+        self.assertEqual(path_v2.parent_id, path_v1.id)
+        self.assertIsNone(path_v1.parent_id)
+
+    def test_import_structural_relationships_missing_label(self):
+        """Test importing structural relationships with missing relationship label."""
+        struct_data = {
+            "content_hash": "test_missing_rel_label_999",
+            "pawls_file_content": [{"page": {"width": 612, "height": 792, "index": 0}}],
+            "txt_content": "Test content with relationships",
+            "structural_annotations": [
+                {
+                    "id": "annot_1",
+                    "annotationLabel": "Test Label",
+                    "rawText": "Source",
+                    "page": 0,
+                    "annotation_json": {},
+                    "annotation_type": "TOKEN_LABEL",
+                    "structural": True,
+                },
+                {
+                    "id": "annot_2",
+                    "annotationLabel": "Test Label",
+                    "rawText": "Target",
+                    "page": 0,
+                    "annotation_json": {},
+                    "annotation_type": "TOKEN_LABEL",
+                    "structural": True,
+                },
+            ],
+            "structural_relationships": [
+                {
+                    "relationshipLabel": "MissingRelLabel",  # This label doesn't exist
+                    "source_annotation_ids": ["annot_1"],
+                    "target_annotation_ids": ["annot_2"],
+                }
+            ],
+        }
+
+        label_lookup = {"Test Label": self.text_label}  # Missing "MissingRelLabel"
+        result = import_structural_annotation_set(struct_data, label_lookup, self.user)
+
+        self.assertIsNotNone(result)
+
+        # Should have 2 annotations but 0 relationships (missing label)
+        annots = Annotation.objects.filter(structural_set=result)
+        self.assertEqual(annots.count(), 2)
+
+        relationships = Relationship.objects.filter(structural_set=result)
+        self.assertEqual(
+            relationships.count(), 0
+        )  # No relationship due to missing label
+
 
 class TestV2FullRoundTrip(TransactionTestCase):
     """Test complete V2 export/import round-trip."""
