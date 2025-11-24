@@ -373,10 +373,15 @@ def import_relationships(
             ]
 
             if source_ids and target_ids:
-                # Determine if this is corpus-level or document-level
-                # For simplicity, attach to corpus
+                # Get document from first source annotation
+                from opencontractserver.annotations.models import Annotation
+
+                first_source_annot = Annotation.objects.get(id=source_ids[0])
+                document = first_source_annot.document
+
                 rel = Relationship.objects.create(
                     corpus=corpus,
+                    document=document,
                     relationship_label=label_obj,
                     structural=False,
                     creator=user_obj,
@@ -514,14 +519,13 @@ def import_conversations(
             )
 
             conv = Conversation.objects.create(
-                corpus=corpus,
+                chat_with_corpus=corpus,
                 title=conv_data.get("title", ""),
                 conversation_type=conv_data.get("conversation_type", "chat"),
-                agent_type=conv_data.get("agent_type"),
                 is_public=conv_data.get("is_public", False),
                 creator=creator,
-                created=created,
-                modified=modified,
+                created_at=created,
+                updated_at=modified,
             )
 
             conv_map[conv_data["id"]] = conv
@@ -538,27 +542,20 @@ def import_conversations(
                 logger.warning(f"Conversation {conv_export_id} not found")
                 continue
 
-            # Get creator and approver
+            # Get creator
             creator_email = msg_data.get("creator_email", "")
             creator = User.objects.filter(email=creator_email).first() or user_obj
-
-            approved_by = None
-            approved_email = msg_data.get("approved_by_email")
-            if approved_email:
-                approved_by = User.objects.filter(email=approved_email).first()
 
             created = datetime.fromisoformat(msg_data["created"].replace("Z", "+00:00"))
 
             message = ChatMessage.objects.create(
                 conversation=conversation,
                 content=msg_data.get("content", ""),
-                message_type=msg_data.get("message_type", "SYNC_CONTENT"),
+                msg_type=msg_data.get("msg_type", "HUMAN"),
                 state=msg_data.get("state", "completed"),
-                role=msg_data.get("role", "user"),
-                tool_name=msg_data.get("tool_name"),
-                approved_by=approved_by,
+                agent_type=msg_data.get("agent_type"),
                 creator=creator,
-                created=created,
+                created_at=created,
             )
 
             msg_map[msg_data["id"]] = message
@@ -582,7 +579,7 @@ def import_conversations(
                 message=message,
                 vote_type=vote_data.get("vote_type", "upvote"),
                 creator=creator,
-                created=created,
+                created_at=created,
             )
 
         logger.info(

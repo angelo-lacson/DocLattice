@@ -419,7 +419,7 @@ def package_conversations(
                     "message_id": msg_id_map.get(vote.message_id, ""),
                     "vote_type": vote.vote_type or "upvote",
                     "creator_email": vote.creator.email if vote.creator else "",
-                    "created": vote.created.isoformat(),
+                    "created": vote.created_at.isoformat(),
                 }
             )
 
