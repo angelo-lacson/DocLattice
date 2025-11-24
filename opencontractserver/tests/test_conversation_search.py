@@ -1356,6 +1356,139 @@ class SearchConversationsResolverCoverageTest(TestCase):
                 f"Unexpected error: {error_message}",
             )
 
+    def test_search_with_mocked_results_anonymous_user(self):
+        """Test searchConversations with mocked vector store returns for anonymous user."""
+        from unittest.mock import Mock, patch
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            ConversationSearchResult,
+        )
+
+        # Create anonymous client
+        anon_client = Client(schema, context_value=TestContext(None))
+
+        query = """
+            query SearchConversations($query: String!, $corpusId: ID, $first: Int) {
+                searchConversations(query: $query, corpusId: $corpusId, first: $first) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                        cursor
+                    }
+                    pageInfo {
+                        hasNextPage
+                        hasPreviousPage
+                    }
+                    totalCount
+                }
+            }
+        """
+
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+
+        # Create mock search result
+        mock_result = ConversationSearchResult(
+            conversation=self.conv,
+            similarity_score=0.95,
+        )
+
+        # Mock the vector store
+        mock_store = Mock()
+        mock_store.search.return_value = [mock_result]
+
+        with patch(
+            "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreConversationVectorStore",
+            return_value=mock_store,
+        ):
+            result = anon_client.execute(
+                query,
+                variables={
+                    "query": "test query",
+                    "corpusId": corpus_global_id,
+                    "first": 10,
+                },
+            )
+
+            # Should succeed and return results
+            self.assertIsNone(result.get("errors"))
+            self.assertIsNotNone(result.get("data"))
+            search_result = result["data"]["searchConversations"]
+
+            # Verify structure
+            self.assertIn("edges", search_result)
+            self.assertIn("pageInfo", search_result)
+            self.assertIn("totalCount", search_result)
+
+            # Verify we got the conversation
+            self.assertEqual(len(search_result["edges"]), 1)
+            node = search_result["edges"][0]["node"]
+            self.assertEqual(node["title"], "Test Conversation")
+
+    def test_search_with_mocked_results_authenticated_user(self):
+        """Test searchConversations with mocked vector store returns for authenticated user."""
+        from unittest.mock import Mock, patch
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            ConversationSearchResult,
+        )
+
+        query = """
+            query SearchConversations($query: String!, $corpusId: ID) {
+                searchConversations(query: $query, corpusId: $corpusId) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                    totalCount
+                }
+            }
+        """
+
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+
+        # Create mock search result
+        mock_result = ConversationSearchResult(
+            conversation=self.conv,
+            similarity_score=0.95,
+        )
+
+        # Mock the vector store
+        mock_store = Mock()
+        mock_store.search.return_value = [mock_result]
+
+        with patch(
+            "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreConversationVectorStore",
+            return_value=mock_store,
+        ) as mock_vector_store_class:
+            result = self.client.execute(
+                query,
+                variables={
+                    "query": "test query",
+                    "corpusId": corpus_global_id,
+                },
+            )
+
+            # Should succeed and return results
+            self.assertIsNone(result.get("errors"))
+            self.assertIsNotNone(result.get("data"))
+
+            # Verify vector store was called with correct user_id
+            mock_vector_store_class.assert_called_once()
+            call_kwargs = mock_vector_store_class.call_args[1]
+            self.assertEqual(call_kwargs["user_id"], self.user.id)
+
+            # Verify search was called
+            mock_store.search.assert_called_once()
+
+            # Verify results
+            search_result = result["data"]["searchConversations"]
+            self.assertEqual(search_result["totalCount"], 1)
+            self.assertEqual(len(search_result["edges"]), 1)
+
     def test_search_conversations_with_all_filters(self):
         """Test searchConversations with all filter parameters."""
         pdf_file = ContentFile(b"%PDF-1.4 test pdf", name="all_filters.pdf")
