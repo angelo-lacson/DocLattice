@@ -862,7 +862,7 @@ class Query(graphene.ObjectType):
         # Return soft-deleted documents (is_deleted=True, is_current=True)
         return (
             DocumentPath.objects.filter(corpus=corpus, is_current=True, is_deleted=True)
-            .select_related("document", "folder", "created_by")
+            .select_related("document", "folder", "creator")
             .order_by("-modified")
         )
 
