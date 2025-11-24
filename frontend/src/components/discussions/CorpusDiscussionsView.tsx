@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
-import { MessageSquare, Plus } from "lucide-react";
+import { MessageSquare, Plus, Search } from "lucide-react";
 import { openedCorpus } from "../../graphql/cache";
 import { navigateToCorpusThread } from "../../utils/navigationUtils";
 import { ThreadList } from "../threads/ThreadList";
 import { CreateThreadForm } from "../threads/CreateThreadForm";
+import { ThreadSearch } from "../search/ThreadSearch";
 
 const Container = styled.div`
   display: flex;
@@ -77,7 +78,40 @@ const CreateButton = styled.button`
   }
 `;
 
-const ThreadListContainer = styled.div`
+const TabContainer = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #e2e8f0;
+`;
+
+const Tab = styled.button<{ $isActive: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  color: ${(props) => (props.$isActive ? "#4a90e2" : "#64748b")};
+  font-size: 0.9375rem;
+  font-weight: ${(props) => (props.$isActive ? "600" : "500")};
+  cursor: pointer;
+  border-bottom: 2px solid
+    ${(props) => (props.$isActive ? "#4a90e2" : "transparent")};
+  margin-bottom: -2px;
+  transition: all 0.2s;
+
+  &:hover {
+    color: ${(props) => (props.$isActive ? "#4a90e2" : "#0f172a")};
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+`;
+
+const ContentContainer = styled.div`
   flex: 1;
   overflow: auto;
 `;
@@ -111,6 +145,7 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   const location = useLocation();
   const corpus = useReactiveVar(openedCorpus);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<"list" | "search">("list");
 
   const handleThreadClick = (threadId: string) => {
     console.log("[CorpusDiscussionsView] handleThreadClick called", {
@@ -155,13 +190,40 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
         </CreateButton>
       </Header>
 
-      <ThreadListContainer>
-        <ThreadList
-          corpusId={corpusId}
-          embedded={false}
-          onThreadClick={handleThreadClick}
-        />
-      </ThreadListContainer>
+      <TabContainer>
+        <Tab
+          $isActive={activeTab === "list"}
+          onClick={() => setActiveTab("list")}
+          type="button"
+          aria-label="View all threads"
+          aria-selected={activeTab === "list"}
+        >
+          <MessageSquare />
+          <span>All Threads</span>
+        </Tab>
+        <Tab
+          $isActive={activeTab === "search"}
+          onClick={() => setActiveTab("search")}
+          type="button"
+          aria-label="Search threads"
+          aria-selected={activeTab === "search"}
+        >
+          <Search />
+          <span>Search</span>
+        </Tab>
+      </TabContainer>
+
+      <ContentContainer>
+        {activeTab === "list" ? (
+          <ThreadList
+            corpusId={corpusId}
+            embedded={false}
+            onThreadClick={handleThreadClick}
+          />
+        ) : (
+          <ThreadSearch corpusId={corpusId} />
+        )}
+      </ContentContainer>
 
       {showCreateModal && (
         <CreateThreadForm
