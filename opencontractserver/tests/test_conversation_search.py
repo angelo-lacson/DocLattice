@@ -11,7 +11,7 @@ This test suite covers:
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from graphene.test import Client
 from graphql_relay import to_global_id
 
@@ -2745,9 +2745,7 @@ class GraphQLResolverEdgeCasesTest(TestCase):
             return_value=mock_store,
         ):
             # Mock settings to provide DEFAULT_EMBEDDER_PATH
-            with patch(
-                "django.conf.settings.DEFAULT_EMBEDDER_PATH", "default/embedder"
-            ):
+            with override_settings(DEFAULT_EMBEDDER_PATH="default/embedder"):
                 result = self.client.execute(
                     query,
                     variables={"query": "test query without corpus"},
@@ -2759,8 +2757,6 @@ class GraphQLResolverEdgeCasesTest(TestCase):
 
     def test_search_conversations_without_embedder_path_raises_error(self):
         """Test searchConversations without corpus_id/document_id and no DEFAULT_EMBEDDER_PATH."""
-        from unittest.mock import patch
-
         query = """
             query SearchConversations($query: String!) {
                 searchConversations(query: $query) {
@@ -2775,7 +2771,7 @@ class GraphQLResolverEdgeCasesTest(TestCase):
         """
 
         # Mock settings with no DEFAULT_EMBEDDER_PATH
-        with patch("django.conf.settings.DEFAULT_EMBEDDER_PATH", None):
+        with override_settings(DEFAULT_EMBEDDER_PATH=None):
             result = self.client.execute(
                 query,
                 variables={"query": "test query"},
@@ -2817,9 +2813,7 @@ class GraphQLResolverEdgeCasesTest(TestCase):
             return_value=mock_store,
         ):
             # Mock settings to provide DEFAULT_EMBEDDER_PATH
-            with patch(
-                "django.conf.settings.DEFAULT_EMBEDDER_PATH", "default/embedder"
-            ):
+            with override_settings(DEFAULT_EMBEDDER_PATH="default/embedder"):
                 result = self.client.execute(
                     query,
                     variables={"query": "test message query"},
@@ -2833,8 +2827,6 @@ class GraphQLResolverEdgeCasesTest(TestCase):
 
     def test_search_messages_without_embedder_path_raises_error(self):
         """Test searchMessages without corpus_id/conversation_id and no DEFAULT_EMBEDDER_PATH."""
-        from unittest.mock import patch
-
         query = """
             query SearchMessages($query: String!) {
                 searchMessages(query: $query) {
@@ -2845,7 +2837,7 @@ class GraphQLResolverEdgeCasesTest(TestCase):
         """
 
         # Mock settings with no DEFAULT_EMBEDDER_PATH
-        with patch("django.conf.settings.DEFAULT_EMBEDDER_PATH", None):
+        with override_settings(DEFAULT_EMBEDDER_PATH=None):
             result = self.client.execute(
                 query,
                 variables={"query": "test message query"},
@@ -2970,22 +2962,24 @@ class GraphQLResolverEdgeCasesTest(TestCase):
             "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreConversationVectorStore",
             return_value=mock_store,
         ):
-            result = self.client.execute(
-                query,
-                variables={
-                    "query": "test query",
-                    "first": 2,
-                },
-            )
+            # Need DEFAULT_EMBEDDER_PATH since no corpus_id/document_id provided
+            with override_settings(DEFAULT_EMBEDDER_PATH="default/embedder"):
+                result = self.client.execute(
+                    query,
+                    variables={
+                        "query": "test query",
+                        "first": 2,
+                    },
+                )
 
-            # Should succeed and return paginated results
-            self.assertIsNone(result.get("errors"))
-            self.assertIsNotNone(result.get("data"))
+                # Should succeed and return paginated results
+                self.assertIsNone(result.get("errors"))
+                self.assertIsNotNone(result.get("data"))
 
-            search_result = result["data"]["searchConversations"]
-            self.assertEqual(search_result["totalCount"], 3)
-            self.assertEqual(len(search_result["edges"]), 2)
-            self.assertTrue(search_result["pageInfo"]["hasNextPage"])
+                search_result = result["data"]["searchConversations"]
+                self.assertEqual(search_result["totalCount"], 3)
+                self.assertEqual(len(search_result["edges"]), 2)
+                self.assertTrue(search_result["pageInfo"]["hasNextPage"])
 
     def test_search_messages_returns_multiple_results(self):
         """Test searchMessages returns multiple results correctly."""
@@ -3034,25 +3028,27 @@ class GraphQLResolverEdgeCasesTest(TestCase):
             "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreChatMessageVectorStore",
             return_value=mock_store,
         ):
-            result = self.client.execute(
-                query,
-                variables={
-                    "query": "test message query",
-                    "topK": 10,
-                },
-            )
+            # Need DEFAULT_EMBEDDER_PATH since no corpus_id/conversation_id provided
+            with override_settings(DEFAULT_EMBEDDER_PATH="default/embedder"):
+                result = self.client.execute(
+                    query,
+                    variables={
+                        "query": "test message query",
+                        "topK": 10,
+                    },
+                )
 
-            # Should succeed and return all messages
-            self.assertIsNone(result.get("errors"))
-            self.assertIsNotNone(result.get("data"))
+                # Should succeed and return all messages
+                self.assertIsNone(result.get("errors"))
+                self.assertIsNotNone(result.get("data"))
 
-            messages = result["data"]["searchMessages"]
-            self.assertEqual(len(messages), 3)
+                messages = result["data"]["searchMessages"]
+                self.assertEqual(len(messages), 3)
 
-            # Verify messages are returned
-            msg_ids = [
-                to_global_id("MessageType", m.id) for m in [self.msg, msg2, msg3]
-            ]
-            returned_ids = [m["id"] for m in messages]
-            for msg_id in msg_ids:
-                self.assertIn(msg_id, returned_ids)
+                # Verify messages are returned
+                msg_ids = [
+                    to_global_id("MessageType", m.id) for m in [self.msg, msg2, msg3]
+                ]
+                returned_ids = [m["id"] for m in messages]
+                for msg_id in msg_ids:
+                    self.assertIn(msg_id, returned_ids)
