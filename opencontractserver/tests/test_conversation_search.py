@@ -2745,7 +2745,9 @@ class GraphQLResolverEdgeCasesTest(TestCase):
             return_value=mock_store,
         ):
             # Mock settings to provide DEFAULT_EMBEDDER_PATH
-            with patch("django.conf.settings.DEFAULT_EMBEDDER_PATH", "default/embedder"):
+            with patch(
+                "django.conf.settings.DEFAULT_EMBEDDER_PATH", "default/embedder"
+            ):
                 result = self.client.execute(
                     query,
                     variables={"query": "test query without corpus"},
@@ -2757,6 +2759,8 @@ class GraphQLResolverEdgeCasesTest(TestCase):
 
     def test_search_conversations_without_embedder_path_raises_error(self):
         """Test searchConversations without corpus_id/document_id and no DEFAULT_EMBEDDER_PATH."""
+        from unittest.mock import patch
+
         query = """
             query SearchConversations($query: String!) {
                 searchConversations(query: $query) {
@@ -2813,7 +2817,9 @@ class GraphQLResolverEdgeCasesTest(TestCase):
             return_value=mock_store,
         ):
             # Mock settings to provide DEFAULT_EMBEDDER_PATH
-            with patch("django.conf.settings.DEFAULT_EMBEDDER_PATH", "default/embedder"):
+            with patch(
+                "django.conf.settings.DEFAULT_EMBEDDER_PATH", "default/embedder"
+            ):
                 result = self.client.execute(
                     query,
                     variables={"query": "test message query"},
@@ -2827,6 +2833,8 @@ class GraphQLResolverEdgeCasesTest(TestCase):
 
     def test_search_messages_without_embedder_path_raises_error(self):
         """Test searchMessages without corpus_id/conversation_id and no DEFAULT_EMBEDDER_PATH."""
+        from unittest.mock import patch
+
         query = """
             query SearchMessages($query: String!) {
                 searchMessages(query: $query) {
@@ -2873,8 +2881,6 @@ class GraphQLResolverEdgeCasesTest(TestCase):
                 }
             }
         """
-
-        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
 
         # Create multiple mock results
         mock_results = [
@@ -3044,7 +3050,9 @@ class GraphQLResolverEdgeCasesTest(TestCase):
             self.assertEqual(len(messages), 3)
 
             # Verify messages are returned
-            msg_ids = [to_global_id("MessageType", m.id) for m in [self.msg, msg2, msg3]]
+            msg_ids = [
+                to_global_id("MessageType", m.id) for m in [self.msg, msg2, msg3]
+            ]
             returned_ids = [m["id"] for m in messages]
             for msg_id in msg_ids:
                 self.assertIn(msg_id, returned_ids)
