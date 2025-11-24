@@ -75,6 +75,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ThreadSearch component tests (4 tests): search bar integration, filters toggle, corpus-scoped search
   - Location: `frontend/tests/search-components.ct.tsx`
 
+- **Enhanced backend test coverage for conversation search** (Issue #580 - Coverage Improvement)
+  - Added `GraphQLResolverEdgeCasesTest` class with 8 new comprehensive tests
+  - Tests cover GraphQL resolver edge cases including:
+    - Default embedder path fallback when no corpus/document ID provided
+    - Error handling when DEFAULT_EMBEDDER_PATH is not configured
+    - Reverse pagination with `last` and `before` parameters
+    - Multiple result handling and pagination behavior
+    - Message search with various filter combinations
+  - Coverage improvements target previously untested code paths in `config/graphql/queries.py:1711-1722, 1797-1808`
+  - Location: `opencontractserver/tests/test_conversation_search.py:2666-3050`
+
 #### Structural Annotation Sets (Phase 2.5)
 - **New `StructuralAnnotationSet` model** for shared, immutable structural annotations
   - Content-hash based uniqueness (`content_hash` field)

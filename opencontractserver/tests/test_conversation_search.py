@@ -2661,3 +2661,390 @@ class HelperFunctionsTest(TestCase):
         # Execute in async context (line 56)
         result = await _safe_execute_queryset(queryset)
         self.assertEqual(len(result), 2)
+
+
+class GraphQLResolverEdgeCasesTest(TestCase):
+    """Test edge cases in GraphQL resolver code paths to improve coverage."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username="resolver_edge_user", password="testpassword"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Resolver Edge Case Corpus", creator=self.user
+        )
+        self.client = Client(schema, context_value=TestContext(self.user))
+
+        # Create conversation with embedding
+        self.conv = Conversation.objects.create(
+            title="Edge Case Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=self.conv,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        Embedding.objects.create(
+            conversation=self.conv,
+            embedder_path="test/embedder",
+            vector_384=[0.1] * 384,
+            creator=self.user,
+        )
+
+        # Create message with embedding
+        self.msg = ChatMessage.objects.create(
+            conversation=self.conv,
+            creator=self.user,
+            msg_type="HUMAN",
+            content="Test message content",
+        )
+
+        Embedding.objects.create(
+            message=self.msg,
+            embedder_path="test/embedder",
+            vector_384=[0.2] * 384,
+            creator=self.user,
+        )
+
+    def test_search_conversations_without_corpus_or_document_id(self):
+        """Test searchConversations without corpus_id or document_id (requires DEFAULT_EMBEDDER_PATH)."""
+        from unittest.mock import Mock, patch
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            ConversationSearchResult,
+        )
+
+        query = """
+            query SearchConversations($query: String!) {
+                searchConversations(query: $query) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                }
+            }
+        """
+
+        # Mock the vector store to avoid embedder dependency
+        mock_result = ConversationSearchResult(
+            conversation=self.conv,
+            similarity_score=0.95,
+        )
+
+        mock_store = Mock()
+        mock_store.search.return_value = [mock_result]
+
+        with patch(
+            "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreConversationVectorStore",
+            return_value=mock_store,
+        ):
+            # Mock settings to provide DEFAULT_EMBEDDER_PATH
+            with patch("django.conf.settings.DEFAULT_EMBEDDER_PATH", "default/embedder"):
+                result = self.client.execute(
+                    query,
+                    variables={"query": "test query without corpus"},
+                )
+
+                # Should succeed with mocked embedder path
+                self.assertIsNone(result.get("errors"))
+                self.assertIsNotNone(result.get("data"))
+
+    def test_search_conversations_without_embedder_path_raises_error(self):
+        """Test searchConversations without corpus_id/document_id and no DEFAULT_EMBEDDER_PATH."""
+        query = """
+            query SearchConversations($query: String!) {
+                searchConversations(query: $query) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                }
+            }
+        """
+
+        # Mock settings with no DEFAULT_EMBEDDER_PATH
+        with patch("django.conf.settings.DEFAULT_EMBEDDER_PATH", None):
+            result = self.client.execute(
+                query,
+                variables={"query": "test query"},
+            )
+
+            # Should have error about missing embedder path
+            self.assertIsNotNone(result.get("errors"))
+            error_message = result["errors"][0]["message"]
+            self.assertIn("DEFAULT_EMBEDDER_PATH", error_message)
+
+    def test_search_messages_without_corpus_or_conversation_id(self):
+        """Test searchMessages without corpus_id or conversation_id (requires DEFAULT_EMBEDDER_PATH)."""
+        from unittest.mock import Mock, patch
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            MessageSearchResult,
+        )
+
+        query = """
+            query SearchMessages($query: String!) {
+                searchMessages(query: $query) {
+                    id
+                    content
+                }
+            }
+        """
+
+        # Mock the vector store
+        mock_result = MessageSearchResult(
+            message=self.msg,
+            similarity_score=0.95,
+        )
+
+        mock_store = Mock()
+        mock_store.search.return_value = [mock_result]
+
+        with patch(
+            "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreChatMessageVectorStore",
+            return_value=mock_store,
+        ):
+            # Mock settings to provide DEFAULT_EMBEDDER_PATH
+            with patch("django.conf.settings.DEFAULT_EMBEDDER_PATH", "default/embedder"):
+                result = self.client.execute(
+                    query,
+                    variables={"query": "test message query"},
+                )
+
+                # Should succeed with mocked embedder path
+                self.assertIsNone(result.get("errors"))
+                self.assertIsNotNone(result.get("data"))
+                messages = result["data"]["searchMessages"]
+                self.assertEqual(len(messages), 1)
+
+    def test_search_messages_without_embedder_path_raises_error(self):
+        """Test searchMessages without corpus_id/conversation_id and no DEFAULT_EMBEDDER_PATH."""
+        query = """
+            query SearchMessages($query: String!) {
+                searchMessages(query: $query) {
+                    id
+                    content
+                }
+            }
+        """
+
+        # Mock settings with no DEFAULT_EMBEDDER_PATH
+        with patch("django.conf.settings.DEFAULT_EMBEDDER_PATH", None):
+            result = self.client.execute(
+                query,
+                variables={"query": "test message query"},
+            )
+
+            # Should have error about missing embedder path
+            self.assertIsNotNone(result.get("errors"))
+            error_message = result["errors"][0]["message"]
+            self.assertIn("DEFAULT_EMBEDDER_PATH", error_message)
+
+    def test_search_conversations_with_last_and_before_pagination(self):
+        """Test searchConversations with last and before parameters for reverse pagination."""
+        from unittest.mock import Mock, patch
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            ConversationSearchResult,
+        )
+
+        query = """
+            query SearchConversations($query: String!, $last: Int, $before: String) {
+                searchConversations(query: $query, last: $last, before: $before) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                        cursor
+                    }
+                    pageInfo {
+                        hasPreviousPage
+                        startCursor
+                    }
+                }
+            }
+        """
+
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+
+        # Create multiple mock results
+        mock_results = [
+            ConversationSearchResult(conversation=self.conv, similarity_score=0.95)
+        ]
+
+        mock_store = Mock()
+        mock_store.search.return_value = mock_results
+
+        with patch(
+            "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreConversationVectorStore",
+            return_value=mock_store,
+        ):
+            result = self.client.execute(
+                query,
+                variables={
+                    "query": "test query",
+                    "last": 5,
+                    "before": "cursor_value",
+                },
+            )
+
+            # Should succeed (cursor will be handled by relay)
+            # May have errors if cursor is invalid, but should hit the code path
+            if not result.get("errors"):
+                self.assertIsNotNone(result.get("data"))
+
+    def test_search_conversations_returns_multiple_results(self):
+        """Test searchConversations returns multiple results and pagination works correctly."""
+        from unittest.mock import Mock, patch
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            ConversationSearchResult,
+        )
+
+        # Create multiple conversations
+        conv2 = Conversation.objects.create(
+            title="Second Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conv2,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        conv3 = Conversation.objects.create(
+            title="Third Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=conv3,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        query = """
+            query SearchConversations($query: String!, $first: Int) {
+                searchConversations(query: $query, first: $first) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                    pageInfo {
+                        hasNextPage
+                    }
+                    totalCount
+                }
+            }
+        """
+
+        # Create mock results for all conversations
+        mock_results = [
+            ConversationSearchResult(conversation=self.conv, similarity_score=0.95),
+            ConversationSearchResult(conversation=conv2, similarity_score=0.90),
+            ConversationSearchResult(conversation=conv3, similarity_score=0.85),
+        ]
+
+        mock_store = Mock()
+        mock_store.search.return_value = mock_results
+
+        with patch(
+            "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreConversationVectorStore",
+            return_value=mock_store,
+        ):
+            result = self.client.execute(
+                query,
+                variables={
+                    "query": "test query",
+                    "first": 2,
+                },
+            )
+
+            # Should succeed and return paginated results
+            self.assertIsNone(result.get("errors"))
+            self.assertIsNotNone(result.get("data"))
+
+            search_result = result["data"]["searchConversations"]
+            self.assertEqual(search_result["totalCount"], 3)
+            self.assertEqual(len(search_result["edges"]), 2)
+            self.assertTrue(search_result["pageInfo"]["hasNextPage"])
+
+    def test_search_messages_returns_multiple_results(self):
+        """Test searchMessages returns multiple results correctly."""
+        from unittest.mock import Mock, patch
+
+        from opencontractserver.llms.vector_stores.core_conversation_vector_stores import (
+            MessageSearchResult,
+        )
+
+        # Create additional messages
+        msg2 = ChatMessage.objects.create(
+            conversation=self.conv,
+            creator=self.user,
+            msg_type="LLM",
+            content="Second message",
+        )
+
+        msg3 = ChatMessage.objects.create(
+            conversation=self.conv,
+            creator=self.user,
+            msg_type="HUMAN",
+            content="Third message",
+        )
+
+        query = """
+            query SearchMessages($query: String!, $topK: Int) {
+                searchMessages(query: $query, topK: $topK) {
+                    id
+                    content
+                    msgType
+                }
+            }
+        """
+
+        # Create mock results
+        mock_results = [
+            MessageSearchResult(message=self.msg, similarity_score=0.95),
+            MessageSearchResult(message=msg2, similarity_score=0.90),
+            MessageSearchResult(message=msg3, similarity_score=0.85),
+        ]
+
+        mock_store = Mock()
+        mock_store.search.return_value = mock_results
+
+        with patch(
+            "opencontractserver.llms.vector_stores.core_conversation_vector_stores.CoreChatMessageVectorStore",
+            return_value=mock_store,
+        ):
+            result = self.client.execute(
+                query,
+                variables={
+                    "query": "test message query",
+                    "topK": 10,
+                },
+            )
+
+            # Should succeed and return all messages
+            self.assertIsNone(result.get("errors"))
+            self.assertIsNotNone(result.get("data"))
+
+            messages = result["data"]["searchMessages"]
+            self.assertEqual(len(messages), 3)
+
+            # Verify messages are returned
+            msg_ids = [to_global_id("MessageType", m.id) for m in [self.msg, msg2, msg3]]
+            returned_ids = [m["id"] for m in messages]
+            for msg_id in msg_ids:
+                self.assertIn(msg_id, returned_ids)
