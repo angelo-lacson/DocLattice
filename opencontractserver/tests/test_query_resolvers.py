@@ -278,9 +278,7 @@ class DeletedDocumentsQueryResolverTest(TestCase):
     def test_resolve_deleted_documents_no_permission(self):
         """Test deleted_documents_in_corpus returns empty for no corpus permission."""
         # Create corpus without permission
-        other_corpus = Corpus.objects.create(
-            title="Other Corpus", creator=self.user
-        )
+        other_corpus = Corpus.objects.create(title="Other Corpus", creator=self.user)
 
         query = """
             query GetDeletedDocuments($corpusId: ID!) {
@@ -445,9 +443,7 @@ class MentionSearchResolverTest(TestCase):
         # Should find the annotation
         self.assertGreaterEqual(len(annotations), 1)
         raw_texts = {ann["node"]["rawText"] for ann in annotations}
-        self.assertIn(
-            "This is an important finding about deep learning", raw_texts
-        )
+        self.assertIn("This is an important finding about deep learning", raw_texts)
 
     def test_search_annotations_for_mention_by_label(self):
         """Test search_annotations_for_mention by label text."""
