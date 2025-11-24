@@ -107,51 +107,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Thread Search (Issue #580)
+
+1. **Anonymous user null reference in searchConversations resolver**
+   - **File**: `config/graphql/queries.py:1725`
+   - **Issue**: Resolver accessed `info.context.user.is_anonymous` without checking if user was `None`, causing AttributeError in tests with anonymous users
+   - **Fixed**: Added null check before accessing `is_anonymous` attribute
+   - **Impact**: Anonymous user search queries now work correctly without AttributeError
+
 #### Critical Production Code Fixes
 
-1. **Missing parsing artifacts in corpus copies**
+2. **Missing parsing artifacts in corpus copies**
    - **Files**: `opencontractserver/corpuses/models.py:445-451`, `opencontractserver/documents/versioning.py:238-244`
    - **Issue**: When creating corpus-isolated document copies, essential parsing artifacts were not being copied
    - **Fixed**: Added copying of `pawls_parse_file`, `txt_extract_file`, `icon`, `md_summary_file`, `page_count`
    - **Impact**: Corpus copies now have all parsing data needed for annotation, search, and display
 
-2. **Missing `is_public` inheritance in corpus copies**
+3. **Missing `is_public` inheritance in corpus copies**
    - **Files**: `opencontractserver/corpuses/models.py:451`, `opencontractserver/documents/versioning.py:244`
    - **Issue**: Public documents became private when added to a corpus (copy didn't inherit `is_public`)
    - **Fixed**: Added `is_public=document.is_public` to corpus copy creation
    - **Impact**: Document visibility is now correctly preserved across corpus isolation
 
-3. **NULL hash deduplication bug**
+4. **NULL hash deduplication bug**
    - **File**: `opencontractserver/corpuses/models.py:414-425`
    - **Issue**: All documents without PDF content hashes were incorrectly treated as duplicates
    - **Fixed**: Added null check: `if document.pdf_file_hash is not None:` before hash-based deduplication
    - **Impact**: Documents without hashes are now correctly treated as distinct documents
 
-4. **Structural annotation portability**
+5. **Structural annotation portability**
    - **Files**: `opencontractserver/corpuses/models.py:456`, `opencontractserver/documents/versioning.py:248`
    - **Issue**: Structural annotations were not traveling with documents when added to multiple corpuses
    - **Fixed**: Corpus copies now inherit `structural_annotation_set` from source document
    - **Impact**: Structural annotations are shared (not duplicated) across corpus-isolated copies
 
-5. **GraphQL corpus.documents field missing**
+6. **GraphQL corpus.documents field missing**
    - **Files**: `config/graphql/graphene_types.py:1179-1184`, `config/graphql/graphene_types.py:1297-1302`
    - **Issue**: After corpus isolation migration (removing M2M documents field), GraphQL queries for `corpus.documents` returned empty because no explicit field declaration existed
    - **Fixed**: Added explicit `DocumentTypeConnection` class and `documents = relay.ConnectionField()` declaration to CorpusType
    - **Impact**: GraphQL queries now correctly resolve documents via DocumentPath-based relationships
 
-6. **Parser `save_parsed_data()` using old M2M relationship**
+7. **Parser `save_parsed_data()` using old M2M relationship**
    - **File**: `opencontractserver/pipeline/base/parser.py:126-133`
    - **Issue**: `save_parsed_data()` used deprecated `corpus.documents.add()` M2M method which no longer exists
    - **Fixed**: Updated to use `corpus.add_document(document=document, user=user)` for corpus isolation
    - **Impact**: Parsers can now correctly associate documents with corpuses during processing
 
-7. **Document mention resolver using old M2M relationship**
+8. **Document mention resolver using old M2M relationship**
    - **File**: `config/graphql/queries.py:976-1015`
    - **Issue**: `resolve_search_documents_for_mention()` queried via `corpus__in` M2M relationship which no longer exists
    - **Fixed**: Updated to query via `DocumentPath` with `is_current=True, is_deleted=False` filters
    - **Impact**: Document mention autocomplete now correctly finds documents in corpuses
 
-8. **BaseFixtureTestCase not adding documents to corpus**
+9. **BaseFixtureTestCase not adding documents to corpus**
    - **File**: `opencontractserver/tests/base.py:385-399`
    - **Issue**: Test setup created corpus but didn't add fixture documents to it via DocumentPath
    - **Fixed**: Added loop to call `corpus.add_document()` for each fixture document and update references to corpus copies
@@ -226,7 +234,7 @@ The structural annotation set feature implements Phase 2.5 of the dual-tree vers
 
 ### Fixed (Continued)
 
-9. **Query optimizer missing structural_set annotations**
+10. **Query optimizer missing structural_set annotations**
    - **Files**: `opencontractserver/annotations/query_optimizer.py:189-212, 273-301, 541-564, 624-643`
    - **Issue**: `AnnotationQueryOptimizer.get_document_annotations()` and `RelationshipQueryOptimizer.get_document_relationships()` only queried by `document_id`, missing annotations/relationships stored in `structural_set` (which have `document_id=NULL`)
    - **Impact**: GraphQL queries using query optimizer (most annotation/relationship queries) did NOT return structural annotations from structural sets - only vector store had the dual-query logic
@@ -238,7 +246,7 @@ The structural annotation set feature implements Phase 2.5 of the dual-tree vers
    - **Tests Added**: `opencontractserver/tests/test_query_optimizer_structural_sets.py` (10 comprehensive integration tests)
    - **Test Results**: All 42 structural annotation tests pass (10 new + 32 existing)
 
-10. **Vector store returning duplicate results**
+11. **Vector store returning duplicate results**
    - **File**: `opencontractserver/shared/mixins.py:40-89`
    - **Issue**: `search_by_embedding()` method returned duplicate results (2x, 4x, 6x expected counts) when annotations had multiple Embedding rows with the same `embedder_path`
    - **Root Cause**: JOIN to Embedding table created cartesian product - if annotation had 2 Embedding rows, JOIN produced 2 result rows
@@ -253,7 +261,7 @@ The structural annotation set feature implements Phase 2.5 of the dual-tree vers
    - **Rationale**: PostgreSQL `DISTINCT ON` requires the distinct field to be first in ORDER BY, conflicting with need to order by similarity_score. Hybrid approach ensures correctness.
    - **Test Results**: All 9 version-aware vector store tests now pass (previously all 8 failing)
 
-11. **Vector store excluding structural annotations from StructuralAnnotationSet**
+12. **Vector store excluding structural annotations from StructuralAnnotationSet**
    - **File**: `opencontractserver/llms/vector_stores/core_vector_stores.py:168-196, 221-270`
    - **Issue**: Version filtering excluded ALL structural annotations from structural sets, causing vector search to return 0 results
    - **Root Cause - Filter Ordering Bug**:
@@ -284,7 +292,7 @@ The structural annotation set feature implements Phase 2.5 of the dual-tree vers
      - Vector store now finds 336 annotations (was 0)
      - SQL shows correct filter: `(document.is_current OR (annotation.document_id IS NULL AND structural))`
 
-12. **Agent tool execution failing due to list/QuerySet type mismatch**
+13. **Agent tool execution failing due to list/QuerySet type mismatch**
    - **Files**: `opencontractserver/llms/vector_stores/core_vector_stores.py:30-90`
    - **Issue**: After deduplication fix (#10), `search_by_embedding()` returns list instead of QuerySet, breaking agent tool execution
    - **Root Cause - Type Assumption**:

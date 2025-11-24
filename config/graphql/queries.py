@@ -1722,7 +1722,11 @@ class Query(graphene.ObjectType):
                 )
 
         # Handle anonymous users
-        user_id = None if info.context.user.is_anonymous else info.context.user.id
+        user_id = (
+            None
+            if not info.context.user or info.context.user.is_anonymous
+            else info.context.user.id
+        )
 
         # Create vector store
         vector_store = CoreConversationVectorStore(
