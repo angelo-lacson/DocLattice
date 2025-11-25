@@ -39,10 +39,9 @@ export const useNavMenu = () => {
    * the route OR it is a sub-route (i.e. pathname starts with `${route}/`).
    */
   const isActive = (route: string) => {
-    if (route === "/corpuses") {
-      // "Corpuses" acts as our home page and should also be active for the old
-      // root path ("/") to avoid a brief flash before the redirect kicks in.
-      return pathname === "/" || pathname.startsWith("/corpuses");
+    if (route === "/") {
+      // Discover/Home is only active on exact "/" path
+      return pathname === "/";
     }
     return pathname === route || pathname.startsWith(`${route}/`);
   };

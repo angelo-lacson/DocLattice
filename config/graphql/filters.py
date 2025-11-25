@@ -501,6 +501,8 @@ class ConversationFilter(django_filters.FilterSet):
 
     document_id = filters.CharFilter(method="filter_by_document_id")
     corpus_id = filters.CharFilter(method="filter_by_corpus_id")
+    has_corpus = filters.BooleanFilter(method="filter_has_corpus")
+    has_document = filters.BooleanFilter(method="filter_has_document")
 
     def filter_by_document_id(self, queryset, name, value):
         """Filter conversations by document ID."""
@@ -511,6 +513,18 @@ class ConversationFilter(django_filters.FilterSet):
         """Filter conversations by corpus ID."""
         django_pk = from_global_id(value)[1]
         return queryset.filter(chat_with_corpus_id=django_pk)
+
+    def filter_has_corpus(self, queryset, name, value):
+        """Filter conversations that have/don't have a corpus."""
+        if value:
+            return queryset.filter(chat_with_corpus__isnull=False)
+        return queryset.filter(chat_with_corpus__isnull=True)
+
+    def filter_has_document(self, queryset, name, value):
+        """Filter conversations that have/don't have a document."""
+        if value:
+            return queryset.filter(chat_with_document__isnull=False)
+        return queryset.filter(chat_with_document__isnull=True)
 
     class Meta:
         model = Conversation

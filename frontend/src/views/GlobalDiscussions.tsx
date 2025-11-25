@@ -1,12 +1,34 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import styled from "styled-components";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { MessageSquare, Database, FileText, Plus, Search } from "lucide-react";
-import { ThreadList } from "../components/threads/ThreadList";
-import { CreateThreadButton } from "../components/threads/CreateThreadButton";
+import { useQuery } from "@apollo/client";
+import {
+  GET_CONVERSATIONS,
+  GetConversationsInputs,
+  GetConversationsOutputs,
+} from "../graphql/queries";
+import { ThreadListItem } from "../components/threads/ThreadListItem";
 import { color } from "../theme/colors";
-import { spacing } from "../theme/spacing";
+import { ModernLoadingDisplay } from "../components/widgets/ModernLoadingDisplay";
+
+// Custom hook for debounced value
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 // Styled components
 const Container = styled.div`
@@ -103,7 +125,7 @@ const SearchInputContainer = styled.div`
   position: relative;
 `;
 
-const SearchIcon = styled(Search)`
+const SearchIconStyled = styled(Search)`
   position: absolute;
   left: 1rem;
   top: 50%;
@@ -193,34 +215,148 @@ const SectionTitle = styled.h2`
 
 const SectionCount = styled.span`
   font-size: 0.875rem;
-  color: ${color.N7};
+  color: ${color.N6};
   font-weight: 500;
   margin-left: auto;
 `;
 
+const ThreadGrid = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
 const EmptyState = styled.div`
   text-align: center;
-  padding: 3rem 1rem;
-  color: ${color.N7};
+  padding: 2rem 1rem;
+  color: ${color.N6};
+  font-size: 0.9375rem;
+`;
+
+const LoadingContainer = styled.div`
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
 `;
 
 type FilterTab = "all" | "corpus" | "document" | "general";
 
 /**
+ * Thread section component - handles its own query
+ */
+interface ThreadSectionProps {
+  title: string;
+  icon: React.ReactNode;
+  iconColor: string;
+  filterType: "corpus" | "document" | "general";
+  searchQuery: string;
+}
+
+const ThreadSection: React.FC<ThreadSectionProps> = ({
+  title,
+  icon,
+  iconColor,
+  filterType,
+  searchQuery,
+}) => {
+  // Memoize variables to prevent unnecessary query restarts
+  const variables = useMemo((): GetConversationsInputs => {
+    const base: GetConversationsInputs = {
+      conversationType: "THREAD",
+      limit: 20,
+      title_Contains: searchQuery || undefined,
+    };
+
+    switch (filterType) {
+      case "corpus":
+        return { ...base, hasCorpus: true, hasDocument: false };
+      case "document":
+        return { ...base, hasDocument: true };
+      case "general":
+        return { ...base, hasCorpus: false, hasDocument: false };
+    }
+  }, [filterType, searchQuery]);
+
+  const { data, loading } = useQuery<
+    GetConversationsOutputs,
+    GetConversationsInputs
+  >(GET_CONVERSATIONS, {
+    variables,
+    fetchPolicy: "cache-first",
+    nextFetchPolicy: "cache-and-network",
+  });
+
+  const threads =
+    data?.conversations?.edges
+      ?.map((e) => e?.node)
+      .filter((node): node is NonNullable<typeof node> => node != null)
+      .filter((t) => !t?.deletedAt)
+      .sort((a, b) => {
+        // Pinned first, then by date
+        if (a?.isPinned && !b?.isPinned) return -1;
+        if (!a?.isPinned && b?.isPinned) return 1;
+        return (
+          new Date(b?.createdAt || 0).getTime() -
+          new Date(a?.createdAt || 0).getTime()
+        );
+      }) || [];
+
+  const totalCount = data?.conversations?.totalCount ?? threads.length;
+
+  return (
+    <SectionContainer
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3 }}
+    >
+      <SectionHeader>
+        <SectionIcon $color={iconColor}>{icon}</SectionIcon>
+        <SectionTitle>{title}</SectionTitle>
+        <SectionCount>{loading ? "..." : `${totalCount} threads`}</SectionCount>
+      </SectionHeader>
+
+      {loading && !data ? (
+        <LoadingContainer>
+          <ModernLoadingDisplay message="Loading..." size="small" />
+        </LoadingContainer>
+      ) : (
+        <ThreadGrid>
+          {threads.length > 0 ? (
+            threads.map((thread) => (
+              <ThreadListItem key={thread.id} thread={thread} />
+            ))
+          ) : (
+            <EmptyState>No discussions found</EmptyState>
+          )}
+        </ThreadGrid>
+      )}
+    </SectionContainer>
+  );
+};
+
+/**
  * Global Discussions View
  * Shows all platform discussions with tabbed filtering
+ * Uses server-side filtering for efficiency
  * Part of Issue #623
  */
 export const GlobalDiscussions: React.FC = () => {
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Filter logic for showing sections based on active tab
-  const showCorpusSection = activeTab === "all" || activeTab === "corpus";
-  const showDocumentSection = activeTab === "all" || activeTab === "document";
-  const showGeneralSection = activeTab === "all" || activeTab === "general";
+  // Debounce the search input (300ms delay)
+  const debouncedSearch = useDebouncedValue(searchInput, 300);
+
+  // Initialize search input from URL parameter
+  useEffect(() => {
+    const urlSearch = searchParams.get("search");
+    if (urlSearch) {
+      setSearchInput(urlSearch);
+    }
+  }, [searchParams]);
 
   return (
     <Container>
@@ -270,92 +406,48 @@ export const GlobalDiscussions: React.FC = () => {
           </TabContainer>
 
           <SearchInputContainer>
-            <SearchIcon size={18} />
+            <SearchIconStyled size={18} />
             <SearchInput
               placeholder="Search discussions..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </SearchInputContainer>
         </FilterBar>
       </Header>
 
-      <AnimatePresence>
-        {showCorpusSection && (
-          <SectionContainer
-            key="corpus-section"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            <SectionHeader>
-              <SectionIcon $color="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
-                <Database size={18} />
-              </SectionIcon>
-              <SectionTitle>Corpus Discussions</SectionTitle>
-              <SectionCount>(Loading...)</SectionCount>
-            </SectionHeader>
+      {/* Corpus Discussions - show in "all" or "corpus" tabs */}
+      {(activeTab === "all" || activeTab === "corpus") && (
+        <ThreadSection
+          title="Corpus Discussions"
+          icon={<Database size={18} />}
+          iconColor="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+          filterType="corpus"
+          searchQuery={debouncedSearch}
+        />
+      )}
 
-            {/* ThreadList will be filtered by corpus context */}
-            <EmptyState>
-              Corpus discussions will appear here
-              <br />
-              (Requires corpus-specific filtering in ThreadList)
-            </EmptyState>
-          </SectionContainer>
-        )}
+      {/* Document Discussions - show in "all" or "document" tabs */}
+      {(activeTab === "all" || activeTab === "document") && (
+        <ThreadSection
+          title="Document Discussions"
+          icon={<FileText size={18} />}
+          iconColor="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+          filterType="document"
+          searchQuery={debouncedSearch}
+        />
+      )}
 
-        {showDocumentSection && (
-          <SectionContainer
-            key="document-section"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-          >
-            <SectionHeader>
-              <SectionIcon $color="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)">
-                <FileText size={18} />
-              </SectionIcon>
-              <SectionTitle>Document Discussions</SectionTitle>
-              <SectionCount>(Loading...)</SectionCount>
-            </SectionHeader>
-
-            {/* ThreadList will be filtered by document context */}
-            <EmptyState>
-              Document discussions will appear here
-              <br />
-              (Requires document-specific filtering in ThreadList)
-            </EmptyState>
-          </SectionContainer>
-        )}
-
-        {showGeneralSection && (
-          <SectionContainer
-            key="general-section"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-          >
-            <SectionHeader>
-              <SectionIcon $color="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">
-                <MessageSquare size={18} />
-              </SectionIcon>
-              <SectionTitle>General Discussions</SectionTitle>
-              <SectionCount>(Loading...)</SectionCount>
-            </SectionHeader>
-
-            {/* ThreadList for general conversations (no corpus/document) */}
-            <EmptyState>
-              General discussions will appear here
-              <br />
-              (Requires filtering for threads without corpus/document)
-            </EmptyState>
-          </SectionContainer>
-        )}
-      </AnimatePresence>
+      {/* General Discussions - show in "all" or "general" tabs */}
+      {(activeTab === "all" || activeTab === "general") && (
+        <ThreadSection
+          title="General Discussions"
+          icon={<MessageSquare size={18} />}
+          iconColor="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+          filterType="general"
+          searchQuery={debouncedSearch}
+        />
+      )}
 
       <FAB
         onClick={() => setShowCreateModal(true)}
