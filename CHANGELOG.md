@@ -5,9 +5,52 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-11-23
+## [Unreleased] - 2025-11-24
 
 ### Added
+
+#### Discovery Landing Page (New)
+- **Beautiful, modern landing page** as the main entry point for the application
+  - Replaces direct redirect to /corpuses with a unified discovery experience
+  - Different content for anonymous vs authenticated users
+  - Responsive design with mobile-first approach
+  - Location: `frontend/src/views/DiscoveryLanding.tsx`
+
+- **New landing page components** (`frontend/src/components/landing/`)
+  - `HeroSection.tsx`: Animated hero with gradient backgrounds, floating icons, and global search
+  - `StatsBar.tsx`: Community metrics display with animated counters (users, collections, documents, threads, annotations, weekly active)
+  - `TrendingCorpuses.tsx`: Card grid of popular document collections with engagement metrics
+  - `RecentDiscussions.tsx`: List of recent public discussions with badges for pinned/locked threads
+  - `TopContributors.tsx`: Leaderboard-style display of top community contributors with reputation scores
+  - `CallToAction.tsx`: Conversion section for anonymous users with feature highlights
+  - All components feature modern UI/UX: glass morphism, smooth Framer Motion animations, skeleton loaders
+
+- **GraphQL queries for discovery data** (`frontend/src/graphql/landing-queries.ts`)
+  - `GET_DISCOVERY_DATA`: Unified query fetching corpuses, conversations, community stats, and leaderboard
+  - `GET_TRENDING_CORPUSES`: Public corpuses with engagement metrics
+  - `GET_RECENT_DISCUSSIONS`: Recent threads with pagination
+  - `GET_COMMUNITY_STATS`: Platform-wide statistics
+  - `GET_GLOBAL_LEADERBOARD`: Top contributors with badges
+
+- **Route integration**
+  - Root path (`/`) now displays DiscoveryLanding instead of redirecting to /corpuses
+  - Location: `frontend/src/App.tsx:377-382`
+
+- **Component tests** (`frontend/tests/landing-components.spec.tsx`)
+  - HeroSection tests: rendering, authenticated/anonymous variants, search submission
+  - StatsBar tests: stats rendering, loading state, null handling
+  - TrendingCorpuses tests: corpus cards, loading skeletons, empty state
+  - RecentDiscussions tests: discussion items, pinned badges, reply counts
+  - TopContributors tests: contributor cards, reputation scores, leaderboard button
+  - CallToAction tests: anonymous visibility, authenticated hiding
+  - DiscoveryLanding integration tests: full page rendering, section visibility
+
+### Technical Details
+- Uses existing design system colors from `frontend/src/theme/colors.ts`
+- Leverages existing GraphQL infrastructure with new queries for discovery data
+- Framer Motion for smooth section animations and card hover effects
+- Styled-components for all styling with responsive breakpoints
+- Polling enabled (5 min interval) for fresh content on landing page
 
 #### Corpus Engagement Analytics Dashboard (Issue #579)
 - **New CorpusEngagementDashboard component** displaying comprehensive engagement metrics

@@ -795,7 +795,10 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpuses(self, info, **kwargs):
-        return Corpus.objects.visible_to_user(info.context.user)
+        return (
+            Corpus.objects.visible_to_user(info.context.user)
+            .select_related("creator", "engagement_metrics")
+        )
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
 
@@ -1646,6 +1649,7 @@ class Query(graphene.ObjectType):
         """
         return (
             Conversation.objects.visible_to_user(info.context.user)
+            .select_related("creator", "chat_with_corpus", "chat_with_corpus__creator")
             .prefetch_related(
                 Prefetch(
                     "chat_messages",
@@ -2621,13 +2625,15 @@ class Query(graphene.ObjectType):
             Corpus.objects.visible_to_user(info.context.user).get(id=corpus_pk)
 
             # Get top users by reputation for this corpus
+            # Prefetch user badges to avoid N+1 queries
             top_reputations = (
                 UserReputation.objects.filter(corpus_id=corpus_pk)
                 .select_related("user")
+                .prefetch_related("user__user_badges__badge")
                 .order_by("-reputation_score")[:limit]
             )
 
-            # Return user objects
+            # Return user objects (badges are already prefetched)
             return [rep.user for rep in top_reputations]
 
         except Corpus.DoesNotExist:
@@ -2648,13 +2654,15 @@ class Query(graphene.ObjectType):
         from opencontractserver.conversations.models import UserReputation
 
         # Get top users by global reputation (corpus__isnull=True)
+        # Prefetch user badges to avoid N+1 queries when frontend requests userBadges
         top_reputations = (
             UserReputation.objects.filter(corpus__isnull=True)
             .select_related("user")
+            .prefetch_related("user__user_badges__badge")
             .order_by("-reputation_score")[:limit]
         )
 
-        # Return user objects
+        # Return user objects (badges are already prefetched)
         return [rep.user for rep in top_reputations]
 
     # LEADERBOARD QUERIES (Issue #613) ###################

@@ -78,6 +78,7 @@ import { UserProfileRoute } from "./components/routes/UserProfileRoute";
 import { LeaderboardRoute } from "./components/routes/LeaderboardRoute";
 import { GlobalDiscussionsRoute } from "./components/routes/GlobalDiscussionsRoute";
 import { ThreadSearchRoute } from "./views/ThreadSearchRoute";
+import { DiscoveryLanding } from "./views/DiscoveryLanding";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
 import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
@@ -372,11 +373,10 @@ export const App = () => {
                 audience={REACT_APP_AUDIENCE}
               >
                 <Routes>
+                  {/* Landing/Discovery Page - Main entry point */}
                   <Route
                     path="/"
-                    element={
-                      isLoading ? <div /> : <Navigate to="/corpuses" replace />
-                    }
+                    element={isLoading ? <div /> : <DiscoveryLanding />}
                   />
                   {/* Simple declarative routes with explicit prefixes */}
 
