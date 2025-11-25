@@ -10,6 +10,7 @@ import {
   Globe,
   Lock,
   ChevronRight,
+  Plus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { color } from "../../theme/colors";
@@ -317,6 +318,71 @@ const SkeletonLine = styled.div<{ $width?: string; $height?: string }>`
   margin-bottom: 0.75rem;
 `;
 
+const EmptyStateContainer = styled(motion.div)`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  background: linear-gradient(
+    135deg,
+    ${color.P1} 0%,
+    ${color.B1} 50%,
+    ${color.T1} 100%
+  );
+  border-radius: 24px;
+  border: 2px dashed ${color.N4};
+`;
+
+const EmptyStateIcon = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background: white;
+  border-radius: 20px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  color: ${color.P6};
+`;
+
+const EmptyStateTitle = styled.h3`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: ${color.N10};
+  margin: 0 0 0.5rem 0;
+`;
+
+const EmptyStateDescription = styled.p`
+  font-size: 1rem;
+  color: ${color.N7};
+  margin: 0 0 1.5rem 0;
+  max-width: 400px;
+  line-height: 1.6;
+`;
+
+const EmptyStateCTA = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  background: linear-gradient(135deg, ${color.P5} 0%, ${color.P6} 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(136, 122, 222, 0.4);
+  }
+`;
+
 function formatUsername(username: string | undefined): string {
   if (!username) return "Anonymous";
   // Handle OAuth IDs like "google-oauth2|114688257717759010643"
@@ -409,7 +475,43 @@ export const TrendingCorpuses: React.FC<TrendingCorpusesProps> = ({
   const validCorpuses = corpuses?.filter((edge) => edge?.node) || [];
 
   if (validCorpuses.length === 0) {
-    return null;
+    return (
+      <Section>
+        <Container>
+          <SectionHeader>
+            <HeaderLeft>
+              <IconBadge>
+                <Database size={24} />
+              </IconBadge>
+              <TitleGroup>
+                <SectionTitle>Trending Collections</SectionTitle>
+                <SectionSubtitle>
+                  Popular document collections from the community
+                </SectionSubtitle>
+              </TitleGroup>
+            </HeaderLeft>
+          </SectionHeader>
+          <EmptyStateContainer
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <EmptyStateIcon>
+              <Database size={36} />
+            </EmptyStateIcon>
+            <EmptyStateTitle>No collections yet</EmptyStateTitle>
+            <EmptyStateDescription>
+              Be the first to create a document collection! Upload PDFs, add
+              annotations, and share your insights with the community.
+            </EmptyStateDescription>
+            <EmptyStateCTA onClick={() => navigate("/corpuses")}>
+              <Plus size={20} />
+              Create Collection
+            </EmptyStateCTA>
+          </EmptyStateContainer>
+        </Container>
+      </Section>
+    );
   }
 
   return (

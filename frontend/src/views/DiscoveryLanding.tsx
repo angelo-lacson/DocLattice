@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import styled from "styled-components";
 import { useQuery, useReactiveVar } from "@apollo/client";
+import { RefreshCw, X, AlertCircle } from "lucide-react";
 import { authToken } from "../graphql/cache";
 import { color } from "../theme/colors";
 import {
@@ -23,11 +24,93 @@ const PageContainer = styled.div`
 `;
 
 const ErrorBanner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
   padding: 1rem 2rem;
-  background: ${color.R2};
-  color: ${color.R8};
-  text-align: center;
+  background: linear-gradient(135deg, ${color.R2} 0%, ${color.R1} 100%);
+  border-bottom: 1px solid ${color.R3};
   font-size: 0.9375rem;
+
+  @media (max-width: 640px) {
+    flex-wrap: wrap;
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+`;
+
+const ErrorContent = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: ${color.R8};
+
+  svg {
+    flex-shrink: 0;
+  }
+`;
+
+const ErrorActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ErrorButton = styled.button<{ $variant?: "primary" | "secondary" }>`
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  ${(props) =>
+    props.$variant === "primary"
+      ? `
+    background: ${color.R6};
+    color: white;
+    border: none;
+
+    &:hover {
+      background: ${color.R7};
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+  `
+      : `
+    background: transparent;
+    color: ${color.R7};
+    border: 1px solid ${color.R4};
+
+    &:hover {
+      background: ${color.R2};
+    }
+  `}
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  &.loading svg {
+    animation: spin 1s linear infinite;
+  }
 `;
 
 interface DiscoveryLandingProps {
@@ -44,8 +127,12 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
       ? isAuthenticatedOverride
       : Boolean(auth_token);
 
+  // State for error banner dismiss
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+
   // Fetch all discovery data in a single query
-  const { data, loading, error } = useQuery<GetDiscoveryDataOutput>(
+  const { data, loading, error, refetch } = useQuery<GetDiscoveryDataOutput>(
     GET_DISCOVERY_DATA,
     {
       variables: {
@@ -61,15 +148,50 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
     }
   );
 
+  // Handle retry with loading state
+  const handleRetry = useCallback(async () => {
+    setIsRetrying(true);
+    setErrorDismissed(false);
+    try {
+      await refetch();
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [refetch]);
+
+  // Reset dismissed state when error changes (new error appears)
+  const showError = error && !errorDismissed;
+
   return (
     <PageContainer>
       {/* Hero Section - Always visible */}
       <HeroSection isAuthenticated={isAuthenticated} />
 
-      {/* Error Banner - Only show if there's an error */}
-      {error && (
+      {/* Error Banner - Only show if there's an error and not dismissed */}
+      {showError && (
         <ErrorBanner>
-          Unable to load some content. Please try refreshing the page.
+          <ErrorContent>
+            <AlertCircle size={20} />
+            <span>Unable to load some content. Please try again.</span>
+          </ErrorContent>
+          <ErrorActions>
+            <ErrorButton
+              $variant="primary"
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className={isRetrying ? "loading" : ""}
+            >
+              <RefreshCw size={16} />
+              {isRetrying ? "Retrying..." : "Retry"}
+            </ErrorButton>
+            <ErrorButton
+              $variant="secondary"
+              onClick={() => setErrorDismissed(true)}
+            >
+              <X size={16} />
+              Dismiss
+            </ErrorButton>
+          </ErrorActions>
         </ErrorBanner>
       )}
 

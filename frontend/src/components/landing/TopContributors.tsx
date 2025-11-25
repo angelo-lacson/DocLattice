@@ -11,6 +11,7 @@ import {
   Crown,
   Medal,
   Star,
+  UserPlus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { color } from "../../theme/colors";
@@ -362,6 +363,65 @@ const SkeletonLine = styled.div<{ $width?: string; $height?: string }>`
   margin-bottom: 0.5rem;
 `;
 
+const EmptyStateContainer = styled(motion.div)`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  background: white;
+  border-radius: 20px;
+  border: 2px dashed ${color.O3};
+`;
+
+const EmptyStateIcon = styled.div`
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, ${color.O2} 0%, ${color.O3} 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  color: ${color.O7};
+`;
+
+const EmptyStateTitle = styled.h3`
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: ${color.N10};
+  margin: 0 0 0.75rem 0;
+`;
+
+const EmptyStateDescription = styled.p`
+  font-size: 1rem;
+  color: ${color.N6};
+  margin: 0 0 1.5rem 0;
+  max-width: 400px;
+  line-height: 1.6;
+`;
+
+const EmptyStateCTA = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  background: linear-gradient(135deg, ${color.O6} 0%, ${color.O7} 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(230, 126, 34, 0.3);
+  }
+`;
+
 function getRankIcon(rank: number) {
   switch (rank) {
     case 1:
@@ -406,6 +466,9 @@ export const TopContributors: React.FC<TopContributorsProps> = ({
   const handleContributorClick = (contributor: LeaderboardEntry) => {
     if (contributor.slug) {
       navigate(`/users/${contributor.slug}`);
+    } else {
+      // Fallback to leaderboard if user has no slug
+      navigate("/leaderboard");
     }
   };
 
@@ -441,7 +504,42 @@ export const TopContributors: React.FC<TopContributorsProps> = ({
   }
 
   if (!contributors || contributors.length === 0) {
-    return null;
+    return (
+      <Section>
+        <Container>
+          <SectionHeader>
+            <HeaderLeft>
+              <IconBadge>
+                <Trophy size={24} />
+              </IconBadge>
+              <TitleGroup>
+                <SectionTitle>Top Contributors</SectionTitle>
+                <SectionSubtitle>Community leaders and experts</SectionSubtitle>
+              </TitleGroup>
+            </HeaderLeft>
+          </SectionHeader>
+          <EmptyStateContainer
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <EmptyStateIcon>
+              <Trophy size={36} />
+            </EmptyStateIcon>
+            <EmptyStateTitle>Be the first contributor</EmptyStateTitle>
+            <EmptyStateDescription>
+              Join our community and start contributing! Annotate documents,
+              participate in discussions, and earn reputation to climb the
+              leaderboard.
+            </EmptyStateDescription>
+            <EmptyStateCTA onClick={() => navigate("/corpuses")}>
+              <UserPlus size={20} />
+              Start Contributing
+            </EmptyStateCTA>
+          </EmptyStateContainer>
+        </Container>
+      </Section>
+    );
   }
 
   return (

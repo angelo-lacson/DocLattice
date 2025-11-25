@@ -11,6 +11,7 @@ import {
   Lock,
   ChevronRight,
   Folder,
+  Plus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { color } from "../../theme/colors";
@@ -329,6 +330,71 @@ const SkeletonLine = styled.div<{ $width?: string; $height?: string }>`
   margin-bottom: 0.5rem;
 `;
 
+const EmptyStateContainer = styled(motion.div)`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  background: linear-gradient(
+    135deg,
+    ${color.G1} 0%,
+    ${color.T1} 50%,
+    ${color.B1} 100%
+  );
+  border-radius: 24px;
+  border: 2px dashed ${color.N4};
+`;
+
+const EmptyStateIcon = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background: white;
+  border-radius: 20px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  color: ${color.G6};
+`;
+
+const EmptyStateTitle = styled.h3`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: ${color.N10};
+  margin: 0 0 0.5rem 0;
+`;
+
+const EmptyStateDescription = styled.p`
+  font-size: 1rem;
+  color: ${color.N7};
+  margin: 0 0 1.5rem 0;
+  max-width: 400px;
+  line-height: 1.6;
+`;
+
+const EmptyStateCTA = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  background: linear-gradient(135deg, ${color.G5} 0%, ${color.G6} 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(30, 194, 142, 0.4);
+  }
+`;
+
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -402,10 +468,15 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
   ) => {
     const corpus = discussion.chatWithCorpus;
     if (corpus) {
+      // Corpus-scoped thread → navigate to full corpus thread view
       const url = getCorpusThreadUrl(corpus, discussion.id);
       if (url !== "#") {
         navigate(url);
       }
+    } else {
+      // General discussion (no corpus) → navigate to global discussions page
+      // The user can find and interact with the thread there
+      navigate("/discussions");
     }
   };
 
@@ -445,7 +516,41 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
   const validDiscussions = discussions?.filter((edge) => edge?.node) || [];
 
   if (validDiscussions.length === 0) {
-    return null;
+    return (
+      <Section>
+        <Container>
+          <SectionHeader>
+            <HeaderLeft>
+              <IconBadge>
+                <MessageSquare size={24} />
+              </IconBadge>
+              <TitleGroup>
+                <SectionTitle>Recent Discussions</SectionTitle>
+                <SectionSubtitle>Join the conversation</SectionSubtitle>
+              </TitleGroup>
+            </HeaderLeft>
+          </SectionHeader>
+          <EmptyStateContainer
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <EmptyStateIcon>
+              <MessageCircle size={36} />
+            </EmptyStateIcon>
+            <EmptyStateTitle>No discussions yet</EmptyStateTitle>
+            <EmptyStateDescription>
+              Start the conversation! Share your thoughts, ask questions, and
+              collaborate with the community on document analysis.
+            </EmptyStateDescription>
+            <EmptyStateCTA onClick={() => navigate("/discussions")}>
+              <Plus size={20} />
+              Start Discussion
+            </EmptyStateCTA>
+          </EmptyStateContainer>
+        </Container>
+      </Section>
+    );
   }
 
   return (
