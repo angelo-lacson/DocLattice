@@ -805,8 +805,11 @@ class TestGetAnalysisRowsForDocument(TestCase):
         )
 
         # Create analyzer and analysis
+        # Note: Analyzer has a constraint requiring either host_gremlin or task_name
         self.analyzer = Analyzer.objects.create(
+            id="test.analyzer.for.document.actions",
             description="Test Analyzer",
+            task_name="test.task.name",
             creator=self.owner,
         )
         self.analysis = Analysis.objects.create(
