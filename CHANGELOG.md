@@ -45,12 +45,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CallToAction tests: anonymous visibility, authenticated hiding
   - DiscoveryLanding integration tests: full page rendering, section visibility
 
-### Technical Details
-- Uses existing design system colors from `frontend/src/theme/colors.ts`
-- Leverages existing GraphQL infrastructure with new queries for discovery data
-- Framer Motion for smooth section animations and card hover effects
-- Styled-components for all styling with responsive breakpoints
-- Polling enabled (5 min interval) for fresh content on landing page
+#### Permission Audit Remediation - Query Optimizers
+- **New `UserQueryOptimizer`** for centralized user profile visibility logic
+  - Respects `is_profile_public` privacy setting
+  - Private profiles visible via corpus membership with > READ permission
+  - Inactive users filtered out (except for superusers)
+  - IDOR-safe visibility checks
+  - Location: `opencontractserver/users/query_optimizer.py`
+
+- **New `BadgeQueryOptimizer`** for centralized badge visibility logic
+  - Badge visibility follows recipient's profile privacy rules
+  - Corpus-specific badges visible only to corpus members
+  - Own badges always visible regardless of privacy
+  - IDOR-safe visibility checks
+  - Location: `opencontractserver/badges/query_optimizer.py`
+
+- **New `DocumentActionsQueryOptimizer`** for document-related actions
+  - Centralized permission logic for corpus actions, extracts, and analysis rows
+  - Follows least-privilege model: `Effective Permission = MIN(document_permission, corpus_permission)`
+  - Integrates with ExtractQueryOptimizer and AnalysisQueryOptimizer
+  - Location: `opencontractserver/documents/query_optimizer.py`
+
+- **Comprehensive permission test suites** (40 tests total)
+  - `opencontractserver/tests/permissioning/test_user_visibility.py` - 16 tests for user profile visibility
+  - `opencontractserver/tests/permissioning/test_badge_visibility.py` - 13 tests for badge visibility
+  - `opencontractserver/tests/permissioning/test_document_actions_permissions.py` - 11 tests for document actions
+
+- **Updated permissioning documentation**
+  - Added Section 8: User Profile and Badge Visibility
+  - Added Section 9: Document Actions Permissions
+  - Added callouts for new privacy features
+  - Updated Key Changes table with new optimizer rows
+  - Location: `docs/permissioning/consolidated_permissioning_guide.md`
 
 #### Corpus Engagement Analytics Dashboard (Issue #579)
 - **New CorpusEngagementDashboard component** displaying comprehensive engagement metrics
@@ -161,9 +187,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Permission Audit Remediation - GraphQL Resolver Fixes
+
+1. **User profile visibility not respecting privacy settings**
+   - **File**: `config/graphql/queries.py` - `resolve_user_by_slug`, `resolve_search_users_for_mention`
+   - **Issue**: Resolvers returned users without checking `is_profile_public` or corpus membership
+   - **Fixed**: Now uses `UserQueryOptimizer` for proper privacy filtering
+   - **Impact**: Private user profiles no longer visible to unauthorized users
+
+2. **Badge visibility not respecting recipient privacy**
+   - **File**: `config/graphql/queries.py` - `resolve_user_badges`, `resolve_user_badge`
+   - **Issue**: Badge awards were visible regardless of recipient's profile privacy
+   - **Fixed**: Now uses `BadgeQueryOptimizer` which filters by recipient visibility
+   - **Impact**: Badges of private users no longer leaked to unauthorized viewers
+
+3. **Document actions missing permission checks**
+   - **File**: `config/graphql/queries.py` - `resolve_document_corpus_actions`
+   - **Issue**: Inline permission checks were inconsistent with least-privilege model
+   - **Fixed**: Now uses `DocumentActionsQueryOptimizer` for centralized permission logic
+   - **Impact**: Document-related data properly filtered by document AND corpus permissions
+
+4. **Assignment resolver using incorrect visible_to_user signature**
+   - **File**: `config/graphql/queries.py` - `resolve_assignments`, `resolve_assignment`
+   - **Issue**: Called `Assignment.objects.visible_to_user(info.context.user)` but manager expected different signature
+   - **Fixed**: Updated to use correct manager method call pattern
+   - **Impact**: Assignment queries now properly filter by user visibility
+
+5. **Unused local imports shadowing top-level imports**
+   - **File**: `config/graphql/queries.py` - lines 2810, 2990
+   - **Issue**: Local `UserBadge` imports inside resolvers were redundant and caused flake8 warnings
+   - **Fixed**: Removed redundant local imports, using top-level import
+   - **Impact**: Cleaner code, no shadowing warnings
+
 #### Thread Search (Issue #580)
 
-1. **Anonymous user null reference in searchConversations resolver**
+6. **Anonymous user null reference in searchConversations resolver**
    - **File**: `config/graphql/queries.py:1725`
    - **Issue**: Resolver accessed `info.context.user.is_anonymous` without checking if user was `None`, causing AttributeError in tests with anonymous users
    - **Fixed**: Added null check before accessing `is_anonymous` attribute
