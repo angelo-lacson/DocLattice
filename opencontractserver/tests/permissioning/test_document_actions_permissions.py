@@ -819,10 +819,10 @@ class TestGetAnalysisRowsForDocument(TestCase):
         )
 
         # Create analysis row
+        # Note: `data` field is a ManyToManyField to Datacell, not a JSON field
         self.analysis_row = DocumentAnalysisRow.objects.create(
             document=self.document,
             analysis=self.analysis,
-            data={"test": "data"},
             creator=self.owner,
         )
 
