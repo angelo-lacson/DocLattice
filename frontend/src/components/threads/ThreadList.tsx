@@ -31,6 +31,12 @@ interface ThreadListProps {
   showModeratorFilters?: boolean;
   /** Optional callback when thread is clicked (overrides default navigation) */
   onThreadClick?: (threadId: string) => void;
+  /** Search query to filter threads by title */
+  searchQuery?: string;
+  /** Filter for threads with/without corpus */
+  hasCorpus?: boolean;
+  /** Filter for threads with/without document */
+  hasDocument?: boolean;
 }
 
 const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
@@ -116,6 +122,9 @@ export function ThreadList({
   showCreateButton = true,
   showModeratorFilters = false,
   onThreadClick,
+  searchQuery,
+  hasCorpus,
+  hasDocument,
 }: ThreadListProps) {
   const [sortBy] = useAtom(threadSortAtom);
   const [filters] = useAtom(threadFiltersAtom);
@@ -130,6 +139,7 @@ export function ThreadList({
       documentId,
       conversationType: "THREAD",
       limit: 20,
+      title_Contains: searchQuery || undefined,
     },
     // Refetch every 30 seconds for new threads
     pollInterval: 30000,
@@ -142,6 +152,18 @@ export function ThreadList({
       data?.conversations?.edges
         ?.map((e) => e?.node)
         .filter((node): node is NonNullable<typeof node> => node != null) || [];
+
+    // Apply corpus/document context filters
+    if (hasCorpus === true) {
+      threads = threads.filter((t) => t?.chatWithCorpus != null);
+    } else if (hasCorpus === false) {
+      threads = threads.filter((t) => t?.chatWithCorpus == null);
+    }
+    if (hasDocument === true) {
+      threads = threads.filter((t) => t?.chatWithDocument != null);
+    } else if (hasDocument === false) {
+      threads = threads.filter((t) => t?.chatWithDocument == null);
+    }
 
     // Apply filters
     if (!filters.showLocked) {
@@ -195,7 +217,7 @@ export function ThreadList({
     });
 
     return threads;
-  }, [data, sortBy, filters]);
+  }, [data, sortBy, filters, hasCorpus, hasDocument]);
 
   // Handle load more for pagination
   const handleLoadMore = () => {

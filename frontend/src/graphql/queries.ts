@@ -2163,6 +2163,8 @@ export interface GetConversationsInputs {
   title_Contains?: string;
   createdAt_Gte?: string;
   createdAt_Lte?: string;
+  hasCorpus?: boolean;
+  hasDocument?: boolean;
 }
 
 /**
@@ -2186,6 +2188,8 @@ export const GET_CONVERSATIONS = gql`
     $createdAt_Gte: DateTime
     $createdAt_Lte: DateTime
     $conversationType: ConversationTypeEnum
+    $hasCorpus: Boolean
+    $hasDocument: Boolean
   ) {
     conversations(
       documentId: $documentId
@@ -2196,6 +2200,8 @@ export const GET_CONVERSATIONS = gql`
       createdAt_Gte: $createdAt_Gte
       createdAt_Lte: $createdAt_Lte
       conversationType: $conversationType
+      hasCorpus: $hasCorpus
+      hasDocument: $hasDocument
     ) {
       edges {
         node {
