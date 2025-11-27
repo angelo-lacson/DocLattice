@@ -370,7 +370,10 @@ class TestLeaderboardGraphQL(TestCase):
 
         result = self.client.execute(query)
 
+        self.assertIsNone(result.get("errors"))
+
         leaderboard = result["data"]["globalLeaderboard"]
+        self.assertIsNotNone(leaderboard, "globalLeaderboard should not be None")
         self.assertEqual(len(leaderboard), 2)
 
     def test_corpus_leaderboard_permission_check(self):
