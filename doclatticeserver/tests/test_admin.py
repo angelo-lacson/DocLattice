@@ -76,7 +76,7 @@ class TestUserAdmin(TestCase):
         assert User.objects.filter(username="test").exists()
 
     def test_view_user(self):
-        user = User.objects.get(username="admin")
+        user = User.objects.get(username="superuser")
         url = reverse("admin:users_user_change", kwargs={"object_id": user.pk})
         response = self.admin_client.get(url)
         assert response.status_code == 200
@@ -100,7 +100,7 @@ class TestAnalyzerAdmin(TestCase):
 
     def test_gremlin_add(self):
 
-        user = User.objects.get(username="admin")
+        user = User.objects.get(username="superuser")
         url = reverse("admin:analyzer_gremlinengine_add")
         response = self.admin_client.get(url)
         assert response.status_code == 200
