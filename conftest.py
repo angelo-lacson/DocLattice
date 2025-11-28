@@ -5,7 +5,9 @@ This file provides pytest-xdist parallel testing support and ensures proper
 worker isolation for tests.
 """
 
+import asyncio
 import os
+import sys
 
 import pytest
 
@@ -68,3 +70,35 @@ def pytest_runtest_setup(item):
     if worker_id:
         # Set worker ID in environment for tests that need to know
         os.environ["TEST_WORKER_ID"] = worker_id
+
+    # Ensure a fresh event loop is available for each test.
+    # This prevents "Event loop is closed" errors when using pydantic-ai's
+    # run_sync() or other async code with pytest-xdist.
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("Event loop is closed")
+    except RuntimeError:
+        # Create a new event loop if one doesn't exist or is closed
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_runtest_teardown(item, nextitem):
+    """Teardown hook that runs after each test."""
+    # Clean up any event loop that was created during the test
+    # to prevent resource leaks, but don't close it as the next test may need it
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If the loop is still running, we can't close it safely
+            pass
+        elif not loop.is_closed():
+            # Cancel any pending tasks
+            pending = asyncio.all_tasks(loop) if hasattr(asyncio, "all_tasks") else []
+            for task in pending:
+                task.cancel()
+    except RuntimeError:
+        # No event loop, nothing to clean up
+        pass
