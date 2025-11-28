@@ -11,11 +11,24 @@ OpenContracts is a GPL-3.0 enterprise document analytics platform for PDFs and t
 ### Backend (Django)
 
 ```bash
-# Run backend tests (use --keepdb to speed up subsequent runs)
+# Run backend tests (sequential, use --keepdb to speed up subsequent runs)
 docker compose -f test.yml run django python manage.py test --keepdb
+
+# Run backend tests in PARALLEL (recommended - ~4x faster)
+# Uses pytest-xdist with 4 workers, --dist loadscope keeps class tests together
+docker compose -f test.yml run django pytest -n 4 --dist loadscope
+
+# Run parallel tests with auto-detected worker count (uses all CPU cores)
+docker compose -f test.yml run django pytest -n auto --dist loadscope
+
+# Run parallel tests with fresh databases (first run or after schema changes)
+docker compose -f test.yml run django pytest -n 4 --dist loadscope --create-db
 
 # Run specific test file
 docker compose -f test.yml run django python manage.py test opencontractserver.tests.test_notifications --keepdb
+
+# Run specific test file in parallel
+docker compose -f test.yml run django pytest opencontractserver/tests/test_notifications.py -n 4 --dist loadscope
 
 # Run specific test class/method
 docker compose -f test.yml run django python manage.py test opencontractserver.tests.test_notifications.TestNotificationModel.test_create_notification --keepdb
@@ -204,6 +217,13 @@ docker compose -f production.yml up
 ### Backend Tests
 
 **Location**: `opencontractserver/tests/`
+
+**Parallel Testing** (pytest-xdist):
+- Run with `-n 4` (or `-n auto`) for parallel execution across workers
+- Use `--dist loadscope` to keep tests from the same class on the same worker (respects `setUpClass`)
+- Each worker gets its own database (test_db_gw0, test_db_gw1, etc.)
+- Use `@pytest.mark.serial` to mark tests that cannot run in parallel
+- First run or after DB schema changes: add `--create-db` flag
 
 **Patterns**:
 - Use `TransactionTestCase` for tests with signals/asynchronous behavior

@@ -181,6 +181,7 @@ class PermissioningTestCase(TestCase):
                     document_id=self.doc_ids[randrange(len(self.doc_ids))],
                     corpus=self.corpus,
                     analysis=self.analysis,
+                    creator=self.user,
                 )
 
     def __test_user_retrieval_permissions(self):
