@@ -14,20 +14,18 @@ This ensures legacy users don't lose access to their structural annotations.
 """
 
 import io
-import json
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TransactionTestCase
 from graphene.test import Client
-from graphql_relay import from_global_id, to_global_id
+from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from opencontractserver.annotations.models import (
     Annotation,
     AnnotationLabel,
     Relationship,
-    StructuralAnnotationSet,
 )
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentPath
@@ -209,7 +207,9 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             self.struct_para2,
         ]:
             annot.refresh_from_db()
-            self.assertIsNotNone(annot.document_id, "Pre-migration: document should be set")
+            self.assertIsNotNone(
+                annot.document_id, "Pre-migration: document should be set"
+            )
             self.assertIsNone(
                 annot.structural_set_id, "Pre-migration: structural_set should be null"
             )
@@ -240,7 +240,9 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             context_value=self._get_request_context(),
         )
 
-        self.assertIsNone(result.get("errors"), f"GraphQL errors: {result.get('errors')}")
+        self.assertIsNone(
+            result.get("errors"), f"GraphQL errors: {result.get('errors')}"
+        )
 
         annotations = result["data"]["document"]["allStructuralAnnotations"]
 
@@ -303,10 +305,14 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             context_value=self._get_request_context(),
         )
 
-        self.assertIsNone(result.get("errors"), f"GraphQL errors: {result.get('errors')}")
+        self.assertIsNone(
+            result.get("errors"), f"GraphQL errors: {result.get('errors')}"
+        )
 
         edges = result["data"]["annotations"]["edges"]
-        self.assertEqual(len(edges), 5, f"Expected 5 structural annotations, got {len(edges)}")
+        self.assertEqual(
+            len(edges), 5, f"Expected 5 structural annotations, got {len(edges)}"
+        )
 
     # =========================================================================
     # TEST 3: Post-migration GraphQL access - same queries, same results
@@ -345,7 +351,9 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
         pre_raw_texts = {annot["rawText"] for annot in pre_annotations}
         pre_count = len(pre_annotations)
 
-        self.assertEqual(pre_count, 5, "Pre-migration should have 5 structural annotations")
+        self.assertEqual(
+            pre_count, 5, "Pre-migration should have 5 structural annotations"
+        )
 
         # =====================================================================
         # RUN THE MIGRATION
@@ -381,7 +389,8 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
         )
 
         self.assertIsNone(
-            post_result.get("errors"), f"GraphQL errors post-migration: {post_result.get('errors')}"
+            post_result.get("errors"),
+            f"GraphQL errors post-migration: {post_result.get('errors')}",
         )
 
         post_annotations = post_result["data"]["document"]["allStructuralAnnotations"]
@@ -455,11 +464,15 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             context_value=self._get_request_context(),
         )
 
-        self.assertIsNone(result.get("errors"), f"GraphQL errors: {result.get('errors')}")
+        self.assertIsNone(
+            result.get("errors"), f"GraphQL errors: {result.get('errors')}"
+        )
 
         edges = result["data"]["annotations"]["edges"]
         self.assertEqual(
-            len(edges), 5, f"Post-migration: Expected 5 structural annotations, got {len(edges)}"
+            len(edges),
+            5,
+            f"Post-migration: Expected 5 structural annotations, got {len(edges)}",
         )
 
         # All should be structural
@@ -725,7 +738,9 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             context_value=self._get_request_context(),
         )
         self.assertIsNone(pre_result.get("errors"))
-        self.assertEqual(len(pre_result["data"]["document"]["allStructuralAnnotations"]), 0)
+        self.assertEqual(
+            len(pre_result["data"]["document"]["allStructuralAnnotations"]), 0
+        )
 
         # Run migration (nothing to migrate for this doc)
         self._call_migrate()
@@ -737,7 +752,9 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             context_value=self._get_request_context(),
         )
         self.assertIsNone(post_result.get("errors"))
-        self.assertEqual(len(post_result["data"]["document"]["allStructuralAnnotations"]), 0)
+        self.assertEqual(
+            len(post_result["data"]["document"]["allStructuralAnnotations"]), 0
+        )
 
 
 class StructuralRelationshipGraphQLBackwardsCompatibilityTests(TransactionTestCase):
@@ -849,7 +866,9 @@ class StructuralRelationshipGraphQLBackwardsCompatibilityTests(TransactionTestCa
         Note: The relationships GraphQL filter doesn't expose 'structural' directly,
         but the query optimizer handles both pre and post-migration states.
         """
-        from opencontractserver.annotations.query_optimizer import RelationshipQueryOptimizer
+        from opencontractserver.annotations.query_optimizer import (
+            RelationshipQueryOptimizer,
+        )
 
         # Pre-migration: verify relationship is attached to document
         self.struct_rel.refresh_from_db()
@@ -864,7 +883,9 @@ class StructuralRelationshipGraphQLBackwardsCompatibilityTests(TransactionTestCa
             structural=True,
         )
         pre_count = pre_rels.count()
-        self.assertEqual(pre_count, 1, "Pre-migration: should find 1 structural relationship")
+        self.assertEqual(
+            pre_count, 1, "Pre-migration: should find 1 structural relationship"
+        )
 
         # Verify content
         pre_rel = pre_rels.first()
@@ -879,11 +900,11 @@ class StructuralRelationshipGraphQLBackwardsCompatibilityTests(TransactionTestCa
         self.struct_rel.refresh_from_db()
         self.assertIsNone(
             self.struct_rel.document_id,
-            "Post-migration: structural relationship should have document=NULL"
+            "Post-migration: structural relationship should have document=NULL",
         )
         self.assertIsNotNone(
             self.struct_rel.structural_set_id,
-            "Post-migration: structural relationship should have structural_set set"
+            "Post-migration: structural relationship should have structural_set set",
         )
 
         # Verify document is linked to structural set
@@ -903,7 +924,7 @@ class StructuralRelationshipGraphQLBackwardsCompatibilityTests(TransactionTestCa
         self.assertEqual(
             post_count,
             pre_count,
-            f"Post-migration should find same relationship count: pre={pre_count}, post={post_count}"
+            f"Post-migration should find same relationship count: pre={pre_count}, post={post_count}",
         )
 
         # Verify relationship content is intact

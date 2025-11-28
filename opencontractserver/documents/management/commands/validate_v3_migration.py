@@ -11,7 +11,7 @@ Usage:
 import logging
 
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Q
+from django.db.models import Count
 
 from opencontractserver.annotations.models import (
     Annotation,
@@ -161,7 +161,9 @@ class Command(BaseCommand):
         docs_null_current = Document.objects.filter(is_current__isnull=True).count()
         if docs_null_current > 0:
             self.stdout.write(
-                self.style.ERROR(f"  FAILED: {docs_null_current} docs have NULL is_current")
+                self.style.ERROR(
+                    f"  FAILED: {docs_null_current} docs have NULL is_current"
+                )
             )
             return {"passed": False, "count": docs_null_current}
 
@@ -180,7 +182,11 @@ class Command(BaseCommand):
                 f"    Note: {non_current_count} non-current documents are previous versions"
             )
 
-        return {"passed": True, "current": current_count, "non_current": non_current_count}
+        return {
+            "passed": True,
+            "current": current_count,
+            "non_current": non_current_count,
+        }
 
     def _check_document_paths(self, verbose):
         """Check that all corpus-document relationships have DocumentPath records."""
@@ -351,7 +357,9 @@ class Command(BaseCommand):
             return {"passed": True, "total": total_sets}
 
         self.stdout.write(
-            self.style.ERROR(f"  FAILED: {duplicate_count} duplicate content_hash values")
+            self.style.ERROR(
+                f"  FAILED: {duplicate_count} duplicate content_hash values"
+            )
         )
 
         if verbose:
@@ -433,7 +441,10 @@ class Command(BaseCommand):
             ("DocumentPath records", results["document_paths"]["passed"]),
             ("Annotation XOR constraint", results["annotation_xor"]["passed"]),
             ("Relationship XOR constraint", results["relationship_xor"]["passed"]),
-            ("StructuralAnnotationSet uniqueness", results["structural_set_hash"]["passed"]),
+            (
+                "StructuralAnnotationSet uniqueness",
+                results["structural_set_hash"]["passed"],
+            ),
         ]
 
         for check_name, passed in checks:

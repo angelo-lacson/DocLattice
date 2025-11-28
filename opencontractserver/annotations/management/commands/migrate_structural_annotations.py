@@ -23,14 +23,12 @@ import logging
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import Count, Q
 
 from opencontractserver.annotations.models import (
     Annotation,
     Relationship,
     StructuralAnnotationSet,
 )
-from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentPath
 
 logger = logging.getLogger(__name__)
@@ -224,12 +222,8 @@ class Command(BaseCommand):
             )
 
         # Count structural annotations/relationships before migration
-        annot_count = Annotation.objects.filter(
-            document=doc, structural=True
-        ).count()
-        rel_count = Relationship.objects.filter(
-            document=doc, structural=True
-        ).count()
+        annot_count = Annotation.objects.filter(document=doc, structural=True).count()
+        rel_count = Relationship.objects.filter(document=doc, structural=True).count()
 
         if verbose:
             self.stdout.write(
@@ -261,12 +255,12 @@ class Command(BaseCommand):
                     "parser_version": None,
                     "page_count": doc.page_count,
                     # Share file references (not duplicated)
-                    "pawls_parse_file": doc.pawls_parse_file.name
-                    if doc.pawls_parse_file
-                    else None,
-                    "txt_extract_file": doc.txt_extract_file.name
-                    if doc.txt_extract_file
-                    else None,
+                    "pawls_parse_file": (
+                        doc.pawls_parse_file.name if doc.pawls_parse_file else None
+                    ),
+                    "txt_extract_file": (
+                        doc.txt_extract_file.name if doc.txt_extract_file else None
+                    ),
                 },
             )
 

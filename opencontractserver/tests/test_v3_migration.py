@@ -27,9 +27,9 @@ from opencontractserver.annotations.models import (
     Relationship,
     StructuralAnnotationSet,
 )
-from opencontractserver.types.enums import LabelType
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.types.enums import LabelType
 
 User = get_user_model()
 
@@ -70,7 +70,9 @@ class DocumentVersioningMigrationTests(TestCase):
 
         # Verify all are unique
         tree_ids = [doc1.version_tree_id, doc2.version_tree_id, doc3.version_tree_id]
-        self.assertEqual(len(set(tree_ids)), 3, "Each document should have unique tree_id")
+        self.assertEqual(
+            len(set(tree_ids)), 3, "Each document should have unique tree_id"
+        )
 
     def test_all_documents_marked_as_current_initially(self):
         """All existing documents should have is_current=True after migration."""
@@ -595,9 +597,7 @@ class StructuralMigrationCommandTests(TransactionTestCase):
     def test_migrate_corpus_scope_processes_only_corpus_documents(self):
         """--corpus-id flag limits migration to documents in that corpus."""
         # Create document in another corpus
-        other_corpus = Corpus.objects.create(
-            title="Other Corpus", creator=self.user
-        )
+        other_corpus = Corpus.objects.create(title="Other Corpus", creator=self.user)
 
         # Add self.doc to corpus via DocumentPath (it needs to be "in" the corpus)
         DocumentPath.objects.create(
@@ -715,9 +715,7 @@ class RollbackAndEdgeCaseTests(TransactionTestCase):
 
     def test_empty_corpus_migration(self):
         """Empty corpus has no effect on migration."""
-        empty_corpus = Corpus.objects.create(
-            title="Empty Corpus", creator=self.user
-        )
+        empty_corpus = Corpus.objects.create(title="Empty Corpus", creator=self.user)
 
         # Should not raise any errors
         self._call_migrate(f"--corpus-id={empty_corpus.id}")
@@ -818,3 +816,119 @@ class ValidationCommandTests(TransactionTestCase):
         # Verbose mode should show more detail
         self.assertIn("[1/7]", output)
         self.assertIn("[2/7]", output)
+
+
+class MigrationCommandErrorTests(TransactionTestCase):
+    """
+    Test migration command error handling paths.
+    """
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(
+            username="migration_error_user", password="testpass123"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Error Test Corpus", creator=self.user
+        )
+        self.label = AnnotationLabel.objects.create(
+            text="Error Test Label",
+            label_type=LabelType.TOKEN_LABEL,
+            creator=self.user,
+        )
+
+    def test_migrate_with_invalid_system_user_id_raises_error(self):
+        """Command raises error when system-user-id doesn't exist."""
+        from django.core.management.base import CommandError
+
+        doc = Document.objects.create(
+            title="Invalid User Test",
+            pdf_file_hash="invalid_user_hash",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural annotation",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        with self.assertRaises(CommandError) as context:
+            call_command(
+                "migrate_structural_annotations",
+                "--system-user-id=999999",  # Non-existent user
+                stdout=out,
+            )
+
+        self.assertIn("not found", str(context.exception))
+
+    def test_migrate_verbose_mode_shows_document_progress(self):
+        """--verbose flag shows document-level progress."""
+        doc = Document.objects.create(
+            title="Verbose Progress Doc",
+            pdf_file_hash="verbose_progress_hash",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural for verbose",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command(
+            "migrate_structural_annotations",
+            "--verbose",
+            f"--system-user-id={self.user.id}",
+            stdout=out,
+        )
+
+        output = out.getvalue()
+        self.assertIn("Processing document", output)
+        self.assertIn("Created StructuralAnnotationSet", output)
+        self.assertIn("Migrated", output)
+
+    def test_migrate_dry_run_verbose_with_existing_set(self):
+        """--dry-run --verbose shows when structural set would be reused."""
+        doc = Document.objects.create(
+            title="Dry Run Reuse Doc",
+            pdf_file_hash="dry_run_reuse_hash",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural for dry run reuse",
+            structural=True,
+            creator=self.user,
+        )
+
+        # Pre-create the structural set
+        StructuralAnnotationSet.objects.create(
+            content_hash=doc.pdf_file_hash,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command(
+            "migrate_structural_annotations",
+            "--dry-run",
+            "--verbose",
+            f"--system-user-id={self.user.id}",
+            stdout=out,
+        )
+
+        output = out.getvalue()
+        self.assertIn("DRY-RUN", output)
+        # Stats should show set_reused
+        self.assertIn("reused", output.lower())
