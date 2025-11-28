@@ -15,6 +15,7 @@ import logging
 from typing import Any
 from urllib.parse import quote
 
+import pytest
 import vcr
 from channels.testing import WebsocketCommunicator
 from django.test.utils import override_settings
@@ -25,12 +26,16 @@ from opencontractserver.tests.base import WebsocketFixtureBaseTestCase
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.serial
 @override_settings(USE_AUTH0=False)
 class CorpusConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
     """
     End-to-end websocket test for the refactored ``CorpusQueryConsumer``.
 
     Tests are executed with ``LLMS_*_AGENT_FRAMEWORK = "pydantic_ai"``.
+
+    Marked as serial because websocket tests use async event loops that
+    can conflict with pytest-xdist workers.
     """
 
     # ------------------------------------------------------------------

@@ -80,8 +80,13 @@ class _DummyPauseAgent:
         return None
 
 
+@pytest.mark.serial
 class WebsocketApprovalGateTestCase(WebsocketFixtureBaseTestCase):
-    """End-to-end test of the approval gate through the websocket consumer."""
+    """End-to-end test of the approval gate through the websocket consumer.
+
+    Marked as serial because websocket tests use async event loops that
+    can conflict with pytest-xdist workers.
+    """
 
     @pytest.mark.asyncio
     async def test_pause_and_approve_via_websocket(self):  # noqa: D401 – async test
