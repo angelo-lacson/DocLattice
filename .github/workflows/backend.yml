@@ -106,10 +106,9 @@ jobs:
       - name: Build Pytest Coverage File
         timeout-minutes: 100
         run: |
-          # Run the full test suite with coverage
-          docker compose -f test.yml run django coverage run -m pytest -x -v
-          # Generate XML coverage report (configuration in setup.cfg handles temporary files)
-          docker compose -f test.yml run django coverage xml
+          # Run the full test suite with coverage using parallel workers
+          # pytest-cov with pytest-xdist handles coverage merging automatically
+          docker compose -f test.yml run django pytest --cov --cov-report=xml -n 4 --dist loadscope -v
 
       - name: Verify Coverage File Exists
         run: |
