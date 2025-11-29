@@ -10,6 +10,7 @@ from unittest import mock
 from unittest.mock import MagicMock
 from urllib.parse import quote
 
+import pytest
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from graphql_relay import to_global_id
@@ -21,10 +22,14 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.serial
 class GraphQLJWTTokenAuthMiddlewareTestCase(WebsocketFixtureBaseTestCase):
     """
     Test class illustrating how GraphQLJWTTokenAuthMiddleware is tested in a WebSocket context.
     Uses the WebsocketFixtureBaseTestCase to provide test data and token handling.
+
+    Marked as serial because websocket tests use async event loops that
+    can conflict with pytest-xdist workers.
     """
 
     @mock.patch(

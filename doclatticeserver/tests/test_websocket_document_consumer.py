@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import patch
 from urllib.parse import quote
 
+import pytest
 import vcr
 from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
@@ -27,11 +28,15 @@ vcr_log = logging.getLogger("vcr")
 vcr_log.setLevel(logging.WARNING)
 
 
+@pytest.mark.serial
 @override_settings(USE_AUTH0=False)
 class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
     """
     End-to-end websocket test for the refactored DocumentQueryConsumer.
     Tests both new and loaded conversations, and a two-turn interaction.
+
+    Marked as serial because websocket tests use async event loops that
+    can conflict with pytest-xdist workers.
     """
 
     maxDiff = None
