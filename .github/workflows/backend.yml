@@ -48,7 +48,7 @@ jobs:
         run: pre-commit run --all-files
 
   pytest:
-    runs-on: larger
+    runs-on: yuge
     timeout-minutes: 180
     permissions:
       contents: read
