@@ -17,7 +17,7 @@
 | Phase 2 | Shared useAgentChat() hook | ✅ Complete |
 | Phase 3 | Agent mention parsing | ✅ Complete |
 | Phase 4 | Agent autocomplete GraphQL | ✅ Complete |
-| Phase 5 | Agent response generation | ⏳ Pending |
+| Phase 5 | Agent response generation | ✅ Complete |
 | Phase 6 | AgentMentionPicker component | ⏳ Pending |
 | Phase 7 | Thread WebSocket + streaming | ⏳ Pending |
 | Phase 8 | Backend and frontend tests | ⏳ Pending |
@@ -72,6 +72,15 @@
 - Added `slug` field to `AgentConfigurationType` fields list
 - Added `mention_format` computed field (returns `@agent:{slug}`)
 - Query supports `text_search` (searches name, slug, description) and `corpus_id` filtering
+
+**Phase 5:**
+- Created `opencontractserver/tasks/agent_tasks.py` with Celery tasks:
+  - `generate_agent_response()` - generates agent response with streaming
+  - `trigger_agent_responses_for_message()` - triggers responses for all mentioned agents
+- Created `config/websocket/consumers/thread_updates.py` - WebSocket consumer for thread updates
+  - Clients subscribe with `conversation_id` to receive streaming updates
+  - Broadcasts: AGENT_STREAM_START, AGENT_STREAM_TOKEN, AGENT_TOOL_CALL, AGENT_STREAM_COMPLETE, AGENT_STREAM_ERROR
+- Added `/ws/thread-updates/` route to `config/asgi.py`
 
 ---
 
