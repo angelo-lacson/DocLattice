@@ -24,7 +24,6 @@ Agent Selection Logic:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import urllib.parse
@@ -420,7 +419,10 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             # Corpus-level agent
             agent_kwargs["corpus"] = self.corpus_id
 
-            if hasattr(self.corpus, "preferred_embedder") and self.corpus.preferred_embedder:
+            if (
+                hasattr(self.corpus, "preferred_embedder")
+                and self.corpus.preferred_embedder
+            ):
                 agent_kwargs["embedder"] = self.corpus.preferred_embedder
 
             self.agent = await agents.for_corpus(
@@ -495,9 +497,8 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
         """Handle a single agent event and send appropriate WebSocket message."""
 
         # Ensure ASYNC_START is sent once we have message IDs
-        if (
-            getattr(event, "user_message_id", None) is not None
-            and not hasattr(self, "_sent_start")
+        if getattr(event, "user_message_id", None) is not None and not hasattr(
+            self, "_sent_start"
         ):
             await self.send_standard_message(
                 msg_type="ASYNC_START",
