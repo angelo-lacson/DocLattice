@@ -6,10 +6,13 @@ new mixin-based approach to register embeddings (e.g. model_instance.add_embeddi
 
 import random
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from opencontractserver.annotations.models import Annotation, Note
 from opencontractserver.documents.models import Document
+
+User = get_user_model()
 
 # We no longer need to directly import Embedding for creation, unless required for other tests
 # from opencontractserver.annotations.models import Embedding
@@ -50,38 +53,43 @@ class TestEmbeddingSearch(TestCase):
           - doc2, anno2, note2: some with "openai/text-embedding-ada-002"
             and some with "some-other-embedder" to verify embedder-based filtering.
         """
+        # Create a test user first
+        self.user = User.objects.create_user(
+            username="testuser", password="testpass123"
+        )
+
         # Create some "parent" objects
         self.doc1 = Document.objects.create(
-            title="Document One", creator_id=1, is_public=True
+            title="Document One", creator=self.user, is_public=True
         )
         self.doc2 = Document.objects.create(
-            title="Document Two", creator_id=1, is_public=True
+            title="Document Two", creator=self.user, is_public=True
         )
 
         self.anno1 = Annotation.objects.create(
             document=self.doc1,
             page=1,
-            creator_id=1,
+            creator=self.user,
             is_public=True,
             raw_text="First annotation text",
         )
         self.anno2 = Annotation.objects.create(
             document=self.doc2,
             page=2,
-            creator_id=1,
+            creator=self.user,
             is_public=True,
             raw_text="Second annotation text",
         )
 
         self.note1 = Note.objects.create(
             document=self.doc1,
-            creator_id=1,
+            creator=self.user,
             is_public=True,
             title="Note #1",
         )
         self.note2 = Note.objects.create(
             document=self.doc2,
-            creator_id=1,
+            creator=self.user,
             is_public=True,
             title="Note #2",
         )

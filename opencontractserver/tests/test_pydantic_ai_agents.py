@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.test import TestCase, override_settings
@@ -110,8 +111,13 @@ class _DummyStreamResult:
         return []
 
 
+@pytest.mark.serial
 class TestPydanticAIAgents(TestCase):
-    """Test suite for PydanticAI agent implementations."""
+    """Test suite for PydanticAI agent implementations.
+
+    Marked as serial because PydanticAI's run_sync() requires an active event loop,
+    which pytest-xdist workers may close between test batches.
+    """
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -678,8 +684,12 @@ class TestPydanticAIAgents(TestCase):
         self.assertEqual(len(embedding_request.query_embedding), 384)
 
 
+@pytest.mark.serial
 class TestPydanticAIAgentsCoverage(TestCase):
-    """Additional tests to improve coverage of pydantic_ai_agents.py"""
+    """Additional tests to improve coverage of pydantic_ai_agents.py.
+
+    Marked as serial because PydanticAI's run_sync() requires an active event loop.
+    """
 
     @classmethod
     def setUpTestData(cls) -> None:
