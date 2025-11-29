@@ -7,7 +7,6 @@ worker isolation for tests.
 
 import asyncio
 import os
-import sys
 
 import pytest
 
