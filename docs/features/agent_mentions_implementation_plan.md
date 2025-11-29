@@ -14,9 +14,9 @@
 |-------|-------------|--------|
 | Phase 0 | Default global agents + slug field | ✅ Complete |
 | Phase 1 | Unified backend WebSocket consumer | ✅ Complete |
-| Phase 2 | Shared useAgentChat() hook | 🔄 In Progress |
-| Phase 3 | Agent mention parsing | ⏳ Pending |
-| Phase 4 | Agent autocomplete GraphQL | ⏳ Pending |
+| Phase 2 | Shared useAgentChat() hook | ✅ Complete |
+| Phase 3 | Agent mention parsing | ✅ Complete |
+| Phase 4 | Agent autocomplete GraphQL | ✅ Complete |
 | Phase 5 | Agent response generation | ⏳ Pending |
 | Phase 6 | AgentMentionPicker component | ⏳ Pending |
 | Phase 7 | Thread WebSocket + streaming | ⏳ Pending |
@@ -58,6 +58,20 @@
 | `frontend/src/hooks/useAgentChat.ts` | Created | Shared chat hook (~550 lines) |
 | `frontend/src/components/chat/get_websockets.ts` | Modified | Added `getUnifiedAgentWebSocket()` |
 | `docs/features/agent_mentions_implementation_plan.md` | Modified | Updated progress tracking |
+
+**Phase 3:**
+- Added `mentioned_agents` M2M field to `ChatMessage` model
+- Created migration `0011_add_mentioned_agents_field.py`
+- Updated `mention_parser.py` to parse agent URL patterns:
+  - `/agents/{agentSlug}` for global agents
+  - `/c/{userIdent}/{corpusIdent}/agents/{agentSlug}` for corpus-scoped agents
+- Updated `link_message_to_resources()` to link mentioned agents
+
+**Phase 4:**
+- Added `search_agents_for_mention` GraphQL query for autocomplete
+- Added `slug` field to `AgentConfigurationType` fields list
+- Added `mention_format` computed field (returns `@agent:{slug}`)
+- Query supports `text_search` (searches name, slug, description) and `corpus_id` filtering
 
 ---
 
