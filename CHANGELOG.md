@@ -5,9 +5,40 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-11-24
+## [Unreleased] - 2025-11-27
 
 ### Added
+
+#### v3.0.0.b3 Migration Tools (Issue #654)
+- **New management command: `validate_v3_migration`**
+  - Pre-flight and post-migration validation for dual-tree versioning and structural annotations
+  - Checks: version_tree_id, is_current, DocumentPath records, XOR constraints, structural set uniqueness
+  - Reports structural migration candidates
+  - Options: `--verbose`, `--fix`
+  - Location: `opencontractserver/documents/management/commands/validate_v3_migration.py`
+
+- **New management command: `migrate_structural_annotations`**
+  - Optional command to migrate structural annotations to shared StructuralAnnotationSet objects
+  - Creates StructuralAnnotationSet by content hash (pdf_file_hash) for storage efficiency
+  - Moves structural annotations/relationships from document FK to structural_set FK
+  - Documents with same hash share StructuralAnnotationSet (O(1) storage vs O(n))
+  - Options: `--dry-run`, `--document-id`, `--corpus-id`, `--batch-size`, `--verbose`, `--force`
+  - Location: `opencontractserver/annotations/management/commands/migrate_structural_annotations.py`
+
+- **Comprehensive migration test suite** (`opencontractserver/tests/test_v3_migration.py`)
+  - DocumentVersioningMigrationTests: version_tree_id, is_current, DocumentPath creation
+  - XORConstraintTests: Annotation/Relationship XOR constraint validation
+  - StructuralMigrationCommandTests: Management command functionality, idempotency
+  - RollbackAndEdgeCaseTests: Edge cases, error handling, data integrity
+  - ValidationCommandTests: validate_v3_migration command testing
+  - 25+ human-readable tests covering all migration scenarios
+
+- **Migration documentation** (`docs/migrations/v3_upgrade_guide.md`)
+  - Pre-upgrade checklist with backup recommendations
+  - Step-by-step migration instructions for production and development
+  - Optional structural annotation migration guide
+  - Rollback procedure documentation
+  - FAQ addressing common concerns (XOR constraint safety, storage savings, incremental migration)
 
 #### Discovery Landing Page (New)
 - **Beautiful, modern landing page** as the main entry point for the application
