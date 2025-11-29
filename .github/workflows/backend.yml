@@ -58,17 +58,6 @@ jobs:
       - name: Checkout Code Repository
         uses: actions/checkout@v5.0.0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ hashFiles('**/Dockerfile', '**/requirements/*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
       - name: Store Codecov Env Flags
         run: |
           # use bash variable expression to get the substring
@@ -76,11 +65,7 @@ jobs:
           echo "$ci_env"
 
       - name: Build the Stack
-        run: |
-          docker compose -f test.yml build --build-arg BUILDKIT_INLINE_CACHE=1
-        env:
-          DOCKER_BUILDKIT: 1
-          COMPOSE_DOCKER_CLI_BUILD: 1
+        run: docker compose -f test.yml build
 
       - name: Run DB Migrations
         run:  docker compose -f test.yml run --rm django python manage.py migrate
