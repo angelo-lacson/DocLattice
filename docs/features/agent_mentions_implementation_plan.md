@@ -3,7 +3,7 @@
 **Issue Reference:** Extends #635 (Configurable Agent Profiles)
 **Branch:** `feature/agent-mentions-in-conversations`
 **Created:** 2025-11-29
-**Status:** In Progress
+**Status:** Complete
 **Updated:** 2025-11-29
 
 ---
@@ -20,7 +20,7 @@
 | Phase 5 | Agent response generation | ✅ Complete |
 | Phase 6 | AgentMentionPicker component | ✅ Complete |
 | Phase 7 | Thread WebSocket + streaming | ✅ Complete |
-| Phase 8 | Backend and frontend tests | ⏳ Pending |
+| Phase 8 | Backend and frontend tests | ✅ Complete |
 
 ### Completed Work
 
@@ -117,6 +117,30 @@
   - Heartbeat/ping-pong for connection health
   - Callbacks for streaming events (onStreamStart, onStreamToken, onToolCall, onStreamComplete, onError)
   - Returns connectionState, sessionId, streamingResponses Map
+
+**Phase 8:**
+- Added `AgentMentionParserTestCase` to `test_mention_parser.py` (6 tests):
+  - `test_parse_global_agent_mention` - Parses `@agent:slug` format
+  - `test_parse_corpus_scoped_agent_mention` - Parses `/c/user/corpus/agents/slug` format
+  - `test_parse_multiple_agent_mentions` - Parses multiple agent mentions in content
+  - `test_parse_mixed_mentions` - Parses agents with users and resources
+  - `test_invalid_agent_url_not_parsed` - Invalid URLs are ignored
+  - `test_empty_content_has_empty_agents` - Empty content returns empty list
+- Added `AgentMentionLinkingTestCase` to `test_mention_parser.py` (7 tests):
+  - `test_link_global_agent` - Links global agent by slug
+  - `test_link_corpus_scoped_agent` - Links corpus-scoped agent
+  - `test_link_multiple_agents` - Links multiple agents
+  - `test_link_mixed_valid_and_invalid_agents` - Only valid agents linked
+  - `test_nonexistent_agent_not_linked` - Non-existent slugs ignored
+  - `test_inactive_agent_not_linked` - Inactive agents not linked
+  - `test_wrong_corpus_agent_not_linked` - Wrong corpus agents ignored
+- Added `TestSearchAgentsForMention` to `test_agents.py` (6 tests):
+  - `test_search_agents_returns_global_agents` - Returns global agents
+  - `test_search_agents_with_corpus_returns_corpus_and_global` - Filters by corpus
+  - `test_search_agents_text_search_filters` - Text search works
+  - `test_search_agents_excludes_inactive` - Inactive excluded
+  - `test_search_agents_search_by_description` - Search by description
+  - `test_search_agents_empty_query_returns_all_visible` - All visible returned
 
 ---
 
