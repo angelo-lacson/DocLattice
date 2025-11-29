@@ -818,6 +818,108 @@ class ValidationCommandTests(TransactionTestCase):
         self.assertIn("[2/7]", output)
 
 
+class ValidationCommandFailureTests(TransactionTestCase):
+    """
+    Test the validate_v3_migration command additional scenarios.
+
+    Note: Some failure scenarios (like missing version_tree_id) cannot be tested
+    directly because the database enforces NOT NULL constraints. These tests
+    focus on testable scenarios.
+    """
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(
+            username="validation_failure_user", password="testpass123"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Validation Failure Corpus", creator=self.user
+        )
+        self.label = AnnotationLabel.objects.create(
+            text="Validation Failure Label",
+            label_type=LabelType.TOKEN_LABEL,
+            creator=self.user,
+        )
+
+    def test_validation_with_fix_flag_runs_successfully(self):
+        """--fix flag runs without error when no documents need fixing."""
+        # Create a valid document (will have version_tree_id auto-assigned)
+        Document.objects.create(
+            title="Valid Doc",
+            pdf_file_hash="valid_hash",
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", "--fix", stdout=out)
+
+        output = out.getvalue()
+        # Should pass since all documents already have version_tree_id
+        self.assertIn("PASSED", output)
+
+    def test_validation_fix_verbose_mode(self):
+        """--fix --verbose runs and shows check details."""
+        Document.objects.create(
+            title="Verbose Fix Doc",
+            pdf_file_hash="verbose_fix_hash",
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", "--fix", "--verbose", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("[1/7]", output)  # Shows progress
+        self.assertIn("PASSED", output)
+
+    def test_validation_shows_all_check_numbers(self):
+        """Validation output shows all 7 check numbers."""
+        out = io.StringIO()
+        call_command("validate_v3_migration", "--verbose", stdout=out)
+
+        output = out.getvalue()
+        for i in range(1, 8):
+            self.assertIn(f"[{i}/7]", output)
+
+    def test_validation_summary_shows_all_checks(self):
+        """Summary includes all check names."""
+        out = io.StringIO()
+        call_command("validate_v3_migration", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("Document.version_tree_id", output)
+        self.assertIn("Document.is_current", output)
+        self.assertIn("DocumentPath records", output)
+        self.assertIn("Annotation XOR constraint", output)
+        self.assertIn("Relationship XOR constraint", output)
+        self.assertIn("StructuralAnnotationSet uniqueness", output)
+
+    def test_validation_with_non_current_documents(self):
+        """Validation handles documents with is_current=False correctly."""
+        # Create a "versioned" document pair
+        parent_doc = Document.objects.create(
+            title="Parent Doc",
+            pdf_file_hash="parent_hash",
+            creator=self.user,
+        )
+        # Mark parent as non-current (simulating a version update)
+        Document.objects.filter(pk=parent_doc.pk).update(is_current=False)
+
+        Document.objects.create(
+            title="Child Doc",
+            pdf_file_hash="child_hash",
+            parent=parent_doc,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", "--verbose", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("non-current", output.lower())
+        self.assertIn("PASSED", output)
+
+
 class MigrationCommandErrorTests(TransactionTestCase):
     """
     Test migration command error handling paths.
@@ -932,3 +1034,173 @@ class MigrationCommandErrorTests(TransactionTestCase):
         self.assertIn("DRY-RUN", output)
         # Stats should show set_reused
         self.assertIn("reused", output.lower())
+
+    def test_migrate_verbose_reuse_existing_set_non_dry_run(self):
+        """--verbose shows when existing StructuralAnnotationSet is reused in actual mode."""
+        doc = Document.objects.create(
+            title="Verbose Reuse Non-Dry Doc",
+            pdf_file_hash="verbose_reuse_nondry_hash",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural for verbose reuse non-dry",
+            structural=True,
+            creator=self.user,
+        )
+
+        # Pre-create the structural set
+        StructuralAnnotationSet.objects.create(
+            content_hash=doc.pdf_file_hash,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command(
+            "migrate_structural_annotations",
+            "--verbose",
+            f"--system-user-id={self.user.id}",
+            stdout=out,
+        )
+
+        output = out.getvalue()
+        self.assertIn("Reusing existing StructuralAnnotationSet", output)
+
+    def test_migrate_structural_relationships_moved_to_set(self):
+        """Command migrates structural relationships along with annotations."""
+        doc = Document.objects.create(
+            title="Doc with Structural Rels",
+            pdf_file_hash="struct_rel_hash",
+            creator=self.user,
+        )
+
+        # Create structural annotations
+        source_annot = Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Source structural",
+            structural=True,
+            creator=self.user,
+        )
+        target_annot = Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=2,
+            raw_text="Target structural",
+            structural=True,
+            creator=self.user,
+        )
+
+        # Create structural relationship
+        struct_rel = Relationship.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            relationship_label=self.label,
+            structural=True,
+            creator=self.user,
+        )
+        struct_rel.source_annotations.add(source_annot)
+        struct_rel.target_annotations.add(target_annot)
+
+        out = io.StringIO()
+        call_command(
+            "migrate_structural_annotations",
+            "--verbose",
+            f"--system-user-id={self.user.id}",
+            stdout=out,
+        )
+
+        # Verify relationship was migrated
+        struct_rel.refresh_from_db()
+        self.assertIsNone(struct_rel.document)
+        self.assertIsNotNone(struct_rel.structural_set)
+
+        output = out.getvalue()
+        self.assertIn("relationships", output.lower())
+
+    def test_migrate_verbose_shows_relationship_counts(self):
+        """--verbose shows counts for both annotations and relationships."""
+        doc = Document.objects.create(
+            title="Verbose Counts Doc",
+            pdf_file_hash="verbose_counts_hash",
+            creator=self.user,
+        )
+
+        # Create annotations and relationships
+        annot1 = Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Annotation 1",
+            structural=True,
+            creator=self.user,
+        )
+        annot2 = Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=2,
+            raw_text="Annotation 2",
+            structural=True,
+            creator=self.user,
+        )
+
+        rel = Relationship.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            relationship_label=self.label,
+            structural=True,
+            creator=self.user,
+        )
+        rel.source_annotations.add(annot1)
+        rel.target_annotations.add(annot2)
+
+        out = io.StringIO()
+        call_command(
+            "migrate_structural_annotations",
+            "--verbose",
+            f"--system-user-id={self.user.id}",
+            stdout=out,
+        )
+
+        output = out.getvalue()
+        self.assertIn("structural annotations", output.lower())
+        self.assertIn("structural relationships", output.lower())
+
+    def test_migrate_summary_shows_correct_totals(self):
+        """Summary output shows correct counts for all stats."""
+        doc = Document.objects.create(
+            title="Summary Test Doc",
+            pdf_file_hash="summary_test_hash",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Summary structural",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command(
+            "migrate_structural_annotations",
+            f"--system-user-id={self.user.id}",
+            stdout=out,
+        )
+
+        output = out.getvalue()
+        self.assertIn("MIGRATION SUMMARY", output)
+        self.assertIn("Documents processed:", output)
+        self.assertIn("StructuralAnnotationSets created:", output)
+        self.assertIn("Annotations migrated:", output)
+        self.assertIn("Successfully migrated", output)
