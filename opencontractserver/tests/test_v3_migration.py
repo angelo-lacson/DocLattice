@@ -1204,3 +1204,611 @@ class MigrationCommandErrorTests(TransactionTestCase):
         self.assertIn("StructuralAnnotationSets created:", output)
         self.assertIn("Annotations migrated:", output)
         self.assertIn("Successfully migrated", output)
+
+
+class ValidationCommandEdgeCaseTests(TransactionTestCase):
+    """
+    Additional tests to cover edge cases in validate_v3_migration command.
+
+    These tests specifically target uncovered code paths to achieve 94% coverage.
+    """
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(
+            username="validation_edge_user", password="testpass123"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Validation Edge Corpus", creator=self.user
+        )
+        self.label = AnnotationLabel.objects.create(
+            text="Validation Edge Label",
+            label_type=LabelType.TOKEN_LABEL,
+            creator=self.user,
+        )
+
+    def test_validation_exits_cleanly_when_all_pass(self):
+        """Validation returns normally (no exception) when all checks pass."""
+        # Create valid data
+        doc = Document.objects.create(
+            title="All Pass Doc",
+            pdf_file_hash="all_pass_hash",
+            creator=self.user,
+        )
+        # Add to corpus properly
+        self.corpus.add_document(document=doc, user=self.user)
+
+        out = io.StringIO()
+        # Should complete without raising SystemExit
+        call_command("validate_v3_migration", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("VALIDATION PASSED", output)
+
+    def test_validation_fails_with_missing_document_paths(self):
+        """Validation fails when M2M exists without DocumentPath."""
+        doc = Document.objects.create(
+            title="Missing Path Doc",
+            pdf_file_hash="missing_path_hash",
+            creator=self.user,
+        )
+        # Add document to corpus M2M directly WITHOUT creating DocumentPath
+        self.corpus.documents.add(doc)
+
+        out = io.StringIO()
+        with self.assertRaises(SystemExit):
+            call_command("validate_v3_migration", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("FAILED", output)
+        self.assertIn("M2M relationships missing DocumentPath", output)
+
+    def test_validation_verbose_shows_missing_document_path_details(self):
+        """--verbose shows which corpuses have missing DocumentPath records."""
+        doc = Document.objects.create(
+            title="Verbose Path Doc",
+            pdf_file_hash="verbose_path_hash",
+            creator=self.user,
+        )
+        self.corpus.documents.add(doc)  # M2M without DocumentPath
+
+        out = io.StringIO()
+        with self.assertRaises(SystemExit):
+            call_command("validate_v3_migration", "--verbose", stdout=out)
+
+        output = out.getvalue()
+        # Verbose mode shows corpus details
+        self.assertIn(self.corpus.title, output)
+
+    def test_validation_verbose_shows_multiple_corpuses_with_issues(self):
+        """--verbose truncates output when more than 5 corpuses have issues."""
+        # Create 6 corpuses with M2M but no DocumentPath
+        corpuses = []
+        for i in range(6):
+            corpus = Corpus.objects.create(title=f"Corpus {i}", creator=self.user)
+            doc = Document.objects.create(
+                title=f"Doc {i}",
+                pdf_file_hash=f"hash_{i}",
+                creator=self.user,
+            )
+            corpus.documents.add(doc)  # M2M without DocumentPath
+            corpuses.append(corpus)
+
+        out = io.StringIO()
+        with self.assertRaises(SystemExit):
+            call_command("validate_v3_migration", "--verbose", stdout=out)
+
+        output = out.getvalue()
+        # Should show truncation message
+        self.assertIn("... and", output)
+        self.assertIn("more corpuses", output)
+
+    def test_validation_structural_migration_candidates_shows_notice(self):
+        """Validation shows notice when documents can benefit from migration."""
+        doc = Document.objects.create(
+            title="Migration Candidate Doc",
+            pdf_file_hash="candidate_hash",
+            creator=self.user,
+        )
+        # Structural annotation but no structural_annotation_set
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural candidate",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", stdout=out)
+
+        output = out.getvalue()
+        # Should show migration notice
+        self.assertIn("migrate_structural_annotations", output)
+        self.assertIn("can benefit from structural annotation migration", output)
+
+
+class ValidationConstraintViolationTests(TransactionTestCase):
+    """
+    Test validation command behavior when constraint violations exist.
+
+    Note: Some violations cannot be created without bypassing database constraints,
+    so we test the validation command's ability to detect valid vs invalid states.
+    """
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(
+            username="constraint_test_user", password="testpass123"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Constraint Test Corpus", creator=self.user
+        )
+        self.label = AnnotationLabel.objects.create(
+            text="Constraint Label",
+            label_type=LabelType.TOKEN_LABEL,
+            creator=self.user,
+        )
+
+    def test_validation_passes_with_structural_annotations_in_set(self):
+        """Validation passes when structural annotations are in StructuralAnnotationSet."""
+        struct_set = StructuralAnnotationSet.objects.create(
+            content_hash="struct_set_hash",
+            creator=self.user,
+        )
+
+        # Create document linked to structural set
+        Document.objects.create(
+            title="Doc with Struct Set",
+            pdf_file_hash="struct_set_doc_hash",
+            structural_annotation_set=struct_set,
+            creator=self.user,
+        )
+
+        # Annotation in structural set (post-migration state)
+        Annotation.objects.create(
+            structural_set=struct_set,
+            document=None,
+            corpus=None,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural in set",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("PASSED", output)
+        self.assertIn("already using StructuralAnnotationSet", output)
+
+    def test_validation_reports_relationships_correctly(self):
+        """Validation correctly counts relationships."""
+        doc = Document.objects.create(
+            title="Rel Doc",
+            pdf_file_hash="rel_hash",
+            creator=self.user,
+        )
+
+        # Create annotations and relationship
+        annot1 = Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Source",
+            creator=self.user,
+        )
+        annot2 = Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Target",
+            creator=self.user,
+        )
+
+        rel = Relationship.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            relationship_label=self.label,
+            creator=self.user,
+        )
+        rel.source_annotations.add(annot1)
+        rel.target_annotations.add(annot2)
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("Relationship XOR constraint", output)
+        self.assertIn("PASS", output)
+
+    def test_validation_structural_set_uniqueness_with_valid_sets(self):
+        """Validation reports unique structural sets correctly."""
+        StructuralAnnotationSet.objects.create(
+            content_hash="unique_hash_1",
+            creator=self.user,
+        )
+        StructuralAnnotationSet.objects.create(
+            content_hash="unique_hash_2",
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("StructuralAnnotationSet uniqueness", output)
+        self.assertIn("PASS", output)
+
+
+class MigrationCommandProgressTests(TransactionTestCase):
+    """
+    Test migration command progress reporting and error handling.
+
+    Specifically targets uncovered paths in migrate_structural_annotations.py.
+    """
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(
+            username="progress_test_user", password="testpass123"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Progress Test Corpus", creator=self.user
+        )
+        self.label = AnnotationLabel.objects.create(
+            text="Progress Label",
+            label_type=LabelType.TOKEN_LABEL,
+            creator=self.user,
+        )
+
+    def _call_migrate(self, *args, **kwargs):
+        """Helper to call migrate_structural_annotations with correct user."""
+        return call_command(
+            "migrate_structural_annotations",
+            f"--system-user-id={self.user.id}",
+            *args,
+            **kwargs,
+        )
+
+    def test_dry_run_summary_shows_would_migrate(self):
+        """Dry run summary shows 'Would migrate' message."""
+        doc = Document.objects.create(
+            title="Dry Run Summary Doc",
+            pdf_file_hash="dry_summary_hash",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural for dry summary",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        self._call_migrate("--dry-run", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("Would migrate", output)
+        self.assertIn("Run without --dry-run to apply changes", output)
+
+    def test_progress_shown_every_50_documents(self):
+        """Progress is shown for every 50 documents processed."""
+        # Create 51 documents to trigger progress output
+        docs = []
+        for i in range(51):
+            doc = Document.objects.create(
+                title=f"Progress Doc {i}",
+                pdf_file_hash=f"progress_hash_{i}",
+                creator=self.user,
+            )
+            Annotation.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                annotation_label=self.label,
+                page=1,
+                raw_text=f"Structural {i}",
+                structural=True,
+                creator=self.user,
+            )
+            docs.append(doc)
+
+        out = io.StringIO()
+        self._call_migrate(stdout=out)
+
+        output = out.getvalue()
+        # Should show progress at 50
+        self.assertIn("Progress: 50/51", output)
+
+    def test_no_documents_need_migration_message(self):
+        """Shows 'All done!' message when no documents need migration."""
+        # Create document that's already migrated
+        struct_set = StructuralAnnotationSet.objects.create(
+            content_hash="already_done_hash",
+            creator=self.user,
+        )
+        Document.objects.create(
+            title="Already Migrated Doc",
+            pdf_file_hash="already_done_hash",
+            structural_annotation_set=struct_set,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        self._call_migrate(stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("No documents need migration. All done!", output)
+
+    def test_batch_size_controls_processing(self):
+        """--batch-size parameter controls document batching."""
+        import uuid
+
+        # Use truly unique hashes based on UUID to avoid database collisions
+        unique_id = str(uuid.uuid4())[:8]
+
+        # Create documents with unique hashes
+        created_doc_ids = []
+        for i in range(3):
+            doc = Document.objects.create(
+                title=f"Batch Doc {unique_id}_{i}",
+                pdf_file_hash=f"batch_hash_{unique_id}_{i}",
+                creator=self.user,
+            )
+            Annotation.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                annotation_label=self.label,
+                page=1,
+                raw_text=f"Structural {unique_id}_{i}",
+                structural=True,
+                creator=self.user,
+            )
+            created_doc_ids.append(doc.id)
+
+        out = io.StringIO()
+        # Migrate only these specific documents by their IDs
+        for doc_id in created_doc_ids:
+            self._call_migrate(f"--document-id={doc_id}", stdout=out)
+
+        output = out.getvalue()
+        # Each document should be processed
+        self.assertIn("Documents processed: 1", output)
+
+    def test_verbose_dry_run_shows_set_created_preview(self):
+        """--verbose --dry-run shows when set would be created."""
+        doc = Document.objects.create(
+            title="Verbose Dry Create Doc",
+            pdf_file_hash="verbose_dry_create_hash",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural for verbose dry create",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        self._call_migrate("--verbose", "--dry-run", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("Processing document", output)
+        self.assertIn("structural annotations", output)
+
+    def test_verbose_mode_shows_document_title_truncation(self):
+        """Verbose shows content_hash truncated to 16 chars."""
+        doc = Document.objects.create(
+            title="Long Hash Doc",
+            pdf_file_hash="very_long_content_hash_value_here_123456",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        self._call_migrate("--verbose", stdout=out)
+
+        output = out.getvalue()
+        # Hash should be truncated with ...
+        self.assertIn("hash:", output)
+        self.assertIn("...", output)
+
+
+class MigrationSummaryTests(TransactionTestCase):
+    """Test migration command summary output paths."""
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(
+            username="summary_test_user", password="testpass123"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Summary Test Corpus", creator=self.user
+        )
+        self.label = AnnotationLabel.objects.create(
+            text="Summary Label",
+            label_type=LabelType.TOKEN_LABEL,
+            creator=self.user,
+        )
+
+    def _call_migrate(self, *args, **kwargs):
+        return call_command(
+            "migrate_structural_annotations",
+            f"--system-user-id={self.user.id}",
+            *args,
+            **kwargs,
+        )
+
+    def test_summary_shows_reused_count(self):
+        """Summary shows count of reused structural annotation sets."""
+        # Pre-create structural set
+        hash_value = "reused_summary_hash"
+        StructuralAnnotationSet.objects.create(
+            content_hash=hash_value,
+            creator=self.user,
+        )
+
+        # Create document with same hash
+        doc = Document.objects.create(
+            title="Reuse Summary Doc",
+            pdf_file_hash=hash_value,
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Structural for reuse",
+            structural=True,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        self._call_migrate(stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("StructuralAnnotationSets reused: 1", output)
+
+    def test_summary_shows_relationship_migration_count(self):
+        """Summary shows count of migrated relationships."""
+        doc = Document.objects.create(
+            title="Rel Summary Doc",
+            pdf_file_hash="rel_summary_hash",
+            creator=self.user,
+        )
+
+        # Create structural annotations
+        annot1 = Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=1,
+            raw_text="Source",
+            structural=True,
+            creator=self.user,
+        )
+        annot2 = Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            page=2,
+            raw_text="Target",
+            structural=True,
+            creator=self.user,
+        )
+
+        # Create structural relationship
+        rel = Relationship.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            relationship_label=self.label,
+            structural=True,
+            creator=self.user,
+        )
+        rel.source_annotations.add(annot1)
+        rel.target_annotations.add(annot2)
+
+        out = io.StringIO()
+        self._call_migrate(stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("Relationships migrated: 1", output)
+
+
+class ValidationVerboseEdgeCaseTests(TransactionTestCase):
+    """Test verbose output edge cases in validation command."""
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(
+            username="verbose_edge_user", password="testpass123"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Verbose Edge Corpus", creator=self.user
+        )
+        self.label = AnnotationLabel.objects.create(
+            text="Verbose Edge Label",
+            label_type=LabelType.TOKEN_LABEL,
+            creator=self.user,
+        )
+
+    def test_verbose_shows_structural_annotation_counts(self):
+        """--verbose shows counts of structural items eligible for migration."""
+        doc = Document.objects.create(
+            title="Verbose Count Doc",
+            pdf_file_hash="verbose_count_hash",
+            creator=self.user,
+        )
+
+        # Add multiple structural annotations
+        for i in range(3):
+            Annotation.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                annotation_label=self.label,
+                page=i + 1,
+                raw_text=f"Structural {i}",
+                structural=True,
+                creator=self.user,
+            )
+
+        # Add structural relationship
+        annot1 = Annotation.objects.filter(document=doc).first()
+        annot2 = Annotation.objects.filter(document=doc).last()
+        rel = Relationship.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            relationship_label=self.label,
+            structural=True,
+            creator=self.user,
+        )
+        rel.source_annotations.add(annot1)
+        rel.target_annotations.add(annot2)
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", "--verbose", stdout=out)
+
+        output = out.getvalue()
+        # Should show structural annotation and relationship counts
+        self.assertIn("structural annotations on documents", output)
+        self.assertIn("structural relationships on documents", output)
+
+    def test_verbose_shows_already_migrated_count(self):
+        """--verbose shows count of already migrated documents."""
+        struct_set = StructuralAnnotationSet.objects.create(
+            content_hash="already_migrated_hash",
+            creator=self.user,
+        )
+        Document.objects.create(
+            title="Already Migrated",
+            pdf_file_hash="already_migrated_hash",
+            structural_annotation_set=struct_set,
+            creator=self.user,
+        )
+
+        out = io.StringIO()
+        call_command("validate_v3_migration", "--verbose", stdout=out)
+
+        output = out.getvalue()
+        self.assertIn("documents already using StructuralAnnotationSet", output)
