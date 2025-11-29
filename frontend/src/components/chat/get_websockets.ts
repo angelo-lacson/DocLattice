@@ -186,3 +186,39 @@ export function getUnifiedAgentWebSocket(
 
   return url;
 }
+
+/**
+ * Get WebSocket URL for thread updates (agent mention streaming responses).
+ *
+ * This endpoint is used for receiving streaming updates when agents are
+ * @mentioned in conversation messages. The thread updates consumer is
+ * separate from the main agent chat consumer.
+ *
+ * @param conversationId - The conversation ID to subscribe to for updates.
+ * @param token - Authentication token from the user session.
+ * @returns WebSocket URL with query parameters.
+ */
+export function getThreadUpdatesWebSocket(
+  conversationId: string,
+  token?: string
+): string {
+  const wsBaseUrl = resolveWsBaseUrl();
+
+  const normalizedBaseUrl = wsBaseUrl
+    .replace(/\/+$/, "")
+    .replace(/^http/, "ws")
+    .replace(/^https/, "wss");
+
+  let url = `${normalizedBaseUrl}/ws/thread-updates/`;
+  const params: string[] = [];
+
+  params.push(`conversation_id=${encodeURIComponent(conversationId)}`);
+
+  if (token) {
+    params.push(`token=${encodeURIComponent(token)}`);
+  }
+
+  url += `?${params.join("&")}`;
+
+  return url;
+}

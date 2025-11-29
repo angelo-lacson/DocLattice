@@ -18,8 +18,8 @@
 | Phase 3 | Agent mention parsing | ✅ Complete |
 | Phase 4 | Agent autocomplete GraphQL | ✅ Complete |
 | Phase 5 | Agent response generation | ✅ Complete |
-| Phase 6 | AgentMentionPicker component | ⏳ Pending |
-| Phase 7 | Thread WebSocket + streaming | ⏳ Pending |
+| Phase 6 | AgentMentionPicker component | ✅ Complete |
+| Phase 7 | Thread WebSocket + streaming | ✅ Complete |
 | Phase 8 | Backend and frontend tests | ⏳ Pending |
 
 ### Completed Work
@@ -58,6 +58,17 @@
 | `frontend/src/hooks/useAgentChat.ts` | Created | Shared chat hook (~550 lines) |
 | `frontend/src/components/chat/get_websockets.ts` | Modified | Added `getUnifiedAgentWebSocket()` |
 | `docs/features/agent_mentions_implementation_plan.md` | Modified | Updated progress tracking |
+| `opencontractserver/conversations/models.py` | Modified | Added `mentioned_agents` M2M field |
+| `opencontractserver/conversations/migrations/0011_add_mentioned_agents_field.py` | Created | Migration for M2M field |
+| `opencontractserver/utils/mention_parser.py` | Modified | Added agent URL pattern parsing |
+| `config/graphql/queries.py` | Modified | Added `search_agents_for_mention` query |
+| `config/graphql/graphene_types.py` | Modified | Added `slug` and `mention_format` to AgentConfigurationType |
+| `opencontractserver/tasks/agent_tasks.py` | Created | Celery tasks for agent response generation |
+| `config/websocket/consumers/thread_updates.py` | Created | Thread updates WebSocket consumer |
+| `frontend/src/graphql/queries.ts` | Modified | Added `SEARCH_AGENTS_FOR_MENTION` query |
+| `frontend/src/components/threads/hooks/useAgentMentionSearch.ts` | Created | Hook for agent mention search |
+| `frontend/src/components/widgets/selectors/AgentMentionPicker.tsx` | Created | Agent mention picker component |
+| `frontend/src/hooks/useThreadWebSocket.ts` | Created | Hook for thread updates WebSocket |
 
 **Phase 3:**
 - Added `mentioned_agents` M2M field to `ChatMessage` model
@@ -81,6 +92,31 @@
   - Clients subscribe with `conversation_id` to receive streaming updates
   - Broadcasts: AGENT_STREAM_START, AGENT_STREAM_TOKEN, AGENT_TOOL_CALL, AGENT_STREAM_COMPLETE, AGENT_STREAM_ERROR
 - Added `/ws/thread-updates/` route to `config/asgi.py`
+
+**Phase 6:**
+- Created `SEARCH_AGENTS_FOR_MENTION` GraphQL query in `frontend/src/graphql/queries.ts`
+  - With TypeScript types `SearchAgentsForMentionInput` and `SearchAgentsForMentionOutput`
+- Created `useAgentMentionSearch` hook in `frontend/src/components/threads/hooks/useAgentMentionSearch.ts`
+  - Debounced search (300ms)
+  - Returns `AgentMentionResource` array with id, name, slug, scope, mentionFormat
+- Created `AgentMentionPicker` component in `frontend/src/components/widgets/selectors/AgentMentionPicker.tsx`
+  - Dropdown UI with search input
+  - Separates global agents from corpus-scoped agents
+  - Keyboard navigation (arrow keys, enter, escape)
+  - Uses motion animations from framer-motion
+  - Styled-components following existing selector patterns
+
+**Phase 7:**
+- Added `getThreadUpdatesWebSocket()` to `frontend/src/components/chat/get_websockets.ts`
+  - Builds WebSocket URL for `/ws/thread-updates/` endpoint
+  - Takes conversationId and optional token
+- Created `useThreadWebSocket` hook in `frontend/src/hooks/useThreadWebSocket.ts`
+  - Subscribes to thread updates for agent mention streaming
+  - Handles message types: AGENT_STREAM_START, AGENT_STREAM_TOKEN, AGENT_TOOL_CALL, AGENT_STREAM_COMPLETE, AGENT_STREAM_ERROR
+  - Auto-reconnect with configurable delay
+  - Heartbeat/ping-pong for connection health
+  - Callbacks for streaming events (onStreamStart, onStreamToken, onToolCall, onStreamComplete, onError)
+  - Returns connectionState, sessionId, streamingResponses Map
 
 ---
 
