@@ -241,9 +241,15 @@ def link_message_to_resources(
             # Get conversation's corpus for scoped agent lookup
             corpus = getattr(chat_message.conversation, "chat_with_corpus", None)
 
-            # Find agents by slug - global OR matching corpus
+            # SECURITY: Only link agents that the user has permission to access
+            # Use visible_to_user() to enforce server-side permission checks
+            # (Frontend autocomplete already filters, but we must not trust clients)
+            user = chat_message.creator
+            base_qs = AgentConfiguration.objects.visible_to_user(user)
+
+            # Find agents by slug - global OR matching corpus (within visible set)
             if corpus:
-                agents_qs = AgentConfiguration.objects.filter(
+                agents_qs = base_qs.filter(
                     Q(slug__in=agent_slugs, scope="GLOBAL", is_active=True)
                     | Q(
                         slug__in=agent_slugs,
@@ -253,7 +259,7 @@ def link_message_to_resources(
                     )
                 )
             else:
-                agents_qs = AgentConfiguration.objects.filter(
+                agents_qs = base_qs.filter(
                     slug__in=agent_slugs, scope="GLOBAL", is_active=True
                 )
 
