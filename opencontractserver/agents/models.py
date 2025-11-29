@@ -63,6 +63,14 @@ class AgentConfiguration(BaseOCModel):
 
     # Identity
     name = models.CharField(max_length=255, help_text="Display name for this agent")
+    slug = models.SlugField(
+        max_length=128,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="URL-friendly identifier for mentions (e.g., 'research-assistant')",
+    )
     description = models.TextField(
         blank=True, help_text="Description of agent's purpose and capabilities"
     )
