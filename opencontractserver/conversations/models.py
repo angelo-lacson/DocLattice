@@ -703,6 +703,12 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         help_text="Annotations that this chat message created",
         blank=True,
     )
+    mentioned_agents = models.ManyToManyField(
+        "agents.AgentConfiguration",
+        related_name="mentioned_in_messages",
+        help_text="Agents mentioned in this message that should respond",
+        blank=True,
+    )
 
     state = models.CharField(
         max_length=32,

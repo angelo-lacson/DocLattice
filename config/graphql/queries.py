@@ -2595,6 +2595,16 @@ class Query(graphene.ObjectType):
     )
     agent = relay.Node.Field(AgentConfigurationType)
 
+    search_agents_for_mention = DjangoConnectionField(
+        AgentConfigurationType,
+        text_search=graphene.String(
+            description="Search query to find agents by name, slug, or description"
+        ),
+        corpus_id=graphene.ID(
+            description="Corpus ID to scope agent search (includes global + corpus agents)"
+        ),
+    )
+
     def resolve_agents(self, info, **kwargs):
         """Resolve agent configurations visible to the user."""
         from opencontractserver.agents.models import AgentConfiguration
@@ -2611,6 +2621,49 @@ class Query(graphene.ObjectType):
         return AgentConfiguration.objects.visible_to_user(info.context.user).get(
             id=django_pk
         )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_agents_for_mention(
+        self, info, text_search=None, corpus_id=None, **kwargs
+    ):
+        """
+        Search agents for @ mention autocomplete.
+
+        Returns:
+        - All active global agents (GLOBAL scope)
+        - Corpus-specific agents for the provided corpus (if user has access)
+
+        SECURITY: Filters by visibility - users only see agents they can mention.
+        Anonymous users cannot search agents.
+        """
+        from django.db.models import Q
+
+        from opencontractserver.agents.models import AgentConfiguration
+
+        user = info.context.user
+
+        # Anonymous users cannot mention agents
+        if not user or not user.is_authenticated:
+            return AgentConfiguration.objects.none()
+
+        # Build base queryset using visible_to_user (respects permissions)
+        qs = AgentConfiguration.objects.visible_to_user(user).filter(is_active=True)
+
+        # If corpus_id provided, filter to global + that corpus only
+        if corpus_id:
+            corpus_pk = from_global_id(corpus_id)[1]
+            qs = qs.filter(Q(scope="GLOBAL") | Q(scope="CORPUS", corpus_id=corpus_pk))
+
+        # Apply text search across name, slug, and description
+        if text_search:
+            qs = qs.filter(
+                Q(name__icontains=text_search)
+                | Q(description__icontains=text_search)
+                | Q(slug__icontains=text_search)
+            )
+
+        # Order: Global first, then corpus-specific, then alphabetically by name
+        return qs.select_related("creator", "corpus").order_by("scope", "name")
 
     # NOTIFICATION QUERIES ########################################
     notifications = DjangoFilterConnectionField(

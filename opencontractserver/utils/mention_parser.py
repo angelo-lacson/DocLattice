@@ -33,6 +33,8 @@ def parse_mentions_from_content(markdown_content: str) -> dict[str, set[str]]:
     - /d/{userIdent}/{docIdent} → document (standalone)
     - /d/{userIdent}/{corpusIdent}/{docIdent} → document (in corpus)
     - /d/...?ann={annotationId} → annotation
+    - /agents/{agentSlug} → agent (global)
+    - /c/{userIdent}/{corpusIdent}/agents/{agentSlug} → agent (corpus-scoped)
 
     Args:
         markdown_content: Markdown string from TipTap editor containing mentions
@@ -43,19 +45,21 @@ def parse_mentions_from_content(markdown_content: str) -> dict[str, set[str]]:
             'users': {slug1, slug2, ...},
             'documents': {slug1, slug2, ...},
             'annotations': {id1, id2, ...},
-            'corpuses': {slug1, slug2, ...}
+            'corpuses': {slug1, slug2, ...},
+            'agents': {slug1, slug2, ...}
         }
 
     Example:
         >>> md = '[@john](/users/john-doe) mentioned [@corpus:my-corpus](/c/john-doe/my-corpus)'
         >>> parse_mentions_from_content(md)
-        {'users': {'john-doe'}, 'documents': set(), 'annotations': set(), 'corpuses': {'my-corpus'}}
+        {'users': {'john-doe'}, 'documents': set(), 'annotations': set(), 'corpuses': {'my-corpus'}, 'agents': set()}
     """
     mentioned = {
         "users": set(),
         "documents": set(),
         "annotations": set(),
         "corpuses": set(),
+        "agents": set(),
     }
 
     # Regex to find markdown links: [text](url)
@@ -107,11 +111,35 @@ def parse_mentions_from_content(markdown_content: str) -> dict[str, set[str]]:
                     mentioned["documents"].add(doc_slug)
                     logger.debug(f"Found document mention: {doc_slug}")
 
+        # Global Agent: /agents/{agentSlug}
+        elif path.startswith("/agents/"):
+            parts = path.split("/")
+            if len(parts) >= 3:
+                agent_slug = parts[2]
+                mentioned["agents"].add(agent_slug)
+                logger.debug(f"Found global agent mention: {agent_slug}")
+
+    # Also check for corpus-scoped agents in corpus URLs
+    # Pattern: /c/{userIdent}/{corpusIdent}/agents/{agentSlug}
+    for match in re.finditer(link_pattern, markdown_content):
+        url = match.group(2)
+        parsed = urlparse(url)
+        path = parsed.path
+
+        if path.startswith("/c/") and "/agents/" in path:
+            parts = path.split("/")
+            # /c/{userIdent}/{corpusIdent}/agents/{agentSlug} → 6 parts
+            if len(parts) >= 6 and parts[4] == "agents":
+                agent_slug = parts[5]
+                mentioned["agents"].add(agent_slug)
+                logger.debug(f"Found corpus-scoped agent mention: {agent_slug}")
+
     logger.debug(
         f"Parsed mentions: {len(mentioned['users'])} users, "
         f"{len(mentioned['documents'])} docs, "
         f"{len(mentioned['annotations'])} annotations, "
-        f"{len(mentioned['corpuses'])} corpuses"
+        f"{len(mentioned['corpuses'])} corpuses, "
+        f"{len(mentioned['agents'])} agents"
     )
 
     return mentioned
@@ -130,7 +158,7 @@ def link_message_to_resources(
     Args:
         chat_message: ChatMessage instance to link resources to
         mentioned_ids: Dictionary from parse_mentions_from_content()
-                      Contains slugs for documents/corpuses, IDs for annotations
+                      Contains slugs for documents/corpuses/agents, IDs for annotations
 
     Returns:
         Dictionary with counts of successfully linked resources:
@@ -138,13 +166,15 @@ def link_message_to_resources(
             'documents_linked': int,
             'annotations_linked': int,
             'users_mentioned': int,  # Currently just counted, not linked
-            'corpuses_mentioned': int  # Currently just counted, not linked
+            'corpuses_mentioned': int,  # Currently just counted, not linked
+            'agents_linked': int
         }
 
     Note:
         - Only the FIRST mentioned document is set as source_document (FK field)
         - Documents and corpuses are looked up by slug (from URL paths)
         - ALL mentioned annotations are linked via ManyToMany (by ID from query params)
+        - ALL mentioned agents are linked via ManyToMany (by slug from URL paths)
         - Users and corpuses are counted but not currently linked
           (could be used for notifications/analytics in future)
     """
@@ -156,6 +186,7 @@ def link_message_to_resources(
         "annotations_linked": 0,
         "users_mentioned": len(mentioned_ids.get("users", set())),
         "corpuses_mentioned": len(mentioned_ids.get("corpuses", set())),
+        "agents_linked": 0,
     }
 
     # Link document (ForeignKey - choose first if multiple mentioned)
@@ -197,6 +228,45 @@ def link_message_to_resources(
             )
         except Exception as e:
             logger.error(f"Error linking annotations to message: {e}")
+
+    # Link agents (ManyToMany - link all mentioned)
+    if mentioned_ids.get("agents"):
+        from django.db.models import Q
+
+        from opencontractserver.agents.models import AgentConfiguration
+
+        try:
+            agent_slugs = list(mentioned_ids["agents"])
+
+            # Get conversation's corpus for scoped agent lookup
+            corpus = getattr(chat_message.conversation, "chat_with_corpus", None)
+
+            # Find agents by slug - global OR matching corpus
+            if corpus:
+                agents_qs = AgentConfiguration.objects.filter(
+                    Q(slug__in=agent_slugs, scope="GLOBAL", is_active=True)
+                    | Q(
+                        slug__in=agent_slugs,
+                        scope="CORPUS",
+                        corpus=corpus,
+                        is_active=True,
+                    )
+                )
+            else:
+                agents_qs = AgentConfiguration.objects.filter(
+                    slug__in=agent_slugs, scope="GLOBAL", is_active=True
+                )
+
+            # Use .set() to replace any existing mentioned agents
+            chat_message.mentioned_agents.set(agents_qs)
+            result["agents_linked"] = agents_qs.count()
+
+            logger.debug(
+                f"Linked message {chat_message.pk} to "
+                f"{result['agents_linked']} agents"
+            )
+        except Exception as e:
+            logger.error(f"Error linking agents to message: {e}")
 
     return result
 
