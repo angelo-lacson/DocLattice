@@ -2,11 +2,10 @@
 
 import random
 from dataclasses import dataclass
-
-import pytest
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.test import TestCase, override_settings
