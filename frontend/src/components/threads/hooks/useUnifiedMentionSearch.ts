@@ -13,11 +13,14 @@ import {
   SEARCH_ANNOTATIONS_FOR_MENTION,
   SearchAnnotationsForMentionInput,
   SearchAnnotationsForMentionOutput,
+  SEARCH_AGENTS_FOR_MENTION,
+  SearchAgentsForMentionInput,
+  SearchAgentsForMentionOutput,
 } from "../../../graphql/queries";
 
 export interface UnifiedMentionResource {
   id: string;
-  type: "user" | "corpus" | "document" | "annotation";
+  type: "user" | "corpus" | "document" | "annotation" | "agent";
   title: string; // Display name
   subtitle?: string; // Context info
   metadata?: string; // Additional info
@@ -58,6 +61,18 @@ export interface UnifiedMentionResource {
       title: string;
     } | null;
   };
+  agent?: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string;
+    scope: "GLOBAL" | "CORPUS";
+    mentionFormat: string | null;
+    corpus: {
+      id: string;
+      title: string;
+    } | null;
+  };
 }
 
 export interface CategorizedResults {
@@ -65,22 +80,23 @@ export interface CategorizedResults {
   corpuses: UnifiedMentionResource[];
   documents: UnifiedMentionResource[];
   annotations: UnifiedMentionResource[];
+  agents: UnifiedMentionResource[];
   total: number;
 }
 
 /**
- * Unified hook for searching all mention types (@users, @corpuses, @documents, @annotations)
+ * Unified hook for searching all mention types (@users, @corpuses, @documents, @annotations, @agents)
  *
  * PERFORMANCE OPTIMIZATIONS:
- * - Parallel query execution (all 4 types searched simultaneously)
+ * - Parallel query execution (all 5 types searched simultaneously)
  * - Debounced search (300ms default)
- * - Result limiting (3 per category = 12 total max)
- * - Context-aware (optional corpusId for annotation scoping)
+ * - Result limiting (3 per category = 15 total max)
+ * - Context-aware (optional corpusId for annotation and agent scoping)
  *
  * Part of Issue #623 - @ Mentions Feature (Extended)
  *
  * @param query - Search query string
- * @param corpusId - Optional corpus ID for context-aware annotation search
+ * @param corpusId - Optional corpus ID for context-aware annotation and agent search
  * @param debounceMs - Debounce delay in milliseconds (default: 300)
  * @param minChars - Minimum characters before searching (default: 2)
  * @param limitPerCategory - Max results per category (default: 3)
@@ -139,6 +155,16 @@ export function useUnifiedMentionSearch(
     fetchPolicy: "network-only",
   });
 
+  const [
+    searchAgents,
+    { data: agentData, loading: agentsLoading, error: agentsError },
+  ] = useLazyQuery<SearchAgentsForMentionOutput, SearchAgentsForMentionInput>(
+    SEARCH_AGENTS_FOR_MENTION,
+    {
+      fetchPolicy: "network-only",
+    }
+  );
+
   // Debounce the query
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -154,7 +180,7 @@ export function useUnifiedMentionSearch(
       return;
     }
 
-    // Fire all 4 queries simultaneously for maximum performance
+    // Fire all 5 queries simultaneously for maximum performance
     searchUsers({ variables: { textSearch: debouncedQuery } });
     searchCorpuses({ variables: { textSearch: debouncedQuery } });
     searchDocuments({ variables: { textSearch: debouncedQuery } });
@@ -162,6 +188,12 @@ export function useUnifiedMentionSearch(
       variables: {
         textSearch: debouncedQuery,
         corpusId: corpusId, // Context-aware scoping
+      },
+    });
+    searchAgents({
+      variables: {
+        textSearch: debouncedQuery,
+        corpusId: corpusId, // Context-aware scoping for corpus agents
       },
     });
   }, [
@@ -172,6 +204,7 @@ export function useUnifiedMentionSearch(
     searchCorpuses,
     searchDocuments,
     searchAnnotations,
+    searchAgents,
   ]);
 
   // Combine and categorize results
@@ -285,20 +318,62 @@ export function useUnifiedMentionSearch(
           };
         }) || [];
 
+    // Agent results
+    const agents: UnifiedMentionResource[] =
+      agentData?.searchAgentsForMention?.edges
+        ?.slice(0, limitPerCategory)
+        .map((edge) => ({
+          id: edge.node.id,
+          type: "agent" as const,
+          title: edge.node.name,
+          subtitle: edge.node.mentionFormat || `@agent:${edge.node.slug}`,
+          metadata:
+            edge.node.scope === "GLOBAL"
+              ? "Global Agent"
+              : edge.node.corpus
+              ? `Corpus: ${edge.node.corpus.title}`
+              : "Corpus Agent",
+          agent: {
+            id: edge.node.id,
+            name: edge.node.name,
+            slug: edge.node.slug,
+            description: edge.node.description,
+            scope: edge.node.scope,
+            mentionFormat: edge.node.mentionFormat,
+            corpus: edge.node.corpus,
+          },
+        })) || [];
+
     const total =
-      users.length + corpuses.length + documents.length + annotations.length;
+      users.length +
+      corpuses.length +
+      documents.length +
+      annotations.length +
+      agents.length;
 
     return {
       users,
       corpuses,
       documents,
       annotations,
+      agents,
       total,
     };
-  }, [userData, corpusData, documentData, annotationData, limitPerCategory]);
+  }, [
+    userData,
+    corpusData,
+    documentData,
+    annotationData,
+    agentData,
+    limitPerCategory,
+  ]);
 
   const loading =
-    usersLoading || corpusesLoading || documentsLoading || annotationsLoading;
+    usersLoading ||
+    corpusesLoading ||
+    documentsLoading ||
+    annotationsLoading ||
+    agentsLoading;
 
   // Flatten all results in category order for keyboard navigation
   const allResults = [
@@ -306,6 +381,7 @@ export function useUnifiedMentionSearch(
     ...categorizedResults.corpuses,
     ...categorizedResults.documents,
     ...categorizedResults.annotations,
+    ...categorizedResults.agents,
   ];
 
   return {

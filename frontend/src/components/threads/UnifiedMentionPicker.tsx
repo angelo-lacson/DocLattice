@@ -5,7 +5,7 @@ import React, {
   useState,
 } from "react";
 import styled from "styled-components";
-import { User, Database, FileText, Tag } from "lucide-react";
+import { User, Database, FileText, Tag, Bot } from "lucide-react";
 import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { UnifiedMentionResource } from "./hooks/useUnifiedMentionSearch";
@@ -61,7 +61,7 @@ const MenuItem = styled.button<{ $isSelected: boolean }>`
 `;
 
 const IconContainer = styled.div<{
-  $type: "user" | "corpus" | "document" | "annotation";
+  $type: "user" | "corpus" | "document" | "annotation" | "agent";
 }>`
   width: 32px;
   height: 32px;
@@ -76,6 +76,8 @@ const IconContainer = styled.div<{
         return "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)";
       case "annotation":
         return "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)";
+      case "agent":
+        return "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)";
     }
   }};
   display: flex;
@@ -198,6 +200,8 @@ export const UnifiedMentionPicker = forwardRef<
         return <FileText size={18} />;
       case "annotation":
         return <Tag size={18} />;
+      case "agent":
+        return <Bot size={18} />;
     }
   };
 
@@ -216,7 +220,7 @@ export const UnifiedMentionPicker = forwardRef<
           No results found
           <br />
           <small>
-            Type to search users, corpuses, documents, and annotations
+            Type to search users, corpuses, documents, annotations, and agents
           </small>
         </NoResults>
       </Container>
@@ -228,6 +232,7 @@ export const UnifiedMentionPicker = forwardRef<
   const corpuses = resources.filter((r) => r.type === "corpus");
   const documents = resources.filter((r) => r.type === "document");
   const annotations = resources.filter((r) => r.type === "annotation");
+  const agents = resources.filter((r) => r.type === "agent");
 
   return (
     <Container>
@@ -331,6 +336,34 @@ export const UnifiedMentionPicker = forwardRef<
                 <IconContainer $type="annotation">
                   {getIcon("annotation")}
                 </IconContainer>
+                <ItemInfo>
+                  <ItemTitle>{resource.title}</ItemTitle>
+                  {resource.subtitle && (
+                    <ItemSubtitle>{resource.subtitle}</ItemSubtitle>
+                  )}
+                  {resource.metadata && (
+                    <ItemMetadata>{resource.metadata}</ItemMetadata>
+                  )}
+                </ItemInfo>
+              </MenuItem>
+            );
+          })}
+        </>
+      )}
+
+      {agents.length > 0 && (
+        <>
+          <CategoryHeader>Agents</CategoryHeader>
+          {agents.map((resource) => {
+            const globalIndex = resources.indexOf(resource);
+            return (
+              <MenuItem
+                key={resource.id}
+                $isSelected={globalIndex === selected}
+                onClick={() => onSelect(resource)}
+                onMouseEnter={() => setSelected(globalIndex)}
+              >
+                <IconContainer $type="agent">{getIcon("agent")}</IconContainer>
                 <ItemInfo>
                   <ItemTitle>{resource.title}</ItemTitle>
                   {resource.subtitle && (
