@@ -2619,7 +2619,11 @@ class Query(graphene.ObjectType):
 
     def resolve_agent_configurations(self, info, **kwargs):
         """Alias for resolve_agents - frontend compatibility."""
-        return self.resolve_agents(info, **kwargs)
+        from opencontractserver.agents.models import AgentConfiguration
+
+        return AgentConfiguration.objects.visible_to_user(
+            info.context.user
+        ).select_related("creator", "corpus")
 
     def resolve_agent(self, info, **kwargs):
         """Resolve a single agent configuration by ID."""
