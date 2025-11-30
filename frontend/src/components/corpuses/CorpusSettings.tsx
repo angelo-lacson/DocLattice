@@ -26,6 +26,7 @@ import {
 import { CreateCorpusActionModal } from "./CreateCorpusActionModal";
 import { CorpusMetadataSettings } from "./CorpusMetadataSettings";
 import { CorpusAgentSettings } from "./CorpusAgentSettings";
+import { CorpusAgentManagement } from "./CorpusAgentManagement";
 import {
   UPDATE_CORPUS,
   UpdateCorpusInputs,
@@ -1187,6 +1188,15 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
               }
               canUpdate={canUpdate}
             />
+          </MetadataContent>
+        </InfoSection>
+
+        <InfoSection>
+          <SectionHeader>
+            <SectionTitle>Corpus Agents</SectionTitle>
+          </SectionHeader>
+          <MetadataContent>
+            <CorpusAgentManagement corpusId={corpus.id} canUpdate={canUpdate} />
           </MetadataContent>
         </InfoSection>
 
