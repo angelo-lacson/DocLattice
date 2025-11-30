@@ -8,6 +8,7 @@ import user_logo from "../../assets/icons/noun-person-113116-FFFFFF.png";
 import { showExportModal } from "../../graphql/cache";
 import "./MobileNavMenu.css";
 import { useNavMenu } from "./useNavMenu";
+import { useNavigate } from "react-router-dom";
 
 const MiniImage = styled.img`
   width: 35px;
@@ -40,9 +41,12 @@ export const MobileNavMenu = () => {
     loginWithPopup,
     loginWithRedirect,
   } = useNavMenu();
+  const navigate = useNavigate();
 
   // Note: CentralRouteManager automatically clears openedCorpus/openedDocument when navigating
   // No need to manually clear on menu clicks
+
+  const isSuperuser = user && (user as any).isSuperuser;
 
   const items = public_header_items.map((item) => (
     <Dropdown.Item
@@ -128,16 +132,18 @@ export const MobileNavMenu = () => {
                       onClick={() => showExportModal(!show_export_modal)}
                       icon={<Icon name="download" />}
                     />
+                    {isSuperuser && (
+                      <Dropdown.Item
+                        text="Admin Settings"
+                        onClick={() => navigate("/admin/settings")}
+                        icon={<Icon name="settings" />}
+                      />
+                    )}
                     <Dropdown.Item
                       text="Logout"
                       onClick={() => requestLogout()}
                       icon={<Icon name="log out" />}
                     />
-                    {/* <Dropdown.Item
-                                            text='Settings'
-                                            onClick={() => console.log("Do nothing yet...")}
-                                            icon={<Icon name='settings'/>}
-                                        /> */}
                   </Dropdown.Menu>
                 </Dropdown>
               </Menu.Item>
@@ -229,16 +235,18 @@ export const MobileNavMenu = () => {
                       onClick={() => showExportModal(!show_export_modal)}
                       icon={<Icon name="download" />}
                     />
+                    {isSuperuser && (
+                      <Dropdown.Item
+                        text="Admin Settings"
+                        onClick={() => navigate("/admin/settings")}
+                        icon={<Icon name="settings" />}
+                      />
+                    )}
                     <Dropdown.Item
                       text="Logout"
                       onClick={() => requestLogout()}
                       icon={<Icon name="log out" />}
                     />
-                    {/* <Dropdown.Item
-                                            text='Settings'
-                                            onClick={() => console.log("Do nothing yet...")}
-                                            icon={<Icon name='settings'/>}
-                                        /> */}
                   </Dropdown.Menu>
                 </Dropdown>
               </Menu.Item>

@@ -64,6 +64,7 @@ import { LabelDisplayBehavior } from "./types/graphql-api";
 import { CookieConsentDialog } from "./components/cookies/CookieConsent";
 import { Extracts } from "./views/Extracts";
 import { BadgeManagement } from "./components/badges/BadgeManagement";
+import { GlobalSettingsPanel, GlobalAgentManagement } from "./components/admin";
 import { useEnv } from "./components/hooks/UseEnv";
 import { EditExtractModal } from "./components/widgets/modals/EditExtractModal";
 import { SelectAnalyzerOrFieldsetModal } from "./components/widgets/modals/SelectCorpusAnalyzerOrFieldsetAnalyzer";
@@ -439,6 +440,14 @@ export const App = () => {
                   />
                   <Route path="/extracts" element={<Extracts />} />
                   <Route path="/admin/badges" element={<BadgeManagement />} />
+                  <Route
+                    path="/admin/settings"
+                    element={<GlobalSettingsPanel />}
+                  />
+                  <Route
+                    path="/admin/agents"
+                    element={<GlobalAgentManagement />}
+                  />
 
                   {/* Community Routes (Issue #613) */}
                   <Route path="/leaderboard" element={<LeaderboardRoute />} />
