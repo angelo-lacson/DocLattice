@@ -2563,6 +2563,7 @@ class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "is_public",
             "created",
             "modified",
+            "mention_format",
         )
         filter_fields = {
             "scope": ["exact"],
