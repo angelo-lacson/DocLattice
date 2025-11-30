@@ -39,7 +39,7 @@ const GET_GLOBAL_AGENTS = gql`
 `;
 
 const GET_CORPUS_AGENTS = gql`
-  query GetCorpusAgents($corpusId: ID!) {
+  query GetCorpusAgents($corpusId: String!) {
     agentConfigurations(corpusId: $corpusId) {
       edges {
         node {
