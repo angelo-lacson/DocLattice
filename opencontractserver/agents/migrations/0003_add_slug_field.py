@@ -3,7 +3,7 @@
 from django.db import migrations, models
 
 
-def populate_default_agent_slugs(apps, schema_editor):
+def populate_default_agent_slugs(apps, schema_editor):  # pragma: no cover
     """Add slugs to the default global agents."""
     AgentConfiguration = apps.get_model("agents", "AgentConfiguration")
 
@@ -18,7 +18,7 @@ def populate_default_agent_slugs(apps, schema_editor):
     ).update(slug="default-corpus-agent")
 
 
-def reverse_slugs(apps, schema_editor):
+def reverse_slugs(apps, schema_editor):  # pragma: no cover
     """Remove slugs from default agents."""
     AgentConfiguration = apps.get_model("agents", "AgentConfiguration")
     AgentConfiguration.objects.filter(
