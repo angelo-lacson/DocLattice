@@ -362,8 +362,14 @@ export const GlobalAgentManagement: React.FC = () => {
       name: agent.name,
       description: agent.description || "",
       systemInstructions: agent.systemInstructions,
-      availableTools: (agent.availableTools || []).join(", "),
-      permissionRequiredTools: (agent.permissionRequiredTools || []).join(", "),
+      availableTools: (Array.isArray(agent.availableTools)
+        ? agent.availableTools
+        : []
+      ).join(", "),
+      permissionRequiredTools: (Array.isArray(agent.permissionRequiredTools)
+        ? agent.permissionRequiredTools
+        : []
+      ).join(", "),
       badgeConfig: JSON.stringify(agent.badgeConfig || {}, null, 2),
       avatarUrl: agent.avatarUrl || "",
       isPublic: agent.isPublic ?? true,
@@ -452,14 +458,26 @@ export const GlobalAgentManagement: React.FC = () => {
                   </Table.Cell>
                   <Table.Cell>
                     <ToolsList>
-                      {(agent.availableTools || []).slice(0, 3).map((tool) => (
-                        <ToolBadge key={tool} size="tiny">
-                          {tool}
-                        </ToolBadge>
-                      ))}
-                      {(agent.availableTools || []).length > 3 && (
+                      {(Array.isArray(agent.availableTools)
+                        ? agent.availableTools
+                        : []
+                      )
+                        .slice(0, 3)
+                        .map((tool) => (
+                          <ToolBadge key={tool} size="tiny">
+                            {tool}
+                          </ToolBadge>
+                        ))}
+                      {(Array.isArray(agent.availableTools)
+                        ? agent.availableTools
+                        : []
+                      ).length > 3 && (
                         <ToolBadge size="tiny">
-                          +{(agent.availableTools || []).length - 3}
+                          +
+                          {(Array.isArray(agent.availableTools)
+                            ? agent.availableTools
+                            : []
+                          ).length - 3}
                         </ToolBadge>
                       )}
                     </ToolsList>
