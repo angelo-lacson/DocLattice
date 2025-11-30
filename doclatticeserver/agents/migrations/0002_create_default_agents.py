@@ -12,11 +12,11 @@ def create_default_agents(apps, schema_editor):
     # Get first superuser or create a system user
     try:
         system_user = User.objects.filter(is_superuser=True).first()
-        if not system_user:
+        if not system_user:  # pragma: no cover
             # If no superuser exists yet, skip creating default agents
             # They can be created manually or in a later migration
             return
-    except Exception:
+    except Exception:  # pragma: no cover
         # If User model doesn't exist or has issues, skip
         return
 
@@ -68,7 +68,7 @@ def create_default_agents(apps, schema_editor):
     )
 
 
-def reverse_migration(apps, schema_editor):
+def reverse_migration(apps, schema_editor):  # pragma: no cover
     """Remove default agents."""
     AgentConfiguration = apps.get_model("agents", "AgentConfiguration")
     AgentConfiguration.objects.filter(

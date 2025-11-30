@@ -4068,3 +4068,58 @@ export const SEARCH_CONVERSATIONS = gql`
     }
   }
 `;
+
+/**
+ * Search agents for @ mention autocomplete
+ * Backend filters results to active agents visible to the user
+ * (global agents + corpus-scoped agents for the given corpus)
+ * Part of Issue #623 - @ Mentions Feature (Extended) - Agent Mentions
+ */
+export interface SearchAgentsForMentionInput {
+  textSearch?: string;
+  corpusId?: string;
+}
+
+export interface SearchAgentsForMentionOutput {
+  searchAgentsForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        name: string;
+        slug: string;
+        description: string;
+        scope: "GLOBAL" | "CORPUS";
+        mentionFormat: string | null;
+        corpus: {
+          id: string;
+          title: string;
+        } | null;
+      };
+    }>;
+  };
+}
+
+export const SEARCH_AGENTS_FOR_MENTION = gql`
+  query SearchAgentsForMention($textSearch: String, $corpusId: ID) {
+    searchAgentsForMention(
+      textSearch: $textSearch
+      corpusId: $corpusId
+      first: 10
+    ) {
+      edges {
+        node {
+          id
+          name
+          slug
+          description
+          scope
+          mentionFormat
+          corpus {
+            id
+            title
+          }
+        }
+      }
+    }
+  }
+`;

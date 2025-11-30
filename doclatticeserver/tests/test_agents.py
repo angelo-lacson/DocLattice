@@ -707,3 +707,244 @@ class TestAgentConfigurationGraphQL(TestCase):
         agent_names = [agent["node"]["name"] for agent in agents]
         self.assertIn("Corpus 1 Agent", agent_names)
         self.assertNotIn("Corpus 2 Agent", agent_names)
+
+
+class TestSearchAgentsForMention(TestCase):
+    """Test the search_agents_for_mention GraphQL query."""
+
+    def setUp(self):
+        """Set up test client and data."""
+        self.client = Client(schema)
+
+        self.admin_user = User.objects.create_user(
+            username="mention_search_admin",
+            password="testpass123",
+            email="mention_search_admin@test.com",
+            is_superuser=True,
+        )
+
+        self.normal_user = User.objects.create_user(
+            username="mention_search_user",
+            password="testpass123",
+            email="mention_search_user@test.com",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus for Mention Search",
+            description="For testing agent mention search",
+            creator=self.admin_user,
+            is_public=True,
+        )
+
+        # Create global agents
+        self.global_agent = AgentConfiguration.objects.create(
+            name="Research Assistant",
+            slug="research-assistant",
+            description="Helps with research tasks",
+            scope="GLOBAL",
+            system_instructions="You help with research.",
+            creator=self.admin_user,
+            is_active=True,
+            is_public=True,
+        )
+
+        self.another_global_agent = AgentConfiguration.objects.create(
+            name="Document Analyzer",
+            slug="document-analyzer",
+            description="Analyzes documents for insights",
+            scope="GLOBAL",
+            system_instructions="You analyze documents.",
+            creator=self.admin_user,
+            is_active=True,
+            is_public=True,
+        )
+
+        # Create corpus-scoped agent
+        self.corpus_agent = AgentConfiguration.objects.create(
+            name="Contract Expert",
+            slug="contract-expert",
+            description="Expert on contracts in this corpus",
+            scope="CORPUS",
+            corpus=self.corpus,
+            system_instructions="You are a contract expert.",
+            creator=self.admin_user,
+            is_active=True,
+            is_public=True,
+        )
+
+        # Create inactive agent
+        self.inactive_agent = AgentConfiguration.objects.create(
+            name="Inactive Bot",
+            slug="inactive-bot",
+            description="This is inactive",
+            scope="GLOBAL",
+            system_instructions="N/A",
+            creator=self.admin_user,
+            is_active=False,
+            is_public=True,
+        )
+
+    def test_search_agents_returns_global_agents(self):
+        """Should return global agents when searching."""
+        query = """
+            query {
+                searchAgentsForMention(textSearch: "Research") {
+                    edges {
+                        node {
+                            id
+                            name
+                            slug
+                            scope
+                            mentionFormat
+                        }
+                    }
+                }
+            }
+        """
+
+        result = self.client.execute(
+            query, context_value=type("Request", (), {"user": self.normal_user})()
+        )
+        self.assertIsNone(result.get("errors"))
+        agents = result["data"]["searchAgentsForMention"]["edges"]
+
+        self.assertEqual(len(agents), 1)
+        self.assertEqual(agents[0]["node"]["name"], "Research Assistant")
+        self.assertEqual(agents[0]["node"]["slug"], "research-assistant")
+        self.assertEqual(agents[0]["node"]["scope"], "GLOBAL")
+        self.assertEqual(
+            agents[0]["node"]["mentionFormat"], "@agent:research-assistant"
+        )
+
+    def test_search_agents_with_corpus_returns_corpus_and_global(self):
+        """Should return both global and corpus-scoped agents when corpus_id is provided."""
+        corpus_gid = to_global_id("CorpusType", self.corpus.id)
+
+        query = f"""
+            query {{
+                searchAgentsForMention(corpusId: "{corpus_gid}") {{
+                    edges {{
+                        node {{
+                            id
+                            name
+                            scope
+                        }}
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            query, context_value=type("Request", (), {"user": self.normal_user})()
+        )
+        self.assertIsNone(result.get("errors"))
+        agents = result["data"]["searchAgentsForMention"]["edges"]
+
+        agent_names = [a["node"]["name"] for a in agents]
+        # Should include global agents and the corpus-scoped agent
+        self.assertIn("Research Assistant", agent_names)
+        self.assertIn("Document Analyzer", agent_names)
+        self.assertIn("Contract Expert", agent_names)
+        # Should NOT include inactive agent
+        self.assertNotIn("Inactive Bot", agent_names)
+
+    def test_search_agents_text_search_filters(self):
+        """Should filter agents by text search on name, slug, and description."""
+        query = """
+            query {
+                searchAgentsForMention(textSearch: "Analyzer") {
+                    edges {
+                        node {
+                            name
+                        }
+                    }
+                }
+            }
+        """
+
+        result = self.client.execute(
+            query, context_value=type("Request", (), {"user": self.normal_user})()
+        )
+        self.assertIsNone(result.get("errors"))
+        agents = result["data"]["searchAgentsForMention"]["edges"]
+
+        self.assertEqual(len(agents), 1)
+        self.assertEqual(agents[0]["node"]["name"], "Document Analyzer")
+
+    def test_search_agents_excludes_inactive(self):
+        """Should not return inactive agents."""
+        query = """
+            query {
+                searchAgentsForMention(textSearch: "Inactive") {
+                    edges {
+                        node {
+                            name
+                        }
+                    }
+                }
+            }
+        """
+
+        result = self.client.execute(
+            query, context_value=type("Request", (), {"user": self.normal_user})()
+        )
+        self.assertIsNone(result.get("errors"))
+        agents = result["data"]["searchAgentsForMention"]["edges"]
+
+        # Should not find inactive agents
+        self.assertEqual(len(agents), 0)
+
+    def test_search_agents_search_by_description(self):
+        """Should find agents by matching description."""
+        query = """
+            query {
+                searchAgentsForMention(textSearch: "insights") {
+                    edges {
+                        node {
+                            name
+                            description
+                        }
+                    }
+                }
+            }
+        """
+
+        result = self.client.execute(
+            query, context_value=type("Request", (), {"user": self.normal_user})()
+        )
+        self.assertIsNone(result.get("errors"))
+        agents = result["data"]["searchAgentsForMention"]["edges"]
+
+        # "insights" appears in Document Analyzer's description
+        self.assertEqual(len(agents), 1)
+        self.assertEqual(agents[0]["node"]["name"], "Document Analyzer")
+
+    def test_search_agents_empty_query_returns_all_visible(self):
+        """Empty text search should return all visible agents (global + corpus-scoped)."""
+        query = """
+            query {
+                searchAgentsForMention {
+                    edges {
+                        node {
+                            name
+                            scope
+                        }
+                    }
+                }
+            }
+        """
+
+        result = self.client.execute(
+            query, context_value=type("Request", (), {"user": self.normal_user})()
+        )
+        self.assertIsNone(result.get("errors"))
+        agents = result["data"]["searchAgentsForMention"]["edges"]
+
+        # Should return all active visible agents (both global and corpus-scoped)
+        agent_names = [a["node"]["name"] for a in agents]
+        self.assertIn("Research Assistant", agent_names)
+        self.assertIn("Document Analyzer", agent_names)
+        # Corpus agent should also be visible if user has access to corpus
+        self.assertIn("Contract Expert", agent_names)
+        # Inactive agents should NOT be included
+        self.assertNotIn("Inactive Bot", agent_names)

@@ -35,6 +35,12 @@ from config.websocket.consumers.document_conversation import (  # noqa: E402
 from config.websocket.consumers.standalone_document_conversation import (  # noqa: E402
     StandaloneDocumentQueryConsumer,
 )
+from config.websocket.consumers.thread_updates import (  # noqa: E402
+    ThreadUpdatesConsumer,
+)
+from config.websocket.consumers.unified_agent_conversation import (  # noqa: E402
+    UnifiedAgentConsumer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +68,29 @@ standalone_document_query_pattern = re_path(
     StandaloneDocumentQueryConsumer.as_asgi(),
 )
 
+# NEW - unified agent consumer (query params for context)
+# Supports: ?corpus_id=X, ?document_id=X, ?agent_id=X, ?conversation_id=X
+unified_agent_query_pattern = re_path(
+    r"ws/agent-chat/$",
+    UnifiedAgentConsumer.as_asgi(),
+)
+
+# NEW - thread updates consumer for agent mention responses
+# Supports: ?conversation_id=X (required)
+thread_updates_pattern = re_path(
+    r"ws/thread-updates/$",
+    ThreadUpdatesConsumer.as_asgi(),
+)
+
 websocket_urlpatterns = [
+    # NEW: Unified agent consumer (preferred for new integrations)
+    unified_agent_query_pattern,
+    # NEW: Thread updates consumer for agent mention streaming
+    thread_updates_pattern,
+    # Legacy routes (kept for backwards compatibility)
     document_query_pattern,
     corpus_query_pattern,
-    standalone_document_query_pattern,  # NEW stand-alone route
+    standalone_document_query_pattern,
 ]
 
 # Log all registered websocket patterns
