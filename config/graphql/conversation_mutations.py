@@ -20,6 +20,7 @@ from config.graphql.graphene_types import ConversationType, MessageType
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.corpuses.models import Corpus
+from opencontractserver.tasks.agent_tasks import trigger_agent_responses_for_message
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.mention_parser import (
     link_message_to_resources,
@@ -106,6 +107,16 @@ class CreateThreadMutation(graphene.Mutation):
                 logger.debug(
                     f"Thread {conversation.pk} initial message linked: {link_result}"
                 )
+
+                # Trigger agent responses if any agents were mentioned
+                if link_result.get("agents_linked", 0) > 0:
+                    trigger_agent_responses_for_message.delay(
+                        message_id=chat_message.pk,
+                        user_id=user.pk,
+                    )
+                    logger.debug(
+                        f"Triggered agent responses for message {chat_message.pk}"
+                    )
             except Exception as e:
                 # Don't fail the whole mutation if mention parsing fails
                 logger.error(f"Error parsing mentions in initial message: {e}")
@@ -182,6 +193,16 @@ class CreateThreadMessageMutation(graphene.Mutation):
                 mentioned_ids = parse_mentions_from_content(content)
                 link_result = link_message_to_resources(chat_message, mentioned_ids)
                 logger.debug(f"Message {chat_message.pk} linked: {link_result}")
+
+                # Trigger agent responses if any agents were mentioned
+                if link_result.get("agents_linked", 0) > 0:
+                    trigger_agent_responses_for_message.delay(
+                        message_id=chat_message.pk,
+                        user_id=user.pk,
+                    )
+                    logger.debug(
+                        f"Triggered agent responses for message {chat_message.pk}"
+                    )
             except Exception as e:
                 # Don't fail the whole mutation if mention parsing fails
                 logger.error(f"Error parsing mentions in message: {e}")
@@ -272,6 +293,16 @@ class ReplyToMessageMutation(graphene.Mutation):
                 mentioned_ids = parse_mentions_from_content(content)
                 link_result = link_message_to_resources(reply_message, mentioned_ids)
                 logger.debug(f"Reply {reply_message.pk} linked: {link_result}")
+
+                # Trigger agent responses if any agents were mentioned
+                if link_result.get("agents_linked", 0) > 0:
+                    trigger_agent_responses_for_message.delay(
+                        message_id=reply_message.pk,
+                        user_id=user.pk,
+                    )
+                    logger.debug(
+                        f"Triggered agent responses for reply {reply_message.pk}"
+                    )
             except Exception as e:
                 # Don't fail the whole mutation if mention parsing fails
                 logger.error(f"Error parsing mentions in reply: {e}")

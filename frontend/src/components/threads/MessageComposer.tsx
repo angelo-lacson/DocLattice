@@ -134,6 +134,22 @@ const EditorContainer = styled.div`
       color: ${({ theme }) => color.P8};
       border: 1px solid ${({ theme }) => color.P4};
     }
+
+    /* Agent mention link styling */
+    a[href^="/agents/"],
+    a[href*="/agents/"] {
+      background: linear-gradient(135deg, #3b82f620 0%, #8b5cf620 100%);
+      color: #6366f1;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+      text-decoration: none;
+      border: 1px solid #8b5cf640;
+
+      &:hover {
+        background: linear-gradient(135deg, #3b82f630 0%, #8b5cf630 100%);
+      }
+    }
   }
 `;
 
@@ -366,6 +382,24 @@ export function MessageComposer({
                           label: `@annotation:${resource.id}`,
                           href: `${baseUrl}?ann=${resource.id}&structural=true`,
                           type: "annotation",
+                        };
+
+                      case "agent":
+                        const agent = resource.agent!;
+                        // Use the mention format from the agent, or construct it
+                        const agentLabel =
+                          agent.mentionFormat || `@agent:${agent.slug}`;
+                        // Agent URL - global agents at /agents/{slug}, corpus agents at corpus path
+                        const agentHref =
+                          agent.scope === "GLOBAL"
+                            ? `/agents/${agent.slug}`
+                            : agent.corpus
+                            ? `/c/${agent.corpus.id}/${agent.corpus.title}/agents/${agent.slug}`
+                            : `/agents/${agent.slug}`;
+                        return {
+                          label: agentLabel,
+                          href: agentHref,
+                          type: "agent",
                         };
 
                       default:
