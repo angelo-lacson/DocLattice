@@ -400,7 +400,7 @@ export const GlobalAgentManagement: React.FC = () => {
     <Container>
       <PageHeader>
         <PageTitle as="h1">
-          <Icon name="robot" /> Global Agent Management
+          <Icon name="microchip" /> Global Agent Management
         </PageTitle>
         <Button
           primary
@@ -745,18 +745,18 @@ export const GlobalAgentManagement: React.FC = () => {
 
       {/* Delete Confirmation */}
       <ConfirmModal
-        open={deleteModalOpen}
+        visible={deleteModalOpen}
         message={`Are you sure you want to delete the agent "${agentToDelete?.name}"? This action cannot be undone.`}
-        onConfirm={() => {
+        yesAction={() => {
           if (agentToDelete) {
             deleteAgent({ variables: { agentId: agentToDelete.id } });
           }
         }}
-        onCancel={() => {
+        noAction={() => {
           setDeleteModalOpen(false);
           setAgentToDelete(null);
         }}
-        loading={deleting}
+        toggleModal={() => setDeleteModalOpen(false)}
       />
     </Container>
   );

@@ -462,7 +462,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
     <Container>
       <SectionHeader>
         <SectionTitle as="h3">
-          <Icon name="robot" /> Corpus Agents
+          <Icon name="microchip" /> Corpus Agents
         </SectionTitle>
         <Button
           primary
@@ -488,7 +488,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
       {agents.length === 0 ? (
         <EmptyState>
           <EmptyStateIcon>
-            <Icon name="robot" size="large" />
+            <Icon name="microchip" size="large" />
           </EmptyStateIcon>
           <EmptyStateTitle>No Corpus Agents</EmptyStateTitle>
           <EmptyStateDescription>
@@ -826,18 +826,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
 
       {/* Delete Confirmation */}
       <ConfirmModal
-        open={deleteModalOpen}
+        visible={deleteModalOpen}
         message={`Are you sure you want to delete the agent "${agentToDelete?.name}"? This action cannot be undone.`}
-        onConfirm={() => {
+        yesAction={() => {
           if (agentToDelete) {
             deleteAgent({ variables: { agentId: agentToDelete.id } });
           }
         }}
-        onCancel={() => {
+        noAction={() => {
           setDeleteModalOpen(false);
           setAgentToDelete(null);
         }}
-        loading={deleting}
+        toggleModal={() => setDeleteModalOpen(false)}
       />
     </Container>
   );
