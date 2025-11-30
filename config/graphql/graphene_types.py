@@ -2536,6 +2536,10 @@ class CriteriaTypeDefinitionType(graphene.ObjectType):
 class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for agent configurations."""
 
+    mention_format = graphene.String(
+        description="The @ mention format for this agent (e.g., '@agent:research-assistant')"
+    )
+
     class Meta:
         from opencontractserver.agents.models import AgentConfiguration
 
@@ -2545,6 +2549,7 @@ class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         fields = (
             "id",
             "name",
+            "slug",
             "description",
             "system_instructions",
             "available_tools",
@@ -2564,6 +2569,12 @@ class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "is_active": ["exact"],
             "corpus": ["exact"],
         }
+
+    def resolve_mention_format(self, info):
+        """Return the @ mention format for this agent."""
+        if self.slug:
+            return f"@agent:{self.slug}"
+        return None
 
 
 class NotificationType(DjangoObjectType):
