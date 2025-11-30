@@ -2593,6 +2593,10 @@ class Query(graphene.ObjectType):
     agents = DjangoFilterConnectionField(
         AgentConfigurationType, filterset_class=AgentConfigurationFilter
     )
+    # Alias for frontend compatibility
+    agent_configurations = DjangoFilterConnectionField(
+        AgentConfigurationType, filterset_class=AgentConfigurationFilter
+    )
     agent = relay.Node.Field(AgentConfigurationType)
 
     search_agents_for_mention = DjangoConnectionField(
@@ -2612,6 +2616,10 @@ class Query(graphene.ObjectType):
         return AgentConfiguration.objects.visible_to_user(
             info.context.user
         ).select_related("creator", "corpus")
+
+    def resolve_agent_configurations(self, info, **kwargs):
+        """Alias for resolve_agents - frontend compatibility."""
+        return self.resolve_agents(info, **kwargs)
 
     def resolve_agent(self, info, **kwargs):
         """Resolve a single agent configuration by ID."""
