@@ -322,6 +322,7 @@ export const showDeleteDocumentsModal = makeVar<boolean>(false);
 export const showNewLabelsetModal = makeVar<boolean>(false);
 export const showExportModal = makeVar<boolean>(false);
 export const showUserSettingsModal = makeVar<boolean>(false);
+export const showGlobalSettingsModal = makeVar<boolean>(false);
 export const showKnowledgeBaseModal = persistentVar<{
   isOpen: boolean;
   documentId: string | null;
