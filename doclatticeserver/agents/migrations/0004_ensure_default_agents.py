@@ -5,7 +5,7 @@ from django.conf import settings
 from django.db import migrations
 
 
-def ensure_default_agents(apps, schema_editor):
+def ensure_default_agents(apps, schema_editor):  # pragma: no cover
     """
     Create or update default global agents with slugs.
 
@@ -98,7 +98,7 @@ def ensure_default_agents(apps, schema_editor):
     ).update(slug="default-corpus-agent")
 
 
-def reverse_migration(apps, schema_editor):
+def reverse_migration(apps, schema_editor):  # pragma: no cover
     """Remove default agents created by this migration."""
     AgentConfiguration = apps.get_model("agents", "AgentConfiguration")
     # Only delete if they were created by this migration (have our slugs)

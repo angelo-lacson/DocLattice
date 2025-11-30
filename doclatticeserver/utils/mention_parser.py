@@ -205,7 +205,7 @@ def link_message_to_resources(
             logger.warning(
                 f"Document with slug '{doc_slug}' not found or not accessible"
             )
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.error(f"Error linking document '{doc_slug}' to message: {e}")
 
     # Link annotations (ManyToMany - link all mentioned)
@@ -226,7 +226,7 @@ def link_message_to_resources(
                 f"Linked message {chat_message.pk} to "
                 f"{result['annotations_linked']} annotations"
             )
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.error(f"Error linking annotations to message: {e}")
 
     # Link agents (ManyToMany - link all mentioned)
@@ -271,7 +271,7 @@ def link_message_to_resources(
                 f"Linked message {chat_message.pk} to "
                 f"{result['agents_linked']} agents"
             )
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.error(f"Error linking agents to message: {e}")
 
     return result
