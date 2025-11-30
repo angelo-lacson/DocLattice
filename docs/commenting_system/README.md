@@ -84,14 +84,24 @@ The frontend UI components have not been built yet. The backend API is ready to 
 - Automatic cleanup via signal handlers
 - Rich notification context data
 
-### 6. Rate Limiting
+### 6. Agent Mentions
+
+- Reference AI agents in chat messages using `@agent` syntax
+- Autocomplete search for agents via GraphQL query
+- Support for global agents and corpus-scoped agents
+- Server-side permission enforcement using `visible_to_user()`
+- Markdown link format: `[@Agent Name](/agents/agent-slug)`
+- ManyToMany relationship tracking between messages and mentioned agents
+- Default agents: Document Assistant, Corpus Assistant
+
+### 7. Rate Limiting
 
 - Multi-level rate limiting to prevent abuse
 - Different limits for different operation types
 - User-tier based limits (superuser > authenticated > anonymous)
 - IP and user-based tracking
 
-### 7. Engagement Metrics & Analytics
+### 8. Engagement Metrics & Analytics
 
 - Denormalized engagement metrics per corpus (threads, messages, contributors)
 - Time-based metrics (7-day and 30-day activity)
@@ -117,7 +127,7 @@ This documentation is organized into the following sections:
 
 ### Key Backend Files
 
-- **Models**: `opencontractserver/conversations/models.py`, `opencontractserver/badges/models.py`, `opencontractserver/notifications/models.py`
+- **Models**: `opencontractserver/conversations/models.py`, `opencontractserver/badges/models.py`, `opencontractserver/notifications/models.py`, `opencontractserver/agents/models.py`
 - **Signals**: `opencontractserver/conversations/signals.py`, `opencontractserver/notifications/signals.py`
 - **Thread Mutations**: `config/graphql/conversation_mutations.py`
 - **Voting Mutations**: `config/graphql/voting_mutations.py`
@@ -126,6 +136,7 @@ This documentation is organized into the following sections:
 - **Notification Mutations**: `config/graphql/notification_mutations.py`
 - **Queries**: `config/graphql/queries.py`
 - **Rate Limits**: `config/graphql/ratelimits.py`
+- **Mention Parser**: `opencontractserver/utils/mention_parser.py`
 
 ### Test Files
 
@@ -138,6 +149,7 @@ This documentation is organized into the following sections:
 - `opencontractserver/tests/test_badges.py`
 - `opencontractserver/tests/test_notifications.py`
 - `opencontractserver/tests/test_notification_graphql.py`
+- `opencontractserver/tests/test_agents.py`
 
 ## Development Guidelines
 

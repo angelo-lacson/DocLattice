@@ -1098,3 +1098,275 @@ function CreateThreadForm({ corpusId }) {
   return <form onSubmit={handleSubmit}>...</form>;
 }
 ```
+
+## Agent Mentions
+
+**Location**: `config/graphql/queries.py`, `opencontractserver/utils/mention_parser.py`
+
+The agent mentions feature allows users to reference AI agents in chat messages using `@agent:slug` syntax. When a message containing agent mentions is created, the system automatically parses the content and links the mentioned agents to the message.
+
+### Query: searchAgentsForMention
+
+**Search for agents to autocomplete in mention UI**
+
+**Rate Limit**: 100/minute (READ_LIGHT)
+
+```graphql
+query SearchAgentsForMention(
+  $searchText: String!
+  $corpusId: ID
+  $limit: Int
+) {
+  searchAgentsForMention(
+    searchText: $searchText
+    corpusId: $corpusId
+    limit: $limit
+  ) {
+    edges {
+      node {
+        id
+        name
+        slug
+        description
+        scope
+        badgeConfig
+      }
+    }
+  }
+}
+```
+
+**Implementation** (`queries.py:1245-1310`):
+1. Filters agents using `visible_to_user()` for permission enforcement
+2. Searches by name or slug using case-insensitive `icontains`
+3. Returns global agents (GLOBAL scope) always
+4. Returns corpus-scoped agents (CORPUS scope) only if `corpusId` is provided
+5. Orders results with exact matches first, then partial matches
+6. Limits results (default: 10, max: 50)
+
+**Parameters**:
+- `searchText` (required): Text to search for in agent name/slug
+- `corpusId` (optional): If provided, also returns corpus-scoped agents for this corpus
+- `limit` (optional): Maximum results to return (default: 10)
+
+**Example**:
+
+```graphql
+# Search for agents matching "document"
+query {
+  searchAgentsForMention(
+    searchText: "document"
+    corpusId: "Q29ycHVzVHlwZTox"
+    limit: 5
+  ) {
+    edges {
+      node {
+        id
+        name
+        slug
+        description
+      }
+    }
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "data": {
+    "searchAgentsForMention": {
+      "edges": [
+        {
+          "node": {
+            "id": "QWdlbnRDb25maWd1cmF0aW9uVHlwZTox",
+            "name": "Document Assistant",
+            "slug": "default-document-agent",
+            "description": "AI assistant for analyzing individual documents"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+### Mention Parsing
+
+**Location**: `opencontractserver/utils/mention_parser.py`
+
+When messages are created via mutations, the system parses Markdown content for mentions:
+
+#### Supported Mention URL Patterns
+
+| Pattern | Resource Type | Example |
+|---------|--------------|---------|
+| `/users/{userSlug}` | User | `[@john](/users/john-doe)` |
+| `/c/{userIdent}/{corpusIdent}` | Corpus | `[@corpus](/c/john/my-corpus)` |
+| `/d/{userIdent}/{docIdent}` | Document | `[@doc](/d/john/contract-1)` |
+| `/d/{userIdent}/{corpusIdent}/{docIdent}` | Document (in corpus) | `[@doc](/d/john/corpus/doc)` |
+| `/d/...?ann={annotationId}` | Annotation | `[@ann](/d/john/doc?ann=123)` |
+| `/agents/{agentSlug}` | Agent (global) | `[@agent](/agents/default-document-agent)` |
+| `/c/{userIdent}/{corpusIdent}/agents/{agentSlug}` | Agent (corpus-scoped) | `[@agent](/c/john/corpus/agents/my-agent)` |
+
+#### parse_mentions_from_content()
+
+Parses Markdown content and extracts mentioned resource IDs:
+
+```python
+from opencontractserver.utils.mention_parser import parse_mentions_from_content
+
+markdown = '''
+Check [@Document Assistant](/agents/default-document-agent) for analysis.
+See [@contract](/d/john/contract-1) for details.
+'''
+
+mentioned = parse_mentions_from_content(markdown)
+# Returns:
+# {
+#     'users': set(),
+#     'documents': {'contract-1'},
+#     'annotations': set(),
+#     'corpuses': set(),
+#     'agents': {'default-document-agent'}
+# }
+```
+
+#### link_message_to_resources()
+
+Links parsed mentions to a ChatMessage instance:
+
+```python
+from opencontractserver.utils.mention_parser import (
+    parse_mentions_from_content,
+    link_message_to_resources
+)
+
+# Parse mentions from message content
+mentioned_ids = parse_mentions_from_content(message.content)
+
+# Link resources to message (with permission checks)
+result = link_message_to_resources(chat_message, mentioned_ids)
+# Returns:
+# {
+#     'documents_linked': 1,
+#     'annotations_linked': 0,
+#     'users_mentioned': 0,
+#     'corpuses_mentioned': 0,
+#     'agents_linked': 1
+# }
+```
+
+**Security**: The `link_message_to_resources()` function enforces server-side permission checks using `visible_to_user()` to ensure users can only mention agents they have access to.
+
+### MessageType Updates
+
+The `MessageType` now includes:
+
+```graphql
+type MessageType {
+  # ... existing fields ...
+
+  # Mentioned agents linked to this message
+  mentionedAgents: [AgentConfigurationType!]!
+}
+```
+
+### AgentConfigurationType
+
+**Location**: `config/graphql/graphene_types.py`
+
+```graphql
+type AgentConfigurationType {
+  id: ID!
+  name: String!
+  slug: String                    # URL-friendly identifier for mentions
+  description: String
+  scope: AgentScopeEnum!          # GLOBAL or CORPUS
+  badgeConfig: JSONScalar         # Icon, color, label for UI display
+  isActive: Boolean!
+  isPublic: Boolean!
+  corpus: CorpusType              # Only for CORPUS-scoped agents
+  creator: UserType!
+  created: DateTime!
+  modified: DateTime!
+}
+```
+
+### Database Schema
+
+The `ChatMessage` model includes:
+
+```python
+class ChatMessage(models.Model):
+    # ... existing fields ...
+
+    # ManyToMany field for mentioned agents
+    mentioned_agents = models.ManyToManyField(
+        'agents.AgentConfiguration',
+        blank=True,
+        related_name='mentioned_in_messages',
+        help_text='Agents mentioned via @agent syntax'
+    )
+```
+
+The `AgentConfiguration` model includes:
+
+```python
+class AgentConfiguration(models.Model):
+    # ... existing fields ...
+
+    # Slug field for URL-friendly mentions
+    slug = models.SlugField(
+        max_length=128,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="URL-friendly identifier for mentions (e.g., 'research-assistant')"
+    )
+```
+
+### Default Agents
+
+The system creates default global agents during migration:
+
+| Name | Slug | Description |
+|------|------|-------------|
+| Document Assistant | `default-document-agent` | AI assistant for analyzing individual documents |
+| Corpus Assistant | `default-corpus-agent` | AI assistant for analyzing collections of documents |
+
+### Frontend Integration
+
+The frontend uses a TipTap editor extension for agent mentions:
+
+```typescript
+// Example: MentionAgentExtension configuration
+const MentionAgent = Mention.extend({
+  name: 'mentionAgent',
+}).configure({
+  suggestion: {
+    char: '@',
+    items: async ({ query }) => {
+      const { data } = await client.query({
+        query: SEARCH_AGENTS_FOR_MENTION,
+        variables: { searchText: query, corpusId, limit: 10 }
+      });
+      return data.searchAgentsForMention.edges.map(e => e.node);
+    },
+    render: () => {
+      // Returns popup component for autocomplete
+    }
+  }
+});
+```
+
+The extension renders mentions as Markdown links:
+- Input: User types `@doc` and selects "Document Assistant"
+- Output: `[@Document Assistant](/agents/default-document-agent)`
+
+### Test Coverage
+
+Agent mention tests are in:
+- `opencontractserver/tests/test_agents.py` - Backend tests for search query and mention parsing
