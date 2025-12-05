@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models import Q
+from django.utils.text import slugify
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
 from opencontractserver.shared.Managers import BaseVisibilityManager
@@ -151,6 +152,23 @@ class AgentConfiguration(BaseOCModel):
             f" ({self.corpus.title})" if self.scope == "CORPUS" else " (Global)"
         )
         return f"{self.name}{scope_label}"
+
+    def save(self, *args, **kwargs):
+        """Auto-generate slug from name if not provided."""
+        if not self.slug:
+            base_slug = slugify(self.name)
+            # Ensure uniqueness by appending a number if needed
+            slug = base_slug
+            counter = 1
+            while (
+                AgentConfiguration.objects.filter(slug=slug)
+                .exclude(pk=self.pk)
+                .exists()
+            ):
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
 
 
 class AgentConfigurationUserObjectPermission(UserObjectPermissionBase):

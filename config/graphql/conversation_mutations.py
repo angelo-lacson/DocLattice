@@ -18,7 +18,11 @@ from graphql_relay import from_global_id
 
 from config.graphql.graphene_types import ConversationType, MessageType
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
-from opencontractserver.conversations.models import ChatMessage, Conversation
+from opencontractserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    MessageTypeChoices,
+)
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.tasks.agent_tasks import trigger_agent_responses_for_message
 from opencontractserver.types.enums import PermissionTypes
@@ -95,7 +99,7 @@ class CreateThreadMutation(graphene.Mutation):
             # Create the initial message
             chat_message = ChatMessage.objects.create(
                 conversation=conversation,
-                msg_type="HUMAN",
+                msg_type=MessageTypeChoices.HUMAN,
                 content=initial_message,
                 creator=user,
             )
@@ -180,7 +184,7 @@ class CreateThreadMessageMutation(graphene.Mutation):
             # Create the message
             chat_message = ChatMessage.objects.create(
                 conversation=conversation,
-                msg_type="HUMAN",
+                msg_type=MessageTypeChoices.HUMAN,
                 content=content,
                 creator=user,
             )
@@ -279,7 +283,7 @@ class ReplyToMessageMutation(graphene.Mutation):
             # Create the reply message
             reply_message = ChatMessage.objects.create(
                 conversation=conversation,
-                msg_type="HUMAN",
+                msg_type=MessageTypeChoices.HUMAN,
                 content=content,
                 parent_message=parent_message,
                 creator=user,

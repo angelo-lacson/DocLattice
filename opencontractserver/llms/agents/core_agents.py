@@ -23,6 +23,7 @@ from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
     MessageStateChoices,
+    MessageTypeChoices,
 )
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -1318,7 +1319,7 @@ class CoreConversationManager:
         message = await ChatMessage.objects.acreate(
             conversation=self.conversation,
             content=content,
-            msg_type="HUMAN",
+            msg_type=MessageTypeChoices.HUMAN,
             creator_id=self.user_id,
             data={
                 "state": MessageState.COMPLETED,
@@ -1352,7 +1353,7 @@ class CoreConversationManager:
         message = await ChatMessage.objects.acreate(
             conversation=self.conversation,
             content=content,
-            msg_type="LLM",
+            msg_type=MessageTypeChoices.LLM,
             creator_id=self.user_id,
             data=data,
             state=MessageStateChoices.COMPLETED,

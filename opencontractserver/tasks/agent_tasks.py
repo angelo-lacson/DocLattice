@@ -8,13 +8,17 @@ When a user @mentions an agent in a chat message, these tasks handle:
 4. Updating the message with final content
 """
 
+import asyncio
 import logging
 
 from asgiref.sync import async_to_sync
 from celery import shared_task
 from channels.layers import get_channel_layer
 
-from opencontractserver.conversations.models import MessageStateChoices, MessageType
+from opencontractserver.conversations.models import (
+    MessageStateChoices,
+    MessageTypeChoices,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +30,7 @@ def get_thread_channel_group(conversation_id: int) -> str:
 
 def broadcast_to_thread(conversation_id: int, message_type: str, data: dict) -> None:
     """
-    Broadcast a message to all WebSocket consumers watching a thread.
+    Broadcast a message to all WebSocket consumers watching a thread (sync version).
 
     Args:
         conversation_id: The conversation ID
@@ -40,6 +44,32 @@ def broadcast_to_thread(conversation_id: int, message_type: str, data: dict) -> 
 
     group_name = get_thread_channel_group(conversation_id)
     async_to_sync(channel_layer.group_send)(
+        group_name,
+        {
+            "type": message_type.replace(".", "_"),  # Django Channels convention
+            **data,
+        },
+    )
+
+
+async def async_broadcast_to_thread(
+    conversation_id: int, message_type: str, data: dict
+) -> None:
+    """
+    Broadcast a message to all WebSocket consumers watching a thread (async version).
+
+    Args:
+        conversation_id: The conversation ID
+        message_type: Type of message (e.g., 'agent.stream', 'agent.complete')
+        data: Message payload
+    """
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        logger.warning("No channel layer configured - skipping WebSocket broadcast")
+        return
+
+    group_name = get_thread_channel_group(conversation_id)
+    await channel_layer.group_send(
         group_name,
         {
             "type": message_type.replace(".", "_"),  # Django Channels convention
@@ -78,7 +108,13 @@ def generate_agent_response(
 
     from opencontractserver.agents.models import AgentConfiguration
     from opencontractserver.conversations.models import ChatMessage
-    from opencontractserver.llms import agents as agent_factory
+    from opencontractserver.llms.agents.core_agents import (
+        ContentEvent,
+        FinalEvent,
+        SourceEvent,
+        ThoughtEvent,
+    )
+    from opencontractserver.llms.api import agents as agent_api
 
     User = get_user_model()
 
@@ -104,7 +140,7 @@ def generate_agent_response(
         # 2. Create placeholder response message
         response_message = ChatMessage.objects.create(
             conversation=conversation,
-            msg_type=MessageType.LLM,
+            msg_type=MessageTypeChoices.LLM,
             agent_configuration=agent_config,
             content="",  # Will be filled during streaming
             parent_message=source_message,
@@ -124,116 +160,122 @@ def generate_agent_response(
             },
         )
 
-        # 3. Gather context from thread
-        thread_messages = (
-            ChatMessage.objects.filter(
-                conversation=conversation,
-                deleted_at__isnull=True,
-            )
-            .exclude(pk=response_message.pk)
-            .order_by("created_at")[:50]  # Limit context window
-        )
+        # 3. Get the user's message content
+        user_message = source_message.content
 
-        # Convert to agent message format
-        context_messages = []
-        for msg in thread_messages:
-            role = "user" if msg.msg_type == MessageType.HUMAN else "assistant"
-            context_messages.append({"role": role, "content": msg.content})
-
-        # 4. Build the agent based on context
-        if corpus:
-            # Corpus-scoped agent
-            agent = agent_factory.for_corpus(
-                corpus_pk=corpus.pk,
-                user_id=user.pk,
-                system_instructions=agent_config.system_instructions,
-                available_tools=agent_config.available_tools,
-            )
-        else:
-            # Document-scoped or generic agent
-            # For now, use corpus agent with no corpus (limited tools)
-            agent = agent_factory.for_corpus(
-                corpus_pk=None,
-                user_id=user.pk,
-                system_instructions=agent_config.system_instructions,
-                available_tools=agent_config.available_tools,
-            )
-
-        # 5. Generate response with streaming
+        # 4. Generate response with streaming
         accumulated_content = ""
         sources_data = []
         timeline_data = []
 
-        # The agent.astream_events() is async, but we're in a sync Celery task
-        # We need to run the async generator synchronously
-        import asyncio
-
         async def run_agent():
             nonlocal accumulated_content
 
-            async for event in agent.astream_events(
-                {"messages": context_messages},
-                version="v2",
-            ):
-                event_kind = event.get("event")
-                event_data = event.get("data", {})
+            # Build the agent - for_corpus is async
+            if corpus:
+                agent = await agent_api.for_corpus(
+                    corpus=corpus,
+                    user_id=user.pk,
+                    system_prompt=agent_config.system_instructions,
+                    conversation=conversation,
+                )
+            else:
+                # No corpus context - create a minimal agent
+                # This shouldn't normally happen for thread agents
+                logger.warning(
+                    f"[AgentTask] No corpus found for conversation {conversation_id}"
+                )
+                agent = await agent_api.for_corpus(
+                    corpus=1,  # Fallback - will need proper handling
+                    user_id=user.pk,
+                    system_prompt=agent_config.system_instructions,
+                    conversation=conversation,
+                )
 
-                # Handle different event types
-                if event_kind == "on_chat_model_stream":
-                    chunk = event_data.get("chunk")
-                    if chunk and hasattr(chunk, "content") and chunk.content:
-                        token = chunk.content
-                        accumulated_content += token
-
-                        # Broadcast token
-                        broadcast_to_thread(
-                            conversation_id,
-                            "agent.stream_token",
-                            {
-                                "message_id": str(response_message.pk),
-                                "token": token,
-                            },
-                        )
-
-                elif event_kind == "on_tool_start":
-                    tool_name = event_data.get("name", "unknown")
-                    tool_input = event_data.get("input", {})
-                    timeline_data.append(
-                        {
-                            "type": "tool_call",
-                            "tool": tool_name,
-                            "args": tool_input,
-                        }
+            # Stream the agent response
+            # Pass store_messages=False since we handle message persistence ourselves
+            # (we already created response_message above with parent_message set)
+            async for event in agent.stream(user_message, store_messages=False):
+                if isinstance(event, ContentEvent):
+                    # Token/content chunk
+                    token = event.content
+                    accumulated_content = event.accumulated_content or (
+                        accumulated_content + token
                     )
-                    broadcast_to_thread(
+
+                    # Broadcast token (use async version inside async context)
+                    await async_broadcast_to_thread(
                         conversation_id,
-                        "agent.tool_call",
+                        "agent.stream_token",
                         {
                             "message_id": str(response_message.pk),
-                            "tool": tool_name,
-                            "args": tool_input,
+                            "token": token,
                         },
                     )
 
-                elif event_kind == "on_tool_end":
-                    tool_output = event_data.get("output", "")
-                    timeline_data.append(
-                        {
-                            "type": "tool_result",
-                            "result": str(tool_output)[:500],  # Truncate
-                        }
-                    )
+                elif isinstance(event, ThoughtEvent):
+                    # Agent thinking/tool usage
+                    thought = event.thought
+                    metadata = event.metadata or {}
+                    tool_name = metadata.get("tool_name")
+
+                    if tool_name:
+                        timeline_data.append(
+                            {
+                                "type": "tool_call",
+                                "tool": tool_name,
+                                "thought": thought,
+                            }
+                        )
+                        await async_broadcast_to_thread(
+                            conversation_id,
+                            "agent.tool_call",
+                            {
+                                "message_id": str(response_message.pk),
+                                "tool": tool_name,
+                                "thought": thought,
+                            },
+                        )
+                    else:
+                        timeline_data.append(
+                            {
+                                "type": "thought",
+                                "thought": thought,
+                            }
+                        )
+
+                elif isinstance(event, SourceEvent):
+                    # Sources discovered
+                    if event.sources:
+                        for source in event.sources:
+                            sources_data.append(source.to_dict())
+
+                elif isinstance(event, FinalEvent):
+                    # Final event - use its content if we don't have accumulated
+                    if event.content and not accumulated_content:
+                        accumulated_content = event.content
+                    if event.sources:
+                        for source in event.sources:
+                            if source.to_dict() not in sources_data:
+                                sources_data.append(source.to_dict())
 
         # Run the async generator
         try:
             asyncio.run(run_agent())
         except Exception as agent_error:
             logger.exception(f"[AgentTask] Agent execution error: {agent_error}")
-            accumulated_content = (
-                f"I encountered an error while processing: {str(agent_error)}"
-            )
+            # Only overwrite content if we have nothing useful
+            if not accumulated_content.strip():
+                accumulated_content = (
+                    f"I encountered an error while processing: {str(agent_error)}"
+                )
+            else:
+                # Append error notice to partial content
+                accumulated_content += (
+                    "\n\n---\n*Note: Response may be incomplete due to an error.*"
+                )
 
-        # 6. Update message with final content
+        # 5. Update message with final content
         response_message.content = accumulated_content
         response_message.state = MessageStateChoices.COMPLETED
         response_message.data = {
@@ -279,9 +321,9 @@ def generate_agent_response(
     except Exception as e:
         logger.exception(f"[AgentTask] Unexpected error: {e}")
 
-        # Update message state to failed if it was created
+        # Update message state to error if it was created
         if response_message:
-            response_message.state = MessageStateChoices.FAILED
+            response_message.state = MessageStateChoices.ERROR
             response_message.content = f"Error generating response: {str(e)}"
             response_message.save(update_fields=["state", "content"])
 
