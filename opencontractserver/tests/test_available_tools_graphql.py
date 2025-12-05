@@ -3,10 +3,7 @@ Tests for the availableTools GraphQL query.
 """
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
 from graphene_django.utils.testing import GraphQLTestCase
-
-from opencontractserver.llms.tools.tool_registry import get_all_tools
 
 User = get_user_model()
 
@@ -124,7 +121,14 @@ class AvailableToolsQueryTests(GraphQLTestCase):
         self.assertGreater(len(categories), 0)
 
         # Check expected categories
-        expected = ["search", "document", "corpus", "notes", "annotations", "coordination"]
+        expected = [
+            "search",
+            "document",
+            "corpus",
+            "notes",
+            "annotations",
+            "coordination",
+        ]
         for cat in expected:
             self.assertIn(cat, categories)
 

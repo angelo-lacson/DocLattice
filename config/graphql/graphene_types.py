@@ -2126,6 +2126,15 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         "Only includes resources visible to the requesting user.",
     )
 
+    def resolve_msg_type(self, info):
+        """Convert msg_type to string for GraphQL enum compatibility."""
+        if self.msg_type:
+            # Handle both string values and enum members
+            if hasattr(self.msg_type, "value"):
+                return self.msg_type.value
+            return self.msg_type
+        return None
+
     def resolve_agent_type(self, info):
         """Convert string agent_type from model to enum."""
         if self.agent_type:

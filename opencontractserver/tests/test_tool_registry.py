@@ -2,8 +2,6 @@
 Tests for the agent tool registry.
 """
 
-import pytest
-
 from opencontractserver.llms.tools.tool_registry import (
     AVAILABLE_TOOLS,
     ToolCategory,

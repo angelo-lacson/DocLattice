@@ -158,7 +158,11 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.DOCUMENT,
         requires_corpus=True,
         parameters=(
-            ("limit", "Maximum number of versions to return (most recent first)", False),
+            (
+                "limit",
+                "Maximum number of versions to return (most recent first)",
+                False,
+            ),
         ),
     ),
     ToolDefinition(
@@ -226,8 +230,16 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         requires_approval=True,
         parameters=(
             ("note_id", "ID of the note to update", True),
-            ("new_content", "Full new content (mutually exclusive with diff_text)", False),
-            ("diff_text", "ndiff format diff to apply (mutually exclusive with new_content)", False),
+            (
+                "new_content",
+                "Full new content (mutually exclusive with diff_text)",
+                False,
+            ),
+            (
+                "diff_text",
+                "ndiff format diff to apply (mutually exclusive with new_content)",
+                False,
+            ),
         ),
     ),
     # -------------------------------------------------------------------------
@@ -274,7 +286,11 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.COORDINATION,
         requires_corpus=True,
         parameters=(
-            ("document_id", "ID of the target document (must belong to this corpus)", True),
+            (
+                "document_id",
+                "ID of the target document (must belong to this corpus)",
+                True,
+            ),
             ("question", "The natural-language question to forward", True),
         ),
     ),
