@@ -5,6 +5,7 @@ GraphQL mutations for the agent configuration system.
 import logging
 
 import graphene
+from graphene.types.generic import GenericScalar
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
@@ -26,6 +27,10 @@ class CreateAgentConfigurationMutation(graphene.Mutation):
 
     class Arguments:
         name = graphene.String(required=True, description="Agent name")
+        slug = graphene.String(
+            required=False,
+            description="URL-friendly slug for @mentions (auto-generated from name if not provided)",
+        )
         description = graphene.String(required=True, description="Agent description")
         system_instructions = graphene.String(
             required=True, description="System instructions for the agent"
@@ -40,7 +45,7 @@ class CreateAgentConfigurationMutation(graphene.Mutation):
             required=False,
             description="List of tools requiring explicit permission",
         )
-        badge_config = graphene.JSONString(
+        badge_config = GenericScalar(
             required=False,
             description="Badge display configuration",
         )
@@ -68,6 +73,7 @@ class CreateAgentConfigurationMutation(graphene.Mutation):
         description,
         system_instructions,
         scope,
+        slug=None,
         available_tools=None,
         permission_required_tools=None,
         badge_config=None,
@@ -123,14 +129,16 @@ class CreateAgentConfigurationMutation(graphene.Mutation):
                     agent=None,
                 )
 
-            # Create the agent
+            # Create the agent (slug auto-generated if not provided via model.save())
+            # Note: badge_config comes as a dict from graphene.JSONString
             agent = AgentConfiguration.objects.create(
                 name=name,
+                slug=slug if slug else None,  # None triggers auto-generation
                 description=description,
                 system_instructions=system_instructions,
                 available_tools=available_tools or [],
                 permission_required_tools=permission_required_tools or [],
-                badge_config=badge_config if badge_config is not None else {},
+                badge_config=badge_config or {},
                 avatar_url=avatar_url,
                 scope=scope,
                 corpus=corpus,
@@ -163,11 +171,15 @@ class UpdateAgentConfigurationMutation(graphene.Mutation):
     class Arguments:
         agent_id = graphene.ID(required=True, description="Agent ID to update")
         name = graphene.String(required=False)
+        slug = graphene.String(
+            required=False,
+            description="URL-friendly slug for @mentions",
+        )
         description = graphene.String(required=False)
         system_instructions = graphene.String(required=False)
         available_tools = graphene.List(graphene.String, required=False)
         permission_required_tools = graphene.List(graphene.String, required=False)
-        badge_config = graphene.JSONString(required=False)
+        badge_config = GenericScalar(required=False)
         avatar_url = graphene.String(required=False)
         is_active = graphene.Boolean(required=False)
         is_public = graphene.Boolean(required=False)
@@ -183,6 +195,7 @@ class UpdateAgentConfigurationMutation(graphene.Mutation):
         info,
         agent_id,
         name=None,
+        slug=None,
         description=None,
         system_instructions=None,
         available_tools=None,
@@ -221,6 +234,8 @@ class UpdateAgentConfigurationMutation(graphene.Mutation):
             # Update fields
             if name is not None:
                 agent.name = name
+            if slug is not None:
+                agent.slug = slug
             if description is not None:
                 agent.description = description
             if system_instructions is not None:
@@ -230,6 +245,7 @@ class UpdateAgentConfigurationMutation(graphene.Mutation):
             if permission_required_tools is not None:
                 agent.permission_required_tools = permission_required_tools
             if badge_config is not None:
+                # badge_config comes as a dict from graphene.JSONString
                 agent.badge_config = badge_config
             if avatar_url is not None:
                 agent.avatar_url = avatar_url

@@ -390,7 +390,8 @@ export function ThreadDetail({
           <ReplyForm
             conversationId={conversationId}
             onSuccess={() => {
-              refetch();
+              // Apollo's refetchQueries in ReplyForm handles refetching
+              // No additional refetch needed here to avoid double-fetch issues
             }}
             onCancel={() => {
               // No-op for bottom composer - it's always visible

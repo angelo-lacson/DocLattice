@@ -45,6 +45,7 @@ from config.graphql.graphene_types import (
     AnnotationLabelType,
     AnnotationType,
     AssignmentType,
+    AvailableToolType,
     BadgeDistributionType,
     BadgeType,
     BulkDocumentUploadStatusType,
@@ -98,7 +99,11 @@ from doclatticeserver.annotations.models import (
 )
 from doclatticeserver.badges.criteria_registry import BadgeCriteriaRegistry
 from doclatticeserver.badges.models import Badge, UserBadge
-from doclatticeserver.conversations.models import ChatMessage, Conversation
+from doclatticeserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    MessageTypeChoices,
+)
 from doclatticeserver.corpuses.models import (
     Corpus,
     CorpusAction,
@@ -2130,8 +2135,8 @@ class Query(graphene.ObjectType):
 
         # Apply msg_type filter if provided
         if msg_type:
-            # Validate msg_type against ChatMessage.TYPE_CHOICES
-            valid_types = [choice[0] for choice in ChatMessage.TYPE_CHOICES]
+            # Validate msg_type against MessageTypeChoices
+            valid_types = [choice.value for choice in MessageTypeChoices]
             if msg_type in valid_types:
                 queryset = queryset.filter(msg_type=msg_type)
 
@@ -2677,6 +2682,45 @@ class Query(graphene.ObjectType):
         # Order: Global first, then corpus-specific, then alphabetically by name
         return qs.select_related("creator", "corpus").order_by("scope", "name")
 
+    # AGENT TOOLS QUERIES ########################################
+    available_tools = graphene.List(
+        graphene.NonNull(AvailableToolType),
+        category=graphene.String(
+            description="Filter by tool category (search, document, corpus, notes, annotations, coordination)"
+        ),
+        description="Get all available tools that can be assigned to agents",
+    )
+
+    available_tool_categories = graphene.List(
+        graphene.NonNull(graphene.String),
+        description="Get all available tool categories",
+    )
+
+    def resolve_available_tools(self, info, category=None, **kwargs):
+        """
+        Resolve available tools for agent configuration.
+
+        This returns the list of tools that can be assigned to agents,
+        optionally filtered by category.
+        """
+        from doclatticeserver.llms.tools.tool_registry import (
+            get_all_tools,
+            get_tools_by_category,
+        )
+
+        if category:
+            tools = get_tools_by_category(category)
+        else:
+            tools = get_all_tools()
+
+        return tools
+
+    def resolve_available_tool_categories(self, info, **kwargs):
+        """Resolve all available tool categories."""
+        from doclatticeserver.llms.tools.tool_registry import ToolCategory
+
+        return [cat.value for cat in ToolCategory]
+
     # NOTIFICATION QUERIES ########################################
     notifications = DjangoFilterConnectionField(
         NotificationType,
@@ -2913,7 +2957,7 @@ class Query(graphene.ObjectType):
 
             message_query = ChatMessage.objects.filter(
                 creator__in=users,
-                msg_type="HUMAN",
+                msg_type=MessageTypeChoices.HUMAN,
                 conversation__in=visible_conversations,
             )
 
@@ -3090,7 +3134,8 @@ class Query(graphene.ObjectType):
             info.context.user
         )
         message_query = ChatMessage.objects.filter(
-            msg_type="HUMAN", conversation__in=visible_conversations_stats
+            msg_type=MessageTypeChoices.HUMAN,
+            conversation__in=visible_conversations_stats,
         )
         if corpus_django_pk:
             message_query = message_query.filter(

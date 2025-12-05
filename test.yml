@@ -32,7 +32,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      # - vector-embedder  # Temporarily disabled - connection issues
+      # vector-embedder:  # Temporarily disabled - connection issues
+      #   condition: service_started
       # Note: celeryworker removed from here to avoid circular dependency
       docling-parser:
         condition: service_started
