@@ -1296,12 +1296,13 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             user_message_id: int | None = None
             from opencontractserver.conversations.models import (  # local import to avoid cycles
                 ChatMessage,
+                MessageTypeChoices,
             )
 
             if paused_msg.conversation_id:
                 async for _m in ChatMessage.objects.filter(
                     conversation_id=paused_msg.conversation_id,
-                    msg_type="HUMAN",
+                    msg_type=MessageTypeChoices.HUMAN,
                 ).order_by("-created"):
                     user_message_id = _m.id
                     break

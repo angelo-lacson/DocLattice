@@ -45,6 +45,7 @@ from config.graphql.graphene_types import (
     AnnotationLabelType,
     AnnotationType,
     AssignmentType,
+    AvailableToolType,
     BadgeDistributionType,
     BadgeType,
     BulkDocumentUploadStatusType,
@@ -98,7 +99,11 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.badges.criteria_registry import BadgeCriteriaRegistry
 from opencontractserver.badges.models import Badge, UserBadge
-from opencontractserver.conversations.models import ChatMessage, Conversation
+from opencontractserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    MessageTypeChoices,
+)
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
@@ -109,14 +114,6 @@ from opencontractserver.documents.models import Document, DocumentRelationship
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.notifications.models import Notification
-from opencontractserver.pipeline.utils import (
-    get_all_embedders,
-    get_all_parsers,
-    get_all_post_processors,
-    get_all_thumbnailers,
-    get_components_by_mimetype,
-    get_metadata_for_component,
-)
 from opencontractserver.types.enums import LabelType, PermissionTypes
 from opencontractserver.users.models import Assignment, UserExport, UserImport
 from opencontractserver.utils.permissioning import user_has_permission_for_obj
@@ -1595,6 +1592,9 @@ class Query(graphene.ObjectType):
         """
         Resolver for the pipeline_components query.
 
+        Uses cached registry for fast response times. The registry is
+        initialized once on first access and cached permanently.
+
         Args:
             info: GraphQL execution info.
             mimetype (Optional[FileTypeEnum]): MIME type to filter pipeline components.
@@ -1602,8 +1602,9 @@ class Query(graphene.ObjectType):
         Returns:
             PipelineComponentsType: The pipeline components grouped by type.
         """
-        from opencontractserver.pipeline.base.file_types import (
-            FileTypeEnum as FileTypeEnumModel,
+        from opencontractserver.pipeline.registry import (
+            get_all_components_cached,
+            get_components_by_mimetype_cached,
         )
 
         if mimetype:
@@ -1615,70 +1616,43 @@ class Query(graphene.ObjectType):
             }
             mime_type_str = mime_type_mapping.get(mimetype.value)
 
-            # If mimetype is provided, get compatible components
-            components_data = get_components_by_mimetype(mime_type_str, detailed=True)
+            # Get compatible components from cached registry
+            components_data = get_components_by_mimetype_cached(mime_type_str)
         else:
-            # Get all components
-            components_data = {
-                "parsers": get_all_parsers(),
-                "embedders": get_all_embedders(),
-                "thumbnailers": get_all_thumbnailers(),
-                "post_processors": get_all_post_processors(),
-            }
+            # Get all components from cached registry
+            components_data = get_all_components_cached()
 
-        components = {
-            "parsers": [],
-            "embedders": [],
-            "thumbnailers": [],
-            "post_processors": [],
-        }
-
-        for component_type in [
-            "parsers",
-            "embedders",
-            "thumbnailers",
-            "post_processors",
-        ]:
-            for component in components_data.get(component_type, []):
-                if isinstance(component, dict):
-                    # If detailed=True, component is a dict with metadata
-                    metadata = component
-                    component_cls = metadata.get("class")
-                else:
-                    component_cls = component
-                    metadata = get_metadata_for_component(component_cls)
-                if component_cls:
-                    # Filter out any file types that are no longer supported
-                    supported_file_types = []
-                    for ft in metadata.get("supported_file_types", []):
-                        try:
-                            # Only include file types that are still defined in FileTypeEnum
-                            supported_file_types.append(FileTypeEnumModel(ft).value)
-                        except (ValueError, AttributeError):
-                            # Skip file types that are no longer supported
-                            pass
-
-                    component_info = PipelineComponentType(
-                        name=component_cls.__name__,
-                        class_name=f"{component_cls.__module__}.{component_cls.__name__}",
-                        title=metadata.get("title", ""),
-                        module_name=metadata.get("module_name", ""),
-                        description=metadata.get("description", ""),
-                        author=metadata.get("author", ""),
-                        dependencies=metadata.get("dependencies", []),
-                        supported_file_types=supported_file_types,
-                        component_type=component_type[:-1],
-                        input_schema=metadata.get("input_schema", {}),
-                    )
-                    if component_type == "embedders":
-                        component_info.vector_size = metadata.get("vector_size", 0)
-                    components[component_type].append(component_info)
+        # Convert PipelineComponentDefinition objects to GraphQL types
+        def to_graphql_type(defn, component_type: str) -> PipelineComponentType:
+            component_info = PipelineComponentType(
+                name=defn.name,
+                class_name=defn.class_name,
+                title=defn.title,
+                module_name=defn.module_name,
+                description=defn.description,
+                author=defn.author,
+                dependencies=list(defn.dependencies),
+                supported_file_types=list(defn.supported_file_types),
+                component_type=component_type,
+                input_schema=defn.input_schema,
+            )
+            if defn.vector_size is not None:
+                component_info.vector_size = defn.vector_size
+            return component_info
 
         return PipelineComponentsType(
-            parsers=components["parsers"],
-            embedders=components["embedders"],
-            thumbnailers=components["thumbnailers"],
-            post_processors=components["post_processors"],
+            parsers=[to_graphql_type(d, "parser") for d in components_data["parsers"]],
+            embedders=[
+                to_graphql_type(d, "embedder") for d in components_data["embedders"]
+            ],
+            thumbnailers=[
+                to_graphql_type(d, "thumbnailer")
+                for d in components_data["thumbnailers"]
+            ],
+            post_processors=[
+                to_graphql_type(d, "post_processor")
+                for d in components_data["post_processors"]
+            ],
         )
 
     conversations = DjangoFilterConnectionField(
@@ -2130,8 +2104,8 @@ class Query(graphene.ObjectType):
 
         # Apply msg_type filter if provided
         if msg_type:
-            # Validate msg_type against ChatMessage.TYPE_CHOICES
-            valid_types = [choice[0] for choice in ChatMessage.TYPE_CHOICES]
+            # Validate msg_type against MessageTypeChoices
+            valid_types = [choice.value for choice in MessageTypeChoices]
             if msg_type in valid_types:
                 queryset = queryset.filter(msg_type=msg_type)
 
@@ -2677,6 +2651,45 @@ class Query(graphene.ObjectType):
         # Order: Global first, then corpus-specific, then alphabetically by name
         return qs.select_related("creator", "corpus").order_by("scope", "name")
 
+    # AGENT TOOLS QUERIES ########################################
+    available_tools = graphene.List(
+        graphene.NonNull(AvailableToolType),
+        category=graphene.String(
+            description="Filter by tool category (search, document, corpus, notes, annotations, coordination)"
+        ),
+        description="Get all available tools that can be assigned to agents",
+    )
+
+    available_tool_categories = graphene.List(
+        graphene.NonNull(graphene.String),
+        description="Get all available tool categories",
+    )
+
+    def resolve_available_tools(self, info, category=None, **kwargs):
+        """
+        Resolve available tools for agent configuration.
+
+        This returns the list of tools that can be assigned to agents,
+        optionally filtered by category.
+        """
+        from opencontractserver.llms.tools.tool_registry import (
+            get_all_tools,
+            get_tools_by_category,
+        )
+
+        if category:
+            tools = get_tools_by_category(category)
+        else:
+            tools = get_all_tools()
+
+        return tools
+
+    def resolve_available_tool_categories(self, info, **kwargs):
+        """Resolve all available tool categories."""
+        from opencontractserver.llms.tools.tool_registry import ToolCategory
+
+        return [cat.value for cat in ToolCategory]
+
     # NOTIFICATION QUERIES ########################################
     notifications = DjangoFilterConnectionField(
         NotificationType,
@@ -2913,7 +2926,7 @@ class Query(graphene.ObjectType):
 
             message_query = ChatMessage.objects.filter(
                 creator__in=users,
-                msg_type="HUMAN",
+                msg_type=MessageTypeChoices.HUMAN,
                 conversation__in=visible_conversations,
             )
 
@@ -3090,7 +3103,8 @@ class Query(graphene.ObjectType):
             info.context.user
         )
         message_query = ChatMessage.objects.filter(
-            msg_type="HUMAN", conversation__in=visible_conversations_stats
+            msg_type=MessageTypeChoices.HUMAN,
+            conversation__in=visible_conversations_stats,
         )
         if corpus_django_pk:
             message_query = message_query.filter(

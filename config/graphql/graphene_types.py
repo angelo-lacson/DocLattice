@@ -166,10 +166,13 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         Issue: #611 - User Profile Page
         """
-        from opencontractserver.conversations.models import ChatMessage
+        from opencontractserver.conversations.models import (
+            ChatMessage,
+            MessageTypeChoices,
+        )
 
         return (
-            ChatMessage.objects.filter(creator=self, msg_type="HUMAN")
+            ChatMessage.objects.filter(creator=self, msg_type=MessageTypeChoices.HUMAN)
             .visible_to_user(info.context.user)
             .count()
         )
@@ -2123,6 +2126,15 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         "Only includes resources visible to the requesting user.",
     )
 
+    def resolve_msg_type(self, info):
+        """Convert msg_type to string for GraphQL enum compatibility."""
+        if self.msg_type:
+            # Handle both string values and enum members
+            if hasattr(self.msg_type, "value"):
+                return self.msg_type.value
+            return self.msg_type
+        return None
+
     def resolve_agent_type(self, info):
         """Convert string agent_type from model to enum."""
         if self.agent_type:
@@ -2576,6 +2588,49 @@ class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if self.slug:
             return f"@agent:{self.slug}"
         return None
+
+
+# ---------------- Agent Tool Types ----------------
+class ToolParameterType(graphene.ObjectType):
+    """GraphQL type for tool parameter definitions."""
+
+    name = graphene.String(required=True, description="Parameter name")
+    description = graphene.String(required=True, description="Parameter description")
+    required = graphene.Boolean(
+        required=True, description="Whether the parameter is required"
+    )
+
+
+class AvailableToolType(graphene.ObjectType):
+    """
+    GraphQL type for available tools that can be assigned to agents.
+
+    This provides metadata about each tool, including its description,
+    category, and requirements.
+    """
+
+    name = graphene.String(
+        required=True, description="Tool name (used in configuration)"
+    )
+    description = graphene.String(
+        required=True, description="Human-readable description of the tool"
+    )
+    category = graphene.String(
+        required=True,
+        description="Tool category (search, document, corpus, notes, annotations, coordination)",
+    )
+    requires_corpus = graphene.Boolean(
+        required=True, description="Whether this tool requires a corpus context"
+    )
+    requires_approval = graphene.Boolean(
+        required=True,
+        description="Whether this tool requires user approval before execution",
+    )
+    parameters = graphene.List(
+        graphene.NonNull(ToolParameterType),
+        required=True,
+        description="List of parameters accepted by this tool",
+    )
 
 
 class NotificationType(DjangoObjectType):

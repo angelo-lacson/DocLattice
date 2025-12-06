@@ -15,7 +15,11 @@ from django.db.models import Q
 from django.test.utils import override_settings
 from graphql_relay import to_global_id
 
-from opencontractserver.conversations.models import ChatMessage, Conversation  # noqa
+from opencontractserver.conversations.models import (  # noqa
+    ChatMessage,
+    Conversation,
+    MessageTypeChoices,
+)
 from opencontractserver.llms.agents import for_document
 from opencontractserver.llms.agents.timeline_schema import TIMELINE_ENTRY_SCHEMA
 from opencontractserver.llms.types import AgentFramework
@@ -203,13 +207,13 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
         )
         await ChatMessage.objects.acreate(
             conversation=conversation,
-            msg_type="HUMAN",
+            msg_type=MessageTypeChoices.HUMAN,
             content="This is a previous user message about general topics.",
             creator=self.user,
         )
         await ChatMessage.objects.acreate(
             conversation=conversation,
-            msg_type="LLM",
+            msg_type=MessageTypeChoices.LLM,
             content="Acknowledged. I am a helpful assistant.",
             creator=self.user,  # LLM messages are also created by the user in current model
         )
@@ -650,7 +654,9 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
     ) -> None:
         # First, fetch ALL LLM messages to see what we have
         all_llm_messages = await database_sync_to_async(
-            lambda: list(conversation.chat_messages.filter(msg_type="LLM"))
+            lambda: list(
+                conversation.chat_messages.filter(msg_type=MessageTypeChoices.LLM)
+            )
         )()
 
         # Enhanced diagnostics
@@ -682,9 +688,9 @@ class ConversationSourceLoggingTestCase(DocumentConversationWebsocketTestCase):
         # Fetch only LLM messages created in the conversation
         llm_messages = await database_sync_to_async(
             lambda: list(
-                conversation.chat_messages.filter(msg_type="LLM").exclude(
-                    Q(data__sources=None) | Q(data__sources=[])
-                )
+                conversation.chat_messages.filter(
+                    msg_type=MessageTypeChoices.LLM
+                ).exclude(Q(data__sources=None) | Q(data__sources=[]))
             )
         )()
 

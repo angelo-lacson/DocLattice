@@ -18,7 +18,20 @@ from opencontractserver.shared.Models import BaseOCModel
 User = get_user_model()
 
 
-MessageType = Literal["ASYNC_START", "ASYNC_CONTENT", "ASYNC_FINISH", "SYNC_CONTENT"]
+# Legacy type hint for streaming message events (used in async handlers)
+StreamingMessageType = Literal[
+    "ASYNC_START", "ASYNC_CONTENT", "ASYNC_FINISH", "SYNC_CONTENT"
+]
+
+# For backwards compatibility - alias to the new name
+MessageType = StreamingMessageType
+
+
+# Message type choices for ChatMessage.msg_type field
+class MessageTypeChoices(models.TextChoices):
+    SYSTEM = "SYSTEM", "System"
+    HUMAN = "HUMAN", "Human"
+    LLM = "LLM", "LLM"
 
 
 # NEW – persisted lifecycle state so the frontend does not have to
@@ -623,12 +636,6 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
             ("comment_chatmessage", "comment chatmessage"),
         )
 
-    TYPE_CHOICES = (
-        ("SYSTEM", "SYSTEM"),
-        ("HUMAN", "HUMAN"),
-        ("LLM", "LLM"),
-    )
-
     conversation = models.ForeignKey(
         Conversation,
         on_delete=models.CASCADE,
@@ -637,7 +644,7 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
     )
     msg_type = models.CharField(
         max_length=32,
-        choices=TYPE_CHOICES,
+        choices=MessageTypeChoices.choices,
         help_text="The type of message (SYSTEM, HUMAN, or LLM)",
     )
     agent_type = models.CharField(
