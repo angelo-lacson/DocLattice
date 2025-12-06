@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useMutation } from "@apollo/client";
+import React, { useState, useCallback } from "react";
+import { useMutation, ApolloCache } from "@apollo/client";
 import styled from "styled-components";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { color } from "../../theme/colors";
@@ -13,6 +13,7 @@ import {
   DownvoteMessageOutput,
   RemoveVoteInput,
   RemoveVoteOutput,
+  VoteMessageResponse,
 } from "../../graphql/mutations";
 
 const Container = styled.div`
@@ -132,7 +133,32 @@ export interface VoteButtonsProps {
   onVoteChange?: (newScore: number) => void;
 }
 
-export function VoteButtons({
+/**
+ * Helper function to update Apollo cache after a vote mutation.
+ * Updates the message's upvoteCount, downvoteCount, and userVote fields
+ * so all components displaying this message reflect the new vote state.
+ */
+function updateCacheAfterVote(
+  cache: ApolloCache<unknown>,
+  messageId: string,
+  response: VoteMessageResponse | null
+) {
+  if (!response?.obj) return;
+
+  const { upvoteCount, downvoteCount, userVote } = response.obj;
+
+  // Update the cache for the MessageType node
+  cache.modify({
+    id: cache.identify({ __typename: "MessageType", id: messageId }),
+    fields: {
+      upvoteCount: () => upvoteCount,
+      downvoteCount: () => downvoteCount,
+      userVote: () => userVote,
+    },
+  });
+}
+
+export const VoteButtons = React.memo(function VoteButtons({
   messageId,
   upvoteCount,
   downvoteCount,
@@ -158,18 +184,23 @@ export function VoteButtons({
     UpvoteMessageOutput,
     UpvoteMessageInput
   >(UPVOTE_MESSAGE, {
+    update: (cache, { data }) => {
+      if (data?.voteMessage) {
+        updateCacheAfterVote(cache, messageId, data.voteMessage);
+      }
+    },
     onCompleted: (data) => {
-      if (data.upvoteMessage.ok) {
+      if (data.voteMessage.ok) {
         setOptimisticVote(null);
-        if (data.upvoteMessage.chatMessage) {
+        if (data.voteMessage.obj) {
           const newScore =
-            data.upvoteMessage.chatMessage.upvoteCount -
-            data.upvoteMessage.chatMessage.downvoteCount;
+            data.voteMessage.obj.upvoteCount -
+            data.voteMessage.obj.downvoteCount;
           onVoteChange?.(newScore);
         }
       } else {
         setOptimisticVote(null);
-        setError(data.upvoteMessage.message || "Failed to upvote");
+        setError(data.voteMessage.message || "Failed to upvote");
         setTimeout(() => setError(null), 3000);
       }
     },
@@ -185,18 +216,23 @@ export function VoteButtons({
     DownvoteMessageOutput,
     DownvoteMessageInput
   >(DOWNVOTE_MESSAGE, {
+    update: (cache, { data }) => {
+      if (data?.voteMessage) {
+        updateCacheAfterVote(cache, messageId, data.voteMessage);
+      }
+    },
     onCompleted: (data) => {
-      if (data.downvoteMessage.ok) {
+      if (data.voteMessage.ok) {
         setOptimisticVote(null);
-        if (data.downvoteMessage.chatMessage) {
+        if (data.voteMessage.obj) {
           const newScore =
-            data.downvoteMessage.chatMessage.upvoteCount -
-            data.downvoteMessage.chatMessage.downvoteCount;
+            data.voteMessage.obj.upvoteCount -
+            data.voteMessage.obj.downvoteCount;
           onVoteChange?.(newScore);
         }
       } else {
         setOptimisticVote(null);
-        setError(data.downvoteMessage.message || "Failed to downvote");
+        setError(data.voteMessage.message || "Failed to downvote");
         setTimeout(() => setError(null), 3000);
       }
     },
@@ -212,13 +248,17 @@ export function VoteButtons({
     RemoveVoteOutput,
     RemoveVoteInput
   >(REMOVE_VOTE, {
+    update: (cache, { data }) => {
+      if (data?.removeVote) {
+        updateCacheAfterVote(cache, messageId, data.removeVote);
+      }
+    },
     onCompleted: (data) => {
       if (data.removeVote.ok) {
         setOptimisticVote(null);
-        if (data.removeVote.chatMessage) {
+        if (data.removeVote.obj) {
           const newScore =
-            data.removeVote.chatMessage.upvoteCount -
-            data.removeVote.chatMessage.downvoteCount;
+            data.removeVote.obj.upvoteCount - data.removeVote.obj.downvoteCount;
           onVoteChange?.(newScore);
         }
       } else {
@@ -237,7 +277,7 @@ export function VoteButtons({
 
   const loading = upvoting || downvoting || removing;
 
-  const handleUpvote = async () => {
+  const handleUpvote = useCallback(async () => {
     if (isOwnMessage) {
       setError("You cannot vote on your own messages");
       setTimeout(() => setError(null), 3000);
@@ -254,9 +294,15 @@ export function VoteButtons({
       setOptimisticVote("UPVOTE");
       await upvoteMutation({ variables: { messageId } });
     }
-  };
+  }, [
+    isOwnMessage,
+    currentVote,
+    messageId,
+    removeVoteMutation,
+    upvoteMutation,
+  ]);
 
-  const handleDownvote = async () => {
+  const handleDownvote = useCallback(async () => {
     if (isOwnMessage) {
       setError("You cannot vote on your own messages");
       setTimeout(() => setError(null), 3000);
@@ -273,7 +319,13 @@ export function VoteButtons({
       setOptimisticVote("DOWNVOTE");
       await downvoteMutation({ variables: { messageId } });
     }
-  };
+  }, [
+    isOwnMessage,
+    currentVote,
+    messageId,
+    removeVoteMutation,
+    downvoteMutation,
+  ]);
 
   // Calculate optimistic score
   let displayScore = score;
@@ -318,4 +370,4 @@ export function VoteButtons({
       {error && <ErrorMessage>{error}</ErrorMessage>}
     </Wrapper>
   );
-}
+});

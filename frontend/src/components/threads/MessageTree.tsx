@@ -15,10 +15,11 @@ interface MessageTreeProps {
 }
 
 /**
- * Recursive component for rendering hierarchical message tree
- * Handles nested replies with proper indentation
+ * Recursive component for rendering hierarchical message tree.
+ * Handles nested replies with proper indentation.
+ * Memoized to prevent unnecessary re-renders when sibling threads update.
  */
-export function MessageTree({
+export const MessageTree = React.memo(function MessageTree({
   messages,
   highlightedMessageId,
   onReply,
@@ -89,4 +90,4 @@ export function MessageTree({
       })}
     </>
   );
-}
+});
