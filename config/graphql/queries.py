@@ -2135,8 +2135,8 @@ class Query(graphene.ObjectType):
 
         # Apply msg_type filter if provided
         if msg_type:
-            # Validate msg_type against ChatMessage.TYPE_CHOICES
-            valid_types = [choice[0] for choice in ChatMessage.TYPE_CHOICES]
+            # Validate msg_type against MessageTypeChoices
+            valid_types = [choice.value for choice in MessageTypeChoices]
             if msg_type in valid_types:
                 queryset = queryset.filter(msg_type=msg_type)
 
