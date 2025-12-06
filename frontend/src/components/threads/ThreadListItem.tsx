@@ -111,9 +111,10 @@ const Separator = styled.span`
 `;
 
 /**
- * Individual thread card in list view
+ * Individual thread card in list view.
+ * Memoized to prevent unnecessary re-renders when thread list updates.
  */
-export function ThreadListItem({
+export const ThreadListItem = React.memo(function ThreadListItem({
   thread,
   corpusId,
   compact = false,
@@ -207,4 +208,4 @@ export function ThreadListItem({
       </ThreadMeta>
     </ThreadCard>
   );
-}
+});

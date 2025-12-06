@@ -95,10 +95,10 @@ test.describe("VoteButtons", () => {
         },
         result: {
           data: {
-            upvoteMessage: {
+            voteMessage: {
               ok: true,
               message: "Message upvoted",
-              chatMessage: {
+              obj: {
                 id: "msg-1",
                 upvoteCount: 6,
                 downvoteCount: 2,
@@ -140,10 +140,10 @@ test.describe("VoteButtons", () => {
         },
         result: {
           data: {
-            downvoteMessage: {
+            voteMessage: {
               ok: true,
               message: "Message downvoted",
-              chatMessage: {
+              obj: {
                 id: "msg-1",
                 upvoteCount: 5,
                 downvoteCount: 3,
@@ -188,7 +188,7 @@ test.describe("VoteButtons", () => {
             removeVote: {
               ok: true,
               message: "Vote removed",
-              chatMessage: {
+              obj: {
                 id: "msg-1",
                 upvoteCount: 4,
                 downvoteCount: 2,
@@ -254,10 +254,10 @@ test.describe("VoteButtons", () => {
         },
         result: {
           data: {
-            upvoteMessage: {
+            voteMessage: {
               ok: false,
               message: "Rate limit exceeded. Please try again later.",
-              chatMessage: null,
+              obj: null,
             },
           } as UpvoteMessageOutput,
         },
@@ -321,10 +321,10 @@ test.describe("VoteButtons", () => {
         },
         result: {
           data: {
-            upvoteMessage: {
+            voteMessage: {
               ok: true,
               message: "Message upvoted",
-              chatMessage: {
+              obj: {
                 id: "msg-1",
                 upvoteCount: 6,
                 downvoteCount: 2,
@@ -375,10 +375,10 @@ test.describe("VoteButtons", () => {
         delay: 1000, // Delay to observe optimistic update
         result: {
           data: {
-            upvoteMessage: {
+            voteMessage: {
               ok: true,
               message: "Message upvoted",
-              chatMessage: {
+              obj: {
                 id: "msg-1",
                 upvoteCount: 6,
                 downvoteCount: 2,

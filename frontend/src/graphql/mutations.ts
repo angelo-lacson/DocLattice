@@ -2671,16 +2671,20 @@ export interface DeleteMessageOutput {
 // Voting Mutations
 // ============================================================================
 
+/**
+ * Upvote a message. Uses the backend vote_message mutation with vote_type="upvote".
+ * Returns the updated message with vote counts and current user's vote status.
+ */
 export const UPVOTE_MESSAGE = gql`
   mutation UpvoteMessage($messageId: ID!) {
-    upvoteMessage(messageId: $messageId) {
+    voteMessage(messageId: $messageId, voteType: "upvote") {
       ok
       message
-      chatMessage {
+      obj {
         id
         upvoteCount
         downvoteCount
-        # userVote  # TODO: Backend field not implemented yet
+        userVote
       }
     }
   }
@@ -2690,29 +2694,36 @@ export interface UpvoteMessageInput {
   messageId: string;
 }
 
-export interface UpvoteMessageOutput {
-  upvoteMessage: {
-    ok: boolean;
-    message: string;
-    chatMessage: {
-      id: string;
-      upvoteCount: number;
-      downvoteCount: number;
-      userVote?: string;
-    } | null;
-  };
+/** Response shape for vote mutations (upvote uses voteMessage mutation) */
+export interface VoteMessageResponse {
+  ok: boolean;
+  message: string;
+  obj: {
+    id: string;
+    upvoteCount: number;
+    downvoteCount: number;
+    userVote: string | null;
+  } | null;
 }
 
+export interface UpvoteMessageOutput {
+  voteMessage: VoteMessageResponse;
+}
+
+/**
+ * Downvote a message. Uses the backend vote_message mutation with vote_type="downvote".
+ * Returns the updated message with vote counts and current user's vote status.
+ */
 export const DOWNVOTE_MESSAGE = gql`
   mutation DownvoteMessage($messageId: ID!) {
-    downvoteMessage(messageId: $messageId) {
+    voteMessage(messageId: $messageId, voteType: "downvote") {
       ok
       message
-      chatMessage {
+      obj {
         id
         upvoteCount
         downvoteCount
-        # userVote  # TODO: Backend field not implemented yet
+        userVote
       }
     }
   }
@@ -2723,28 +2734,23 @@ export interface DownvoteMessageInput {
 }
 
 export interface DownvoteMessageOutput {
-  downvoteMessage: {
-    ok: boolean;
-    message: string;
-    chatMessage: {
-      id: string;
-      upvoteCount: number;
-      downvoteCount: number;
-      userVote?: string;
-    } | null;
-  };
+  voteMessage: VoteMessageResponse;
 }
 
+/**
+ * Remove a vote from a message.
+ * Returns the updated message with vote counts and current user's vote status (null after removal).
+ */
 export const REMOVE_VOTE = gql`
   mutation RemoveVote($messageId: ID!) {
     removeVote(messageId: $messageId) {
       ok
       message
-      chatMessage {
+      obj {
         id
         upvoteCount
         downvoteCount
-        # userVote  # TODO: Backend field not implemented yet
+        userVote
       }
     }
   }
@@ -2755,16 +2761,7 @@ export interface RemoveVoteInput {
 }
 
 export interface RemoveVoteOutput {
-  removeVote: {
-    ok: boolean;
-    message: string;
-    chatMessage: {
-      id: string;
-      upvoteCount: number;
-      downvoteCount: number;
-      userVote?: string;
-    } | null;
-  };
+  removeVote: VoteMessageResponse;
 }
 
 // ============================================================================

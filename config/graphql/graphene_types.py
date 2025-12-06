@@ -2125,6 +2125,9 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Corpuses and documents mentioned in this message using @ syntax. "
         "Only includes resources visible to the requesting user.",
     )
+    user_vote = graphene.String(
+        description="Current user's vote on this message: 'UPVOTE', 'DOWNVOTE', or null"
+    )
 
     def resolve_msg_type(self, info):
         """Convert msg_type to string for GraphQL enum compatibility."""
@@ -2144,6 +2147,26 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_agent_configuration(self, info):
         """Resolve agent_configuration field."""
         return self.agent_configuration
+
+    def resolve_user_vote(self, info):
+        """
+        Returns the current user's vote on this message.
+
+        Returns:
+            'UPVOTE' if the user has upvoted the message
+            'DOWNVOTE' if the user has downvoted the message
+            None if the user has not voted or is not authenticated
+        """
+        user = info.context.user
+        if not user or not user.is_authenticated:
+            return None
+
+        from opencontractserver.conversations.models import MessageVote
+
+        vote = MessageVote.objects.filter(message=self, creator=user).first()
+        if vote:
+            return vote.vote_type.upper()  # Return 'UPVOTE' or 'DOWNVOTE'
+        return None
 
     def resolve_mentioned_resources(self, info):
         """
