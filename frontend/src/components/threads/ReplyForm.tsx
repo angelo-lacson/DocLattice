@@ -150,6 +150,9 @@ export function ReplyForm({
   const [error, setError] = useState("");
   const [showQuote, setShowQuote] = useState(false);
 
+  // Submission guard to prevent double submissions
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Determine which mutation to use
   const isTopLevel = !parentMessageId && conversationId;
   const isNestedReply = !!parentMessageId;
@@ -216,12 +219,21 @@ export function ReplyForm({
   const loading = createLoading || replyLoading;
 
   const handleSubmit = async (content: string) => {
+    // Guard against double submissions
+    if (isSubmitting) {
+      console.warn("[ReplyForm] Blocked duplicate submission");
+      return;
+    }
+
     setError("");
 
     if (!content.trim()) {
       setError("Please write a message.");
       return;
     }
+
+    // Set submission guard
+    setIsSubmitting(true);
 
     try {
       if (isTopLevel && conversationId) {
@@ -243,6 +255,9 @@ export function ReplyForm({
       }
     } catch (err) {
       // Error already handled in mutation callbacks
+    } finally {
+      // Reset submission guard after a short delay to prevent rapid re-submissions
+      setTimeout(() => setIsSubmitting(false), 500);
     }
   };
 
@@ -303,7 +318,7 @@ export function ReplyForm({
             : "Write your message..."
         }
         onSubmit={handleSubmit}
-        disabled={loading}
+        disabled={loading || isSubmitting}
         error={error}
         autoFocus={autoFocus}
         maxLength={10000}

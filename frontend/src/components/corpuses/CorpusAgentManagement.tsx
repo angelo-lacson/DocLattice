@@ -18,6 +18,7 @@ import {
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
+import { BadgeConfigurator, BadgeConfig } from "../agents/BadgeConfigurator";
 
 // GraphQL Queries and Mutations
 const GET_CORPUS_AGENTS = gql`
@@ -49,14 +50,28 @@ const GET_CORPUS_AGENTS = gql`
   }
 `;
 
+const GET_AVAILABLE_TOOLS = gql`
+  query GetAvailableTools {
+    availableTools {
+      name
+      description
+      category
+      requiresCorpus
+      requiresApproval
+    }
+    availableToolCategories
+  }
+`;
+
 const CREATE_AGENT_CONFIGURATION = gql`
   mutation CreateAgentConfiguration(
     $name: String!
+    $slug: String
     $description: String!
     $systemInstructions: String!
     $availableTools: [String]
     $permissionRequiredTools: [String]
-    $badgeConfig: JSONString
+    $badgeConfig: GenericScalar
     $avatarUrl: String
     $scope: String!
     $corpusId: ID
@@ -64,6 +79,7 @@ const CREATE_AGENT_CONFIGURATION = gql`
   ) {
     createAgentConfiguration(
       name: $name
+      slug: $slug
       description: $description
       systemInstructions: $systemInstructions
       availableTools: $availableTools
@@ -81,6 +97,11 @@ const CREATE_AGENT_CONFIGURATION = gql`
         name
         slug
         description
+        badgeConfig
+        availableTools
+        permissionRequiredTools
+        isActive
+        isPublic
       }
     }
   }
@@ -90,11 +111,12 @@ const UPDATE_AGENT_CONFIGURATION = gql`
   mutation UpdateAgentConfiguration(
     $agentId: ID!
     $name: String
+    $slug: String
     $description: String
     $systemInstructions: String
     $availableTools: [String]
     $permissionRequiredTools: [String]
-    $badgeConfig: JSONString
+    $badgeConfig: GenericScalar
     $avatarUrl: String
     $isActive: Boolean
     $isPublic: Boolean
@@ -102,6 +124,7 @@ const UPDATE_AGENT_CONFIGURATION = gql`
     updateAgentConfiguration(
       agentId: $agentId
       name: $name
+      slug: $slug
       description: $description
       systemInstructions: $systemInstructions
       availableTools: $availableTools
@@ -118,6 +141,11 @@ const UPDATE_AGENT_CONFIGURATION = gql`
         name
         slug
         description
+        badgeConfig
+        availableTools
+        permissionRequiredTools
+        isActive
+        isPublic
       }
     }
   }
@@ -225,9 +253,148 @@ const EmptyStateDescription = styled.p`
   margin-right: auto;
 `;
 
+// Tool Selection UI Components
+const ToolSelectionContainer = styled.div`
+  margin-top: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+`;
+
+const ToolCategoryHeader = styled.div`
+  background: #f8fafc;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+`;
+
+const ToolItem = styled.div<{ $selected: boolean }>`
+  display: flex;
+  align-items: flex-start;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  background: ${(props) => (props.$selected ? "#eff6ff" : "transparent")};
+
+  &:hover {
+    background: ${(props) => (props.$selected ? "#dbeafe" : "#f8fafc")};
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const ToolCheckbox = styled.div<{ $checked: boolean }>`
+  width: 18px;
+  height: 18px;
+  border: 2px solid ${(props) => (props.$checked ? "#3b82f6" : "#cbd5e1")};
+  border-radius: 4px;
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${(props) => (props.$checked ? "#3b82f6" : "white")};
+  transition: all 0.15s ease;
+
+  &::after {
+    content: "${(props) => (props.$checked ? "✓" : "")}";
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+  }
+`;
+
+const ToolInfo = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const ToolName = styled.div`
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 0.875rem;
+  font-family: monospace;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ToolDescription = styled.div`
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+`;
+
+const ToolBadges = styled.div`
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+  flex-shrink: 0;
+`;
+
+const ApprovalBadge = styled.span`
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 500;
+`;
+
+const CorpusBadge = styled.span`
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 500;
+`;
+
+const SelectedToolsPreview = styled.div`
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+`;
+
+const SelectedToolPill = styled.span`
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-family: monospace;
+`;
+
+const ToolHelpText = styled.small`
+  display: block;
+  color: #64748b;
+  margin-top: 0.5rem;
+`;
+
 interface CorpusAgentManagementProps {
   corpusId: string;
   canUpdate: boolean;
+}
+
+interface AvailableTool {
+  name: string;
+  description: string;
+  category: string;
+  requiresCorpus: boolean;
+  requiresApproval: boolean;
 }
 
 interface AgentNode {
@@ -250,23 +417,31 @@ interface AgentNode {
 
 interface FormState {
   name: string;
+  slug: string;
   description: string;
   systemInstructions: string;
-  availableTools: string;
-  permissionRequiredTools: string;
-  badgeConfig: string;
+  availableTools: string[];
+  permissionRequiredTools: string[];
+  badgeConfig: BadgeConfig;
   avatarUrl: string;
   isPublic: boolean;
   isActive: boolean;
 }
 
+const defaultBadgeConfig: BadgeConfig = {
+  icon: "bot",
+  color: "#8b5cf6",
+  label: "AI",
+};
+
 const initialFormState: FormState = {
   name: "",
+  slug: "",
   description: "",
   systemInstructions: "",
-  availableTools: "",
-  permissionRequiredTools: "",
-  badgeConfig: '{"icon": "robot", "color": "#8b5cf6", "label": "AI"}',
+  availableTools: [],
+  permissionRequiredTools: [],
+  badgeConfig: defaultBadgeConfig,
   avatarUrl: "",
   isPublic: false,
   isActive: true,
@@ -286,6 +461,10 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   const { loading, error, data, refetch } = useQuery(GET_CORPUS_AGENTS, {
     variables: { corpusId },
   });
+
+  // Fetch available tools for the selection UI
+  const { data: toolsData, loading: toolsLoading } =
+    useQuery(GET_AVAILABLE_TOOLS);
 
   const [createAgent, { loading: creating }] = useMutation(
     CREATE_AGENT_CONFIGURATION,
@@ -339,31 +518,19 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   );
 
   const handleCreate = () => {
-    const tools = formState.availableTools
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    const permTools = formState.permissionRequiredTools
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
-    let badgeConfig = {};
-    try {
-      badgeConfig = JSON.parse(formState.badgeConfig || "{}");
-    } catch (e) {
-      toast.error("Invalid badge config JSON");
-      return;
-    }
-
     createAgent({
       variables: {
         name: formState.name,
+        slug: formState.slug || null, // null triggers auto-generation
         description: formState.description,
         systemInstructions: formState.systemInstructions,
-        availableTools: tools.length > 0 ? tools : null,
-        permissionRequiredTools: permTools.length > 0 ? permTools : null,
-        badgeConfig: JSON.stringify(badgeConfig),
+        availableTools:
+          formState.availableTools.length > 0 ? formState.availableTools : null,
+        permissionRequiredTools:
+          formState.permissionRequiredTools.length > 0
+            ? formState.permissionRequiredTools
+            : null,
+        badgeConfig: formState.badgeConfig,
         avatarUrl: formState.avatarUrl || null,
         scope: "CORPUS",
         corpusId: corpusId,
@@ -375,32 +542,16 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   const handleUpdate = () => {
     if (!agentToEdit) return;
 
-    const tools = formState.availableTools
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    const permTools = formState.permissionRequiredTools
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
-    let badgeConfig = {};
-    try {
-      badgeConfig = JSON.parse(formState.badgeConfig || "{}");
-    } catch (e) {
-      toast.error("Invalid badge config JSON");
-      return;
-    }
-
     updateAgent({
       variables: {
         agentId: agentToEdit.id,
         name: formState.name,
+        slug: formState.slug || null,
         description: formState.description,
         systemInstructions: formState.systemInstructions,
-        availableTools: tools,
-        permissionRequiredTools: permTools,
-        badgeConfig: JSON.stringify(badgeConfig),
+        availableTools: formState.availableTools,
+        permissionRequiredTools: formState.permissionRequiredTools,
+        badgeConfig: formState.badgeConfig,
         avatarUrl: formState.avatarUrl || null,
         isActive: formState.isActive,
         isPublic: formState.isPublic,
@@ -408,21 +559,59 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
     });
   };
 
+  // Toggle a tool in the available tools list
+  const toggleAvailableTool = (toolName: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      availableTools: prev.availableTools.includes(toolName)
+        ? prev.availableTools.filter((t) => t !== toolName)
+        : [...prev.availableTools, toolName],
+    }));
+  };
+
+  // Toggle a tool in the permission-required tools list
+  const togglePermissionTool = (toolName: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      permissionRequiredTools: prev.permissionRequiredTools.includes(toolName)
+        ? prev.permissionRequiredTools.filter((t) => t !== toolName)
+        : [...prev.permissionRequiredTools, toolName],
+    }));
+  };
+
+  // Group tools by category for display
+  const groupedTools = React.useMemo(() => {
+    const tools: AvailableTool[] = toolsData?.availableTools || [];
+    const groups: Record<string, AvailableTool[]> = {};
+    for (const tool of tools) {
+      if (!groups[tool.category]) {
+        groups[tool.category] = [];
+      }
+      groups[tool.category].push(tool);
+    }
+    return groups;
+  }, [toolsData?.availableTools]);
+
   const openEditModal = (agent: AgentNode) => {
     setAgentToEdit(agent);
+    // Parse badge config from API or use defaults
+    const parsedBadgeConfig: BadgeConfig = {
+      icon: agent.badgeConfig?.icon || defaultBadgeConfig.icon,
+      color: agent.badgeConfig?.color || defaultBadgeConfig.color,
+      label: agent.badgeConfig?.label || defaultBadgeConfig.label,
+    };
     setFormState({
       name: agent.name,
+      slug: agent.slug || "",
       description: agent.description || "",
       systemInstructions: agent.systemInstructions,
-      availableTools: (Array.isArray(agent.availableTools)
+      availableTools: Array.isArray(agent.availableTools)
         ? agent.availableTools
-        : []
-      ).join(", "),
-      permissionRequiredTools: (Array.isArray(agent.permissionRequiredTools)
+        : [],
+      permissionRequiredTools: Array.isArray(agent.permissionRequiredTools)
         ? agent.permissionRequiredTools
-        : []
-      ).join(", "),
-      badgeConfig: JSON.stringify(agent.badgeConfig || {}, null, 2),
+        : [],
+      badgeConfig: parsedBadgeConfig,
       avatarUrl: agent.avatarUrl || "",
       isPublic: agent.isPublic ?? false,
       isActive: agent.isActive,
@@ -614,6 +803,20 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 }
               />
             </Form.Field>
+            <Form.Field>
+              <label>Slug (for @mentions)</label>
+              <Input
+                placeholder="my-agent (auto-generated from name if empty)"
+                value={formState.slug}
+                onChange={(e) =>
+                  setFormState({ ...formState, slug: e.target.value })
+                }
+              />
+              <small style={{ color: "#64748b" }}>
+                URL-friendly identifier used in @mentions (e.g.,
+                @agent:my-agent)
+              </small>
+            </Form.Field>
             <Form.Field required>
               <label>Description</label>
               <TextArea
@@ -641,42 +844,119 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
               />
             </Form.Field>
             <Form.Field>
-              <label>Available Tools (comma-separated)</label>
-              <Input
-                placeholder="similarity_search, load_document_text, search_exact_text"
-                value={formState.availableTools}
-                onChange={(e) =>
-                  setFormState({ ...formState, availableTools: e.target.value })
-                }
-              />
+              <label>Available Tools</label>
+              {toolsLoading ? (
+                <Loader active inline size="small" />
+              ) : (
+                <>
+                  <ToolSelectionContainer>
+                    {Object.entries(groupedTools).map(([category, tools]) => (
+                      <React.Fragment key={category}>
+                        <ToolCategoryHeader>
+                          {category.replace(/_/g, " ")}
+                        </ToolCategoryHeader>
+                        {tools.map((tool) => (
+                          <ToolItem
+                            key={tool.name}
+                            $selected={formState.availableTools.includes(
+                              tool.name
+                            )}
+                            onClick={() => toggleAvailableTool(tool.name)}
+                          >
+                            <ToolCheckbox
+                              $checked={formState.availableTools.includes(
+                                tool.name
+                              )}
+                            />
+                            <ToolInfo>
+                              <ToolName>{tool.name}</ToolName>
+                              <ToolDescription>
+                                {tool.description}
+                              </ToolDescription>
+                            </ToolInfo>
+                            <ToolBadges>
+                              {tool.requiresApproval && (
+                                <ApprovalBadge>Needs Approval</ApprovalBadge>
+                              )}
+                              {tool.requiresCorpus && (
+                                <CorpusBadge>Corpus</CorpusBadge>
+                              )}
+                            </ToolBadges>
+                          </ToolItem>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </ToolSelectionContainer>
+                  {formState.availableTools.length > 0 && (
+                    <SelectedToolsPreview>
+                      {formState.availableTools.map((tool) => (
+                        <SelectedToolPill key={tool}>{tool}</SelectedToolPill>
+                      ))}
+                    </SelectedToolsPreview>
+                  )}
+                  <ToolHelpText>
+                    Select the tools this agent can use. Tools marked "Needs
+                    Approval" will prompt users before execution.
+                  </ToolHelpText>
+                </>
+              )}
             </Form.Field>
             <Form.Field>
-              <label>Permission Required Tools (comma-separated)</label>
-              <Input
-                placeholder="Tools that require explicit permission"
-                value={formState.permissionRequiredTools}
-                onChange={(e) =>
-                  setFormState({
-                    ...formState,
-                    permissionRequiredTools: e.target.value,
-                  })
-                }
-              />
+              <label>Permission Required Tools</label>
+              <ToolHelpText style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                Select tools that should require explicit user permission before
+                the agent can use them. Only tools selected above can be marked
+                as permission-required.
+              </ToolHelpText>
+              {formState.availableTools.length === 0 ? (
+                <Message size="small" info>
+                  Select available tools first to configure permission
+                  requirements.
+                </Message>
+              ) : (
+                <ToolSelectionContainer style={{ maxHeight: "150px" }}>
+                  {formState.availableTools.map((toolName) => {
+                    const tool = toolsData?.availableTools?.find(
+                      (t: AvailableTool) => t.name === toolName
+                    );
+                    return (
+                      <ToolItem
+                        key={toolName}
+                        $selected={formState.permissionRequiredTools.includes(
+                          toolName
+                        )}
+                        onClick={() => togglePermissionTool(toolName)}
+                      >
+                        <ToolCheckbox
+                          $checked={formState.permissionRequiredTools.includes(
+                            toolName
+                          )}
+                        />
+                        <ToolInfo>
+                          <ToolName>{toolName}</ToolName>
+                          {tool?.description && (
+                            <ToolDescription>
+                              {tool.description.substring(0, 80)}...
+                            </ToolDescription>
+                          )}
+                        </ToolInfo>
+                      </ToolItem>
+                    );
+                  })}
+                </ToolSelectionContainer>
+              )}
             </Form.Field>
             <Form.Field>
-              <label>Badge Config (JSON)</label>
-              <TextArea
-                placeholder='{"icon": "robot", "color": "#8b5cf6", "label": "AI"}'
+              <label>Badge Appearance</label>
+              <BadgeConfigurator
                 value={formState.badgeConfig}
-                onChange={(e) =>
-                  setFormState({ ...formState, badgeConfig: e.target.value })
+                onChange={(config) =>
+                  setFormState({ ...formState, badgeConfig: config })
                 }
-                rows={3}
-                style={{ fontFamily: "monospace" }}
               />
             </Form.Field>
             <Form.Field>
-              <label>Avatar URL</label>
+              <label>Avatar URL (optional)</label>
               <Input
                 placeholder="https://example.com/avatar.png"
                 value={formState.avatarUrl}
@@ -684,6 +964,16 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   setFormState({ ...formState, avatarUrl: e.target.value })
                 }
               />
+              <small
+                style={{
+                  color: "#64748b",
+                  marginTop: "0.25rem",
+                  display: "block",
+                }}
+              >
+                Custom avatar image URL. If not provided, the badge icon will be
+                used.
+              </small>
             </Form.Field>
             <Form.Field>
               <Checkbox
@@ -732,6 +1022,20 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 }
               />
             </Form.Field>
+            <Form.Field>
+              <label>Slug (for @mentions)</label>
+              <Input
+                placeholder="my-agent"
+                value={formState.slug}
+                onChange={(e) =>
+                  setFormState({ ...formState, slug: e.target.value })
+                }
+              />
+              <small style={{ color: "#64748b" }}>
+                URL-friendly identifier used in @mentions (e.g.,
+                @agent:my-agent)
+              </small>
+            </Form.Field>
             <Form.Field required>
               <label>Description</label>
               <TextArea
@@ -759,42 +1063,119 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
               />
             </Form.Field>
             <Form.Field>
-              <label>Available Tools (comma-separated)</label>
-              <Input
-                placeholder="similarity_search, load_document_text, search_exact_text"
-                value={formState.availableTools}
-                onChange={(e) =>
-                  setFormState({ ...formState, availableTools: e.target.value })
-                }
-              />
+              <label>Available Tools</label>
+              {toolsLoading ? (
+                <Loader active inline size="small" />
+              ) : (
+                <>
+                  <ToolSelectionContainer>
+                    {Object.entries(groupedTools).map(([category, tools]) => (
+                      <React.Fragment key={category}>
+                        <ToolCategoryHeader>
+                          {category.replace(/_/g, " ")}
+                        </ToolCategoryHeader>
+                        {tools.map((tool) => (
+                          <ToolItem
+                            key={tool.name}
+                            $selected={formState.availableTools.includes(
+                              tool.name
+                            )}
+                            onClick={() => toggleAvailableTool(tool.name)}
+                          >
+                            <ToolCheckbox
+                              $checked={formState.availableTools.includes(
+                                tool.name
+                              )}
+                            />
+                            <ToolInfo>
+                              <ToolName>{tool.name}</ToolName>
+                              <ToolDescription>
+                                {tool.description}
+                              </ToolDescription>
+                            </ToolInfo>
+                            <ToolBadges>
+                              {tool.requiresApproval && (
+                                <ApprovalBadge>Needs Approval</ApprovalBadge>
+                              )}
+                              {tool.requiresCorpus && (
+                                <CorpusBadge>Corpus</CorpusBadge>
+                              )}
+                            </ToolBadges>
+                          </ToolItem>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </ToolSelectionContainer>
+                  {formState.availableTools.length > 0 && (
+                    <SelectedToolsPreview>
+                      {formState.availableTools.map((tool) => (
+                        <SelectedToolPill key={tool}>{tool}</SelectedToolPill>
+                      ))}
+                    </SelectedToolsPreview>
+                  )}
+                  <ToolHelpText>
+                    Select the tools this agent can use. Tools marked "Needs
+                    Approval" will prompt users before execution.
+                  </ToolHelpText>
+                </>
+              )}
             </Form.Field>
             <Form.Field>
-              <label>Permission Required Tools (comma-separated)</label>
-              <Input
-                placeholder="Tools that require explicit permission"
-                value={formState.permissionRequiredTools}
-                onChange={(e) =>
-                  setFormState({
-                    ...formState,
-                    permissionRequiredTools: e.target.value,
-                  })
-                }
-              />
+              <label>Permission Required Tools</label>
+              <ToolHelpText style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                Select tools that should require explicit user permission before
+                the agent can use them. Only tools selected above can be marked
+                as permission-required.
+              </ToolHelpText>
+              {formState.availableTools.length === 0 ? (
+                <Message size="small" info>
+                  Select available tools first to configure permission
+                  requirements.
+                </Message>
+              ) : (
+                <ToolSelectionContainer style={{ maxHeight: "150px" }}>
+                  {formState.availableTools.map((toolName) => {
+                    const tool = toolsData?.availableTools?.find(
+                      (t: AvailableTool) => t.name === toolName
+                    );
+                    return (
+                      <ToolItem
+                        key={toolName}
+                        $selected={formState.permissionRequiredTools.includes(
+                          toolName
+                        )}
+                        onClick={() => togglePermissionTool(toolName)}
+                      >
+                        <ToolCheckbox
+                          $checked={formState.permissionRequiredTools.includes(
+                            toolName
+                          )}
+                        />
+                        <ToolInfo>
+                          <ToolName>{toolName}</ToolName>
+                          {tool?.description && (
+                            <ToolDescription>
+                              {tool.description.substring(0, 80)}...
+                            </ToolDescription>
+                          )}
+                        </ToolInfo>
+                      </ToolItem>
+                    );
+                  })}
+                </ToolSelectionContainer>
+              )}
             </Form.Field>
             <Form.Field>
-              <label>Badge Config (JSON)</label>
-              <TextArea
-                placeholder='{"icon": "robot", "color": "#8b5cf6", "label": "AI"}'
+              <label>Badge Appearance</label>
+              <BadgeConfigurator
                 value={formState.badgeConfig}
-                onChange={(e) =>
-                  setFormState({ ...formState, badgeConfig: e.target.value })
+                onChange={(config) =>
+                  setFormState({ ...formState, badgeConfig: config })
                 }
-                rows={3}
-                style={{ fontFamily: "monospace" }}
               />
             </Form.Field>
             <Form.Field>
-              <label>Avatar URL</label>
+              <label>Avatar URL (optional)</label>
               <Input
                 placeholder="https://example.com/avatar.png"
                 value={formState.avatarUrl}
@@ -802,6 +1183,16 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   setFormState({ ...formState, avatarUrl: e.target.value })
                 }
               />
+              <small
+                style={{
+                  color: "#64748b",
+                  marginTop: "0.25rem",
+                  display: "block",
+                }}
+              >
+                Custom avatar image URL. If not provided, the badge icon will be
+                used.
+              </small>
             </Form.Field>
             <Form.Group>
               <Form.Field>

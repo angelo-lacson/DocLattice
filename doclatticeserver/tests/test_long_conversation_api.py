@@ -14,7 +14,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from doclatticeserver.conversations.models import ChatMessage, Conversation
+from doclatticeserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    MessageTypeChoices,
+)
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.llms.api import agents
@@ -325,7 +329,9 @@ class TestLongConversationAPI(TestCase):
             )
 
             # Find our message
-            user_messages = [msg for msg in messages if msg.msg_type == "HUMAN"]
+            user_messages = [
+                msg for msg in messages if msg.msg_type == MessageTypeChoices.HUMAN
+            ]
             self.assertTrue(
                 any("First session message" in msg.content for msg in user_messages),
                 "Should preserve message history across sessions",

@@ -169,6 +169,63 @@ class TestAgentConfigurationModel(TestCase):
         self.assertEqual(agent.badge_config["icon"], "Bot")
         self.assertEqual(agent.badge_config["color"], "#4A5568")
 
+    def test_slug_auto_generation(self):
+        """Test that slug is auto-generated from name if not provided."""
+        agent = AgentConfiguration.objects.create(
+            name="My Test Agent",
+            description="Test agent",
+            system_instructions="Test instructions",
+            scope="GLOBAL",
+            creator=self.admin_user,
+        )
+
+        self.assertEqual(agent.slug, "my-test-agent")
+
+    def test_slug_uniqueness_with_counter(self):
+        """Test that duplicate slugs get a counter appended."""
+        # Create first agent
+        agent1 = AgentConfiguration.objects.create(
+            name="Duplicate Name",
+            description="First agent",
+            system_instructions="Test",
+            scope="GLOBAL",
+            creator=self.admin_user,
+        )
+        self.assertEqual(agent1.slug, "duplicate-name")
+
+        # Create second agent with same name - should get -1 suffix
+        agent2 = AgentConfiguration.objects.create(
+            name="Duplicate Name",
+            description="Second agent",
+            system_instructions="Test",
+            scope="GLOBAL",
+            creator=self.admin_user,
+        )
+        self.assertEqual(agent2.slug, "duplicate-name-1")
+
+        # Create third agent - should get -2 suffix
+        agent3 = AgentConfiguration.objects.create(
+            name="Duplicate Name",
+            description="Third agent",
+            system_instructions="Test",
+            scope="GLOBAL",
+            creator=self.admin_user,
+        )
+        self.assertEqual(agent3.slug, "duplicate-name-2")
+
+    def test_explicit_slug_preserved(self):
+        """Test that explicitly provided slug is not overwritten."""
+        agent = AgentConfiguration.objects.create(
+            name="Some Agent Name",
+            slug="custom-slug-value",
+            description="Test agent",
+            system_instructions="Test",
+            scope="GLOBAL",
+            creator=self.admin_user,
+        )
+
+        self.assertEqual(agent.slug, "custom-slug-value")
+
     def test_agent_string_representation(self):
         """Test agent string representation."""
         global_agent = AgentConfiguration.objects.create(
