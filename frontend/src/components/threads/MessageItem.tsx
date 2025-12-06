@@ -363,9 +363,10 @@ const SourceItem = styled.div`
 `;
 
 /**
- * Individual message component with support for nested replies
+ * Individual message component with support for nested replies.
+ * Memoized to prevent unnecessary re-renders when parent thread updates.
  */
-export function MessageItem({
+export const MessageItem = React.memo(function MessageItem({
   message,
   isHighlighted = false,
   onReply,
@@ -543,4 +544,4 @@ export function MessageItem({
       )}
     </MessageContainer>
   );
-}
+});
