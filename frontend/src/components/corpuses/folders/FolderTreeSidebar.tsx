@@ -360,6 +360,12 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
         variables: { corpusId },
       },
     ],
+    // Evict all documents queries from cache to force refetch
+    // This ensures document lists update after moving documents between folders
+    update(cache) {
+      cache.evict({ fieldName: "documents" });
+      cache.gc();
+    },
   });
 
   // Fetch folders from server
