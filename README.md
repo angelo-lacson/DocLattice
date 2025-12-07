@@ -168,13 +168,13 @@ Disable with `TELEMETRY_ENABLED=False` in your settings.
 
 ---
 
-## Limitations
+## Supported Formats
 
-Currently supported formats:
+Currently supported:
 - PDF (full layout and annotation support)
 - Text-based formats (plaintext, Markdown)
 
-Office formats (docx, xlsx) are on the roadmap. The parsing pipeline can support them, but open source viewers for in-browser annotation are limited.
+**Coming soon:** DOCX viewing and annotation powered by [Docxodus](https://github.com/JSv4/Docxodus), an open source in-browser Word document viewer. This will enable the same annotation and analysis workflows for Word documents that currently exist for PDFs.
 
 ---
 
