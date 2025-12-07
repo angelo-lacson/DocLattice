@@ -476,3 +476,120 @@ class StructuralAnnotationImmutabilityTests(TestCase):
         self.assertIsNone(relationship.document)
         self.assertIsNone(relationship.corpus)
         self.assertEqual(relationship.structural_set, self.sas)
+
+
+class StructuralSetRequiresStructuralFlagTests(TestCase):
+    """
+    Tests for the database constraint that ensures annotations and relationships
+    in a structural_set must have structural=True.
+
+    This constraint prevents data integrity issues where an annotation/relationship
+    is assigned to a structural_set but has structural=False, which would break
+    assumptions in the query optimizer (see query_optimizer.py:207-209).
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="test")
+        self.content_hash = hashlib.sha256(b"test constraint content").hexdigest()
+        self.structural_set = StructuralAnnotationSet.objects.create(
+            content_hash=self.content_hash, creator=self.user
+        )
+        self.label = AnnotationLabel.objects.create(text="TestLabel", creator=self.user)
+        self.rel_label = AnnotationLabel.objects.create(
+            text="TestRelLabel", creator=self.user, label_type="RELATIONSHIP_LABEL"
+        )
+
+    def test_annotation_in_structural_set_with_structural_true_succeeds(self):
+        """Annotation in structural_set with structural=True should succeed."""
+        annotation = Annotation.objects.create(
+            structural_set=self.structural_set,
+            annotation_label=self.label,
+            creator=self.user,
+            raw_text="Valid structural annotation",
+            structural=True,
+        )
+        self.assertIsNotNone(annotation.id)
+        self.assertTrue(annotation.structural)
+        self.assertEqual(annotation.structural_set, self.structural_set)
+
+    def test_annotation_in_structural_set_with_structural_false_fails(self):
+        """Annotation in structural_set with structural=False should fail at database level."""
+        # This tests the CheckConstraint 'structural_set_requires_structural_flag'
+        with self.assertRaises(IntegrityError):
+            # Bypass model validation by using SQL insert or raw create
+            # We need to test the DB-level constraint, so we use a lower-level approach
+            from django.db import connection
+
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO annotations_annotation
+                    (created, modified, page, raw_text, structural, is_public,
+                     creator_id, structural_set_id, annotation_label_id, annotation_type,
+                     tokens_jsons, bounding_box, json)
+                    VALUES (NOW(), NOW(), 1, 'Invalid annotation', FALSE, FALSE,
+                            %s, %s, %s, 'TOKEN_LABEL', '[]', '{}', '{}')
+                    """,
+                    [self.user.id, self.structural_set.id, self.label.id],
+                )
+
+    def test_relationship_in_structural_set_with_structural_true_succeeds(self):
+        """Relationship in structural_set with structural=True should succeed."""
+        relationship = Relationship.objects.create(
+            structural_set=self.structural_set,
+            relationship_label=self.rel_label,
+            creator=self.user,
+            structural=True,
+        )
+        self.assertIsNotNone(relationship.id)
+        self.assertTrue(relationship.structural)
+        self.assertEqual(relationship.structural_set, self.structural_set)
+
+    def test_relationship_in_structural_set_with_structural_false_fails(self):
+        """Relationship in structural_set with structural=False should fail at database level."""
+        # This tests the CheckConstraint 'rel_structural_set_requires_structural_flag'
+        with self.assertRaises(IntegrityError):
+            from django.db import connection
+
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO annotations_relationship
+                    (created, modified, structural, is_public,
+                     creator_id, structural_set_id, relationship_label_id)
+                    VALUES (NOW(), NOW(), FALSE, FALSE,
+                            %s, %s, %s)
+                    """,
+                    [self.user.id, self.structural_set.id, self.rel_label.id],
+                )
+
+    def test_annotation_without_structural_set_can_have_structural_false(self):
+        """Annotation without structural_set can have structural=False (normal case)."""
+        document = Document.objects.create(
+            title="Test Doc", creator=self.user, is_public=True
+        )
+        annotation = Annotation.objects.create(
+            document=document,
+            annotation_label=self.label,
+            creator=self.user,
+            raw_text="Normal non-structural annotation",
+            structural=False,
+        )
+        self.assertIsNotNone(annotation.id)
+        self.assertFalse(annotation.structural)
+        self.assertIsNone(annotation.structural_set)
+
+    def test_relationship_without_structural_set_can_have_structural_false(self):
+        """Relationship without structural_set can have structural=False (normal case)."""
+        document = Document.objects.create(
+            title="Test Doc", creator=self.user, is_public=True
+        )
+        relationship = Relationship.objects.create(
+            document=document,
+            relationship_label=self.rel_label,
+            creator=self.user,
+            structural=False,
+        )
+        self.assertIsNotNone(relationship.id)
+        self.assertFalse(relationship.structural)
+        self.assertIsNone(relationship.structural_set)
