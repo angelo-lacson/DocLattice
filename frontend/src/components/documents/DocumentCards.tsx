@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useDropzone } from "react-dropzone";
 import styled from "styled-components";
+import { FileText, Upload } from "lucide-react";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 
 import { DocumentItem } from "./DocumentItem";
 import { ModernDocumentItem } from "./ModernDocumentItem";
-import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { DocumentType, PageInfo } from "../../types/graphql-api";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 
@@ -100,6 +100,87 @@ const ModernListContainer = styled.div`
   @media (max-width: 640px) {
     padding: 8px;
     gap: 6px;
+  }
+`;
+
+const EmptyStateContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  flex: 1;
+  min-height: 400px;
+  padding: 48px 24px;
+  text-align: center;
+  background: transparent;
+`;
+
+const EmptyStateIcon = styled.div`
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  color: #3b82f6;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1),
+    0 2px 4px -1px rgba(59, 130, 246, 0.06);
+
+  svg {
+    width: 36px;
+    height: 36px;
+    stroke-width: 1.5px;
+  }
+`;
+
+const EmptyStateTitle = styled.h3`
+  color: #0f172a;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+`;
+
+const EmptyStateDescription = styled.p`
+  color: #64748b;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 320px;
+`;
+
+const DropHint = styled.button`
+  margin-top: 24px;
+  padding: 12px 20px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #3b82f6;
+
+    svg {
+      color: #3b82f6;
+    }
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    color: #94a3b8;
+    transition: color 0.2s ease;
   }
 `;
 
@@ -208,18 +289,11 @@ export const DocumentCards = ({
     }
   };
 
-  let cards = [
-    <PlaceholderCard
-      key="PlaceholderCard"
-      title="No Matching Documents"
-      style={{
-        minHeight: "240px",
-        background: "#ffffff",
-        border: "1px solid #e2e8f0",
-        borderRadius: "12px",
-      }}
-    />,
-  ];
+  // Check if we should show the empty state (no items AND no folders)
+  const showEmptyState =
+    (!items || items.length === 0) && prefixItems.length === 0;
+
+  let cards: React.ReactNode[] = [];
 
   if (items && items.length > 0) {
     if (viewMode === "classic") {
@@ -254,11 +328,16 @@ export const DocumentCards = ({
     }
   }
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
-    noClick: true,
+    noClick: true, // We handle click manually via the DropHint button
     noKeyboard: true,
   });
+
+  // Handler to open file dialog when clicking the upload button
+  const handleUploadClick = () => {
+    open();
+  };
 
   // Choose the appropriate container based on view mode
   const GridContainer =
@@ -304,14 +383,35 @@ export const DocumentCards = ({
           overflowY: "auto",
           overflowX: "hidden",
           minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
           ...style,
         }}
       >
-        <GridContainer>
-          {prefixItems}
-          {cards}
-        </GridContainer>
-        <FetchMoreOnVisible fetchNextPage={handleUpdate} />
+        {showEmptyState ? (
+          <EmptyStateContainer>
+            <EmptyStateIcon>
+              <FileText />
+            </EmptyStateIcon>
+            <EmptyStateTitle>No Documents Yet</EmptyStateTitle>
+            <EmptyStateDescription>
+              This folder is empty. Upload documents to get started with your
+              document analysis.
+            </EmptyStateDescription>
+            <DropHint type="button" onClick={handleUploadClick}>
+              <Upload />
+              Drag and drop files here, or click to browse
+            </DropHint>
+          </EmptyStateContainer>
+        ) : (
+          <>
+            <GridContainer>
+              {prefixItems}
+              {cards}
+            </GridContainer>
+            <FetchMoreOnVisible fetchNextPage={handleUpdate} />
+          </>
+        )}
       </div>
     </div>
   );
