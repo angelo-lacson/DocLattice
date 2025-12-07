@@ -166,8 +166,10 @@ def import_corpus(
 
                                 # Link Document to Corpus using proper versioning method
                                 # This creates a corpus-isolated copy with DocumentPath
-                                corpus_copy, _status, _doc_path = corpus_obj.add_document(
-                                    document=doc_obj, user=user_obj
+                                corpus_copy, _status, _doc_path = (
+                                    corpus_obj.add_document(
+                                        document=doc_obj, user=user_obj
+                                    )
                                 )
 
                                 # Import Document-level annotations
