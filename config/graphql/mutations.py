@@ -124,15 +124,11 @@ from opencontractserver.annotations.models import (
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
-    CorpusDocumentFolder,
     CorpusFolder,
     CorpusQuery,
     TemporaryFileHandle,
 )
 from opencontractserver.documents.models import Document, DocumentPath
-from opencontractserver.documents.versioning import (
-    restore_document as restore_document_func,
-)
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.tasks import (
@@ -767,6 +763,14 @@ class AcceptCookieConsent(graphene.Mutation):
 
 
 class AddDocumentsToCorpus(graphene.Mutation):
+    """Add existing documents to a corpus.
+
+    Delegates to DocumentFolderService.add_documents_to_corpus() for:
+    - Permission checking (corpus UPDATE permission)
+    - Document validation (user owns or public)
+    - Dual-system update (DocumentPath + corpus.add_document)
+    """
+
     class Arguments:
         corpus_id = graphene.String(
             required=True, description="ID of corpus to add documents to."
@@ -782,34 +786,46 @@ class AddDocumentsToCorpus(graphene.Mutation):
 
     @login_required
     def mutate(root, info, corpus_id, document_ids):
-        ok = False
-        message = "Success"
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
 
         try:
             user = info.context.user
-            doc_pks = list(
-                map(lambda graphene_id: from_global_id(graphene_id)[1], document_ids)
-            )
-            doc_objs = Document.objects.filter(
-                Q(pk__in=doc_pks) & (Q(creator=user) | Q(is_public=True))
-            )
-            corpus = Corpus.objects.get(
-                Q(pk=from_global_id(corpus_id)[1])
-                & (Q(creator=user) | Q(is_public=True))
-            )
-            # Use new DocumentPath-based method with audit trail
-            for doc in doc_objs:
-                corpus.add_document(document=doc, user=user)
-            ok = True
+            doc_pks = [int(from_global_id(doc_id)[1]) for doc_id in document_ids]
+            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
 
+            # Delegate to service - handles permission checks, validation, dual-system update
+            added_count, added_ids, error = (
+                DocumentFolderService.add_documents_to_corpus(
+                    user=user,
+                    document_ids=doc_pks,
+                    corpus=corpus,
+                    folder=None,  # No folder specified - add to root
+                )
+            )
+
+            if error:
+                return AddDocumentsToCorpus(message=error, ok=False)
+
+            return AddDocumentsToCorpus(
+                message=f"Successfully added {added_count} document(s)",
+                ok=True,
+            )
+
+        except Corpus.DoesNotExist:
+            return AddDocumentsToCorpus(message="Corpus not found", ok=False)
         except Exception as e:
-            message = f"Error on upload: {e}"
-            ok = False
-
-        return AddDocumentsToCorpus(message=message, ok=ok)
+            return AddDocumentsToCorpus(message=f"Error on upload: {e}", ok=False)
 
 
 class RemoveDocumentsFromCorpus(graphene.Mutation):
+    """Remove documents from a corpus (soft-delete).
+
+    Delegates to DocumentFolderService.remove_documents_from_corpus() for:
+    - Permission checking (corpus UPDATE permission)
+    - Soft-delete via DocumentPath (creates is_deleted=True record)
+    - Audit trail
+    """
+
     class Arguments:
         corpus_id = graphene.String(
             required=True, description="ID of corpus to remove documents from."
@@ -825,32 +841,34 @@ class RemoveDocumentsFromCorpus(graphene.Mutation):
 
     @login_required
     def mutate(root, info, corpus_id, document_ids_to_remove):
-        ok = False
-        message = "Success"
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
 
         try:
             user = info.context.user
-            doc_pks = list(
-                map(
-                    lambda graphene_id: from_global_id(graphene_id)[1],
-                    document_ids_to_remove,
-                )
-            )
-            corpus = Corpus.objects.get(
-                Q(pk=from_global_id(corpus_id)[1])
-                & (Q(creator=user) | Q(is_public=True))
-            )
-            # Use new DocumentPath-based method with soft-delete and audit trail
-            corpus_docs = corpus.get_documents().filter(pk__in=doc_pks)
-            for doc in corpus_docs:
-                corpus.remove_document(document=doc, user=user)
-            ok = True
+            doc_pks = [
+                int(from_global_id(doc_id)[1]) for doc_id in document_ids_to_remove
+            ]
+            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
 
+            # Delegate to service - handles permission checks, soft-delete, audit trail
+            removed_count, error = DocumentFolderService.remove_documents_from_corpus(
+                user=user,
+                document_ids=doc_pks,
+                corpus=corpus,
+            )
+
+            if error:
+                return RemoveDocumentsFromCorpus(message=error, ok=False)
+
+            return RemoveDocumentsFromCorpus(
+                message=f"Successfully removed {removed_count} document(s)",
+                ok=True,
+            )
+
+        except Corpus.DoesNotExist:
+            return RemoveDocumentsFromCorpus(message="Corpus not found", ok=False)
         except Exception as e:
-            message = f"Error on upload: {e}"
-            ok = False
-
-        return RemoveDocumentsFromCorpus(message=message, ok=ok)
+            return RemoveDocumentsFromCorpus(message=f"Error on removal: {e}", ok=False)
 
 
 class UpdateDocument(DRFMutation):
@@ -1601,17 +1619,19 @@ class UploadDocument(graphene.Mutation):
                             f"[UPLOAD] Document {document.id} status: {status} in corpus {corpus.id}"
                         )
 
-                    # Handle folder assignment via CorpusDocumentFolder for backward compatibility
+                    # Handle folder assignment via service for dual-system consistency
                     if folder is not None:
-                        folder_assignment, created = (
-                            CorpusDocumentFolder.objects.update_or_create(
-                                document=document,
-                                corpus=corpus,
-                                defaults={"folder": folder},
-                            )
+                        from opencontractserver.corpuses.folder_service import (
+                            DocumentFolderService,
+                        )
+
+                        DocumentFolderService._update_document_folder_assignment(
+                            document=document,
+                            corpus=corpus,
+                            folder=folder,
                         )
                         logger.info(
-                            f"[UPLOAD] Assigned document {document.id} to folder {folder.id} (created={created})"
+                            f"[UPLOAD] Assigned document {document.id} to folder {folder.id}"
                         )
 
                 except Exception as e:
@@ -3865,7 +3885,10 @@ class CreateNote(graphene.Mutation):
 class RestoreDeletedDocument(graphene.Mutation):
     """
     Restore a soft-deleted document path within a corpus.
-    Creates a new path entry with is_deleted=False.
+
+    Delegates to DocumentFolderService.restore_document() for:
+    - Permission checking (corpus UPDATE permission)
+    - Creating new DocumentPath with is_deleted=False
     """
 
     class Arguments:
@@ -3883,6 +3906,8 @@ class RestoreDeletedDocument(graphene.Mutation):
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
     def mutate(root, info, document_id, corpus_id):
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+
         user = info.context.user
 
         try:
@@ -3891,25 +3916,6 @@ class RestoreDeletedDocument(graphene.Mutation):
 
             document = Document.objects.get(pk=doc_pk)
             corpus = Corpus.objects.get(pk=corpus_pk)
-
-            # Check UPDATE permission on both document and corpus
-            if not user_has_permission_for_obj(
-                user, document, PermissionTypes.UPDATE, include_group_permissions=True
-            ):
-                return RestoreDeletedDocument(
-                    ok=False,
-                    message="You don't have permission to restore this document",
-                    document=None,
-                )
-
-            if not user_has_permission_for_obj(
-                user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
-            ):
-                return RestoreDeletedDocument(
-                    ok=False,
-                    message="You don't have permission to modify this corpus",
-                    document=None,
-                )
 
             # Find the deleted path entry
             deleted_path = (
@@ -3927,20 +3933,22 @@ class RestoreDeletedDocument(graphene.Mutation):
                     document=None,
                 )
 
-            # Restore the document using the versioning function
-            new_path = restore_document_func(
-                corpus=corpus,
-                path=deleted_path.path,
+            # Delegate to service - handles permission checks and restoration
+            success, error = DocumentFolderService.restore_document(
                 user=user,
+                document_path=deleted_path,
             )
 
-            logger.info(
-                f"User {user.id} restored document {doc_pk} in corpus {corpus_pk}"
-            )
+            if not success:
+                return RestoreDeletedDocument(
+                    ok=False,
+                    message=error,
+                    document=None,
+                )
 
             return RestoreDeletedDocument(
                 ok=True,
-                message=f"Document restored successfully to {new_path.path}",
+                message="Document restored successfully",
                 document=document,
             )
 

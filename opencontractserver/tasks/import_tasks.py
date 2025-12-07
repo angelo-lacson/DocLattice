@@ -164,9 +164,9 @@ def import_corpus(
                                     user_obj, doc_obj, [PermissionTypes.ALL]
                                 )
 
-                                # Link Document to Corpus
-                                corpus_obj.documents.add(doc_obj)
-                                corpus_obj.save()
+                                # Link Document to Corpus using proper versioning method
+                                # This creates a corpus-isolated copy with DocumentPath
+                                corpus_obj.add_document(document=doc_obj, user=user_obj)
 
                                 # Import Document-level annotations
                                 doc_labels_list = doc_data.get("doc_labels", [])
@@ -303,11 +303,12 @@ def import_document_to_corpus(
             page_count=document_import_data["doc_data"]["page_count"],
         )
         logger.info(f"Created document: {doc_obj.title}")
-        set_permissions_for_obj_to_user(user_id, doc_obj, [PermissionTypes.ALL])
+        user_obj = User.objects.get(id=user_id)
+        set_permissions_for_obj_to_user(user_obj, doc_obj, [PermissionTypes.ALL])
 
-        # Link to corpus
-        corpus_obj.documents.add(doc_obj)
-        corpus_obj.save()
+        # Link to corpus using proper versioning method
+        # This creates a corpus-isolated copy with DocumentPath
+        corpus_obj.add_document(document=doc_obj, user=user_obj)
         logger.info(f"Linked document to corpus: {corpus_obj.title}")
 
         # Import text annotations

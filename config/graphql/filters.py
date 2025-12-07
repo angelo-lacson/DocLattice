@@ -418,11 +418,13 @@ class DocumentFilter(django_filters.FilterSet):
             )
             # Also check CorpusDocumentFolder for backward compatibility
             docs_with_folder_from_legacy = set(
-                CorpusDocumentFolder.objects.filter(
-                    folder__isnull=False
-                ).values_list("document_id", flat=True)
+                CorpusDocumentFolder.objects.filter(folder__isnull=False).values_list(
+                    "document_id", flat=True
+                )
             )
-            docs_with_folder = docs_with_folder_from_paths | docs_with_folder_from_legacy
+            docs_with_folder = (
+                docs_with_folder_from_paths | docs_with_folder_from_legacy
+            )
 
             result = queryset.exclude(id__in=docs_with_folder)
             logger.info(f"[QUERY] Filtered to root folder, count: {result.count()}")
@@ -439,9 +441,9 @@ class DocumentFilter(django_filters.FilterSet):
 
             # Also check CorpusDocumentFolder for backward compatibility
             doc_ids_from_legacy = set(
-                CorpusDocumentFolder.objects.filter(
-                    folder_id=folder_pk
-                ).values_list("document_id", flat=True)
+                CorpusDocumentFolder.objects.filter(folder_id=folder_pk).values_list(
+                    "document_id", flat=True
+                )
             )
 
             all_doc_ids = doc_ids_from_paths | doc_ids_from_legacy

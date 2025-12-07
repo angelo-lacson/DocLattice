@@ -5,34 +5,39 @@ This module implements folder management functionality including:
 - Creating, updating, moving, and deleting folders
 - Moving documents to/from folders
 - Bulk document operations
+
+All mutations delegate to DocumentFolderService for business logic,
+permission checks, and dual-system consistency (DocumentPath + CorpusDocumentFolder).
 """
 
 import logging
 
 import graphene
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
 from config.graphql.graphene_types import CorpusFolderType, DocumentType
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
+from opencontractserver.corpuses.folder_service import DocumentFolderService
 from opencontractserver.corpuses.models import (
     Corpus,
-    CorpusDocumentFolder,
     CorpusFolder,
 )
 from opencontractserver.documents.models import Document
-from opencontractserver.types.enums import PermissionTypes
-from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
 class CreateCorpusFolderMutation(graphene.Mutation):
-    """Create a new folder in a corpus."""
+    """Create a new folder in a corpus.
+
+    Delegates to DocumentFolderService.create_folder() for:
+    - Permission checking (corpus UPDATE permission)
+    - Validation (unique name, parent in same corpus)
+    - Folder creation
+    """
 
     class Arguments:
         corpus_id = graphene.ID(
@@ -69,50 +74,32 @@ class CreateCorpusFolderMutation(graphene.Mutation):
 
         try:
             corpus_pk = from_global_id(corpus_id)[1]
-
-            # Check corpus permissions - user must have UPDATE permission or be creator
-            # Note: is_public grants READ-ONLY access, not write access
             corpus = Corpus.objects.get(pk=corpus_pk)
-            if not (
-                corpus.creator == user
-                or user_has_permission_for_obj(
-                    user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
-                )
-            ):
-                return CreateCorpusFolderMutation(
-                    ok=False,
-                    message="You do not have permission to create folders in this corpus",
-                    folder=None,
-                )
 
-            # Validate and get parent folder if provided
+            # Get parent folder if provided
             parent = None
             if parent_id:
                 parent_pk = from_global_id(parent_id)[1]
                 parent = CorpusFolder.objects.get(pk=parent_pk)
 
-                # Verify parent is in the same corpus
-                if parent.corpus_id != corpus.id:
-                    return CreateCorpusFolderMutation(
-                        ok=False,
-                        message="Parent folder must be in the same corpus",
-                        folder=None,
-                    )
-
-            # Create folder
-            folder = CorpusFolder(
-                name=name,
+            # Delegate to service - handles permission checks, validation, creation
+            folder, error = DocumentFolderService.create_folder(
+                user=user,
                 corpus=corpus,
+                name=name,
                 parent=parent,
                 description=description,
                 color=color,
                 icon=icon,
-                tags=tags or [],
-                creator=user,
+                tags=tags,
             )
 
-            # This will trigger validation (clean) and save
-            folder.save()
+            if error:
+                return CreateCorpusFolderMutation(
+                    ok=False,
+                    message=error,
+                    folder=None,
+                )
 
             return CreateCorpusFolderMutation(
                 ok=True,
@@ -132,26 +119,6 @@ class CreateCorpusFolderMutation(graphene.Mutation):
                 message="Parent folder not found",
                 folder=None,
             )
-        except IntegrityError as e:
-            # This typically means duplicate folder name under same parent
-            if "unique constraint" in str(e).lower():
-                return CreateCorpusFolderMutation(
-                    ok=False,
-                    message=f"A folder named '{name}' already exists in this location",
-                    folder=None,
-                )
-            logger.exception("Integrity error creating folder")
-            return CreateCorpusFolderMutation(
-                ok=False,
-                message=f"Database error creating folder: {str(e)}",
-                folder=None,
-            )
-        except ValidationError as e:
-            return CreateCorpusFolderMutation(
-                ok=False,
-                message=f"Validation error: {str(e)}",
-                folder=None,
-            )
         except Exception as e:
             logger.exception("Error creating folder")
             return CreateCorpusFolderMutation(
@@ -162,7 +129,13 @@ class CreateCorpusFolderMutation(graphene.Mutation):
 
 
 class UpdateCorpusFolderMutation(graphene.Mutation):
-    """Update folder properties (name, description, color, icon, tags)."""
+    """Update folder properties (name, description, color, icon, tags).
+
+    Delegates to DocumentFolderService.update_folder() for:
+    - Permission checking (corpus UPDATE permission)
+    - Validation (unique name within parent)
+    - Folder update
+    """
 
     class Arguments:
         folder_id = graphene.ID(required=True, description="Folder ID to update")
@@ -194,37 +167,26 @@ class UpdateCorpusFolderMutation(graphene.Mutation):
             folder_pk = from_global_id(folder_id)[1]
             folder = CorpusFolder.objects.get(pk=folder_pk)
 
-            # Check permission - user must have UPDATE permission or be creator
-            # Note: is_public grants READ-ONLY access, not write access
-            if not (
-                folder.corpus.creator == user
-                or user_has_permission_for_obj(
-                    user,
-                    folder.corpus,
-                    PermissionTypes.UPDATE,
-                    include_group_permissions=True,
-                )
-            ):
+            # Delegate to service - handles permission checks, validation, update
+            success, error = DocumentFolderService.update_folder(
+                user=user,
+                folder=folder,
+                name=name,
+                description=description,
+                color=color,
+                icon=icon,
+                tags=tags,
+            )
+
+            if not success:
                 return UpdateCorpusFolderMutation(
                     ok=False,
-                    message="You do not have permission to update folders in this corpus",
+                    message=error,
                     folder=None,
                 )
 
-            # Update provided fields
-            if name is not None:
-                folder.name = name
-            if description is not None:
-                folder.description = description
-            if color is not None:
-                folder.color = color
-            if icon is not None:
-                folder.icon = icon
-            if tags is not None:
-                folder.tags = tags
-
-            # Save with validation
-            folder.save()
+            # Refresh folder from DB to get updated values
+            folder.refresh_from_db()
 
             return UpdateCorpusFolderMutation(
                 ok=True,
@@ -238,25 +200,6 @@ class UpdateCorpusFolderMutation(graphene.Mutation):
                 message="Folder not found",
                 folder=None,
             )
-        except IntegrityError as e:
-            if "unique constraint" in str(e).lower():
-                return UpdateCorpusFolderMutation(
-                    ok=False,
-                    message=f"A folder named '{name}' already exists in this location",
-                    folder=None,
-                )
-            logger.exception("Integrity error updating folder")
-            return UpdateCorpusFolderMutation(
-                ok=False,
-                message=f"Database error updating folder: {str(e)}",
-                folder=None,
-            )
-        except ValidationError as e:
-            return UpdateCorpusFolderMutation(
-                ok=False,
-                message=f"Validation error: {str(e)}",
-                folder=None,
-            )
         except Exception as e:
             logger.exception("Error updating folder")
             return UpdateCorpusFolderMutation(
@@ -267,7 +210,13 @@ class UpdateCorpusFolderMutation(graphene.Mutation):
 
 
 class MoveCorpusFolderMutation(graphene.Mutation):
-    """Move a folder to a different parent (or to root if parent_id is null)."""
+    """Move a folder to a different parent (or to root if parent_id is null).
+
+    Delegates to DocumentFolderService.move_folder() for:
+    - Permission checking (corpus UPDATE permission)
+    - Validation (no self-move, no move into descendants, same corpus)
+    - Folder move
+    """
 
     class Arguments:
         folder_id = graphene.ID(required=True, description="Folder ID to move")
@@ -289,48 +238,28 @@ class MoveCorpusFolderMutation(graphene.Mutation):
             folder_pk = from_global_id(folder_id)[1]
             folder = CorpusFolder.objects.get(pk=folder_pk)
 
-            # Check permission - user must have UPDATE permission or be creator
-            # Note: is_public grants READ-ONLY access, not write access
-            if not (
-                folder.corpus.creator == user
-                or user_has_permission_for_obj(
-                    user,
-                    folder.corpus,
-                    PermissionTypes.UPDATE,
-                    include_group_permissions=True,
-                )
-            ):
-                return MoveCorpusFolderMutation(
-                    ok=False,
-                    message="You do not have permission to move folders in this corpus",
-                    folder=None,
-                )
-
             # Get new parent if provided
             new_parent = None
             if new_parent_id:
                 new_parent_pk = from_global_id(new_parent_id)[1]
                 new_parent = CorpusFolder.objects.get(pk=new_parent_pk)
 
-                # Verify new parent is in the same corpus
-                if new_parent.corpus_id != folder.corpus_id:
-                    return MoveCorpusFolderMutation(
-                        ok=False,
-                        message="Cannot move folder to a different corpus",
-                        folder=None,
-                    )
+            # Delegate to service - handles permission checks, validation, move
+            success, error = DocumentFolderService.move_folder(
+                user=user,
+                folder=folder,
+                new_parent=new_parent,
+            )
 
-                # Prevent moving a folder into itself or its descendants
-                if new_parent == folder or new_parent in folder.descendants():
-                    return MoveCorpusFolderMutation(
-                        ok=False,
-                        message="Cannot move folder into itself or its descendants",
-                        folder=None,
-                    )
+            if not success:
+                return MoveCorpusFolderMutation(
+                    ok=False,
+                    message=error,
+                    folder=None,
+                )
 
-            # Move folder
-            folder.parent = new_parent
-            folder.save()
+            # Refresh folder from DB to get updated parent
+            folder.refresh_from_db()
 
             return MoveCorpusFolderMutation(
                 ok=True,
@@ -344,25 +273,6 @@ class MoveCorpusFolderMutation(graphene.Mutation):
                 message="Folder not found",
                 folder=None,
             )
-        except IntegrityError as e:
-            if "unique constraint" in str(e).lower():
-                return MoveCorpusFolderMutation(
-                    ok=False,
-                    message="A folder with this name already exists at the destination",
-                    folder=None,
-                )
-            logger.exception("Integrity error moving folder")
-            return MoveCorpusFolderMutation(
-                ok=False,
-                message=f"Database error moving folder: {str(e)}",
-                folder=None,
-            )
-        except ValidationError as e:
-            return MoveCorpusFolderMutation(
-                ok=False,
-                message=f"Validation error: {str(e)}",
-                folder=None,
-            )
         except Exception as e:
             logger.exception("Error moving folder")
             return MoveCorpusFolderMutation(
@@ -373,7 +283,13 @@ class MoveCorpusFolderMutation(graphene.Mutation):
 
 
 class DeleteCorpusFolderMutation(graphene.Mutation):
-    """Delete a folder and optionally its contents."""
+    """Delete a folder and optionally its contents.
+
+    Delegates to DocumentFolderService.delete_folder() for:
+    - Permission checking (corpus DELETE permission)
+    - Child folder handling (reparent or cascade)
+    - Document folder assignment cleanup (both DocumentPath and CorpusDocumentFolder)
+    """
 
     class Arguments:
         folder_id = graphene.ID(required=True, description="Folder ID to delete")
@@ -395,31 +311,18 @@ class DeleteCorpusFolderMutation(graphene.Mutation):
             folder_pk = from_global_id(folder_id)[1]
             folder = CorpusFolder.objects.get(pk=folder_pk)
 
-            # Check permission - user must have DELETE permission or be creator
-            if not (
-                folder.corpus.creator == user
-                or user_has_permission_for_obj(user, folder.corpus, "delete")
-            ):
+            # Delegate to service - handles permission checks, cleanup, deletion
+            success, error = DocumentFolderService.delete_folder(
+                user=user,
+                folder=folder,
+                move_children_to_parent=not delete_contents,
+            )
+
+            if not success:
                 return DeleteCorpusFolderMutation(
                     ok=False,
-                    message="You do not have permission to delete folders in this corpus",
+                    message=error,
                 )
-
-            with transaction.atomic():
-                if not delete_contents:
-                    # Move child folders to this folder's parent
-                    children = folder.children.all()
-                    for child in children:
-                        child.parent = folder.parent
-                        child.save()
-
-                    # Move documents to corpus root (delete their folder assignments)
-                    CorpusDocumentFolder.objects.filter(
-                        folder=folder, corpus=folder.corpus
-                    ).delete()
-
-                # Delete the folder (CASCADE will handle subfolders if delete_contents=True)
-                folder.delete()
 
             return DeleteCorpusFolderMutation(
                 ok=True,
@@ -440,7 +343,13 @@ class DeleteCorpusFolderMutation(graphene.Mutation):
 
 
 class MoveDocumentToFolderMutation(graphene.Mutation):
-    """Move a document to a specific folder (or to corpus root if folder_id is null)."""
+    """Move a document to a specific folder (or to corpus root if folder_id is null).
+
+    Delegates to DocumentFolderService.move_document_to_folder() for:
+    - Permission checking (corpus UPDATE permission)
+    - Validation (document in corpus, folder in corpus)
+    - Dual-system update (DocumentPath + CorpusDocumentFolder)
+    """
 
     class Arguments:
         document_id = graphene.ID(required=True, description="Document ID to move")
@@ -465,31 +374,9 @@ class MoveDocumentToFolderMutation(graphene.Mutation):
             document_pk = from_global_id(document_id)[1]
             corpus_pk = from_global_id(corpus_id)[1]
 
-            # Get and check objects
+            # Get objects
             document = Document.objects.get(pk=document_pk)
             corpus = Corpus.objects.get(pk=corpus_pk)
-
-            # Check permissions - user must have UPDATE permission or be creator
-            # Note: is_public grants READ-ONLY access, not write access
-            if not (
-                corpus.creator == user
-                or user_has_permission_for_obj(
-                    user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
-                )
-            ):
-                return MoveDocumentToFolderMutation(
-                    ok=False,
-                    message="You do not have permission to organize documents in this corpus",
-                    document=None,
-                )
-
-            # Verify document is in corpus (using DocumentPath source of truth)
-            if not corpus.get_documents().filter(pk=document.pk).exists():
-                return MoveDocumentToFolderMutation(
-                    ok=False,
-                    message="Document is not in this corpus",
-                    document=None,
-                )
 
             # Get folder if provided
             folder = None
@@ -497,29 +384,20 @@ class MoveDocumentToFolderMutation(graphene.Mutation):
                 folder_pk = from_global_id(folder_id)[1]
                 folder = CorpusFolder.objects.get(pk=folder_pk)
 
-                # Verify folder is in the same corpus
-                if folder.corpus_id != corpus.id:
-                    return MoveDocumentToFolderMutation(
-                        ok=False,
-                        message="Folder must be in the same corpus as the document",
-                        document=None,
-                    )
+            # Delegate to service - handles permission checks, validation, dual-system update
+            success, error = DocumentFolderService.move_document_to_folder(
+                user=user,
+                document=document,
+                corpus=corpus,
+                folder=folder,
+            )
 
-            # Update or create document folder assignment
-            with transaction.atomic():
-                # Delete existing assignment for this corpus
-                CorpusDocumentFolder.objects.filter(
-                    document=document, corpus=corpus
-                ).delete()
-
-                # Create new assignment if folder specified
-                # (if folder is None, document goes to root)
-                if folder is not None:
-                    CorpusDocumentFolder.objects.create(
-                        document=document,
-                        corpus=corpus,
-                        folder=folder,
-                    )
+            if not success:
+                return MoveDocumentToFolderMutation(
+                    ok=False,
+                    message=error,
+                    document=None,
+                )
 
             return MoveDocumentToFolderMutation(
                 ok=True,
@@ -555,7 +433,13 @@ class MoveDocumentToFolderMutation(graphene.Mutation):
 
 
 class MoveDocumentsToFolderMutation(graphene.Mutation):
-    """Move multiple documents to a specific folder in bulk."""
+    """Move multiple documents to a specific folder in bulk.
+
+    Delegates to DocumentFolderService.move_documents_to_folder() for:
+    - Permission checking (corpus UPDATE permission)
+    - Validation (all documents in corpus, folder in corpus)
+    - Bulk dual-system update (DocumentPath + CorpusDocumentFolder)
+    """
 
     class Arguments:
         document_ids = graphene.List(
@@ -582,70 +466,34 @@ class MoveDocumentsToFolderMutation(graphene.Mutation):
             corpus_pk = from_global_id(corpus_id)[1]
             corpus = Corpus.objects.get(pk=corpus_pk)
 
-            # Check permissions - user must have UPDATE permission or be creator
-            # Note: is_public grants READ-ONLY access, not write access
-            if not (
-                corpus.creator == user
-                or user_has_permission_for_obj(
-                    user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
-                )
-            ):
-                return MoveDocumentsToFolderMutation(
-                    ok=False,
-                    message="You do not have permission to organize documents in this corpus",
-                    moved_count=0,
-                )
-
             # Get folder if provided
             folder = None
             if folder_id:
                 folder_pk = from_global_id(folder_id)[1]
                 folder = CorpusFolder.objects.get(pk=folder_pk)
 
-                # Verify folder is in the same corpus
-                if folder.corpus_id != corpus.id:
-                    return MoveDocumentsToFolderMutation(
-                        ok=False,
-                        message="Folder must be in the same corpus",
-                        moved_count=0,
-                    )
+            # Convert document IDs from global IDs to integer PKs
+            doc_pks = [int(from_global_id(doc_id)[1]) for doc_id in document_ids]
 
-            # Convert document IDs
-            doc_pks = [from_global_id(doc_id)[1] for doc_id in document_ids]
+            # Delegate to service - handles permission checks, validation, bulk update
+            moved_count, error = DocumentFolderService.move_documents_to_folder(
+                user=user,
+                document_ids=doc_pks,
+                corpus=corpus,
+                folder=folder,
+            )
 
-            # Verify all documents are in corpus (using DocumentPath source of truth)
-            corpus_doc_ids = set(corpus.get_documents().values_list("id", flat=True))
-            invalid_docs = [pk for pk in doc_pks if int(pk) not in corpus_doc_ids]
-            if invalid_docs:
+            if error:
                 return MoveDocumentsToFolderMutation(
                     ok=False,
-                    message=f"Some documents are not in this corpus: {invalid_docs}",
+                    message=error,
                     moved_count=0,
                 )
 
-            # Bulk move documents
-            with transaction.atomic():
-                # Delete existing assignments
-                CorpusDocumentFolder.objects.filter(
-                    document_id__in=doc_pks, corpus=corpus
-                ).delete()
-
-                # Create new assignments if folder specified
-                if folder is not None:
-                    assignments = [
-                        CorpusDocumentFolder(
-                            document_id=doc_pk,
-                            corpus=corpus,
-                            folder=folder,
-                        )
-                        for doc_pk in doc_pks
-                    ]
-                    CorpusDocumentFolder.objects.bulk_create(assignments)
-
             return MoveDocumentsToFolderMutation(
                 ok=True,
-                message=f"Successfully moved {len(doc_pks)} document(s)",
-                moved_count=len(doc_pks),
+                message=f"Successfully moved {moved_count} document(s)",
+                moved_count=moved_count,
             )
 
         except Corpus.DoesNotExist:

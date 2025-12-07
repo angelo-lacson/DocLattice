@@ -107,7 +107,6 @@ from opencontractserver.conversations.models import (
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
-    CorpusFolder,
     CorpusQuery,
 )
 from opencontractserver.documents.models import Document, DocumentRelationship
@@ -825,10 +824,15 @@ class Query(graphene.ObjectType):
         """
         Get all folders in a corpus.
         Returns flat list - frontend reconstructs tree from parentId relationships.
+
+        Delegates to DocumentFolderService.get_visible_folders() for
+        permission checking and query optimization.
         """
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+
         _, corpus_pk = from_global_id(corpus_id)
-        return CorpusFolder.objects.filter(corpus_id=corpus_pk).visible_to_user(
-            info.context.user
+        return DocumentFolderService.get_visible_folders(
+            user=info.context.user, corpus_id=int(corpus_pk)
         )
 
     corpus_folder = graphene.Field(
@@ -839,14 +843,18 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpus_folder(self, info, id):
-        """Get a single folder by ID with permission check."""
+        """
+        Get a single folder by ID with permission check.
+
+        Delegates to DocumentFolderService.get_folder_by_id() for
+        permission checking and IDOR protection.
+        """
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+
         _, folder_pk = from_global_id(id)
-        try:
-            return CorpusFolder.objects.visible_to_user(info.context.user).get(
-                pk=folder_pk
-            )
-        except CorpusFolder.DoesNotExist:
-            return None
+        return DocumentFolderService.get_folder_by_id(
+            user=info.context.user, folder_id=int(folder_pk)
+        )
 
     deleted_documents_in_corpus = graphene.List(
         DocumentPathType,
@@ -859,24 +867,14 @@ class Query(graphene.ObjectType):
         """
         Get all soft-deleted documents in a corpus for trash folder view.
 
-        Returns DocumentPath records where is_deleted=True and is_current=True,
-        which represents the current soft-deleted state in the path tree.
+        Delegates to DocumentFolderService.get_deleted_documents() for
+        permission checking and query optimization.
         """
-        from opencontractserver.documents.models import DocumentPath
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
 
         _, corpus_pk = from_global_id(corpus_id)
-
-        # First check user has access to the corpus
-        try:
-            corpus = Corpus.objects.visible_to_user(info.context.user).get(pk=corpus_pk)
-        except Corpus.DoesNotExist:
-            return []
-
-        # Return soft-deleted documents (is_deleted=True, is_current=True)
-        return (
-            DocumentPath.objects.filter(corpus=corpus, is_current=True, is_deleted=True)
-            .select_related("document", "folder", "creator")
-            .order_by("-modified")
+        return DocumentFolderService.get_deleted_documents(
+            user=info.context.user, corpus_id=int(corpus_pk)
         )
 
     # SEARCH RESOURCES FOR MENTIONS #####################################
