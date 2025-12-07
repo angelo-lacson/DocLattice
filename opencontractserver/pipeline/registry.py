@@ -1,0 +1,409 @@
+"""
+Central registry of all pipeline components with lazy initialization.
+
+This module provides an efficient, cached registry of pipeline components
+(parsers, embedders, thumbnailers, post-processors) that:
+1. Auto-discovers components on first access (no manual registration needed)
+2. Caches the registry at module level for zero-overhead subsequent access
+3. Exposes fast lookup functions similar to the tool_registry pattern
+
+Performance:
+- First access: ~50-100ms (module scanning)
+- Subsequent accesses: ~0ms (cached dict lookup)
+"""
+
+import importlib
+import inspect
+import logging
+import pkgutil
+from dataclasses import dataclass, field
+from enum import Enum
+from functools import lru_cache
+from typing import Any, Optional
+
+from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.pipeline.base.parser import BaseParser
+from opencontractserver.pipeline.base.post_processor import BasePostProcessor
+from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
+
+logger = logging.getLogger(__name__)
+
+
+class ComponentType(str, Enum):
+    """Types of pipeline components."""
+
+    PARSER = "parser"
+    EMBEDDER = "embedder"
+    THUMBNAILER = "thumbnailer"
+    POST_PROCESSOR = "post_processor"
+
+
+@dataclass(frozen=True)
+class PipelineComponentDefinition:
+    """
+    Immutable definition of a pipeline component for fast registry access.
+
+    This captures the component's metadata at registration time, avoiding
+    repeated attribute lookups on the class.
+    """
+
+    name: str
+    class_name: str  # Full module.ClassName path
+    component_type: ComponentType
+    title: str
+    module_name: str
+    description: str
+    author: str
+    dependencies: tuple[str, ...]
+    supported_file_types: tuple[str, ...]  # FileTypeEnum values as strings
+    input_schema: dict = field(default_factory=dict)
+    vector_size: Optional[int] = None  # Only for embedders
+    component_class: Optional[type] = field(
+        default=None, compare=False, hash=False
+    )  # Reference to actual class
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for GraphQL response."""
+        result = {
+            "name": self.name,
+            "class_name": self.class_name,
+            "component_type": self.component_type.value,
+            "title": self.title,
+            "module_name": self.module_name,
+            "description": self.description,
+            "author": self.author,
+            "dependencies": list(self.dependencies),
+            "supported_file_types": list(self.supported_file_types),
+            "input_schema": self.input_schema,
+        }
+        if self.vector_size is not None:
+            result["vector_size"] = self.vector_size
+        return result
+
+
+class PipelineComponentRegistry:
+    """
+    Singleton registry for all pipeline components.
+
+    Uses lazy initialization - components are discovered on first access
+    and cached for all subsequent accesses.
+    """
+
+    _instance: Optional["PipelineComponentRegistry"] = None
+    _initialized: bool = False
+
+    def __new__(cls) -> "PipelineComponentRegistry":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        # Only initialize once (singleton pattern)
+        if PipelineComponentRegistry._initialized:
+            return
+        PipelineComponentRegistry._initialized = True
+
+        # Initialize storage
+        self._parsers: tuple[PipelineComponentDefinition, ...] = ()
+        self._embedders: tuple[PipelineComponentDefinition, ...] = ()
+        self._thumbnailers: tuple[PipelineComponentDefinition, ...] = ()
+        self._post_processors: tuple[PipelineComponentDefinition, ...] = ()
+
+        # Name -> Definition lookup for fast access
+        self._by_name: dict[str, PipelineComponentDefinition] = {}
+        self._by_class_name: dict[str, PipelineComponentDefinition] = {}
+
+        # File type -> Components lookup for filtering
+        self._parsers_by_filetype: dict[str, list[PipelineComponentDefinition]] = {}
+        self._thumbnailers_by_filetype: dict[str, list[PipelineComponentDefinition]] = (
+            {}
+        )
+        self._post_processors_by_filetype: dict[
+            str, list[PipelineComponentDefinition]
+        ] = {}
+
+        # Perform discovery
+        self._discover_all_components()
+
+    def _discover_subclasses(self, module_name: str, base_class: type) -> list[type]:
+        """
+        Discover all subclasses of base_class in the given module package.
+
+        This is called ONCE during initialization.
+        """
+        subclasses = []
+        try:
+            package = importlib.import_module(module_name)
+            prefix = package.__name__ + "."
+
+            for _, modname, ispkg in pkgutil.iter_modules(package.__path__, prefix):
+                if not ispkg:
+                    try:
+                        module = importlib.import_module(modname)
+                        for name, obj in inspect.getmembers(module, inspect.isclass):
+                            if issubclass(obj, base_class) and obj != base_class:
+                                subclasses.append(obj)
+                    except Exception as e:
+                        logger.warning(f"Failed to import {modname}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to discover components in {module_name}: {e}")
+
+        return subclasses
+
+    def _create_definition(
+        self, component_class: type, component_type: ComponentType
+    ) -> PipelineComponentDefinition:
+        """Create a PipelineComponentDefinition from a component class."""
+        module_name = component_class.__module__.split(".")[-1]
+
+        # Get supported file types, filtering to valid ones
+        # Store as the enum value (e.g., "pdf") for consistency
+        supported_file_types = []
+        if hasattr(component_class, "supported_file_types"):
+            for ft in component_class.supported_file_types:
+                if ft in [FileTypeEnum.PDF, FileTypeEnum.TXT, FileTypeEnum.DOCX]:
+                    # Store the enum value ("pdf", "txt", "docx")
+                    supported_file_types.append(ft.value)
+
+        # Build definition
+        definition = PipelineComponentDefinition(
+            name=component_class.__name__,
+            class_name=f"{component_class.__module__}.{component_class.__name__}",
+            component_type=component_type,
+            title=getattr(component_class, "title", ""),
+            module_name=module_name,
+            description=getattr(component_class, "description", ""),
+            author=getattr(component_class, "author", ""),
+            dependencies=tuple(getattr(component_class, "dependencies", [])),
+            supported_file_types=tuple(supported_file_types),
+            input_schema=dict(getattr(component_class, "input_schema", {})),
+            vector_size=getattr(component_class, "vector_size", None),
+            component_class=component_class,
+        )
+
+        return definition
+
+    def _discover_all_components(self) -> None:
+        """
+        Discover and register all pipeline components.
+
+        Called once during singleton initialization.
+        """
+        logger.info("Initializing pipeline component registry...")
+
+        # Discover parsers
+        parser_classes = self._discover_subclasses(
+            "opencontractserver.pipeline.parsers", BaseParser
+        )
+        parsers = []
+        for cls in parser_classes:
+            defn = self._create_definition(cls, ComponentType.PARSER)
+            parsers.append(defn)
+            self._by_name[defn.name] = defn
+            self._by_class_name[defn.class_name] = defn
+            for ft in defn.supported_file_types:
+                self._parsers_by_filetype.setdefault(ft, []).append(defn)
+        self._parsers = tuple(parsers)
+
+        # Discover embedders
+        embedder_classes = self._discover_subclasses(
+            "opencontractserver.pipeline.embedders", BaseEmbedder
+        )
+        embedders = []
+        for cls in embedder_classes:
+            defn = self._create_definition(cls, ComponentType.EMBEDDER)
+            embedders.append(defn)
+            self._by_name[defn.name] = defn
+            self._by_class_name[defn.class_name] = defn
+        self._embedders = tuple(embedders)
+
+        # Discover thumbnailers
+        thumbnailer_classes = self._discover_subclasses(
+            "opencontractserver.pipeline.thumbnailers", BaseThumbnailGenerator
+        )
+        thumbnailers = []
+        for cls in thumbnailer_classes:
+            defn = self._create_definition(cls, ComponentType.THUMBNAILER)
+            thumbnailers.append(defn)
+            self._by_name[defn.name] = defn
+            self._by_class_name[defn.class_name] = defn
+            for ft in defn.supported_file_types:
+                self._thumbnailers_by_filetype.setdefault(ft, []).append(defn)
+        self._thumbnailers = tuple(thumbnailers)
+
+        # Discover post-processors
+        post_processor_classes = self._discover_subclasses(
+            "opencontractserver.pipeline.post_processors", BasePostProcessor
+        )
+        post_processors = []
+        for cls in post_processor_classes:
+            defn = self._create_definition(cls, ComponentType.POST_PROCESSOR)
+            post_processors.append(defn)
+            self._by_name[defn.name] = defn
+            self._by_class_name[defn.class_name] = defn
+            for ft in defn.supported_file_types:
+                self._post_processors_by_filetype.setdefault(ft, []).append(defn)
+        self._post_processors = tuple(post_processors)
+
+        logger.info(
+            f"Pipeline registry initialized: "
+            f"{len(self._parsers)} parsers, "
+            f"{len(self._embedders)} embedders, "
+            f"{len(self._thumbnailers)} thumbnailers, "
+            f"{len(self._post_processors)} post-processors"
+        )
+
+    # -------------------------------------------------------------------------
+    # PUBLIC API - Fast cached access
+    # -------------------------------------------------------------------------
+
+    @property
+    def parsers(self) -> tuple[PipelineComponentDefinition, ...]:
+        """Get all registered parsers."""
+        return self._parsers
+
+    @property
+    def embedders(self) -> tuple[PipelineComponentDefinition, ...]:
+        """Get all registered embedders."""
+        return self._embedders
+
+    @property
+    def thumbnailers(self) -> tuple[PipelineComponentDefinition, ...]:
+        """Get all registered thumbnailers."""
+        return self._thumbnailers
+
+    @property
+    def post_processors(self) -> tuple[PipelineComponentDefinition, ...]:
+        """Get all registered post-processors."""
+        return self._post_processors
+
+    def get_by_name(self, name: str) -> Optional[PipelineComponentDefinition]:
+        """Get a component definition by class name (e.g., 'DoclingParser')."""
+        return self._by_name.get(name)
+
+    def get_by_class_name(
+        self, class_name: str
+    ) -> Optional[PipelineComponentDefinition]:
+        """
+        Get a component by full class path.
+
+        E.g., 'opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser'
+        """
+        return self._by_class_name.get(class_name)
+
+    def get_parsers_for_filetype(
+        self, file_type: str
+    ) -> list[PipelineComponentDefinition]:
+        """Get parsers compatible with a file type (e.g., 'application/pdf')."""
+        return self._parsers_by_filetype.get(file_type, [])
+
+    def get_thumbnailers_for_filetype(
+        self, file_type: str
+    ) -> list[PipelineComponentDefinition]:
+        """Get thumbnailers compatible with a file type."""
+        return self._thumbnailers_by_filetype.get(file_type, [])
+
+    def get_post_processors_for_filetype(
+        self, file_type: str
+    ) -> list[PipelineComponentDefinition]:
+        """Get post-processors compatible with a file type."""
+        return self._post_processors_by_filetype.get(file_type, [])
+
+
+# =============================================================================
+# MODULE-LEVEL CONVENIENCE FUNCTIONS
+# =============================================================================
+
+
+# Lazy singleton access
+@lru_cache(maxsize=1)
+def get_registry() -> PipelineComponentRegistry:
+    """
+    Get the singleton pipeline component registry.
+
+    The registry is initialized on first access and cached permanently.
+    """
+    return PipelineComponentRegistry()
+
+
+def get_all_parsers_cached() -> tuple[PipelineComponentDefinition, ...]:
+    """Get all registered parsers (cached)."""
+    return get_registry().parsers
+
+
+def get_all_embedders_cached() -> tuple[PipelineComponentDefinition, ...]:
+    """Get all registered embedders (cached)."""
+    return get_registry().embedders
+
+
+def get_all_thumbnailers_cached() -> tuple[PipelineComponentDefinition, ...]:
+    """Get all registered thumbnailers (cached)."""
+    return get_registry().thumbnailers
+
+
+def get_all_post_processors_cached() -> tuple[PipelineComponentDefinition, ...]:
+    """Get all registered post-processors (cached)."""
+    return get_registry().post_processors
+
+
+def get_component_by_name_cached(name: str) -> Optional[PipelineComponentDefinition]:
+    """Get a component definition by name (cached)."""
+    return get_registry().get_by_name(name)
+
+
+def get_components_by_mimetype_cached(
+    mimetype: str,
+) -> dict[str, list[PipelineComponentDefinition]]:
+    """
+    Get all components compatible with a MIME type (cached).
+
+    Args:
+        mimetype: MIME type string (e.g., "application/pdf")
+
+    Returns dict with keys: parsers, embedders, thumbnailers, post_processors
+    """
+    registry = get_registry()
+
+    # Convert MIME type to FileTypeEnum value for lookup
+    # FileTypeEnum values are "pdf", "txt", "docx" - not MIME types
+    mime_to_enum_value = {
+        "application/pdf": "pdf",
+        "text/plain": "txt",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    }
+
+    file_type_value = mime_to_enum_value.get(mimetype, mimetype)
+
+    return {
+        "parsers": registry.get_parsers_for_filetype(file_type_value),
+        "embedders": list(registry.embedders),  # Embedders work on all text
+        "thumbnailers": registry.get_thumbnailers_for_filetype(file_type_value),
+        "post_processors": registry.get_post_processors_for_filetype(file_type_value),
+    }
+
+
+def get_all_components_cached() -> dict[str, tuple[PipelineComponentDefinition, ...]]:
+    """
+    Get all components grouped by type (cached).
+
+    Returns dict with keys: parsers, embedders, thumbnailers, post_processors
+    """
+    registry = get_registry()
+    return {
+        "parsers": registry.parsers,
+        "embedders": registry.embedders,
+        "thumbnailers": registry.thumbnailers,
+        "post_processors": registry.post_processors,
+    }
+
+
+def reset_registry() -> None:
+    """
+    Reset the registry singleton.
+
+    Useful for testing or if components are dynamically added.
+    """
+    PipelineComponentRegistry._instance = None
+    PipelineComponentRegistry._initialized = False
+    get_registry.cache_clear()

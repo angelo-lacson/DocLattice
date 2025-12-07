@@ -10,6 +10,7 @@ import UserSettingsModal from "../modals/UserSettingsModal";
 import { useReactiveVar } from "@apollo/client";
 import { VERSION_TAG } from "../../assets/configurations/constants";
 import { useNavMenu } from "./useNavMenu";
+import { useNavigate } from "react-router-dom";
 
 const MiniImage = styled.img`
   width: 35px;
@@ -40,9 +41,12 @@ export const NavMenu = () => {
     requestLogout,
     doLogin,
   } = useNavMenu();
+  const navigate = useNavigate();
 
   // Note: CentralRouteManager automatically clears openedCorpus/openedDocument when navigating
   // No need to manually clear on menu clicks
+
+  const isSuperuser = user && (user as any).isSuperuser;
 
   const items = public_header_items.map((item) => (
     <Menu.Item
@@ -87,6 +91,17 @@ export const NavMenu = () => {
             </Label>
           </Menu.Item>
           {!isLoading && user ? [...items, ...private_items] : items}
+          {!isLoading && user && (user as any).isSuperuser && (
+            <Menu.Item
+              id="admin_badges_menu_button"
+              name="Badge Management"
+              active={getIsActive("/admin/badges")}
+              as={Link}
+              to="/admin/badges"
+            >
+              Badge Management
+            </Menu.Item>
+          )}
           <Menu.Menu position="right">
             {!isLoading && user ? (
               <>
@@ -113,16 +128,18 @@ export const NavMenu = () => {
                         onClick={() => showUserSettingsModal(true)}
                         icon={<Icon name="user circle" />}
                       />
+                      {isSuperuser && (
+                        <Dropdown.Item
+                          text="Admin Settings"
+                          onClick={() => navigate("/admin/settings")}
+                          icon={<Icon name="settings" />}
+                        />
+                      )}
                       <Dropdown.Item
                         text="Logout"
                         onClick={() => requestLogout()}
                         icon={<Icon name="log out" />}
                       />
-                      {/* <Dropdown.Item 
-                                            text='Settings'
-                                            onClick={() => console.log("Do nothing yet...")}
-                                            icon={<Icon name='settings'/>}
-                                        /> */}
                     </Dropdown.Menu>
                   </Dropdown>
                 </Menu.Item>
@@ -151,6 +168,17 @@ export const NavMenu = () => {
             </Label>
           </Menu.Item>
           {user ? [...items, ...private_items] : items}
+          {user && (user as any).isSuperuser && (
+            <Menu.Item
+              id="admin_badges_menu_button"
+              name="Badge Management"
+              active={getIsActive("/admin/badges")}
+              as={Link}
+              to="/admin/badges"
+            >
+              Badge Management
+            </Menu.Item>
+          )}
           <Menu.Menu position="right">
             {user ? (
               <>
@@ -177,16 +205,18 @@ export const NavMenu = () => {
                         onClick={() => showUserSettingsModal(true)}
                         icon={<Icon name="user circle" />}
                       />
+                      {isSuperuser && (
+                        <Dropdown.Item
+                          text="Admin Settings"
+                          onClick={() => navigate("/admin/settings")}
+                          icon={<Icon name="settings" />}
+                        />
+                      )}
                       <Dropdown.Item
                         text="Logout"
                         onClick={() => requestLogout()}
                         icon={<Icon name="log out" />}
                       />
-                      {/* <Dropdown.Item 
-                                            text='Settings'
-                                            onClick={() => console.log("Do nothing yet...")}
-                                            icon={<Icon name='settings'/>}
-                                        /> */}
                     </Dropdown.Menu>
                   </Dropdown>
                 </Menu.Item>

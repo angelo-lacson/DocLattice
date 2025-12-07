@@ -1,24 +1,32 @@
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 
-from config.telemetry import record_event
+from config.telemetry import _reset_posthog_client, record_event
 from opencontractserver.users.models import Installation
 
 
 class TelemetryTestCase(TestCase):
     def setUp(self):
+        # Reset the singleton client before each test to ensure clean state
+        _reset_posthog_client()
+
         # Mock Installation instance
         self.mock_installation = Installation.get()
         self.installation_id = self.mock_installation.id
 
-        # Set up PostHog mock - now patching the module-level capture function
-        self.posthog_patcher = patch("config.telemetry.posthog.capture")
-        self.mock_posthog_capture = self.posthog_patcher.start()
+        # Set up PostHog mock - patches the class so _get_posthog_client()
+        # creates our mock when initializing the singleton
+        self.posthog_patcher = patch("config.telemetry.Posthog")
+        self.mock_posthog_class = self.posthog_patcher.start()
+        self.mock_posthog = MagicMock()
+        self.mock_posthog_class.return_value = self.mock_posthog
 
     def tearDown(self):
         self.posthog_patcher.stop()
+        # Reset singleton after each test to clean up
+        _reset_posthog_client()
 
     def test_record_event_success(self):
         """Test successful event recording with all conditions met"""
@@ -32,10 +40,10 @@ class TelemetryTestCase(TestCase):
             result = record_event("test_event", {"test_prop": "value"})
 
         self.assertTrue(result)
-        self.mock_posthog_capture.assert_called_once()
+        self.mock_posthog.capture.assert_called_once()
 
         # Verify the capture call arguments
-        call_args = self.mock_posthog_capture.call_args[1]
+        call_args = self.mock_posthog.capture.call_args[1]
         self.assertEqual(call_args["distinct_id"], str(self.installation_id))
         self.assertEqual(call_args["event"], "opencontracts.test_event")
         self.assertEqual(call_args["properties"]["package"], "opencontracts")
@@ -56,7 +64,7 @@ class TelemetryTestCase(TestCase):
             result = record_event("test_event")
 
         self.assertFalse(result)
-        self.mock_posthog_capture.assert_not_called()
+        self.mock_posthog.capture.assert_not_called()
 
     def test_record_event_installation_inactive(self):
         """Test when installation exists but is inactive"""
@@ -65,11 +73,11 @@ class TelemetryTestCase(TestCase):
             result = record_event("test_event")
 
         self.assertFalse(result)
-        self.mock_posthog_capture.assert_not_called()
+        self.mock_posthog.capture.assert_not_called()
 
     def test_record_event_posthog_error(self):
         """Test when PostHog client raises an error"""
-        self.mock_posthog_capture.side_effect = Exception("PostHog Error")
+        self.mock_posthog.capture.side_effect = Exception("PostHog Error")
 
         with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
             result = record_event("test_event")
@@ -83,10 +91,10 @@ class TelemetryTestCase(TestCase):
             result = record_event("test_event")
 
         self.assertTrue(result)
-        self.mock_posthog_capture.assert_called_once()
+        self.mock_posthog.capture.assert_called_once()
 
         # Verify only default properties are present
-        properties = self.mock_posthog_capture.call_args[1]["properties"]
+        properties = self.mock_posthog.capture.call_args[1]["properties"]
         self.assertEqual(
             set(properties.keys()), {"package", "timestamp", "installation_id"}
         )
