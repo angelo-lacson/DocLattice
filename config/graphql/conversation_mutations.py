@@ -179,7 +179,7 @@ class CreateThreadMessageMutation(graphene.Mutation):
             if conversation.is_locked:
                 return CreateThreadMessageMutation(
                     ok=False,
-                    message="Cannot post in this thread",
+                    message="This thread is locked",
                     obj=None,
                 )
 
@@ -280,7 +280,7 @@ class ReplyToMessageMutation(graphene.Mutation):
             if conversation.is_locked:
                 return ReplyToMessageMutation(
                     ok=False,
-                    message="Cannot reply in this thread",
+                    message="This thread is locked",
                     obj=None,
                 )
 
