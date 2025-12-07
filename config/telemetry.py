@@ -4,8 +4,8 @@ import atexit
 import logging
 from datetime import datetime, timezone
 
-import posthog
 from django.conf import settings
+from posthog import Posthog
 
 logger = logging.getLogger(__name__)
 
