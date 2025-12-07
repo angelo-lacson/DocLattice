@@ -3,17 +3,21 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 
-from config.telemetry import record_event
+from config.telemetry import _reset_posthog_client, record_event
 from opencontractserver.users.models import Installation
 
 
 class TelemetryTestCase(TestCase):
     def setUp(self):
+        # Reset the singleton client before each test to ensure clean state
+        _reset_posthog_client()
+
         # Mock Installation instance
         self.mock_installation = Installation.get()
         self.installation_id = self.mock_installation.id
 
-        # Set up PostHog mock
+        # Set up PostHog mock - patches the class so _get_posthog_client()
+        # creates our mock when initializing the singleton
         self.posthog_patcher = patch("config.telemetry.Posthog")
         self.mock_posthog_class = self.posthog_patcher.start()
         self.mock_posthog = MagicMock()
@@ -21,6 +25,8 @@ class TelemetryTestCase(TestCase):
 
     def tearDown(self):
         self.posthog_patcher.stop()
+        # Reset singleton after each test to clean up
+        _reset_posthog_client()
 
     def test_record_event_success(self):
         """Test successful event recording with all conditions met"""
