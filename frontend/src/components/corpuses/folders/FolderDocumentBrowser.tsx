@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useSetAtom, useAtomValue, useAtom } from "jotai";
+import { useSetAtom, useAtom } from "jotai";
 import { useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
@@ -104,6 +104,7 @@ const ContentArea = styled.div`
   overflow-x: hidden;
   padding: 0;
   background: white;
+  position: relative;
 
   /* Custom scrollbar */
   &::-webkit-scrollbar {
@@ -341,7 +342,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
             <FolderBreadcrumb onFolderSelect={handleFolderSelect} />
           </BreadcrumbWrapper>
 
-          {/* Document List or Custom Content */}
+          {/* Document List or Custom Content - Dropzone handled by DocumentCards child */}
           <ContentArea
             onContextMenu={
               selectedFolderId === "trash"
