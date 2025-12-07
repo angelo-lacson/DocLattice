@@ -12,11 +12,11 @@ defaults:
 
 on:
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "v*" ]
     paths-ignore: [ "docs/**" ]
 
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "v*" ]
     paths-ignore: [ "docs/**" ]
 
 concurrency:
@@ -48,7 +48,7 @@ jobs:
         run: pre-commit run --all-files
 
   pytest:
-    runs-on: larger
+    runs-on: yuge
     timeout-minutes: 180
     permissions:
       contents: read
@@ -65,7 +65,7 @@ jobs:
           echo "$ci_env"
 
       - name: Build the Stack
-        run:  docker compose -f test.yml build
+        run: docker compose -f test.yml build
 
       - name: Run DB Migrations
         run:  docker compose -f test.yml run --rm django python manage.py migrate
@@ -106,10 +106,9 @@ jobs:
       - name: Build Pytest Coverage File
         timeout-minutes: 100
         run: |
-          # Run the full test suite with coverage
-          docker compose -f test.yml run django coverage run -m pytest -x -v
-          # Generate XML coverage report (configuration in setup.cfg handles temporary files)
-          docker compose -f test.yml run django coverage xml
+          # Run the full test suite with coverage using parallel workers
+          # pytest-cov with pytest-xdist handles coverage merging automatically
+          docker compose -f test.yml run django pytest --cov --cov-report=xml -n auto --dist loadscope -v
 
       - name: Verify Coverage File Exists
         run: |
