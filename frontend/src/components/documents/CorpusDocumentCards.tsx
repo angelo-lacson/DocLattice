@@ -226,9 +226,19 @@ export const CorpusDocumentCards = ({
     MoveDocumentToFolderOutputs,
     MoveDocumentToFolderInputs
   >(MOVE_DOCUMENT_TO_FOLDER, {
-    onCompleted: () => {
-      refetchDocuments();
+    // Evict all documents queries from cache to force refetch
+    // This ensures document lists update after moving documents between folders
+    update(cache) {
+      cache.evict({ fieldName: "documents" });
+      cache.gc();
     },
+    // Also refetch folders to update document counts
+    refetchQueries: [
+      {
+        query: GET_CORPUS_FOLDERS,
+        variables: { corpusId: opened_corpus_id || "" },
+      },
+    ],
   });
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
