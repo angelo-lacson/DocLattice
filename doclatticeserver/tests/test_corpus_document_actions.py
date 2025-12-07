@@ -52,26 +52,17 @@ class TestCorpusDocumentActions(TestCase):
             document=self.document, user=self.user
         )
 
-        # The new versioning system creates DocumentPath records directly,
-        # bypassing the M2M signal. We need to manually trigger the corpus action
-        # or check that the DocumentPath was created properly.
-        # Since the signal is no longer fired via M2M, let's verify the DocumentPath
-        # was created and call the task directly to maintain backward compatibility.
+        # Verify the DocumentPath was created properly
         self.assertIsNotNone(doc_path)
         self.assertEqual(doc_path.corpus, self.corpus)
         self.assertEqual(doc_path.document, added_doc)
         self.assertTrue(doc_path.is_current)
         self.assertFalse(doc_path.is_deleted)
 
-        # Now verify that we can manually trigger the task for new documents
-        # The old M2M signal approach is deprecated in favor of DocumentPath-based additions
-        process_corpus_action.si(
-            corpus_id=self.corpus.id,
-            document_ids=[added_doc.id],
-            user_id=self.corpus.creator.id,
-        ).apply_async()
-
-        # Assert that the task was called with the correct arguments
+        # The M2M signal fires automatically when corpus.add_document() is called
+        # because it maintains the M2M relationship via self.documents.add().
+        # This triggers the handle_document_added_to_corpus signal which calls
+        # process_corpus_action.si().apply_async() automatically.
         mock_task.assert_called_once_with(
             corpus_id=self.corpus.id,
             document_ids=[added_doc.id],
