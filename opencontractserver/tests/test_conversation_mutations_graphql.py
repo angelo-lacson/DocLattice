@@ -230,6 +230,8 @@ class ConversationMutationsTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         data = result["data"]["createThreadMessage"]
         self.assertFalse(data["ok"])
+        # User with permission sees the locked status (IDOR protection still applies
+        # for users without permission who get generic "cannot post" message)
         self.assertIn("locked", data["message"].lower())
 
     def test_reply_to_message_mutation(self):

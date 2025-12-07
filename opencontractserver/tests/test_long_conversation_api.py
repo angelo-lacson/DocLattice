@@ -14,7 +14,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from opencontractserver.conversations.models import ChatMessage, Conversation
+from opencontractserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    MessageTypeChoices,
+)
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.llms.api import agents
@@ -48,7 +52,7 @@ class TestLongConversationAPI(TestCase):
             is_public=True,
         )
 
-        cls.corpus.documents.add(cls.document)
+        cls.corpus.add_document(document=cls.document, user=cls.user)
 
         # Ensure fixture-derived corpus is public for anonymous-agent tests.
         if hasattr(cls, "corpus"):
@@ -325,7 +329,9 @@ class TestLongConversationAPI(TestCase):
             )
 
             # Find our message
-            user_messages = [msg for msg in messages if msg.msg_type == "HUMAN"]
+            user_messages = [
+                msg for msg in messages if msg.msg_type == MessageTypeChoices.HUMAN
+            ]
             self.assertTrue(
                 any("First session message" in msg.content for msg in user_messages),
                 "Should preserve message history across sessions",

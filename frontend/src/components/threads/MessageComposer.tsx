@@ -1,18 +1,40 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import Mention from "@tiptap/extension-mention";
+import Link from "@tiptap/extension-link";
+import { Markdown } from "tiptap-markdown";
+import { ReactRenderer } from "@tiptap/react";
+import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
 import { color } from "../../theme/colors";
+import {
+  UnifiedMentionPicker,
+  UnifiedMentionPickerRef,
+} from "./UnifiedMentionPicker";
+import {
+  useUnifiedMentionSearch,
+  UnifiedMentionResource,
+} from "./hooks/useUnifiedMentionSearch";
+import type { MarkdownStorage } from "tiptap-markdown";
 
 const ComposerContainer = styled.div`
   display: flex;
   flex-direction: column;
-  border: 1px solid ${({ theme }) => color.N4};
-  border-radius: 8px;
-  background: ${({ theme }) => color.N1};
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  background: white;
   overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+
+  &:focus-within {
+    border-color: ${color.B5};
+    box-shadow: 0 6px 24px rgba(74, 144, 226, 0.15),
+      0 2px 8px rgba(74, 144, 226, 0.1);
+  }
 `;
 
 const Toolbar = styled.div`
@@ -93,6 +115,41 @@ const EditorContainer = styled.div`
     em {
       font-style: italic;
     }
+
+    /* Mention styling */
+    .mention {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 0.95em;
+    }
+
+    .mention-user {
+      background-color: ${({ theme }) => color.B2};
+      color: ${({ theme }) => color.B8};
+    }
+
+    .mention-resource {
+      background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+      color: ${({ theme }) => color.P8};
+      border: 1px solid ${({ theme }) => color.P4};
+    }
+
+    /* Agent mention link styling */
+    a[href^="/agents/"],
+    a[href*="/agents/"] {
+      background: linear-gradient(135deg, #3b82f620 0%, #8b5cf620 100%);
+      color: #6366f1;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+      text-decoration: none;
+      border: 1px solid #8b5cf640;
+
+      &:hover {
+        background: linear-gradient(135deg, #3b82f630 0%, #8b5cf630 100%);
+      }
+    }
   }
 `;
 
@@ -113,29 +170,40 @@ const CharacterCount = styled.span`
 const SendButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: 8px;
+  padding: 10px 20px;
   border: none;
-  border-radius: 6px;
-  background: ${({ theme }) => color.B5};
+  border-radius: 10px;
+  background: linear-gradient(135deg, ${color.B6} 0%, ${color.B5} 100%);
   color: white;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.35);
+  letter-spacing: -0.01em;
 
   &:hover:not(:disabled) {
-    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(74, 144, 226, 0.45);
+    background: linear-gradient(135deg, #5a7ee2 0%, #4a90e2 100%);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
   }
 
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 2px 6px rgba(74, 144, 226, 0.2);
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
   }
 `;
 
@@ -164,6 +232,10 @@ export interface MessageComposerProps {
   error?: string;
   /** Auto-focus on mount */
   autoFocus?: boolean;
+  /** Enable @ mentions (default: true) */
+  enableMentions?: boolean;
+  /** Corpus ID for context-aware annotation search */
+  corpusId?: string;
 }
 
 export function MessageComposer({
@@ -175,7 +247,35 @@ export function MessageComposer({
   disabled = false,
   error,
   autoFocus = false,
+  enableMentions = true,
+  corpusId,
 }: MessageComposerProps) {
+  const [mentionSearchQuery, setMentionSearchQuery] = React.useState("");
+  const [characterCount, setCharacterCount] = React.useState(0);
+
+  // Unified mention search for all resource types
+  const { allResults, loading } = useUnifiedMentionSearch(
+    mentionSearchQuery,
+    corpusId // Context-aware annotation search
+  );
+
+  // Use ref to always get latest results (TipTap captures closure)
+  const allResultsRef = useRef(allResults);
+  const loadingRef = useRef(loading);
+  const mentionComponentRef = useRef<any>(null);
+
+  useEffect(() => {
+    allResultsRef.current = allResults;
+    loadingRef.current = loading;
+
+    // Update the component props when results arrive
+    if (mentionComponentRef.current) {
+      mentionComponentRef.current.updateProps({
+        resources: allResults,
+        loading,
+      });
+    }
+  }, [allResults, loading]);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -183,23 +283,277 @@ export function MessageComposer({
         codeBlock: false,
         blockquote: false,
       }),
+      Markdown.configure({
+        html: false, // Disable HTML in markdown
+        linkify: true, // Auto-convert URLs to links
+        breaks: true, // Convert \n to <br>
+      }),
+      Link.configure({
+        openOnClick: false, // Don't open links while editing
+        HTMLAttributes: {
+          class: "mention-link", // Style mention links
+        },
+      }),
       Placeholder.configure({
         placeholder,
       }),
+      ...(enableMentions
+        ? [
+            Mention.configure({
+              HTMLAttributes: {
+                class: "mention mention-unified",
+              },
+              suggestion: {
+                char: "@",
+                items: ({ query }: { query: string }) => {
+                  // Trigger unified search for all resource types
+                  setMentionSearchQuery(query);
+                  return allResultsRef.current;
+                },
+                render: () => {
+                  let component: ReactRenderer<UnifiedMentionPickerRef> | null =
+                    null;
+                  let popup: HTMLDivElement | null = null;
+
+                  const updatePosition = (props: any) => {
+                    if (!popup || !props.clientRect) return;
+
+                    const virtualReference = {
+                      getBoundingClientRect: props.clientRect,
+                    };
+
+                    computePosition(virtualReference, popup, {
+                      placement: "bottom-start",
+                      middleware: [offset(8), flip(), shift({ padding: 8 })],
+                    }).then(({ x, y }) => {
+                      Object.assign(popup!.style, {
+                        left: `${x}px`,
+                        top: `${y}px`,
+                      });
+                    });
+                  };
+
+                  /**
+                   * Generate mention format and deep link URL based on resource type
+                   */
+                  const getMentionData = (resource: UnifiedMentionResource) => {
+                    switch (resource.type) {
+                      case "user":
+                        // Use slug if available, fallback to ID (auto-redirects to slug)
+                        const userIdent =
+                          resource.user!.slug || resource.user!.id;
+                        return {
+                          label: `@${resource.user!.username}`,
+                          href: `/users/${userIdent}`,
+                          type: "user",
+                        };
+
+                      case "corpus":
+                        return {
+                          label: `@corpus:${resource.corpus!.slug}`,
+                          href: `/c/${resource.corpus!.creator.slug}/${
+                            resource.corpus!.slug
+                          }`,
+                          type: "corpus",
+                        };
+
+                      case "document":
+                        const doc = resource.document!;
+                        const corpus = doc.corpus;
+                        return {
+                          label: corpus
+                            ? `@corpus:${corpus.slug}/document:${doc.slug}`
+                            : `@document:${doc.slug}`,
+                          href: corpus
+                            ? `/d/${corpus.creator.slug}/${corpus.slug}/${doc.slug}`
+                            : `/d/${doc.creator.slug}/${doc.slug}`,
+                          type: "document",
+                        };
+
+                      case "annotation":
+                        const ann = resource.annotation!;
+                        const annDoc = ann.document;
+                        const annCorpus = ann.corpus;
+                        // Deep link to annotation in document with optimal viewer settings
+                        const baseUrl = annCorpus
+                          ? `/d/${annCorpus.title}/${annDoc.title}`
+                          : `/d/${annDoc.title}`;
+                        return {
+                          label: `@annotation:${resource.id}`,
+                          href: `${baseUrl}?ann=${resource.id}&structural=true`,
+                          type: "annotation",
+                        };
+
+                      case "agent":
+                        const agent = resource.agent!;
+                        // Use the mention format from the agent, or construct it
+                        const agentLabel =
+                          agent.mentionFormat || `@agent:${agent.slug}`;
+                        // Agent URL - global agents at /agents/{slug}, corpus agents at corpus path
+                        const agentHref =
+                          agent.scope === "GLOBAL"
+                            ? `/agents/${agent.slug}`
+                            : agent.corpus
+                            ? `/c/${agent.corpus.id}/${agent.corpus.title}/agents/${agent.slug}`
+                            : `/agents/${agent.slug}`;
+                        return {
+                          label: agentLabel,
+                          href: agentHref,
+                          type: "agent",
+                        };
+
+                      default:
+                        return {
+                          label: `@${resource.title}`,
+                          href: null,
+                          type: "unknown",
+                        };
+                    }
+                  };
+
+                  return {
+                    onStart: (props: any) => {
+                      component = new ReactRenderer(UnifiedMentionPicker, {
+                        props: {
+                          ...props,
+                          resources: allResultsRef.current,
+                          loading: loadingRef.current,
+                          onSelect: (resource: UnifiedMentionResource) => {
+                            // Generate mention with deep link as markdown [text](url)
+                            const mentionData = getMentionData(resource);
+
+                            // Delete the @ trigger character and insert link
+                            props.editor
+                              .chain()
+                              .focus()
+                              .deleteRange(props.range) // Delete @query
+                              .insertContent([
+                                {
+                                  type: "text",
+                                  marks: mentionData.href
+                                    ? [
+                                        {
+                                          type: "link",
+                                          attrs: { href: mentionData.href },
+                                        },
+                                      ]
+                                    : [],
+                                  text: mentionData.label,
+                                },
+                                { type: "text", text: " " }, // Add space after mention
+                              ])
+                              .run();
+                          },
+                        },
+                        editor: props.editor,
+                      });
+
+                      // Store component ref for updates when results arrive
+                      mentionComponentRef.current = component;
+
+                      if (!props.clientRect) {
+                        return;
+                      }
+
+                      popup = document.createElement("div");
+                      popup.style.position = "absolute";
+                      popup.style.zIndex = "9999";
+                      popup.appendChild(component.element);
+                      document.body.appendChild(popup);
+
+                      updatePosition(props);
+                    },
+
+                    onUpdate(props: any) {
+                      component?.updateProps({
+                        ...props,
+                        resources: allResultsRef.current,
+                        loading: loadingRef.current,
+                        onSelect: (resource: UnifiedMentionResource) => {
+                          const mentionData = getMentionData(resource);
+
+                          // Delete the @ trigger character and insert link
+                          props.editor
+                            .chain()
+                            .focus()
+                            .deleteRange(props.range)
+                            .insertContent([
+                              {
+                                type: "text",
+                                marks: mentionData.href
+                                  ? [
+                                      {
+                                        type: "link",
+                                        attrs: { href: mentionData.href },
+                                      },
+                                    ]
+                                  : [],
+                                text: mentionData.label,
+                              },
+                              { type: "text", text: " " },
+                            ])
+                            .run();
+                        },
+                      });
+
+                      updatePosition(props);
+                    },
+
+                    onKeyDown(props: any) {
+                      if (props.event.key === "Escape") {
+                        return true;
+                      }
+
+                      return component?.ref?.onKeyDown(props) ?? false;
+                    },
+
+                    onExit() {
+                      popup?.remove();
+                      component?.destroy();
+                      mentionComponentRef.current = null;
+                    },
+                  };
+                },
+              },
+            }),
+          ]
+        : []),
     ],
     content: initialContent,
     editable: !disabled,
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML());
+      const text = editor.getText();
+      setCharacterCount(text.length);
+      // Export as Markdown instead of HTML
+      const markdown = (editor.storage as any).markdown.getMarkdown();
+      onChange?.(markdown);
     },
   });
 
   // Update editor content when initialContent changes
   useEffect(() => {
-    if (editor && initialContent && editor.getHTML() !== initialContent) {
-      editor.commands.setContent(initialContent);
+    if (!editor || !initialContent) return;
+
+    try {
+      if (editor.getHTML() !== initialContent) {
+        editor.commands.setContent(initialContent);
+        setCharacterCount(editor.getText().length);
+      }
+    } catch (err) {
+      console.debug("Editor not ready for content update, will retry");
     }
   }, [editor, initialContent]);
+
+  // Initialize character count when editor is created
+  useEffect(() => {
+    if (!editor) return;
+
+    try {
+      setCharacterCount(editor.getText().length);
+    } catch (err) {
+      console.debug("Editor not ready for character count, will retry");
+    }
+  }, [editor]);
 
   // Update editor editable state when disabled changes
   useEffect(() => {
@@ -218,7 +572,8 @@ export function MessageComposer({
   const handleSubmit = useCallback(async () => {
     if (!editor || disabled) return;
 
-    const content = editor.getHTML();
+    // Export as Markdown instead of HTML
+    const content = (editor.storage as any).markdown.getMarkdown();
     const text = editor.getText();
 
     // Validate
@@ -234,6 +589,7 @@ export function MessageComposer({
       await onSubmit(content);
       // Clear editor on success
       editor.commands.clearContent();
+      setCharacterCount(0);
     } catch (err) {
       // Parent component handles error display
       console.error("Failed to submit message:", err);
@@ -252,12 +608,20 @@ export function MessageComposer({
   );
 
   useEffect(() => {
-    const editorElement = editor?.view.dom;
-    if (editorElement) {
-      editorElement.addEventListener("keydown", handleKeyDown as any);
-      return () => {
-        editorElement.removeEventListener("keydown", handleKeyDown as any);
-      };
+    if (!editor) return;
+
+    try {
+      // TipTap's view.dom getter throws if editor isn't fully mounted
+      const editorElement = editor.view?.dom;
+      if (editorElement) {
+        editorElement.addEventListener("keydown", handleKeyDown as any);
+        return () => {
+          editorElement.removeEventListener("keydown", handleKeyDown as any);
+        };
+      }
+    } catch (err) {
+      // Editor not fully mounted yet, will retry on next render
+      console.debug("Editor view not ready yet, skipping keydown listener");
     }
   }, [editor, handleKeyDown]);
 
@@ -265,9 +629,17 @@ export function MessageComposer({
     return null;
   }
 
-  const characterCount = editor.getText().length;
-  const isEmpty = !editor.getText().trim();
-  const isOverLimit = characterCount > maxLength;
+  // Use state-based character count for reactivity
+  let isEmpty = characterCount === 0;
+  let isOverLimit = characterCount > maxLength;
+
+  // Safely check if editor has content (TipTap might not be ready yet)
+  try {
+    isEmpty = characterCount === 0 || !editor.getText().trim();
+  } catch (err) {
+    // Editor not fully mounted, default to empty
+    isEmpty = true;
+  }
 
   return (
     <ComposerContainer>

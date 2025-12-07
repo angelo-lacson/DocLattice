@@ -4,18 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpenContracts is a GPL-3.0 enterprise document analytics platform for PDFs and text-based formats. It features a Django/GraphQL backend with PostgreSQL + pgvector, a React/TypeScript frontend, and pluggable document processing pipelines powered by machine learning models.
+OpenContracts is a GPL-3.0 enterprise document analytics platform for PDFs and text-based formats. It features a Django/GraphQL backend with PostgreSQL + pgvector, a React/TypeScript frontend with Jotai state management, and pluggable document processing pipelines powered by machine learning models.
 
 ## Essential Commands
 
 ### Backend (Django)
 
 ```bash
-# Run backend tests (use --keepdb to speed up subsequent runs)
+# Run backend tests (sequential, use --keepdb to speed up subsequent runs)
 docker compose -f test.yml run django python manage.py test --keepdb
+
+# Run backend tests in PARALLEL (recommended - ~4x faster)
+# Uses pytest-xdist with 4 workers, --dist loadscope keeps class tests together
+docker compose -f test.yml run django pytest -n 4 --dist loadscope
+
+# Run parallel tests with auto-detected worker count (uses all CPU cores)
+docker compose -f test.yml run django pytest -n auto --dist loadscope
+
+# Run parallel tests with fresh databases (first run or after schema changes)
+docker compose -f test.yml run django pytest -n 4 --dist loadscope --create-db
 
 # Run specific test file
 docker compose -f test.yml run django python manage.py test opencontractserver.tests.test_notifications --keepdb
+
+# Run specific test file in parallel
+docker compose -f test.yml run django pytest opencontractserver/tests/test_notifications.py -n 4 --dist loadscope
 
 # Run specific test class/method
 docker compose -f test.yml run django python manage.py test opencontractserver.tests.test_notifications.TestNotificationModel.test_create_notification --keepdb
@@ -38,17 +51,23 @@ pre-commit run --all-files
 ```bash
 cd frontend
 
-# Start development server
+# Start development server (proxies to Django on :8000)
 yarn start
 
-# Run unit tests (Vitest)
-yarn run test:unit
+# Run unit tests (Vitest) - watches by default
+yarn test:unit
 
-# Run component tests (Playwright) - IMPORTANT: Use --reporter=list to prevent hanging
-yarn run test:ct --reporter=list
+# Run component tests (Playwright) - CRITICAL: Use --reporter=list to prevent hanging
+yarn test:ct --reporter=list
 
 # Run component tests with grep filter
-yarn run test:ct --reporter=list -g "test name pattern"
+yarn test:ct --reporter=list -g "test name pattern"
+
+# Run E2E tests
+yarn test:e2e
+
+# Coverage report
+yarn test:coverage
 
 # Linting and formatting
 yarn lint
@@ -56,6 +75,9 @@ yarn fix-styles
 
 # Build for production
 yarn build
+
+# Preview production build locally
+yarn serve
 ```
 
 ### Production Deployment
@@ -109,36 +131,53 @@ docker compose -f production.yml up
 
 ### Frontend Architecture
 
-**Stack**: React 18 + TypeScript + Apollo Client + Jotai + PDF.js + Vite
+**Stack**: React 18 + TypeScript + Apollo Client + Jotai (atoms) + PDF.js + Vite
 
 **Key Patterns**:
 
-1. **State Management**:
-   - **Jotai atoms** for global state (NOT Redux/Context)
-   - Located in `frontend/src/atoms/` directory
-   - Key atoms: `pdfAnnotationsAtom`, `activeLayerAtom`, `showStructuralAtom`
-   - Computed/derived atoms automatically update when dependencies change
+1. **State Management - Jotai Atoms**:
+   - **Global state via atoms** in `frontend/src/atoms/` (NOT Redux/Context)
+   - Key atoms: `selectedCorpusIdAtom`, `selectedFolderIdAtom`, `currentThreadIdAtom`
+   - Derived atoms automatically update when dependencies change
+   - Apollo reactive vars in `frontend/src/graphql/cache.ts` for UI state
+   - AuthGate pattern ensures auth completes before rendering
 
-2. **PDF Annotation System** (see `.cursor/rules/pdf-viewer-and-annotator-architecture.mdc`):
+2. **Central Routing System** (see `docs/frontend/routing_system.md`):
+   - Single source of truth: `frontend/src/routing/CentralRouteManager.tsx`
+   - URL paths → Entity resolution via GraphQL slug queries
+   - URL params ↔ Reactive vars (bidirectional sync)
+   - Components consume state via reactive vars, never touch URLs directly
+   - Deep linking and canonical redirects handled automatically
+
+3. **PDF Annotation System** (see `.cursor/rules/pdf-viewer-and-annotator-architecture.mdc`):
    - **Virtualized rendering**: Only visible pages (+overscan) rendered for performance
    - Binary search to find visible page range (O(log n))
    - Height caching per zoom level
    - Two-phase scroll-to-annotation system
    - Dual-layer architecture: Document layer (annotations) + Knowledge layer (summaries)
 
-3. **Unified Filtering Architecture**:
+4. **Unified Filtering Architecture**:
    - `useVisibleAnnotations` and `useVisibleRelationships` hooks provide parallel filtering
    - Both read from same Jotai atoms (`showStructuralAtom`, `showSelectedOnlyAtom`)
    - Ensures consistency across all components
    - Forced visibility for selected items and their connections
 
-4. **Component Testing** (see `.cursor/rules/test-document-knowledge-base.mdc`):
-   - ALWAYS mount components through test wrappers (e.g., `DocumentKnowledgeBaseTestWrapper`)
+5. **Component Testing** (see `.cursor/rules/test-document-knowledge-base.mdc`):
+   - **ALWAYS mount components through test wrappers** (e.g., `DocumentKnowledgeBaseTestWrapper`)
    - Wrapper provides: MockedProvider + InMemoryCache + Jotai Provider + asset mocking
-   - Use `--reporter=list` flag to prevent hanging
+   - **Use `--reporter=list` flag to prevent hanging**
    - Increase timeouts (20s+) for PDF rendering in Chromium
-   - GraphQL mocks must match variables EXACTLY
+   - GraphQL mocks must match variables EXACTLY (null vs undefined matters)
    - Mock same query multiple times for refetches
+   - Use `page.mouse` for PDF canvas interactions (NOT `locator.dragTo`)
+   - Add settle time after drag operations (500ms UI, 1000ms Apollo cache)
+
+6. **Development Server Configuration**:
+   - Vite dev server on :3000 proxies to Django on :8000
+   - WebSocket proxy for `/ws` → `ws://localhost:8000`
+   - GraphQL proxy for `/graphql` → `http://localhost:8000`
+   - REST API proxy for `/api` → `http://localhost:8000`
+   - Auth0 optional via `REACT_APP_USE_AUTH0` environment variable
 
 ### Data Flow Architecture
 
@@ -179,6 +218,13 @@ docker compose -f production.yml up
 
 **Location**: `opencontractserver/tests/`
 
+**Parallel Testing** (pytest-xdist):
+- Run with `-n 4` (or `-n auto`) for parallel execution across workers
+- Use `--dist loadscope` to keep tests from the same class on the same worker (respects `setUpClass`)
+- Each worker gets its own database (test_db_gw0, test_db_gw1, etc.)
+- Use `@pytest.mark.serial` to mark tests that cannot run in parallel
+- First run or after DB schema changes: add `--create-db` flag
+
 **Patterns**:
 - Use `TransactionTestCase` for tests with signals/asynchronous behavior
 - Use `TestCase` for faster tests without transaction isolation
@@ -197,13 +243,25 @@ docker compose -f production.yml up
 - Use `page.mouse` for PDF canvas interactions (NOT `locator.dragTo`)
 - Add settle time after drag operations (500ms UI, 1000ms Apollo cache)
 
+**Test Wrapper Pattern**:
+```typescript
+// ALWAYS use wrappers, never mount components directly
+const component = await mount(
+  <DocumentKnowledgeBaseTestWrapper corpusId="corpus-1" documentId="doc-1">
+    <DocumentKnowledgeBase />
+  </DocumentKnowledgeBaseTestWrapper>
+);
+```
+
 ## Documentation Locations
 
 - **Permissioning**: `docs/permissioning/consolidated_permissioning_guide.md`
+- **Frontend Routing**: `docs/frontend/routing_system.md`
 - **PDF Data Layer**: `docs/architecture/PDF-data-layer.md`
 - **Parser Pipeline**: `docs/pipelines/pipeline_overview.md`
 - **LLM Framework**: `docs/architecture/llms/README.md`
 - **Collaboration System**: `docs/commenting_system/README.md`
+- **Auth Pattern**: `frontend/src/docs/AUTHENTICATION_PATTERN.md`
 
 ## Branch Strategy
 
@@ -211,6 +269,42 @@ docker compose -f production.yml up
 - **Production**: `main` branch
 - Use feature branches: `feature/description-issue-number`
 - Commit message format: Descriptive with issue references (e.g., "Closes #562")
+
+## Changelog Maintenance
+
+**IMPORTANT**: Always update `CHANGELOG.md` when making significant changes to the codebase.
+
+The changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
+
+```markdown
+## [Unreleased] - YYYY-MM-DD
+
+### Added
+- New features
+
+### Fixed
+- Bug fixes with file locations and line numbers
+
+### Changed
+- Changes to existing functionality
+
+### Technical Details
+- Implementation specifics, architectural notes
+```
+
+**When to update**:
+- New features or models added
+- Production code bugs fixed (document file location, line numbers, and impact)
+- Breaking changes to APIs or data models
+- Test suite fixes that reveal production issues
+- Database migrations
+- Architecture changes
+
+**What to include**:
+- File paths and line numbers for code changes
+- Clear description of the issue and fix
+- Impact on system behavior
+- Migration notes if applicable
 
 ## Pre-commit Hooks
 
@@ -227,10 +321,18 @@ Run manually: `pre-commit run --all-files`
 
 1. **Frontend tests hanging**: Always use `--reporter=list` flag
 2. **Permission N+1 queries**: Use `.visible_to_user()` NOT individual permission checks
-3. **Missing GraphQL mocks**: Check variables match exactly, add duplicates for refetches
+3. **Missing GraphQL mocks**: Check variables match exactly (null vs undefined matters), add duplicates for refetches
 4. **Notification duplication in tests**: Moderation methods auto-create ModerationAction records
 5. **Structural annotation editing**: Always read-only except for superusers
 6. **Missing signal imports**: Import signal handlers in `apps.py` `ready()` method
 7. **PDF rendering slow in tests**: Increase timeouts to 20s+ for Chromium
 8. **Cache serialization crashes**: Keep InMemoryCache definition inside wrapper, not test file
-9. **Backend Tests Waiting > 10 seconds on Postgres to be Ready**: Usually indicates somehow docker network has gotten fubared. Destroy and recreate network.
+9. **Backend Tests Waiting > 10 seconds on Postgres to be Ready**: Docker network issue. Fix with: `docker compose -f test.yml down && docker kill $(docker ps -q) && docker compose -f test.yml down`
+10. **Empty lists on direct navigation**: AuthGate pattern solves this (don't check auth status, it's always ready)
+11. **URL desynchronization**: Use CentralRouteManager, don't bypass routing system
+12. **Jotai state not updating**: Ensure atoms are properly imported and used with useAtom hook
+13. **Corrupted Docker iptables chains** (RARE): If you see `Chain 'DOCKER-ISOLATION-STAGE-2' does not exist` errors, Docker's iptables chains have been corrupted during docker cycling. Run this nuclear fix:
+    ```bash
+    sudo systemctl stop docker && sudo systemctl stop docker.socket && sudo ip link delete docker0 2>/dev/null || true && sudo iptables -t nat -F && sudo iptables -t nat -X && sudo iptables -t filter -F && sudo iptables -t filter -X 2>/dev/null || true && sudo iptables -t mangle -F && sudo iptables -t mangle -X && sudo iptables -t filter -N INPUT 2>/dev/null || true && sudo iptables -t filter -N FORWARD 2>/dev/null || true && sudo iptables -t filter -N OUTPUT 2>/dev/null || true && sudo iptables -P INPUT ACCEPT && sudo iptables -P FORWARD ACCEPT && sudo iptables -P OUTPUT ACCEPT && sudo systemctl start docker
+    ```
+    This completely resets Docker's networking and iptables state. Docker will recreate all required chains on startup.

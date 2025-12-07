@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
-import { useQuery } from "@apollo/client";
+import { useQuery, useReactiveVar } from "@apollo/client";
 import { useAtom } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, MessageCircle } from "lucide-react";
@@ -11,7 +11,10 @@ import {
 } from "../../graphql/queries";
 import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
-import { selectedMessageIdAtom } from "../../atoms/threadAtoms";
+import {
+  selectedMessageIdAtom,
+  replyingToMessageIdAtom,
+} from "../../atoms/threadAtoms";
 import { buildMessageTree } from "./utils";
 import { MessageTree } from "./MessageTree";
 import { ThreadBadge } from "./ThreadBadge";
@@ -19,20 +22,41 @@ import { RelativeTime } from "./RelativeTime";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
+import { useMessageBadges } from "../../hooks/useMessageBadges";
+import { openedCorpus } from "../../graphql/cache";
+import { ReplyForm } from "./ReplyForm";
+import { formatUsername } from "./userUtils";
 
 interface ThreadDetailProps {
   conversationId: string;
   corpusId?: string;
+  documentId?: string;
+  /** Compact mode for sidebar (narrower padding) */
+  compact?: boolean;
 }
 
-const ThreadDetailContainer = styled.div`
-  max-width: 1000px;
+const ThreadDetailContainer = styled.div<{ $compact?: boolean }>`
+  max-width: ${(props) => (props.$compact ? "100%" : "100%")};
   margin: 0 auto;
-  padding: ${spacing.lg};
+  padding: ${(props) => (props.$compact ? "1.5rem" : "2rem 10%")};
   width: 100%;
+  background: #f5f7fa;
 
-  @media (max-width: 640px) {
-    padding: ${spacing.sm};
+  @media (max-width: 1600px) {
+    padding: ${(props) => (props.$compact ? "1.5rem" : "2rem 5%")};
+  }
+
+  @media (max-width: 1024px) {
+    max-width: 100%;
+    padding: ${(props) => (props.$compact ? "1rem" : "1.5rem 3%")};
+  }
+
+  @media (max-width: 768px) {
+    padding: 1rem 2%;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.75rem 1%;
   }
 `;
 
@@ -40,52 +64,78 @@ const BackButton = styled.button`
   display: flex;
   align-items: center;
   gap: ${spacing.xs};
-  background: none;
-  border: none;
-  color: ${color.N7};
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #4b5563;
   cursor: pointer;
   font-size: 14px;
+  font-weight: 500;
   padding: ${spacing.xs} ${spacing.sm};
-  border-radius: 4px;
+  border-radius: 6px;
   margin-bottom: ${spacing.md};
   transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    background: ${color.N3};
-    color: ${color.N9};
+    background: #f9fafb;
+    color: #111827;
+    border-color: #9ca3af;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 `;
 
 const ThreadHeader = styled.div`
-  border-bottom: 1px solid ${color.N4};
-  padding-bottom: ${spacing.lg};
-  margin-bottom: ${spacing.lg};
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 1.75rem;
+  margin-bottom: 2rem;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(249, 250, 251, 0.4) 100%
+  );
+  padding: 1.75rem 0;
+  border-radius: 12px;
 `;
 
 const BadgeRow = styled.div`
   display: flex;
-  gap: ${spacing.xs};
-  margin-bottom: ${spacing.sm};
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 `;
 
 const ThreadTitleLarge = styled.h1`
-  font-size: 28px;
-  font-weight: 700;
-  color: ${color.N10};
-  margin: 0 0 ${spacing.sm} 0;
-  line-height: 1.3;
+  font-size: 32px;
+  font-weight: 800;
+  color: #111827;
+  margin: 0 0 1rem 0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
+    font-size: 28px;
+  }
+
+  @media (max-width: 480px) {
     font-size: 24px;
   }
 `;
 
 const ThreadDescription = styled.p`
-  font-size: 16px;
-  color: ${color.N7};
-  line-height: 1.6;
-  margin: 0 0 ${spacing.md} 0;
+  font-size: 17px;
+  color: #4b5563;
+  line-height: 1.7;
+  margin: 0 0 1.25rem 0;
+  font-weight: 400;
+
+  @media (max-width: 768px) {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 15px;
+  }
 `;
 
 const ThreadMeta = styled.div`
@@ -93,7 +143,7 @@ const ThreadMeta = styled.div`
   align-items: center;
   gap: ${spacing.md};
   font-size: 13px;
-  color: ${color.N6};
+  color: #6b7280;
   flex-wrap: wrap;
 `;
 
@@ -101,15 +151,22 @@ const MetaItem = styled.span`
   display: flex;
   align-items: center;
   gap: 4px;
+
+  strong {
+    color: #374151;
+    font-weight: 600;
+  }
 `;
 
 const Separator = styled.span`
-  color: ${color.N5};
+  color: #d1d5db;
 `;
 
 const MessageListContainer = styled.div`
   display: flex;
   flex-direction: column;
+  gap: ${spacing.md};
+  width: 100%;
 `;
 
 const EmptyMessageState = styled.div`
@@ -122,11 +179,19 @@ const EmptyMessageState = styled.div`
  * Thread detail view - shows full thread with all messages
  * Supports deep linking to specific messages via ?message=id query param
  */
-export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
+export function ThreadDetail({
+  conversationId,
+  corpusId,
+  documentId: _documentId, // Reserved for future document-specific filtering
+  compact = false,
+}: ThreadDetailProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedMessageId, setSelectedMessageId] = useAtom(
     selectedMessageIdAtom
+  );
+  const [replyingToMessageId, setReplyingToMessageId] = useAtom(
+    replyingToMessageIdAtom
   );
 
   // Fetch thread detail
@@ -139,6 +204,20 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   });
 
   const thread = data?.conversation;
+
+  // Extract unique user IDs from messages
+  const userIds = useMemo(() => {
+    if (!thread?.allMessages) return [];
+    const uniqueIds = new Set(
+      thread.allMessages
+        .filter((msg) => msg.msgType !== "AGENT") // Only fetch badges for human users
+        .map((msg) => msg.creator.id)
+    );
+    return Array.from(uniqueIds);
+  }, [thread?.allMessages]);
+
+  // Fetch badges for all message creators
+  const { badgesByUser } = useMessageBadges(userIds, corpusId);
 
   // Build message tree
   const messageTree = useMemo(() => {
@@ -167,15 +246,18 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
 
   // Handle reply action
   const handleReply = (messageId: string) => {
-    // TODO: Implement reply form in #574
     console.log("Reply to message:", messageId);
+    setReplyingToMessageId(messageId);
   };
 
   // Handle back navigation
+  const corpus = useReactiveVar(openedCorpus);
   const handleBack = () => {
-    if (corpusId) {
-      navigate(`/corpus/${corpusId}/discussions`);
+    if (corpus?.creator?.slug && corpus?.slug) {
+      // Navigate back to corpus discussions tab using proper slug-based URL
+      navigate(`/c/${corpus.creator.slug}/${corpus.slug}?tab=discussions`);
     } else {
+      // Fallback to browser history
       navigate(-1);
     }
   };
@@ -183,7 +265,7 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   // Loading state
   if (loading && !data) {
     return (
-      <ThreadDetailContainer>
+      <ThreadDetailContainer $compact={compact}>
         <ModernLoadingDisplay
           type="default"
           message="Loading discussion..."
@@ -196,7 +278,7 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   // Error state
   if (error || !thread) {
     return (
-      <ThreadDetailContainer>
+      <ThreadDetailContainer $compact={compact}>
         <ModernErrorDisplay
           type="generic"
           error={error?.message || "Thread not found"}
@@ -210,12 +292,14 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
   const messageCount = thread.allMessages?.length || 0;
 
   return (
-    <ThreadDetailContainer>
-      {/* Back button */}
-      <BackButton onClick={handleBack} aria-label="Back to discussions">
-        <ArrowLeft size={16} />
-        <span>Back to Discussions</span>
-      </BackButton>
+    <ThreadDetailContainer $compact={compact}>
+      {/* Back button - only show in compact mode (sidebar), route provides its own back button in full-page mode */}
+      {compact && (
+        <BackButton onClick={handleBack} aria-label="Back to discussions">
+          <ArrowLeft size={16} />
+          <span>Back to Discussions</span>
+        </BackButton>
+      )}
 
       {/* Thread header */}
       <ThreadHeader>
@@ -242,7 +326,9 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
         <ThreadMeta>
           <MetaItem>
             Started by{" "}
-            <strong>{thread.creator?.username || thread.creator?.email}</strong>
+            <strong>
+              {formatUsername(thread.creator?.username, thread.creator?.email)}
+            </strong>
           </MetaItem>
 
           <Separator>•</Separator>
@@ -275,17 +361,45 @@ export function ThreadDetail({ conversationId, corpusId }: ThreadDetailProps) {
           />
         </EmptyMessageState>
       ) : (
-        <MessageListContainer role="list" aria-label="Discussion messages">
+        <MessageListContainer
+          role="list"
+          aria-label="Discussion messages"
+          style={{ width: "100%" }}
+        >
           <MessageTree
             messages={messageTree}
             highlightedMessageId={selectedMessageId}
             onReply={handleReply}
+            badgesByUser={badgesByUser}
+            conversationId={conversationId}
+            replyingToMessageId={replyingToMessageId}
+            onCancelReply={() => setReplyingToMessageId(null)}
           />
         </MessageListContainer>
       )}
 
-      {/* TODO: Add message composer at bottom in #574 */}
-      {/* {!thread.isLocked && <MessageComposer conversationId={conversationId} />} */}
+      {/* Bottom-level message composer */}
+      {!thread.isLocked && (
+        <div
+          style={{
+            marginTop: spacing.lg,
+            paddingTop: spacing.lg,
+            borderTop: `1px solid ${color.N4}`,
+          }}
+        >
+          <ReplyForm
+            conversationId={conversationId}
+            onSuccess={() => {
+              // Apollo's refetchQueries in ReplyForm handles refetching
+              // No additional refetch needed here to avoid double-fetch issues
+            }}
+            onCancel={() => {
+              // No-op for bottom composer - it's always visible
+            }}
+            autoFocus={false}
+          />
+        </div>
+      )}
     </ThreadDetailContainer>
   );
 }

@@ -781,11 +781,14 @@ export interface UploadDocumentInputProps {
   description?: string;
   title?: string;
   addToCorpusId?: string;
+  addToFolderId?: string;
   slug?: string;
 }
 
 export interface UploadDocumentOutputProps {
   uploadDocument: {
+    ok: boolean;
+    message: string;
     document: {
       id: string;
       icon: string;
@@ -793,6 +796,7 @@ export interface UploadDocumentOutputProps {
       title: string;
       description: string;
       backendLock: boolean;
+      fileType: string;
       docAnnotations: {
         edges: {
           node: {
@@ -800,7 +804,7 @@ export interface UploadDocumentOutputProps {
           };
         };
       }[];
-    };
+    } | null;
   };
 }
 
@@ -814,6 +818,7 @@ export const UPLOAD_DOCUMENT = gql`
     $makePublic: Boolean!
     $addToCorpusId: ID
     $addToExtractId: ID
+    $addToFolderId: ID
     $slug: String
   ) {
     uploadDocument(
@@ -825,8 +830,11 @@ export const UPLOAD_DOCUMENT = gql`
       makePublic: $makePublic
       addToCorpusId: $addToCorpusId
       addToExtractId: $addToExtractId
+      addToFolderId: $addToFolderId
       slug: $slug
     ) {
+      ok
+      message
       document {
         id
         icon
@@ -2448,7 +2456,7 @@ export interface RevokeBadgeOutput {
 
 export const CREATE_THREAD = gql`
   mutation CreateThread(
-    $corpusId: ID!
+    $corpusId: String!
     $title: String!
     $description: String
     $initialMessage: String!
@@ -2461,25 +2469,10 @@ export const CREATE_THREAD = gql`
     ) {
       ok
       message
-      conversation {
+      obj {
         id
-        conversationType
         title
         description
-        createdAt
-        updatedAt
-        isPinned
-        isLocked
-        creator {
-          id
-          username
-          email
-        }
-        corpus {
-          id
-          title
-        }
-        messageCount
       }
     }
   }
@@ -2496,40 +2489,25 @@ export interface CreateThreadOutput {
   createThread: {
     ok: boolean;
     message: string;
-    conversation: {
+    obj?: {
       id: string;
-      conversationType: string;
       title: string;
       description?: string;
-      createdAt: string;
-      updatedAt: string;
-      isPinned: boolean;
-      isLocked: boolean;
-      creator: {
-        id: string;
-        username: string;
-        email: string;
-      };
-      corpus: {
-        id: string;
-        title: string;
-      };
-      messageCount: number;
-    } | null;
+    };
   };
 }
 
 export const CREATE_THREAD_MESSAGE = gql`
-  mutation CreateThreadMessage($conversationId: ID!, $content: String!) {
+  mutation CreateThreadMessage($conversationId: String!, $content: String!) {
     createThreadMessage(conversationId: $conversationId, content: $content) {
       ok
       message
-      chatMessage {
+      obj {
         id
         content
-        createdAt
-        updatedAt
-        sender {
+        created
+        modified
+        creator {
           id
           username
           email
@@ -2540,7 +2518,7 @@ export const CREATE_THREAD_MESSAGE = gql`
         }
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
       }
     }
   }
@@ -2555,12 +2533,12 @@ export interface CreateThreadMessageOutput {
   createThreadMessage: {
     ok: boolean;
     message: string;
-    chatMessage: {
+    obj: {
       id: string;
       content: string;
-      createdAt: string;
-      updatedAt: string;
-      sender: {
+      created: string;
+      modified: string;
+      creator: {
         id: string;
         username: string;
         email: string;
@@ -2577,16 +2555,16 @@ export interface CreateThreadMessageOutput {
 }
 
 export const REPLY_TO_MESSAGE = gql`
-  mutation ReplyToMessage($parentMessageId: ID!, $content: String!) {
+  mutation ReplyToMessage($parentMessageId: String!, $content: String!) {
     replyToMessage(parentMessageId: $parentMessageId, content: $content) {
       ok
       message
-      chatMessage {
+      obj {
         id
         content
-        createdAt
-        updatedAt
-        sender {
+        created
+        modified
+        creator {
           id
           username
           email
@@ -2594,7 +2572,7 @@ export const REPLY_TO_MESSAGE = gql`
         parentMessage {
           id
           content
-          sender {
+          creator {
             id
             username
           }
@@ -2605,7 +2583,7 @@ export const REPLY_TO_MESSAGE = gql`
         }
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
       }
     }
   }
@@ -2620,12 +2598,12 @@ export interface ReplyToMessageOutput {
   replyToMessage: {
     ok: boolean;
     message: string;
-    chatMessage: {
+    obj: {
       id: string;
       content: string;
-      createdAt: string;
-      updatedAt: string;
-      sender: {
+      created: string;
+      modified: string;
+      creator: {
         id: string;
         username: string;
         email: string;
@@ -2633,7 +2611,7 @@ export interface ReplyToMessageOutput {
       parentMessage: {
         id: string;
         content: string;
-        sender: {
+        creator: {
           id: string;
           username: string;
         };
@@ -2693,12 +2671,16 @@ export interface DeleteMessageOutput {
 // Voting Mutations
 // ============================================================================
 
+/**
+ * Upvote a message. Uses the backend vote_message mutation with vote_type="upvote".
+ * Returns the updated message with vote counts and current user's vote status.
+ */
 export const UPVOTE_MESSAGE = gql`
   mutation UpvoteMessage($messageId: ID!) {
-    upvoteMessage(messageId: $messageId) {
+    voteMessage(messageId: $messageId, voteType: "upvote") {
       ok
       message
-      chatMessage {
+      obj {
         id
         upvoteCount
         downvoteCount
@@ -2712,25 +2694,32 @@ export interface UpvoteMessageInput {
   messageId: string;
 }
 
-export interface UpvoteMessageOutput {
-  upvoteMessage: {
-    ok: boolean;
-    message: string;
-    chatMessage: {
-      id: string;
-      upvoteCount: number;
-      downvoteCount: number;
-      userVote?: string;
-    } | null;
-  };
+/** Response shape for vote mutations (upvote uses voteMessage mutation) */
+export interface VoteMessageResponse {
+  ok: boolean;
+  message: string;
+  obj: {
+    id: string;
+    upvoteCount: number;
+    downvoteCount: number;
+    userVote: string | null;
+  } | null;
 }
 
+export interface UpvoteMessageOutput {
+  voteMessage: VoteMessageResponse;
+}
+
+/**
+ * Downvote a message. Uses the backend vote_message mutation with vote_type="downvote".
+ * Returns the updated message with vote counts and current user's vote status.
+ */
 export const DOWNVOTE_MESSAGE = gql`
   mutation DownvoteMessage($messageId: ID!) {
-    downvoteMessage(messageId: $messageId) {
+    voteMessage(messageId: $messageId, voteType: "downvote") {
       ok
       message
-      chatMessage {
+      obj {
         id
         upvoteCount
         downvoteCount
@@ -2745,24 +2734,19 @@ export interface DownvoteMessageInput {
 }
 
 export interface DownvoteMessageOutput {
-  downvoteMessage: {
-    ok: boolean;
-    message: string;
-    chatMessage: {
-      id: string;
-      upvoteCount: number;
-      downvoteCount: number;
-      userVote?: string;
-    } | null;
-  };
+  voteMessage: VoteMessageResponse;
 }
 
+/**
+ * Remove a vote from a message.
+ * Returns the updated message with vote counts and current user's vote status (null after removal).
+ */
 export const REMOVE_VOTE = gql`
   mutation RemoveVote($messageId: ID!) {
     removeVote(messageId: $messageId) {
       ok
       message
-      chatMessage {
+      obj {
         id
         upvoteCount
         downvoteCount
@@ -2777,16 +2761,7 @@ export interface RemoveVoteInput {
 }
 
 export interface RemoveVoteOutput {
-  removeVote: {
-    ok: boolean;
-    message: string;
-    chatMessage: {
-      id: string;
-      upvoteCount: number;
-      downvoteCount: number;
-      userVote?: string;
-    } | null;
-  };
+  removeVote: VoteMessageResponse;
 }
 
 // ============================================================================
@@ -3122,5 +3097,40 @@ export interface DeleteNotificationOutput {
   deleteNotification: {
     ok: boolean;
     message: string;
+  };
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///
+/// DOCUMENT VERSIONING MUTATIONS
+///
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const RESTORE_DELETED_DOCUMENT = gql`
+  mutation RestoreDeletedDocument($documentId: ID!, $corpusId: ID!) {
+    restoreDeletedDocument(documentId: $documentId, corpusId: $corpusId) {
+      ok
+      message
+      document {
+        id
+        title
+      }
+    }
+  }
+`;
+
+export interface RestoreDeletedDocumentInput {
+  documentId: string;
+  corpusId: string;
+}
+
+export interface RestoreDeletedDocumentOutput {
+  restoreDeletedDocument: {
+    ok: boolean;
+    message: string;
+    document: {
+      id: string;
+      title: string;
+    } | null;
   };
 }

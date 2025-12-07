@@ -193,6 +193,11 @@ class CoreConversationVectorStore:
                 query.query_text, embedder_path=self.embedder_path
             )
             _logger.debug(f"Generated embedding using: {embedder_path}")
+            if query_embedding is None:
+                _logger.warning(
+                    f"Failed to generate embedding for query: {query.query_text[:50]}..."
+                )
+                return []
         elif query.query_embedding:
             query_embedding = query.query_embedding
         else:
@@ -260,6 +265,11 @@ class CoreConversationVectorStore:
                 query.query_text, embedder_path=self.embedder_path
             )
             _logger.debug(f"Generated embedding using: {embedder_path}")
+            if query_embedding is None:
+                _logger.warning(
+                    f"Failed to generate embedding for query: {query.query_text[:50]}..."
+                )
+                return []
         elif query.query_embedding:
             query_embedding = query.query_embedding
         else:
@@ -414,6 +424,11 @@ class CoreChatMessageVectorStore:
                 query.query_text, embedder_path=self.embedder_path
             )
             _logger.debug(f"Generated embedding using: {embedder_path}")
+            if query_embedding is None:
+                _logger.warning(
+                    f"Failed to generate embedding for query: {query.query_text[:50]}..."
+                )
+                return []
         elif query.query_embedding:
             query_embedding = query.query_embedding
         else:
@@ -493,6 +508,11 @@ class CoreChatMessageVectorStore:
                 query.query_text, embedder_path=self.embedder_path
             )
             _logger.debug(f"Generated embedding using: {embedder_path}")
+            if query_embedding is None:
+                _logger.warning(
+                    f"Failed to generate embedding for query: {query.query_text[:50]}..."
+                )
+                return []
         elif query.query_embedding:
             query_embedding = query.query_embedding
         else:

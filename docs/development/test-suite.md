@@ -1,24 +1,92 @@
-Our test suite is a bit sparse, but we're working to improve coverage on the backend. Frontend tests will likely take
-longer to implement. Our existing tests do test imports and a number of the utility functions for manipulating
-annotations. These tests are integrated in our GitHub actions.
+Our test suite provides comprehensive coverage of the backend. Frontend tests use Playwright for component testing. All tests are integrated in our GitHub Actions CI pipeline.
 
-NOTE, **use Python 3.10 or above** as pydantic and certain pre-3.10 type annotations do not play well.
-using `from __future__ import annotations` doesn't always solve the problem, and upgrading to Python 3.10
-was a lot easier than trying to figure out why the `from __future__` didn't behave as expected
+NOTE: **Use Python 3.10 or above** as pydantic and certain pre-3.10 type annotations do not play well.
 
-To run the tests, check your test coverage, and generate an HTML coverage report:
+## Running Tests
 
-```commandline
- $ docker-compose -f local.yml run django coverage run -m pytest
- $ docker-compose -f local.yml run django coverage html
- $ open htmlcov/index.html
+### Parallel Test Execution (Recommended)
+
+We use pytest-xdist for parallel test execution, which reduces test time from ~65 minutes to ~15-20 minutes:
+
+```bash
+# Run tests in parallel with 4 workers
+docker compose -f test.yml run --rm django pytest -n 4 --dist loadscope
+
+# Auto-detect workers based on CPU cores
+docker compose -f test.yml run --rm django pytest -n auto --dist loadscope
+
+# First run or after schema changes (creates fresh database)
+docker compose -f test.yml run --rm django pytest -n 4 --dist loadscope --create-db
 ```
 
-To run a specific test (e.g. test_analyzers):
+### Running with Coverage
 
-```commandline
- $ sudo docker-compose -f local.yml run django python manage.py test opencontractserver.tests.test_analyzers --noinput
+```bash
+# Run parallel tests with coverage
+docker compose -f test.yml run --rm django pytest --cov --cov-report=xml -n 4 --dist loadscope
+
+# Generate HTML coverage report
+docker compose -f test.yml run --rm django pytest --cov --cov-report=html -n 4 --dist loadscope
 ```
+
+### Running Specific Tests
+
+```bash
+# Run a specific test file
+docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_analyzers.py -v
+
+# Run a specific test class
+docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_analyzers.py::TestAnalyzerClass -v
+
+# Run a specific test method
+docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_analyzers.py::TestAnalyzerClass::test_method -v
+
+# Run tests matching a pattern
+docker compose -f test.yml run --rm django pytest -k "analyzer" -v
+```
+
+### Serial Test Execution
+
+Some tests cannot run in parallel (websocket tests, async event loop tests). These are marked with `@pytest.mark.serial`:
+
+```bash
+# Run only serial tests
+docker compose -f test.yml run --rm django pytest -m serial -v
+
+# Run only parallelizable tests
+docker compose -f test.yml run --rm django pytest -m "not serial" -n 4 --dist loadscope
+```
+
+## Writing Tests for Parallel Execution
+
+When writing new tests, keep these guidelines in mind:
+
+### Tests That Need `@pytest.mark.serial`
+
+Mark tests as serial if they:
+- Use `channels.testing.WebsocketCommunicator` (websocket tests)
+- Call `agent.run_sync()` or other PydanticAI sync wrappers
+- Use Django Channels async consumers
+- Have complex async event loop requirements
+
+```python
+import pytest
+
+@pytest.mark.serial
+class MyWebsocketTestCase(TestCase):
+    """Tests that use websocket communicators must run serially."""
+    pass
+```
+
+### Tests Safe for Parallel Execution
+
+Most tests are safe for parallel execution by default:
+- Standard Django TestCase and TransactionTestCase
+- GraphQL query/mutation tests
+- Model tests
+- API tests
+
+The `--dist loadscope` option keeps tests from the same class together, which is important for `setUpClass`/`setUpTestData` patterns.
 
 ## Production Stack Testing
 

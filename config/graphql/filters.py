@@ -338,6 +338,7 @@ class DocumentFilter(django_filters.FilterSet):
         method="handle_has_annotations_with_ids"
     )
     in_corpus_with_id = filters.CharFilter(method="in_corpus")
+    in_folder_id = filters.CharFilter(method="in_folder")
     has_label_with_title = filters.CharFilter(method="has_label_title")
     has_label_with_id = filters.CharFilter(method="has_label_id")
     text_search = filters.CharFilter(method="naive_text_search")
@@ -362,6 +363,47 @@ class DocumentFilter(django_filters.FilterSet):
 
     def in_corpus(self, queryset, name, value):
         return queryset.filter(corpus=from_global_id(value)[1]).distinct()
+
+    def in_folder(self, queryset, name, value):
+        """
+        Filter documents by folder assignment.
+        Special handling: value="__root__" returns documents in corpus root (no folder).
+        Otherwise filters to specific folder ID.
+        """
+        import logging
+
+        from opencontractserver.corpuses.models import CorpusDocumentFolder
+
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"[QUERY] in_folder filter called with value: {value}")
+
+        if value == "__root__":
+            # Get corpus_id from earlier filter (must have in_corpus_with_id set)
+            # For root documents, we need to exclude documents that have folder assignments
+            # This requires knowing the corpus context
+            result = queryset.filter(
+                ~Q(
+                    id__in=CorpusDocumentFolder.objects.filter(
+                        folder__isnull=False
+                    ).values_list("document_id", flat=True)
+                )
+            )
+            logger.info(f"[QUERY] Filtered to root folder, count: {result.count()}")
+            return result
+        else:
+            folder_pk = from_global_id(value)[1]
+            doc_ids = list(
+                CorpusDocumentFolder.objects.filter(folder_id=folder_pk).values_list(
+                    "document_id", flat=True
+                )
+            )
+            logger.info(
+                f"[QUERY] Filtering to folder {folder_pk}, found {len(doc_ids)} document assignments"
+            )
+            result = queryset.filter(id__in=doc_ids).distinct()
+            logger.info(f"[QUERY] After filter, result count: {result.count()}")
+            return result
 
     def has_label_title(self, queryset, name, value):
         return queryset.filter(annotation__annotation_label__title__contains=value)
@@ -459,6 +501,8 @@ class ConversationFilter(django_filters.FilterSet):
 
     document_id = filters.CharFilter(method="filter_by_document_id")
     corpus_id = filters.CharFilter(method="filter_by_corpus_id")
+    has_corpus = filters.BooleanFilter(method="filter_has_corpus")
+    has_document = filters.BooleanFilter(method="filter_has_document")
 
     def filter_by_document_id(self, queryset, name, value):
         """Filter conversations by document ID."""
@@ -470,11 +514,24 @@ class ConversationFilter(django_filters.FilterSet):
         django_pk = from_global_id(value)[1]
         return queryset.filter(chat_with_corpus_id=django_pk)
 
+    def filter_has_corpus(self, queryset, name, value):
+        """Filter conversations that have/don't have a corpus."""
+        if value:
+            return queryset.filter(chat_with_corpus__isnull=False)
+        return queryset.filter(chat_with_corpus__isnull=True)
+
+    def filter_has_document(self, queryset, name, value):
+        """Filter conversations that have/don't have a document."""
+        if value:
+            return queryset.filter(chat_with_document__isnull=False)
+        return queryset.filter(chat_with_document__isnull=True)
+
     class Meta:
         model = Conversation
         fields = {
             "created_at": ["gte", "lte"],
             "title": ["contains"],
+            "conversation_type": ["exact"],
         }
 
 
@@ -546,4 +603,27 @@ class UserBadgeFilter(django_filters.FilterSet):
         model = UserBadge
         fields = {
             "awarded_at": ["gte", "lte"],
+        }
+
+
+class AgentConfigurationFilter(django_filters.FilterSet):
+    """Filter set for AgentConfiguration model."""
+
+    corpus_id = filters.CharFilter(method="filter_by_corpus_id")
+
+    def filter_by_corpus_id(self, queryset, name, value):
+        """Filter agent configurations by corpus ID."""
+        if value:
+            django_pk = from_global_id(value)[1]
+            return queryset.filter(corpus_id=django_pk)
+        return queryset
+
+    class Meta:
+        from opencontractserver.agents.models import AgentConfiguration
+
+        model = AgentConfiguration
+        fields = {
+            "scope": ["exact"],
+            "is_active": ["exact"],
+            "name": ["contains", "exact"],
         }

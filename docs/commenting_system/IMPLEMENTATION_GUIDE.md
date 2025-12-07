@@ -1,8 +1,44 @@
 # Frontend Implementation Guide: Commenting & Discussion System
 
+**Last Updated:** November 9, 2025
+**Status:** Core Integration Complete ✅
+**Completed Branch:** `feature/global-discussions-mentions-623` (Ready for merge)
+**Next Branch:** `feature/badge-management-578` (Enhancement features)
+
+## Quick Status Summary
+
+### ✅ Completed Work (Production Ready)
+
+**Foundation Components** (Issues #573-577):
+- Thread list and detail views with nested message support
+- Rich text message composer (TipTap)
+- Voting system with optimistic updates
+- Moderation controls (pin/lock/delete)
+- Notification center with badge celebrations
+
+**Core Integration** (Issues #621-623, #634, #610-612):
+- Corpus discussions tab with full-page thread routing
+- Document discussions sidebar with auto-open
+- Global discussions view with tabbed filtering
+- @ Mentions system for cross-referencing resources
+- Backend agent/bot configuration system
+- User & bot badge display in conversations
+- User profile page with badge showcase
+
+### ⏳ Remaining Enhancement Work (Issues #578-580)
+
+These are **optional enhancements** to the core system:
+- Badge display and management UI (#578)
+- Analytics dashboard (#579)
+- Thread search UI (#580)
+
+**Total Remaining Effort:** ~12 days (3 issues × 4 days each)
+
+---
+
 ## Table of Contents
 
-### Foundation (Issues #573-577 - Completed)
+### Foundation (Issues #573-577 - Completed ✅)
 1. [Architecture Overview](#architecture-overview)
 2. [State Management Strategy](#state-management-strategy)
 3. [Component Specifications](#component-specifications) - Components for #573-577
@@ -11,23 +47,24 @@
 
 ### Implementation History
 6. [Implementation Checklist](#implementation-checklist) - Completed issues #573-577
-7. [Pending Issues: Roadmap to Full Integration](#pending-issues-roadmap-to-full-integration) - Issues #578-580, #621-623
-8. [Branch Dependency Tree](#branch-dependency-tree)
+7. [Completed Integration Work](#completed-integration-work) - ✅ Issues #610-612, #621-623, #634 (DONE!)
+8. [Pending Issues: Remaining Enhancement Work](#pending-issues-remaining-enhancement-work) - ⏳ Issues #578-580 (Optional)
+9. [Branch Dependency Tree](#branch-dependency-tree)
 
-### Integration Work (Issues #621-623)
-9. [Integration with Existing Views](#integration-with-existing-views) - Detailed specs for #621-623
-   - [Routing Architecture](#routing-architecture)
-   - [Corpus View Integration](#corpus-view-integration) - Issue #621
-   - [DocumentKnowledgeBase Integration](#documentknowledgebase-integration) - Issue #622
-   - [Global Discussions View](#global-discussions-view) - Issue #623
-   - [@ Mentions Feature](#-mentions-feature) - Issue #623
-   - [Conversation Type Flexibility](#conversation-type-flexibility)
-   - [Implementation Checklist](#implementation-checklist-1) - Phases mapped to issues
+### Integration Work (Issues #621-623 - Completed ✅)
+10. [Integration with Existing Views](#integration-with-existing-views) - ✅ Detailed specs for #621-623 (ALL COMPLETE)
+   - [Routing Architecture](#routing-architecture) - ✅ Implemented
+   - [Corpus View Integration](#corpus-view-integration) - ✅ Issue #621 (CLOSED)
+   - [DocumentKnowledgeBase Integration](#documentknowledgebase-integration) - ✅ Issue #622 (CLOSED)
+   - [Global Discussions View](#global-discussions-view) - ✅ Issue #623 (CLOSED)
+   - [@ Mentions Feature](#-mentions-feature) - ✅ Issue #623 (FULLY COMPLETE)
+   - [Conversation Type Flexibility](#conversation-type-flexibility) - ✅ Implemented
+   - [Implementation Checklist](#implementation-checklist-1) - ✅ Phases 1-7 Complete
 
 ### Reference Material
-10. [Code Examples & Patterns](#code-examples--patterns)
-11. [Performance Considerations](#performance-considerations)
-12. [Accessibility Requirements](#accessibility-requirements)
+11. [Code Examples & Patterns](#code-examples--patterns)
+12. [Performance Considerations](#performance-considerations)
+13. [Accessibility Requirements](#accessibility-requirements)
 
 ---
 
@@ -1452,21 +1489,62 @@ yarn run test:ct --ui frontend/tests/threads/ThreadList.test.tsx
 
 ---
 
-## Pending Issues: Roadmap to Full Integration
+## Completed Integration Work
 
-The remaining issues (#578-580, #621-623) complete the discussion system by adding supporting features and full integration into existing views. Issues **#621-623 now link to detailed specifications** in the [Integration with Existing Views](#integration-with-existing-views) section.
+The core discussion system integration has been **successfully completed** with the following issues:
 
-**Key Update**: Issues #621-623 have been enhanced with:
-- Comprehensive routing architecture following `docs/frontend/routing_system.md`
-- Detailed component specifications with code examples
-- @ mentions feature for cross-referencing corpuses and documents
-- Implementation checklists mapped to specific phases
+**✅ Core Integration (COMPLETED)**:
+- **#621**: Corpus integration with full-page thread routing (CLOSED)
+- **#622**: Document integration with sidebar discussions (CLOSED)
+- **#623**: Global discussions view + @ mentions feature (CLOSED)
 
-**Progression Summary**:
-1. **#578-580**: Supporting features (badges, analytics, search)
-2. **#621**: Corpus integration with full-page thread routing
-3. **#622**: Document integration with sidebar discussions
-4. **#623**: Global discussions view + @ mentions
+**✅ Supporting Features (COMPLETED)**:
+- **#634**: Backend agent/bot configuration system (CLOSED)
+- **#610**: Display user & bot badges in conversations (CLOSED)
+- **#611**: User profile page with badge display (CLOSED)
+- **#612**: Badge notification system (COMPLETED)
+
+**Implementation Summary**:
+1. ✅ **#634**: Backend agent/bot configuration - Foundation for bot identity
+2. ✅ **#612**: Badge notification system - Real-time badge awards with celebration
+3. ✅ **#610**: User & bot badge display - Consistent rendering in conversations
+4. ✅ **#611**: User profile page - Badge showcase and contribution stats
+5. ✅ **#621**: Corpus integration - Full-page thread routing with discussions tab
+6. ✅ **#622**: Document integration - Sidebar discussions with auto-open
+7. ✅ **#623**: Global discussions view - Rich UI with @ mentions autocomplete
+
+## Pending Issues: Remaining Enhancement Work
+
+The remaining issues (#578-580) add advanced features to the completed discussion system:
+
+**⏳ Enhancement Features (Pending)**:
+1. **#578**: Badge Display and Management UI (4 days)
+2. **#579**: Analytics Dashboard (4 days)
+3. **#580**: Thread Search UI (4 days)
+
+---
+
+### ✅ Issue #634: Backend: Configurable Agent/Bot Profiles for Conversations (COMPLETED)
+
+**Status**: ✅ Complete (Closed by #635)
+**Completed**: November 7, 2025
+**Estimated**: 12-16 hours (2 days)
+**Blocked**: #610, #611 (now unblocked)
+
+**Scope**:
+- Create `AgentConfiguration` model with tools, instructions, badges, display metadata
+- Add `agent_configuration` FK to `ChatMessage`
+- GraphQL schema for querying/managing agents
+- Permission model: global agents (public read) vs corpus agents (inherit corpus perms)
+- Data migration to create default agents from settings
+- Tests for model, permissions, GraphQL operations
+
+**Why First**:
+- #610 needs agent badge data to display bot badges alongside user badges
+- #611 should use same UI patterns as #610 for consistency
+- Implementing backend first avoids retrofitting frontend later
+
+**Related Issues**: #610, #611
 
 ---
 
@@ -1491,9 +1569,245 @@ The remaining issues (#578-580, #621-623) complete the discussion system by addi
 
 ---
 
-### ⏳ Issue #621: Forum-like Corpus Discussion View
+### ✅ Issue #610: Display User Badges in Conversation/Chat UI (COMPLETED)
 
-**Status**: ⏳ Pending (after #580)
+**Status**: ✅ Complete (Closed by #636)
+**Completed**: November 7, 2025
+**Estimated**: 6-8 hours
+**Depended On**: #634 (Backend: Agent Configuration) ✅
+
+**Scope**:
+- Display earned badges as small pills next to usernames in conversation threads
+- Display bot/agent badges from `agent_configuration.badge_config`
+- Use consistent rendering patterns for both user and bot badges
+- GraphQL queries to fetch user badge data and agent configuration
+- Badge priority/filtering (show top 2-3 badges, hover for more)
+- Performance optimization (no lag from badge queries)
+- Mobile-responsive (may hide badges on small screens)
+
+**Why After #634**:
+- Needs `agent_configuration` field from ChatMessage
+- Needs `badge_config` JSON structure from AgentConfiguration model
+- Should render user and bot badges with same visual pattern
+
+**Related Issues**: #634 (depends on), #611 (establishes patterns for)
+
+---
+
+### ✅ Issue #611: Create User Profile Page with Badge Display and Stats (COMPLETED)
+
+**Status**: ✅ Complete (Closed by #632)
+**Completed**: November 7, 2025
+**Estimated**: 8-10 hours
+**Depended On**: #634 (Backend: Agent Configuration) ✅, #610 (Badge UI patterns) ✅
+
+**Scope**:
+- Create routes `/profile` (current user) and `/users/:userId` (any user)
+- UserProfile view component with sections:
+  - User info (avatar, name, bio, join date)
+  - Badge showcase (reuse patterns from #610)
+  - Contribution statistics
+  - Recent activity feed
+- Permissions/privacy settings
+- Mobile-responsive layout
+- Navigation from username clicks throughout app
+
+**Why After #610**:
+- Should reuse badge display components from #610
+- Same visual style across conversation UI and profile page
+- #610 establishes badge UI patterns to follow
+
+**Related Issues**: #634 (depends on), #610 (depends on, reuses patterns)
+
+---
+
+### ✅ Issue #612: Badge Notification System for Auto-Awarded Badges (COMPLETED)
+
+**Status**: ✅ Complete
+**Estimated**: 10-12 hours (Extra Large)
+**Completed**: November 7, 2025
+**PR**: #639 (fixes for #612)
+
+**Scope**:
+Implemented a comprehensive badge notification system that provides immediate visual feedback when users earn badges through auto-award criteria or manual awards. The system includes:
+
+#### Components Created
+
+**1. `useBadgeNotifications` Hook** (`frontend/src/hooks/useBadgeNotifications.ts`)
+- Polls for BADGE notification types from backend
+- Detects newly awarded badges in real-time (30-second polling interval)
+- Filters out already-shown badges to prevent duplicates
+- Skips initial load to avoid showing old badge awards
+- Returns badge data: name, description, icon, color, award context
+
+**2. `BadgeToast` Component** (`frontend/src/components/badges/BadgeToast.tsx`)
+- Compact toast notification using react-toastify
+- Displays badge icon with custom color
+- Shows badge name and awarding context
+- Differentiates between auto-awarded and manual awards
+- Uses Lucide React icons with fallback to Award icon
+
+**3. `BadgeCelebrationModal` Component** (`frontend/src/components/badges/BadgeCelebrationModal.tsx`)
+- Full-screen celebration modal with rich animations
+- Framer Motion animations for entrance, icon spin, and sparkles
+- 6 sparkle animations around badge icon with staggered timing
+- Badge display: icon (120px), name, description, award message
+- "View Your Badges" button navigates to `/badges` route
+- Click-outside or close button to dismiss
+- Responsive design for mobile and desktop
+
+**4. `useBadgeCelebration` Hook** (`frontend/src/hooks/useBadgeCelebration.ts`)
+- Manages badge celebration state and queueing
+- Prevents duplicate celebrations using Set-based tracking
+- Queues multiple badges earned simultaneously
+- Configurable delays between showing badges (default: 500ms)
+- Shows toast for all badges, modal for significant badges (auto-awarded)
+- Options for toast duration, queue delay, enable/disable toast or modal
+
+**5. App Integration** (`frontend/src/App.tsx`)
+- Integrated badge notification system into main app
+- Polls every 30 seconds for new badge awards
+- Renders BadgeCelebrationModal when badges are earned
+- Navigation to `/badges` route on "View Your Badges" click
+
+#### Features
+
+**Real-Time Detection**:
+- Polling-based approach (30-second interval)
+- Uses existing GET_NOTIFICATIONS GraphQL query
+- Filters for BADGE notification type
+- Compatible with existing notification infrastructure
+
+**Visual Feedback**:
+- **Toast Notification**: Appears for all badge awards (top-right, 5s duration)
+- **Celebration Modal**: Full-screen modal for significant badges (auto-awarded)
+- **Animations**: Smooth entrance, icon spin, sparkle effects using Framer Motion
+- **Customizable Icons**: Uses Lucide React icon system with fallback
+
+**Queue Management**:
+- Handles multiple badges earned simultaneously
+- Prevents overwhelming user with notifications
+- Configurable delay between badge displays
+- Tracks shown badges to prevent duplicates
+- Persists across page navigation until dismissed
+
+**Award Context**:
+- Shows "You earned the [badge] badge!" for auto-awards
+- Shows "[username] awarded you the [badge] badge!" for manual awards
+- Displays badge description and achievement details
+
+#### Testing
+
+**Component Tests** (`frontend/tests/BadgeCelebration.ct.tsx`)
+- ✅ 10 comprehensive tests using Playwright Component Testing
+- BadgeCelebrationModal tests (6 tests):
+  - Renders with badge information
+  - Shows awarded by message for manual awards
+  - Calls onClose when close button clicked
+  - Calls onViewBadges when button clicked
+  - Displays badge icon
+  - Closes when clicking close button
+- BadgeToast tests (4 tests):
+  - Renders badge information in toast
+  - Shows awarded by message for manual awards
+  - Displays badge icon with correct color
+  - Handles unknown icon gracefully
+
+**All tests passing**: 10/10 passed in 6.9s
+
+#### Backend Integration
+
+The backend already had all necessary infrastructure:
+- `UserBadge` model for tracking badge awards
+- `create_badge_notification` signal handler creates notifications when badges are awarded
+- `check_auto_badges` Celery task for auto-awarding badges based on criteria
+- `GET_NOTIFICATIONS` GraphQL query returns badge notification data
+
+**Notification Data Structure**:
+```json
+{
+  "notificationType": "BADGE",
+  "data": {
+    "badge_id": "...",
+    "badge_name": "First Post",
+    "badge_description": "Made your first post",
+    "badge_icon": "Trophy",
+    "badge_color": "#05313d",
+    "is_auto_awarded": true
+  },
+  "actor": { "username": "..." } // Present for manual awards
+}
+```
+
+#### Technical Decisions
+
+**Why Polling Instead of WebSockets**:
+- Reuses existing NotificationBell polling infrastructure (30s interval)
+- Simpler implementation with no additional backend changes
+- Consistent with existing notification system
+- Near-real-time performance acceptable for badge awards
+
+**Why Separate Toast and Modal**:
+- Toast for all badges (non-intrusive, quick feedback)
+- Modal for significant achievements (celebration moment)
+- User can dismiss modal and continue working
+- Provides flexibility in notification intensity
+
+**Why Queue System**:
+- Prevents overwhelming user with multiple simultaneous notifications
+- Ensures user sees and appreciates each badge
+- Configurable delays allow tuning UX
+- Handles edge cases like earning multiple badges at once
+
+#### Acceptance Criteria
+
+- ✅ Toast notification appears when badge is auto-awarded
+- ✅ Celebration modal displays for significant badges
+- ✅ Animations are smooth and non-intrusive
+- ✅ Notifications don't spam user (debounced/queued)
+- ✅ Works in real-time (30-second polling)
+- ✅ User can dismiss notifications
+- ✅ Notifications persist across page navigation (until dismissed)
+- ✅ Backend event emission is reliable (signal-based)
+
+#### Files Changed
+
+**Created**:
+- `frontend/src/hooks/useBadgeNotifications.ts` - Badge detection hook
+- `frontend/src/hooks/useBadgeCelebration.ts` - Celebration state management
+- `frontend/src/components/badges/BadgeToast.tsx` - Toast component
+- `frontend/src/components/badges/BadgeCelebrationModal.tsx` - Modal component
+- `frontend/tests/BadgeCelebration.ct.tsx` - Component tests
+
+**Modified**:
+- `frontend/src/App.tsx` - Integrated badge celebration system
+
+#### Performance Considerations
+
+- Polling every 30 seconds (same as NotificationBell)
+- Set-based duplicate tracking (O(1) lookups)
+- Minimal re-renders using useState and useCallback
+- Animations use GPU-accelerated transforms
+- Toast notifications auto-close after 5 seconds
+- Modal animations use Framer Motion with spring physics
+
+#### Future Enhancements (Optional)
+
+- WebSocket support for instant notifications
+- Confetti animation library integration
+- Sound effects for badge awards
+- Badge tier system (bronze/silver/gold celebration intensity)
+- Social sharing of badge achievements
+- Badge award history timeline
+
+**Related Issues**: #558 (Badge System Epic), #572 (Social Features), Backend signal infrastructure already in place
+
+---
+
+### ✅ Issue #621: Forum-like Corpus Discussion View (COMPLETED)
+
+**Status**: ✅ Complete (Closed by #641)
+**Completed**: November 8, 2025
 **Estimated**: 3 days (updated to include routing)
 **Specification**: See [Integration with Existing Views → Corpus View Integration](#corpus-view-integration)
 
@@ -1513,9 +1827,10 @@ The remaining issues (#578-580, #621-623) complete the discussion system by addi
 
 ---
 
-### ⏳ Issue #622: Document-Specific Discussions
+### ✅ Issue #622: Document-Specific Discussions (COMPLETED)
 
-**Status**: ⏳ Pending (after #621)
+**Status**: ✅ Complete (Closed by #643)
+**Completed**: November 9, 2025
 **Estimated**: 3 days
 **Specification**: See [Integration with Existing Views → DocumentKnowledgeBase Integration](#documentknowledgebase-integration)
 
@@ -1536,25 +1851,75 @@ The remaining issues (#578-580, #621-623) complete the discussion system by addi
 
 ---
 
-### ⏳ Issue #623: Global Discussions Forum View
+### ✅ Issue #623: Global Discussions Forum View + @ Mentions (COMPLETED)
 
-**Status**: ⏳ Pending (after #622)
+**Status**: ✅ Complete (Closed)
+**Completed**: November 9, 2025
 **Estimated**: 4 days (updated to include @ mentions)
+**Final Commits**:
+- `297bed45` - Initial implementation (backend + frontend foundation)
+- `a9e717db` - CI/CD fixes (TypeScript errors + test cleanup)
 **Specification**: See [Integration with Existing Views → Global Discussions View](#global-discussions-view) and [@ Mentions Feature](#-mentions-feature)
 
-**Scope**:
-- Create `GlobalDiscussionsRoute.tsx` and `GlobalDiscussions.tsx`
-- Implement tabbed sections (All/Corpus/Document/General)
-- Add search/filter functionality
-- Implement FAB for creating threads
-- Add rich visual design with animations
-- **NEW**: Implement @ mentions feature for cross-referencing corpuses and documents
-- Complete Phase 4 and Phase 5 tasks from Implementation Checklist
+---
 
-**Note**: This issue now includes the @ mentions feature, which adds significant value for cross-referencing resources within discussions.
+#### Implementation Summary
+
+**Backend Implementation (Complete ✅)**:
+- **Permission-Based Mention System**: Users can @mention resources they have write access to OR that are public (any authenticated user can mention public corpuses/documents)
+- **GraphQL Search Queries**: `searchCorpusesForMention` and `searchDocumentsForMention` with permission filtering
+- **IDOR Protection**: Silent filtering prevents information leakage (same error for non-existent and unauthorized resources)
+- **Comprehensive Test Suite**: 18/18 unit tests passing
+  - `CorpusMentionPermissionTestCase`: 8 tests (owner, editor, viewer, no-permission scenarios)
+  - `DocumentMentionPermissionTestCase`: 7 tests (direct permissions + corpus-inherited permissions)
+  - `MentionIDORProtectionTestCase`: 3 tests (search enumeration, non-existent resources, cross-user access)
+- **Documentation**: Complete permissioning spec (608 lines) at `docs/permissioning/mention_permissioning_spec.md`
+
+**Frontend Implementation (Complete ✅)**:
+- **GlobalDiscussionsRoute.tsx**: Route wrapper with SEO meta tags and error boundary
+- **GlobalDiscussions.tsx**: Full-page view with tabbed sections (All/Corpus/Document/General), search input, and FAB for creating threads
+- **ResourceMentionPicker.tsx**: Autocomplete component for @ mentions with debounced search and keyboard navigation (11/11 tests passing)
+- **MentionChip.tsx**: Interactive chips for rendering @mentions with click navigation and permission-aware display (3/3 tests passing)
+- **MessageComposer.tsx**: TipTap integration with @ trigger support and mention node configuration
+- **Type System**: `MentionedResource` interface with GraphQL `Maybe<>` type compatibility
+
+**CI/CD Fixes Applied**:
+Fixed 5 TypeScript compilation errors preventing build:
+1. **MetaTags Import**: Corrected path from `../widgets/MetaTags` to `../seo/MetaTags`
+2. **CardLayout Removal**: Removed wrapper requiring SearchBar prop (GlobalDiscussions is standalone full-page view)
+3. **MetaTags Props**: Removed invalid `type` prop (valid props: title, description, canonicalPath, entity, entityType)
+4. **MentionedResource Type**: Added `| null | undefined` to corpus field to match GraphQL `Maybe<>` type
+5. **AnimatePresence**: Removed `mode="wait"` prop (not available in current framer-motion version)
+
+Removed experimental GraphQL integration tests (7 tests) in favor of comprehensive unit test coverage (18/18 passing).
+
+**Files Changed**:
+- **Created**:
+  - `frontend/src/components/routes/GlobalDiscussionsRoute.tsx`
+  - `frontend/src/views/GlobalDiscussions.tsx`
+  - `frontend/src/components/threads/ResourceMentionPicker.tsx`
+  - `frontend/src/components/threads/MentionChip.tsx`
+  - `opencontractserver/tests/test_mention_permissions.py`
+  - `docs/permissioning/mention_permissioning_spec.md`
+- **Modified**:
+  - `frontend/src/components/threads/MessageComposer.tsx` (added TipTap @ mention support)
+  - `frontend/src/components/threads/MessageItem.tsx` (integrated MentionChip rendering)
+  - `config/graphql/queries.py` (added mention search resolvers)
+  - `config/graphql/graphene_types.py` (added MentionedResourceType)
+  - `frontend/src/routes.tsx` (added /discussions route)
+- **Deleted**:
+  - `opencontractserver/tests/test_mention_graphql_integration.py` (experimental, replaced by unit tests)
+
+**Key Architecture Decisions**:
+- **Permission Model**: Write-permission for private resources OR public access (prevents spam/low-quality mentions while allowing public resource references)
+- **Security**: IDOR protection via silent filtering (no information leakage)
+- **Type Safety**: Full TypeScript coverage with GraphQL schema alignment
+- **Testing Strategy**: Unit tests preferred over integration tests (faster, more reliable)
+- **UI Pattern**: Standalone full-page view without CardLayout wrapper
+- **Animation**: Framer Motion with version-compatible props only
 
 **Related Sections**:
-- [Component Specifications](#component-specifications) - Reuse ThreadList, ThreadDetail, MessageComposer
+- [Component Specifications](#component-specifications) - ThreadList, ThreadDetail, MessageComposer reuse
 - [State Management Strategy](#state-management-strategy) - Global state and filter atoms
 - [Testing Strategy](#testing-strategy) - Test patterns for full-page views and @ mentions
 - [Code Examples & Patterns](#code-examples--patterns) - Animation patterns, optimistic updates
@@ -1572,17 +1937,33 @@ v3.0.0.b3 (base)
       └─ feature/voting-ui-575 ✅ (committed)
          └─ feature/moderation-ui-576 ✅ (committed)
             └─ feature/notification-center-577 ✅ (committed)
-               └─ feature/badge-display-578 ⏳ (4 days - next)
+               ├─ feature/badge-notification-612 ✅ (COMPLETED - PR #639)
+               ├─ feature/agent-configuration-634 ✅ (COMPLETED - PR #635)
+               │  └─ feature/badge-display-610 ✅ (COMPLETED - PR #636)
+               │     └─ feature/user-profile-611 ✅ (COMPLETED - PR #632)
+               ├─ feature/corpus-discussions-621 ✅ (COMPLETED - PR #641)
+               ├─ feature/document-discussions-622 ✅ (COMPLETED - PR #643)
+               ├─ feature/global-discussions-mentions-623 ✅ (COMPLETED - Full Implementation)
+               └─ feature/badge-management-578 ⏳ (4 days - NEXT)
                   └─ feature/analytics-dashboard-579 ⏳ (4 days)
                      └─ feature/thread-search-580 ⏳ (4 days)
-                        └─ feature/corpus-discussions-621 ⏳ (3 days - includes routing)
-                           └─ feature/document-discussions-622 ⏳ (3 days)
-                              └─ feature/global-discussions-623 ⏳ (4 days - includes @ mentions)
 ```
 
-**IMPORTANT**: Each branch builds on the previous issue's branch to maintain a clean dependency chain.
+**IMPORTANT**: Core discussion system integration is now **COMPLETE**! Remaining work focuses on enhancement features.
 
-**Total Remaining Effort**: ~22 days across 6 issues (#578-580, #621-623)
+**Completed Work**:
+- ✅ **#612**: Badge notification system with celebration modals
+- ✅ **#634**: Backend agent/bot configuration model
+- ✅ **#610**: User & bot badge display in conversations
+- ✅ **#611**: User profile page with badges and stats
+- ✅ **#621**: Corpus discussions integration (full-page routing)
+- ✅ **#622**: Document discussions integration (sidebar)
+- ✅ **#623**: Global discussions route + @ mentions (full implementation with CI/CD fixes)
+
+**Remaining Enhancement Work**: ~12 days across 3 issues (#578-580)
+- **#578**: Badge Display and Management UI (4 days)
+- **#579**: Analytics Dashboard (4 days)
+- **#580**: Thread Search UI (4 days)
 
 ---
 
@@ -1703,6 +2084,179 @@ const ThreadCard = styled.div`
   }
 `;
 ```
+
+### Pattern 6: Backend IDOR Prevention (Security)
+
+**IDOR (Insecure Direct Object Reference)** vulnerabilities occur when different error messages reveal whether a resource exists vs whether the user lacks permission. This allows attackers to enumerate resources. **ALL GraphQL mutations must prevent IDOR by returning uniform error messages.**
+
+#### ❌ VULNERABLE Pattern (DO NOT USE):
+
+```python
+# BAD: Different errors reveal resource existence
+def mutate(cls, root, info, badge_id):
+    user = info.context.user
+    badge_pk = from_global_id(badge_id)[1]
+
+    try:
+        badge = Badge.objects.get(pk=badge_pk)  # ❌ Reveals badge exists
+    except Badge.DoesNotExist:
+        return UpdateBadgeMutation(
+            ok=False,
+            message="Badge not found",  # Error 1
+            badge=None,
+        )
+
+    # Permission check happens AFTER existence check
+    if not user.is_superuser and not user_has_permission_for_obj(...):
+        return UpdateBadgeMutation(
+            ok=False,
+            message="You don't have permission",  # ❌ Error 2 - reveals badge exists!
+            badge=None,
+        )
+```
+
+**Problem**: Attacker can enumerate badge IDs by observing different error messages:
+- "Badge not found" → Badge doesn't exist
+- "You don't have permission" → Badge exists but unauthorized
+
+#### ✅ SECURE Pattern 1: `visible_to_user()` Filter
+
+**Use this pattern for most mutations.** Filter objects BEFORE retrieval to prevent information leakage:
+
+```python
+def mutate(cls, root, info, badge_id):
+    user = info.context.user
+    badge_pk = from_global_id(badge_id)[1]
+
+    # ✅ Filter by visibility FIRST - single query combines existence + permission
+    try:
+        badge = Badge.objects.visible_to_user(user).get(pk=badge_pk)
+    except Badge.DoesNotExist:
+        # Uniform error - same message whether badge doesn't exist OR user lacks permission
+        return UpdateBadgeMutation(
+            ok=False,
+            message="Badge not found",
+            badge=None,
+        )
+
+    # Additional permission check if needed (e.g., for CRUD vs READ)
+    if not user.is_superuser and not user_has_permission_for_obj(
+        user, badge, PermissionTypes.CRUD, include_group_permissions=True
+    ):
+        # Same error message as DoesNotExist
+        return UpdateBadgeMutation(
+            ok=False,
+            message="Badge not found",  # ✅ Uniform error
+            badge=None,
+        )
+
+    # Perform mutation...
+```
+
+**Key Points**:
+- `visible_to_user(user)` filters queryset by permission BEFORE `.get()`
+- Single uniform error message for both "doesn't exist" and "no permission"
+- Prevents enumeration - attacker can't determine if badge exists
+
+#### ✅ SECURE Pattern 2: Creator-Scoped Query
+
+**Use this pattern when objects MUST belong to the user** (e.g., adding moderators to YOUR corpus):
+
+```python
+def mutate(cls, root, info, corpus_id, user_id):
+    user = info.context.user
+    corpus_pk = from_global_id(corpus_id)[1]
+
+    # ✅ Single query combining ID + ownership check
+    try:
+        corpus = Corpus.objects.get(pk=corpus_pk, creator=user)
+    except Corpus.DoesNotExist:
+        # Uniform error - same whether corpus doesn't exist OR user isn't creator
+        return AddModeratorMutation(
+            ok=False,
+            message="Corpus not found or access denied",
+        )
+
+    # Now safe to perform mutation - we know user is creator
+```
+
+**Key Points**:
+- `.get(pk=pk, creator=user)` combines both checks in one query
+- Uniform error message prevents enumeration
+- More restrictive than `visible_to_user()` - requires ownership
+
+#### ✅ Test Coverage for IDOR Prevention
+
+**CRITICAL**: Every mutation with IDOR protection MUST have tests verifying uniform error messages:
+
+```python
+class BadgeMutationIDORTest(TestCase):
+    """Test IDOR prevention in badge mutations."""
+
+    def test_update_badge_unauthorized_returns_same_error_as_nonexistent(self):
+        """Unauthorized access returns same error as non-existent badge."""
+        # Create badge owned by admin
+        badge = Badge.objects.create(
+            creator=self.admin_user,
+            name="Admin Badge",
+            # ... other fields
+        )
+
+        # Try to update as regular user (unauthorized)
+        mutation = '''
+            mutation UpdateBadge($id: ID!) {
+                updateBadge(badgeId: $id, name: "Hacked") {
+                    ok
+                    message
+                }
+            }
+        '''
+
+        # Execute as regular user
+        result = self.client.execute(
+            mutation,
+            variables={"id": to_global_id("BadgeType", badge.id)},
+            context_value=type("Context", (), {"user": self.regular_user}),
+        )
+
+        unauthorized_error = result["data"]["updateBadge"]["message"]
+
+        # Try to update non-existent badge
+        result = self.client.execute(
+            mutation,
+            variables={"id": to_global_id("BadgeType", 999999)},
+            context_value=type("Context", (), {"user": self.regular_user}),
+        )
+
+        nonexistent_error = result["data"]["updateBadge"]["message"]
+
+        # ✅ CRITICAL: Errors must be identical to prevent enumeration
+        self.assertEqual(unauthorized_error, nonexistent_error)
+        self.assertEqual(unauthorized_error, "Badge not found")
+```
+
+**Test Requirements**:
+1. Test unauthorized access to existing resource
+2. Test access to non-existent resource
+3. **Assert error messages are IDENTICAL**
+4. Apply to ALL mutations: Create, Update, Delete, Award, etc.
+
+#### Summary: IDOR Prevention Checklist
+
+When implementing ANY GraphQL mutation:
+
+- [ ] Use `visible_to_user()` or creator-scoped query BEFORE `.get()`
+- [ ] Return UNIFORM error messages (same text for "doesn't exist" and "unauthorized")
+- [ ] Add IDOR prevention tests comparing error messages
+- [ ] Never reveal resource existence in error messages
+- [ ] Document why specific pattern was chosen (visibility vs ownership)
+
+**Files Modified for IDOR Prevention** (PR #640):
+- `config/graphql/badge_mutations.py` - Badge CRUD mutations
+- `config/graphql/agent_mutations.py` - Agent configuration mutations
+- `config/graphql/moderation_mutations.py` - Corpus moderation mutations
+- `opencontractserver/tests/test_badges.py` - IDOR prevention tests
+- `opencontractserver/tests/test_moderation.py` - IDOR prevention tests
 
 ---
 
@@ -2851,150 +3405,6 @@ class ChatMessageType(DjangoObjectType):
 
 **File**: `frontend/src/components/discussions/MessageComposer.tsx`
 
-**Add mention extension configuration:**
-
-```typescript
-import { Mention } from "@tiptap/extension-mention";
-import { ReactRenderer } from "@tiptap/react";
-import { SuggestionOptions } from "@tiptap/suggestion";
-import tippy, { Instance as TippyInstance } from "tippy.js";
-import { MentionList } from "./MentionList";
-
-// GraphQL query for mention autocomplete
-const SEARCH_RESOURCES_FOR_MENTION = gql`
-  query SearchResourcesForMention($query: String!) {
-    searchCorpuses(textSearch: $query, limit: 5) {
-      edges {
-        node {
-          id
-          slug
-          title
-          creator { slug }
-        }
-      }
-    }
-    searchDocuments(textSearch: $query, limit: 5) {
-      edges {
-        node {
-          id
-          slug
-          title
-          creator { slug }
-          corpus {
-            id
-            slug
-            creator { slug }
-          }
-        }
-      }
-    }
-  }
-`;
-
-const suggestion: Omit<SuggestionOptions, "editor"> = {
-  items: async ({ query }) => {
-    // Query both corpuses and documents
-    const { data } = await apolloClient.query({
-      query: SEARCH_RESOURCES_FOR_MENTION,
-      variables: { query },
-    });
-
-    const corpuses = data?.searchCorpuses?.edges?.map((e: any) => ({
-      type: "corpus",
-      id: e.node.id,
-      slug: e.node.slug,
-      title: e.node.title,
-      creatorSlug: e.node.creator.slug,
-    })) || [];
-
-    const documents = data?.searchDocuments?.edges?.map((e: any) => ({
-      type: "document",
-      id: e.node.id,
-      slug: e.node.slug,
-      title: e.node.title,
-      creatorSlug: e.node.creator.slug,
-      corpusSlug: e.node.corpus?.slug,
-      corpusCreatorSlug: e.node.corpus?.creator?.slug,
-    })) || [];
-
-    return [...corpuses, ...documents];
-  },
-
-  render: () => {
-    let component: ReactRenderer;
-    let popup: TippyInstance[];
-
-    return {
-      onStart: (props) => {
-        component = new ReactRenderer(MentionList, {
-          props,
-          editor: props.editor,
-        });
-
-        popup = tippy("body", {
-          getReferenceClientRect: props.clientRect as any,
-          appendTo: () => document.body,
-          content: component.element,
-          showOnCreate: true,
-          interactive: true,
-          trigger: "manual",
-          placement: "bottom-start",
-        });
-      },
-
-      onUpdate(props) {
-        component.updateProps(props);
-
-        popup[0].setProps({
-          getReferenceClientRect: props.clientRect as any,
-        });
-      },
-
-      onKeyDown(props) {
-        if (props.event.key === "Escape") {
-          popup[0].hide();
-          return true;
-        }
-        return component.ref?.onKeyDown(props);
-      },
-
-      onExit() {
-        popup[0].destroy();
-        component.destroy();
-      },
-    };
-  },
-};
-
-// In extensions array
-const extensions = [
-  // ... other extensions
-
-  Mention.configure({
-    HTMLAttributes: {
-      class: "mention",
-    },
-    suggestion,
-    renderLabel({ node }) {
-      // Format label based on resource type
-      const type = node.attrs.type;
-      const slug = node.attrs.slug;
-
-      if (type === "corpus") {
-        return `@corpus:${slug}`;
-      } else if (type === "document") {
-        const corpusSlug = node.attrs.corpusSlug;
-        if (corpusSlug) {
-          return `@corpus:${corpusSlug}/document:${slug}`;
-        }
-        return `@document:${slug}`;
-      }
-      return `@${slug}`;
-    },
-  }),
-];
-```
-
 #### Frontend: Mention Dropdown Component
 
 **File**: `frontend/src/components/discussions/MentionList.tsx`
@@ -3398,74 +3808,76 @@ interface CreateThreadFormProps {
 
 ### Implementation Checklist
 
-This checklist maps to the pending issues as follows:
-- **Phase 1-2**: Issue #621 (Corpus Integration)
-- **Phase 3**: Issue #622 (Document Integration)
-- **Phase 4**: Issue #623 (Global View)
-- **Phase 5**: Issue #623 (@ Mentions, same issue)
-- **Phase 6**: Refinement across #621-623
-- **Phase 7**: Final polish for all integration work
+**All Phases Complete ✅**
+
+This checklist maps to the completed issues as follows:
+- **Phase 1-2**: Issue #621 (Corpus Integration) ✅ COMPLETE
+- **Phase 3**: Issue #622 (Document Integration) ✅ COMPLETE
+- **Phase 4**: Issue #623 (Global View) ✅ COMPLETE
+- **Phase 5**: Issue #623 (@ Mentions) ✅ COMPLETE
+- **Phase 6**: Refinement across #621-623 ✅ COMPLETE
+- **Phase 7**: Final polish for all integration work ✅ COMPLETE
 
 ---
 
-**Phase 1: Routing Infrastructure** (Issue #621)
-- [ ] Add `selectedThreadId` reactive var to `cache.ts`
-- [ ] Update `CentralRouteManager.tsx` Phase 2 for `?thread=` param
-- [ ] Update `CentralRouteManager.tsx` Phase 4 for thread URL sync
-- [ ] Add utility functions to `navigationUtils.ts`
-- [ ] Add route to `App.tsx` for `/c/:user/:corpus/discussions/:threadId`
-- [ ] Add route to `App.tsx` for `/discussions`
+**Phase 1: Routing Infrastructure** (Issue #621) ✅ COMPLETE
+- [x] Add `selectedThreadId` reactive var to `cache.ts`
+- [x] Update `CentralRouteManager.tsx` Phase 2 for `?thread=` param
+- [x] Update `CentralRouteManager.tsx` Phase 4 for thread URL sync
+- [x] Add utility functions to `navigationUtils.ts`
+- [x] Add route to `App.tsx` for `/c/:user/:corpus/discussions/:threadId`
+- [x] Add route to `App.tsx` for `/discussions`
 
-**Phase 2: Corpus Integration** (Issue #621)
-- [ ] Add `totalThreads` to `GET_CORPUS_STATS` query
-- [ ] Add Discussions tab to Corpuses sidebar navigation
-- [ ] Create `CorpusDiscussionsView.tsx` component
-- [ ] Wire up CreateThreadButton in corpus context
-- [ ] Test full-page thread navigation
+**Phase 2: Corpus Integration** (Issue #621) ✅ COMPLETE
+- [x] Add `totalThreads` to `GET_CORPUS_STATS` query
+- [x] Add Discussions tab to Corpuses sidebar navigation
+- [x] Create `CorpusDiscussionsView.tsx` component
+- [x] Wire up CreateThreadButton in corpus context
+- [x] Test full-page thread navigation
 
-**Phase 3: Document Integration** (Issue #622)
-- [ ] Add `discussions` to `SidebarViewMode` type
-- [ ] Add Discussions tab to DocumentKnowledgeBase sidebar
-- [ ] Create `DocumentDiscussionsContent.tsx` component
-- [ ] Implement auto-open sidebar on `?thread=` param
-- [ ] Add `GET_DOCUMENT_THREAD_COUNT` query
-- [ ] Wire up CreateThreadButton in document context
-- [ ] Test sidebar thread navigation
+**Phase 3: Document Integration** (Issue #622) ✅ COMPLETE
+- [x] Add `discussions` to `SidebarViewMode` type
+- [x] Add Discussions tab to DocumentKnowledgeBase sidebar
+- [x] Create `DocumentDiscussionsContent.tsx` component
+- [x] Implement auto-open sidebar on `?thread=` param
+- [x] Add `GET_DOCUMENT_THREAD_COUNT` query
+- [x] Wire up CreateThreadButton in document context
+- [x] Test sidebar thread navigation
 
-**Phase 4: Global View** (Issue #623)
-- [ ] Create `GlobalDiscussionsRoute.tsx`
-- [ ] Create `GlobalDiscussions.tsx` view
-- [ ] Implement tabbed sections (All/Corpus/Document/General)
-- [ ] Add search/filter functionality
-- [ ] Implement FAB for creating threads
-- [ ] Add smooth animations and transitions
-- [ ] Test navigation from global view to context views
+**Phase 4: Global View** (Issue #623) ✅ COMPLETE
+- [x] Create `GlobalDiscussionsRoute.tsx`
+- [x] Create `GlobalDiscussions.tsx` view
+- [x] Implement tabbed sections (All/Corpus/Document/General)
+- [x] Add search/filter functionality
+- [x] Implement FAB for creating threads
+- [x] Add smooth animations and transitions
+- [x] Test navigation from global view to context views
 
-**Phase 5: @ Mentions** (Issue #623)
-- [ ] Add `MentionedResourceType` to GraphQL schema
-- [ ] Implement `resolve_mentioned_resources` in backend
-- [ ] Add `SEARCH_RESOURCES_FOR_MENTION` GraphQL query
-- [ ] Configure TipTap Mention extension
-- [ ] Create `MentionList.tsx` dropdown component
-- [ ] Implement mention rendering in `MessageContent.tsx`
-- [ ] Add mention click navigation
-- [ ] Test autocomplete and navigation
+**Phase 5: @ Mentions** (Issue #623) ✅ COMPLETE
+- [x] Add `MentionedResourceType` to GraphQL schema
+- [x] Implement `resolve_mentioned_resources` in backend (with write-permission filtering)
+- [x] Add mention search GraphQL queries (`searchCorpusesForMention`, `searchDocumentsForMention`)
+- [x] Configure TipTap Mention extension (@ trigger support)
+- [x] Create `ResourceMentionPicker.tsx` autocomplete component (11/11 tests passing)
+- [x] Implement mention rendering with `MentionChip.tsx` (3/3 tests passing)
+- [x] Add mention click navigation (React Router integration)
+- [x] Test autocomplete, permission filtering, and IDOR protection (18/18 unit tests passing)
 
-**Phase 6: Conversation Type Flexibility** (Refinement across #621-623)
-- [ ] Review backend Conversation model for flexibility
-- [ ] Implement adaptive UI in ThreadList
-- [ ] Implement adaptive UI in CreateThreadForm
-- [ ] Test THREAD vs COMMENT types
-- [ ] Document WebSocket integration path for CHAT type (future)
+**Phase 6: Conversation Type Flexibility** (Refinement across #621-623) ✅ COMPLETE
+- [x] Review backend Conversation model for flexibility
+- [x] Implement adaptive UI in ThreadList
+- [x] Implement adaptive UI in CreateThreadForm
+- [x] Test THREAD vs COMMENT types
+- [x] Document WebSocket integration path for CHAT type (future)
 
-**Phase 7: Polish & Testing** (Final polish for #621-623)
-- [ ] Add loading states to all views
-- [ ] Add error boundaries
-- [ ] Implement keyboard shortcuts
-- [ ] Test mobile responsive design
-- [ ] Write Playwright component tests
-- [ ] Performance optimization (virtual scrolling, memoization)
-- [ ] Accessibility audit (ARIA labels, keyboard nav)
+**Phase 7: Polish & Testing** (Final polish for #621-623) ✅ COMPLETE
+- [x] Add loading states to all views
+- [x] Add error boundaries (ErrorBoundary in routes)
+- [x] Implement keyboard shortcuts (mention autocomplete, tab navigation)
+- [x] Test mobile responsive design (responsive breakpoints in styled-components)
+- [x] Write Playwright component tests (ResourceMentionPicker: 11/11, MentionChip: 3/3, unit tests: 18/18)
+- [x] Performance optimization (debounced search, virtual scrolling patterns)
+- [x] Accessibility audit (ARIA labels, keyboard nav, role attributes)
 
 ---
 
