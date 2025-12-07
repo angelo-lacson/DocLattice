@@ -61,7 +61,7 @@ services:
     container_name: docling-parser
 
   vector-embedder:
-    image: jscrudato/vector-embedder-microservice
+    image: ghcr.io/jsv4/vectorembeddermicroservice:latest
     container_name: vector-embedder
     environment:
       PORT: 8000

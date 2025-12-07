@@ -1,7 +1,8 @@
-import React from "react";
-import { Label, Popup } from "semantic-ui-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Label } from "semantic-ui-react";
 import * as LucideIcons from "lucide-react";
 import styled from "styled-components";
+import { computePosition, flip, shift, offset, arrow } from "@floating-ui/dom";
 
 const StyledBadge = styled(Label)<{ $badgeColor: string }>`
   &.ui.label {
@@ -24,6 +25,19 @@ const StyledBadge = styled(Label)<{ $badgeColor: string }>`
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
   }
+`;
+
+const PopupContainer = styled.div<{ $show: boolean }>`
+  position: absolute;
+  z-index: 10000;
+  background: white;
+  padding: 1em;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e2e8f0;
+  opacity: ${(props) => (props.$show ? 1 : 0)};
+  pointer-events: ${(props) => (props.$show ? "auto" : "none")};
+  transition: opacity 0.2s ease;
 `;
 
 const BadgeContent = styled.div`
@@ -81,52 +95,94 @@ export const Badge: React.FC<BadgeProps> = ({
   size = "small",
   showTooltip = true,
 }) => {
+  const [showPopup, setShowPopup] = useState(false);
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
   // Dynamically get the icon component from lucide-react
   const IconComponent = (LucideIcons[badge.icon as keyof typeof LucideIcons] ||
     LucideIcons.Award) as React.ComponentType<{ size: number }>;
 
+  // Update popup position using floating-ui
+  const updatePosition = async () => {
+    if (!badgeRef.current || !popupRef.current) return;
+
+    const { x, y } = await computePosition(badgeRef.current, popupRef.current, {
+      placement: "top",
+      middleware: [offset(8), flip(), shift({ padding: 8 })],
+    });
+
+    Object.assign(popupRef.current.style, {
+      left: `${x}px`,
+      top: `${y}px`,
+    });
+  };
+
+  // Update position when popup shows
+  useEffect(() => {
+    if (showPopup) {
+      updatePosition();
+    }
+  }, [showPopup]);
+
+  const handleMouseEnter = () => {
+    setShowPopup(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowPopup(false);
+  };
+
   const badgeElement = (
-    <StyledBadge $badgeColor={badge.color || "#05313d"} size={size}>
-      <IconComponent size={size === "mini" ? 12 : 14} />
-      {badge.name}
-    </StyledBadge>
+    <div
+      ref={badgeRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={{ display: "inline-block" }}
+    >
+      <StyledBadge $badgeColor={badge.color || "#05313d"} size={size}>
+        <IconComponent size={size === "mini" ? 12 : 14} />
+        {badge.name}
+      </StyledBadge>
+    </div>
   );
 
   if (!showTooltip) {
-    return badgeElement;
+    return (
+      <StyledBadge $badgeColor={badge.color || "#05313d"} size={size}>
+        <IconComponent size={size === "mini" ? 12 : 14} />
+        {badge.name}
+      </StyledBadge>
+    );
   }
 
-  // Create detailed popup content
-  const popupContent = (
-    <BadgeContent>
-      <BadgeTitle>{badge.name}</BadgeTitle>
-      <BadgeDescription>{badge.description}</BadgeDescription>
-      <BadgeMetadata>
-        {badge.badgeType === "CORPUS" && badge.corpus && (
-          <div>Corpus: {badge.corpus.title}</div>
-        )}
-        {badge.badgeType === "GLOBAL" && <div>Global Badge</div>}
-        {badge.isAutoAwarded && <div>Auto-awarded</div>}
-        {badge.awardedAt && (
-          <div>Awarded: {new Date(badge.awardedAt).toLocaleDateString()}</div>
-        )}
-        {badge.awardedBy && <div>By: {badge.awardedBy.username}</div>}
-      </BadgeMetadata>
-    </BadgeContent>
-  );
-
   return (
-    <Popup
-      trigger={badgeElement}
-      content={popupContent}
-      position="top center"
-      hoverable
-      inverted={false}
-      style={{
-        padding: "1em",
-        borderRadius: "12px",
-        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
-      }}
-    />
+    <>
+      {badgeElement}
+      <PopupContainer
+        ref={popupRef}
+        $show={showPopup}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <BadgeContent>
+          <BadgeTitle>{badge.name}</BadgeTitle>
+          <BadgeDescription>{badge.description}</BadgeDescription>
+          <BadgeMetadata>
+            {badge.badgeType === "CORPUS" && badge.corpus && (
+              <div>Corpus: {badge.corpus.title}</div>
+            )}
+            {badge.badgeType === "GLOBAL" && <div>Global Badge</div>}
+            {badge.isAutoAwarded && <div>Auto-awarded</div>}
+            {badge.awardedAt && (
+              <div>
+                Awarded: {new Date(badge.awardedAt).toLocaleDateString()}
+              </div>
+            )}
+            {badge.awardedBy && <div>By: {badge.awardedBy.username}</div>}
+          </BadgeMetadata>
+        </BadgeContent>
+      </PopupContainer>
+    </>
   );
 };

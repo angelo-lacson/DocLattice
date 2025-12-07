@@ -16,7 +16,7 @@ from doclatticeserver.annotations.models import (
     LabelSet,
 )
 from doclatticeserver.corpuses.models import Corpus
-from doclatticeserver.documents.models import Document
+from doclatticeserver.documents.models import Document, DocumentPath
 from doclatticeserver.utils.analyzer import import_annotations_from_analysis
 
 User = get_user_model()
@@ -43,7 +43,18 @@ class AnalysisAnnotationImportTestCase(TestCase):
         self.corpus = Corpus.objects.create(
             title="Test Corpus", creator=self.user, is_public=False
         )
-        self.corpus.documents.add(self.doc)
+        self.corpus.add_document(document=self.doc, user=self.user)
+
+        # Create DocumentPath to link document to corpus in dual-tree versioning
+        DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/test_document.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
 
         # Setup analyzer infrastructure
         self.gremlin = GremlinEngine.objects.create(

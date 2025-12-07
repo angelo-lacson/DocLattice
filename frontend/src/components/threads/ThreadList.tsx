@@ -12,6 +12,9 @@ import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { threadSortAtom, threadFiltersAtom } from "../../atoms/threadAtoms";
 import { ThreadListItem } from "./ThreadListItem";
+import { ThreadSortDropdown } from "./ThreadSortDropdown";
+import { ThreadFilterToggles } from "./ThreadFilterToggles";
+import { CreateThreadButton } from "./CreateThreadButton";
 import { calculateThreadUpvotes, getLastActivityTime } from "./utils";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
@@ -22,36 +25,61 @@ interface ThreadListProps {
   corpusId?: string;
   documentId?: string;
   embedded?: boolean;
+  /** Show create button (requires corpusId) */
+  showCreateButton?: boolean;
+  /** Show moderator filters (deleted threads) */
+  showModeratorFilters?: boolean;
+  /** Optional callback when thread is clicked (overrides default navigation) */
+  onThreadClick?: (threadId: string) => void;
+  /** Search query to filter threads by title */
+  searchQuery?: string;
+  /** Filter for threads with/without corpus */
+  hasCorpus?: boolean;
+  /** Filter for threads with/without document */
+  hasDocument?: boolean;
 }
 
 const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: ${spacing.md};
-  padding: ${(props) => (props.$embedded ? spacing.md : spacing.lg)};
-  max-width: 1200px;
+  gap: 1rem;
+  padding: ${(props) => (props.$embedded ? "1rem" : "1.5rem")};
+  max-width: ${(props) => (props.$embedded ? "100%" : "1200px")};
   margin: 0 auto;
   width: 100%;
 
-  @media (max-width: 640px) {
-    padding: ${spacing.sm};
-    gap: ${spacing.sm};
+  @media (max-width: 768px) {
+    padding: ${(props) => (props.$embedded ? "0.75rem" : "1rem")};
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+    gap: 0.625rem;
   }
 `;
 
 const ThreadGrid = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${spacing.sm};
+  gap: 0.75rem;
+
+  @media (max-width: 480px) {
+    gap: 0.5rem;
+  }
 `;
 
 const ThreadListHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: ${spacing.md};
+  margin-bottom: 1rem;
   flex-wrap: wrap;
-  gap: ${spacing.sm};
+  gap: 0.75rem;
+
+  @media (max-width: 768px) {
+    margin-bottom: 0.75rem;
+  }
 `;
 
 const Title = styled.h2`
@@ -65,6 +93,24 @@ const Title = styled.h2`
   }
 `;
 
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 900px) {
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 0.5rem;
+  }
+`;
+
 /**
  * Thread list component
  * Displays list of discussion threads with sorting, filtering, and pagination
@@ -73,6 +119,12 @@ export function ThreadList({
   corpusId,
   documentId,
   embedded = false,
+  showCreateButton = true,
+  showModeratorFilters = false,
+  onThreadClick,
+  searchQuery,
+  hasCorpus,
+  hasDocument,
 }: ThreadListProps) {
   const [sortBy] = useAtom(threadSortAtom);
   const [filters] = useAtom(threadFiltersAtom);
@@ -87,6 +139,7 @@ export function ThreadList({
       documentId,
       conversationType: "THREAD",
       limit: 20,
+      title_Contains: searchQuery || undefined,
     },
     // Refetch every 30 seconds for new threads
     pollInterval: 30000,
@@ -99,6 +152,18 @@ export function ThreadList({
       data?.conversations?.edges
         ?.map((e) => e?.node)
         .filter((node): node is NonNullable<typeof node> => node != null) || [];
+
+    // Apply corpus/document context filters
+    if (hasCorpus === true) {
+      threads = threads.filter((t) => t?.chatWithCorpus != null);
+    } else if (hasCorpus === false) {
+      threads = threads.filter((t) => t?.chatWithCorpus == null);
+    }
+    if (hasDocument === true) {
+      threads = threads.filter((t) => t?.chatWithDocument != null);
+    } else if (hasDocument === false) {
+      threads = threads.filter((t) => t?.chatWithDocument == null);
+    }
 
     // Apply filters
     if (!filters.showLocked) {
@@ -152,7 +217,7 @@ export function ThreadList({
     });
 
     return threads;
-  }, [data, sortBy, filters]);
+  }, [data, sortBy, filters, hasCorpus, hasDocument]);
 
   // Handle load more for pagination
   const handleLoadMore = () => {
@@ -198,6 +263,9 @@ export function ThreadList({
         {!embedded && (
           <ThreadListHeader>
             <Title>Discussions</Title>
+            {showCreateButton && corpusId && (
+              <CreateThreadButton corpusId={corpusId} />
+            )}
           </ThreadListHeader>
         )}
         <PlaceholderCard
@@ -219,7 +287,13 @@ export function ThreadList({
       {!embedded && (
         <ThreadListHeader>
           <Title>Discussions</Title>
-          {/* TODO: Add sort dropdown and filters in future */}
+          <HeaderActions>
+            <ThreadSortDropdown />
+            <ThreadFilterToggles showModeratorFilters={showModeratorFilters} />
+            {showCreateButton && corpusId && (
+              <CreateThreadButton corpusId={corpusId} />
+            )}
+          </HeaderActions>
         </ThreadListHeader>
       )}
 
@@ -230,6 +304,7 @@ export function ThreadList({
             thread={thread}
             corpusId={corpusId}
             compact={embedded}
+            onThreadClick={onThreadClick}
           />
         ))}
       </ThreadGrid>

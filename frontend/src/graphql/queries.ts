@@ -20,6 +20,7 @@ import {
   AnalysisRowType,
   ConversationType,
   ConversationTypeConnection,
+  ConversationTypeEnum,
   PipelineComponentType,
   ChatMessageType,
   UserType,
@@ -32,6 +33,7 @@ import { WebSocketSources } from "../components/knowledge_base/document/right_tr
 export interface RequestDocumentsInputs {
   textSearch?: string;
   corpusId?: string;
+  inFolderId?: string; // Use "__root__" for root documents, folder ID, or omit for all
   annotateDocLabels?: boolean;
   hasLabelWithId?: string;
 }
@@ -46,6 +48,7 @@ export interface RequestDocumentsOutputs {
 export const GET_DOCUMENTS = gql`
   query (
     $inCorpusWithId: String
+    $inFolderId: String
     $cursor: String
     $limit: Int
     $textSearch: String
@@ -56,6 +59,7 @@ export const GET_DOCUMENTS = gql`
   ) {
     documents(
       inCorpusWithId: $inCorpusWithId
+      inFolderId: $inFolderId
       textSearch: $textSearch
       hasLabelWithId: $hasLabelWithId
       hasAnnotationsWithIds: $hasAnnotationsWithIds
@@ -81,6 +85,10 @@ export const GET_DOCUMENTS = gql`
           }
           is_selected @client
           is_open @client
+          hasVersionHistory
+          versionCount
+          isLatestVersion
+          canViewHistory
           doc_label_annotations: docAnnotations(
             annotationLabel_LabelType: DOC_TYPE_LABEL
           ) @include(if: $annotateDocLabels) {
@@ -549,6 +557,7 @@ export interface CorpusStats {
   totalAnalyses: number;
   totalExtracts: number;
   totalAnnotations: number;
+  totalThreads?: number; // Optional for backward compatibility with backend
 }
 
 export interface GetCorpusStatsOutputType {
@@ -563,6 +572,7 @@ export const GET_CORPUS_STATS = gql`
       totalAnalyses
       totalExtracts
       totalAnnotations
+      totalThreads
     }
   }
 `;
@@ -2153,6 +2163,8 @@ export interface GetConversationsInputs {
   title_Contains?: string;
   createdAt_Gte?: string;
   createdAt_Lte?: string;
+  hasCorpus?: boolean;
+  hasDocument?: boolean;
 }
 
 /**
@@ -2175,7 +2187,9 @@ export const GET_CONVERSATIONS = gql`
     $title_Contains: String
     $createdAt_Gte: DateTime
     $createdAt_Lte: DateTime
-    $conversationType: String
+    $conversationType: ConversationTypeEnum
+    $hasCorpus: Boolean
+    $hasDocument: Boolean
   ) {
     conversations(
       documentId: $documentId
@@ -2186,6 +2200,8 @@ export const GET_CONVERSATIONS = gql`
       createdAt_Gte: $createdAt_Gte
       createdAt_Lte: $createdAt_Lte
       conversationType: $conversationType
+      hasCorpus: $hasCorpus
+      hasDocument: $hasDocument
     ) {
       edges {
         node {
@@ -2203,6 +2219,12 @@ export const GET_CONVERSATIONS = gql`
           chatWithCorpus {
             id
             title
+            slug
+            creator {
+              id
+              slug
+              username
+            }
           }
           chatWithDocument {
             id
@@ -2271,6 +2293,12 @@ export const GET_THREAD_DETAIL = gql`
       chatWithCorpus {
         id
         title
+        slug
+        creator {
+          id
+          slug
+          username
+        }
       }
       chatWithDocument {
         id
@@ -2299,8 +2327,16 @@ export const GET_THREAD_DETAIL = gql`
         id
         msgType
         agentType
+        agentConfiguration {
+          id
+          name
+          description
+          badgeConfig
+          avatarUrl
+        }
         content
         state
+        data
         createdAt
         created
         modified
@@ -2318,13 +2354,231 @@ export const GET_THREAD_DETAIL = gql`
         # Voting
         upvoteCount
         downvoteCount
-        userVote
+        # userVote  # TODO: Backend field not implemented yet
 
         # Soft delete
         deletedAt
-        deletedBy {
+
+        # Mentioned resources (Issue #623)
+        mentionedResources {
+          type
+          id
+          slug
+          title
+          url
+          corpus {
+            slug
+            title
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Search users for @ mention autocomplete
+ * Backend filters results to active users only
+ * Part of Issue #623 - @ Mentions Feature (Extended)
+ */
+export interface SearchUsersForMentionInput {
+  textSearch: string;
+}
+
+export interface SearchUsersForMentionOutput {
+  searchUsersForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        username: string;
+        email: string | null;
+        slug: string | null;
+      };
+    }>;
+  };
+}
+
+export const SEARCH_USERS_FOR_MENTION = gql`
+  query SearchUsersForMention($textSearch: String!) {
+    searchUsersForMention(textSearch: $textSearch, first: 10) {
+      edges {
+        node {
           id
           username
+          email
+          slug
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Search corpuses for @ mention autocomplete
+ * Backend filters results to only corpuses visible to the user via .visible_to_user()
+ * Part of Issue #623 - @ Mentions Feature
+ */
+export interface SearchCorpusesForMentionInput {
+  textSearch: string;
+}
+
+export interface SearchCorpusesForMentionOutput {
+  searchCorpusesForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        slug: string;
+        title: string;
+        creator: {
+          slug: string;
+        };
+      };
+    }>;
+  };
+}
+
+export const SEARCH_CORPUSES_FOR_MENTION = gql`
+  query SearchCorpusesForMention($textSearch: String!) {
+    searchCorpusesForMention(textSearch: $textSearch, first: 10) {
+      edges {
+        node {
+          id
+          slug
+          title
+          creator {
+            slug
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Search documents for @ mention autocomplete
+ * Backend filters results to only documents visible to the user via .visible_to_user()
+ * Part of Issue #623 - @ Mentions Feature
+ */
+export interface SearchDocumentsForMentionInput {
+  textSearch: string;
+}
+
+export interface SearchDocumentsForMentionOutput {
+  searchDocumentsForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        slug: string;
+        title: string;
+        creator: {
+          slug: string;
+        };
+        corpusSet: {
+          edges: Array<{
+            node: {
+              id: string;
+              slug: string;
+              title: string;
+              creator: {
+                slug: string;
+              };
+            };
+          }>;
+        };
+      };
+    }>;
+  };
+}
+
+export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
+  query SearchDocumentsForMention($textSearch: String!) {
+    searchDocumentsForMention(textSearch: $textSearch, first: 10) {
+      edges {
+        node {
+          id
+          slug
+          title
+          creator {
+            slug
+          }
+          corpusSet(first: 1) {
+            edges {
+              node {
+                id
+                slug
+                title
+                creator {
+                  slug
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Search annotations for @ mention autocomplete
+ * Backend filters results to only annotations visible to the user via .visible_to_user()
+ * Part of Issue #623 - @ Mentions Feature (Extended)
+ */
+export interface SearchAnnotationsForMentionInput {
+  textSearch: string;
+  corpusId?: string;
+}
+
+export interface SearchAnnotationsForMentionOutput {
+  searchAnnotationsForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        rawText: string | null;
+        page: number;
+        annotationLabel: {
+          id: string;
+          text: string;
+          color: string;
+        };
+        document: {
+          id: string;
+          title: string;
+        };
+        corpus: {
+          id: string;
+          title: string;
+        } | null;
+      };
+    }>;
+  };
+}
+
+export const SEARCH_ANNOTATIONS_FOR_MENTION = gql`
+  query SearchAnnotationsForMention($textSearch: String!, $corpusId: ID) {
+    searchAnnotationsForMention(
+      textSearch: $textSearch
+      corpusId: $corpusId
+      first: 10
+    ) {
+      edges {
+        node {
+          id
+          rawText
+          page
+          annotationLabel {
+            id
+            text
+            color
+          }
+          document {
+            id
+            title
+          }
+          corpus {
+            id
+            title
+          }
         }
       }
     }
@@ -2908,9 +3162,22 @@ export const GET_CHAT_MESSAGES = gql`
     chatMessages(conversationId: $conversationId, orderBy: $orderBy) {
       id
       msgType
+      agentType
+      agentConfiguration {
+        id
+        name
+        description
+        badgeConfig
+        avatarUrl
+      }
       content
       state
       data
+      creator {
+        id
+        username
+        email
+      }
     }
   }
 `;
@@ -3112,6 +3379,7 @@ export const GET_ME = gql`
       lastName
       phone
       isUsageCapped # Crucially, fetch this field
+      isProfilePublic # Issue #611
     }
   }
 `;
@@ -3123,6 +3391,49 @@ export interface GetMeOutputs {
 
 // No inputs needed for this query
 export interface GetMeInputs {}
+
+// Issue #611 - User Profile Page
+export const GET_USER = gql`
+  query GetUser($slug: String!) {
+    userBySlug(slug: $slug) {
+      id
+      username
+      slug
+      name
+      firstName
+      lastName
+      email
+      isProfilePublic
+      reputationGlobal
+      totalMessages
+      totalThreadsCreated
+      totalAnnotationsCreated
+      totalDocumentsUploaded
+    }
+  }
+`;
+
+export interface GetUserInput {
+  slug: string;
+}
+
+export interface GetUserOutput {
+  userBySlug: {
+    id: string;
+    username: string;
+    slug: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    isProfilePublic: boolean;
+    reputationGlobal: number;
+    totalMessages: number;
+    totalThreadsCreated: number;
+    totalAnnotationsCreated: number;
+    totalDocumentsUploaded: number;
+  } | null;
+}
 
 // ID-based resolution queries for navigation fallback
 export const GET_CORPUS_BY_ID_FOR_REDIRECT = gql`
@@ -3221,8 +3532,8 @@ export interface GetDocumentByIdForRedirectOutput {
 
 export const GET_BADGES = gql`
   query GetBadges(
-    $badgeType: String
-    $corpusId: ID
+    $badgeType: BadgesBadgeBadgeTypeChoices
+    $corpusId: String
     $isAutoAwarded: Boolean
     $limit: Int
     $cursor: String
@@ -3309,9 +3620,9 @@ export interface GetBadgesOutput {
 
 export const GET_USER_BADGES = gql`
   query GetUserBadges(
-    $userId: ID
-    $badgeId: ID
-    $corpusId: ID
+    $userId: String
+    $badgeId: String
+    $corpusId: String
     $limit: Int
     $cursor: String
   ) {
@@ -3407,6 +3718,56 @@ export interface GetUserBadgesOutput {
   };
 }
 
+export const GET_BADGE_CRITERIA_TYPES = gql`
+  query GetBadgeCriteriaTypes($scope: String) {
+    badgeCriteriaTypes(scope: $scope) {
+      typeId
+      name
+      description
+      scope
+      fields {
+        name
+        label
+        fieldType
+        required
+        description
+        minValue
+        maxValue
+        allowedValues
+      }
+      implemented
+    }
+  }
+`;
+
+export interface GetBadgeCriteriaTypesInput {
+  scope?: string;
+}
+
+export interface CriteriaField {
+  name: string;
+  label: string;
+  fieldType: string;
+  required: boolean;
+  description?: string;
+  minValue?: number;
+  maxValue?: number;
+  allowedValues?: string[];
+}
+
+export interface CriteriaTypeDefinition {
+  typeId: string;
+  name: string;
+  description: string;
+  scope: string;
+  fields: CriteriaField[];
+  implemented: boolean;
+}
+
+export interface GetBadgeCriteriaTypesOutput {
+  badgeCriteriaTypes: CriteriaTypeDefinition[];
+}
+
 /**
  * ============================================================================
  * NOTIFICATION QUERIES
@@ -3416,7 +3777,7 @@ export interface GetUserBadgesOutput {
 export const GET_NOTIFICATIONS = gql`
   query GetNotifications(
     $isRead: Boolean
-    $notificationType: String
+    $notificationType: NotificationsNotificationNotificationTypeChoices
     $limit: Int
     $cursor: String
   ) {
@@ -3515,3 +3876,250 @@ export interface GetNotificationsOutput {
 export interface GetUnreadNotificationCountOutput {
   unreadNotificationCount: number;
 }
+
+// ============================================================================
+// Corpus Engagement Metrics Queries (Issue #579)
+// ============================================================================
+
+export interface CorpusEngagementMetrics {
+  totalThreads: number;
+  activeThreads: number;
+  totalMessages: number;
+  messagesLast7Days: number;
+  messagesLast30Days: number;
+  uniqueContributors: number;
+  activeContributors30Days: number;
+  totalUpvotes: number;
+  avgMessagesPerThread: number;
+  lastUpdated: string;
+}
+
+export interface GetCorpusEngagementMetricsInput {
+  corpusId: string;
+}
+
+export interface GetCorpusEngagementMetricsOutput {
+  corpus: {
+    id: string;
+    title: string;
+    engagementMetrics: CorpusEngagementMetrics | null;
+  };
+}
+
+export const GET_CORPUS_ENGAGEMENT_METRICS = gql`
+  query GetCorpusEngagementMetrics($corpusId: ID!) {
+    corpus(id: $corpusId) {
+      id
+      title
+      engagementMetrics {
+        totalThreads
+        activeThreads
+        totalMessages
+        messagesLast7Days
+        messagesLast30Days
+        uniqueContributors
+        activeContributors30Days
+        totalUpvotes
+        avgMessagesPerThread
+        lastUpdated
+      }
+    }
+  }
+`;
+
+// ============================================================================
+// Conversation Search Queries (Issue #580)
+// ============================================================================
+
+export interface SearchConversationsInput {
+  query: string;
+  corpusId?: string;
+  documentId?: string;
+  conversationType?: string;
+  topK?: number;
+  first?: number;
+  after?: string;
+  last?: number;
+  before?: string;
+}
+
+export interface ConversationSearchResult {
+  id: string;
+  title: string;
+  description: string;
+  conversationType?: ConversationTypeEnum;
+  createdAt: string;
+  updatedAt: string;
+  created: string; // Alias for compatibility with ConversationType
+  modified: string; // Alias for compatibility with ConversationType
+  creator: {
+    id: string;
+    username: string;
+  };
+  chatMessages: {
+    totalCount: number;
+  };
+  isPinned: boolean;
+  isLocked: boolean;
+  deletedAt: string | null;
+  chatWithCorpus?: {
+    id: string;
+    title: string;
+    slug: string;
+    creator: {
+      slug: string;
+    };
+  };
+  chatWithDocument?: {
+    id: string;
+    title: string;
+    slug: string;
+    creator: {
+      slug: string;
+    };
+  };
+}
+
+export interface SearchConversationsOutput {
+  searchConversations: {
+    edges: Array<{
+      node: ConversationSearchResult;
+      cursor: string;
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string | null;
+      endCursor: string | null;
+    };
+    totalCount: number;
+  };
+}
+
+export const SEARCH_CONVERSATIONS = gql`
+  query SearchConversations(
+    $query: String!
+    $corpusId: ID
+    $documentId: ID
+    $conversationType: String
+    $topK: Int
+    $first: Int
+    $after: String
+    $last: Int
+    $before: String
+  ) {
+    searchConversations(
+      query: $query
+      corpusId: $corpusId
+      documentId: $documentId
+      conversationType: $conversationType
+      topK: $topK
+      first: $first
+      after: $after
+      last: $last
+      before: $before
+    ) {
+      edges {
+        node {
+          id
+          title
+          description
+          conversationType
+          createdAt
+          updatedAt
+          created
+          modified
+          creator {
+            id
+            username
+          }
+          chatMessages {
+            totalCount
+          }
+          isPinned
+          isLocked
+          deletedAt
+          chatWithCorpus {
+            id
+            title
+            slug
+            creator {
+              slug
+            }
+          }
+          chatWithDocument {
+            id
+            title
+            slug
+            creator {
+              slug
+            }
+          }
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      totalCount
+    }
+  }
+`;
+
+/**
+ * Search agents for @ mention autocomplete
+ * Backend filters results to active agents visible to the user
+ * (global agents + corpus-scoped agents for the given corpus)
+ * Part of Issue #623 - @ Mentions Feature (Extended) - Agent Mentions
+ */
+export interface SearchAgentsForMentionInput {
+  textSearch?: string;
+  corpusId?: string;
+}
+
+export interface SearchAgentsForMentionOutput {
+  searchAgentsForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        name: string;
+        slug: string;
+        description: string;
+        scope: "GLOBAL" | "CORPUS";
+        mentionFormat: string | null;
+        corpus: {
+          id: string;
+          title: string;
+        } | null;
+      };
+    }>;
+  };
+}
+
+export const SEARCH_AGENTS_FOR_MENTION = gql`
+  query SearchAgentsForMention($textSearch: String, $corpusId: ID) {
+    searchAgentsForMention(
+      textSearch: $textSearch
+      corpusId: $corpusId
+      first: 10
+    ) {
+      edges {
+        node {
+          id
+          name
+          slug
+          description
+          scope
+          mentionFormat
+          corpus {
+            id
+            title
+          }
+        }
+      }
+    }
+  }
+`;

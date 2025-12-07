@@ -7,18 +7,21 @@ import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { ThreadBadge } from "./ThreadBadge";
 import { RelativeTime } from "./RelativeTime";
+import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 
 interface ThreadListItemProps {
   thread: ConversationType;
   corpusId?: string;
   compact?: boolean;
+  /** Optional callback when thread is clicked (overrides default navigation) */
+  onThreadClick?: (threadId: string) => void;
 }
 
 const ThreadCard = styled.div<{ $isPinned?: boolean; $isDeleted?: boolean }>`
   background: ${color.N2};
   border: 1px solid ${color.N4};
   border-radius: 8px;
-  padding: ${spacing.md};
+  padding: 1rem;
   cursor: pointer;
   transition: all 0.2s;
 
@@ -43,14 +46,14 @@ const ThreadCard = styled.div<{ $isPinned?: boolean; $isDeleted?: boolean }>`
   }
 
   @media (max-width: 640px) {
-    padding: ${spacing.sm};
+    padding: 0.875rem;
   }
 `;
 
 const BadgeRow = styled.div`
   display: flex;
-  gap: ${spacing.xs};
-  margin-bottom: ${spacing.sm};
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
   flex-wrap: wrap;
 `;
 
@@ -58,7 +61,7 @@ const ThreadTitle = styled.h3`
   font-size: 18px;
   font-weight: 600;
   color: ${color.N10};
-  margin: 0 0 ${spacing.xs} 0;
+  margin: 0 0 0.375rem 0;
   line-height: 1.4;
 
   @media (max-width: 640px) {
@@ -69,7 +72,7 @@ const ThreadTitle = styled.h3`
 const ThreadDescription = styled.p`
   font-size: 14px;
   color: ${color.N7};
-  margin: 0 0 ${spacing.md} 0;
+  margin: 0 0 1rem 0;
   line-height: 1.5;
 
   /* Truncate to 2 lines */
@@ -82,13 +85,13 @@ const ThreadDescription = styled.p`
 const ThreadMeta = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.md};
+  gap: 1rem;
   font-size: 13px;
   color: ${color.N6};
   flex-wrap: wrap;
 
   @media (max-width: 640px) {
-    gap: ${spacing.xs};
+    gap: 0.5rem;
     font-size: 12px;
   }
 `;
@@ -108,19 +111,41 @@ const Separator = styled.span`
 `;
 
 /**
- * Individual thread card in list view
+ * Individual thread card in list view.
+ * Memoized to prevent unnecessary re-renders when thread list updates.
  */
-export function ThreadListItem({
+export const ThreadListItem = React.memo(function ThreadListItem({
   thread,
   corpusId,
   compact = false,
+  onThreadClick,
 }: ThreadListItemProps) {
   const navigate = useNavigate();
 
   const handleClick = () => {
-    const corpus = corpusId || thread.chatWithCorpus?.id;
-    if (corpus) {
-      navigate(`/corpus/${corpus}/discussions/${thread.id}`);
+    // Use callback if provided, otherwise use default navigation
+    if (onThreadClick) {
+      onThreadClick(thread.id);
+    } else {
+      // Use the corpus from thread's chatWithCorpus (has full data with slug)
+      const corpus = thread.chatWithCorpus;
+      if (corpus) {
+        // Use navigation utility for proper slug-based URL
+        const url = getCorpusThreadUrl(corpus, thread.id);
+        if (url !== "#") {
+          navigate(url);
+        } else {
+          console.warn(
+            "[ThreadListItem] Cannot navigate - corpus missing slug data",
+            corpus
+          );
+        }
+      } else {
+        console.warn(
+          "[ThreadListItem] Cannot navigate - thread has no corpus",
+          thread
+        );
+      }
     }
   };
 
@@ -183,4 +208,4 @@ export function ThreadListItem({
       </ThreadMeta>
     </ThreadCard>
   );
-}
+});

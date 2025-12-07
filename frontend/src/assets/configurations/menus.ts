@@ -1,5 +1,11 @@
 export const header_menu_items = [
   {
+    title: "Discover",
+    route: "/",
+    protected: false,
+    id: "discover_menu_button",
+  },
+  {
     title: "Corpuses",
     route: "/corpuses",
     protected: false,
@@ -28,5 +34,11 @@ export const header_menu_items = [
     route: "/extracts",
     protected: false,
     id: "extract_menu_button",
+  },
+  {
+    title: "Leaderboard",
+    route: "/leaderboard",
+    protected: false,
+    id: "leaderboard_menu_button",
   },
 ];
