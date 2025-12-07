@@ -499,6 +499,10 @@ class Corpus(TreeNode):
                 creator=user,
             )
 
+            # Maintain M2M relationship for backwards compatibility
+            # This allows legacy queries like Document.objects.filter(corpus=...)
+            self.documents.add(corpus_copy)
+
             logger.info(
                 f"Added corpus-isolated doc {corpus_copy.pk} to corpus {self.pk} at {path}"
             )
@@ -1137,15 +1141,73 @@ class CorpusFolder(TreeNode):
         return self.descendants(include_self=True)
 
     def get_document_count(self) -> int:
-        """Get count of documents directly in this folder (not including subfolders)."""
-        return self.document_assignments.count()
+        """
+        Get count of documents directly in this folder (not including subfolders).
+
+        Uses DocumentPath (new versioning system) as primary source with proper
+        filtering for is_current=True, is_deleted=False. Falls back to
+        CorpusDocumentFolder only for documents without DocumentPath records.
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        # Get active documents from DocumentPath (primary source)
+        doc_ids_from_paths = set(
+            DocumentPath.objects.filter(
+                folder=self, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+        )
+
+        # Get documents from legacy CorpusDocumentFolder that don't have DocumentPath
+        legacy_doc_ids = set(
+            self.document_assignments.values_list("document_id", flat=True)
+        )
+
+        # For legacy docs, only include ones that don't have a DocumentPath entry
+        # (if they have DocumentPath entries, we should trust those instead)
+        docs_with_any_path = set(
+            DocumentPath.objects.filter(
+                document_id__in=legacy_doc_ids, corpus=self.corpus
+            ).values_list("document_id", flat=True)
+        )
+        legacy_only_docs = legacy_doc_ids - docs_with_any_path
+
+        return len(doc_ids_from_paths | legacy_only_docs)
 
     def get_descendant_document_count(self) -> int:
-        """Get count of documents in this folder and all subfolders."""
+        """
+        Get count of documents in this folder and all subfolders.
+
+        Uses DocumentPath (new versioning system) as primary source with proper
+        filtering for is_current=True, is_deleted=False. Falls back to
+        CorpusDocumentFolder only for documents without DocumentPath records.
+        """
+        from opencontractserver.documents.models import DocumentPath
+
         descendant_folders = self.get_descendant_folders()
-        return CorpusDocumentFolder.objects.filter(
-            folder__in=descendant_folders
-        ).count()
+
+        # Get active documents from DocumentPath (primary source)
+        doc_ids_from_paths = set(
+            DocumentPath.objects.filter(
+                folder__in=descendant_folders, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+        )
+
+        # Get documents from legacy CorpusDocumentFolder
+        legacy_doc_ids = set(
+            CorpusDocumentFolder.objects.filter(
+                folder__in=descendant_folders
+            ).values_list("document_id", flat=True)
+        )
+
+        # For legacy docs, only include ones that don't have a DocumentPath entry
+        docs_with_any_path = set(
+            DocumentPath.objects.filter(
+                document_id__in=legacy_doc_ids, corpus=self.corpus
+            ).values_list("document_id", flat=True)
+        )
+        legacy_only_docs = legacy_doc_ids - docs_with_any_path
+
+        return len(doc_ids_from_paths | legacy_only_docs)
 
     def __str__(self):
         return f"{self.corpus.title}/{self.get_path()}"
