@@ -298,6 +298,18 @@ class Relationship(BaseOCModel):
                     "structural set, not both or neither"
                 ),
             ),
+            # Ensure relationships in a structural_set must have structural=True
+            # This enforces data integrity consistent with Annotation model
+            django.db.models.CheckConstraint(
+                check=(
+                    django.db.models.Q(structural_set__isnull=True)
+                    | django.db.models.Q(structural=True)
+                ),
+                name="rel_structural_set_requires_structural_flag",
+                violation_error_message=(
+                    "Relationships in a structural_set must have structural=True"
+                ),
+            ),
         ]
 
     def clean(self) -> None:
@@ -901,6 +913,18 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
                 violation_error_message=(
                     "An annotation must belong to either a document or a "
                     "structural set, not both or neither"
+                ),
+            ),
+            # Ensure annotations in a structural_set must have structural=True
+            # This enforces data integrity for the assumption in query_optimizer.py
+            django.db.models.CheckConstraint(
+                check=(
+                    django.db.models.Q(structural_set__isnull=True)
+                    | django.db.models.Q(structural=True)
+                ),
+                name="structural_set_requires_structural_flag",
+                violation_error_message=(
+                    "Annotations in a structural_set must have structural=True"
                 ),
             ),
         ]

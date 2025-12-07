@@ -163,21 +163,23 @@ class CreateThreadMessageMutation(graphene.Mutation):
             conversation_pk = from_global_id(conversation_id)[1]
             conversation = Conversation.objects.get(pk=conversation_pk)
 
-            # Check if conversation is locked
-            if conversation.is_locked:
-                return CreateThreadMessageMutation(
-                    ok=False,
-                    message="This thread is locked and cannot accept new messages",
-                    obj=None,
-                )
-
-            # Check if user has permission to read the conversation (can post if can read)
+            # SECURITY: Check permissions FIRST to prevent information disclosure
+            # about locked thread status via different error messages (IDOR prevention).
+            # Uses same generic message for both permission denied and locked states.
             if not user_has_permission_for_obj(
                 user, conversation, PermissionTypes.READ
             ):
                 return CreateThreadMessageMutation(
                     ok=False,
-                    message="You do not have permission to post in this thread",
+                    message="Cannot post in this thread",
+                    obj=None,
+                )
+
+            # Check if conversation is locked (only after verifying user has access)
+            if conversation.is_locked:
+                return CreateThreadMessageMutation(
+                    ok=False,
+                    message="This thread is locked",
                     obj=None,
                 )
 
@@ -262,21 +264,23 @@ class ReplyToMessageMutation(graphene.Mutation):
 
             conversation = parent_message.conversation
 
-            # Check if conversation is locked
-            if conversation.is_locked:
-                return ReplyToMessageMutation(
-                    ok=False,
-                    message="This thread is locked and cannot accept new messages",
-                    obj=None,
-                )
-
-            # Check if user has permission to read the conversation
+            # SECURITY: Check permissions FIRST to prevent information disclosure
+            # about locked thread status via different error messages (IDOR prevention).
+            # Uses same generic message for both permission denied and locked states.
             if not user_has_permission_for_obj(
                 user, conversation, PermissionTypes.READ
             ):
                 return ReplyToMessageMutation(
                     ok=False,
-                    message="You do not have permission to reply in this thread",
+                    message="Cannot reply in this thread",
+                    obj=None,
+                )
+
+            # Check if conversation is locked (only after verifying user has access)
+            if conversation.is_locked:
+                return ReplyToMessageMutation(
+                    ok=False,
+                    message="This thread is locked",
                     obj=None,
                 )
 
