@@ -1,30 +1,20 @@
-import { useEffect, useCallback, useState } from "react";
-import _ from "lodash";
+import { useCallback, useState } from "react";
 import { toast } from "react-toastify";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Button, Icon, Popup, Segment } from "semantic-ui-react";
+import { useNavigate } from "react-router-dom";
+import { Button, Popup } from "semantic-ui-react";
 import styled from "styled-components";
-import {
-  DndContext,
-  DragEndEvent,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-} from "@dnd-kit/core";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 
 import { DocumentCards } from "../../components/documents/DocumentCards";
 import { DocumentMetadataGrid } from "../../components/documents/DocumentMetadataGrid";
 import { FolderCard } from "../corpuses/folders/FolderCard";
+import { ParentFolderCard } from "../corpuses/folders/ParentFolderCard";
 
 import {
   selectedDocumentIds,
   documentSearchTerm,
-  authToken,
   filterToLabelId,
   selectedMetaAnnotationId,
   showUploadNewDocumentsModal,
@@ -36,9 +26,6 @@ import {
   GET_CORPUS_FOLDERS,
   GetCorpusFoldersInputs,
   GetCorpusFoldersOutputs,
-  MOVE_DOCUMENT_TO_FOLDER,
-  MoveDocumentToFolderInputs,
-  MoveDocumentToFolderOutputs,
   buildFolderTree,
 } from "../../graphql/queries/folders";
 import {
@@ -53,7 +40,6 @@ import {
 } from "../../graphql/queries";
 import { DocumentType } from "../../types/graphql-api";
 import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
-import { openedDocument } from "../../graphql/cache";
 
 const ViewToggleContainer = styled.div`
   position: absolute;
@@ -128,12 +114,9 @@ export const CorpusDocumentCards = ({
   const selected_metadata_id_to_filter_on = useReactiveVar(
     selectedMetaAnnotationId
   );
-
-  const auth_token = useReactiveVar(authToken);
   const filter_to_label_id = useReactiveVar(filterToLabelId);
   const selected_folder_id = useReactiveVar(selectedFolderId);
 
-  const location = useLocation();
   const navigate = useNavigate();
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -222,91 +205,8 @@ export const CorpusDocumentCards = ({
     },
   });
 
-  const [moveDocumentToFolder] = useMutation<
-    MoveDocumentToFolderOutputs,
-    MoveDocumentToFolderInputs
-  >(MOVE_DOCUMENT_TO_FOLDER, {
-    // Evict all documents queries from cache to force refetch
-    // This ensures document lists update after moving documents between folders
-    update(cache) {
-      cache.evict({ fieldName: "documents" });
-      cache.gc();
-    },
-    // Also refetch folders to update document counts
-    refetchQueries: [
-      {
-        query: GET_CORPUS_FOLDERS,
-        variables: { corpusId: opened_corpus_id || "" },
-      },
-    ],
-  });
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // Drag-and-drop setup
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // Require 8px movement before drag starts
-      },
-    })
-  );
-
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveDragId(event.active.id as string);
-  }, []);
-
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      setActiveDragId(null);
-
-      if (!over || active.id === over.id) {
-        return;
-      }
-
-      const dragData = active.data.current;
-      const dropData = over.data.current;
-
-      // Only handle document drops on folder cards in this component
-      if (dragData?.type !== "document") {
-        return; // Folder-to-folder handled by sidebar
-      }
-
-      const documentId = dragData.documentId;
-      let targetFolderId: string | null;
-
-      if (dropData?.type === "folder") {
-        targetFolderId = dropData.folderId;
-      } else {
-        return; // Not a valid drop target
-      }
-
-      moveDocumentToFolder({
-        variables: {
-          documentId,
-          corpusId: opened_corpus_id || "",
-          folderId: targetFolderId,
-        },
-      })
-        .then((result) => {
-          if (result.data?.moveDocumentToFolder.ok) {
-            toast.success("Document moved to folder");
-          } else {
-            toast.error(
-              result.data?.moveDocumentToFolder.message ||
-                "Failed to move document"
-            );
-          }
-        })
-        .catch((error) => {
-          toast.error(`Error moving document: ${error.message}`);
-        });
-    },
-    [moveDocumentToFolder, opened_corpus_id]
-  );
+  // Note: moveDocumentToFolder mutation is now handled by FolderDocumentBrowser
+  // which wraps this component in a DndContext with unified drag-drop handling
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to shape item data
@@ -380,133 +280,151 @@ export const CorpusDocumentCards = ({
     uploadModalPreloadedFiles(filePackages);
   }, []);
 
-  // Build folder cards to show before documents
-  const folderCards = current_folder_tree.map((folder) => (
-    <FolderCard
-      key={folder.id}
-      folder={folder}
-      viewMode={viewMode === "modern-list" ? "modern-list" : "modern-card"}
-    />
-  ));
+  // Get parent folder info for navigation (if we're inside a subfolder)
+  const currentFolder = folders_response?.corpusFolders.find(
+    (f) => f.id === selected_folder_id
+  );
+  const parentFolderId = currentFolder?.parent?.id || null;
+  const parentFolderName = currentFolder?.parent?.name || "Corpus Root";
 
+  // Build prefix items: ParentFolderCard (if in subfolder) + folder cards
+  const prefixItems: React.ReactNode[] = [];
+
+  // Add ".." card if we're inside a subfolder
+  if (selected_folder_id) {
+    prefixItems.push(
+      <ParentFolderCard
+        key="parent-folder"
+        parentFolderId={parentFolderId}
+        parentFolderName={parentFolderName}
+        viewMode={viewMode === "modern-list" ? "modern-list" : "modern-card"}
+      />
+    );
+  }
+
+  // Add folder cards for current directory's children
+  current_folder_tree.forEach((folder) => {
+    prefixItems.push(
+      <FolderCard
+        key={folder.id}
+        folder={folder}
+        viewMode={viewMode === "modern-list" ? "modern-list" : "modern-card"}
+      />
+    );
+  });
+
+  // Note: DndContext is now provided by FolderDocumentBrowser parent component
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
+    <div
+      style={{
+        flex: 1,
+        height: "100%",
+        width: "100%",
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
     >
+      <ViewToggleContainer>
+        <Button.Group>
+          <Popup
+            content="Card View"
+            trigger={
+              <ViewToggleButton
+                icon="grid layout"
+                active={viewMode === "modern-card"}
+                onClick={() => setViewMode("modern-card")}
+                data-testid="card-view-button"
+              />
+            }
+          />
+          <Popup
+            content="List View"
+            trigger={
+              <ViewToggleButton
+                icon="list"
+                active={viewMode === "modern-list"}
+                onClick={() => setViewMode("modern-list")}
+                data-testid="list-view-button"
+              />
+            }
+          />
+          <Popup
+            content="Table View"
+            trigger={
+              <ViewToggleButton
+                icon="table"
+                active={viewMode === "grid"}
+                onClick={() => setViewMode("grid")}
+                data-testid="grid-view-button"
+              />
+            }
+          />
+        </Button.Group>
+      </ViewToggleContainer>
+
       <div
+        id="corpus-document-card-content-container"
         style={{
           flex: 1,
-          height: "100%",
-          width: "100%",
           position: "relative",
+          overflow: "hidden",
+          minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
         }}
       >
-        <ViewToggleContainer>
-          <Button.Group>
-            <Popup
-              content="Card View"
-              trigger={
-                <ViewToggleButton
-                  icon="grid layout"
-                  active={viewMode === "modern-card"}
-                  onClick={() => setViewMode("modern-card")}
-                  data-testid="card-view-button"
-                />
-              }
-            />
-            <Popup
-              content="List View"
-              trigger={
-                <ViewToggleButton
-                  icon="list"
-                  active={viewMode === "modern-list"}
-                  onClick={() => setViewMode("modern-list")}
-                  data-testid="list-view-button"
-                />
-              }
-            />
-            <Popup
-              content="Table View"
-              trigger={
-                <ViewToggleButton
-                  icon="table"
-                  active={viewMode === "grid"}
-                  onClick={() => setViewMode("grid")}
-                  data-testid="grid-view-button"
-                />
-              }
-            />
-          </Button.Group>
-        </ViewToggleContainer>
-
-        <div
-          id="corpus-document-card-content-container"
-          style={{
-            flex: 1,
-            position: "relative",
-            overflow: "hidden",
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {viewMode !== "grid" ? (
-            <DocumentCards
-              items={document_items}
+        {viewMode !== "grid" ? (
+          <DocumentCards
+            items={document_items}
+            loading={documents_loading}
+            loading_message="Documents Loading..."
+            pageInfo={documents_response?.documents.pageInfo}
+            containerStyle={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              paddingTop: "3.5rem", // Add padding to prevent overlap with view toggle buttons
+            }}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+            }}
+            fetchMore={fetchMoreDocuments}
+            onShiftClick={onSelect}
+            onClick={onOpen}
+            removeFromCorpus={
+              opened_corpus_id ? handleRemoveContracts : undefined
+            }
+            onDrop={onDrop}
+            viewMode={viewMode}
+            prefixItems={prefixItems}
+          />
+        ) : (
+          <div
+            style={{
+              paddingTop: "3.5rem",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <DocumentMetadataGrid
+              corpusId={opened_corpus_id || ""}
+              documents={document_items}
               loading={documents_loading}
-              loading_message="Documents Loading..."
+              onDocumentClick={onOpen}
               pageInfo={documents_response?.documents.pageInfo}
-              containerStyle={{
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                paddingTop: "3.5rem", // Add padding to prevent overlap with view toggle buttons
-              }}
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-              }}
               fetchMore={fetchMoreDocuments}
-              onShiftClick={onSelect}
-              onClick={onOpen}
-              removeFromCorpus={
-                opened_corpus_id ? handleRemoveContracts : undefined
+              hasMore={
+                documents_response?.documents.pageInfo?.hasNextPage ?? false
               }
-              onDrop={onDrop}
-              viewMode={viewMode}
-              prefixItems={folderCards}
             />
-          ) : (
-            <div
-              style={{
-                paddingTop: "3.5rem",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <DocumentMetadataGrid
-                corpusId={opened_corpus_id || ""}
-                documents={document_items}
-                loading={documents_loading}
-                onDocumentClick={onOpen}
-                pageInfo={documents_response?.documents.pageInfo}
-                fetchMore={fetchMoreDocuments}
-                hasMore={
-                  documents_response?.documents.pageInfo?.hasNextPage ?? false
-                }
-              />
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </DndContext>
+    </div>
   );
 };

@@ -1,9 +1,20 @@
-import React, { useEffect } from "react";
-import { useSetAtom, useAtom } from "jotai";
-import { useReactiveVar } from "@apollo/client";
+import React, { useEffect, useCallback, useState } from "react";
+import { useSetAtom, useAtom, useAtomValue } from "jotai";
+import { useReactiveVar, useMutation, useQuery } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { Folder, FolderOpen } from "lucide-react";
+import { toast } from "react-toastify";
+import {
+  DndContext,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from "@dnd-kit/core";
 import { selectedFolderId as selectedFolderIdReactiveVar } from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
@@ -17,7 +28,18 @@ import {
   selectedFolderIdAtom,
   sidebarCollapsedAtom,
   openCreateFolderModalAtom,
+  folderListAtom,
 } from "../../../atoms/folderAtoms";
+import {
+  MOVE_DOCUMENT_TO_FOLDER,
+  MoveDocumentToFolderInputs,
+  MoveDocumentToFolderOutputs,
+  MOVE_CORPUS_FOLDER,
+  MoveCorpusFolderInputs,
+  MoveCorpusFolderOutputs,
+  GET_CORPUS_FOLDERS,
+} from "../../../graphql/queries/folders";
+import { GET_DOCUMENTS } from "../../../graphql/queries";
 
 /**
  * FolderDocumentBrowser - Main container for folder-based document browsing
@@ -235,14 +257,171 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   const selectedFolderId = useReactiveVar(selectedFolderIdReactiveVar);
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom);
   const openCreateModal = useSetAtom(openCreateFolderModalAtom);
+  const folderList = useAtomValue(folderListAtom);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Drag-and-drop state
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [activeDragType, setActiveDragType] = useState<
+    "document" | "folder" | null
+  >(null);
 
   // Context menu state for right-clicking in content area
   const [contextMenu, setContextMenu] = React.useState<{
     x: number;
     y: number;
   } | null>(null);
+
+  // Configure drag sensors - require 8px movement before drag starts
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  // Move document to folder mutation
+  const [moveDocumentToFolder] = useMutation<
+    MoveDocumentToFolderOutputs,
+    MoveDocumentToFolderInputs
+  >(MOVE_DOCUMENT_TO_FOLDER, {
+    // Evict all documents queries from cache to force refetch
+    update(cache) {
+      cache.evict({ fieldName: "documents" });
+      cache.gc();
+    },
+    refetchQueries: [
+      {
+        query: GET_CORPUS_FOLDERS,
+        variables: { corpusId },
+      },
+    ],
+  });
+
+  // Move folder mutation
+  const [moveFolder] = useMutation<
+    MoveCorpusFolderOutputs,
+    MoveCorpusFolderInputs
+  >(MOVE_CORPUS_FOLDER, {
+    refetchQueries: [
+      {
+        query: GET_CORPUS_FOLDERS,
+        variables: { corpusId },
+      },
+    ],
+  });
+
+  // Get parent folder ID for current folder (for ".." navigation)
+  const currentFolder = folderList.find((f) => f.id === selectedFolderId);
+  const parentFolderId = currentFolder?.parent?.id || null;
+
+  // Unified drag-drop handlers
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const dragData = event.active.data.current;
+    setActiveDragId(event.active.id as string);
+    setActiveDragType(dragData?.type === "document" ? "document" : "folder");
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveDragId(null);
+      setActiveDragType(null);
+
+      if (!over || active.id === over.id) {
+        return; // Dropped on itself or no drop target
+      }
+
+      const dragData = active.data.current;
+      const dropData = over.data.current;
+
+      // Determine what was dropped and where
+      const isDraggingDocument = dragData?.type === "document";
+
+      // Extract target folder ID from drop target
+      let targetFolderId: string | null;
+      const overId = over.id as string;
+
+      if (overId === "root" || overId === "corpus-root-drop-target") {
+        // Dropped on corpus root
+        targetFolderId = null;
+      } else if (overId === "parent-folder-drop-target") {
+        // Dropped on parent folder (..)
+        targetFolderId = parentFolderId;
+      } else if (overId.startsWith("folder-card-")) {
+        // Dropped on a folder card in content area
+        targetFolderId =
+          dropData?.folderId || overId.replace("folder-card-", "");
+      } else if (dropData?.type === "folder") {
+        // Dropped on folder in sidebar tree
+        targetFolderId = dropData.folderId || (overId as string);
+      } else {
+        // Try to use overId as folder ID (for sidebar tree nodes)
+        targetFolderId = overId;
+      }
+
+      if (isDraggingDocument) {
+        // Moving document to folder
+        const documentId = dragData.documentId;
+
+        moveDocumentToFolder({
+          variables: {
+            documentId,
+            corpusId,
+            folderId: targetFolderId,
+          },
+        })
+          .then((result) => {
+            if (result.data?.moveDocumentToFolder.ok) {
+              toast.success(
+                targetFolderId
+                  ? "Document moved to folder"
+                  : "Document moved to corpus root"
+              );
+            } else {
+              toast.error(
+                result.data?.moveDocumentToFolder.message ||
+                  "Failed to move document"
+              );
+            }
+          })
+          .catch((error) => {
+            toast.error(`Error moving document: ${error.message}`);
+          });
+      } else {
+        // Moving folder to folder
+        const draggedFolderId = active.id as string;
+
+        // Prevent moving folder into itself or its descendants
+        if (draggedFolderId === targetFolderId) {
+          toast.error("Cannot move a folder into itself");
+          return;
+        }
+
+        moveFolder({
+          variables: {
+            folderId: draggedFolderId,
+            newParentId: targetFolderId,
+          },
+        })
+          .then((result) => {
+            if (result.data?.moveCorpusFolder.ok) {
+              toast.success("Folder moved successfully");
+            } else {
+              toast.error(
+                result.data?.moveCorpusFolder.message || "Failed to move folder"
+              );
+            }
+          })
+          .catch((error) => {
+            toast.error(`Error moving folder: ${error.message}`);
+          });
+      }
+    },
+    [corpusId, parentFolderId, moveDocumentToFolder, moveFolder]
+  );
 
   // Initialize corpus context
   useEffect(() => {
@@ -311,7 +490,12 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   }, [selectedFolderId, openCreateModal, closeContextMenu]);
 
   return (
-    <>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <BrowserContainer>
         {/* Folder Tree Sidebar */}
         <Sidebar $visible={showSidebar} $collapsed={sidebarCollapsed}>
@@ -379,6 +563,6 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
           </ContextMenu>
         </>
       )}
-    </>
+    </DndContext>
   );
 };
