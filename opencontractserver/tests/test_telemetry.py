@@ -1,5 +1,5 @@
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 
@@ -40,10 +40,10 @@ class TelemetryTestCase(TestCase):
             result = record_event("test_event", {"test_prop": "value"})
 
         self.assertTrue(result)
-        self.mock_posthog.capture.assert_called_once()
+        self.mock_posthog_capture.assert_called_once()
 
         # Verify the capture call arguments
-        call_args = self.mock_posthog.capture.call_args[1]
+        call_args = self.mock_posthog_capture.call_args[1]
         self.assertEqual(call_args["distinct_id"], str(self.installation_id))
         self.assertEqual(call_args["event"], "opencontracts.test_event")
         self.assertEqual(call_args["properties"]["package"], "opencontracts")
@@ -64,7 +64,7 @@ class TelemetryTestCase(TestCase):
             result = record_event("test_event")
 
         self.assertFalse(result)
-        self.mock_posthog.capture.assert_not_called()
+        self.mock_posthog_capture.assert_not_called()
 
     def test_record_event_installation_inactive(self):
         """Test when installation exists but is inactive"""
@@ -73,11 +73,11 @@ class TelemetryTestCase(TestCase):
             result = record_event("test_event")
 
         self.assertFalse(result)
-        self.mock_posthog.capture.assert_not_called()
+        self.mock_posthog_capture.assert_not_called()
 
     def test_record_event_posthog_error(self):
         """Test when PostHog client raises an error"""
-        self.mock_posthog.capture.side_effect = Exception("PostHog Error")
+        self.mock_posthog_capture.side_effect = Exception("PostHog Error")
 
         with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
             result = record_event("test_event")
@@ -91,10 +91,10 @@ class TelemetryTestCase(TestCase):
             result = record_event("test_event")
 
         self.assertTrue(result)
-        self.mock_posthog.capture.assert_called_once()
+        self.mock_posthog_capture.assert_called_once()
 
         # Verify only default properties are present
-        properties = self.mock_posthog.capture.call_args[1]["properties"]
+        properties = self.mock_posthog_capture.call_args[1]["properties"]
         self.assertEqual(
             set(properties.keys()), {"package", "timestamp", "installation_id"}
         )
