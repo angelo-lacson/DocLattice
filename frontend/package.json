@@ -100,7 +100,7 @@
     "lint": "prettier . --check --ignore-unknown",
     "fix-styles": "prettier . --check --write --ignore-unknown",
     "prepare": "cd .. && husky install frontend/.husky",
-    "test:ct": "playwright test -c playwright-ct.config.ts"
+    "test:ct": "playwright test -c playwright-ct.config.ts --reporter=list"
   },
   "eslintConfig": {
     "extends": [
