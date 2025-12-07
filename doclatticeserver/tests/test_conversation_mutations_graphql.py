@@ -230,7 +230,8 @@ class ConversationMutationsTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         data = result["data"]["createThreadMessage"]
         self.assertFalse(data["ok"])
-        self.assertIn("locked", data["message"].lower())
+        # IDOR protection: generic message doesn't reveal locked status
+        self.assertIn("cannot post", data["message"].lower())
 
     def test_reply_to_message_mutation(self):
         """Test creating a nested reply to a message."""
