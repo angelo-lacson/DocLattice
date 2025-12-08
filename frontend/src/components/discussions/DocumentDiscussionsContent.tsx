@@ -93,10 +93,15 @@ export const DocumentDiscussionsContent: React.FC<
   const threadId = useReactiveVar(selectedThreadId);
 
   const handleThreadClick = (clickedThreadId: string) => {
-    // Update URL query param
+    // Update URL query param to show thread inline in sidebar
     const searchParams = new URLSearchParams(location.search);
     searchParams.set("thread", clickedThreadId);
     navigate({ search: searchParams.toString() }, { replace: true });
+  };
+
+  const handleThreadCreated = (conversationId: string) => {
+    // After creating a thread, show it inline in sidebar (same as clicking a thread)
+    handleThreadClick(conversationId);
   };
 
   const handleBack = () => {
@@ -121,6 +126,7 @@ export const DocumentDiscussionsContent: React.FC<
             corpusId={corpusId}
             documentId={documentId}
             variant="secondary"
+            onSuccess={handleThreadCreated}
           />
         )}
       </Header>
@@ -131,6 +137,7 @@ export const DocumentDiscussionsContent: React.FC<
             conversationId={threadId}
             documentId={documentId}
             compact // Narrower layout for sidebar
+            onBack={handleBack} // Stay in sidebar, don't navigate away
           />
         ) : (
           <ThreadList

@@ -108,6 +108,11 @@ export interface CreateThreadButtonProps {
   className?: string;
   /** Disabled state */
   disabled?: boolean;
+  /**
+   * Custom success handler. If provided, overrides default navigation behavior.
+   * Used by sidebar to stay inline instead of navigating to full-page view.
+   */
+  onSuccess?: (conversationId: string) => void;
 }
 
 /**
@@ -126,6 +131,7 @@ export function CreateThreadButton({
   floating = false,
   className,
   disabled = false,
+  onSuccess: customOnSuccess,
 }: CreateThreadButtonProps) {
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
@@ -133,7 +139,14 @@ export function CreateThreadButton({
 
   const handleSuccess = (conversationId: string) => {
     setShowModal(false);
-    // Navigate to the newly created thread using proper slug-based URL
+
+    // If custom handler provided (e.g., sidebar), use that instead of navigation
+    if (customOnSuccess) {
+      customOnSuccess(conversationId);
+      return;
+    }
+
+    // Default: Navigate to the newly created thread using proper slug-based URL
     if (corpus) {
       const url = getCorpusThreadUrl(corpus, conversationId);
       if (url !== "#") {

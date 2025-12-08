@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useAtom } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, MessageCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle, FileText, Folder } from "lucide-react";
 import {
   GET_THREAD_DETAIL,
   GetThreadDetailInput,
@@ -33,6 +33,11 @@ interface ThreadDetailProps {
   documentId?: string;
   /** Compact mode for sidebar (narrower padding) */
   compact?: boolean;
+  /**
+   * Custom back handler. If provided, overrides default navigation behavior.
+   * Used by sidebar to stay inline instead of navigating away.
+   */
+  onBack?: () => void;
 }
 
 const ThreadDetailContainer = styled.div<{ $compact?: boolean }>`
@@ -101,6 +106,32 @@ const BadgeRow = styled.div`
   display: flex;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+`;
+
+const ContextBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #0369a1;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+`;
+
+const ContextRow = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
 `;
 
@@ -184,6 +215,7 @@ export function ThreadDetail({
   corpusId,
   documentId: _documentId, // Reserved for future document-specific filtering
   compact = false,
+  onBack: customOnBack,
 }: ThreadDetailProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -253,8 +285,14 @@ export function ThreadDetail({
   // Handle back navigation
   const corpus = useReactiveVar(openedCorpus);
   const handleBack = () => {
+    // If custom handler provided (e.g., sidebar), use that instead of navigation
+    if (customOnBack) {
+      customOnBack();
+      return;
+    }
+
+    // Default: Navigate back to corpus discussions tab
     if (corpus?.creator?.slug && corpus?.slug) {
-      // Navigate back to corpus discussions tab using proper slug-based URL
       navigate(`/c/${corpus.creator.slug}/${corpus.slug}?tab=discussions`);
     } else {
       // Fallback to browser history
@@ -310,6 +348,26 @@ export function ThreadDetail({
             {thread.isLocked && <ThreadBadge type="locked" />}
             {isDeleted && <ThreadBadge type="deleted" />}
           </BadgeRow>
+        )}
+
+        {/* Context badges - show linked document and/or corpus */}
+        {(thread.chatWithDocument || thread.chatWithCorpus) && (
+          <ContextRow>
+            {thread.chatWithDocument && (
+              <ContextBadge
+                title={`Linked to document: ${thread.chatWithDocument.title}`}
+              >
+                <FileText />
+                <span>{thread.chatWithDocument.title}</span>
+              </ContextBadge>
+            )}
+            {thread.chatWithCorpus && (
+              <ContextBadge title={`In corpus: ${thread.chatWithCorpus.title}`}>
+                <Folder />
+                <span>{thread.chatWithCorpus.title}</span>
+              </ContextBadge>
+            )}
+          </ContextRow>
         )}
 
         {/* Title */}
