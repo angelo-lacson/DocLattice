@@ -397,6 +397,10 @@ class DocumentFilter(django_filters.FilterSet):
 
         Special handling: value="__root__" returns documents in corpus root (no folder).
         Otherwise filters to specific folder ID.
+
+        Note: This filter works in conjunction with in_corpus filter. The queryset
+        is already filtered to documents in a specific corpus, so we need to find
+        documents that have folder=NULL in their DocumentPath for THAT corpus.
         """
         import logging
 
@@ -407,14 +411,19 @@ class DocumentFilter(django_filters.FilterSet):
         logger.info(f"[QUERY] in_folder filter called with value: {value}")
 
         if value == "__root__":
-            # For root documents, find documents with no folder assignment
-            docs_with_folder = set(
+            # For root documents, find documents with folder=NULL in their DocumentPath
+            # We need to find docs where their path in the corpus has no folder
+            # The queryset is already filtered to docs in the corpus via in_corpus filter
+            #
+            # Get document IDs that have a path with folder=NULL (root level docs)
+            root_doc_ids = set(
                 DocumentPath.objects.filter(
-                    folder__isnull=False, is_current=True, is_deleted=False
+                    folder__isnull=True, is_current=True, is_deleted=False
                 ).values_list("document_id", flat=True)
             )
 
-            result = queryset.exclude(id__in=docs_with_folder)
+            # Filter queryset to only include these root-level documents
+            result = queryset.filter(id__in=root_doc_ids)
             logger.info(f"[QUERY] Filtered to root folder, count: {result.count()}")
             return result
         else:
