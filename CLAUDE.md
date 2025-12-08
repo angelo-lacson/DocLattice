@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpenContracts is a GPL-3.0 enterprise document analytics platform for PDFs and text-based formats. It features a Django/GraphQL backend with PostgreSQL + pgvector, a React/TypeScript frontend with Jotai state management, and pluggable document processing pipelines powered by machine learning models.
+OpenContracts is an AGPL-3.0 enterprise document analytics platform for PDFs and text-based formats. It features a Django/GraphQL backend with PostgreSQL + pgvector, a React/TypeScript frontend with Jotai state management, and pluggable document processing pipelines powered by machine learning models.
 
 ## Essential Commands
 
