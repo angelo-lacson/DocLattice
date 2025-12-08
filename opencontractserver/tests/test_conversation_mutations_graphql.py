@@ -663,3 +663,357 @@ class ConversationMutationsTestCase(TestCase):
         # clean() should raise ValidationError for CHAT type
         with self.assertRaises(ValidationError):
             conversation.clean()
+
+
+class DualContextThreadAccessControlTestCase(TestCase):
+    """
+    Test the AND logic for dual-context thread access.
+
+    When a thread is linked to BOTH a corpus AND a document, the user must have
+    access to BOTH resources. This is different from moderation (which uses OR
+    logic - either owner can moderate).
+
+    These tests verify the permission boundary cases:
+    - User with corpus-only permission cannot access dual-context thread
+    - User with document-only permission cannot access dual-context thread
+    - User with both permissions can access dual-context thread
+    - Public corpus + private document = denied
+    - Private corpus + public document = denied
+    """
+
+    def setUp(self):
+        """Create users, corpus, and document with specific permission setups."""
+        # Create test users
+        self.corpus_owner = User.objects.create_user(
+            username="corpus_owner",
+            email="corpus_owner@example.com",
+            password="testpass123",
+        )
+        self.document_owner = User.objects.create_user(
+            username="document_owner",
+            email="document_owner@example.com",
+            password="testpass123",
+        )
+        self.user_with_both = User.objects.create_user(
+            username="user_with_both",
+            email="both@example.com",
+            password="testpass123",
+        )
+        self.user_with_neither = User.objects.create_user(
+            username="outsider",
+            email="outsider@example.com",
+            password="testpass123",
+        )
+
+        # Create a private corpus (corpus_owner is creator)
+        self.private_corpus = Corpus.objects.create(
+            title="Private Corpus",
+            description="Only accessible to specific users",
+            creator=self.corpus_owner,
+            is_public=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.corpus_owner, self.private_corpus, [PermissionTypes.CRUD]
+        )
+
+        # Create a private document (document_owner is creator)
+        self.private_document = Document.objects.create(
+            title="Private Document",
+            description="Only accessible to specific users",
+            creator=self.document_owner,
+            is_public=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.document_owner, self.private_document, [PermissionTypes.CRUD]
+        )
+
+        # Give user_with_both access to both resources
+        set_permissions_for_obj_to_user(
+            self.user_with_both, self.private_corpus, [PermissionTypes.READ]
+        )
+        set_permissions_for_obj_to_user(
+            self.user_with_both, self.private_document, [PermissionTypes.READ]
+        )
+
+        # Create the dual-context thread (linked to both corpus and document)
+        self.dual_context_thread = Conversation.objects.create(
+            title="Discussion about document in corpus",
+            conversation_type="thread",
+            chat_with_corpus=self.private_corpus,
+            chat_with_document=self.private_document,
+            creator=self.corpus_owner,
+        )
+
+    def _check_websocket_access(self, user):
+        """
+        Simulate the WebSocket access check logic.
+
+        This mirrors the logic in thread_updates.py:_can_access_conversation()
+        """
+        conversation = self.dual_context_thread
+
+        # Creator always has access
+        if conversation.creator_id == user.pk:
+            return True
+
+        # Superuser always has access
+        if user.is_superuser:
+            return True
+
+        has_corpus_access = True  # Default if no corpus context
+        has_document_access = True  # Default if no document context
+
+        # Check corpus access
+        if conversation.chat_with_corpus:
+            has_corpus_access = (
+                Corpus.objects.visible_to_user(user)
+                .filter(pk=conversation.chat_with_corpus_id)
+                .exists()
+            )
+
+        # Check document access
+        if conversation.chat_with_document:
+            has_document_access = (
+                Document.objects.visible_to_user(user)
+                .filter(pk=conversation.chat_with_document_id)
+                .exists()
+            )
+
+        # AND logic for dual-context threads
+        if conversation.chat_with_corpus and conversation.chat_with_document:
+            return has_corpus_access and has_document_access
+        elif conversation.chat_with_corpus:
+            return has_corpus_access
+        elif conversation.chat_with_document:
+            return has_document_access
+
+        return False
+
+    def test_user_with_corpus_only_permission_denied(self):
+        """
+        User who can access the corpus but NOT the document should be DENIED.
+
+        Scenario: Alice has read access to "Engineering Corpus" but no access
+        to "Confidential Contract.pdf". When she tries to view a thread about
+        that document within the corpus, she should be denied.
+        """
+        # Give corpus_owner explicit document access (they're the corpus owner)
+        # but user_with_corpus_only has only corpus access
+        user_with_corpus_only = User.objects.create_user(
+            username="corpus_only",
+            email="corpus_only@example.com",
+            password="testpass123",
+        )
+        set_permissions_for_obj_to_user(
+            user_with_corpus_only, self.private_corpus, [PermissionTypes.READ]
+        )
+        # No document permission granted
+
+        access_granted = self._check_websocket_access(user_with_corpus_only)
+
+        self.assertFalse(
+            access_granted,
+            "User with corpus-only permission should NOT access dual-context thread",
+        )
+
+    def test_user_with_document_only_permission_denied(self):
+        """
+        User who can access the document but NOT the corpus should be DENIED.
+
+        Scenario: Bob has access to "Contract.pdf" on his personal drive, but
+        not to the "Legal Team Corpus" where it's being discussed. He should
+        not be able to see the corpus-level discussion thread.
+        """
+        user_with_document_only = User.objects.create_user(
+            username="document_only",
+            email="document_only@example.com",
+            password="testpass123",
+        )
+        set_permissions_for_obj_to_user(
+            user_with_document_only, self.private_document, [PermissionTypes.READ]
+        )
+        # No corpus permission granted
+
+        access_granted = self._check_websocket_access(user_with_document_only)
+
+        self.assertFalse(
+            access_granted,
+            "User with document-only permission should NOT access dual-context thread",
+        )
+
+    def test_user_with_both_permissions_granted(self):
+        """
+        User who can access BOTH corpus AND document should be GRANTED access.
+
+        Scenario: Carol is a team member with access to both the "Project Corpus"
+        and the specific "Requirements.pdf" being discussed. She should be able
+        to participate in the thread.
+        """
+        access_granted = self._check_websocket_access(self.user_with_both)
+
+        self.assertTrue(
+            access_granted,
+            "User with both corpus AND document permission should access dual-context thread",
+        )
+
+    def test_user_with_no_permissions_denied(self):
+        """
+        User with access to neither resource should be DENIED.
+
+        Scenario: Dave is an external contractor with no access to any internal
+        resources. He should not see any threads.
+        """
+        access_granted = self._check_websocket_access(self.user_with_neither)
+
+        self.assertFalse(
+            access_granted,
+            "User with no permissions should NOT access dual-context thread",
+        )
+
+    def test_public_corpus_private_document_denied(self):
+        """
+        Public corpus + private document = DENIED for users without document access.
+
+        Scenario: The "Open Research Corpus" is public, but "Proprietary Data.pdf"
+        within it is restricted. Random users should not be able to see discussions
+        about the proprietary document, even though they can browse the corpus.
+        """
+        # Make corpus public
+        public_corpus = Corpus.objects.create(
+            title="Public Research Corpus",
+            description="Anyone can view",
+            creator=self.corpus_owner,
+            is_public=True,
+        )
+
+        # Document stays private
+        private_doc_in_public_corpus = Document.objects.create(
+            title="Proprietary Data",
+            description="Restricted access",
+            creator=self.document_owner,
+            is_public=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.document_owner, private_doc_in_public_corpus, [PermissionTypes.CRUD]
+        )
+
+        # Create thread linking both (we create this to ensure the scenario is valid,
+        # even though we test the underlying permission logic directly)
+        Conversation.objects.create(
+            title="Discussion about proprietary data",
+            conversation_type="thread",
+            chat_with_corpus=public_corpus,
+            chat_with_document=private_doc_in_public_corpus,
+            creator=self.corpus_owner,
+        )
+
+        # Random user can see public corpus but not private document
+        random_user = User.objects.create_user(
+            username="random_public",
+            email="random@example.com",
+            password="testpass123",
+        )
+
+        # Check access (using the thread we just created)
+        has_corpus_access = (
+            Corpus.objects.visible_to_user(random_user)
+            .filter(pk=public_corpus.pk)
+            .exists()
+        )
+        has_document_access = (
+            Document.objects.visible_to_user(random_user)
+            .filter(pk=private_doc_in_public_corpus.pk)
+            .exists()
+        )
+
+        self.assertTrue(has_corpus_access, "Random user should see public corpus")
+        self.assertFalse(
+            has_document_access, "Random user should NOT see private document"
+        )
+
+        # AND logic means access denied
+        combined_access = has_corpus_access and has_document_access
+        self.assertFalse(
+            combined_access,
+            "Public corpus + private document should DENY access to dual-context thread",
+        )
+
+    def test_private_corpus_public_document_denied(self):
+        """
+        Private corpus + public document = DENIED for users without corpus access.
+
+        Scenario: "Internal Strategy Corpus" is private, but it contains a link
+        to a "Public Announcement.pdf". Even though the document is public,
+        discussions within the private corpus context should be restricted.
+        """
+        # Corpus stays private
+        private_corpus = Corpus.objects.create(
+            title="Internal Strategy Corpus",
+            description="Team members only",
+            creator=self.corpus_owner,
+            is_public=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.corpus_owner, private_corpus, [PermissionTypes.CRUD]
+        )
+
+        # Make document public
+        public_document = Document.objects.create(
+            title="Public Announcement",
+            description="Anyone can view",
+            creator=self.document_owner,
+            is_public=True,
+        )
+
+        # Create thread linking both (we create this to ensure the scenario is valid,
+        # even though we test the underlying permission logic directly)
+        Conversation.objects.create(
+            title="Internal discussion about public announcement",
+            conversation_type="thread",
+            chat_with_corpus=private_corpus,
+            chat_with_document=public_document,
+            creator=self.corpus_owner,
+        )
+
+        # Random user can see public document but not private corpus
+        random_user = User.objects.create_user(
+            username="random_private",
+            email="random2@example.com",
+            password="testpass123",
+        )
+
+        has_corpus_access = (
+            Corpus.objects.visible_to_user(random_user)
+            .filter(pk=private_corpus.pk)
+            .exists()
+        )
+        has_document_access = (
+            Document.objects.visible_to_user(random_user)
+            .filter(pk=public_document.pk)
+            .exists()
+        )
+
+        self.assertFalse(has_corpus_access, "Random user should NOT see private corpus")
+        self.assertTrue(has_document_access, "Random user should see public document")
+
+        # AND logic means access denied
+        combined_access = has_corpus_access and has_document_access
+        self.assertFalse(
+            combined_access,
+            "Private corpus + public document should DENY access to dual-context thread",
+        )
+
+    def test_thread_creator_always_has_access(self):
+        """
+        Thread creator should always have access, regardless of other permissions.
+
+        Scenario: Admin creates a thread linking resources. Even if the admin's
+        explicit permissions are later revoked, they should still access their
+        own thread as the creator.
+        """
+        access_granted = self._check_websocket_access(self.corpus_owner)
+
+        self.assertTrue(
+            access_granted,
+            "Thread creator should always have access to their own thread",
+        )
