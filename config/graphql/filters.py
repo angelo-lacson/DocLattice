@@ -1,5 +1,5 @@
 #  Copyright (C) 2022  John Scrudato
-#  License: Apache 2
+#  License: AGPL-3.0
 
 import django_filters
 from django.contrib.auth import get_user_model
