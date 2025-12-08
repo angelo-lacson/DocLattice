@@ -28,10 +28,12 @@ Architecture Rules Implemented:
 
 import hashlib
 import logging
+import mimetypes
 import uuid
 from typing import Optional
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.db import transaction
 
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
@@ -39,6 +41,58 @@ from opencontractserver.documents.models import Document, DocumentPath
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+# Map MIME types to file extensions for creating filenames
+MIME_TO_EXTENSION = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "text/plain": ".txt",
+}
+
+
+def _create_pdf_file_from_content(
+    content: bytes,
+    content_hash: str,
+    path: str,
+    file_type: str = "application/pdf",
+) -> ContentFile:
+    """
+    Create a Django ContentFile from raw content bytes.
+
+    Used when importing content that doesn't have an associated file object.
+    The filename is derived from the path or hash, with the appropriate extension.
+
+    Args:
+        content: Raw file content bytes
+        content_hash: SHA-256 hash of the content (used for filename if path not available)
+        path: The document path (used to derive filename)
+        file_type: MIME type to determine file extension
+
+    Returns:
+        ContentFile ready for assignment to a FileField
+    """
+    # Get extension from MIME type
+    extension = MIME_TO_EXTENSION.get(file_type)
+    if not extension:
+        # Fallback to mimetypes library
+        extension = mimetypes.guess_extension(file_type) or ".bin"
+
+    # Derive filename from path or use hash
+    if path:
+        # Extract filename from path, e.g., "/documents/my_file.pdf" -> "my_file"
+        base_name = path.split("/")[-1]
+        # Remove existing extension if present
+        if "." in base_name:
+            base_name = base_name.rsplit(".", 1)[0]
+    else:
+        # Use hash prefix as filename
+        base_name = f"doc_{content_hash[:12]}"
+
+    filename = f"{base_name}{extension}"
+    return ContentFile(content, name=filename)
 
 
 def compute_sha256(content: bytes) -> str:
@@ -150,12 +204,24 @@ def import_document(
                     is_current=False
                 )
 
+                # Determine pdf_file: use provided, fall back to old doc, or create from content
+                file_type = doc_kwargs.get("file_type", old_doc.file_type)
+                effective_pdf_file = pdf_file or old_doc.pdf_file
+                if not effective_pdf_file:
+                    # Neither provided nor available from old doc - create from content
+                    effective_pdf_file = _create_pdf_file_from_content(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+
                 # Create new document version (isolated within corpus)
                 new_doc = Document.objects.create(
                     title=doc_kwargs.get("title", old_doc.title),
                     description=doc_kwargs.get("description", old_doc.description),
-                    file_type=doc_kwargs.get("file_type", old_doc.file_type),
-                    pdf_file=pdf_file or old_doc.pdf_file,
+                    file_type=file_type,
+                    pdf_file=effective_pdf_file,
                     pdf_file_hash=content_hash,
                     version_tree_id=old_doc.version_tree_id,  # Same tree
                     parent=old_doc,  # Rule C2
@@ -264,11 +330,22 @@ def import_document(
                     )
                 else:
                     # Brand new content globally (Rule C1)
+                    # Create pdf_file from content if not provided
+                    file_type = doc_kwargs.get("file_type", "application/pdf")
+                    effective_pdf_file = pdf_file
+                    if not effective_pdf_file:
+                        effective_pdf_file = _create_pdf_file_from_content(
+                            content=content,
+                            content_hash=content_hash,
+                            path=path,
+                            file_type=file_type,
+                        )
+
                     doc = Document.objects.create(
                         title=doc_kwargs.get("title", f"Document at {path}"),
                         description=doc_kwargs.get("description", ""),
-                        file_type=doc_kwargs.get("file_type", "application/pdf"),
-                        pdf_file=pdf_file,
+                        file_type=file_type,
+                        pdf_file=effective_pdf_file,
                         pdf_file_hash=content_hash,
                         version_tree_id=tree_id,
                         is_current=True,
