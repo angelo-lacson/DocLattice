@@ -116,8 +116,12 @@ export const DocumentDiscussionsContent: React.FC<
           <Title>Document Discussions</Title>
         )}
 
-        {!threadId && corpusId && (
-          <CreateThreadButton corpusId={corpusId} variant="secondary" />
+        {!threadId && (corpusId || documentId) && (
+          <CreateThreadButton
+            corpusId={corpusId}
+            documentId={documentId}
+            variant="secondary"
+          />
         )}
       </Header>
 

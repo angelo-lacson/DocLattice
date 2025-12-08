@@ -96,8 +96,10 @@ const FloatingActionButton = styled.button`
 `;
 
 export interface CreateThreadButtonProps {
-  /** ID of the corpus to create thread in */
-  corpusId: string;
+  /** ID of the corpus to create thread in (optional if documentId provided) */
+  corpusId?: string;
+  /** ID of the document to create thread for (optional if corpusId provided) */
+  documentId?: string;
   /** Button variant: primary (filled) or secondary (outlined) */
   variant?: "primary" | "secondary";
   /** Display as floating action button (mobile-friendly) */
@@ -111,9 +113,15 @@ export interface CreateThreadButtonProps {
 /**
  * Button to create a new discussion thread
  * Opens CreateThreadForm modal when clicked
+ *
+ * Supports:
+ * - corpusId only: corpus-level discussions
+ * - documentId only: document-specific discussions
+ * - both: doc-in-corpus discussions
  */
 export function CreateThreadButton({
   corpusId,
+  documentId,
   variant = "primary",
   floating = false,
   className,
@@ -159,6 +167,7 @@ export function CreateThreadButton({
         {showModal && (
           <CreateThreadForm
             corpusId={corpusId}
+            documentId={documentId}
             onSuccess={handleSuccess}
             onClose={handleClose}
           />
@@ -183,6 +192,7 @@ export function CreateThreadButton({
       {showModal && (
         <CreateThreadForm
           corpusId={corpusId}
+          documentId={documentId}
           onSuccess={handleSuccess}
           onClose={handleClose}
         />

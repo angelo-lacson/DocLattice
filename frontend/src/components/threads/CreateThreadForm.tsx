@@ -154,8 +154,10 @@ const ErrorMessage = styled.div`
 `;
 
 export interface CreateThreadFormProps {
-  /** ID of the corpus to create thread in */
-  corpusId: string;
+  /** ID of the corpus to create thread in (optional if documentId provided) */
+  corpusId?: string;
+  /** ID of the document to create thread for (optional if corpusId provided) */
+  documentId?: string;
   /** Called when thread is created successfully */
   onSuccess: (conversationId: string) => void;
   /** Called when form is closed/cancelled */
@@ -166,6 +168,7 @@ export interface CreateThreadFormProps {
 
 export function CreateThreadForm({
   corpusId,
+  documentId,
   onSuccess,
   onClose,
   initialMessage,
@@ -180,10 +183,24 @@ export function CreateThreadForm({
     CreateThreadInput
   >(CREATE_THREAD, {
     refetchQueries: [
-      {
-        query: GET_CONVERSATIONS,
-        variables: { corpusId, conversationType: "THREAD" },
-      },
+      // Refetch document-filtered query if documentId provided
+      ...(documentId
+        ? [
+            {
+              query: GET_CONVERSATIONS,
+              variables: { documentId, conversationType: "THREAD" },
+            },
+          ]
+        : []),
+      // Refetch corpus-filtered query if corpusId provided
+      ...(corpusId
+        ? [
+            {
+              query: GET_CONVERSATIONS,
+              variables: { corpusId, conversationType: "THREAD" },
+            },
+          ]
+        : []),
     ],
     onCompleted: (data) => {
       if (data.createThread.ok && data.createThread.obj) {
@@ -217,7 +234,8 @@ export function CreateThreadForm({
 
     await createThread({
       variables: {
-        corpusId,
+        corpusId: corpusId || undefined,
+        documentId: documentId || undefined,
         title: title.trim(),
         description: description.trim() || undefined,
         initialMessage: content,
