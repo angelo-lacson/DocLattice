@@ -7,7 +7,7 @@ This module implements folder management functionality including:
 - Bulk document operations
 
 All mutations delegate to DocumentFolderService for business logic,
-permission checks, and dual-system consistency (DocumentPath + CorpusDocumentFolder).
+permission checks, and consistency via DocumentPath.
 """
 
 import logging
@@ -288,7 +288,7 @@ class DeleteCorpusFolderMutation(graphene.Mutation):
     Delegates to DocumentFolderService.delete_folder() for:
     - Permission checking (corpus DELETE permission)
     - Child folder handling (reparent or cascade)
-    - Document folder assignment cleanup (both DocumentPath and CorpusDocumentFolder)
+    - Document folder assignment cleanup via DocumentPath
     """
 
     class Arguments:
@@ -348,7 +348,7 @@ class MoveDocumentToFolderMutation(graphene.Mutation):
     Delegates to DocumentFolderService.move_document_to_folder() for:
     - Permission checking (corpus UPDATE permission)
     - Validation (document in corpus, folder in corpus)
-    - Dual-system update (DocumentPath + CorpusDocumentFolder)
+    - DocumentPath folder assignment update
     """
 
     class Arguments:
@@ -438,7 +438,7 @@ class MoveDocumentsToFolderMutation(graphene.Mutation):
     Delegates to DocumentFolderService.move_documents_to_folder() for:
     - Permission checking (corpus UPDATE permission)
     - Validation (all documents in corpus, folder in corpus)
-    - Bulk dual-system update (DocumentPath + CorpusDocumentFolder)
+    - Bulk DocumentPath folder assignment update
     """
 
     class Arguments:
