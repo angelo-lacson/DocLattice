@@ -1,9 +1,8 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useQuery, useMutation } from "@apollo/client";
+import { useQuery } from "@apollo/client";
 import styled from "styled-components";
 import { Loader, Input, Button } from "semantic-ui-react";
-import { toast } from "react-toastify";
 import {
   FolderPlus,
   Search,
@@ -12,17 +11,7 @@ import {
   Home,
   Trash2,
 } from "lucide-react";
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  useDroppable,
-} from "@dnd-kit/core";
+import { useDroppable } from "@dnd-kit/core";
 import { FolderTreeNode } from "./FolderTreeNode";
 import {
   folderTreeAtom,
@@ -40,12 +29,6 @@ import {
   GetCorpusFoldersInputs,
   GetCorpusFoldersOutputs,
   FolderTreeNode as FolderTreeNodeType,
-  MOVE_CORPUS_FOLDER,
-  MoveCorpusFolderInputs,
-  MoveCorpusFolderOutputs,
-  MOVE_DOCUMENT_TO_FOLDER,
-  MoveDocumentToFolderInputs,
-  MoveDocumentToFolderOutputs,
 } from "../../../graphql/queries/folders";
 
 /**
@@ -324,43 +307,8 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
   const expandAll = useSetAtom(expandAllFoldersAtom);
   const collapseAll = useSetAtom(collapseAllFoldersAtom);
 
-  // Drag-and-drop state
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
-
-  // Configure drag sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // Require 8px movement before drag starts
-      },
-    })
-  );
-
-  // Move folder mutation
-  const [moveFolder] = useMutation<
-    MoveCorpusFolderOutputs,
-    MoveCorpusFolderInputs
-  >(MOVE_CORPUS_FOLDER, {
-    refetchQueries: [
-      {
-        query: GET_CORPUS_FOLDERS,
-        variables: { corpusId },
-      },
-    ],
-  });
-
-  // Move document to folder mutation
-  const [moveDocument] = useMutation<
-    MoveDocumentToFolderOutputs,
-    MoveDocumentToFolderInputs
-  >(MOVE_DOCUMENT_TO_FOLDER, {
-    refetchQueries: [
-      {
-        query: GET_CORPUS_FOLDERS,
-        variables: { corpusId },
-      },
-    ],
-  });
+  // Note: Drag-and-drop is now handled by FolderDocumentBrowser's unified DndContext
+  // This component just renders droppable tree nodes
 
   // Fetch folders from server
   const { loading, error, data } = useQuery<
@@ -424,97 +372,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
     collapseAll();
   }, [collapseAll]);
 
-  // Drag-and-drop handlers
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveDragId(event.active.id as string);
-  }, []);
-
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      setActiveDragId(null);
-
-      if (!over || active.id === over.id) {
-        return; // Dropped on itself or no drop target
-      }
-
-      const dragData = active.data.current;
-      const dropData = over.data.current;
-
-      // Determine what was dropped and where
-      const isDraggingDocument = dragData?.type === "document";
-      const isDraggingFolder = !isDraggingDocument;
-
-      // Extract target folder ID (handle both folder tree nodes and folder cards)
-      let targetFolderId: string | null;
-      if (over.id === "root") {
-        targetFolderId = null;
-      } else if (dropData?.type === "folder") {
-        targetFolderId = dropData.folderId;
-      } else {
-        targetFolderId = over.id as string;
-      }
-
-      if (isDraggingDocument) {
-        // Moving document to folder
-        const documentId = dragData.documentId;
-
-        moveDocument({
-          variables: {
-            documentId,
-            corpusId,
-            folderId: targetFolderId,
-          },
-        })
-          .then((result) => {
-            if (result.data?.moveDocumentToFolder.ok) {
-              toast.success(
-                targetFolderId
-                  ? "Document moved to folder"
-                  : "Document moved to corpus root"
-              );
-            } else {
-              toast.error(
-                result.data?.moveDocumentToFolder.message ||
-                  "Failed to move document"
-              );
-            }
-          })
-          .catch((error) => {
-            toast.error(`Error moving document: ${error.message}`);
-          });
-      } else {
-        // Moving folder to folder
-        const draggedFolderId = active.id as string;
-
-        // Prevent moving folder into itself
-        if (draggedFolderId === targetFolderId) {
-          toast.error("Cannot move a folder into itself");
-          return;
-        }
-
-        moveFolder({
-          variables: {
-            folderId: draggedFolderId,
-            newParentId: targetFolderId,
-          },
-        })
-          .then((result) => {
-            if (result.data?.moveCorpusFolder.ok) {
-              toast.success("Folder moved successfully");
-            } else {
-              toast.error(
-                result.data?.moveCorpusFolder.message || "Failed to move folder"
-              );
-            }
-          })
-          .catch((error) => {
-            toast.error(`Error moving folder: ${error.message}`);
-          });
-      }
-    },
-    [moveFolder, moveDocument, corpusId]
-  );
+  // Note: Drag-and-drop handlers are now in FolderDocumentBrowser's unified DndContext
 
   return (
     <SidebarContainer>
@@ -551,72 +409,66 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
         </ActionRow>
       </SidebarHeader>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <TreeContainer>
-          {/* Corpus Root Item (Droppable) */}
-          <CorpusRootDropTarget
-            isSelected={selectedFolderId === null}
-            onClick={handleRootClick}
-          />
+      {/* TreeContainer is a droppable area - DndContext is provided by FolderDocumentBrowser */}
+      <TreeContainer>
+        {/* Corpus Root Item (Droppable) */}
+        <CorpusRootDropTarget
+          isSelected={selectedFolderId === null}
+          onClick={handleRootClick}
+        />
 
-          {/* Trash Folder Item */}
-          <TrashFolderItem
-            isSelected={selectedFolderId === "trash"}
-            onClick={() => {
-              setSelectedFolderId("trash");
-              onFolderSelect?.("trash");
-            }}
-          />
+        {/* Trash Folder Item */}
+        <TrashFolderItem
+          isSelected={selectedFolderId === "trash"}
+          onClick={() => {
+            setSelectedFolderId("trash");
+            onFolderSelect?.("trash");
+          }}
+        />
 
-          {/* Loading State */}
-          {loading && (
-            <LoadingContainer>
-              <Loader active inline size="small" />
-              <div style={{ marginTop: "12px" }}>Loading folders...</div>
-            </LoadingContainer>
+        {/* Loading State */}
+        {loading && (
+          <LoadingContainer>
+            <Loader active inline size="small" />
+            <div style={{ marginTop: "12px" }}>Loading folders...</div>
+          </LoadingContainer>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <ErrorContainer>
+            Failed to load folders: {error.message}
+          </ErrorContainer>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && filteredTree.length === 0 && !searchQuery && (
+          <EmptyState>
+            No folders yet. Click "New" to create your first folder.
+          </EmptyState>
+        )}
+
+        {/* Search Empty State */}
+        {!loading &&
+          !error &&
+          filteredTree.length === 0 &&
+          searchQuery &&
+          (data?.corpusFolders?.length ?? 0) > 0 && (
+            <EmptyState>No folders match "{searchQuery}"</EmptyState>
           )}
 
-          {/* Error State */}
-          {error && (
-            <ErrorContainer>
-              Failed to load folders: {error.message}
-            </ErrorContainer>
-          )}
-
-          {/* Empty State */}
-          {!loading && !error && filteredTree.length === 0 && !searchQuery && (
-            <EmptyState>
-              No folders yet. Click "New" to create your first folder.
-            </EmptyState>
-          )}
-
-          {/* Search Empty State */}
-          {!loading &&
-            !error &&
-            filteredTree.length === 0 &&
-            searchQuery &&
-            (data?.corpusFolders?.length ?? 0) > 0 && (
-              <EmptyState>No folders match "{searchQuery}"</EmptyState>
-            )}
-
-          {/* Folder Tree */}
-          {!loading &&
-            !error &&
-            filteredTree.map((folder) => (
-              <FolderTreeNode
-                key={folder.id}
-                folder={folder}
-                depth={0}
-                onFolderSelect={onFolderSelect}
-              />
-            ))}
-        </TreeContainer>
-      </DndContext>
+        {/* Folder Tree */}
+        {!loading &&
+          !error &&
+          filteredTree.map((folder) => (
+            <FolderTreeNode
+              key={folder.id}
+              folder={folder}
+              depth={0}
+              onFolderSelect={onFolderSelect}
+            />
+          ))}
+      </TreeContainer>
     </SidebarContainer>
   );
 };

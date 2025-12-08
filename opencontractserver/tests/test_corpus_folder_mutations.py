@@ -21,10 +21,9 @@ from graphql_relay import to_global_id
 from config.graphql.schema import schema
 from opencontractserver.corpuses.models import (
     Corpus,
-    CorpusDocumentFolder,
     CorpusFolder,
 )
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -513,9 +512,11 @@ class TestMoveDocumentToFolderMutation(TestCase):
 
         assert result["data"]["moveDocumentToFolder"]["ok"] is True
 
-        # Verify assignment
-        assignment = CorpusDocumentFolder.objects.get(document=doc, corpus=corpus)
-        assert assignment.folder == folder
+        # Verify assignment via DocumentPath
+        path = DocumentPath.objects.get(
+            document=doc, corpus=corpus, is_current=True, is_deleted=False
+        )
+        assert path.folder == folder
 
     def test_move_document_to_root(self):
         """Test moving document to corpus root."""
@@ -525,10 +526,7 @@ class TestMoveDocumentToFolderMutation(TestCase):
             name="Research", corpus=corpus, creator=user
         )
         doc = Document.objects.create(title="Test Doc", creator=user)
-        doc, _, _ = corpus.add_document(document=doc, user=user)
-
-        # Initially in folder
-        CorpusDocumentFolder.objects.create(document=doc, corpus=corpus, folder=folder)
+        doc, _, _ = corpus.add_document(document=doc, user=user, folder=folder)
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 
@@ -544,10 +542,11 @@ class TestMoveDocumentToFolderMutation(TestCase):
 
         assert result["data"]["moveDocumentToFolder"]["ok"] is True
 
-        # Verify document is now in root (no assignment)
-        assert not CorpusDocumentFolder.objects.filter(
-            document=doc, corpus=corpus
-        ).exists()
+        # Verify document is now in root (no folder assignment)
+        path = DocumentPath.objects.get(
+            document=doc, corpus=corpus, is_current=True, is_deleted=False
+        )
+        assert path.folder is None
 
 
 class TestMoveDocumentsToFolderMutation(TestCase):
@@ -597,10 +596,12 @@ class TestMoveDocumentsToFolderMutation(TestCase):
         assert result["data"]["moveDocumentsToFolder"]["ok"] is True
         assert result["data"]["moveDocumentsToFolder"]["movedCount"] == 3
 
-        # Verify all documents are in folder
+        # Verify all documents are in folder via DocumentPath
         for doc in docs:
-            assignment = CorpusDocumentFolder.objects.get(document=doc, corpus=corpus)
-            assert assignment.folder == folder
+            path = DocumentPath.objects.get(
+                document=doc, corpus=corpus, is_current=True, is_deleted=False
+            )
+            assert path.folder == folder
 
     def test_bulk_move_documents_to_root(self):
         """Test moving multiple documents to corpus root."""
@@ -616,8 +617,6 @@ class TestMoveDocumentsToFolderMutation(TestCase):
         for i, doc in enumerate(docs):
             # add_document returns corpus-isolated copy and creates DocumentPath
             docs[i], _, _ = corpus.add_document(document=doc, user=user, folder=folder)
-            # Don't manually create CorpusDocumentFolder - add_document handles this
-            # via DocumentPath folder parameter
 
         set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.UPDATE])
 
@@ -633,8 +632,9 @@ class TestMoveDocumentsToFolderMutation(TestCase):
         assert result["data"]["moveDocumentsToFolder"]["ok"] is True
         assert result["data"]["moveDocumentsToFolder"]["movedCount"] == 3
 
-        # Verify all documents are in root
+        # Verify all documents are in root via DocumentPath
         for doc in docs:
-            assert not CorpusDocumentFolder.objects.filter(
-                document=doc, corpus=corpus
-            ).exists()
+            path = DocumentPath.objects.get(
+                document=doc, corpus=corpus, is_current=True, is_deleted=False
+            )
+            assert path.folder is None

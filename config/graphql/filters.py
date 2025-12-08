@@ -362,44 +362,82 @@ class DocumentFilter(django_filters.FilterSet):
             return queryset.filter(Q(pdf_file="") | Q(pdf_file__exact=None))
 
     def in_corpus(self, queryset, name, value):
-        return queryset.filter(corpus=from_global_id(value)[1]).distinct()
+        """
+        Filter documents by corpus membership.
+
+        Uses DocumentPath to find documents - this is the new versioning system.
+        Falls back to M2M relationship for backward compatibility.
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        corpus_pk = from_global_id(value)[1]
+
+        # Get document IDs from active DocumentPath records (new versioning system)
+        doc_ids_from_paths = list(
+            DocumentPath.objects.filter(
+                corpus_id=corpus_pk, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+        )
+
+        # Also include documents from the M2M relationship (backward compatibility)
+        doc_ids_from_m2m = list(
+            queryset.filter(corpus=corpus_pk).values_list("id", flat=True)
+        )
+
+        # Combine both sets
+        all_doc_ids = set(doc_ids_from_paths) | set(doc_ids_from_m2m)
+
+        return queryset.filter(id__in=all_doc_ids).distinct()
 
     def in_folder(self, queryset, name, value):
         """
         Filter documents by folder assignment.
+
+        Uses DocumentPath as the source of truth for folder assignments.
+
         Special handling: value="__root__" returns documents in corpus root (no folder).
         Otherwise filters to specific folder ID.
+
+        Note: This filter works in conjunction with in_corpus filter. The queryset
+        is already filtered to documents in a specific corpus, so we need to find
+        documents that have folder=NULL in their DocumentPath for THAT corpus.
         """
         import logging
 
-        from opencontractserver.corpuses.models import CorpusDocumentFolder
+        from opencontractserver.documents.models import DocumentPath
 
         logger = logging.getLogger(__name__)
 
         logger.info(f"[QUERY] in_folder filter called with value: {value}")
 
         if value == "__root__":
-            # Get corpus_id from earlier filter (must have in_corpus_with_id set)
-            # For root documents, we need to exclude documents that have folder assignments
-            # This requires knowing the corpus context
-            result = queryset.filter(
-                ~Q(
-                    id__in=CorpusDocumentFolder.objects.filter(
-                        folder__isnull=False
-                    ).values_list("document_id", flat=True)
-                )
+            # For root documents, find documents with folder=NULL in their DocumentPath
+            # We need to find docs where their path in the corpus has no folder
+            # The queryset is already filtered to docs in the corpus via in_corpus filter
+            #
+            # Get document IDs that have a path with folder=NULL (root level docs)
+            root_doc_ids = set(
+                DocumentPath.objects.filter(
+                    folder__isnull=True, is_current=True, is_deleted=False
+                ).values_list("document_id", flat=True)
             )
+
+            # Filter queryset to only include these root-level documents
+            result = queryset.filter(id__in=root_doc_ids)
             logger.info(f"[QUERY] Filtered to root folder, count: {result.count()}")
             return result
         else:
             folder_pk = from_global_id(value)[1]
-            doc_ids = list(
-                CorpusDocumentFolder.objects.filter(folder_id=folder_pk).values_list(
-                    "document_id", flat=True
-                )
+
+            # Get document IDs from DocumentPath
+            doc_ids = set(
+                DocumentPath.objects.filter(
+                    folder_id=folder_pk, is_current=True, is_deleted=False
+                ).values_list("document_id", flat=True)
             )
+
             logger.info(
-                f"[QUERY] Filtering to folder {folder_pk}, found {len(doc_ids)} document assignments"
+                f"[QUERY] Filtering to folder {folder_pk}, found {len(doc_ids)} documents"
             )
             result = queryset.filter(id__in=doc_ids).distinct()
             logger.info(f"[QUERY] After filter, result count: {result.count()}")

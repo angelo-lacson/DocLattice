@@ -1535,16 +1535,24 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     def resolve_folder_in_corpus(self, info, corpus_id):
-        """Get folder assignment for this document in a specific corpus."""
-        from opencontractserver.corpuses.models import CorpusDocumentFolder
+        """
+        Get folder assignment for this document in a specific corpus.
+
+        Delegates to DocumentFolderService.get_document_folder() for
+        permission checking and dual-system consistency.
+        """
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+        from opencontractserver.corpuses.models import Corpus
 
         _, corpus_pk = from_global_id(corpus_id)
         try:
-            assignment = CorpusDocumentFolder.objects.get(
-                document_id=self.id, corpus_id=corpus_pk
+            corpus = Corpus.objects.get(pk=corpus_pk)
+            return DocumentFolderService.get_document_folder(
+                user=info.context.user,
+                document=self,
+                corpus=corpus,
             )
-            return assignment.folder
-        except CorpusDocumentFolder.DoesNotExist:
+        except Corpus.DoesNotExist:
             return None
 
     class Meta:

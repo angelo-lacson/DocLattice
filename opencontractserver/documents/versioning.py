@@ -28,10 +28,12 @@ Architecture Rules Implemented:
 
 import hashlib
 import logging
+import mimetypes
 import uuid
 from typing import Optional
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.db import transaction
 
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
@@ -39,6 +41,58 @@ from opencontractserver.documents.models import Document, DocumentPath
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+# Map MIME types to file extensions for creating filenames
+MIME_TO_EXTENSION = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "text/plain": ".txt",
+}
+
+
+def _create_pdf_file_from_content(
+    content: bytes,
+    content_hash: str,
+    path: str,
+    file_type: str = "application/pdf",
+) -> ContentFile:
+    """
+    Create a Django ContentFile from raw content bytes.
+
+    Used when importing content that doesn't have an associated file object.
+    The filename is derived from the path or hash, with the appropriate extension.
+
+    Args:
+        content: Raw file content bytes
+        content_hash: SHA-256 hash of the content (used for filename if path not available)
+        path: The document path (used to derive filename)
+        file_type: MIME type to determine file extension
+
+    Returns:
+        ContentFile ready for assignment to a FileField
+    """
+    # Get extension from MIME type
+    extension = MIME_TO_EXTENSION.get(file_type)
+    if not extension:
+        # Fallback to mimetypes library
+        extension = mimetypes.guess_extension(file_type) or ".bin"
+
+    # Derive filename from path or use hash
+    if path:
+        # Extract filename from path, e.g., "/documents/my_file.pdf" -> "my_file"
+        base_name = path.split("/")[-1]
+        # Remove existing extension if present
+        if "." in base_name:
+            base_name = base_name.rsplit(".", 1)[0]
+    else:
+        # Use hash prefix as filename
+        base_name = f"doc_{content_hash[:12]}"
+
+    filename = f"{base_name}{extension}"
+    return ContentFile(content, name=filename)
 
 
 def compute_sha256(content: bytes) -> str:
@@ -150,12 +204,24 @@ def import_document(
                     is_current=False
                 )
 
+                # Determine pdf_file: use provided, fall back to old doc, or create from content
+                file_type = doc_kwargs.get("file_type", old_doc.file_type)
+                effective_pdf_file = pdf_file or old_doc.pdf_file
+                if not effective_pdf_file:
+                    # Neither provided nor available from old doc - create from content
+                    effective_pdf_file = _create_pdf_file_from_content(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+
                 # Create new document version (isolated within corpus)
                 new_doc = Document.objects.create(
                     title=doc_kwargs.get("title", old_doc.title),
                     description=doc_kwargs.get("description", old_doc.description),
-                    file_type=doc_kwargs.get("file_type", old_doc.file_type),
-                    pdf_file=pdf_file or old_doc.pdf_file,
+                    file_type=file_type,
+                    pdf_file=effective_pdf_file,
                     pdf_file_hash=content_hash,
                     version_tree_id=old_doc.version_tree_id,  # Same tree
                     parent=old_doc,  # Rule C2
@@ -194,98 +260,96 @@ def import_document(
             return new_doc, "updated", new_path
 
         else:
-            # New path in this corpus
-            # Step 2: Check if this content already exists in THIS corpus
-            # (Rule I1: corpus isolation)
-            # Check both current AND historical paths (for content reuse within corpus)
-            corpus_doc_with_hash = (
-                DocumentPath.objects.filter(
-                    corpus=corpus,
-                    document__pdf_file_hash=content_hash,
-                )
-                .select_related("document")
+            # New path in this corpus - ALWAYS create a new document
+            # This ensures each upload gets its own document with proper pdf_file
+            # Check if content exists anywhere (for artifact sharing - Rule I3)
+            existing_doc_with_hash = (
+                Document.objects.filter(pdf_file_hash=content_hash)
+                .select_for_update()
                 .first()
             )
 
-            if corpus_doc_with_hash:
-                # Same content already in THIS corpus (current or historical)
-                doc = corpus_doc_with_hash.document
-                version = calculate_content_version(doc)
-                status = "linked"
+            tree_id = uuid.uuid4()  # Always new tree for each upload
+
+            if existing_doc_with_hash:
+                # Content exists elsewhere - share artifacts, track provenance (Rule I2, I3)
+                file_type = doc_kwargs.get("file_type", "application/pdf")
+                effective_pdf_file = pdf_file or existing_doc_with_hash.pdf_file
+                if not effective_pdf_file:
+                    # Neither provided nor available - create from content
+                    effective_pdf_file = _create_pdf_file_from_content(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+
+                doc = Document.objects.create(
+                    title=doc_kwargs.get("title", f"Document at {path}"),
+                    description=doc_kwargs.get("description", ""),
+                    file_type=file_type,
+                    pdf_file=effective_pdf_file,
+                    pdf_file_hash=content_hash,
+                    # Share parsing artifacts (file blobs, not duplicated)
+                    pawls_parse_file=existing_doc_with_hash.pawls_parse_file,
+                    txt_extract_file=existing_doc_with_hash.txt_extract_file,
+                    icon=existing_doc_with_hash.icon,
+                    md_summary_file=existing_doc_with_hash.md_summary_file,
+                    page_count=existing_doc_with_hash.page_count,
+                    is_public=doc_kwargs.get(
+                        "is_public", existing_doc_with_hash.is_public
+                    ),
+                    version_tree_id=tree_id,  # New isolated tree
+                    is_current=True,
+                    parent=None,  # Root of NEW content tree
+                    source_document=existing_doc_with_hash,  # Rule I2: provenance
+                    structural_annotation_set=existing_doc_with_hash.structural_annotation_set,
+                    creator=user,
+                    **{
+                        k: v
+                        for k, v in doc_kwargs.items()
+                        if k not in ["title", "description", "file_type", "is_public"]
+                    },
+                )
+                version = 1
+                status = "created"
                 logger.info(
-                    f"Content already in corpus {corpus.id} as doc {doc.id}, "
-                    f"linking to new path {path}"
+                    f"Created new doc {doc.id} at {path} in corpus {corpus.id} "
+                    f"(shared artifacts from doc {existing_doc_with_hash.id})"
                 )
             else:
-                # Content not in this corpus - create new corpus-isolated document
-                # Check if content exists globally (for provenance tracking - Rule I2)
-                global_doc_with_hash = (
-                    Document.objects.filter(pdf_file_hash=content_hash)
-                    .select_for_update()
-                    .first()
+                # Brand new content globally (Rule C1)
+                # Create pdf_file from content if not provided
+                file_type = doc_kwargs.get("file_type", "application/pdf")
+                effective_pdf_file = pdf_file
+                if not effective_pdf_file:
+                    effective_pdf_file = _create_pdf_file_from_content(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+
+                doc = Document.objects.create(
+                    title=doc_kwargs.get("title", f"Document at {path}"),
+                    description=doc_kwargs.get("description", ""),
+                    file_type=file_type,
+                    pdf_file=effective_pdf_file,
+                    pdf_file_hash=content_hash,
+                    version_tree_id=tree_id,
+                    is_current=True,
+                    parent=None,  # Root of content tree
+                    source_document=None,  # No provenance
+                    creator=user,
+                    **{
+                        k: v
+                        for k, v in doc_kwargs.items()
+                        if k not in ["title", "description", "file_type"]
+                    },
                 )
-
-                tree_id = uuid.uuid4()  # Always new tree for corpus isolation
-
-                if global_doc_with_hash:
-                    # Content exists elsewhere - track provenance (Rule I2)
-                    doc = Document.objects.create(
-                        title=doc_kwargs.get("title", f"Document at {path}"),
-                        description=doc_kwargs.get("description", ""),
-                        file_type=doc_kwargs.get("file_type", "application/pdf"),
-                        pdf_file=pdf_file or global_doc_with_hash.pdf_file,  # Rule I3
-                        pdf_file_hash=content_hash,
-                        # Share parsing artifacts (file blobs, not duplicated)
-                        pawls_parse_file=global_doc_with_hash.pawls_parse_file,
-                        txt_extract_file=global_doc_with_hash.txt_extract_file,
-                        icon=global_doc_with_hash.icon,
-                        md_summary_file=global_doc_with_hash.md_summary_file,
-                        page_count=global_doc_with_hash.page_count,
-                        is_public=global_doc_with_hash.is_public,  # Inherit public status
-                        version_tree_id=tree_id,  # New isolated tree
-                        is_current=True,
-                        parent=None,  # Root of NEW content tree
-                        source_document=global_doc_with_hash,  # Rule I2: provenance
-                        # Share structural annotations
-                        structural_annotation_set=global_doc_with_hash.structural_annotation_set,
-                        creator=user,
-                        **{
-                            k: v
-                            for k, v in doc_kwargs.items()
-                            if k not in ["title", "description", "file_type"]
-                        },
-                    )
-                    version = 1
-                    status = "created_from_existing"
-                    logger.info(
-                        f"Created corpus-isolated doc {doc.id} from existing "
-                        f"doc {global_doc_with_hash.id} at {path} in corpus {corpus.id} "
-                        f"(structural_set={global_doc_with_hash.structural_annotation_set_id})"
-                    )
-                else:
-                    # Brand new content globally (Rule C1)
-                    doc = Document.objects.create(
-                        title=doc_kwargs.get("title", f"Document at {path}"),
-                        description=doc_kwargs.get("description", ""),
-                        file_type=doc_kwargs.get("file_type", "application/pdf"),
-                        pdf_file=pdf_file,
-                        pdf_file_hash=content_hash,
-                        version_tree_id=tree_id,
-                        is_current=True,
-                        parent=None,  # Root of content tree
-                        source_document=None,  # No provenance
-                        creator=user,
-                        **{
-                            k: v
-                            for k, v in doc_kwargs.items()
-                            if k not in ["title", "description", "file_type"]
-                        },
-                    )
-                    version = 1
-                    status = "created"
-                    logger.info(
-                        f"Created new doc {doc.id} at {path} in corpus {corpus.id}"
-                    )
+                version = 1
+                status = "created"
+                logger.info(f"Created new doc {doc.id} at {path} in corpus {corpus.id}")
 
             # Create root of path tree (Rule P1)
             new_path = DocumentPath.objects.create(

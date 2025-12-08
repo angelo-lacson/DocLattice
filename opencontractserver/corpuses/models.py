@@ -499,6 +499,10 @@ class Corpus(TreeNode):
                 creator=user,
             )
 
+            # Maintain M2M relationship for backwards compatibility
+            # This allows legacy queries like Document.objects.filter(corpus=...)
+            self.documents.add(corpus_copy)
+
             logger.info(
                 f"Added corpus-isolated doc {corpus_copy.pk} to corpus {self.pk} at {path}"
             )
@@ -1137,14 +1141,29 @@ class CorpusFolder(TreeNode):
         return self.descendants(include_self=True)
 
     def get_document_count(self) -> int:
-        """Get count of documents directly in this folder (not including subfolders)."""
-        return self.document_assignments.count()
+        """
+        Get count of documents directly in this folder (not including subfolders).
+
+        Uses DocumentPath with proper filtering for is_current=True, is_deleted=False.
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        return DocumentPath.objects.filter(
+            folder=self, is_current=True, is_deleted=False
+        ).count()
 
     def get_descendant_document_count(self) -> int:
-        """Get count of documents in this folder and all subfolders."""
+        """
+        Get count of documents in this folder and all subfolders.
+
+        Uses DocumentPath with proper filtering for is_current=True, is_deleted=False.
+        """
+        from opencontractserver.documents.models import DocumentPath
+
         descendant_folders = self.get_descendant_folders()
-        return CorpusDocumentFolder.objects.filter(
-            folder__in=descendant_folders
+
+        return DocumentPath.objects.filter(
+            folder__in=descendant_folders, is_current=True, is_deleted=False
         ).count()
 
     def __str__(self):
@@ -1165,67 +1184,3 @@ class CorpusFolderGroupObjectPermission(GroupObjectPermissionBase):
     content_object = django.db.models.ForeignKey(
         "CorpusFolder", on_delete=django.db.models.CASCADE
     )
-
-
-class CorpusDocumentFolder(django.db.models.Model):
-    """
-    Junction table linking documents to folders within a corpus.
-    Enforces one-folder-per-document-per-corpus constraint.
-    Null folder means document is in corpus "root".
-    """
-
-    document = django.db.models.ForeignKey(
-        "documents.Document",
-        on_delete=django.db.models.CASCADE,
-        related_name="corpus_folder_assignments",
-    )
-
-    corpus = django.db.models.ForeignKey(
-        "corpuses.Corpus",
-        on_delete=django.db.models.CASCADE,
-        related_name="document_folder_assignments",
-    )
-
-    folder = django.db.models.ForeignKey(
-        "CorpusFolder",
-        on_delete=django.db.models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="document_assignments",
-        help_text="Folder containing this document. Null = root of corpus.",
-    )
-
-    # Timestamps
-    added_to_folder = django.db.models.DateTimeField(
-        default=timezone.now,
-        help_text="When document was added to this folder",
-    )
-
-    class Meta:
-        indexes = [
-            django.db.models.Index(fields=["corpus", "folder"]),
-            django.db.models.Index(fields=["document", "corpus"]),
-            django.db.models.Index(fields=["folder"]),
-        ]
-        constraints = [
-            # One folder per document per corpus (null folder = root)
-            django.db.models.UniqueConstraint(
-                fields=["document", "corpus"],
-                name="unique_document_folder_per_corpus",
-            ),
-        ]
-
-    def clean(self):
-        """Validate folder belongs to same corpus."""
-        super().clean()
-        if self.folder and self.folder.corpus_id != self.corpus_id:
-            raise ValidationError("Folder must belong to the same corpus")
-
-    def save(self, *args, **kwargs):
-        """Validate before saving."""
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        folder_path = self.folder.get_path() if self.folder else "root"
-        return f"{self.document.title} in {self.corpus.title}/{folder_path}"

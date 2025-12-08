@@ -1,0 +1,1779 @@
+"""
+DocumentFolderService - Centralized service for document and folder operations.
+
+This service consolidates all document lifecycle and folder-related business logic
+into a single, DRY, permission-aware module following the QueryOptimizer pattern.
+
+Key Design Principles:
+1. DRY Permissions: Single permission check methods used by all operations
+2. Transaction Safety: All mutations wrapped in transactions
+3. Query Optimization: Proper use of select_related, prefetch_related, with_tree_fields
+4. IDOR Protection: Consistent error messages for not-found vs permission-denied
+5. One-Stop Shop: All document CRUD, folder CRUD, and corpus operations in one place
+
+Document Lifecycle Operations:
+- create_document(): Create standalone documents (not in corpus)
+- upload_document_to_corpus(): Upload new content to corpus with deduplication
+- add_document_to_corpus(): Add existing document to corpus (creates isolated copy)
+- remove_document_from_corpus(): Soft-delete document from corpus
+- check_user_upload_quota(): Verify user can create more documents
+
+Folder Operations:
+- create_folder(), update_folder(), move_folder(), delete_folder()
+- get_visible_folders(), get_folder_by_id(), get_folder_tree()
+
+Document-in-Folder Operations:
+- move_document_to_folder(), move_documents_to_folder()
+- soft_delete_document(), restore_document()
+- get_folder_documents(), get_deleted_documents()
+
+Permission Model (from consolidated_permissioning_guide.md):
+- CorpusFolder objects inherit ALL permissions from parent Corpus
+- Write operations require: User is Corpus creator OR User has UPDATE permission
+- CRITICAL: corpus.is_public=True grants READ-ONLY access, NOT write access
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+from django.conf import settings
+from django.db import transaction
+from django.db.models import Q, QuerySet
+
+from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.permissioning import (
+    set_permissions_for_obj_to_user,
+    user_has_permission_for_obj,
+)
+
+if TYPE_CHECKING:
+    from django.contrib.auth import get_user_model
+
+    from opencontractserver.corpuses.models import Corpus, CorpusFolder
+    from opencontractserver.documents.models import Document, DocumentPath
+
+    User = get_user_model()
+
+logger = logging.getLogger(__name__)
+
+
+class DocumentFolderService:
+    """
+    Centralized service for all document lifecycle and folder operations.
+
+    This is the ONE-STOP-SHOP for:
+    - Document creation (standalone and corpus imports)
+    - Document-to-corpus operations (add, remove)
+    - Folder CRUD operations
+    - Document-in-folder operations (move, delete, restore)
+    - Permission management for documents
+
+    Follows the QueryOptimizer pattern with:
+    - Static classmethod-based API
+    - Centralized permission checks
+    - Transaction-safe mutations
+    - Query optimization for reads
+
+    Usage:
+        # Document creation
+        doc, error = DocumentFolderService.create_document(user, file_bytes, filename, title)
+        doc, status, error = DocumentFolderService.upload_document_to_corpus(
+            user, corpus, file_bytes, filename, title, folder=folder
+        )
+
+        # Corpus operations
+        corpus_doc, status, error = DocumentFolderService.add_document_to_corpus(user, doc, corpus)
+        success, error = DocumentFolderService.remove_document_from_corpus(user, doc, corpus)
+
+        # Folder operations
+        folder, error = DocumentFolderService.create_folder(user, corpus, "Name")
+        success, error = DocumentFolderService.move_document_to_folder(user, doc, corpus, folder)
+
+        # Read operations
+        folders = DocumentFolderService.get_visible_folders(user, corpus_id)
+        documents = DocumentFolderService.get_folder_documents(user, corpus_id, folder_id)
+
+        # Permission checks
+        can_read = DocumentFolderService.check_corpus_read_permission(user, corpus)
+        can_write = DocumentFolderService.check_corpus_write_permission(user, corpus)
+    """
+
+    # =========================================================================
+    # PERMISSION CHECKING - DRY methods used by all operations
+    # =========================================================================
+
+    @classmethod
+    def check_corpus_read_permission(
+        cls,
+        user: User,
+        corpus: Corpus,
+    ) -> bool:
+        """
+        Check if user can READ the corpus (and view its folders).
+
+        Returns True if ANY of:
+        - User is superuser
+        - User is corpus creator
+        - Corpus is public (is_public=True)
+        - User has explicit READ permission via django-guardian
+
+        Args:
+            user: The user to check permissions for
+            corpus: The corpus to check access to
+
+        Returns:
+            True if user has read access, False otherwise
+        """
+        # Superuser has all permissions
+        if user.is_superuser:
+            return True
+
+        # Anonymous users can only access public corpuses
+        if user.is_anonymous:
+            return corpus.is_public
+
+        # Creator has full access
+        if corpus.creator_id == user.id:
+            return True
+
+        # Public corpuses are readable by all authenticated users
+        if corpus.is_public:
+            return True
+
+        # Check explicit guardian permission
+        return user_has_permission_for_obj(
+            user_val=user,
+            instance=corpus,
+            permission=PermissionTypes.READ,
+            include_group_permissions=True,
+        )
+
+    @classmethod
+    def check_corpus_write_permission(
+        cls,
+        user: User,
+        corpus: Corpus,
+    ) -> bool:
+        """
+        Check if user can WRITE to corpus (create/update/move/delete folders).
+
+        Returns True if ANY of:
+        - User is superuser
+        - User is corpus creator
+        - User has explicit UPDATE permission via django-guardian
+
+        CRITICAL: corpus.is_public=True does NOT grant write access.
+        This is a security-critical distinction from read access.
+
+        Args:
+            user: The user to check permissions for
+            corpus: The corpus to check write access to
+
+        Returns:
+            True if user has write access, False otherwise
+        """
+        # Superuser has all permissions
+        if user.is_superuser:
+            return True
+
+        # Anonymous users NEVER have write access
+        if user.is_anonymous:
+            return False
+
+        # Creator has full access
+        if corpus.creator_id == user.id:
+            return True
+
+        # CRITICAL: is_public does NOT grant write access
+        # Only check explicit UPDATE permission
+        return user_has_permission_for_obj(
+            user_val=user,
+            instance=corpus,
+            permission=PermissionTypes.UPDATE,
+            include_group_permissions=True,
+        )
+
+    @classmethod
+    def check_corpus_delete_permission(
+        cls,
+        user: User,
+        corpus: Corpus,
+    ) -> bool:
+        """
+        Check if user can DELETE from corpus (delete folders, soft-delete documents).
+
+        Returns True if ANY of:
+        - User is superuser
+        - User is corpus creator
+        - User has explicit DELETE permission via django-guardian
+
+        Args:
+            user: The user to check permissions for
+            corpus: The corpus to check delete access to
+
+        Returns:
+            True if user has delete access, False otherwise
+        """
+        # Superuser has all permissions
+        if user.is_superuser:
+            return True
+
+        # Anonymous users NEVER have delete access
+        if user.is_anonymous:
+            return False
+
+        # Creator has full access
+        if corpus.creator_id == user.id:
+            return True
+
+        # Check explicit DELETE permission
+        return user_has_permission_for_obj(
+            user_val=user,
+            instance=corpus,
+            permission=PermissionTypes.DELETE,
+            include_group_permissions=True,
+        )
+
+    @classmethod
+    def check_document_in_corpus(
+        cls,
+        document: Document,
+        corpus: Corpus,
+    ) -> bool:
+        """
+        Verify that a document belongs to a corpus.
+
+        Args:
+            document: The document to check
+            corpus: The corpus to check membership in
+
+        Returns:
+            True if document belongs to corpus, False otherwise
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        # Check DocumentPath (source of truth for corpus membership)
+        return DocumentPath.objects.filter(
+            document=document,
+            corpus=corpus,
+        ).exists()
+
+    # =========================================================================
+    # FOLDER READ OPERATIONS
+    # =========================================================================
+
+    @classmethod
+    def get_visible_folders(
+        cls,
+        user: User,
+        corpus_id: int,
+        parent_id: int | None = None,
+    ) -> QuerySet[CorpusFolder]:
+        """
+        Get folders visible to user in a corpus.
+
+        Returns an optimized QuerySet with tree fields and related objects
+        prefetched for efficient rendering.
+
+        Args:
+            user: Requesting user
+            corpus_id: ID of corpus to query folders from
+            parent_id: Optional parent folder ID to filter children only
+                       (None returns all folders, not just root)
+
+        Returns:
+            QuerySet of CorpusFolder objects, empty if no access
+
+        Permissions:
+            Requires corpus READ permission
+        """
+        from opencontractserver.corpuses.models import Corpus, CorpusFolder
+
+        # Get corpus and check permission
+        try:
+            corpus = Corpus.objects.get(id=corpus_id)
+        except Corpus.DoesNotExist:
+            return CorpusFolder.objects.none()
+
+        if not cls.check_corpus_read_permission(user, corpus):
+            return CorpusFolder.objects.none()
+
+        # Build optimized query
+        # Note: Don't use order_by("tree_path") as tree_path is a CTE annotation
+        # that requires special handling. Frontend reconstructs tree from parentId.
+        qs = CorpusFolder.objects.filter(corpus_id=corpus_id).select_related(
+            "corpus", "creator", "parent"
+        )
+
+        # Filter to specific parent if requested
+        if parent_id is not None:
+            qs = qs.filter(parent_id=parent_id)
+
+        return qs
+
+    @classmethod
+    def get_folder_by_id(
+        cls,
+        user: User,
+        folder_id: int,
+    ) -> CorpusFolder | None:
+        """
+        Get single folder by ID with permission check.
+
+        Implements IDOR protection by returning None for both
+        not-found and permission-denied cases.
+
+        Args:
+            user: Requesting user
+            folder_id: ID of folder to retrieve
+
+        Returns:
+            CorpusFolder if found and accessible, None otherwise
+        """
+        from opencontractserver.corpuses.models import CorpusFolder
+
+        try:
+            folder = CorpusFolder.objects.select_related(
+                "corpus", "creator", "parent"
+            ).get(id=folder_id)
+        except CorpusFolder.DoesNotExist:
+            return None
+
+        # Check corpus permission (folders inherit from corpus)
+        if not cls.check_corpus_read_permission(user, folder.corpus):
+            return None
+
+        return folder
+
+    @classmethod
+    def get_folder_tree(
+        cls,
+        user: User,
+        corpus_id: int,
+    ) -> list[dict]:
+        """
+        Get full folder tree for corpus as nested dictionary structure.
+
+        Optimized to use a single query and build tree in Python.
+
+        Args:
+            user: Requesting user
+            corpus_id: ID of corpus to get tree for
+
+        Returns:
+            List of root folder dicts with nested children:
+            [
+                {
+                    "id": 1,
+                    "name": "Contracts",
+                    "path": "/Contracts",
+                    "documentCount": 5,
+                    "children": [...]
+                }
+            ]
+        """
+        folders = cls.get_visible_folders(user, corpus_id)
+
+        # Build lookup dict
+        folder_dict: dict[int, dict] = {}
+        for folder in folders:
+            folder_dict[folder.id] = {
+                "id": folder.id,
+                "name": folder.name,
+                "path": folder.get_path(),
+                "documentCount": folder.get_document_count(),
+                "parentId": folder.parent_id,
+                "children": [],
+            }
+
+        # Build tree structure
+        roots: list[dict] = []
+        for folder_id, folder_data in folder_dict.items():
+            parent_id = folder_data.get("parentId")
+            if parent_id and parent_id in folder_dict:
+                folder_dict[parent_id]["children"].append(folder_data)
+            else:
+                roots.append(folder_data)
+
+        return roots
+
+    # =========================================================================
+    # DOCUMENT-IN-FOLDER READ OPERATIONS
+    # =========================================================================
+
+    @classmethod
+    def get_folder_documents(
+        cls,
+        user: User,
+        corpus_id: int,
+        folder_id: int | None = None,
+        include_deleted: bool = False,
+    ) -> QuerySet[Document]:
+        """
+        Get documents in a specific folder with permission filtering.
+
+        Args:
+            user: Requesting user
+            corpus_id: ID of corpus context
+            folder_id: Folder ID to get documents from
+                       None = corpus root (documents with no folder)
+            include_deleted: If True, include soft-deleted documents
+
+        Returns:
+            QuerySet of Document objects, empty if no access
+
+        Permissions:
+            Requires corpus READ permission
+        """
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        # Get corpus and check permission
+        try:
+            corpus = Corpus.objects.get(id=corpus_id)
+        except Corpus.DoesNotExist:
+            return Document.objects.none()
+
+        if not cls.check_corpus_read_permission(user, corpus):
+            return Document.objects.none()
+
+        # Build filters for DocumentPath
+        path_filters = Q(corpus_id=corpus_id, is_current=True)
+        if not include_deleted:
+            path_filters &= Q(is_deleted=False)
+
+        if folder_id is None:
+            # Root level: documents with no folder
+            path_filters &= Q(folder__isnull=True)
+        else:
+            path_filters &= Q(folder_id=folder_id)
+
+        # Get document IDs from DocumentPath
+        doc_ids = DocumentPath.objects.filter(path_filters).values_list(
+            "document_id", flat=True
+        )
+
+        return Document.objects.filter(id__in=doc_ids).select_related("creator")
+
+    @classmethod
+    def get_folder_document_ids(
+        cls,
+        user: User,
+        corpus_id: int,
+        folder_id: int | None = None,
+    ) -> set[int]:
+        """
+        Get document IDs in a folder (optimized for filtering).
+
+        This is a lightweight version of get_folder_documents that returns
+        only IDs, useful for QuerySet filtering.
+
+        Args:
+            user: Requesting user
+            corpus_id: ID of corpus context
+            folder_id: Folder ID (None = root level)
+
+        Returns:
+            Set of document IDs in the folder
+        """
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import DocumentPath
+
+        # Get corpus and check permission
+        try:
+            corpus = Corpus.objects.get(id=corpus_id)
+        except Corpus.DoesNotExist:
+            return set()
+
+        if not cls.check_corpus_read_permission(user, corpus):
+            return set()
+
+        # Build filters for DocumentPath
+        path_filters = Q(corpus_id=corpus_id, is_current=True, is_deleted=False)
+        if folder_id is None:
+            path_filters &= Q(folder__isnull=True)
+        else:
+            path_filters &= Q(folder_id=folder_id)
+
+        return set(
+            DocumentPath.objects.filter(path_filters).values_list(
+                "document_id", flat=True
+            )
+        )
+
+    @classmethod
+    def get_deleted_documents(
+        cls,
+        user: User,
+        corpus_id: int,
+    ) -> QuerySet[DocumentPath]:
+        """
+        Get soft-deleted documents for "trash" view.
+
+        Returns DocumentPath records (not Documents) because we need
+        the path metadata for restore operations.
+
+        Args:
+            user: Requesting user
+            corpus_id: ID of corpus to get deleted documents from
+
+        Returns:
+            QuerySet of DocumentPath records with is_deleted=True
+
+        Permissions:
+            Requires corpus READ permission
+        """
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import DocumentPath
+
+        try:
+            corpus = Corpus.objects.get(id=corpus_id)
+        except Corpus.DoesNotExist:
+            return DocumentPath.objects.none()
+
+        if not cls.check_corpus_read_permission(user, corpus):
+            return DocumentPath.objects.none()
+
+        return (
+            DocumentPath.objects.filter(
+                corpus_id=corpus_id,
+                is_current=True,
+                is_deleted=True,
+            )
+            .select_related("document", "folder", "document__creator")
+            .order_by("-modified")
+        )
+
+    @classmethod
+    def get_folder_document_count(
+        cls,
+        user: User,
+        folder: CorpusFolder,
+        include_descendants: bool = False,
+    ) -> int:
+        """
+        Get count of documents in folder.
+
+        Uses the optimized CorpusFolder.get_document_count() method
+        which properly handles dual-system filtering.
+
+        Args:
+            user: Requesting user
+            folder: Folder to count documents in
+            include_descendants: If True, include documents in subfolders
+
+        Returns:
+            Document count, 0 if no access
+        """
+        if not cls.check_corpus_read_permission(user, folder.corpus):
+            return 0
+
+        if include_descendants:
+            return folder.get_descendant_document_count()
+        return folder.get_document_count()
+
+    # =========================================================================
+    # FOLDER WRITE OPERATIONS
+    # =========================================================================
+
+    @classmethod
+    def create_folder(
+        cls,
+        user: User,
+        corpus: Corpus,
+        name: str,
+        parent: CorpusFolder | None = None,
+        description: str = "",
+        color: str | None = None,
+        icon: str | None = None,
+        tags: list[str] | None = None,
+        is_public: bool = False,
+    ) -> tuple[CorpusFolder | None, str]:
+        """
+        Create a new folder in corpus.
+
+        Args:
+            user: Creating user
+            corpus: Parent corpus
+            name: Folder name (must be unique within parent)
+            parent: Parent folder (None = create at root level)
+            description: Optional description
+            color: Hex color for UI (e.g., "#3B82F6")
+            icon: Icon identifier for UI
+            tags: List of tags
+            is_public: Whether folder is publicly visible
+
+        Returns:
+            (folder, error_message) - folder is None on error
+
+        Validations:
+            - User has corpus UPDATE permission
+            - Name is unique within parent
+            - Parent (if provided) is in same corpus
+
+        Example:
+            folder, error = DocumentFolderService.create_folder(
+                user=request.user,
+                corpus=corpus,
+                name="Contracts",
+                parent=legal_folder,
+            )
+            if error:
+                return {"ok": False, "message": error}
+        """
+        from opencontractserver.corpuses.models import CorpusFolder
+
+        # Permission check
+        if not cls.check_corpus_write_permission(user, corpus):
+            return (
+                None,
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        # Validate parent belongs to same corpus
+        if parent is not None and parent.corpus_id != corpus.id:
+            return None, "Parent folder must be in the same corpus"
+
+        # Validate unique name within parent
+        exists = CorpusFolder.objects.filter(
+            corpus=corpus,
+            parent=parent,
+            name=name,
+        ).exists()
+        if exists:
+            return None, f"A folder named '{name}' already exists in this location"
+
+        # Create folder
+        with transaction.atomic():
+            folder = CorpusFolder.objects.create(
+                corpus=corpus,
+                parent=parent,
+                name=name,
+                description=description,
+                color=color or "",
+                icon=icon or "",
+                tags=tags or [],
+                is_public=is_public,
+                creator=user,
+            )
+            logger.info(
+                f"Created folder '{name}' (id={folder.id}) in corpus {corpus.id} by user {user.id}"
+            )
+            return folder, ""
+
+    @classmethod
+    def update_folder(
+        cls,
+        user: User,
+        folder: CorpusFolder,
+        name: str | None = None,
+        description: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        tags: list[str] | None = None,
+    ) -> tuple[bool, str]:
+        """
+        Update folder properties.
+
+        Args:
+            user: Updating user
+            folder: Folder to update
+            name: New name (if changing)
+            description: New description
+            color: New color
+            icon: New icon
+            tags: New tags list
+
+        Returns:
+            (success, error_message)
+
+        Validations:
+            - User has corpus UPDATE permission
+            - Name uniqueness within parent (if name is changing)
+        """
+        from opencontractserver.corpuses.models import CorpusFolder
+
+        # Permission check
+        if not cls.check_corpus_write_permission(user, folder.corpus):
+            return (
+                False,
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        # Validate name uniqueness if changing
+        if name is not None and name != folder.name:
+            exists = (
+                CorpusFolder.objects.filter(
+                    corpus=folder.corpus,
+                    parent=folder.parent,
+                    name=name,
+                )
+                .exclude(id=folder.id)
+                .exists()
+            )
+            if exists:
+                return False, f"A folder named '{name}' already exists in this location"
+
+        # Update folder
+        with transaction.atomic():
+            if name is not None:
+                folder.name = name
+            if description is not None:
+                folder.description = description
+            if color is not None:
+                folder.color = color
+            if icon is not None:
+                folder.icon = icon
+            if tags is not None:
+                folder.tags = tags
+
+            folder.save()
+            logger.info(f"Updated folder {folder.id} by user {user.id}")
+            return True, ""
+
+    @classmethod
+    def move_folder(
+        cls,
+        user: User,
+        folder: CorpusFolder,
+        new_parent: CorpusFolder | None = None,
+    ) -> tuple[bool, str]:
+        """
+        Move folder to new parent.
+
+        Args:
+            user: Moving user
+            folder: Folder to move
+            new_parent: New parent folder (None = move to root)
+
+        Returns:
+            (success, error_message)
+
+        Validations:
+            - User has corpus UPDATE permission
+            - Cannot move folder into itself
+            - Cannot move folder into its descendants
+            - New parent must be in same corpus
+        """
+        # Permission check
+        if not cls.check_corpus_write_permission(user, folder.corpus):
+            return (
+                False,
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        # Cannot move to itself
+        if new_parent is not None and new_parent.id == folder.id:
+            return False, "Cannot move a folder into itself"
+
+        # Cannot move into descendants
+        if new_parent is not None:
+            descendants = folder.descendants()
+            if descendants.filter(id=new_parent.id).exists():
+                return False, "Cannot move a folder into one of its descendants"
+
+            # Validate same corpus
+            if new_parent.corpus_id != folder.corpus_id:
+                return False, "Cannot move folder to a different corpus"
+
+        # Move folder
+        with transaction.atomic():
+            folder.parent = new_parent
+            folder.save()
+            logger.info(
+                f"Moved folder {folder.id} to parent {new_parent.id if new_parent else 'root'} by user {user.id}"
+            )
+            return True, ""
+
+    @classmethod
+    def delete_folder(
+        cls,
+        user: User,
+        folder: CorpusFolder,
+        move_children_to_parent: bool = True,
+    ) -> tuple[bool, str]:
+        """
+        Delete folder.
+
+        Args:
+            user: Deleting user
+            folder: Folder to delete
+            move_children_to_parent: If True, reparent child folders to this folder's parent
+                                     If False, cascade delete child folders
+
+        Returns:
+            (success, error_message)
+
+        Side Effects:
+            - Documents in folder have their folder assignment removed (moved to root)
+            - Child folders are either reparented or deleted based on flag
+
+        Permissions:
+            Requires corpus DELETE permission
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        # Permission check
+        if not cls.check_corpus_delete_permission(user, folder.corpus):
+            return (
+                False,
+                "Permission denied: You do not have delete access to this corpus",
+            )
+
+        with transaction.atomic():
+            # Handle child folders
+            if move_children_to_parent:
+                # Reparent children to this folder's parent
+                folder.children.update(parent=folder.parent)
+            # else: cascade delete will handle children automatically
+
+            # Move documents to root (set folder=NULL)
+            DocumentPath.objects.filter(
+                folder=folder,
+                is_current=True,
+            ).update(folder=None)
+
+            # Delete folder
+            folder_id = folder.id
+            folder.delete()
+
+            logger.info(f"Deleted folder {folder_id} by user {user.id}")
+            return True, ""
+
+    # =========================================================================
+    # DOCUMENT-IN-FOLDER WRITE OPERATIONS
+    # =========================================================================
+
+    @classmethod
+    def move_document_to_folder(
+        cls,
+        user: User,
+        document: Document,
+        corpus: Corpus,
+        folder: CorpusFolder | None = None,
+    ) -> tuple[bool, str]:
+        """
+        Move single document to folder.
+
+        Args:
+            user: Moving user
+            document: Document to move
+            corpus: Corpus context
+            folder: Target folder (None = move to root)
+
+        Returns:
+            (success, error_message)
+
+        Validations:
+            - User has corpus UPDATE permission
+            - Document belongs to corpus
+            - Folder (if provided) belongs to corpus
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        # Permission check
+        if not cls.check_corpus_write_permission(user, corpus):
+            return (
+                False,
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        # Validate document belongs to corpus
+        if not cls.check_document_in_corpus(document, corpus):
+            return False, "Document does not belong to this corpus"
+
+        # Validate folder belongs to corpus
+        if folder is not None and folder.corpus_id != corpus.id:
+            return False, "Target folder does not belong to this corpus"
+
+        with transaction.atomic():
+            DocumentPath.objects.filter(
+                document=document,
+                corpus=corpus,
+                is_current=True,
+                is_deleted=False,
+            ).update(folder=folder)
+
+            logger.info(
+                f"Moved document {document.id} to folder {folder.id if folder else 'root'} "
+                f"in corpus {corpus.id} by user {user.id}"
+            )
+            return True, ""
+
+    @classmethod
+    def move_documents_to_folder(
+        cls,
+        user: User,
+        document_ids: list[int],
+        corpus: Corpus,
+        folder: CorpusFolder | None = None,
+    ) -> tuple[int, str]:
+        """
+        Bulk move documents to folder.
+
+        Args:
+            user: Moving user
+            document_ids: List of document IDs to move
+            corpus: Corpus context
+            folder: Target folder (None = move to root)
+
+        Returns:
+            (moved_count, error_message)
+
+        Validations:
+            - User has corpus UPDATE permission
+            - All documents belong to corpus
+            - Folder (if provided) belongs to corpus
+        """
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        # Permission check
+        if not cls.check_corpus_write_permission(user, corpus):
+            return 0, "Permission denied: You do not have write access to this corpus"
+
+        # Validate folder belongs to corpus
+        if folder is not None and folder.corpus_id != corpus.id:
+            return 0, "Target folder does not belong to this corpus"
+
+        # Get documents
+        documents = Document.objects.filter(id__in=document_ids)
+
+        # Validate all documents belong to corpus
+        for doc in documents:
+            if not cls.check_document_in_corpus(doc, corpus):
+                return 0, f"Document {doc.id} does not belong to this corpus"
+
+        with transaction.atomic():
+            # Bulk update DocumentPath
+            DocumentPath.objects.filter(
+                document_id__in=document_ids,
+                corpus=corpus,
+                is_current=True,
+                is_deleted=False,
+            ).update(folder=folder)
+
+            logger.info(
+                f"Bulk moved {len(document_ids)} documents to folder "
+                f"{folder.id if folder else 'root'} in corpus {corpus.id} by user {user.id}"
+            )
+            return len(document_ids), ""
+
+    @classmethod
+    def soft_delete_document(
+        cls,
+        user: User,
+        document: Document,
+        corpus: Corpus,
+    ) -> tuple[bool, str]:
+        """
+        Soft-delete document (move to trash).
+
+        Creates new DocumentPath with is_deleted=True following Rule P1
+        (every lifecycle event creates new node).
+
+        Args:
+            user: Deleting user
+            document: Document to soft-delete
+            corpus: Corpus context
+
+        Returns:
+            (success, error_message)
+
+        Permissions:
+            Requires corpus DELETE permission
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        # Permission check
+        if not cls.check_corpus_delete_permission(user, corpus):
+            return (
+                False,
+                "Permission denied: You do not have delete access to this corpus",
+            )
+
+        # Validate document belongs to corpus
+        if not cls.check_document_in_corpus(document, corpus):
+            return False, "Document does not belong to this corpus"
+
+        with transaction.atomic():
+            # Get current path
+            try:
+                current_path = DocumentPath.objects.get(
+                    document=document,
+                    corpus=corpus,
+                    is_current=True,
+                    is_deleted=False,
+                )
+            except DocumentPath.DoesNotExist:
+                return False, "Document has no active path in this corpus"
+
+            # Mark current as non-current
+            current_path.is_current = False
+            current_path.save()
+
+            # Create new deleted path (Rule P1)
+            DocumentPath.objects.create(
+                document=document,
+                corpus=corpus,
+                creator=user,
+                folder=current_path.folder,
+                path=current_path.path,
+                version_number=current_path.version_number,
+                parent=current_path,
+                is_deleted=True,
+                is_current=True,
+            )
+
+            logger.info(
+                f"Soft-deleted document {document.id} in corpus {corpus.id} by user {user.id}"
+            )
+            return True, ""
+
+    @classmethod
+    def restore_document(
+        cls,
+        user: User,
+        document_path: DocumentPath,
+    ) -> tuple[bool, str]:
+        """
+        Restore soft-deleted document.
+
+        Creates new DocumentPath with is_deleted=False following Rule P1.
+
+        Args:
+            user: Restoring user
+            document_path: The deleted DocumentPath to restore from
+
+        Returns:
+            (success, error_message)
+
+        Permissions:
+            Requires corpus UPDATE permission
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        # Permission check
+        if not cls.check_corpus_write_permission(user, document_path.corpus):
+            return (
+                False,
+                "You do not have permission to restore documents in this corpus",
+            )
+
+        # Validate path is deleted
+        if not document_path.is_deleted:
+            return False, "Document is not deleted"
+
+        if not document_path.is_current:
+            return False, "Document path is not current"
+
+        with transaction.atomic():
+            # Mark current deleted path as non-current
+            document_path.is_current = False
+            document_path.save()
+
+            # Create new restored path (Rule P1)
+            DocumentPath.objects.create(
+                document=document_path.document,
+                corpus=document_path.corpus,
+                creator=user,
+                folder=document_path.folder,
+                path=document_path.path,
+                version_number=document_path.version_number,
+                parent=document_path,
+                is_deleted=False,
+                is_current=True,
+            )
+
+            logger.info(
+                f"Restored document {document_path.document_id} in corpus "
+                f"{document_path.corpus_id} by user {user.id}"
+            )
+            return True, ""
+
+    # =========================================================================
+    # UTILITY METHODS
+    # =========================================================================
+
+    @classmethod
+    def get_document_folder(
+        cls,
+        user: User,
+        document: Document,
+        corpus: Corpus,
+    ) -> CorpusFolder | None:
+        """
+        Get the current folder for a document in a corpus.
+
+        Args:
+            user: Requesting user
+            document: Document to get folder for
+            corpus: Corpus context
+
+        Returns:
+            CorpusFolder if document is in a folder, None if at root or no access
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        if not cls.check_corpus_read_permission(user, corpus):
+            return None
+
+        try:
+            path = DocumentPath.objects.select_related("folder").get(
+                document=document,
+                corpus=corpus,
+                is_current=True,
+                is_deleted=False,
+            )
+            return path.folder
+        except DocumentPath.DoesNotExist:
+            return None
+
+    @classmethod
+    def get_folder_path(
+        cls,
+        user: User,
+        folder: CorpusFolder,
+    ) -> str | None:
+        """
+        Get the full path string for a folder.
+
+        Args:
+            user: Requesting user
+            folder: Folder to get path for
+
+        Returns:
+            Path string like "/Legal/Contracts/2024", None if no access
+        """
+        if not cls.check_corpus_read_permission(user, folder.corpus):
+            return None
+
+        return "/" + folder.get_path()
+
+    @classmethod
+    def search_folders(
+        cls,
+        user: User,
+        corpus_id: int,
+        query: str,
+    ) -> QuerySet[CorpusFolder]:
+        """
+        Search folders by name within a corpus.
+
+        Args:
+            user: Requesting user
+            corpus_id: ID of corpus to search in
+            query: Search query string
+
+        Returns:
+            QuerySet of matching folders
+        """
+        folders = cls.get_visible_folders(user, corpus_id)
+
+        if not query.strip():
+            return folders
+
+        return folders.filter(name__icontains=query.strip())
+
+    # =========================================================================
+    # DOCUMENT LIFECYCLE OPERATIONS
+    # =========================================================================
+
+    @classmethod
+    def check_user_upload_quota(
+        cls,
+        user: User,
+    ) -> tuple[bool, str]:
+        """
+        Check if user can create more documents based on usage caps.
+
+        Args:
+            user: User to check quota for
+
+        Returns:
+            (can_upload, error_message) - True if user can upload, error if not
+        """
+        if not user.is_usage_capped:
+            return True, ""
+
+        from opencontractserver.documents.models import Document
+
+        current_count = Document.objects.filter(creator=user).count()
+        cap = getattr(settings, "USAGE_CAPPED_USER_DOC_CAP_COUNT", 10)
+
+        if current_count >= cap:
+            return False, (
+                f"Your usage is capped at {cap} documents. "
+                f"Try deleting an existing document first or contact the admin "
+                f"for a higher limit."
+            )
+
+        return True, ""
+
+    @classmethod
+    def validate_file_type(
+        cls,
+        file_bytes: bytes,
+    ) -> tuple[str | None, str]:
+        """
+        Validate and detect file MIME type.
+
+        Args:
+            file_bytes: Raw file bytes to analyze
+
+        Returns:
+            (mime_type, error_message) - mime_type is None if validation fails
+        """
+        import filetype
+
+        from opencontractserver.utils.files import is_plaintext_content
+
+        kind = filetype.guess(file_bytes)
+        if kind is None:
+            if is_plaintext_content(file_bytes):
+                mime_type = "text/plain"
+            else:
+                return None, "Unable to determine file type"
+        else:
+            mime_type = kind.mime
+
+        allowed = getattr(settings, "ALLOWED_DOCUMENT_MIMETYPES", [])
+        if mime_type not in allowed:
+            return None, f"Unallowed filetype: {mime_type}"
+
+        return mime_type, ""
+
+    @classmethod
+    def create_document(
+        cls,
+        user: User,
+        file_bytes: bytes,
+        filename: str,
+        title: str,
+        description: str = "",
+        custom_meta: dict | None = None,
+        is_public: bool = False,
+        slug: str | None = None,
+    ) -> tuple[Document | None, str]:
+        """
+        Create a standalone document (not attached to any corpus).
+
+        This is the single entry point for creating documents outside of corpus context.
+        Handles file type validation, usage quota checks, and permission setup.
+
+        Args:
+            user: Creating user
+            file_bytes: Raw file bytes
+            filename: Original filename
+            title: Document title
+            description: Document description
+            custom_meta: Optional custom metadata dict
+            is_public: Whether document should be public
+            slug: Optional URL slug
+
+        Returns:
+            (document, error_message) - document is None if creation fails
+
+        Note:
+            For corpus imports with deduplication, use upload_document_to_corpus() instead.
+        """
+        from django.core.files.base import ContentFile
+
+        from opencontractserver.documents.models import Document
+
+        # Check quota
+        can_upload, quota_error = cls.check_user_upload_quota(user)
+        if not can_upload:
+            return None, quota_error
+
+        # Validate file type
+        mime_type, type_error = cls.validate_file_type(file_bytes)
+        if not mime_type:
+            return None, type_error
+
+        try:
+            with transaction.atomic():
+                # Create document based on file type
+                if mime_type in [
+                    "application/pdf",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ]:
+                    pdf_file = ContentFile(file_bytes, name=filename)
+                    document = Document.objects.create(
+                        creator=user,
+                        title=title,
+                        description=description,
+                        custom_meta=custom_meta or {},
+                        pdf_file=pdf_file,
+                        backend_lock=True,
+                        is_public=is_public,
+                        file_type=mime_type,
+                        slug=slug,
+                    )
+                elif mime_type in ["text/plain", "application/txt"]:
+                    txt_file = ContentFile(file_bytes, name=filename)
+                    document = Document.objects.create(
+                        creator=user,
+                        title=title,
+                        description=description,
+                        custom_meta=custom_meta or {},
+                        txt_extract_file=txt_file,
+                        backend_lock=True,
+                        is_public=is_public,
+                        file_type=mime_type,
+                        slug=slug,
+                    )
+                else:
+                    return None, f"Unsupported file type: {mime_type}"
+
+                # Set permissions for creator
+                set_permissions_for_obj_to_user(user, document, [PermissionTypes.CRUD])
+
+                logger.info(
+                    f"Created standalone document {document.id} "
+                    f"(type={mime_type}) by user {user.id}"
+                )
+
+                return document, ""
+
+        except Exception as e:
+            logger.exception(f"Error creating document: {e}")
+            return None, f"Error creating document: {e}"
+
+    @classmethod
+    def upload_document_to_corpus(
+        cls,
+        user: User,
+        corpus: Corpus,
+        file_bytes: bytes,
+        filename: str,
+        title: str,
+        description: str = "",
+        folder: CorpusFolder | None = None,
+        custom_meta: dict | None = None,
+        is_public: bool = False,
+        slug: str | None = None,
+    ) -> tuple[Document | None, str, str]:
+        """
+        Upload a document to a corpus.
+
+        This method ensures consistent versioning behavior by:
+        1. First creating a standalone document in the system
+        2. Then adding that document to the corpus (creating a corpus-isolated copy)
+
+        This approach ensures documents have identical versioning behavior regardless
+        of whether they were uploaded directly to a corpus or added later.
+
+        Args:
+            user: Uploading user
+            corpus: Target corpus
+            file_bytes: Raw file bytes
+            filename: Original filename
+            title: Document title
+            description: Document description
+            folder: Optional folder to place document in
+            custom_meta: Optional custom metadata dict
+            is_public: Whether document should be public
+            slug: Optional URL slug
+
+        Returns:
+            (corpus_document, status, error_message) where:
+            - corpus_document: The corpus-isolated document
+            - status: 'added' or 'already_exists'
+            - error_message: Empty if successful
+
+        Permissions:
+            Requires corpus UPDATE permission
+        """
+        # Check corpus write permission first
+        if not cls.check_corpus_write_permission(user, corpus):
+            return (
+                None,
+                "",
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        # Step 1: Create standalone document first
+        standalone_doc, create_error = cls.create_document(
+            user=user,
+            file_bytes=file_bytes,
+            filename=filename,
+            title=title,
+            description=description,
+            custom_meta=custom_meta,
+            is_public=is_public,
+            slug=slug,
+        )
+
+        if not standalone_doc:
+            return None, "", create_error
+
+        # Step 2: Add to corpus (creates isolated copy with proper versioning)
+        corpus_doc, status, add_error = cls.add_document_to_corpus(
+            user=user,
+            document=standalone_doc,
+            corpus=corpus,
+            folder=folder,
+        )
+
+        if not corpus_doc:
+            # If adding to corpus failed, we still have the standalone doc
+            logger.warning(
+                f"Document {standalone_doc.id} created but failed to add to corpus: {add_error}"
+            )
+            return None, "", add_error
+
+        logger.info(
+            f"Uploaded document to corpus {corpus.id} "
+            f"(standalone={standalone_doc.id}, corpus_doc={corpus_doc.id}, "
+            f"status={status}, folder={folder.id if folder else None}) by user {user.id}"
+        )
+
+        return corpus_doc, status, ""
+
+    @classmethod
+    def add_document_to_corpus(
+        cls,
+        user: User,
+        document: Document,
+        corpus: Corpus,
+        folder: CorpusFolder | None = None,
+    ) -> tuple[Document | None, str, str]:
+        """
+        Add an existing document to a corpus, creating a corpus-isolated copy.
+
+        This creates a NEW document in the corpus with:
+        - Its own version_tree_id (independent version tree)
+        - source_document pointing to original (provenance tracking)
+        - DocumentPath linking to the corpus
+
+        Use this when you have a document (perhaps from user's library) and want
+        to add it to a corpus. The original document is unchanged.
+
+        Args:
+            user: User performing the operation
+            document: Source document to copy into corpus
+            corpus: Target corpus
+            folder: Optional folder to place document in
+
+        Returns:
+            (corpus_document, status, error_message) where:
+            - corpus_document: The NEW corpus-isolated document (not the original)
+            - status: 'added' or 'already_exists'
+
+        Permissions:
+            Requires corpus UPDATE permission AND document READ permission
+        """
+        # Check corpus write permission
+        if not cls.check_corpus_write_permission(user, corpus):
+            return (
+                None,
+                "",
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        # Check document access (owner or public)
+        if document.creator != user and not document.is_public:
+            if not user_has_permission_for_obj(user, document, PermissionTypes.READ):
+                return (
+                    None,
+                    "",
+                    "Permission denied: You do not have access to this document",
+                )
+
+        try:
+            # Use corpus.add_document for proper corpus isolation
+            # The folder is passed through and stored in DocumentPath
+            corpus_doc, status, path_record = corpus.add_document(
+                document=document,
+                user=user,
+                folder=folder,
+            )
+
+            # Set permissions on the corpus-isolated copy
+            set_permissions_for_obj_to_user(user, corpus_doc, [PermissionTypes.CRUD])
+
+            logger.info(
+                f"Added document {document.id} to corpus {corpus.id} as {corpus_doc.id} "
+                f"(status={status}) by user {user.id}"
+            )
+
+            return corpus_doc, status, ""
+
+        except Exception as e:
+            logger.exception(f"Error adding document to corpus: {e}")
+            return None, "", f"Error adding document to corpus: {e}"
+
+    @classmethod
+    def add_documents_to_corpus(
+        cls,
+        user: User,
+        document_ids: list[int],
+        corpus: Corpus,
+        folder: CorpusFolder | None = None,
+    ) -> tuple[int, list[int], str]:
+        """
+        Add multiple existing documents to a corpus.
+
+        This is a bulk operation that creates corpus-isolated copies of each document.
+
+        Args:
+            user: User performing the operation
+            document_ids: List of document IDs to add
+            corpus: Target corpus
+            folder: Optional folder to place documents in
+
+        Returns:
+            (added_count, added_doc_ids, error_message)
+
+        Permissions:
+            Requires corpus UPDATE permission
+        """
+        from opencontractserver.documents.models import Document
+
+        # Check corpus write permission
+        if not cls.check_corpus_write_permission(user, corpus):
+            return (
+                0,
+                [],
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        # Get accessible documents (owned or public)
+        documents = Document.objects.filter(
+            Q(pk__in=document_ids) & (Q(creator=user) | Q(is_public=True))
+        )
+
+        added_count = 0
+        added_ids = []
+        errors = []
+
+        for doc in documents:
+            corpus_doc, status, error = cls.add_document_to_corpus(
+                user=user,
+                document=doc,
+                corpus=corpus,
+                folder=folder,
+            )
+            if corpus_doc:
+                added_count += 1
+                added_ids.append(corpus_doc.id)
+            elif error:
+                errors.append(f"Doc {doc.id}: {error}")
+
+        error_msg = "; ".join(errors) if errors else ""
+        return added_count, added_ids, error_msg
+
+    @classmethod
+    def remove_document_from_corpus(
+        cls,
+        user: User,
+        document: Document,
+        corpus: Corpus,
+    ) -> tuple[bool, str]:
+        """
+        Remove a document from a corpus (soft delete).
+
+        This creates a soft-delete DocumentPath record maintaining history.
+        The document is not permanently deleted and can be restored.
+
+        Args:
+            user: User performing the operation
+            document: Document to remove
+            corpus: Corpus to remove from
+
+        Returns:
+            (success, error_message)
+
+        Permissions:
+            Requires corpus UPDATE permission
+        """
+        # Check corpus write permission
+        if not cls.check_corpus_write_permission(user, corpus):
+            return (
+                False,
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        try:
+            deleted_paths = corpus.remove_document(document=document, user=user)
+
+            if not deleted_paths:
+                return False, "Document not found in corpus"
+
+            logger.info(
+                f"Removed document {document.id} from corpus {corpus.id} "
+                f"({len(deleted_paths)} paths) by user {user.id}"
+            )
+
+            return True, ""
+
+        except Exception as e:
+            logger.exception(f"Error removing document from corpus: {e}")
+            return False, f"Error removing document from corpus: {e}"
+
+    @classmethod
+    def remove_documents_from_corpus(
+        cls,
+        user: User,
+        document_ids: list[int],
+        corpus: Corpus,
+    ) -> tuple[int, str]:
+        """
+        Remove multiple documents from a corpus (soft delete).
+
+        Args:
+            user: User performing the operation
+            document_ids: List of document IDs to remove
+            corpus: Corpus to remove from
+
+        Returns:
+            (removed_count, error_message)
+
+        Permissions:
+            Requires corpus UPDATE permission
+        """
+        # Check corpus write permission
+        if not cls.check_corpus_write_permission(user, corpus):
+            return 0, "Permission denied: You do not have write access to this corpus"
+
+        # Get documents that are actually in this corpus
+        corpus_docs = corpus.get_documents().filter(pk__in=document_ids)
+
+        removed_count = 0
+        errors = []
+
+        for doc in corpus_docs:
+            success, error = cls.remove_document_from_corpus(
+                user=user,
+                document=doc,
+                corpus=corpus,
+            )
+            if success:
+                removed_count += 1
+            elif error:
+                errors.append(f"Doc {doc.id}: {error}")
+
+        error_msg = "; ".join(errors) if errors else ""
+        return removed_count, error_msg
+
+    @classmethod
+    def get_document_by_id(
+        cls,
+        user: User,
+        document_id: int,
+    ) -> Document | None:
+        """
+        Get a document by ID if user has access.
+
+        Args:
+            user: Requesting user
+            document_id: Document ID
+
+        Returns:
+            Document if found and accessible, None otherwise
+
+        Note:
+            Returns same error (None) whether document doesn't exist or
+            user doesn't have access (IDOR protection).
+        """
+        from opencontractserver.documents.models import Document
+
+        try:
+            document = Document.objects.get(pk=document_id)
+
+            # Check access: owner, public, or has READ permission
+            if document.creator == user or document.is_public:
+                return document
+
+            if user_has_permission_for_obj(user, document, PermissionTypes.READ):
+                return document
+
+            return None
+
+        except Document.DoesNotExist:
+            return None
+
+    @classmethod
+    def get_corpus_documents(
+        cls,
+        user: User,
+        corpus: Corpus,
+        include_deleted: bool = False,
+    ) -> QuerySet[Document]:
+        """
+        Get all documents in a corpus.
+
+        Args:
+            user: Requesting user
+            corpus: Corpus to get documents from
+            include_deleted: Whether to include soft-deleted documents
+
+        Returns:
+            QuerySet of documents (empty if no access)
+
+        Permissions:
+            Requires corpus READ permission
+        """
+        from opencontractserver.documents.models import Document
+
+        if not cls.check_corpus_read_permission(user, corpus):
+            return Document.objects.none()
+
+        if include_deleted:
+            # Get all documents with any path (current or deleted)
+            from opencontractserver.documents.models import DocumentPath
+
+            doc_ids = DocumentPath.objects.filter(
+                corpus=corpus, is_current=True
+            ).values_list("document_id", flat=True)
+            return Document.objects.filter(pk__in=doc_ids)
+        else:
+            return corpus.get_documents()
+
+    @classmethod
+    def set_document_permissions(
+        cls,
+        user: User,
+        document: Document,
+        target_user: User,
+        permissions: list[PermissionTypes],
+    ) -> tuple[bool, str]:
+        """
+        Set permissions for a document.
+
+        Args:
+            user: User setting permissions (must be owner or have permission control)
+            document: Document to set permissions on
+            target_user: User to grant permissions to
+            permissions: List of PermissionTypes to grant
+
+        Returns:
+            (success, error_message)
+
+        Permissions:
+            Requires document ownership or PERMISSION permission
+        """
+        # Check if user can set permissions (owner or has PERMISSION perm)
+        if document.creator != user:
+            if not user_has_permission_for_obj(
+                user, document, PermissionTypes.PERMISSION
+            ):
+                return (
+                    False,
+                    "Permission denied: Cannot modify permissions for this document",
+                )
+
+        try:
+            set_permissions_for_obj_to_user(target_user, document, permissions)
+            logger.info(
+                f"Set permissions {permissions} on document {document.id} "
+                f"for user {target_user.id} by user {user.id}"
+            )
+            return True, ""
+        except Exception as e:
+            logger.exception(f"Error setting document permissions: {e}")
+            return False, f"Error setting permissions: {e}"

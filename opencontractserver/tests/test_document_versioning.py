@@ -78,7 +78,7 @@ class ContentTreeRulesTestCase(TestCase):
             "Rule C1 violated: Only one Document should exist for unique hash",
         )
 
-        # Second import at different path - should link to existing Document
+        # Second import at different path - creates NEW document (always new for new path)
         doc2, status2, path2 = import_document(
             corpus=self.corpus,
             path="/test2.pdf",
@@ -87,18 +87,19 @@ class ContentTreeRulesTestCase(TestCase):
             title="Second Document",
         )
 
-        self.assertEqual(status2, "linked")
-        self.assertEqual(
+        self.assertEqual(status2, "created")
+        # Each upload at a new path creates a new document (no deduplication)
+        self.assertNotEqual(
             doc1.id,
             doc2.id,
-            "Rule C1 violated: Same content in same corpus should reuse Document",
+            "New upload should create new document, not link to existing",
         )
+        # Provenance is tracked
+        self.assertEqual(doc2.source_document_id, doc1.id)
 
-        # Still only one document with this hash in this corpus
+        # Now we have 2 documents with this hash (each upload creates new doc)
         docs_with_hash = Document.objects.filter(pdf_file_hash=content_hash).count()
-        self.assertEqual(
-            docs_with_hash, 1, "Rule C1 violated: Corpus deduplication failed"
-        )
+        self.assertEqual(docs_with_hash, 2, "Each upload creates a new document")
 
     def test_c2_updates_create_child_nodes_of_previous_version(self):
         """
@@ -706,7 +707,7 @@ class ImportOperationTestCase(TestCase):
         )
 
         # Verify status - corpus-isolated with provenance
-        self.assertEqual(status2, "created_from_existing")
+        self.assertEqual(status2, "created")
 
         # Verify different Documents (corpus isolation - Rule I1 NEW)
         self.assertNotEqual(doc1.id, doc2.id)
@@ -1071,7 +1072,7 @@ class InteractionRulesTestCase(TestCase):
         doc2, status2, path1_c2 = import_document(
             corpus=self.corpus2, path="/different.pdf", content=content, user=self.user
         )
-        self.assertEqual(status2, "created_from_existing")
+        self.assertEqual(status2, "created")
 
         # Verify different documents (corpus isolation)
         self.assertNotEqual(doc1.id, doc2.id)
@@ -1118,7 +1119,7 @@ class InteractionRulesTestCase(TestCase):
         doc2, status2, _ = import_document(
             corpus=self.corpus2, path="/doc2.pdf", content=content, user=self.user
         )
-        self.assertEqual(status2, "created_from_existing")
+        self.assertEqual(status2, "created")
         self.assertNotEqual(doc1.id, doc2.id)  # Corpus isolation
 
         # Not truly deleted yet (each doc has paths in their respective corpus)
@@ -1304,7 +1305,7 @@ class ComplexWorkflowTestCase(TestCase):
 
         # Verify different documents with provenance (corpus isolation - Rule I1 NEW)
         self.assertNotEqual(doc_a1.id, doc_b1.id)
-        self.assertEqual(status_b1, "created_from_existing")
+        self.assertEqual(status_b1, "created")
         self.assertEqual(doc_b1.source_document, doc_a1)
         self.assertNotEqual(doc_a1.version_tree_id, doc_b1.version_tree_id)
 
@@ -1377,21 +1378,25 @@ class ComplexWorkflowTestCase(TestCase):
             title="Archived v1",
         )
 
-        # Should link to v1 document (same content in same corpus)
-        self.assertEqual(doc_v1_again.id, doc_v1.id)
-        self.assertEqual(status, "linked")
+        # Creates new document (each upload at new path creates new doc)
+        self.assertNotEqual(doc_v1_again.id, doc_v1.id)
+        self.assertEqual(status, "created")
+        # Provenance tracked to original v1
+        self.assertEqual(doc_v1_again.source_document_id, doc_v1.id)
 
-        # Verify version tree
+        # Verify version tree for the update chain (v1->v2->v3)
         history = get_content_history(doc_v3)
         self.assertEqual(len(history), 3)
         self.assertEqual(history[0].id, doc_v1.id)
         self.assertEqual(history[1].id, doc_v2.id)
         self.assertEqual(history[2].id, doc_v3.id)
 
-        # Verify all in same tree
+        # Verify original update chain is in same tree
         tree_id = doc_v1.version_tree_id
         self.assertEqual(doc_v2.version_tree_id, tree_id)
         self.assertEqual(doc_v3.version_tree_id, tree_id)
+        # New doc_v1_again is in its OWN tree (not the original update chain)
+        self.assertNotEqual(doc_v1_again.version_tree_id, tree_id)
 
 
 class PerformanceTestCase(TestCase):
@@ -1490,3 +1495,212 @@ class PerformanceTestCase(TestCase):
         self.assertLess(
             duration, 0.5, f"History traversal took {duration:.3f}s, should be < 0.5s"
         )
+
+
+class PdfFileCreationTestCase(TestCase):
+    """
+    Test Suite: pdf_file Field Population
+
+    Ensures that import_document always populates the pdf_file field from content
+    when not explicitly provided. This prevents frontend PDF loading failures.
+
+    Bug fixed: When importing brand new content via import_content/import_document,
+    the pdf_file field was not being set, causing "Unsupported file type" errors
+    in the frontend despite fileType being "application/pdf".
+    """
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+
+    def test_import_document_creates_pdf_file_for_new_content(self):
+        """
+        Regression test: When importing brand new content without pdf_file,
+        the function should create pdf_file from the content bytes.
+
+        This prevents the bug where documents had fileType="application/pdf"
+        but empty pdfFile, causing frontend loading failures.
+        """
+        content = b"%PDF-1.4 fake pdf content for testing"
+
+        # Import content without providing pdf_file parameter
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/test_document.pdf",
+            content=content,
+            user=self.user,
+            title="Test PDF",
+            file_type="application/pdf",
+        )
+
+        self.assertEqual(status, "created")
+        # Critical assertion: pdf_file must be populated
+        self.assertTrue(
+            doc.pdf_file,
+            "pdf_file field is empty - this will cause frontend loading failures!",
+        )
+        # Verify the file has correct extension
+        self.assertTrue(
+            doc.pdf_file.name.endswith(".pdf"),
+            f"Expected .pdf extension, got: {doc.pdf_file.name}",
+        )
+        # Verify content is accessible
+        doc.pdf_file.seek(0)
+        saved_content = doc.pdf_file.read()
+        self.assertEqual(saved_content, content, "Saved content doesn't match original")
+
+    def test_import_document_creates_docx_file_for_new_docx_content(self):
+        """
+        Verify pdf_file is created with correct extension for DOCX files.
+        """
+        content = b"PK fake docx content for testing"
+
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/test_document.docx",
+            content=content,
+            user=self.user,
+            title="Test DOCX",
+            file_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        self.assertEqual(status, "created")
+        self.assertTrue(doc.pdf_file, "pdf_file field is empty!")
+        self.assertTrue(
+            doc.pdf_file.name.endswith(".docx"),
+            f"Expected .docx extension, got: {doc.pdf_file.name}",
+        )
+
+    def test_import_document_version_update_creates_pdf_file_if_missing(self):
+        """
+        When updating content at an existing path, if the old document
+        has no pdf_file (due to the bug), create it from the new content.
+        """
+        # First, create a document but simulate the bug by manually clearing pdf_file
+        initial_content = b"%PDF-1.4 initial content"
+        doc1, _, _ = import_document(
+            corpus=self.corpus,
+            path="/test.pdf",
+            content=initial_content,
+            user=self.user,
+            title="Test",
+        )
+
+        # Simulate the bug: clear pdf_file on the old document
+        Document.objects.filter(pk=doc1.pk).update(pdf_file="")
+        doc1.refresh_from_db()
+        self.assertFalse(doc1.pdf_file, "Setup failed: pdf_file should be empty")
+
+        # Now update with new content - should create pdf_file from new content
+        new_content = b"%PDF-1.4 updated content"
+        doc2, status, _ = import_document(
+            corpus=self.corpus,
+            path="/test.pdf",
+            content=new_content,
+            user=self.user,
+        )
+
+        self.assertEqual(status, "updated")
+        # Critical: new version should have pdf_file populated
+        self.assertTrue(
+            doc2.pdf_file,
+            "pdf_file field is empty on updated document!",
+        )
+        doc2.pdf_file.seek(0)
+        saved_content = doc2.pdf_file.read()
+        self.assertEqual(saved_content, new_content, "Updated content doesn't match")
+
+    def test_import_document_uses_provided_pdf_file_when_given(self):
+        """
+        When pdf_file is explicitly provided, use it instead of creating from content.
+        """
+        from django.core.files.base import ContentFile
+
+        content = b"%PDF-1.4 content bytes"
+        explicit_file = ContentFile(content, name="explicit_name.pdf")
+
+        doc, status, _ = import_document(
+            corpus=self.corpus,
+            path="/test.pdf",
+            content=content,
+            user=self.user,
+            pdf_file=explicit_file,
+        )
+
+        self.assertEqual(status, "created")
+        self.assertTrue(doc.pdf_file)
+        # Should use the explicit filename (may have path prefix added by storage)
+        self.assertIn("explicit_name", doc.pdf_file.name)
+
+    def test_import_document_filename_derived_from_path(self):
+        """
+        When creating pdf_file from content, filename should be derived from path.
+        """
+        content = b"%PDF-1.4 test"
+
+        doc, _, _ = import_document(
+            corpus=self.corpus,
+            path="/documents/my_important_report.pdf",
+            content=content,
+            user=self.user,
+        )
+
+        self.assertTrue(doc.pdf_file)
+        # Filename should be derived from path (my_important_report.pdf)
+        self.assertIn("my_important_report", doc.pdf_file.name)
+
+    def test_import_document_with_existing_content_creates_pdf_file(self):
+        """
+        Regression test: When importing content that exists globally (in another
+        corpus) but the global document has no pdf_file, create it from content.
+
+        Each upload to a new path creates a new document, sharing artifacts
+        from existing documents with the same content hash.
+        """
+        from opencontractserver.documents.versioning import compute_sha256
+
+        content = b"%PDF-1.4 content that exists globally"
+        content_hash = compute_sha256(content)
+
+        # Create a global document (standalone, not in any corpus) without pdf_file
+        # This simulates a document created before the bug fix
+        global_doc = Document.objects.create(
+            title="Global Document",
+            creator=self.user,
+            pdf_file_hash=content_hash,
+            file_type="application/pdf",
+            # pdf_file intentionally left empty to simulate buggy document
+        )
+        self.assertFalse(
+            global_doc.pdf_file, "Setup: global doc should have no pdf_file"
+        )
+
+        # Create a different corpus
+        corpus2 = Corpus.objects.create(title="Corpus 2", creator=self.user)
+
+        # Import same content to corpus2 - should create NEW document
+        # with pdf_file populated from content (not link to existing)
+        doc, status, path = import_document(
+            corpus=corpus2,
+            path="/test.pdf",
+            content=content,
+            user=self.user,
+            title="Corpus Copy",
+            file_type="application/pdf",
+        )
+
+        # Status is now "created" (always creates new doc for new path)
+        self.assertEqual(status, "created")
+        # Critical: new doc should have pdf_file populated
+        self.assertTrue(
+            doc.pdf_file,
+            "pdf_file field is empty on new document!",
+        )
+        doc.pdf_file.seek(0)
+        saved_content = doc.pdf_file.read()
+        self.assertEqual(saved_content, content, "Saved content doesn't match")
+        # Verify provenance tracking still works
+        self.assertEqual(doc.source_document_id, global_doc.id)
+        # Verify it's a NEW document, not the existing one
+        self.assertNotEqual(doc.id, global_doc.id)
