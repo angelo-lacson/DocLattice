@@ -12,6 +12,7 @@ This module provides mutations for creating and managing discussion threads:
 import logging
 
 import graphene
+from django.db import transaction
 from django.utils import timezone
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
@@ -78,6 +79,7 @@ class CreateThreadMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="10/h")
+    @transaction.atomic
     def mutate(
         root,
         info,

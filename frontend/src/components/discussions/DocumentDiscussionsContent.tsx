@@ -135,7 +135,6 @@ export const DocumentDiscussionsContent: React.FC<
         {threadId ? (
           <ThreadDetail
             conversationId={threadId}
-            documentId={documentId}
             compact // Narrower layout for sidebar
             onBack={handleBack} // Stay in sidebar, don't navigate away
           />

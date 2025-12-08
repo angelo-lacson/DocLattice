@@ -30,7 +30,6 @@ import { formatUsername } from "./userUtils";
 interface ThreadDetailProps {
   conversationId: string;
   corpusId?: string;
-  documentId?: string;
   /** Compact mode for sidebar (narrower padding) */
   compact?: boolean;
   /**
@@ -213,7 +212,6 @@ const EmptyMessageState = styled.div`
 export function ThreadDetail({
   conversationId,
   corpusId,
-  documentId: _documentId, // Reserved for future document-specific filtering
   compact = false,
   onBack: customOnBack,
 }: ThreadDetailProps) {
