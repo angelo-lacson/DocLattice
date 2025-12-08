@@ -15,7 +15,7 @@
 ## Design Principles
 
 1. **DRY Permissions**: Single permission check methods used by all operations
-2. **Dual-System Awareness**: All mutations update both `DocumentPath` (new system) and `CorpusDocumentFolder` (legacy system)
+2. **Single Source of Truth**: `DocumentPath` is the sole record of document-corpus-folder relationships
 3. **Transaction Safety**: All mutations wrapped in database transactions
 4. **Query Optimization**: Proper use of `select_related`, `prefetch_related`
 5. **IDOR Protection**: Consistent error messages for not-found vs permission-denied
@@ -251,22 +251,17 @@ path = DocumentFolderService.get_folder_path(user, folder)
 # Returns: "/Legal/Contracts/2024"
 ```
 
-## Dual-System Architecture
+## DocumentPath Architecture
 
-The service maintains consistency between two systems:
+The service uses `DocumentPath` as the single source of truth for all document-corpus-folder relationships:
 
-### DocumentPath (Primary - New System)
+### DocumentPath
 - Stores document-corpus-folder relationships
 - Supports versioning with `is_current`, `is_deleted`, `parent` fields
 - Used for soft-delete/restore operations
 - Source of truth for document presence in corpus
-
-### CorpusDocumentFolder (Legacy System)
-- Simple document-corpus-folder assignments
-- Maintained for backward compatibility
-- Updated alongside DocumentPath in all operations
-
-All write operations update both systems atomically within transactions.
+- Each document can exist in multiple corpuses with different folder locations
+- Folder field can be `null` for root-level documents in a corpus
 
 ## Document Upload Flow
 
@@ -285,8 +280,7 @@ upload_document_to_corpus()
             ├── Creates corpus-isolated copy
             │   └── New version_tree_id
             │   └── source_document → original
-            ├── Creates DocumentPath record
-            └── Updates CorpusDocumentFolder (legacy)
+            └── Creates DocumentPath record
 ```
 
 This ensures documents have identical versioning behavior regardless of whether they were uploaded directly to a corpus or added later from the user's document library.
@@ -308,7 +302,7 @@ Comprehensive tests are in `opencontractserver/tests/test_document_folder_servic
 - Permission checking tests
 - Folder CRUD tests
 - Document operations tests
-- Dual-system consistency tests
+- DocumentPath consistency tests
 - Document lifecycle tests
 
 Run tests:
@@ -325,7 +319,6 @@ docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_
 # Don't do this
 folder = CorpusFolder.objects.create(corpus=corpus, name="Folder")
 DocumentPath.objects.filter(document=doc).update(folder=folder)
-CorpusDocumentFolder.objects.create(document=doc, corpus=corpus, folder=folder)
 ```
 
 **After (using service):**
