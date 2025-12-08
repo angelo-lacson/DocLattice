@@ -1619,20 +1619,8 @@ class UploadDocument(graphene.Mutation):
                             f"[UPLOAD] Document {document.id} status: {status} in corpus {corpus.id}"
                         )
 
-                    # Handle folder assignment via service for dual-system consistency
-                    if folder is not None:
-                        from opencontractserver.corpuses.folder_service import (
-                            DocumentFolderService,
-                        )
-
-                        DocumentFolderService._update_document_folder_assignment(
-                            document=document,
-                            corpus=corpus,
-                            folder=folder,
-                        )
-                        logger.info(
-                            f"[UPLOAD] Assigned document {document.id} to folder {folder.id}"
-                        )
+                    # Note: folder assignment is already handled by corpus.import_content()
+                    # which passes folder to import_document() -> DocumentPath creation
 
                 except Exception as e:
                     logger.error(f"[UPLOAD] Error importing to corpus: {e}")
