@@ -1644,3 +1644,54 @@ class PdfFileCreationTestCase(TestCase):
         self.assertTrue(doc.pdf_file)
         # Filename should be derived from path (my_important_report.pdf)
         self.assertIn("my_important_report", doc.pdf_file.name)
+
+    def test_import_document_created_from_existing_creates_pdf_file(self):
+        """
+        Regression test: When importing content that exists globally (in another
+        corpus) but the global document has no pdf_file, create it from content.
+
+        This tests the "created_from_existing" status code path.
+        """
+        from opencontractserver.documents.versioning import compute_sha256
+
+        content = b"%PDF-1.4 content that exists globally"
+        content_hash = compute_sha256(content)
+
+        # Create a global document (standalone, not in any corpus) without pdf_file
+        # This simulates a document created before the bug fix
+        global_doc = Document.objects.create(
+            title="Global Document",
+            creator=self.user,
+            pdf_file_hash=content_hash,
+            file_type="application/pdf",
+            # pdf_file intentionally left empty to simulate buggy document
+        )
+        self.assertFalse(
+            global_doc.pdf_file, "Setup: global doc should have no pdf_file"
+        )
+
+        # Create a different corpus
+        corpus2 = Corpus.objects.create(title="Corpus 2", creator=self.user)
+
+        # Import same content to corpus2 - should create corpus-isolated copy
+        # with pdf_file populated from content
+        doc, status, path = import_document(
+            corpus=corpus2,
+            path="/test.pdf",
+            content=content,
+            user=self.user,
+            title="Corpus Copy",
+            file_type="application/pdf",
+        )
+
+        self.assertEqual(status, "created_from_existing")
+        # Critical: new corpus-isolated doc should have pdf_file populated
+        self.assertTrue(
+            doc.pdf_file,
+            "pdf_file field is empty on created_from_existing document!",
+        )
+        doc.pdf_file.seek(0)
+        saved_content = doc.pdf_file.read()
+        self.assertEqual(saved_content, content, "Saved content doesn't match")
+        # Verify provenance tracking
+        self.assertEqual(doc.source_document_id, global_doc.id)

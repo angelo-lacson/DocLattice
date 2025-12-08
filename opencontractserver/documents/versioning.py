@@ -295,11 +295,23 @@ def import_document(
 
                 if global_doc_with_hash:
                     # Content exists elsewhere - track provenance (Rule I2)
+                    # Determine pdf_file: use provided, fall back to global doc, or create
+                    file_type = doc_kwargs.get("file_type", "application/pdf")
+                    effective_pdf_file = pdf_file or global_doc_with_hash.pdf_file
+                    if not effective_pdf_file:
+                        # Neither provided nor available from global doc - create from content
+                        effective_pdf_file = _create_pdf_file_from_content(
+                            content=content,
+                            content_hash=content_hash,
+                            path=path,
+                            file_type=file_type,
+                        )
+
                     doc = Document.objects.create(
                         title=doc_kwargs.get("title", f"Document at {path}"),
                         description=doc_kwargs.get("description", ""),
-                        file_type=doc_kwargs.get("file_type", "application/pdf"),
-                        pdf_file=pdf_file or global_doc_with_hash.pdf_file,  # Rule I3
+                        file_type=file_type,
+                        pdf_file=effective_pdf_file,  # Rule I3
                         pdf_file_hash=content_hash,
                         # Share parsing artifacts (file blobs, not duplicated)
                         pawls_parse_file=global_doc_with_hash.pawls_parse_file,
