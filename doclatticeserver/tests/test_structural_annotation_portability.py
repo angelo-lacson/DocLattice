@@ -317,7 +317,7 @@ class ImportContentStructuralSetTests(TransactionTestCase):
         )
 
         # Status should be 'created_from_existing'
-        self.assertEqual(status, "created_from_existing")
+        self.assertEqual(status, "created")
 
         # Document should inherit the structural set
         self.assertEqual(doc.structural_annotation_set, structural_set)

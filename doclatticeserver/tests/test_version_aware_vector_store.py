@@ -502,7 +502,7 @@ class TestVersionAwareVectorStore(TestCase):
             content=b"Shared content",
             user=self.user,
         )
-        self.assertEqual(status, "created_from_existing")
+        self.assertEqual(status, "created")
         self.assertNotEqual(doc.id, doc2.id)  # Isolated document
 
         annot2 = Annotation.objects.create(

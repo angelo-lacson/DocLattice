@@ -303,6 +303,7 @@ test.describe("Metadata Workflow Integration", () => {
           query: GET_DOCUMENTS,
           variables: {
             inCorpusWithId: corpusId,
+            inFolderId: "__root__",
             annotateDocLabels: true,
             includeMetadata: true,
           },
@@ -340,6 +341,7 @@ test.describe("Metadata Workflow Integration", () => {
           query: GET_DOCUMENTS,
           variables: {
             inCorpusWithId: corpusId,
+            inFolderId: "__root__",
             annotateDocLabels: true,
             includeMetadata: true,
           },
