@@ -1144,70 +1144,27 @@ class CorpusFolder(TreeNode):
         """
         Get count of documents directly in this folder (not including subfolders).
 
-        Uses DocumentPath (new versioning system) as primary source with proper
-        filtering for is_current=True, is_deleted=False. Falls back to
-        CorpusDocumentFolder only for documents without DocumentPath records.
+        Uses DocumentPath with proper filtering for is_current=True, is_deleted=False.
         """
         from opencontractserver.documents.models import DocumentPath
 
-        # Get active documents from DocumentPath (primary source)
-        doc_ids_from_paths = set(
-            DocumentPath.objects.filter(
-                folder=self, is_current=True, is_deleted=False
-            ).values_list("document_id", flat=True)
-        )
-
-        # Get documents from legacy CorpusDocumentFolder that don't have DocumentPath
-        legacy_doc_ids = set(
-            self.document_assignments.values_list("document_id", flat=True)
-        )
-
-        # For legacy docs, only include ones that don't have a DocumentPath entry
-        # (if they have DocumentPath entries, we should trust those instead)
-        docs_with_any_path = set(
-            DocumentPath.objects.filter(
-                document_id__in=legacy_doc_ids, corpus=self.corpus
-            ).values_list("document_id", flat=True)
-        )
-        legacy_only_docs = legacy_doc_ids - docs_with_any_path
-
-        return len(doc_ids_from_paths | legacy_only_docs)
+        return DocumentPath.objects.filter(
+            folder=self, is_current=True, is_deleted=False
+        ).count()
 
     def get_descendant_document_count(self) -> int:
         """
         Get count of documents in this folder and all subfolders.
 
-        Uses DocumentPath (new versioning system) as primary source with proper
-        filtering for is_current=True, is_deleted=False. Falls back to
-        CorpusDocumentFolder only for documents without DocumentPath records.
+        Uses DocumentPath with proper filtering for is_current=True, is_deleted=False.
         """
         from opencontractserver.documents.models import DocumentPath
 
         descendant_folders = self.get_descendant_folders()
 
-        # Get active documents from DocumentPath (primary source)
-        doc_ids_from_paths = set(
-            DocumentPath.objects.filter(
-                folder__in=descendant_folders, is_current=True, is_deleted=False
-            ).values_list("document_id", flat=True)
-        )
-
-        # Get documents from legacy CorpusDocumentFolder
-        legacy_doc_ids = set(
-            CorpusDocumentFolder.objects.filter(
-                folder__in=descendant_folders
-            ).values_list("document_id", flat=True)
-        )
-
-        # For legacy docs, only include ones that don't have a DocumentPath entry
-        docs_with_any_path = set(
-            DocumentPath.objects.filter(
-                document_id__in=legacy_doc_ids, corpus=self.corpus
-            ).values_list("document_id", flat=True)
-        )
-        legacy_only_docs = legacy_doc_ids - docs_with_any_path
-
-        return len(doc_ids_from_paths | legacy_only_docs)
+        return DocumentPath.objects.filter(
+            folder__in=descendant_folders, is_current=True, is_deleted=False
+        ).count()
 
     def __str__(self):
         return f"{self.corpus.title}/{self.get_path()}"
@@ -1227,67 +1184,3 @@ class CorpusFolderGroupObjectPermission(GroupObjectPermissionBase):
     content_object = django.db.models.ForeignKey(
         "CorpusFolder", on_delete=django.db.models.CASCADE
     )
-
-
-class CorpusDocumentFolder(django.db.models.Model):
-    """
-    Junction table linking documents to folders within a corpus.
-    Enforces one-folder-per-document-per-corpus constraint.
-    Null folder means document is in corpus "root".
-    """
-
-    document = django.db.models.ForeignKey(
-        "documents.Document",
-        on_delete=django.db.models.CASCADE,
-        related_name="corpus_folder_assignments",
-    )
-
-    corpus = django.db.models.ForeignKey(
-        "corpuses.Corpus",
-        on_delete=django.db.models.CASCADE,
-        related_name="document_folder_assignments",
-    )
-
-    folder = django.db.models.ForeignKey(
-        "CorpusFolder",
-        on_delete=django.db.models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="document_assignments",
-        help_text="Folder containing this document. Null = root of corpus.",
-    )
-
-    # Timestamps
-    added_to_folder = django.db.models.DateTimeField(
-        default=timezone.now,
-        help_text="When document was added to this folder",
-    )
-
-    class Meta:
-        indexes = [
-            django.db.models.Index(fields=["corpus", "folder"]),
-            django.db.models.Index(fields=["document", "corpus"]),
-            django.db.models.Index(fields=["folder"]),
-        ]
-        constraints = [
-            # One folder per document per corpus (null folder = root)
-            django.db.models.UniqueConstraint(
-                fields=["document", "corpus"],
-                name="unique_document_folder_per_corpus",
-            ),
-        ]
-
-    def clean(self):
-        """Validate folder belongs to same corpus."""
-        super().clean()
-        if self.folder and self.folder.corpus_id != self.corpus_id:
-            raise ValidationError("Folder must belong to the same corpus")
-
-    def save(self, *args, **kwargs):
-        """Validate before saving."""
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        folder_path = self.folder.get_path() if self.folder else "root"
-        return f"{self.document.title} in {self.corpus.title}/{folder_path}"

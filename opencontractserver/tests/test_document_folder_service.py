@@ -9,8 +9,7 @@ This test suite is organized into human-readable scenario groups:
 4. DOCUMENT-IN-FOLDER SCENARIOS - Tests moving documents between folders
 5. VERSIONING SCENARIOS - Tests DocumentPath versioning (soft delete, restore, version chains)
 6. CORPUS ISOLATION SCENARIOS - Tests that adding documents creates isolated copies
-7. DUAL-SYSTEM CONSISTENCY SCENARIOS - Tests DocumentPath + CorpusDocumentFolder sync
-8. EDGE CASES AND ERROR HANDLING - Tests boundary conditions and error states
+7. EDGE CASES AND ERROR HANDLING - Tests boundary conditions and error states
 
 Each test is named descriptively to serve as documentation of expected behavior.
 """
@@ -23,7 +22,6 @@ from django.test import TransactionTestCase
 from opencontractserver.corpuses.folder_service import DocumentFolderService
 from opencontractserver.corpuses.models import (
     Corpus,
-    CorpusDocumentFolder,
     CorpusFolder,
 )
 from opencontractserver.documents.models import Document, DocumentPath
@@ -839,7 +837,7 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
     SCENARIO: Moving documents between folders.
 
     BUSINESS RULE: Documents can be moved between folders within same corpus.
-    Both DocumentPath and CorpusDocumentFolder are updated atomically.
+    DocumentPath is updated to reflect the new folder assignment.
     """
 
     def setUp(self):
@@ -1453,179 +1451,7 @@ class TestCorpusIsolation_AddToFolder(DocumentFolderServiceTestBase):
 
 
 # =============================================================================
-# 7. DUAL-SYSTEM CONSISTENCY SCENARIOS
-# =============================================================================
-
-
-class TestDualSystem_BothSystemsUpdatedOnMove(DocumentFolderServiceTestBase):
-    """
-    SCENARIO: Moving documents updates both DocumentPath and CorpusDocumentFolder.
-
-    BUSINESS RULE: Both systems must stay in sync for backward compatibility.
-    """
-
-    def setUp(self):
-        self.owner = User.objects.create_user(
-            username="owner", email="owner@test.com", password="test"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus", creator=self.owner, is_public=False
-        )
-        self.folder, _ = DocumentFolderService.create_folder(
-            user=self.owner, corpus=self.corpus, name="Target Folder"
-        )
-        self.document = Document.objects.create(
-            title="Test Document", creator=self.owner, pdf_file="test.pdf"
-        )
-        self.document_path = DocumentPath.objects.create(
-            document=self.document,
-            corpus=self.corpus,
-            creator=self.owner,
-            folder=None,
-            path="/test.pdf",
-            version_number=1,
-            is_current=True,
-            is_deleted=False,
-        )
-
-    def test_move_to_folder_updates_document_path(self):
-        """DocumentPath should be updated when moving to folder."""
-        DocumentFolderService.move_document_to_folder(
-            user=self.owner,
-            document=self.document,
-            corpus=self.corpus,
-            folder=self.folder,
-        )
-
-        path = DocumentPath.objects.get(
-            document=self.document, corpus=self.corpus, is_current=True
-        )
-        self.assertEqual(path.folder, self.folder)
-
-    def test_move_to_folder_creates_corpus_document_folder(self):
-        """CorpusDocumentFolder should be created when moving to folder."""
-        DocumentFolderService.move_document_to_folder(
-            user=self.owner,
-            document=self.document,
-            corpus=self.corpus,
-            folder=self.folder,
-        )
-
-        cdf = CorpusDocumentFolder.objects.get(
-            document=self.document, corpus=self.corpus
-        )
-        self.assertEqual(cdf.folder, self.folder)
-
-    def test_move_to_root_removes_corpus_document_folder(self):
-        """CorpusDocumentFolder should be removed when moving to root."""
-        # First move to folder
-        DocumentFolderService.move_document_to_folder(
-            user=self.owner,
-            document=self.document,
-            corpus=self.corpus,
-            folder=self.folder,
-        )
-
-        # Then move to root
-        DocumentFolderService.move_document_to_folder(
-            user=self.owner, document=self.document, corpus=self.corpus, folder=None
-        )
-
-        exists = CorpusDocumentFolder.objects.filter(
-            document=self.document, corpus=self.corpus
-        ).exists()
-        self.assertFalse(exists)
-
-
-class TestDualSystem_BothSystemsUpdatedOnFolderDelete(DocumentFolderServiceTestBase):
-    """
-    SCENARIO: Deleting folder clears folder assignment in both systems.
-
-    BUSINESS RULE: Documents in deleted folder go to root in both systems.
-    """
-
-    def setUp(self):
-        self.owner = User.objects.create_user(
-            username="owner", email="owner@test.com", password="test"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus", creator=self.owner, is_public=False
-        )
-        self.folder, _ = DocumentFolderService.create_folder(
-            user=self.owner, corpus=self.corpus, name="To Be Deleted"
-        )
-        self.document = Document.objects.create(
-            title="Test Document", creator=self.owner, pdf_file="test.pdf"
-        )
-        DocumentPath.objects.create(
-            document=self.document,
-            corpus=self.corpus,
-            creator=self.owner,
-            folder=self.folder,
-            path="/test.pdf",
-            version_number=1,
-            is_current=True,
-            is_deleted=False,
-        )
-        CorpusDocumentFolder.objects.create(
-            document=self.document, corpus=self.corpus, folder=self.folder
-        )
-
-    def test_folder_delete_clears_document_path_folder(self):
-        """DocumentPath.folder should be NULL after folder delete."""
-        DocumentFolderService.delete_folder(user=self.owner, folder=self.folder)
-
-        path = DocumentPath.objects.get(
-            document=self.document, corpus=self.corpus, is_current=True
-        )
-        self.assertIsNone(path.folder)
-
-    def test_folder_delete_clears_corpus_document_folder(self):
-        """CorpusDocumentFolder.folder should be NULL after folder delete."""
-        DocumentFolderService.delete_folder(user=self.owner, folder=self.folder)
-
-        cdf = CorpusDocumentFolder.objects.get(
-            document=self.document, corpus=self.corpus
-        )
-        self.assertIsNone(cdf.folder)
-
-
-class TestDualSystem_LegacyOnlyDocumentsHandled(DocumentFolderServiceTestBase):
-    """
-    SCENARIO: Documents with only CorpusDocumentFolder (no DocumentPath) are handled.
-
-    BUSINESS RULE: Legacy documents without DocumentPath should still be visible.
-    """
-
-    def setUp(self):
-        self.owner = User.objects.create_user(
-            username="owner", email="owner@test.com", password="test"
-        )
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus", creator=self.owner, is_public=False
-        )
-        self.folder, _ = DocumentFolderService.create_folder(
-            user=self.owner, corpus=self.corpus, name="Folder"
-        )
-        # Create legacy-only document (no DocumentPath)
-        self.legacy_doc = Document.objects.create(
-            title="Legacy Document", creator=self.owner, pdf_file="legacy.pdf"
-        )
-        CorpusDocumentFolder.objects.create(
-            document=self.legacy_doc, corpus=self.corpus, folder=self.folder
-        )
-
-    def test_legacy_document_appears_in_folder_documents(self):
-        """Legacy documents should appear in get_folder_documents()."""
-        docs = DocumentFolderService.get_folder_documents(
-            user=self.owner, corpus_id=self.corpus.id, folder_id=self.folder.id
-        )
-
-        self.assertIn(self.legacy_doc, docs)
-
-
-# =============================================================================
-# 8. EDGE CASES AND ERROR HANDLING
+# 7. EDGE CASES AND ERROR HANDLING
 # =============================================================================
 
 

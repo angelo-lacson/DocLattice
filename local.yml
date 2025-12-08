@@ -72,9 +72,12 @@ services:
     image: opencontractserver_local_django
     container_name: celeryworker
     depends_on:
-      - redis
-      - postgres
-      - docling-parser
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      docling-parser:
+        condition: service_started
     volumes:
       - .:/app:z
     env_file:
@@ -87,9 +90,12 @@ services:
     image: opencontractserver_local_django
     container_name: celerybeat
     depends_on:
-      - redis
-      - postgres
-      - docling-parser
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      docling-parser:
+        condition: service_started
     volumes:
       - .:/app:z
     env_file:

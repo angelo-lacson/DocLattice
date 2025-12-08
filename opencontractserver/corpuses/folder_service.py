@@ -6,11 +6,10 @@ into a single, DRY, permission-aware module following the QueryOptimizer pattern
 
 Key Design Principles:
 1. DRY Permissions: Single permission check methods used by all operations
-2. Dual-System Awareness: All mutations update both DocumentPath and CorpusDocumentFolder
-3. Transaction Safety: All mutations wrapped in transactions
-4. Query Optimization: Proper use of select_related, prefetch_related, with_tree_fields
-5. IDOR Protection: Consistent error messages for not-found vs permission-denied
-6. One-Stop Shop: All document CRUD, folder CRUD, and corpus operations in one place
+2. Transaction Safety: All mutations wrapped in transactions
+3. Query Optimization: Proper use of select_related, prefetch_related, with_tree_fields
+4. IDOR Protection: Consistent error messages for not-found vs permission-denied
+5. One-Stop Shop: All document CRUD, folder CRUD, and corpus operations in one place
 
 Document Lifecycle Operations:
 - create_document(): Create standalone documents (not in corpus)
@@ -74,7 +73,6 @@ class DocumentFolderService:
     Follows the QueryOptimizer pattern with:
     - Static classmethod-based API
     - Centralized permission checks
-    - Dual-system support (DocumentPath + CorpusDocumentFolder)
     - Transaction-safe mutations
     - Query optimization for reads
 
@@ -247,11 +245,6 @@ class DocumentFolderService:
         """
         Verify that a document belongs to a corpus.
 
-        Checks multiple sources for backward compatibility:
-        1. DocumentPath records (primary - new versioning system)
-        2. CorpusDocumentFolder records (legacy junction table)
-        3. corpus.documents M2M relationship (fallback)
-
         Args:
             document: The document to check
             corpus: The corpus to check membership in
@@ -259,27 +252,13 @@ class DocumentFolderService:
         Returns:
             True if document belongs to corpus, False otherwise
         """
-        from opencontractserver.corpuses.models import CorpusDocumentFolder
         from opencontractserver.documents.models import DocumentPath
 
-        # Check DocumentPath (primary system)
-        has_path = DocumentPath.objects.filter(
+        # Check DocumentPath (source of truth for corpus membership)
+        return DocumentPath.objects.filter(
             document=document,
             corpus=corpus,
         ).exists()
-        if has_path:
-            return True
-
-        # Check CorpusDocumentFolder (legacy system)
-        has_legacy = CorpusDocumentFolder.objects.filter(
-            document=document,
-            corpus=corpus,
-        ).exists()
-        if has_legacy:
-            return True
-
-        # Fallback to M2M relationship
-        return corpus.documents.filter(id=document.id).exists()
 
     # =========================================================================
     # FOLDER READ OPERATIONS
@@ -435,9 +414,6 @@ class DocumentFolderService:
         """
         Get documents in a specific folder with permission filtering.
 
-        Uses DocumentPath (primary) with CorpusDocumentFolder (fallback)
-        for backward compatibility with the dual-tree architecture.
-
         Args:
             user: Requesting user
             corpus_id: ID of corpus context
@@ -451,7 +427,7 @@ class DocumentFolderService:
         Permissions:
             Requires corpus READ permission
         """
-        from opencontractserver.corpuses.models import Corpus, CorpusDocumentFolder
+        from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import Document, DocumentPath
 
         # Get corpus and check permission
@@ -463,7 +439,7 @@ class DocumentFolderService:
         if not cls.check_corpus_read_permission(user, corpus):
             return Document.objects.none()
 
-        # Build filters for DocumentPath (primary system)
+        # Build filters for DocumentPath
         path_filters = Q(corpus_id=corpus_id, is_current=True)
         if not include_deleted:
             path_filters &= Q(is_deleted=False)
@@ -475,38 +451,11 @@ class DocumentFolderService:
             path_filters &= Q(folder_id=folder_id)
 
         # Get document IDs from DocumentPath
-        doc_ids_from_paths = set(
-            DocumentPath.objects.filter(path_filters).values_list(
-                "document_id", flat=True
-            )
+        doc_ids = DocumentPath.objects.filter(path_filters).values_list(
+            "document_id", flat=True
         )
 
-        # Get document IDs from CorpusDocumentFolder (legacy fallback)
-        legacy_filters = Q(corpus_id=corpus_id)
-        if folder_id is None:
-            legacy_filters &= Q(folder__isnull=True)
-        else:
-            legacy_filters &= Q(folder_id=folder_id)
-
-        legacy_doc_ids = set(
-            CorpusDocumentFolder.objects.filter(legacy_filters).values_list(
-                "document_id", flat=True
-            )
-        )
-
-        # For legacy docs, only include ones without DocumentPath entries
-        # (if they have DocumentPath, we trust that system)
-        docs_with_any_path = set(
-            DocumentPath.objects.filter(
-                document_id__in=legacy_doc_ids, corpus_id=corpus_id
-            ).values_list("document_id", flat=True)
-        )
-        legacy_only_docs = legacy_doc_ids - docs_with_any_path
-
-        # Combine and query
-        all_doc_ids = doc_ids_from_paths | legacy_only_docs
-
-        return Document.objects.filter(id__in=all_doc_ids).select_related("creator")
+        return Document.objects.filter(id__in=doc_ids).select_related("creator")
 
     @classmethod
     def get_folder_document_ids(
@@ -529,7 +478,7 @@ class DocumentFolderService:
         Returns:
             Set of document IDs in the folder
         """
-        from opencontractserver.corpuses.models import Corpus, CorpusDocumentFolder
+        from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentPath
 
         # Get corpus and check permission
@@ -548,33 +497,11 @@ class DocumentFolderService:
         else:
             path_filters &= Q(folder_id=folder_id)
 
-        doc_ids_from_paths = set(
+        return set(
             DocumentPath.objects.filter(path_filters).values_list(
                 "document_id", flat=True
             )
         )
-
-        # Legacy fallback
-        legacy_filters = Q(corpus_id=corpus_id)
-        if folder_id is None:
-            legacy_filters &= Q(folder__isnull=True)
-        else:
-            legacy_filters &= Q(folder_id=folder_id)
-
-        legacy_doc_ids = set(
-            CorpusDocumentFolder.objects.filter(legacy_filters).values_list(
-                "document_id", flat=True
-            )
-        )
-
-        docs_with_any_path = set(
-            DocumentPath.objects.filter(
-                document_id__in=legacy_doc_ids, corpus_id=corpus_id
-            ).values_list("document_id", flat=True)
-        )
-        legacy_only_docs = legacy_doc_ids - docs_with_any_path
-
-        return doc_ids_from_paths | legacy_only_docs
 
     @classmethod
     def get_deleted_documents(
@@ -881,13 +808,11 @@ class DocumentFolderService:
 
         Side Effects:
             - Documents in folder have their folder assignment removed (moved to root)
-            - Updates both DocumentPath and CorpusDocumentFolder
             - Child folders are either reparented or deleted based on flag
 
         Permissions:
             Requires corpus DELETE permission
         """
-        from opencontractserver.corpuses.models import CorpusDocumentFolder
         from opencontractserver.documents.models import DocumentPath
 
         # Permission check
@@ -905,14 +830,10 @@ class DocumentFolderService:
             # else: cascade delete will handle children automatically
 
             # Move documents to root (set folder=NULL)
-            # Update DocumentPath
             DocumentPath.objects.filter(
                 folder=folder,
                 is_current=True,
             ).update(folder=None)
-
-            # Update CorpusDocumentFolder (legacy)
-            CorpusDocumentFolder.objects.filter(folder=folder).update(folder=None)
 
             # Delete folder
             folder_id = folder.id
@@ -924,52 +845,6 @@ class DocumentFolderService:
     # =========================================================================
     # DOCUMENT-IN-FOLDER WRITE OPERATIONS
     # =========================================================================
-
-    @classmethod
-    def _update_document_folder_assignment(
-        cls,
-        document: Document,
-        corpus: Corpus,
-        folder: CorpusFolder | None,
-    ) -> None:
-        """
-        Internal method to update both DocumentPath and CorpusDocumentFolder.
-
-        MUST be called within a transaction.
-
-        This is the single source of truth for dual-system updates.
-        All document folder assignment changes should go through this method.
-
-        Args:
-            document: Document to update
-            corpus: Corpus context
-            folder: New folder (None = move to root)
-        """
-        from opencontractserver.corpuses.models import CorpusDocumentFolder
-        from opencontractserver.documents.models import DocumentPath
-
-        # Update DocumentPath (primary system)
-        DocumentPath.objects.filter(
-            document=document,
-            corpus=corpus,
-            is_current=True,
-            is_deleted=False,
-        ).update(folder=folder)
-
-        # Update CorpusDocumentFolder (legacy system)
-        CorpusDocumentFolder.objects.filter(
-            document=document,
-            corpus=corpus,
-        ).delete()
-
-        # Create new assignment (if folder is specified)
-        # Note: If folder is None, document is at root (no CorpusDocumentFolder needed)
-        if folder is not None:
-            CorpusDocumentFolder.objects.create(
-                document=document,
-                corpus=corpus,
-                folder=folder,
-            )
 
     @classmethod
     def move_document_to_folder(
@@ -991,16 +866,13 @@ class DocumentFolderService:
         Returns:
             (success, error_message)
 
-        Implementation:
-            Updates BOTH systems in a transaction:
-            1. DocumentPath: Updates folder FK where is_current=True, is_deleted=False
-            2. CorpusDocumentFolder: Deletes old, creates new assignment
-
         Validations:
             - User has corpus UPDATE permission
             - Document belongs to corpus
             - Folder (if provided) belongs to corpus
         """
+        from opencontractserver.documents.models import DocumentPath
+
         # Permission check
         if not cls.check_corpus_write_permission(user, corpus):
             return (
@@ -1017,7 +889,13 @@ class DocumentFolderService:
             return False, "Target folder does not belong to this corpus"
 
         with transaction.atomic():
-            cls._update_document_folder_assignment(document, corpus, folder)
+            DocumentPath.objects.filter(
+                document=document,
+                corpus=corpus,
+                is_current=True,
+                is_deleted=False,
+            ).update(folder=folder)
+
             logger.info(
                 f"Moved document {document.id} to folder {folder.id if folder else 'root'} "
                 f"in corpus {corpus.id} by user {user.id}"
@@ -1044,17 +922,11 @@ class DocumentFolderService:
         Returns:
             (moved_count, error_message)
 
-        Implementation:
-            - Validates all documents belong to corpus first
-            - Uses bulk operations for efficiency
-            - Updates both DocumentPath and CorpusDocumentFolder
-
         Validations:
             - User has corpus UPDATE permission
             - All documents belong to corpus
             - Folder (if provided) belongs to corpus
         """
-        from opencontractserver.corpuses.models import CorpusDocumentFolder
         from opencontractserver.documents.models import Document, DocumentPath
 
         # Permission check
@@ -1081,26 +953,6 @@ class DocumentFolderService:
                 is_current=True,
                 is_deleted=False,
             ).update(folder=folder)
-
-            # Bulk update CorpusDocumentFolder
-            CorpusDocumentFolder.objects.filter(
-                document_id__in=document_ids,
-                corpus=corpus,
-            ).delete()
-
-            if folder is not None:
-                # Create new assignments
-                assignments = [
-                    CorpusDocumentFolder(
-                        document_id=doc_id,
-                        corpus=corpus,
-                        folder=folder,
-                    )
-                    for doc_id in document_ids
-                ]
-                CorpusDocumentFolder.objects.bulk_create(
-                    assignments, ignore_conflicts=True
-                )
 
             logger.info(
                 f"Bulk moved {len(document_ids)} documents to folder "
@@ -1634,6 +1486,7 @@ class DocumentFolderService:
 
         try:
             # Use corpus.add_document for proper corpus isolation
+            # The folder is passed through and stored in DocumentPath
             corpus_doc, status, path_record = corpus.add_document(
                 document=document,
                 user=user,
@@ -1642,10 +1495,6 @@ class DocumentFolderService:
 
             # Set permissions on the corpus-isolated copy
             set_permissions_for_obj_to_user(user, corpus_doc, [PermissionTypes.CRUD])
-
-            # Handle folder assignment in legacy system
-            if folder is not None:
-                cls._update_document_folder_assignment(corpus_doc, corpus, folder)
 
             logger.info(
                 f"Added document {document.id} to corpus {corpus.id} as {corpus_doc.id} "

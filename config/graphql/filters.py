@@ -393,15 +393,13 @@ class DocumentFilter(django_filters.FilterSet):
         """
         Filter documents by folder assignment.
 
-        Uses DocumentPath (new versioning system) as primary source, falls back to
-        CorpusDocumentFolder for backward compatibility.
+        Uses DocumentPath as the source of truth for folder assignments.
 
         Special handling: value="__root__" returns documents in corpus root (no folder).
         Otherwise filters to specific folder ID.
         """
         import logging
 
-        from opencontractserver.corpuses.models import CorpusDocumentFolder
         from opencontractserver.documents.models import DocumentPath
 
         logger = logging.getLogger(__name__)
@@ -409,21 +407,11 @@ class DocumentFilter(django_filters.FilterSet):
         logger.info(f"[QUERY] in_folder filter called with value: {value}")
 
         if value == "__root__":
-            # For root documents, we need to find documents with no folder assignment
-            # Get docs with folder assignments via DocumentPath
-            docs_with_folder_from_paths = set(
+            # For root documents, find documents with no folder assignment
+            docs_with_folder = set(
                 DocumentPath.objects.filter(
                     folder__isnull=False, is_current=True, is_deleted=False
                 ).values_list("document_id", flat=True)
-            )
-            # Also check CorpusDocumentFolder for backward compatibility
-            docs_with_folder_from_legacy = set(
-                CorpusDocumentFolder.objects.filter(folder__isnull=False).values_list(
-                    "document_id", flat=True
-                )
-            )
-            docs_with_folder = (
-                docs_with_folder_from_paths | docs_with_folder_from_legacy
             )
 
             result = queryset.exclude(id__in=docs_with_folder)
@@ -432,27 +420,17 @@ class DocumentFilter(django_filters.FilterSet):
         else:
             folder_pk = from_global_id(value)[1]
 
-            # Get document IDs from DocumentPath (new versioning system)
-            doc_ids_from_paths = set(
+            # Get document IDs from DocumentPath
+            doc_ids = set(
                 DocumentPath.objects.filter(
                     folder_id=folder_pk, is_current=True, is_deleted=False
                 ).values_list("document_id", flat=True)
             )
 
-            # Also check CorpusDocumentFolder for backward compatibility
-            doc_ids_from_legacy = set(
-                CorpusDocumentFolder.objects.filter(folder_id=folder_pk).values_list(
-                    "document_id", flat=True
-                )
-            )
-
-            all_doc_ids = doc_ids_from_paths | doc_ids_from_legacy
-
             logger.info(
-                f"[QUERY] Filtering to folder {folder_pk}, found {len(all_doc_ids)} document assignments "
-                f"(paths: {len(doc_ids_from_paths)}, legacy: {len(doc_ids_from_legacy)})"
+                f"[QUERY] Filtering to folder {folder_pk}, found {len(doc_ids)} documents"
             )
-            result = queryset.filter(id__in=all_doc_ids).distinct()
+            result = queryset.filter(id__in=doc_ids).distinct()
             logger.info(f"[QUERY] After filter, result count: {result.count()}")
             return result
 
