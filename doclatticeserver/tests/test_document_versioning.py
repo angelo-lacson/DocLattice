@@ -1490,3 +1490,157 @@ class PerformanceTestCase(TestCase):
         self.assertLess(
             duration, 0.5, f"History traversal took {duration:.3f}s, should be < 0.5s"
         )
+
+
+class PdfFileCreationTestCase(TestCase):
+    """
+    Test Suite: pdf_file Field Population
+
+    Ensures that import_document always populates the pdf_file field from content
+    when not explicitly provided. This prevents frontend PDF loading failures.
+
+    Bug fixed: When importing brand new content via import_content/import_document,
+    the pdf_file field was not being set, causing "Unsupported file type" errors
+    in the frontend despite fileType being "application/pdf".
+    """
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+
+    def test_import_document_creates_pdf_file_for_new_content(self):
+        """
+        Regression test: When importing brand new content without pdf_file,
+        the function should create pdf_file from the content bytes.
+
+        This prevents the bug where documents had fileType="application/pdf"
+        but empty pdfFile, causing frontend loading failures.
+        """
+        content = b"%PDF-1.4 fake pdf content for testing"
+
+        # Import content without providing pdf_file parameter
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/test_document.pdf",
+            content=content,
+            user=self.user,
+            title="Test PDF",
+            file_type="application/pdf",
+        )
+
+        self.assertEqual(status, "created")
+        # Critical assertion: pdf_file must be populated
+        self.assertTrue(
+            doc.pdf_file,
+            "pdf_file field is empty - this will cause frontend loading failures!",
+        )
+        # Verify the file has correct extension
+        self.assertTrue(
+            doc.pdf_file.name.endswith(".pdf"),
+            f"Expected .pdf extension, got: {doc.pdf_file.name}",
+        )
+        # Verify content is accessible
+        doc.pdf_file.seek(0)
+        saved_content = doc.pdf_file.read()
+        self.assertEqual(saved_content, content, "Saved content doesn't match original")
+
+    def test_import_document_creates_docx_file_for_new_docx_content(self):
+        """
+        Verify pdf_file is created with correct extension for DOCX files.
+        """
+        content = b"PK fake docx content for testing"
+
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/test_document.docx",
+            content=content,
+            user=self.user,
+            title="Test DOCX",
+            file_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        self.assertEqual(status, "created")
+        self.assertTrue(doc.pdf_file, "pdf_file field is empty!")
+        self.assertTrue(
+            doc.pdf_file.name.endswith(".docx"),
+            f"Expected .docx extension, got: {doc.pdf_file.name}",
+        )
+
+    def test_import_document_version_update_creates_pdf_file_if_missing(self):
+        """
+        When updating content at an existing path, if the old document
+        has no pdf_file (due to the bug), create it from the new content.
+        """
+        # First, create a document but simulate the bug by manually clearing pdf_file
+        initial_content = b"%PDF-1.4 initial content"
+        doc1, _, _ = import_document(
+            corpus=self.corpus,
+            path="/test.pdf",
+            content=initial_content,
+            user=self.user,
+            title="Test",
+        )
+
+        # Simulate the bug: clear pdf_file on the old document
+        Document.objects.filter(pk=doc1.pk).update(pdf_file="")
+        doc1.refresh_from_db()
+        self.assertFalse(doc1.pdf_file, "Setup failed: pdf_file should be empty")
+
+        # Now update with new content - should create pdf_file from new content
+        new_content = b"%PDF-1.4 updated content"
+        doc2, status, _ = import_document(
+            corpus=self.corpus,
+            path="/test.pdf",
+            content=new_content,
+            user=self.user,
+        )
+
+        self.assertEqual(status, "updated")
+        # Critical: new version should have pdf_file populated
+        self.assertTrue(
+            doc2.pdf_file,
+            "pdf_file field is empty on updated document!",
+        )
+        doc2.pdf_file.seek(0)
+        saved_content = doc2.pdf_file.read()
+        self.assertEqual(saved_content, new_content, "Updated content doesn't match")
+
+    def test_import_document_uses_provided_pdf_file_when_given(self):
+        """
+        When pdf_file is explicitly provided, use it instead of creating from content.
+        """
+        from django.core.files.base import ContentFile
+
+        content = b"%PDF-1.4 content bytes"
+        explicit_file = ContentFile(content, name="explicit_name.pdf")
+
+        doc, status, _ = import_document(
+            corpus=self.corpus,
+            path="/test.pdf",
+            content=content,
+            user=self.user,
+            pdf_file=explicit_file,
+        )
+
+        self.assertEqual(status, "created")
+        self.assertTrue(doc.pdf_file)
+        # Should use the explicit filename (may have path prefix added by storage)
+        self.assertIn("explicit_name", doc.pdf_file.name)
+
+    def test_import_document_filename_derived_from_path(self):
+        """
+        When creating pdf_file from content, filename should be derived from path.
+        """
+        content = b"%PDF-1.4 test"
+
+        doc, _, _ = import_document(
+            corpus=self.corpus,
+            path="/documents/my_important_report.pdf",
+            content=content,
+            user=self.user,
+        )
+
+        self.assertTrue(doc.pdf_file)
+        # Filename should be derived from path (my_important_report.pdf)
+        self.assertIn("my_important_report", doc.pdf_file.name)
