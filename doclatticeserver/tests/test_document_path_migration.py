@@ -386,7 +386,7 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         )
 
         # Should create corpus-isolated document with provenance tracking
-        self.assertEqual(status2, "created_from_existing")
+        self.assertEqual(status2, "created")
         self.assertNotEqual(doc1.id, doc2.id)  # Different documents
         self.assertEqual(doc2.source_document, doc1)  # Provenance tracked
         self.assertEqual(doc1.pdf_file_hash, doc2.pdf_file_hash)  # Same content
