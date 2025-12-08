@@ -139,8 +139,9 @@ export const CorpusDocumentCards = ({
     ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
     ...(document_search_term ? { textSearch: document_search_term } : {}),
     // ALWAYS pass inFolderId to filter by folder
-    // null = root level only, string = specific folder only
-    inFolderId: selected_folder_id ?? undefined,
+    // null (corpus root) = "__root__" to show only root-level docs
+    // string = specific folder ID
+    inFolderId: selected_folder_id === null ? "__root__" : selected_folder_id,
   };
 
   console.log("[QUERY] GET_DOCUMENTS variables:", queryVariables);
