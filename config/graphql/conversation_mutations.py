@@ -12,6 +12,7 @@ This module provides mutations for creating and managing discussion threads:
 import logging
 
 import graphene
+from django.db import transaction
 from django.utils import timezone
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
@@ -24,6 +25,7 @@ from opencontractserver.conversations.models import (
     MessageTypeChoices,
 )
 from opencontractserver.corpuses.models import Corpus
+from opencontractserver.documents.models import Document
 from opencontractserver.tasks.agent_tasks import trigger_agent_responses_for_message
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.mention_parser import (
@@ -40,17 +42,28 @@ logger = logging.getLogger(__name__)
 
 class CreateThreadMutation(graphene.Mutation):
     """
-    Create a new discussion thread in a corpus.
+    Create a new discussion thread linked to a corpus and/or document.
+
+    Supports three modes:
+    - corpus_id only: Thread is linked to corpus (corpus-level discussion)
+    - document_id only: Thread is linked to document (standalone document discussion)
+    - both corpus_id AND document_id: Thread is linked to both (doc-in-corpus discussion)
 
     Security Note: Message content is stored as Markdown from TipTap editor.
     Markdown is safer than HTML (no script injection), and mention links use
     standard Markdown syntax [text](url) which is parsed to create database relationships.
     Part of Issue #623 - @ Mentions Feature (Extended)
+    Part of Issue #677 - Document Discussions UI Enhancement
     """
 
     class Arguments:
         corpus_id = graphene.String(
-            required=True, description="ID of the corpus for this thread"
+            required=False,
+            description="ID of the corpus for this thread (optional if document_id provided)",
+        )
+        document_id = graphene.String(
+            required=False,
+            description="ID of the document for this thread (for doc-specific discussions)",
         )
         title = graphene.String(required=True, description="Title of the thread")
         description = graphene.String(
@@ -66,23 +79,74 @@ class CreateThreadMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="10/h")
-    def mutate(root, info, corpus_id, title, initial_message, description=None):
+    @transaction.atomic
+    def mutate(
+        root,
+        info,
+        title,
+        initial_message,
+        corpus_id=None,
+        document_id=None,
+        description=None,
+    ):
         ok = False
         obj = None
         message = ""
 
         try:
             user = info.context.user
-            corpus_pk = from_global_id(corpus_id)[1]
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            corpus = None
+            document = None
 
-            # Check if user has permission to access the corpus
-            if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
+            # At least one of corpus_id or document_id must be provided
+            if not corpus_id and not document_id:
                 return CreateThreadMutation(
                     ok=False,
-                    message="You do not have permission to create threads in this corpus",
+                    message="Either corpus_id or document_id (or both) must be provided",
                     obj=None,
                 )
+
+            # Resolve corpus if provided
+            if corpus_id:
+                corpus_pk = from_global_id(corpus_id)[1]
+                try:
+                    corpus = Corpus.objects.get(pk=corpus_pk)
+                except Corpus.DoesNotExist:
+                    return CreateThreadMutation(
+                        ok=False,
+                        message="You do not have permission to create threads in this corpus",
+                        obj=None,
+                    )
+
+                # Check if user has permission to access the corpus
+                if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
+                    return CreateThreadMutation(
+                        ok=False,
+                        message="You do not have permission to create threads in this corpus",
+                        obj=None,
+                    )
+
+            # Resolve document if provided
+            if document_id:
+                document_pk = from_global_id(document_id)[1]
+                try:
+                    document = Document.objects.get(pk=document_pk)
+                except Document.DoesNotExist:
+                    return CreateThreadMutation(
+                        ok=False,
+                        message="You do not have permission to create threads for this document",
+                        obj=None,
+                    )
+
+                # Check if user has permission to access the document
+                if not user_has_permission_for_obj(
+                    user, document, PermissionTypes.READ
+                ):
+                    return CreateThreadMutation(
+                        ok=False,
+                        message="You do not have permission to create threads for this document",
+                        obj=None,
+                    )
 
             # Create the conversation with THREAD type
             conversation = Conversation.objects.create(
@@ -90,6 +154,7 @@ class CreateThreadMutation(graphene.Mutation):
                 description=description or "",
                 conversation_type="thread",
                 chat_with_corpus=corpus,
+                chat_with_document=document,
                 creator=user,
             )
 
@@ -129,8 +194,6 @@ class CreateThreadMutation(graphene.Mutation):
             message = "Thread created successfully"
             obj = conversation
 
-        except Corpus.DoesNotExist:
-            message = "You do not have permission to create threads in this corpus"
         except Exception as e:
             logger.error(f"Error creating thread: {e}")
             message = "Failed to create thread"

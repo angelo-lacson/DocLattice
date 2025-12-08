@@ -287,6 +287,96 @@ The GraphQL layer translates between backend Django Guardian format and frontend
 | **CAN_PERMISSION** | Manage corpus access | Manage document access | Permission management |
 | **CAN_COMMENT** | Add comments | Add comments | Comment functionality |
 
+## Permission Model Summary by Object Type
+
+This section provides a comprehensive reference for how permissions work across different object types in the system.
+
+### Permission Model Reference Table
+
+| Object Type | Permission Model | Primary Permission Source | Secondary Checks | Special Rules |
+|-------------|------------------|---------------------------|------------------|---------------|
+| **Corpus** | Direct | Object permissions | `is_public` flag | Creator has full access |
+| **Document** | Direct | Object permissions | `is_public` flag | Creator has full access |
+| **CorpusFolder** | Inherited (Corpus) | Parent corpus permissions | None | No individual permissions; write requires UPDATE on corpus |
+| **Annotation** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
+| **Relationship** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
+| **Analysis** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
+| **Extract** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
+| **Conversation (CHAT)** | Context-based | `chat_with_corpus` OR `chat_with_document` | `is_public` flag | Only ONE context field can be set |
+| **Conversation (THREAD)** | Context-based | `chat_with_corpus` AND/OR `chat_with_document` | `is_public` flag | BOTH context fields can be set for doc-in-corpus threads |
+| **ChatMessage** | Inherited (Conversation) | Parent conversation permissions | None | Uses conversation's context permissions |
+| **UserBadge** | Privacy-filtered | Recipient's profile privacy | Corpus membership | Follows recipient's `is_profile_public` |
+| **User** | Privacy-controlled | `is_profile_public` | Corpus membership | Private users visible via shared corpus with > READ |
+
+### Detailed Permission Formulas
+
+#### Standard Objects (Corpus, Document)
+```
+Can Access = is_superuser OR is_creator OR has_object_permission OR (is_public AND READ)
+```
+
+#### Annotations & Relationships
+```
+Effective Permission = MIN(document_permission, corpus_permission)
+Structural Override = IF structural THEN READ-ONLY (except superuser)
+Privacy Filter = IF created_by_analysis/extract THEN require source permission
+```
+
+#### Analyses & Extracts (Hybrid Model)
+```
+Can See Object = has_object_permission AND can_read_corpus
+Can See Content = can_see_object AND can_read_document
+```
+
+#### Conversations (THREAD Type) - Document-in-Corpus Model
+```
+Access Check (when both chat_with_corpus AND chat_with_document set):
+  can_access = (has_corpus_permission OR corpus_is_public)
+               AND (has_document_permission OR document_is_public)
+
+Moderation Check:
+  can_moderate = is_superuser
+                 OR corpus.creator == user
+                 OR document.creator == user
+                 OR user has EDIT permission on corpus
+                 OR user has EDIT permission on document
+```
+
+#### Conversations (CHAT Type) - Single Context Model
+```
+Access Check (only ONE of corpus/document set):
+  IF chat_with_corpus:
+    can_access = has_corpus_permission OR corpus_is_public
+  ELIF chat_with_document:
+    can_access = has_document_permission OR document_is_public
+```
+
+### Anonymous User Access Summary
+
+| Object Type | Can Read? | Conditions |
+|-------------|-----------|------------|
+| Corpus | ✅ | `is_public=True` |
+| Document | ✅ | `is_public=True` |
+| Annotation | ✅ | Document AND Corpus both public |
+| Relationship | ✅ | Document AND Corpus both public |
+| Analysis | ✅ | Analysis public AND Corpus public |
+| Extract | ❌ | Never (always filtered out) |
+| Conversation | ✅ | `is_public=True` |
+| User Profile | ✅ | `is_profile_public=True` |
+
+### Structural Item Protection Summary
+
+| Item Type | Non-Superuser | Superuser |
+|-----------|---------------|-----------|
+| Structural Annotation | READ-ONLY | Full CRUD |
+| Structural Relationship | READ-ONLY | Full CRUD |
+| Non-Structural Annotation | Per doc+corpus permissions | Full CRUD |
+| Non-Structural Relationship | Per doc+corpus permissions | Full CRUD |
+
+**Enforcement Locations:**
+- Annotations: `permissioning.py:297-303`
+- Relationships: `permissioning.py:388-394`
+
 ## COMMENT Permission System
 
 ### Overview

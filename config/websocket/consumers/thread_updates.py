@@ -254,7 +254,16 @@ class ThreadUpdatesConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _check_conversation_access(self, user) -> bool:
-        """Check if user has access to the conversation."""
+        """
+        Check if user has access to the conversation.
+
+        For conversations with BOTH chat_with_corpus AND chat_with_document set
+        (doc-in-corpus threads), user must have access to BOTH the corpus AND
+        the document (AND logic).
+
+        For single-context conversations, user only needs access to the
+        respective corpus OR document.
+        """
         try:
             conversation = Conversation.objects.get(pk=self.conversation_id)
             self.conversation = conversation
@@ -267,7 +276,10 @@ class ThreadUpdatesConsumer(AsyncWebsocketConsumer):
             if user.is_superuser:
                 return True
 
-            # Check corpus access if conversation is corpus-scoped
+            has_corpus_access = True  # Default true if no corpus context
+            has_document_access = True  # Default true if no document context
+
+            # Check corpus access if conversation has corpus context
             if conversation.chat_with_corpus:
                 from opencontractserver.corpuses.models import Corpus
 
@@ -275,11 +287,11 @@ class ThreadUpdatesConsumer(AsyncWebsocketConsumer):
                     Corpus.objects.visible_to_user(user).get(
                         pk=conversation.chat_with_corpus_id
                     )
-                    return True
+                    has_corpus_access = True
                 except Corpus.DoesNotExist:
-                    return False
+                    has_corpus_access = False
 
-            # Check document access if conversation is document-scoped
+            # Check document access if conversation has document context
             if conversation.chat_with_document:
                 from opencontractserver.documents.models import Document
 
@@ -287,9 +299,18 @@ class ThreadUpdatesConsumer(AsyncWebsocketConsumer):
                     Document.objects.visible_to_user(user).get(
                         pk=conversation.chat_with_document_id
                     )
-                    return True
+                    has_document_access = True
                 except Document.DoesNotExist:
-                    return False
+                    has_document_access = False
+
+            # For THREAD type with both contexts: require BOTH permissions (AND)
+            # For single context: require that context's permission
+            if conversation.chat_with_corpus and conversation.chat_with_document:
+                return has_corpus_access and has_document_access
+            elif conversation.chat_with_corpus:
+                return has_corpus_access
+            elif conversation.chat_with_document:
+                return has_document_access
 
             return False
 
