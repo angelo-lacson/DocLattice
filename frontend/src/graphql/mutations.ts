@@ -2456,13 +2456,15 @@ export interface RevokeBadgeOutput {
 
 export const CREATE_THREAD = gql`
   mutation CreateThread(
-    $corpusId: String!
+    $corpusId: String
+    $documentId: String
     $title: String!
     $description: String
     $initialMessage: String!
   ) {
     createThread(
       corpusId: $corpusId
+      documentId: $documentId
       title: $title
       description: $description
       initialMessage: $initialMessage
@@ -2473,13 +2475,30 @@ export const CREATE_THREAD = gql`
         id
         title
         description
+        chatWithDocument {
+          id
+          title
+          slug
+          creator {
+            slug
+          }
+        }
+        chatWithCorpus {
+          id
+          title
+          slug
+          creator {
+            slug
+          }
+        }
       }
     }
   }
 `;
 
 export interface CreateThreadInput {
-  corpusId: string;
+  corpusId?: string;
+  documentId?: string;
   title: string;
   description?: string;
   initialMessage: string;

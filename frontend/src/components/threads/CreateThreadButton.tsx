@@ -96,8 +96,10 @@ const FloatingActionButton = styled.button`
 `;
 
 export interface CreateThreadButtonProps {
-  /** ID of the corpus to create thread in */
-  corpusId: string;
+  /** ID of the corpus to create thread in (optional if documentId provided) */
+  corpusId?: string;
+  /** ID of the document to create thread for (optional if corpusId provided) */
+  documentId?: string;
   /** Button variant: primary (filled) or secondary (outlined) */
   variant?: "primary" | "secondary";
   /** Display as floating action button (mobile-friendly) */
@@ -106,18 +108,30 @@ export interface CreateThreadButtonProps {
   className?: string;
   /** Disabled state */
   disabled?: boolean;
+  /**
+   * Custom success handler. If provided, overrides default navigation behavior.
+   * Used by sidebar to stay inline instead of navigating to full-page view.
+   */
+  onSuccess?: (conversationId: string) => void;
 }
 
 /**
  * Button to create a new discussion thread
  * Opens CreateThreadForm modal when clicked
+ *
+ * Supports:
+ * - corpusId only: corpus-level discussions
+ * - documentId only: document-specific discussions
+ * - both: doc-in-corpus discussions
  */
 export function CreateThreadButton({
   corpusId,
+  documentId,
   variant = "primary",
   floating = false,
   className,
   disabled = false,
+  onSuccess: customOnSuccess,
 }: CreateThreadButtonProps) {
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
@@ -125,7 +139,14 @@ export function CreateThreadButton({
 
   const handleSuccess = (conversationId: string) => {
     setShowModal(false);
-    // Navigate to the newly created thread using proper slug-based URL
+
+    // If custom handler provided (e.g., sidebar), use that instead of navigation
+    if (customOnSuccess) {
+      customOnSuccess(conversationId);
+      return;
+    }
+
+    // Default: Navigate to the newly created thread using proper slug-based URL
     if (corpus) {
       const url = getCorpusThreadUrl(corpus, conversationId);
       if (url !== "#") {
@@ -159,6 +180,7 @@ export function CreateThreadButton({
         {showModal && (
           <CreateThreadForm
             corpusId={corpusId}
+            documentId={documentId}
             onSuccess={handleSuccess}
             onClose={handleClose}
           />
@@ -183,6 +205,7 @@ export function CreateThreadButton({
       {showModal && (
         <CreateThreadForm
           corpusId={corpusId}
+          documentId={documentId}
           onSuccess={handleSuccess}
           onClose={handleClose}
         />

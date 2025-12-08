@@ -313,7 +313,11 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
     """
     Stores high-level information about an agent-based conversation.
     Each conversation can have multiple messages (now renamed to ChatMessage) associated with it.
-    Only one of chat_with_corpus or chat_with_document can be set.
+
+    Context Field Rules:
+    - For CHAT type: Only ONE of chat_with_corpus OR chat_with_document can be set
+      (agents need single context for streaming)
+    - For THREAD type: BOTH can be set simultaneously (doc-in-corpus discussions)
 
     Includes HasEmbeddingMixin for vector search support on conversation titles and descriptions.
     """
@@ -406,10 +410,19 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
 
     class Meta:
         constraints = [
+            # For CHAT type: enforce mutual exclusivity (at least one must be NULL)
+            # For THREAD type: allow both to be set (doc-in-corpus discussions)
             django.db.models.CheckConstraint(
-                check=django.db.models.Q(chat_with_corpus__isnull=True)
-                | django.db.models.Q(chat_with_document__isnull=True),
-                name="one_chat_field_null_constraint",
+                check=(
+                    # THREAD type allows both fields to be set
+                    django.db.models.Q(conversation_type="thread")
+                    | (
+                        # CHAT type requires at least one to be NULL
+                        django.db.models.Q(chat_with_corpus__isnull=True)
+                        | django.db.models.Q(chat_with_document__isnull=True)
+                    )
+                ),
+                name="chat_type_mutual_exclusivity_constraint",
             ),
         ]
         indexes = [
@@ -427,35 +440,66 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
 
     def clean(self):
         """
-        Ensure that only one of chat_with_corpus or chat_with_document is set.
+        Validate context field rules based on conversation type.
+
+        - CHAT type: Only ONE of chat_with_corpus OR chat_with_document can be set
+        - THREAD type: Both can be set simultaneously (doc-in-corpus discussions)
         """
         if self.chat_with_corpus and self.chat_with_document:
-            raise ValidationError(
-                "Only one of chat_with_corpus or chat_with_document can be set."
-            )
+            # Only CHAT type has mutual exclusivity requirement
+            if self.conversation_type == ConversationTypeChoices.CHAT:
+                raise ValidationError(
+                    "For CHAT conversations, only one of chat_with_corpus or "
+                    "chat_with_document can be set. Use THREAD type for "
+                    "document-in-corpus discussions."
+                )
 
     def can_moderate(self, user) -> bool:
         """
         Check if a user can moderate this conversation.
-        Corpus owners and designated moderators have moderation permissions.
+
+        Moderation is granted if user is ANY of:
+        - Superuser
+        - Conversation creator
+        - Corpus owner (if chat_with_corpus is set)
+        - Document owner (if chat_with_document is set)
+        - Designated corpus moderator with permissions
+
+        For THREAD type with both corpus AND document set, having moderation
+        rights on EITHER grants moderation access (OR logic, not AND).
         """
-        # If this is a corpus conversation
+        # Superusers can always moderate
+        if user.is_superuser:
+            return True
+
+        # Conversation creator can always moderate
+        if self.creator == user:
+            return True
+
+        # Check corpus-based moderation rights
         if self.chat_with_corpus:
-            # Check if user is the corpus owner
+            # Corpus owner can moderate
             if self.chat_with_corpus.creator == user:
                 return True
 
-            # Check if user is a designated moderator
+            # Check if user is a designated corpus moderator
             try:
                 moderator = CorpusModerator.objects.get(
                     corpus=self.chat_with_corpus, user=user
                 )
-                return bool(moderator.permissions)
+                if bool(moderator.permissions):
+                    return True
             except CorpusModerator.DoesNotExist:
-                return False
+                pass
 
-        # For non-corpus conversations, only creator can moderate
-        return self.creator == user
+        # Check document-based moderation rights
+        if self.chat_with_document:
+            # Document owner can moderate
+            if self.chat_with_document.creator == user:
+                return True
+
+        # No moderation rights found
+        return False
 
     def lock(self, moderator, reason: str = ""):
         """
