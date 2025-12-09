@@ -69,7 +69,9 @@ import {
   showQueryViewState,
   openedQueryObj,
   showSelectCorpusAnalyzerOrFieldsetModal,
+  selectedTab,
 } from "../graphql/cache";
+import { updateTabParam } from "../utils/navigationUtils";
 import {
   UPDATE_CORPUS,
   UpdateCorpusOutputs,
@@ -1527,7 +1529,8 @@ export const Corpuses = () => {
     useState<boolean>(false);
   const [show_new_corpus_modal, setShowNewCorpusModal] =
     useState<boolean>(false);
-  const [active_tab, setActiveTab] = useState<number>(0);
+  // Tab state is now URL-driven via CentralRouteManager
+  const urlTab = useReactiveVar(selectedTab);
   const [showDescriptionEditor, setShowDescriptionEditor] =
     useState<boolean>(false);
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(
@@ -2067,6 +2070,34 @@ export const Corpuses = () => {
 
   // NOTE: canUpdateCorpus and corpusAtomPermissions are already destructured above
   // Removed duplicate useCorpusState() call that was causing infinite re-renders
+
+  // Tab IDs for URL-based navigation (order matches navigationItems array)
+  const TAB_IDS = [
+    "home",
+    "documents",
+    "annotations",
+    "analyses",
+    "extracts",
+    "discussions",
+    "analytics",
+    "settings",
+    "badges",
+  ] as const;
+
+  // Helper to navigate to a tab by index or ID
+  const setActiveTab = (tabIndexOrId: number | string) => {
+    const tabId =
+      typeof tabIndexOrId === "number" ? TAB_IDS[tabIndexOrId] : tabIndexOrId;
+    // Use null for "home" to keep URLs clean (home is default)
+    updateTabParam(location, navigate, tabId === "home" ? null : tabId);
+  };
+
+  // Derive active tab index from URL
+  const active_tab = useMemo(() => {
+    if (!urlTab) return 0; // Default to home
+    const index = TAB_IDS.indexOf(urlTab as (typeof TAB_IDS)[number]);
+    return index >= 0 ? index : 0;
+  }, [urlTab]);
 
   // Navigation items configuration
   // Memoize to prevent recreating on every render

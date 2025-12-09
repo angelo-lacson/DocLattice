@@ -32,6 +32,8 @@ export interface QueryParams {
   extractIds?: string[];
   threadId?: string | null;
   folderId?: string | null;
+  tab?: string | null;
+  messageId?: string | null;
   showStructural?: boolean;
   showSelectedOnly?: boolean;
   showBoundingBoxes?: boolean;
@@ -203,6 +205,12 @@ export function buildQueryParams(params: QueryParams): string {
   }
   if (params.folderId) {
     searchParams.set("folder", params.folderId);
+  }
+  if (params.tab) {
+    searchParams.set("tab", params.tab);
+  }
+  if (params.messageId) {
+    searchParams.set("message", params.messageId);
   }
 
   // Visualization state - only add non-default values to keep URLs clean
@@ -734,5 +742,70 @@ export function clearThreadSelection(
 ) {
   const searchParams = new URLSearchParams(location.search);
   searchParams.delete("thread");
+  searchParams.delete("message"); // Also clear message when clearing thread
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Update tab selection in URL
+ * Used for deep-linking to specific tabs in corpus or document views
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param tabId - Tab identifier (e.g., "discussions", "documents", "chat", "feed")
+ *                Pass null to clear tab and use default
+ */
+export function updateTabParam(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  tabId: string | null
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (tabId) {
+    searchParams.set("tab", tabId);
+  } else {
+    searchParams.delete("tab");
+  }
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Update message selection in URL for thread deep-linking
+ * Used to link directly to a specific message within a thread
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param messageId - Message identifier, or null to clear
+ */
+export function updateMessageParam(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  messageId: string | null
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (messageId) {
+    searchParams.set("message", messageId);
+  } else {
+    searchParams.delete("message");
+  }
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Navigate to thread with optional message deep-link
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param threadId - Thread/conversation ID
+ * @param messageId - Optional message ID to highlight
+ */
+export function navigateToThreadWithMessage(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  threadId: string,
+  messageId?: string
+) {
+  const searchParams = new URLSearchParams(location.search);
+  searchParams.set("thread", threadId);
+  if (messageId) {
+    searchParams.set("message", messageId);
+  }
   navigate({ search: searchParams.toString() }, { replace: true });
 }

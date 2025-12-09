@@ -25,6 +25,8 @@ import {
   selectedExtractIds,
   selectedThreadId,
   selectedFolderId,
+  selectedTab,
+  selectedMessageId,
   routeLoading,
   routeError,
   authStatusVar,
@@ -740,6 +742,8 @@ export function CentralRouteManager() {
     const extractIds = parseQueryParam(searchParams.get("extract"));
     const threadId = searchParams.get("thread");
     const folderId = searchParams.get("folder");
+    const tab = searchParams.get("tab");
+    const messageId = searchParams.get("message");
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
@@ -753,6 +757,8 @@ export function CentralRouteManager() {
       extractIds,
       threadId,
       folderId,
+      tab,
+      messageId,
       structural,
       selectedOnly,
       boundingBoxes,
@@ -766,6 +772,8 @@ export function CentralRouteManager() {
     const currentExtractIds = selectedExtractIds();
     const currentThreadId = selectedThreadId();
     const currentFolderId = selectedFolderId();
+    const currentTab = selectedTab();
+    const currentMessageId = selectedMessageId();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -801,6 +809,12 @@ export function CentralRouteManager() {
     }
     if (currentFolderId !== folderId) {
       updates.push(() => selectedFolderId(folderId));
+    }
+    if (currentTab !== tab) {
+      updates.push(() => selectedTab(tab));
+    }
+    if (currentMessageId !== messageId) {
+      updates.push(() => selectedMessageId(messageId));
     }
     if (currentStructural !== structural) {
       updates.push(() => showStructuralAnnotations(structural));
@@ -933,6 +947,8 @@ export function CentralRouteManager() {
   const extractIds = useReactiveVar(selectedExtractIds);
   const threadId = useReactiveVar(selectedThreadId);
   const folderId = useReactiveVar(selectedFolderId);
+  const tab = useReactiveVar(selectedTab);
+  const messageId = useReactiveVar(selectedMessageId);
   const structural = useReactiveVar(showStructuralAnnotations);
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
@@ -993,6 +1009,8 @@ export function CentralRouteManager() {
         extractIds,
         threadId,
         folderId,
+        tab,
+        messageId,
         structural,
         selectedOnly,
         boundingBoxes,
@@ -1006,6 +1024,8 @@ export function CentralRouteManager() {
       extractIds,
       threadId,
       folderId,
+      tab,
+      messageId,
       showStructural: structural,
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
@@ -1035,6 +1055,8 @@ export function CentralRouteManager() {
     extractIds,
     threadId,
     folderId,
+    tab,
+    messageId,
     structural,
     selectedOnly,
     boundingBoxes,
