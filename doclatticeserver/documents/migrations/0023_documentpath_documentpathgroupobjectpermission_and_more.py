@@ -130,18 +130,14 @@ class Migration(migrations.Migration):
             name="version_tree_id",
             field=models.UUIDField(
                 db_index=True,
-                default=uuid.uuid4,
+                null=True,  # Allow null initially - will be populated by 0024 data migration
                 help_text="Groups all content versions of same logical document. Implements Rule C1.",
             ),
         ),
-        migrations.AddConstraint(
-            model_name="document",
-            constraint=models.UniqueConstraint(
-                condition=models.Q(("is_current", True)),
-                fields=("version_tree_id",),
-                name="one_current_per_version_tree",
-            ),
-        ),
+        # NOTE: The UniqueConstraint "one_current_per_version_tree" is added in migration 0024
+        # AFTER the data migration populates unique UUIDs for each document.
+        # This prevents the constraint from failing when all existing rows get the same
+        # default UUID value during AddField.
         migrations.AddField(
             model_name="documentpathuserobjectpermission",
             name="content_object",
