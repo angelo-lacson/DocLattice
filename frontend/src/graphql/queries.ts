@@ -2544,10 +2544,20 @@ export interface SearchAnnotationsForMentionOutput {
         document: {
           id: string;
           title: string;
+          slug: string;
+          creator: {
+            id: string;
+            slug: string;
+          };
         };
         corpus: {
           id: string;
           title: string;
+          slug: string;
+          creator: {
+            id: string;
+            slug: string;
+          };
         } | null;
       };
     }>;
@@ -2574,10 +2584,20 @@ export const SEARCH_ANNOTATIONS_FOR_MENTION = gql`
           document {
             id
             title
+            slug
+            creator {
+              id
+              slug
+            }
           }
           corpus {
             id
             title
+            slug
+            creator {
+              id
+              slug
+            }
           }
         }
       }

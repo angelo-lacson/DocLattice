@@ -10,6 +10,10 @@ import {
   parseQueryParam,
   buildCanonicalPath,
   QueryParams,
+  updateTabParam,
+  updateMessageParam,
+  navigateToThreadWithMessage,
+  clearThreadSelection,
 } from "../navigationUtils";
 import { CorpusType, DocumentType } from "../../types/graphql-api";
 
@@ -612,5 +616,240 @@ describe("buildCanonicalPath()", () => {
   it("should return empty string when both entities null", () => {
     const path = buildCanonicalPath(null, null);
     expect(path).toBe("");
+  });
+});
+
+describe("buildQueryParams() with tab and message", () => {
+  it("should include tab parameter", () => {
+    const params: QueryParams = { tab: "discussions" };
+    expect(buildQueryParams(params)).toBe("?tab=discussions");
+  });
+
+  it("should include message parameter", () => {
+    const params: QueryParams = { messageId: "msg-123" };
+    expect(buildQueryParams(params)).toBe("?message=msg-123");
+  });
+
+  it("should include both tab and message parameters", () => {
+    const params: QueryParams = { tab: "discussions", messageId: "msg-456" };
+    const result = buildQueryParams(params);
+    expect(result).toContain("tab=discussions");
+    expect(result).toContain("message=msg-456");
+  });
+
+  it("should combine tab with existing params", () => {
+    const params: QueryParams = {
+      annotationIds: ["123"],
+      tab: "documents",
+    };
+    const result = buildQueryParams(params);
+    expect(result).toContain("ann=123");
+    expect(result).toContain("tab=documents");
+  });
+
+  it("should combine message with thread param", () => {
+    const params: QueryParams = {
+      threadId: "thread-1",
+      messageId: "msg-789",
+    };
+    const result = buildQueryParams(params);
+    expect(result).toContain("thread=thread-1");
+    expect(result).toContain("message=msg-789");
+  });
+
+  it("should not include tab when null", () => {
+    const params: QueryParams = { tab: null, annotationIds: ["123"] };
+    const result = buildQueryParams(params);
+    expect(result).toBe("?ann=123");
+    expect(result).not.toContain("tab");
+  });
+
+  it("should not include message when null", () => {
+    const params: QueryParams = { messageId: null, threadId: "thread-1" };
+    const result = buildQueryParams(params);
+    expect(result).toBe("?thread=thread-1");
+    expect(result).not.toContain("message");
+  });
+});
+
+describe("updateTabParam()", () => {
+  it("should set tab parameter", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "" };
+
+    updateTabParam(location, mockNavigate, "discussions");
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      { search: "tab=discussions" },
+      { replace: true }
+    );
+  });
+
+  it("should preserve existing parameters when adding tab", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "ann=123&analysis=456" };
+
+    updateTabParam(location, mockNavigate, "documents");
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("ann=123");
+    expect(calledWith).toContain("analysis=456");
+    expect(calledWith).toContain("tab=documents");
+  });
+
+  it("should remove tab parameter when null", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "tab=discussions&ann=123" };
+
+    updateTabParam(location, mockNavigate, null);
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("ann=123");
+    expect(calledWith).not.toContain("tab");
+  });
+
+  it("should update existing tab parameter", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "tab=discussions" };
+
+    updateTabParam(location, mockNavigate, "documents");
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      { search: "tab=documents" },
+      { replace: true }
+    );
+  });
+});
+
+describe("updateMessageParam()", () => {
+  it("should set message parameter", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "" };
+
+    updateMessageParam(location, mockNavigate, "msg-123");
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      { search: "message=msg-123" },
+      { replace: true }
+    );
+  });
+
+  it("should preserve existing parameters when adding message", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "thread=thread-1&ann=456" };
+
+    updateMessageParam(location, mockNavigate, "msg-789");
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("thread=thread-1");
+    expect(calledWith).toContain("ann=456");
+    expect(calledWith).toContain("message=msg-789");
+  });
+
+  it("should remove message parameter when null", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "message=msg-123&thread=thread-1" };
+
+    updateMessageParam(location, mockNavigate, null);
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("thread=thread-1");
+    expect(calledWith).not.toContain("message");
+  });
+});
+
+describe("navigateToThreadWithMessage()", () => {
+  it("should set thread parameter", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "" };
+
+    navigateToThreadWithMessage(location, mockNavigate, "thread-123");
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      { search: "thread=thread-123" },
+      { replace: true }
+    );
+  });
+
+  it("should set both thread and message parameters", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "" };
+
+    navigateToThreadWithMessage(
+      location,
+      mockNavigate,
+      "thread-123",
+      "msg-456"
+    );
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("thread=thread-123");
+    expect(calledWith).toContain("message=msg-456");
+  });
+
+  it("should preserve existing parameters", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "ann=123&tab=discussions" };
+
+    navigateToThreadWithMessage(
+      location,
+      mockNavigate,
+      "thread-789",
+      "msg-abc"
+    );
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("ann=123");
+    expect(calledWith).toContain("tab=discussions");
+    expect(calledWith).toContain("thread=thread-789");
+    expect(calledWith).toContain("message=msg-abc");
+  });
+
+  it("should not include message when not provided", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "tab=discussions" };
+
+    navigateToThreadWithMessage(location, mockNavigate, "thread-456");
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("thread=thread-456");
+    expect(calledWith).not.toContain("message");
+  });
+});
+
+describe("clearThreadSelection()", () => {
+  it("should remove thread parameter", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "thread=thread-123&ann=456" };
+
+    clearThreadSelection(location, mockNavigate);
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).not.toContain("thread");
+    expect(calledWith).toContain("ann=456");
+  });
+
+  it("should remove both thread and message parameters", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "thread=thread-123&message=msg-456&ann=789" };
+
+    clearThreadSelection(location, mockNavigate);
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).not.toContain("thread");
+    expect(calledWith).not.toContain("message");
+    expect(calledWith).toContain("ann=789");
+  });
+
+  it("should handle empty search gracefully", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "" };
+
+    clearThreadSelection(location, mockNavigate);
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      { search: "" },
+      { replace: true }
+    );
   });
 });
