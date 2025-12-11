@@ -5,7 +5,33 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-11-27
+## [Unreleased] - 2025-12-11
+
+### Added
+
+#### Mobile UI/UX Improvements for Corpus Navigation
+- **Mobile-first folder sidebar defaults**: Sidebar now collapses by default on mobile/tablet devices (≤768px) to maximize document viewing area
+- **Mobile bottom-sheet mention pickers**: User, resource, and unified mention pickers now display as bottom sheets on mobile (≤600px) for thumb-friendly interaction
+- **Discussions and Analytics quick access**: Added icon buttons to CorpusHome stat cards for direct navigation to Discussions and Analytics tabs
+- **Sidebar auto-close behavior**: Folder sidebar automatically closes on mobile/tablet after folder selection for seamless navigation
+- **Mobile sidebar backdrop overlay**: Semi-transparent backdrop behind mobile sidebar for visual focus and easy dismissal
+- **Escape key accessibility**: Mobile sidebar can now be dismissed with Escape key for keyboard accessibility
+- **TABLET_BREAKPOINT constant**: Added to `constants.ts` for consistent responsive breakpoint management across components
+
+### Fixed
+
+#### Mobile UI/UX Fixes
+- **Settings button variable name bug** (`frontend/src/components/corpuses/CorpusHome.tsx:780`): Fixed `canUpdate` → `canEdit` reference error that prevented Settings button from displaying for users with update permissions
+- **FAB z-index layering** (`frontend/src/views/Corpuses.tsx:1320`): Raised FAB z-index from 100 to 150 to ensure visibility above folder sidebar toggle (z-index: 101)
+- **Explicit z-index layering**: Made mobile sidebar z-index layering explicit (backdrop: 98, toggle button: 99) to prevent fragile DOM-order-dependent behavior
+
+### Changed
+
+#### Mobile UI/UX Refactoring
+- **Hardcoded breakpoints replaced with constants**: Updated all hardcoded `768px` references in `FolderDocumentBrowser.tsx` and `folderAtoms.ts` to use `TABLET_BREAKPOINT` constant for maintainability
+- **Improved breakpoint documentation**: Added detailed JSDoc comment in `folderAtoms.ts` explaining why `TABLET_BREAKPOINT` (768px) is used for sidebar collapse rather than `MOBILE_VIEW_BREAKPOINT` (600px)
+
+---
 
 ### Added
 

@@ -777,7 +777,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       navIndex: 6,
       icon: <BarChart3 size={18} />,
     }, // analytics tab
-    ...(canUpdate
+    ...(canEdit
       ? [
           {
             label: "Settings",

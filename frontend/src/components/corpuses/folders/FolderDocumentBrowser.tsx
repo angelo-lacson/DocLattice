@@ -40,6 +40,7 @@ import {
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
 import { GET_DOCUMENTS } from "../../../graphql/queries";
+import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
 
 /**
  * FolderDocumentBrowser - Main container for folder-based document browsing
@@ -89,7 +90,7 @@ const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     position: absolute;
     left: ${(props) => (props.$visible && !props.$collapsed ? "0" : "-320px")};
     z-index: 100;
@@ -110,7 +111,7 @@ const MainContent = styled.main<{ $hasSidebar: boolean }>`
   overflow: hidden;
   margin-left: ${(props) => (props.$hasSidebar ? "0" : "0")};
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     margin-left: 0;
   }
 `;
@@ -193,7 +194,7 @@ const ToggleButton = styled.button<{ $collapsed: boolean }>`
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     display: none;
   }
 `;
@@ -211,13 +212,13 @@ const MobileToggleButton = styled.button<{ $visible: boolean }>`
   border-radius: 12px;
   color: white;
   cursor: pointer;
-  z-index: 99;
+  z-index: 99; /* Above backdrop (98) */
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
   transition: all 0.3s ease;
   align-items: center;
   justify-content: center;
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     display: ${(props) => (props.$visible ? "flex" : "none")};
   }
 
@@ -254,7 +255,7 @@ const MobileSidebarCloseButton = styled.button`
   justify-content: center;
   transition: all 0.2s ease;
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     display: flex;
   }
 
@@ -269,7 +270,7 @@ const MobileSidebarCloseButton = styled.button`
   }
 `;
 
-// Mobile backdrop for sidebar
+// Mobile backdrop for sidebar - dismissible via click or Escape key
 const MobileSidebarBackdrop = styled.div<{ $visible: boolean }>`
   display: none;
   position: fixed;
@@ -278,12 +279,12 @@ const MobileSidebarBackdrop = styled.div<{ $visible: boolean }>`
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 99;
+  z-index: 98; /* Below toggle button (99) */
   opacity: ${(props) => (props.$visible ? "1" : "0")};
   pointer-events: ${(props) => (props.$visible ? "auto" : "none")};
   transition: opacity 0.3s ease;
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     display: block;
   }
 `;
@@ -572,6 +573,18 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     setContextMenu(null);
   }, []);
 
+  // Escape key handler for accessibility - closes mobile sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showSidebar && !sidebarCollapsed) {
+        setSidebarCollapsed(true);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showSidebar, sidebarCollapsed, setSidebarCollapsed]);
+
   const handleCreateFolderInCurrentDir = React.useCallback(() => {
     // Pass the current folder ID - creates subfolder of current directory
     // If selectedFolderId is null, creates folder at root level
@@ -607,8 +620,8 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
             corpusId={corpusId}
             onFolderSelect={(folderId) => {
               handleFolderSelect(folderId);
-              // Auto-close sidebar on mobile after selection
-              if (window.innerWidth < 768) {
+              // Auto-close sidebar on mobile/tablet after selection
+              if (window.innerWidth <= TABLET_BREAKPOINT) {
                 setSidebarCollapsed(true);
               }
             }}
