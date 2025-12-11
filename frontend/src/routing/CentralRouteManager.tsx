@@ -897,6 +897,19 @@ export function CentralRouteManager() {
       );
       return;
     }
+    // CRITICAL: If URL has corpus but corpus not loaded yet, skip redirect
+    // This prevents ping-pong when navigating to /d/user/corpus/doc before Phase 1 sets openedCorpus
+    if (
+      currentRoute.type === "document" &&
+      currentRoute.corpusIdent &&
+      !corpus
+    ) {
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Skipping redirect - document-in-corpus route but corpus not loaded yet (Phase 1 loading)",
+        { expectedCorpus: currentRoute.corpusIdent }
+      );
+      return;
+    }
     if (currentRoute.type === "extract" && !extract) {
       routingLogger.debug(
         "[RouteManager] Phase 3: Skipping redirect - extract route but extract not loaded yet (Phase 1 loading)"

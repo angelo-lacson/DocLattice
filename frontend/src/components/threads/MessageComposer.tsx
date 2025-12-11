@@ -375,9 +375,10 @@ export function MessageComposer({
                         const annDoc = ann.document;
                         const annCorpus = ann.corpus;
                         // Deep link to annotation in document with optimal viewer settings
+                        // URL pattern: /d/{creatorSlug}/{corpusSlug}/{docSlug} or /d/{creatorSlug}/{docSlug}
                         const baseUrl = annCorpus
-                          ? `/d/${annCorpus.title}/${annDoc.title}`
-                          : `/d/${annDoc.title}`;
+                          ? `/d/${annCorpus.creator.slug}/${annCorpus.slug}/${annDoc.slug}`
+                          : `/d/${annDoc.creator.slug}/${annDoc.slug}`;
                         return {
                           label: `@annotation:${resource.id}`,
                           href: `${baseUrl}?ann=${resource.id}&structural=true`,
