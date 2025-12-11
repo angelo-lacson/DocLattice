@@ -25,6 +25,8 @@ import {
   selectedExtractIds,
   selectedThreadId,
   selectedFolderId,
+  selectedTab,
+  selectedMessageId,
   routeLoading,
   routeError,
   authStatusVar,
@@ -740,6 +742,8 @@ export function CentralRouteManager() {
     const extractIds = parseQueryParam(searchParams.get("extract"));
     const threadId = searchParams.get("thread");
     const folderId = searchParams.get("folder");
+    const tab = searchParams.get("tab");
+    const messageId = searchParams.get("message");
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
@@ -753,6 +757,8 @@ export function CentralRouteManager() {
       extractIds,
       threadId,
       folderId,
+      tab,
+      messageId,
       structural,
       selectedOnly,
       boundingBoxes,
@@ -766,6 +772,8 @@ export function CentralRouteManager() {
     const currentExtractIds = selectedExtractIds();
     const currentThreadId = selectedThreadId();
     const currentFolderId = selectedFolderId();
+    const currentTab = selectedTab();
+    const currentMessageId = selectedMessageId();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -801,6 +809,12 @@ export function CentralRouteManager() {
     }
     if (currentFolderId !== folderId) {
       updates.push(() => selectedFolderId(folderId));
+    }
+    if (currentTab !== tab) {
+      updates.push(() => selectedTab(tab));
+    }
+    if (currentMessageId !== messageId) {
+      updates.push(() => selectedMessageId(messageId));
     }
     if (currentStructural !== structural) {
       updates.push(() => showStructuralAnnotations(structural));
@@ -883,6 +897,19 @@ export function CentralRouteManager() {
       );
       return;
     }
+    // CRITICAL: If URL has corpus but corpus not loaded yet, skip redirect
+    // This prevents ping-pong when navigating to /d/user/corpus/doc before Phase 1 sets openedCorpus
+    if (
+      currentRoute.type === "document" &&
+      currentRoute.corpusIdent &&
+      !corpus
+    ) {
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Skipping redirect - document-in-corpus route but corpus not loaded yet (Phase 1 loading)",
+        { expectedCorpus: currentRoute.corpusIdent }
+      );
+      return;
+    }
     if (currentRoute.type === "extract" && !extract) {
       routingLogger.debug(
         "[RouteManager] Phase 3: Skipping redirect - extract route but extract not loaded yet (Phase 1 loading)"
@@ -928,11 +955,20 @@ export function CentralRouteManager() {
   // ═══════════════════════════════════════════════════════════════
   // PHASE 4: Reactive Vars → URL Sync (Bidirectional)
   // ═══════════════════════════════════════════════════════════════
+  // All reactive vars listed here have BIDIRECTIONAL sync:
+  // - Phase 2: URL → Reactive Var (on URL change)
+  // - Phase 4: Reactive Var → URL (on var change)
+  //
+  // Vars synced: annotationIds, analysisIds, extractIds, threadId,
+  // folderId, tab, messageId, structural, selectedOnly, boundingBoxes, labels
+  // ═══════════════════════════════════════════════════════════════
   const annIds = useReactiveVar(selectedAnnotationIds);
   const analysisIds = useReactiveVar(selectedAnalysesIds);
   const extractIds = useReactiveVar(selectedExtractIds);
   const threadId = useReactiveVar(selectedThreadId);
   const folderId = useReactiveVar(selectedFolderId);
+  const tab = useReactiveVar(selectedTab);
+  const messageId = useReactiveVar(selectedMessageId);
   const structural = useReactiveVar(showStructuralAnnotations);
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
@@ -993,6 +1029,8 @@ export function CentralRouteManager() {
         extractIds,
         threadId,
         folderId,
+        tab,
+        messageId,
         structural,
         selectedOnly,
         boundingBoxes,
@@ -1006,6 +1044,8 @@ export function CentralRouteManager() {
       extractIds,
       threadId,
       folderId,
+      tab,
+      messageId,
       showStructural: structural,
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
@@ -1035,6 +1075,8 @@ export function CentralRouteManager() {
     extractIds,
     threadId,
     folderId,
+    tab,
+    messageId,
     structural,
     selectedOnly,
     boundingBoxes,

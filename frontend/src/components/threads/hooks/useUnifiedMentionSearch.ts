@@ -55,10 +55,14 @@ export interface UnifiedMentionResource {
     document: {
       id: string;
       title: string;
+      slug: string;
+      creator: { slug: string };
     };
     corpus: {
       id: string;
       title: string;
+      slug: string;
+      creator: { slug: string };
     } | null;
   };
   agent?: {
@@ -307,11 +311,15 @@ export function useUnifiedMentionSearch(
               document: {
                 id: edge.node.document.id,
                 title: edge.node.document.title,
+                slug: edge.node.document.slug,
+                creator: { slug: edge.node.document.creator.slug },
               },
               corpus: edge.node.corpus
                 ? {
                     id: edge.node.corpus.id,
                     title: edge.node.corpus.title,
+                    slug: edge.node.corpus.slug,
+                    creator: { slug: edge.node.corpus.creator.slug },
                   }
                 : null,
             },

@@ -6,10 +6,15 @@ import {
 } from "@apollo/client/testing";
 import { InMemoryCache, ApolloLink, Observable } from "@apollo/client";
 import { Provider } from "jotai";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { Corpuses } from "../src/views/Corpuses";
 import { relayStylePagination } from "@apollo/client/utilities";
-import { authStatusVar, openedCorpus } from "../src/graphql/cache";
+import {
+  authStatusVar,
+  openedCorpus,
+  selectedTab,
+  selectedFolderId,
+} from "../src/graphql/cache";
 import { OperationDefinitionNode } from "graphql";
 import { mergeArrayByIdFieldPolicy } from "../src/graphql/cache";
 import { GET_CORPUSES } from "../src/graphql/queries";
@@ -32,6 +37,28 @@ const createTestCache = () =>
       },
     },
   });
+
+/**
+ * Minimal URL-to-state sync for tests (mimics CentralRouteManager Phase 2)
+ * Only syncs tab and folder params - tests don't render full CentralRouteManager
+ */
+const UrlToStateSync: React.FC = () => {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get("tab");
+    const folderParam = searchParams.get("folder");
+
+    // Sync tab param to reactive var
+    selectedTab(tabParam);
+
+    // Sync folder param to reactive var
+    selectedFolderId(folderParam);
+  }, [location.search]);
+
+  return null;
+};
 
 // Create wildcard link to respond to any GET_CORPUSES variables
 const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
@@ -86,6 +113,8 @@ export const CorpusesTestWrapper: React.FC<WrapperProps> = ({
   return (
     <Provider>
       <MemoryRouter initialEntries={initialEntries}>
+        {/* Minimal URL-to-state sync for tab/folder params (mimics CentralRouteManager Phase 2) */}
+        <UrlToStateSync />
         <MockedProvider link={link} cache={createTestCache()} addTypename>
           <Corpuses />
         </MockedProvider>
