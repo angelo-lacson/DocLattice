@@ -21,16 +21,9 @@ interface ViewSettingsPopupProps {
 export const ViewSettingsPopup: React.FC<ViewSettingsPopupProps> = ({
   label_display_options,
 }) => {
-  const {
-    showLabels,
-    setShowLabels,
-    showStructural,
-    setShowStructural,
-    showSelectedOnly,
-    setShowSelectedOnly,
-    showBoundingBoxes,
-    setShowBoundingBoxes,
-  } = useAnnotationDisplay();
+  // Only read reactive var values - updates go through URL utilities
+  const { showLabels, showStructural, showSelectedOnly, showBoundingBoxes } =
+    useAnnotationDisplay();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,7 +45,10 @@ export const ViewSettingsPopup: React.FC<ViewSettingsPopupProps> = ({
 
   const handleShowSelectedChange = (checked: boolean) => {
     setLocalShowSelected(checked);
-    setShowSelectedOnly(checked);
+    // Update URL - CentralRouteManager Phase 2 will set reactive var
+    updateAnnotationDisplayParams(location, navigate, {
+      showSelectedOnly: checked,
+    });
   };
 
   const handleShowStructuralChange = () => {
@@ -74,12 +70,18 @@ export const ViewSettingsPopup: React.FC<ViewSettingsPopupProps> = ({
 
   const handleShowBoundingBoxesChange = (checked: boolean) => {
     setLocalShowBoundingBoxes(checked);
-    setShowBoundingBoxes(checked);
+    // Update URL - CentralRouteManager Phase 2 will set reactive var
+    updateAnnotationDisplayParams(location, navigate, {
+      showBoundingBoxes: checked,
+    });
   };
 
   const handleLabelBehaviorChange = (value: LabelDisplayBehavior) => {
     setLocalLabelBehavior(value);
-    setShowLabels(value);
+    // Update URL - CentralRouteManager Phase 2 will set reactive var
+    updateAnnotationDisplayParams(location, navigate, {
+      labelDisplay: value,
+    });
   };
 
   return (

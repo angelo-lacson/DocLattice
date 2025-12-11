@@ -198,7 +198,14 @@ graph TB
 | `?ann=`      | Select annotations          | `?ann=123,456,789`                | Phase 2 or 4   |
 | `?analysis=` | Select analyses             | `?analysis=123,456`               | Phase 2 or 4   |
 | `?extract=`  | Select extracts             | `?extract=456,789`                | Phase 2 or 4   |
-| `?thread=`   | Select discussion thread (document sidebar only) | `?thread=thread-123`   | Component-local |
+| `?thread=`   | Select discussion thread (sidebar) | `?thread=thread-123`       | Phase 2 or 4   |
+| `?folder=`   | Filter by folder in corpus  | `?folder=folder-123`              | Phase 2 or 4   |
+| `?tab=`      | Select active tab           | `?tab=discussions`                | Phase 2 or 4   |
+| `?message=`  | Highlight message in thread | `?message=msg-456`                | Phase 2 or 4   |
+
+**Tab Values:**
+- **Corpus tabs**: `home` (default), `documents`, `annotations`, `analyses`, `extracts`, `discussions`, `analytics`, `settings`, `badges`
+- **Document sidebar tabs**: `chat` (default), `feed`, `extract`, `analysis`, `discussions`
 
 **Visualization Parameters (Document Viewer):**
 
@@ -228,6 +235,18 @@ graph TB
 
 # Deep link to structural annotation with optimal viewer settings
 /d/user/corpus/document?ann=structural-ann-123&structural=true&selectedOnly=true&labels=ALWAYS
+
+# Corpus with tab selection (discussions tab)
+/c/john/legal-corpus?tab=discussions
+
+# Corpus with folder filter and documents tab
+/c/john/legal-corpus?tab=documents&folder=folder-123
+
+# Document with sidebar thread and specific message
+/d/john/corpus/doc?thread=thread-456&message=msg-789
+
+# Full-page thread with message highlight
+/c/john/legal-corpus/discussions/thread-456?message=msg-789
 ```
 
 ### Route Configuration

@@ -498,6 +498,33 @@ export const selectedThreadId = makeVar<string | null>(null);
 export const selectedFolderId = makeVar<string | null>(null);
 
 /**
+ * Tab state (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Tracks currently selected tab/view within corpus or document pages.
+ * Tab IDs are string-based to allow flexibility across different views.
+ *
+ * Corpus tab IDs: "home" | "documents" | "annotations" | "analyses" | "extracts" | "discussions" | "analytics" | "settings" | "badges"
+ * Document sidebar tab IDs: "chat" | "feed" | "extract" | "analysis" | "discussions"
+ *
+ * URL Examples:
+ *   /c/user/corpus                     → selectedTab(null) = default tab
+ *   /c/user/corpus?tab=discussions     → selectedTab("discussions")
+ *   /d/user/doc?tab=feed               → selectedTab("feed")
+ */
+export const selectedTab = makeVar<string | null>(null);
+
+/**
+ * Message selection for thread deep-linking (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Tracks selected message within a thread for scrolling/highlighting.
+ *
+ * URL Examples:
+ *   /c/user/corpus/discussions/thread-123?message=msg-456  → selectedMessageId("msg-456")
+ *   /d/user/doc?thread=thread-123&message=msg-456          → selectedMessageId("msg-456")
+ */
+export const selectedMessageId = makeVar<string | null>(null);
+
+/**
  * Auth-related global variables
  */
 export const userObj = makeVar<User | null>(null);
