@@ -955,6 +955,13 @@ export function CentralRouteManager() {
   // ═══════════════════════════════════════════════════════════════
   // PHASE 4: Reactive Vars → URL Sync (Bidirectional)
   // ═══════════════════════════════════════════════════════════════
+  // All reactive vars listed here have BIDIRECTIONAL sync:
+  // - Phase 2: URL → Reactive Var (on URL change)
+  // - Phase 4: Reactive Var → URL (on var change)
+  //
+  // Vars synced: annotationIds, analysisIds, extractIds, threadId,
+  // folderId, tab, messageId, structural, selectedOnly, boundingBoxes, labels
+  // ═══════════════════════════════════════════════════════════════
   const annIds = useReactiveVar(selectedAnnotationIds);
   const analysisIds = useReactiveVar(selectedAnalysesIds);
   const extractIds = useReactiveVar(selectedExtractIds);

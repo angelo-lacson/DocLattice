@@ -134,6 +134,8 @@ export const CorpusDocumentCards = ({
           // Only filter by folder when inside a corpus
           // null (corpus root) = "__root__" to show only root-level docs
           // string = specific folder ID
+          // Note: Invalid folder IDs will return 0 results (no validation performed)
+          // This is intentional - empty folders and non-existent folders behave the same
           inFolderId:
             selected_folder_id === null ? "__root__" : selected_folder_id,
         }
