@@ -123,6 +123,11 @@
   "lint-staged": {
     "**/*": "prettier --write --ignore-unknown"
   },
+  "resolutions": {
+    "glob": "10.5.0",
+    "js-yaml": "4.1.1",
+    "mdast-util-to-hast": "13.2.1"
+  },
   "devDependencies": {
     "@graphql-codegen/cli": "^5.0.2",
     "@playwright/experimental-ct-react": "^1.52.0",
