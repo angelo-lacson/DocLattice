@@ -128,10 +128,18 @@ export const expandedFolderIdsAtom = atomWithStorage<Set<string>>(
 
 /**
  * Sidebar collapsed state (persisted to localStorage)
+ * Default: collapsed on mobile (< 768px), expanded on desktop
  */
+const getDefaultSidebarCollapsed = (): boolean => {
+  // SSR safety check
+  if (typeof window === "undefined") return false;
+  // Default to collapsed on mobile for better UX
+  return window.innerWidth < 768;
+};
+
 export const sidebarCollapsedAtom = atomWithStorage<boolean>(
   "opencontracts:folderSidebarCollapsed",
-  false
+  getDefaultSidebarCollapsed()
 );
 
 /**

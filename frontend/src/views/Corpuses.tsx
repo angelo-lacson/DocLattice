@@ -1304,19 +1304,20 @@ const MobileBackButton = styled.button`
   }
 `;
 
-// Mobile bottom navigation FAB - ultra sleek and compact
+// Mobile bottom navigation FAB - opens corpus sidebar navigation
+// z-index: 150 ensures it appears above folder sidebar toggle (101) and other UI elements
 const BottomNavigationHandle = styled(motion.button)<{ isOpen?: boolean }>`
   display: none;
   position: fixed;
   bottom: 16px;
-  right: 16px; /* Moved to bottom-right */
+  right: 16px;
   width: 56px;
   height: 56px;
   background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
   border: none;
   border-radius: 16px;
   cursor: pointer;
-  z-index: 100;
+  z-index: 150; /* Raised from 100 to ensure visibility above folder toggle (101) */
   box-shadow: 0 8px 24px rgba(74, 144, 226, 0.4), 0 2px 8px rgba(0, 0, 0, 0.12);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
