@@ -3,7 +3,7 @@ import { useSetAtom, useAtom, useAtomValue } from "jotai";
 import { useReactiveVar, useMutation, useQuery } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { Folder, FolderOpen } from "lucide-react";
+import { Folder, FolderOpen, PanelLeftOpen, X } from "lucide-react";
 import { toast } from "react-toastify";
 import {
   DndContext,
@@ -40,6 +40,7 @@ import {
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
 import { GET_DOCUMENTS } from "../../../graphql/queries";
+import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
 
 /**
  * FolderDocumentBrowser - Main container for folder-based document browsing
@@ -89,7 +90,7 @@ const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     position: absolute;
     left: ${(props) => (props.$visible && !props.$collapsed ? "0" : "-320px")};
     z-index: 100;
@@ -110,7 +111,7 @@ const MainContent = styled.main<{ $hasSidebar: boolean }>`
   overflow: hidden;
   margin-left: ${(props) => (props.$hasSidebar ? "0" : "0")};
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     margin-left: 0;
   }
 `;
@@ -193,8 +194,98 @@ const ToggleButton = styled.button<{ $collapsed: boolean }>`
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     display: none;
+  }
+`;
+
+// Mobile toggle button - shows on mobile when sidebar is hidden
+const MobileToggleButton = styled.button<{ $visible: boolean }>`
+  display: none;
+  position: fixed;
+  left: 12px;
+  bottom: 80px;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  cursor: pointer;
+  z-index: 99; /* Above backdrop (98) */
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  transition: all 0.3s ease;
+  align-items: center;
+  justify-content: center;
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    display: ${(props) => (props.$visible ? "flex" : "none")};
+  }
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 24px;
+    height: 24px;
+  }
+`;
+
+// Mobile close button for sidebar
+const MobileSidebarCloseButton = styled.button`
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #64748b;
+  cursor: pointer;
+  z-index: 10;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    display: flex;
+  }
+
+  &:hover {
+    background: #e2e8f0;
+    color: #475569;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+`;
+
+// Mobile backdrop for sidebar - dismissible via click or Escape key
+const MobileSidebarBackdrop = styled.div<{ $visible: boolean }>`
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 98; /* Below toggle button (99) */
+  opacity: ${(props) => (props.$visible ? "1" : "0")};
+  pointer-events: ${(props) => (props.$visible ? "auto" : "none")};
+  transition: opacity 0.3s ease;
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    display: block;
   }
 `;
 
@@ -482,6 +573,18 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     setContextMenu(null);
   }, []);
 
+  // Escape key handler for accessibility - closes mobile sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showSidebar && !sidebarCollapsed) {
+        setSidebarCollapsed(true);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showSidebar, sidebarCollapsed, setSidebarCollapsed]);
+
   const handleCreateFolderInCurrentDir = React.useCallback(() => {
     // Pass the current folder ID - creates subfolder of current directory
     // If selectedFolderId is null, creates folder at root level
@@ -497,15 +600,35 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       onDragEnd={handleDragEnd}
     >
       <BrowserContainer>
+        {/* Mobile backdrop for sidebar */}
+        <MobileSidebarBackdrop
+          $visible={showSidebar && !sidebarCollapsed}
+          onClick={() => setSidebarCollapsed(true)}
+        />
+
         {/* Folder Tree Sidebar */}
         <Sidebar $visible={showSidebar} $collapsed={sidebarCollapsed}>
+          {/* Mobile close button */}
+          <MobileSidebarCloseButton
+            onClick={() => setSidebarCollapsed(true)}
+            aria-label="Close folders"
+            title="Close folders"
+          >
+            <X />
+          </MobileSidebarCloseButton>
           <FolderTreeSidebar
             corpusId={corpusId}
-            onFolderSelect={handleFolderSelect}
+            onFolderSelect={(folderId) => {
+              handleFolderSelect(folderId);
+              // Auto-close sidebar on mobile/tablet after selection
+              if (window.innerWidth <= TABLET_BREAKPOINT) {
+                setSidebarCollapsed(true);
+              }
+            }}
           />
         </Sidebar>
 
-        {/* Toggle Button */}
+        {/* Desktop Toggle Button */}
         {showSidebar && (
           <ToggleButton
             $collapsed={sidebarCollapsed}
@@ -515,6 +638,18 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
           >
             {sidebarCollapsed ? <Folder /> : <FolderOpen />}
           </ToggleButton>
+        )}
+
+        {/* Mobile Toggle Button - shows when sidebar is hidden */}
+        {showSidebar && (
+          <MobileToggleButton
+            $visible={sidebarCollapsed}
+            onClick={() => setSidebarCollapsed(false)}
+            aria-label="Open folders"
+            title="Open folders"
+          >
+            <PanelLeftOpen />
+          </MobileToggleButton>
         )}
 
         {/* Main Content Area */}
