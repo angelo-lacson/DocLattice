@@ -2096,6 +2096,13 @@ export const Corpuses = () => {
   const active_tab = useMemo(() => {
     if (!urlTab) return 0; // Default to home
     const index = TAB_IDS.indexOf(urlTab as (typeof TAB_IDS)[number]);
+    if (index < 0) {
+      console.warn(
+        `[Corpuses] Invalid tab ID "${urlTab}" in URL, defaulting to home. Valid tabs: ${TAB_IDS.join(
+          ", "
+        )}`
+      );
+    }
     return index >= 0 ? index : 0;
   }, [urlTab]);
 
