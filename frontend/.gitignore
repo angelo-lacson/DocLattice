@@ -41,6 +41,7 @@ packages/react-devtools-timeline/dist
 # Playwright
 /test-results/
 /playwright-report/
+/playwright-report-e2e/
 /blob-report/
 /playwright/.cache/
 
