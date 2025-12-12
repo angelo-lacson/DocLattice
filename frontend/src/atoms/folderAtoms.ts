@@ -7,6 +7,7 @@ import {
   buildFolderBreadcrumb,
   ParsedCorpusFolderType,
 } from "../graphql/queries/folders";
+import { TABLET_BREAKPOINT } from "../assets/configurations/constants";
 
 /**
  * Corpus Folder State Management with Jotai
@@ -128,10 +129,24 @@ export const expandedFolderIdsAtom = atomWithStorage<Set<string>>(
 
 /**
  * Sidebar collapsed state (persisted to localStorage)
+ * Default: collapsed on mobile/tablet (<= TABLET_BREAKPOINT), expanded on desktop
+ *
+ * Uses TABLET_BREAKPOINT (768px) rather than MOBILE_VIEW_BREAKPOINT (600px) because
+ * the folder sidebar takes significant screen real estate. On tablets (600-768px),
+ * users benefit from having the sidebar collapsed by default while still having
+ * easy access via the toggle button. This improves the document browsing experience
+ * on medium-sized screens.
  */
+const getDefaultSidebarCollapsed = (): boolean => {
+  // SSR safety check
+  if (typeof window === "undefined") return false;
+  // Default to collapsed on mobile/tablet for better UX
+  return window.innerWidth <= TABLET_BREAKPOINT;
+};
+
 export const sidebarCollapsedAtom = atomWithStorage<boolean>(
   "opencontracts:folderSidebarCollapsed",
-  false
+  getDefaultSidebarCollapsed()
 );
 
 /**

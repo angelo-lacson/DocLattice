@@ -758,18 +758,32 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     PermissionTypes.CAN_UPDATE
   );
 
+  // TAB_IDS in Corpuses.tsx: home(0), documents(1), annotations(2), analyses(3),
+  // extracts(4), discussions(5), analytics(6), settings(7), badges(8)
   const statItems = [
     { label: "Docs", value: stats.totalDocs, navIndex: 1 }, // documents tab
     { label: "Notes", value: stats.totalAnnotations, navIndex: 2 }, // annotations tab
     { label: "Analyses", value: stats.totalAnalyses, navIndex: 3 }, // analyses tab
     { label: "Extracts", value: stats.totalExtracts, navIndex: 4 }, // extracts tab
-    ...(canUpdate
+    {
+      label: "Discuss",
+      value: null,
+      navIndex: 5,
+      icon: <MessageCircle size={18} />,
+    }, // discussions tab
+    {
+      label: "Analytics",
+      value: null,
+      navIndex: 6,
+      icon: <BarChart3 size={18} />,
+    }, // analytics tab
+    ...(canEdit
       ? [
           {
             label: "Settings",
             value: null,
-            navIndex: 5,
-            icon: <Settings size={20} />,
+            navIndex: 7, // Fixed: was 5, should be 7 (settings tab)
+            icon: <Settings size={18} />,
           },
         ]
       : []),
