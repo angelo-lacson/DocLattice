@@ -18,6 +18,21 @@ const Container = styled.div`
   overflow-y: auto;
   z-index: 1000;
   min-width: 200px;
+
+  /* Mobile responsive adjustments */
+  @media (max-width: 600px) {
+    position: fixed;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 80px !important;
+    top: auto !important;
+    min-width: unset;
+    max-width: unset;
+    width: calc(100% - 16px);
+    max-height: 40vh;
+    border-radius: 12px;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.25);
+  }
 `;
 
 const MenuItem = styled.button<{ $isSelected: boolean }>`
@@ -44,6 +59,16 @@ const MenuItem = styled.button<{ $isSelected: boolean }>`
 
   &:last-child {
     border-radius: 0 0 6px 6px;
+  }
+
+  /* Mobile touch-friendly adjustments */
+  @media (max-width: 600px) {
+    padding: 12px 16px;
+    min-height: 48px;
+
+    &:active {
+      background: ${color.B1};
+    }
   }
 `;
 
