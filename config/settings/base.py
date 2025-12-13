@@ -433,6 +433,7 @@ elif STORAGE_BACKEND == "GCP":
     STATICFILES_STORAGE = (
         "opencontractserver.utils.storages.StaticRootGoogleCloudStorage"
     )
+    COLLECTFAST_STRATEGY = "collectfast.strategies.gcloud.GoogleCloudStrategy"
     STATIC_URL = f"https://{gcs_domain}/static/"
 
     # MEDIA

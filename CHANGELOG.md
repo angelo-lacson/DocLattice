@@ -5,7 +5,13 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-11
+## [Unreleased] - 2025-12-12
+
+### Fixed
+
+#### Production Deployment
+- **Missing COLLECTFAST_STRATEGY for GCP storage backend** (`config/settings/base.py:436`): Added `collectfast.strategies.gcloud.GoogleCloudStrategy` for GCP deployments. Previously, `collectfast` was installed in production but `COLLECTFAST_STRATEGY` was only configured for AWS, causing `collectstatic` to fail with `ImproperlyConfigured: No strategy configured` error when using `STORAGE_BACKEND=GCP`.
+- **GCS static files ACL incompatible with uniform bucket-level access** (`opencontractserver/utils/storages.py:38`): Changed `StaticRootGoogleCloudStorage.default_acl` from `"publicRead"` to `None`. GCS buckets with uniform bucket-level access enabled cannot use per-object ACLs; access must be controlled via IAM policies at the bucket level instead.
 
 ### Added
 
