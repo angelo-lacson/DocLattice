@@ -28,10 +28,14 @@ class StaticRootGoogleCloudStorage(GoogleCloudStorage):
     """
     Google Cloud Storage backend for static files.
     Static files are typically public and cached.
+
+    Note: default_acl is set to None to support GCS buckets with uniform
+    bucket-level access enabled. Public access should be configured at the
+    bucket level via IAM policies instead of per-object ACLs.
     """
 
     location = "static"
-    default_acl = "publicRead"  # GCS uses camelCase for ACLs
+    default_acl = None  # Required for uniform bucket-level access
 
     def get_object_parameters(self, name):
         """
