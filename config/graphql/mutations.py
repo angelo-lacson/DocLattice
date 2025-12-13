@@ -2615,7 +2615,11 @@ class CreateCorpusMutation(DRFMutation):
             set_permissions_for_obj_to_user(
                 info.context.user,
                 corpus,
-                [PermissionTypes.CRUD, PermissionTypes.PUBLISH, PermissionTypes.PERMISSION],
+                [
+                    PermissionTypes.CRUD,
+                    PermissionTypes.PUBLISH,
+                    PermissionTypes.PERMISSION,
+                ],
             )
 
         return result

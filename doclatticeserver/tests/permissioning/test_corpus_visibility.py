@@ -89,15 +89,15 @@ class TestSetCorpusVisibilityMutation(TestCase):
         client = Client(schema, context_value=TestContext(self.owner))
 
         # Mock the celery task to avoid async issues in tests
-        with patch(
-            "config.graphql.mutations.make_corpus_public_task"
-        ) as mock_task:
+        with patch("config.graphql.mutations.make_corpus_public_task") as mock_task:
             mock_task.si.return_value.apply_async.return_value = None
             result = client.execute(self.MUTATION, variable_values=variables)
 
         self.assertIsNone(result.get("errors"))
         self.assertTrue(result["data"]["setCorpusVisibility"]["ok"])
-        self.assertIn("public", result["data"]["setCorpusVisibility"]["message"].lower())
+        self.assertIn(
+            "public", result["data"]["setCorpusVisibility"]["message"].lower()
+        )
 
         # Verify task was called
         mock_task.si.assert_called_once_with(corpus_id=str(self.corpus.id))
@@ -118,7 +118,9 @@ class TestSetCorpusVisibilityMutation(TestCase):
 
         self.assertIsNone(result.get("errors"))
         self.assertTrue(result["data"]["setCorpusVisibility"]["ok"])
-        self.assertIn("private", result["data"]["setCorpusVisibility"]["message"].lower())
+        self.assertIn(
+            "private", result["data"]["setCorpusVisibility"]["message"].lower()
+        )
 
         # Verify corpus was updated
         self.corpus.refresh_from_db()
@@ -138,9 +140,7 @@ class TestSetCorpusVisibilityMutation(TestCase):
 
         client = Client(schema, context_value=TestContext(self.other_user))
 
-        with patch(
-            "config.graphql.mutations.make_corpus_public_task"
-        ) as mock_task:
+        with patch("config.graphql.mutations.make_corpus_public_task") as mock_task:
             mock_task.si.return_value.apply_async.return_value = None
             result = client.execute(self.MUTATION, variable_values=variables)
 
@@ -156,9 +156,7 @@ class TestSetCorpusVisibilityMutation(TestCase):
 
         client = Client(schema, context_value=TestContext(self.superuser))
 
-        with patch(
-            "config.graphql.mutations.make_corpus_public_task"
-        ) as mock_task:
+        with patch("config.graphql.mutations.make_corpus_public_task") as mock_task:
             mock_task.si.return_value.apply_async.return_value = None
             result = client.execute(self.MUTATION, variable_values=variables)
 
@@ -294,7 +292,9 @@ class TestSetCorpusVisibilityMutation(TestCase):
 
         self.assertIsNone(result.get("errors"))
         self.assertTrue(result["data"]["setCorpusVisibility"]["ok"])
-        self.assertIn("already public", result["data"]["setCorpusVisibility"]["message"])
+        self.assertIn(
+            "already public", result["data"]["setCorpusVisibility"]["message"]
+        )
 
     def test_already_private_returns_success(self):
         """Setting private on already-private corpus returns success."""
@@ -308,7 +308,9 @@ class TestSetCorpusVisibilityMutation(TestCase):
 
         self.assertIsNone(result.get("errors"))
         self.assertTrue(result["data"]["setCorpusVisibility"]["ok"])
-        self.assertIn("already private", result["data"]["setCorpusVisibility"]["message"])
+        self.assertIn(
+            "already private", result["data"]["setCorpusVisibility"]["message"]
+        )
 
 
 class TestUpdateCorpusMutationCannotSetVisibility(TestCase):
@@ -335,9 +337,7 @@ class TestUpdateCorpusMutationCannotSetVisibility(TestCase):
             title="Test Corpus", creator=self.owner, is_public=False
         )
         # Owner has UPDATE permission
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
     def test_update_corpus_ignores_is_public_parameter(self):
         """
@@ -352,7 +352,7 @@ class TestUpdateCorpusMutationCannotSetVisibility(TestCase):
         }
 
         client = Client(schema, context_value=TestContext(self.owner))
-        result = client.execute(self.UPDATE_MUTATION, variable_values=variables)
+        _ = client.execute(self.UPDATE_MUTATION, variable_values=variables)
 
         # The mutation should succeed (title update works)
         # Note: GraphQL may return an error for unknown field, which is fine
