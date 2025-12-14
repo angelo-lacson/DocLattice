@@ -5,13 +5,34 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-12
+## [Unreleased] - 2025-12-13
+
+### Added
+
+#### Social Media Preview (OG Metadata) System (PR #701)
+- **Cloudflare Worker for social media previews** (`cloudflare-og-worker/`): Intercepts requests from social media crawlers (Facebook, Twitter, LinkedIn, Discord, Slack, etc.) and returns HTML with Open Graph meta tags for rich link previews
+- **Public OG metadata GraphQL queries** (`config/graphql/queries.py:3235-3403`): New unauthenticated queries for fetching public corpus, document, thread, and extract metadata
+  - `ogCorpusMetadata`: Returns title, description, icon, document count for public corpuses
+  - `ogDocumentMetadata`: Returns title, description, icon for public standalone documents
+  - `ogDocumentInCorpusMetadata`: Returns document metadata with corpus context
+  - `ogThreadMetadata`: Returns discussion thread metadata (title, corpus, message count)
+  - `ogExtractMetadata`: Returns data extract metadata
+- **Worker architecture**: Modular TypeScript implementation with crawler detection, URL parsing, metadata fetching, and HTML generation
+- **Comprehensive documentation** (`docs/architecture/social-media-previews.md`): Architecture overview, deployment guide, and testing instructions
 
 ### Fixed
 
 #### Production Deployment
 - **Missing COLLECTFAST_STRATEGY for GCP storage backend** (`config/settings/base.py:436`): Added `collectfast.strategies.gcloud.GoogleCloudStrategy` for GCP deployments. Previously, `collectfast` was installed in production but `COLLECTFAST_STRATEGY` was only configured for AWS, causing `collectstatic` to fail with `ImproperlyConfigured: No strategy configured` error when using `STORAGE_BACKEND=GCP`.
 - **GCS static files ACL incompatible with uniform bucket-level access** (`opencontractserver/utils/storages.py:38`): Changed `StaticRootGoogleCloudStorage.default_acl` from `"publicRead"` to `None`. GCS buckets with uniform bucket-level access enabled cannot use per-object ACLs; access must be controlled via IAM policies at the bucket level instead.
+
+#### Social Media Preview Security & Performance Fixes (PR #701 remediation)
+- **Prevented potential infinite loop in worker passthrough** (`cloudflare-og-worker/src/index.ts:23-42`): Added `passToOrigin()` helper function with `X-OG-Worker-Pass` header to prevent Cloudflare Worker from re-invoking itself on route-based deployments
+- **Added rate limiting to public OG queries** (`config/graphql/queries.py`): All five OG metadata resolvers now have `@graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")` to prevent abuse and DoS attacks
+- **Fixed N+1 query in corpus document count** (`config/graphql/queries.py:3250-3255`): Changed from `corpus.documents.count()` to `Corpus.objects.annotate(doc_count=Count("documents"))` for single-query optimization
+- **Fixed N+1 query in thread message count** (`config/graphql/queries.py:3359-3364`): Changed from `thread.messages.count()` to `Conversation.objects.annotate(msg_count=Count("messages"))` for single-query optimization
+- **Added input validation for decodeURIComponent** (`cloudflare-og-worker/src/parser.ts:88-95`): Wrapped `decodeURIComponent()` in try-catch to handle malformed URLs gracefully instead of crashing the worker
+- **Unified description truncation** (`config/graphql/queries.py`): Removed redundant Python-side `[:500]` truncation; description truncation now handled solely by the worker at 200 characters for consistency
 
 ### Added
 

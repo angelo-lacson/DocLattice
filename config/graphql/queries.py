@@ -85,8 +85,15 @@ from config.graphql.graphene_types import (
     UserImportType,
     UserType,
 )
+from config.graphql.og_metadata_types import (
+    OGCorpusMetadataType,
+    OGDocumentMetadataType,
+    OGExtractMetadataType,
+    OGThreadMetadataType,
+)
 from config.graphql.ratelimits import (
     get_user_tier_rate,
+    graphql_ratelimit,
     graphql_ratelimit_dynamic,
 )
 from opencontractserver.analyzer.models import Analyzer, GremlinEngine
@@ -3182,6 +3189,231 @@ class Query(graphene.ObjectType):
             active_users_this_week=active_users_week,
             active_users_this_month=active_users_month,
         )
+
+    # OG METADATA RESOLVERS (PUBLIC - NO AUTH) ############
+    # These queries are used by Cloudflare Workers to generate
+    # Open Graph meta tags for social media link previews.
+    # They only return data for public entities (is_public=True).
+    # See: docs/architecture/social-media-previews.md
+
+    og_corpus_metadata = graphene.Field(
+        OGCorpusMetadataType,
+        user_slug=graphene.String(required=True),
+        corpus_slug=graphene.String(required=True),
+        description="Public OG metadata for corpus - no auth required",
+    )
+
+    og_document_metadata = graphene.Field(
+        OGDocumentMetadataType,
+        user_slug=graphene.String(required=True),
+        document_slug=graphene.String(required=True),
+        description="Public OG metadata for standalone document - no auth required",
+    )
+
+    og_document_in_corpus_metadata = graphene.Field(
+        OGDocumentMetadataType,
+        user_slug=graphene.String(required=True),
+        corpus_slug=graphene.String(required=True),
+        document_slug=graphene.String(required=True),
+        description="Public OG metadata for document in corpus - no auth required",
+    )
+
+    og_thread_metadata = graphene.Field(
+        OGThreadMetadataType,
+        user_slug=graphene.String(required=True),
+        corpus_slug=graphene.String(required=True),
+        thread_id=graphene.String(required=True),
+        description="Public OG metadata for discussion thread - no auth required",
+    )
+
+    og_extract_metadata = graphene.Field(
+        OGExtractMetadataType,
+        extract_id=graphene.String(required=True),
+        description="Public OG metadata for data extract - no auth required",
+    )
+
+    @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
+    def resolve_og_corpus_metadata(self, info, user_slug, corpus_slug):
+        """
+        Public OG metadata for corpus - no auth required.
+        Only returns data for public corpuses (is_public=True).
+
+        Used by Cloudflare Workers for social media link previews.
+        Rate limited to 60 requests/minute per IP to prevent abuse.
+        """
+        from django.contrib.auth import get_user_model
+        from django.db.models import Count
+
+        User = get_user_model()
+        try:
+            user = User.objects.get(slug=user_slug)
+            # Use annotate to avoid N+1 query for document count
+            corpus = (
+                Corpus.objects.annotate(doc_count=Count("documents"))
+                .select_related("creator")
+                .get(creator=user, slug=corpus_slug, is_public=True)
+            )
+
+            # Build icon URL if available
+            icon_url = None
+            if corpus.icon:
+                icon_url = info.context.build_absolute_uri(corpus.icon.url)
+
+            return OGCorpusMetadataType(
+                title=corpus.title,
+                description=corpus.description or "",
+                icon_url=icon_url,
+                document_count=corpus.doc_count,
+                creator_name=corpus.creator.username,
+                is_public=True,
+            )
+        except (User.DoesNotExist, Corpus.DoesNotExist):
+            return None
+
+    @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
+    def resolve_og_document_metadata(self, info, user_slug, document_slug):
+        """
+        Public OG metadata for standalone document - no auth required.
+        Only returns data for public documents (is_public=True).
+        Rate limited to 60 requests/minute per IP to prevent abuse.
+        """
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        try:
+            user = User.objects.get(slug=user_slug)
+            document = Document.objects.get(
+                creator=user, slug=document_slug, is_public=True
+            )
+
+            # Build icon URL if available
+            icon_url = None
+            if document.icon:
+                icon_url = info.context.build_absolute_uri(document.icon.url)
+
+            return OGDocumentMetadataType(
+                title=document.title,
+                description=document.description or "",
+                icon_url=icon_url,
+                corpus_title=None,
+                creator_name=document.creator.username,
+                is_public=True,
+            )
+        except (User.DoesNotExist, Document.DoesNotExist):
+            return None
+
+    @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
+    def resolve_og_document_in_corpus_metadata(
+        self, info, user_slug, corpus_slug, document_slug
+    ):
+        """
+        Public OG metadata for document in corpus context - no auth required.
+        Only returns data if both corpus and document are public.
+        Rate limited to 60 requests/minute per IP to prevent abuse.
+        """
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        try:
+            user = User.objects.get(slug=user_slug)
+            corpus = Corpus.objects.get(creator=user, slug=corpus_slug, is_public=True)
+            document = corpus.documents.get(slug=document_slug, is_public=True)
+
+            # Build icon URL if available
+            icon_url = None
+            if document.icon:
+                icon_url = info.context.build_absolute_uri(document.icon.url)
+
+            return OGDocumentMetadataType(
+                title=document.title,
+                description=document.description or "",
+                icon_url=icon_url,
+                corpus_title=corpus.title,
+                creator_name=document.creator.username,
+                is_public=True,
+            )
+        except (User.DoesNotExist, Corpus.DoesNotExist, Document.DoesNotExist):
+            return None
+
+    @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
+    def resolve_og_thread_metadata(self, info, user_slug, corpus_slug, thread_id):
+        """
+        Public OG metadata for discussion thread - no auth required.
+        Only returns data if parent corpus is public.
+        Rate limited to 60 requests/minute per IP to prevent abuse.
+        """
+        from django.contrib.auth import get_user_model
+        from django.db.models import Count
+
+        User = get_user_model()
+        try:
+            user = User.objects.get(slug=user_slug)
+            corpus = Corpus.objects.get(creator=user, slug=corpus_slug, is_public=True)
+
+            # Decode thread ID if base64 encoded (GraphQL relay ID)
+            try:
+                _, pk = from_global_id(thread_id)
+                # from_global_id returns empty strings for invalid base64
+                if not pk:
+                    pk = thread_id
+            except Exception:
+                pk = thread_id
+
+            # Use annotate to avoid N+1 query for message count
+            thread = (
+                Conversation.objects.annotate(msg_count=Count("chat_messages"))
+                .select_related("creator")
+                .get(pk=pk, chat_with_corpus=corpus)
+            )
+
+            return OGThreadMetadataType(
+                title=thread.title or "Discussion",
+                corpus_title=corpus.title,
+                message_count=thread.msg_count,
+                creator_name=thread.creator.username if thread.creator else "Anonymous",
+                is_public=True,
+            )
+        except (User.DoesNotExist, Corpus.DoesNotExist, Conversation.DoesNotExist):
+            return None
+
+    @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
+    def resolve_og_extract_metadata(self, info, extract_id):
+        """
+        Public OG metadata for data extract - no auth required.
+        Only returns data if parent corpus is public.
+        Rate limited to 60 requests/minute per IP to prevent abuse.
+        """
+        from opencontractserver.extracts.models import Extract
+
+        try:
+            # Decode extract ID if base64 encoded (GraphQL relay ID)
+            try:
+                _, pk = from_global_id(extract_id)
+                # from_global_id returns empty strings for invalid base64
+                if not pk:
+                    pk = extract_id
+            except Exception:
+                pk = extract_id
+
+            extract = Extract.objects.select_related(
+                "corpus", "fieldset", "creator"
+            ).get(pk=pk)
+
+            # Extracts inherit corpus visibility
+            if not extract.corpus.is_public:
+                return None
+
+            return OGExtractMetadataType(
+                name=extract.name,
+                corpus_title=extract.corpus.title,
+                fieldset_name=extract.fieldset.name if extract.fieldset else "Custom",
+                creator_name=(
+                    extract.creator.username if extract.creator else "System"
+                ),
+                is_public=True,
+            )
+        except Extract.DoesNotExist:
+            return None
 
     # DEBUG FIELD ########################################
     if settings.ALLOW_GRAPHQL_DEBUG:
