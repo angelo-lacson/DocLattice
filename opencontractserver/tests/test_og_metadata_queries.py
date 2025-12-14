@@ -227,7 +227,9 @@ class OGDocumentMetadataTestCase(TestCase):
         data = result["data"]["ogDocumentMetadata"]
         self.assertIsNotNone(data)
         self.assertEqual(data["title"], "Public Test Document")
-        self.assertEqual(data["description"], "A public document for OG metadata testing")
+        self.assertEqual(
+            data["description"], "A public document for OG metadata testing"
+        )
         self.assertEqual(data["creatorName"], "og_doc_user")
         self.assertTrue(data["isPublic"])
 
