@@ -5,9 +5,28 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-13
+## [Unreleased] - 2025-12-14
 
 ### Added
+
+#### Mobile-Friendly Corpus Modal
+- **New CorpusModal component** (`frontend/src/components/corpuses/CorpusModal.tsx`): Purpose-built modal replacing CRUDModal for corpus create/edit/view operations with mobile-first design
+- **13 comprehensive component tests** (`frontend/tests/CorpusModal.spec.tsx`): Full test coverage for all modal modes and interactions
+- **Smart change detection for EDIT mode**: Only sends changed fields to backend using original value comparison (`CorpusModal.tsx:498-519`)
+- **ARIA accessibility**: CloseButton includes `aria-label="Close modal"` for screen reader users
+
+### Changed
+
+#### Corpus Modal Architecture
+- **Replaced CRUDModal with CorpusModal**: Simplified form handling with controlled inputs instead of complex JSON Schema Form library
+- **Removed debug console.log statements** (`Corpuses.tsx`): Cleaned up 4 debug logging statements
+
+### Technical Details
+
+#### Corpus Modal Implementation
+- Mobile-first responsive design: 16px input font prevents iOS auto-zoom, 48px min touch targets
+- Proper TypeScript types: Icon type is `string | null` (not ArrayBuffer), slug field uses existing type from RawCorpusType
+- isDirty computed by comparing current values against stored original values (not just tracking changes)
 
 #### Social Media Preview (OG Metadata) System (PR #701)
 - **Cloudflare Worker for social media previews** (`cloudflare-og-worker/`): Intercepts requests from social media crawlers (Facebook, Twitter, LinkedIn, Discord, Slack, etc.) and returns HTML with Open Graph meta tags for rich link previews

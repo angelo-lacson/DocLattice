@@ -11,10 +11,10 @@ export type CorpusModalMode = "CREATE" | "EDIT" | "VIEW";
 
 export interface CorpusFormData {
   id?: string;
-  title: string;
-  slug: string;
-  description: string;
-  icon?: string | ArrayBuffer | null;
+  title?: string;
+  slug?: string;
+  description?: string;
+  icon?: string | null;
   labelSet?: string | null;
   preferredEmbedder?: string | null;
 }
@@ -378,7 +378,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
-  const [icon, setIcon] = useState<string | ArrayBuffer | null>(null);
+  const [icon, setIcon] = useState<string | null>(null);
   const [labelSetId, setLabelSetId] = useState<string | null>(null);
   const [labelSetObj, setLabelSetObj] = useState<LabelSetType | undefined>(
     undefined
@@ -387,19 +387,43 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     null
   );
 
-  // Track if form has been modified
-  const [isDirty, setIsDirty] = useState(false);
+  // Track original values for change detection in EDIT mode
+  const [originalValues, setOriginalValues] = useState<{
+    title: string;
+    slug: string;
+    description: string;
+    icon: string | null;
+    labelSetId: string | null;
+    preferredEmbedder: string | null;
+  } | null>(null);
 
   // Initialize form from corpus data
   useEffect(() => {
     if (corpus) {
-      setTitle(corpus.title || "");
-      setSlug((corpus as any).slug || "");
-      setDescription(corpus.description || "");
-      setIcon(corpus.icon || null);
-      setLabelSetId(corpus.labelSet?.id || null);
+      const corpusTitle = corpus.title || "";
+      const corpusSlug = corpus.slug || "";
+      const corpusDescription = corpus.description || "";
+      const corpusIcon = corpus.icon || null;
+      const corpusLabelSetId = corpus.labelSet?.id || null;
+      const corpusPreferredEmbedder = corpus.preferredEmbedder || null;
+
+      setTitle(corpusTitle);
+      setSlug(corpusSlug);
+      setDescription(corpusDescription);
+      setIcon(corpusIcon);
+      setLabelSetId(corpusLabelSetId);
       setLabelSetObj(corpus.labelSet || undefined);
-      setPreferredEmbedder(corpus.preferredEmbedder || null);
+      setPreferredEmbedder(corpusPreferredEmbedder);
+
+      // Store original values for change detection
+      setOriginalValues({
+        title: corpusTitle,
+        slug: corpusSlug,
+        description: corpusDescription,
+        icon: corpusIcon,
+        labelSetId: corpusLabelSetId,
+        preferredEmbedder: corpusPreferredEmbedder,
+      });
     } else {
       // Reset for create mode
       setTitle("");
@@ -409,15 +433,14 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       setLabelSetId(null);
       setLabelSetObj(undefined);
       setPreferredEmbedder(null);
+      setOriginalValues(null);
     }
-    setIsDirty(false);
   }, [corpus, open]);
 
   // Handle form field changes
   const handleTitleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setTitle(e.target.value);
-      setIsDirty(true);
     },
     []
   );
@@ -425,7 +448,6 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   const handleSlugChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setSlug(e.target.value);
-      setIsDirty(true);
     },
     []
   );
@@ -433,28 +455,35 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   const handleDescriptionChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       setDescription(e.target.value);
-      setIsDirty(true);
     },
     []
   );
 
   const handleIconChange = useCallback(
-    ({ data }: { data: string | ArrayBuffer; filename: string }) => {
+    ({ data }: { data: string; filename: string }) => {
       setIcon(data);
-      setIsDirty(true);
     },
     []
   );
 
   const handleLabelSetChange = useCallback((values: any) => {
     setLabelSetId(values.labelSet || null);
-    setIsDirty(true);
   }, []);
 
   const handleEmbedderChange = useCallback((values: any) => {
     setPreferredEmbedder(values.preferredEmbedder || null);
-    setIsDirty(true);
   }, []);
+
+  // Compute isDirty by comparing current values against original values
+  const isDirty = isCreate
+    ? title.trim().length > 0 || description.trim().length > 0
+    : originalValues !== null &&
+      (title !== originalValues.title ||
+        slug !== originalValues.slug ||
+        description !== originalValues.description ||
+        icon !== originalValues.icon ||
+        labelSetId !== originalValues.labelSetId ||
+        preferredEmbedder !== originalValues.preferredEmbedder);
 
   // Form validation
   const isFormValid = title.trim().length > 0 && description.trim().length > 0;
@@ -464,26 +493,35 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   const handleSubmit = useCallback(() => {
     if (!canSubmit || !onSubmit) return;
 
-    const formData: CorpusFormData = {
-      title: title.trim(),
-      slug: slug.trim(),
-      description: description.trim(),
-    };
+    const formData: CorpusFormData = {};
 
-    // Only include changed fields for edit mode
-    if (mode === "EDIT" && corpus) {
+    if (mode === "EDIT" && corpus && originalValues) {
+      // Only include changed fields for edit mode
       formData.id = corpus.id;
-      if (icon !== corpus.icon) {
+
+      if (title.trim() !== originalValues.title) {
+        formData.title = title.trim();
+      }
+      if (slug.trim() !== originalValues.slug) {
+        formData.slug = slug.trim();
+      }
+      if (description.trim() !== originalValues.description) {
+        formData.description = description.trim();
+      }
+      if (icon !== originalValues.icon) {
         formData.icon = icon;
       }
-      if (labelSetId !== corpus.labelSet?.id) {
+      if (labelSetId !== originalValues.labelSetId) {
         formData.labelSet = labelSetId;
       }
-      if (preferredEmbedder !== corpus.preferredEmbedder) {
+      if (preferredEmbedder !== originalValues.preferredEmbedder) {
         formData.preferredEmbedder = preferredEmbedder;
       }
     } else {
       // Include all for create mode
+      formData.title = title.trim();
+      formData.slug = slug.trim();
+      formData.description = description.trim();
       formData.icon = icon;
       formData.labelSet = labelSetId;
       formData.preferredEmbedder = preferredEmbedder;
@@ -495,6 +533,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     onSubmit,
     mode,
     corpus,
+    originalValues,
     title,
     slug,
     description,
@@ -538,7 +577,11 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
           {getHeaderText()}
         </HeaderTitle>
         <HeaderSubtitle>{getSubtitle()}</HeaderSubtitle>
-        <CloseButton onClick={onClose} disabled={loading}>
+        <CloseButton
+          onClick={onClose}
+          disabled={loading}
+          aria-label="Close modal"
+        >
           <Icon name="close" />
         </CloseButton>
       </ModalHeader>

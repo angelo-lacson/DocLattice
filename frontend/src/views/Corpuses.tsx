@@ -1651,7 +1651,6 @@ export const Corpuses = () => {
    * -------------------------------------------------------------------------------------------------- */
 
   if (corpus_load_error) {
-    console.log("Corpuses.tsx - corpus_load_error", corpus_load_error);
     toast.error("ERROR\nUnable to fetch corpuses.");
   }
 
@@ -1842,27 +1841,6 @@ export const Corpuses = () => {
   // When query is skipped (no valid corpus ID), treat as not loading
   const effectiveStatsLoading = validCorpusId ? statsLoading : false;
 
-  // Debug logging for stats issues
-  useEffect(() => {
-    if (opened_corpus) {
-      console.log("Corpus Stats Debug:", {
-        corpusId: opened_corpus.id,
-        validCorpusId,
-        statsLoading,
-        effectiveStatsLoading,
-        hasStatsData: !!statsData?.corpusStats,
-        stats,
-      });
-    }
-  }, [
-    opened_corpus?.id,
-    validCorpusId,
-    statsLoading,
-    effectiveStatsLoading,
-    statsData,
-    stats,
-  ]);
-
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to shape item data
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2028,7 +2006,6 @@ export const Corpuses = () => {
 
     tryCreateCorpus({ variables })
       .then((data) => {
-        console.log("Data", data);
         if (data.data?.createCorpus.ok) {
           toast.success("SUCCESS. Created corpus.");
         } else {
@@ -2585,7 +2562,6 @@ export const Corpuses = () => {
     opened_document !== null &&
     opened_document !== undefined
   ) {
-    console.log("Show annotator");
     content = <></>;
   }
 
