@@ -16,6 +16,31 @@ import { parseRoute, isDeepLinkUrl } from "./parser";
 import { fetchOGMetadata } from "./metadata";
 import { generateOGHtml, generateGenericOGHtml } from "./html";
 
+/**
+ * Pass request through to origin without re-invoking the worker.
+ * Uses a header flag to prevent infinite loops in route-based deployments.
+ */
+async function passToOrigin(request: Request): Promise<Response> {
+  // Check if already processed to prevent infinite loops
+  if (request.headers.get("X-OG-Worker-Pass")) {
+    // This shouldn't happen with proper Cloudflare routing, but safety first
+    return new Response("Loop detected", { status: 500 });
+  }
+
+  // Create new request with pass-through header
+  const headers = new Headers(request.headers);
+  headers.set("X-OG-Worker-Pass", "true");
+
+  const originRequest = new Request(request.url, {
+    method: request.method,
+    headers: headers,
+    body: request.body,
+    redirect: request.redirect,
+  });
+
+  return fetch(originRequest);
+}
+
 export default {
   /**
    * Handle incoming requests
@@ -31,6 +56,11 @@ export default {
     const url = new URL(request.url);
     const userAgent = request.headers.get("user-agent") || "";
 
+    // Check for pass-through header to prevent infinite loops
+    if (request.headers.get("X-OG-Worker-Pass")) {
+      return fetch(request);
+    }
+
     // Log crawler detection (helpful for debugging)
     const crawlerName = getCrawlerName(userAgent);
     if (crawlerName) {
@@ -40,7 +70,7 @@ export default {
     // Only intercept for social media crawlers
     if (!isSocialMediaCrawler(userAgent)) {
       // Pass through to origin (React SPA)
-      return fetch(request);
+      return passToOrigin(request);
     }
 
     // Check if this is a deep-link URL we should handle
@@ -53,7 +83,7 @@ export default {
         return generateGenericResponse(url, env);
       }
       // Pass through for other URLs
-      return fetch(request);
+      return passToOrigin(request);
     }
 
     try {
