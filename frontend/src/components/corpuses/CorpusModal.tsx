@@ -460,8 +460,12 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   );
 
   const handleIconChange = useCallback(
-    ({ data }: { data: string; filename: string }) => {
-      setIcon(data);
+    ({ data }: { data: string | ArrayBuffer; filename: string }) => {
+      // FilePreviewAndUpload uses readAsDataURL which returns a string (base64)
+      // but the type allows ArrayBuffer for flexibility
+      if (typeof data === "string") {
+        setIcon(data);
+      }
     },
     []
   );
@@ -474,9 +478,14 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     setPreferredEmbedder(values.preferredEmbedder || null);
   }, []);
 
+  // Form validation - both title and description are required
+  const isFormValid = title.trim().length > 0 && description.trim().length > 0;
+
   // Compute isDirty by comparing current values against original values
+  // For CREATE mode, form is "dirty" (has submittable content) when valid
+  // For EDIT mode, compare each field against original values
   const isDirty = isCreate
-    ? title.trim().length > 0 || description.trim().length > 0
+    ? isFormValid
     : originalValues !== null &&
       (title !== originalValues.title ||
         slug !== originalValues.slug ||
@@ -485,8 +494,6 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
         labelSetId !== originalValues.labelSetId ||
         preferredEmbedder !== originalValues.preferredEmbedder);
 
-  // Form validation
-  const isFormValid = title.trim().length > 0 && description.trim().length > 0;
   const canSubmit = isFormValid && isDirty && !loading;
 
   // Handle submit

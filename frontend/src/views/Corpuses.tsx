@@ -1951,7 +1951,7 @@ export const Corpuses = () => {
     if (formData.preferredEmbedder !== undefined)
       variables.preferredEmbedder = formData.preferredEmbedder ?? undefined;
     if (formData.icon !== undefined && formData.icon !== null) {
-      variables.icon = formData.icon as string;
+      variables.icon = formData.icon;
     }
 
     tryMutateCorpus({ variables });
@@ -2001,7 +2001,7 @@ export const Corpuses = () => {
     if (formData.preferredEmbedder)
       variables.preferredEmbedder = formData.preferredEmbedder;
     if (formData.icon) {
-      variables.icon = formData.icon as string;
+      variables.icon = formData.icon;
     }
 
     tryCreateCorpus({ variables })

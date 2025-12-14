@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Mobile-Friendly Corpus Modal
 - **New CorpusModal component** (`frontend/src/components/corpuses/CorpusModal.tsx`): Purpose-built modal replacing CRUDModal for corpus create/edit/view operations with mobile-first design
-- **13 comprehensive component tests** (`frontend/tests/CorpusModal.spec.tsx`): Full test coverage for all modal modes and interactions
+- **13 comprehensive component tests** (`frontend/tests/corpus-modal.ct.tsx`): Full test coverage for all modal modes and interactions
 - **Smart change detection for EDIT mode**: Only sends changed fields to backend using original value comparison (`CorpusModal.tsx:498-519`)
 - **ARIA accessibility**: CloseButton includes `aria-label="Close modal"` for screen reader users
 
