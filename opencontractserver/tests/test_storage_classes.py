@@ -31,7 +31,8 @@ class TestStorageClasses(unittest.TestCase):
 
         # Check class attributes
         self.assertEqual(StaticRootGoogleCloudStorage.location, "static")
-        self.assertEqual(StaticRootGoogleCloudStorage.default_acl, "publicRead")
+        # default_acl is None for uniform bucket-level access (IAM-based)
+        self.assertIsNone(StaticRootGoogleCloudStorage.default_acl)
 
         self.assertEqual(MediaRootGoogleCloudStorage.location, "media")
         self.assertFalse(MediaRootGoogleCloudStorage.file_overwrite)

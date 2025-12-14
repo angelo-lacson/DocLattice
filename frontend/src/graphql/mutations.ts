@@ -94,7 +94,7 @@ export interface UpdateCorpusInputs {
   preferredEmbedder?: string;
   labelSet?: string;
   slug?: string;
-  isPublic?: boolean;
+  // NOTE: isPublic removed - use SET_CORPUS_VISIBILITY mutation instead
   corpusAgentInstructions?: string;
   documentAgentInstructions?: string;
 }
@@ -122,7 +122,6 @@ export const UPDATE_CORPUS = gql`
     $title: String
     $preferredEmbedder: String
     $slug: String
-    $isPublic: Boolean
     $corpusAgentInstructions: String
     $documentAgentInstructions: String
   ) {
@@ -134,10 +133,32 @@ export const UPDATE_CORPUS = gql`
       title: $title
       preferredEmbedder: $preferredEmbedder
       slug: $slug
-      isPublic: $isPublic
       corpusAgentInstructions: $corpusAgentInstructions
       documentAgentInstructions: $documentAgentInstructions
     ) {
+      ok
+      message
+    }
+  }
+`;
+
+// NOTE: Use SET_CORPUS_VISIBILITY to change corpus visibility (isPublic)
+// This mutation has proper permission checks (owner OR PERMISSION permission)
+export interface SetCorpusVisibilityInputs {
+  corpusId: string;
+  isPublic: boolean;
+}
+
+export interface SetCorpusVisibilityOutputs {
+  setCorpusVisibility: {
+    ok: boolean;
+    message: string;
+  };
+}
+
+export const SET_CORPUS_VISIBILITY = gql`
+  mutation SetCorpusVisibility($corpusId: ID!, $isPublic: Boolean!) {
+    setCorpusVisibility(corpusId: $corpusId, isPublic: $isPublic) {
       ok
       message
     }

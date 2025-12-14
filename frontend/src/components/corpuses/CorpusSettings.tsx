@@ -31,6 +31,9 @@ import {
   UPDATE_CORPUS,
   UpdateCorpusInputs,
   UpdateCorpusOutputs,
+  SET_CORPUS_VISIBILITY,
+  SetCorpusVisibilityInputs,
+  SetCorpusVisibilityOutputs,
 } from "../../graphql/mutations";
 import { CorpusType } from "../../types/graphql-api";
 import { PermissionTypes } from "../types";
@@ -663,6 +666,24 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  // Separate mutation for visibility changes (uses proper permission checks)
+  const [setCorpusVisibility, { loading: settingVisibility }] = useMutation<
+    SetCorpusVisibilityOutputs,
+    SetCorpusVisibilityInputs
+  >(SET_CORPUS_VISIBILITY, {
+    onCompleted: (data) => {
+      if (data.setCorpusVisibility?.ok) {
+        toast.success(data.setCorpusVisibility.message);
+      } else {
+        toast.error(
+          data.setCorpusVisibility?.message || "Failed to update visibility"
+        );
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [actionToDelete, setActionToDelete] = React.useState<string | null>(
     null
@@ -994,13 +1015,37 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
               <div style={{ gridColumn: "1 / span 2", marginTop: "1rem" }}>
                 <Button
                   primary
-                  loading={updatingVisibility}
+                  loading={updatingVisibility || settingVisibility}
                   disabled={!canUpdate && !canPermission}
                   onClick={() => {
-                    const vars: UpdateCorpusInputs = { id: corpus.id } as any;
-                    if (canPermission) vars.isPublic = publicDraft;
-                    if (canUpdate) vars.slug = slugDraft || undefined;
-                    updateCorpusMutation({ variables: vars });
+                    // Use separate mutations for visibility vs other settings
+                    // This ensures proper permission checks on each operation
+                    const visibilityChanged =
+                      publicDraft !== Boolean(corpus.isPublic);
+                    const slugChanged = slugDraft !== originalSlug;
+
+                    if (canPermission && visibilityChanged) {
+                      setCorpusVisibility({
+                        variables: {
+                          corpusId: corpus.id,
+                          isPublic: publicDraft,
+                        },
+                      });
+                    }
+
+                    if (canUpdate && slugChanged) {
+                      updateCorpusMutation({
+                        variables: {
+                          id: corpus.id,
+                          slug: slugDraft || undefined,
+                        },
+                      });
+                    }
+
+                    // If nothing changed, show a message
+                    if (!visibilityChanged && !slugChanged) {
+                      toast.info("No changes to save");
+                    }
                   }}
                   style={{
                     background:

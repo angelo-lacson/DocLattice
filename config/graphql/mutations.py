@@ -203,34 +203,86 @@ class MakeAnalysisPublic(graphene.Mutation):
         return MakeAnalysisPublic(ok=ok, message=message)
 
 
-class MakeCorpusPublic(graphene.Mutation):
+class SetCorpusVisibility(graphene.Mutation):
+    """
+    Set corpus visibility (public/private).
+
+    Requires one of:
+    - User is the corpus creator (owner), OR
+    - User has PERMISSION permission on the corpus, OR
+    - User is superuser
+
+    Security notes:
+    - Permission check prevents users from escalating access
+    - Uses existing make_corpus_public_task for cascading public visibility
+    - Making private only affects the corpus flag (child objects remain public)
+    """
+
     class Arguments:
-        corpus_id = graphene.String(
-            required=True, description="Corpus id to make public (superuser only)"
+        corpus_id = graphene.ID(
+            required=True, description="ID of the corpus to change visibility for"
+        )
+        is_public = graphene.Boolean(
+            required=True, description="True to make public, False to make private"
         )
 
     ok = graphene.Boolean()
     message = graphene.String()
 
-    @user_passes_test(lambda user: user.is_superuser)
-    @graphql_ratelimit(rate=RateLimits.ADMIN_OPERATION)
-    def mutate(root, info, corpus_id):
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
+    def mutate(root, info, corpus_id, is_public):
+        user = info.context.user
 
         try:
             corpus_pk = from_global_id(corpus_id)[1]
+        except Exception:
+            return SetCorpusVisibility(ok=False, message="Invalid corpus ID format")
 
-            make_corpus_public_task.si(corpus_id=corpus_pk).apply_async()
-            message = "Starting an OpenContracts worker to make your corpus public!"
-            ok = True
+        try:
+            corpus = Corpus.objects.get(pk=corpus_pk)
+        except Corpus.DoesNotExist:
+            # IDOR protection: same message whether corpus doesn't exist or user can't access
+            return SetCorpusVisibility(
+                ok=False, message="Corpus not found or you don't have permission"
+            )
 
-        except Exception as e:
-            message = f"Failed to start task to make your corpus public due to unexpected error: {e}"
-            ok = False
-
-        return MakeCorpusPublic(
-            ok=ok,
-            message=message,
+        # Permission check: owner OR has PERMISSION OR superuser
+        # This is the security gate - prevents unauthorized visibility changes
+        can_change_visibility = (
+            user.is_superuser
+            or corpus.creator_id == user.id
+            or user_has_permission_for_obj(
+                user, corpus, PermissionTypes.PERMISSION, include_group_permissions=True
+            )
         )
+
+        if not can_change_visibility:
+            # IDOR protection: same message as "not found"
+            return SetCorpusVisibility(
+                ok=False, message="Corpus not found or you don't have permission"
+            )
+
+        # Check if visibility is actually changing
+        if corpus.is_public == is_public:
+            status = "public" if is_public else "private"
+            return SetCorpusVisibility(ok=True, message=f"Corpus is already {status}")
+
+        if is_public:
+            # Use existing async task to cascade public visibility to all child objects
+            # This sets is_public=True on documents, annotations, analyses, etc.
+            make_corpus_public_task.si(corpus_id=corpus_pk).apply_async()
+            return SetCorpusVisibility(
+                ok=True,
+                message="Making corpus public. This may take a moment for large corpuses.",
+            )
+        else:
+            # Make private - only update the corpus flag
+            # Note: Child objects (docs, annotations) remain public if they were made public
+            # This is intentional to avoid breaking existing public links
+            corpus.is_public = False
+            corpus.save(update_fields=["is_public"])
+            return SetCorpusVisibility(ok=True, message="Corpus is now private")
 
 
 class UpdateLabelset(DRFMutation):
@@ -2559,10 +2611,15 @@ class CreateCorpusMutation(DRFMutation):
 
             obj_pk = from_global_id(result.obj_id)[1]
             corpus = cls.IOSettings.model.objects.get(pk=obj_pk)
+            # Grant creator full permissions including PERMISSION to manage access
             set_permissions_for_obj_to_user(
                 info.context.user,
                 corpus,
-                [PermissionTypes.CRUD, PermissionTypes.PUBLISH],
+                [
+                    PermissionTypes.CRUD,
+                    PermissionTypes.PUBLISH,
+                    PermissionTypes.PERMISSION,
+                ],
             )
 
         return result
@@ -2584,7 +2641,8 @@ class UpdateCorpusMutation(DRFMutation):
         label_set = graphene.String(required=False)
         preferred_embedder = graphene.String(required=False)
         slug = graphene.String(required=False)
-        is_public = graphene.Boolean(required=False)
+        # NOTE: is_public removed - use SetCorpusVisibility mutation instead
+        # This prevents bypassing permission checks via UpdateCorpusMutation
         corpus_agent_instructions = graphene.String(required=False)
         document_agent_instructions = graphene.String(required=False)
 
@@ -4190,7 +4248,7 @@ class Mutation(graphene.ObjectType):
 
     # CORPUS MUTATIONS #########################################################
     fork_corpus = StartCorpusFork.Field()
-    make_corpus_public = MakeCorpusPublic.Field()
+    set_corpus_visibility = SetCorpusVisibility.Field()
     create_corpus = CreateCorpusMutation.Field()
     update_corpus = UpdateCorpusMutation.Field()
     update_me = UpdateMe.Field()
