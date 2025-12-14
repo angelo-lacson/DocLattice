@@ -98,7 +98,8 @@ const ModalBody = styled.div`
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Ensure Semantic UI dropdowns appear above the sticky footer */
+  /* Ensure Semantic UI dropdowns appear above the sticky footer (z-index: 10) */
+  /* z-index scale: header/footer=10, dropdowns=20 */
   .ui.dropdown .menu {
     z-index: 20;
   }
@@ -532,7 +533,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     } else {
       // Include all for create mode
       formData.title = title.trim();
-      formData.slug = slug.trim();
+      formData.slug = slug.trim() || undefined;
       formData.description = description.trim();
       formData.icon = icon;
       formData.labelSet = labelSetId;

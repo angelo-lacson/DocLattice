@@ -647,7 +647,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
     setPublicDraft(Boolean(corpus.isPublic));
   }, [corpus]);
 
-  const [updateCorpusMutation, { loading: updatingSlug }] = useMutation<
+  const [updateCorpusMutation, { loading: updatingCorpus }] = useMutation<
     UpdateCorpusOutputs,
     UpdateCorpusInputs
   >(UPDATE_CORPUS, {
@@ -675,14 +675,20 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
       toast.error(err.message);
     },
     update: (cache, { data }) => {
-      if (data?.updateCorpus?.ok) {
+      if (data?.updateCorpus?.ok && corpus.id) {
         // Update the corpus in cache with the new slug
-        cache.modify({
-          id: cache.identify({ __typename: "CorpusType", id: corpus.id }),
-          fields: {
-            slug: () => slugDraft || null,
-          },
+        const cacheId = cache.identify({
+          __typename: "CorpusType",
+          id: corpus.id,
         });
+        if (cacheId) {
+          cache.modify({
+            id: cacheId,
+            fields: {
+              slug: () => slugDraft || null,
+            },
+          });
+        }
       }
     },
   });
@@ -710,14 +716,20 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
       toast.error(err.message);
     },
     update: (cache, { data }) => {
-      if (data?.setCorpusVisibility?.ok) {
+      if (data?.setCorpusVisibility?.ok && corpus.id) {
         // Update the corpus in cache with the new visibility
-        cache.modify({
-          id: cache.identify({ __typename: "CorpusType", id: corpus.id }),
-          fields: {
-            isPublic: () => publicDraft,
-          },
+        const cacheId = cache.identify({
+          __typename: "CorpusType",
+          id: corpus.id,
         });
+        if (cacheId) {
+          cache.modify({
+            id: cacheId,
+            fields: {
+              isPublic: () => publicDraft,
+            },
+          });
+        }
       }
     },
   });
@@ -1053,7 +1065,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
               <div style={{ gridColumn: "1 / span 2", marginTop: "1rem" }}>
                 <Button
                   primary
-                  loading={updatingSlug || settingVisibility}
+                  loading={updatingCorpus || settingVisibility}
                   disabled={!canUpdate && !canPermission}
                   onClick={() => {
                     // Use separate mutations for visibility vs other settings
