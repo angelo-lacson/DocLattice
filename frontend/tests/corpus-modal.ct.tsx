@@ -495,9 +495,10 @@ test.describe("CorpusModal - Form Validation", () => {
     // Submit should be enabled
     await page.locator('button:has-text("Create Corpus")').click();
 
-    // Data should be submitted with empty slug
+    // Data should be submitted with undefined slug (converted from empty string)
+    // Empty slug becomes undefined so backend auto-generates one
     expect(submittedData).not.toBeNull();
-    expect(submittedData.slug).toBe("");
+    expect(submittedData.slug).toBeUndefined();
 
     await component.unmount();
   });

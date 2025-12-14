@@ -1991,6 +1991,12 @@ export const Corpuses = () => {
 
   // Handle corpus creation with properly typed form data
   const handleCreateNewCorpus = (formData: CorpusFormData) => {
+    // Runtime validation for required fields
+    if (!formData.title || !formData.description) {
+      toast.error("Title and description are required");
+      return;
+    }
+
     const variables: CreateCorpusInputs = {
       title: formData.title,
       description: formData.description,
