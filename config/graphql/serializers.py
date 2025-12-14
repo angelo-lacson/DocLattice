@@ -48,7 +48,9 @@ class CorpusSerializer(serializers.ModelSerializer):
             "corpus_agent_instructions",
             "document_agent_instructions",
         ]
-        read_only_fields = ["id"]
+        # NOTE: is_public is read-only - use SetCorpusVisibility mutation to change it
+        # This prevents bypassing permission checks via serializer updates
+        read_only_fields = ["id", "is_public"]
 
 
 class ExtractSerializer(serializers.ModelSerializer):
