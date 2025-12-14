@@ -124,7 +124,7 @@ export async function fetchOGMetadata(
   const variables = buildVariables(route);
 
   try {
-    const response = await fetch(`${env.API_URL}/graphql`, {
+    const response = await fetch(`${env.API_URL}/graphql/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
