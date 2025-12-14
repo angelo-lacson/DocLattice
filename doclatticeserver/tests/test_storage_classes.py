@@ -31,7 +31,8 @@ class TestStorageClasses(unittest.TestCase):
 
         # Check class attributes
         self.assertEqual(StaticRootGoogleCloudStorage.location, "static")
-        # default_acl is None for uniform bucket-level access (IAM-based)
+        # default_acl is None to support GCS buckets with uniform bucket-level access
+        # Public access should be configured at the bucket level via IAM policies
         self.assertIsNone(StaticRootGoogleCloudStorage.default_acl)
 
         self.assertEqual(MediaRootGoogleCloudStorage.location, "media")
