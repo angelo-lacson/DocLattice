@@ -3353,14 +3353,17 @@ class Query(graphene.ObjectType):
             # Decode thread ID if base64 encoded (GraphQL relay ID)
             try:
                 _, pk = from_global_id(thread_id)
+                # from_global_id returns empty strings for invalid base64
+                if not pk:
+                    pk = thread_id
             except Exception:
                 pk = thread_id
 
             # Use annotate to avoid N+1 query for message count
             thread = (
-                Conversation.objects.annotate(msg_count=Count("messages"))
+                Conversation.objects.annotate(msg_count=Count("chat_messages"))
                 .select_related("creator")
-                .get(pk=pk, corpus=corpus)
+                .get(pk=pk, chat_with_corpus=corpus)
             )
 
             return OGThreadMetadataType(
@@ -3383,9 +3386,12 @@ class Query(graphene.ObjectType):
         from opencontractserver.extracts.models import Extract
 
         try:
-            # Decode extract ID if base64 encoded
+            # Decode extract ID if base64 encoded (GraphQL relay ID)
             try:
                 _, pk = from_global_id(extract_id)
+                # from_global_id returns empty strings for invalid base64
+                if not pk:
+                    pk = extract_id
             except Exception:
                 pk = extract_id
 
