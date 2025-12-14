@@ -38,17 +38,12 @@ import {
   CreateAndSearchBar,
   DropdownActionProps,
 } from "../components/layout/CreateAndSearchBar";
-import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
 import { CardLayout } from "../components/layout/CardLayout";
 import { CorpusBreadcrumbs } from "../components/corpuses/CorpusBreadcrumbs";
-import { LabelSetSelector } from "../components/widgets/CRUD/LabelSetSelector";
-import { EmbedderSelector } from "../components/widgets/CRUD/EmbedderSelector";
 import {
-  newCorpusForm_Ui_Schema,
-  newCorpusForm_Schema,
-  editCorpusForm_Schema,
-  editCorpusForm_Ui_Schema,
-} from "../components/forms/schemas";
+  CorpusModal,
+  CorpusFormData,
+} from "../components/corpuses/CorpusModal";
 
 import {
   openedCorpus,
@@ -1962,9 +1957,26 @@ export const Corpuses = () => {
     }
   };
 
-  // TODO - Improve typing.
-  const handleUpdateCorpus = (corpus_obj: any) => {
-    tryMutateCorpus({ variables: corpus_obj });
+  // Handle corpus update with properly typed form data
+  const handleUpdateCorpus = (formData: CorpusFormData) => {
+    const variables: UpdateCorpusInputs = {
+      id: formData.id!,
+    };
+
+    // Only include changed fields
+    if (formData.title !== undefined) variables.title = formData.title;
+    if (formData.description !== undefined)
+      variables.description = formData.description;
+    if (formData.slug !== undefined) variables.slug = formData.slug;
+    if (formData.labelSet !== undefined)
+      variables.labelSet = formData.labelSet ?? undefined;
+    if (formData.preferredEmbedder !== undefined)
+      variables.preferredEmbedder = formData.preferredEmbedder ?? undefined;
+    if (formData.icon !== undefined && formData.icon !== null) {
+      variables.icon = formData.icon as string;
+    }
+
+    tryMutateCorpus({ variables });
   };
 
   // TODO - Improve typing.
@@ -1999,9 +2011,22 @@ export const Corpuses = () => {
       });
   };
 
-  // TODO - Improve typing.
-  const handleCreateNewCorpus = (corpus_json: Record<string, any>) => {
-    tryCreateCorpus({ variables: corpus_json })
+  // Handle corpus creation with properly typed form data
+  const handleCreateNewCorpus = (formData: CorpusFormData) => {
+    const variables: CreateCorpusInputs = {
+      title: formData.title,
+      description: formData.description,
+    };
+
+    // Include optional fields if provided
+    if (formData.labelSet) variables.labelSet = formData.labelSet;
+    if (formData.preferredEmbedder)
+      variables.preferredEmbedder = formData.preferredEmbedder;
+    if (formData.icon) {
+      variables.icon = formData.icon as string;
+    }
+
+    tryCreateCorpus({ variables })
       .then((data) => {
         console.log("Data", data);
         if (data.data?.createCorpus.ok) {
@@ -2624,24 +2649,12 @@ export const Corpuses = () => {
             }
             visible={show_remove_docs_from_corpus_modal}
           />
-          <CRUDModal
+          <CorpusModal
             open={corpus_to_edit !== null}
             mode="EDIT"
-            oldInstance={corpus_to_edit ?? {}}
-            modelName="corpus"
-            uiSchema={editCorpusForm_Ui_Schema}
-            dataSchema={editCorpusForm_Schema}
+            corpus={corpus_to_edit}
             onSubmit={handleUpdateCorpus}
             onClose={() => editingCorpus(null)}
-            hasFile={true}
-            fileField={"icon"}
-            fileLabel="Corpus Icon"
-            fileIsImage={true}
-            acceptedFileTypes="image/*"
-            propertyWidgets={{
-              labelSet: <LabelSetSelector />,
-              preferredEmbedder: <EmbedderSelector />,
-            }}
             loading={update_corpus_loading}
           />
           {exporting_corpus ? (
@@ -2659,47 +2672,22 @@ export const Corpuses = () => {
             <></>
           )}
           {corpus_to_view !== null ? (
-            <CRUDModal
+            <CorpusModal
               open={corpus_to_view !== null}
               mode="VIEW"
-              oldInstance={corpus_to_view ? corpus_to_view : {}}
-              modelName="corpus"
-              uiSchema={editCorpusForm_Ui_Schema}
-              dataSchema={editCorpusForm_Schema}
+              corpus={corpus_to_view}
               onClose={() => viewingCorpus(null)}
-              hasFile={true}
-              fileField={"icon"}
-              fileLabel="Corpus Icon"
-              fileIsImage={true}
-              acceptedFileTypes="image/*"
-              propertyWidgets={{
-                labelSet: <LabelSetSelector read_only={true} />,
-                preferredEmbedder: <EmbedderSelector read_only={true} />,
-              }}
             />
           ) : (
             <></>
           )}
 
           {show_new_corpus_modal ? (
-            <CRUDModal
+            <CorpusModal
               open={show_new_corpus_modal}
               mode="CREATE"
-              oldInstance={{ shared_with: [], is_public: false }}
-              modelName="corpus"
-              uiSchema={newCorpusForm_Ui_Schema}
-              dataSchema={newCorpusForm_Schema}
               onSubmit={handleCreateNewCorpus}
-              onClose={() => setShowNewCorpusModal(!show_new_corpus_modal)}
-              hasFile={true}
-              fileField={"icon"}
-              fileLabel="Corpus Icon"
-              fileIsImage={true}
-              acceptedFileTypes="image/*"
-              propertyWidgets={{
-                labelSet: <LabelSetSelector />,
-                preferredEmbedder: <EmbedderSelector />,
-              }}
+              onClose={() => setShowNewCorpusModal(false)}
               loading={create_corpus_loading}
             />
           ) : (
