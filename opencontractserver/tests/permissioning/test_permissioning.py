@@ -401,48 +401,62 @@ class PermissioningTestCase(TestCase):
         self.assertEqual(user_two_corpus_response["data"]["corpuses"]["totalCount"], 0)
 
     def __test_make_corpus_public_mutation(self):
+        """
+        Test the SetCorpusVisibility mutation (replaced MakeCorpusPublic).
 
+        SetCorpusVisibility allows:
+        - Corpus creator (owner)
+        - Users with PERMISSION permission
+        - Superusers
+
+        This test verifies:
+        1. A non-creator user without PERMISSION cannot change visibility
+        2. The creator can change visibility
+        """
         logger.info(
-            "----- TEST MAKE CORPUS PUBLIC MUTATION ----------------------------------------------------------"
+            "----- TEST SET CORPUS VISIBILITY MUTATION -------------------------------------------------------"
         )
 
-        make_public_mutation_request = """
-            mutation ($corpusId: String!) {
-              makeCorpusPublic(corpusId: $corpusId) {
+        set_visibility_mutation = """
+            mutation ($corpusId: ID!, $isPublic: Boolean!) {
+              setCorpusVisibility(corpusId: $corpusId, isPublic: $isPublic) {
                 ok
                 message
               }
             }
         """
-        variables = {"corpusId": self.global_corpus_id}
+        variables = {"corpusId": self.global_corpus_id, "isPublic": True}
 
-        # This should fail (only superuser can do this)
-        prohibited_graphql_response = self.graphene_client.execute(
-            make_public_mutation_request,
+        # This should fail - user_2 (Frodo) is NOT the creator and has no PERMISSION
+        prohibited_graphql_response = self.graphene_client_2.execute(
+            set_visibility_mutation,
             variable_values=variables,
         )
         logger.info(f"Improper permission response: {prohibited_graphql_response}")
-        self.assertEqual(prohibited_graphql_response["data"]["makeCorpusPublic"], None)
         self.assertEqual(
-            prohibited_graphql_response["errors"][0]["message"],
-            "You do not have permission to " "perform this action",
+            prohibited_graphql_response["data"]["setCorpusVisibility"]["ok"], False
+        )
+        self.assertEqual(
+            prohibited_graphql_response["data"]["setCorpusVisibility"]["message"],
+            "Corpus not found or you don't have permission",
         )
 
-        # THIS should work - request make public with superuser
-        permissioned_graphql_response = self.elevated_graphene_client.execute(
-            make_public_mutation_request,
+        # THIS should work - request from creator (Bob/self.user)
+        permissioned_graphql_response = self.graphene_client.execute(
+            set_visibility_mutation,
             variable_values=variables,
         )
 
-        # Now anonymous requests should work to request the corpus.
-        logger.info(f"Make public call return value: {permissioned_graphql_response}")
+        logger.info(
+            f"Set visibility call return value: {permissioned_graphql_response}"
+        )
 
         self.assertEqual(
-            permissioned_graphql_response["data"]["makeCorpusPublic"]["ok"], True
+            permissioned_graphql_response["data"]["setCorpusVisibility"]["ok"], True
         )
         self.assertEqual(
-            permissioned_graphql_response["data"]["makeCorpusPublic"]["message"],
-            "Starting an OpenContracts worker to make your corpus public!",
+            permissioned_graphql_response["data"]["setCorpusVisibility"]["message"],
+            "Making corpus public. This may take a moment for large corpuses.",
         )
 
     def __test_make_corpus_public_task(self):
