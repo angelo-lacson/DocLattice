@@ -85,7 +85,14 @@ const ROUTE_PATTERNS: Array<{
  */
 export function parseRoute(pathname: string): ParsedRoute | null {
   // Normalize pathname: remove trailing slash, handle encoded characters
-  const normalizedPath = decodeURIComponent(pathname.replace(/\/$/, ""));
+  let normalizedPath: string;
+  try {
+    normalizedPath = decodeURIComponent(pathname.replace(/\/$/, ""));
+  } catch {
+    // decodeURIComponent throws on malformed URLs (e.g., invalid percent encoding)
+    // Return null to trigger fallback behavior
+    return null;
+  }
 
   for (const { pattern, type, extract } of ROUTE_PATTERNS) {
     const match = normalizedPath.match(pattern);
