@@ -47,9 +47,10 @@ const StyledModal = styled(Modal)`
 `;
 
 const ModalHeader = styled.div`
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #ffffff;
   padding: 1.5rem 2rem;
-  color: white;
+  color: #1a1a1a;
+  border-bottom: 1px solid #e5e5e5;
 
   @media (max-width: 768px) {
     padding: 1rem 1.25rem;
@@ -74,7 +75,7 @@ const HeaderTitle = styled.h2`
 
 const HeaderSubtitle = styled.p`
   margin: 0;
-  opacity: 0.9;
+  color: #666666;
   font-size: 0.9rem;
 
   @media (max-width: 768px) {
@@ -84,13 +85,15 @@ const HeaderSubtitle = styled.p`
 
 const ModalBody = styled.div`
   padding: 2rem;
-  background: #f8fafc;
+  background: #fafafa;
   max-height: calc(100vh - 200px);
   overflow-y: auto;
 
   @media (max-width: 768px) {
     padding: 1.25rem;
-    max-height: calc(100vh - 140px);
+    /* Add extra bottom padding so content can scroll above sticky footer */
+    padding-bottom: 120px;
+    max-height: calc(100vh - 80px);
     /* Smooth scrolling on iOS */
     -webkit-overflow-scrolling: touch;
   }
@@ -101,8 +104,8 @@ const FormSection = styled.div`
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e5e5e5;
 
   @media (max-width: 768px) {
     padding: 1rem;
@@ -118,7 +121,7 @@ const FormSection = styled.div`
 const SectionTitle = styled.h3`
   font-size: 0.875rem;
   font-weight: 600;
-  color: #64748b;
+  color: #888888;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0 0 1rem 0;
@@ -148,7 +151,7 @@ const Label = styled.label`
   display: block;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a1a;
   margin-bottom: 0.5rem;
 
   @media (max-width: 768px) {
@@ -159,7 +162,7 @@ const Label = styled.label`
 const HelpText = styled.span`
   display: block;
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: #888888;
   margin-top: 0.25rem;
 
   @media (max-width: 768px) {
@@ -170,27 +173,27 @@ const HelpText = styled.span`
 const TextInput = styled.input<{ $readOnly?: boolean }>`
   width: 100%;
   padding: 0.875rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #e5e5e5;
   border-radius: 10px;
   font-size: 1rem;
-  color: #1e293b;
-  background: ${(props) => (props.$readOnly ? "#f8fafc" : "white")};
+  color: #1a1a1a;
+  background: ${(props) => (props.$readOnly ? "#fafafa" : "white")};
   transition: all 0.2s ease;
   outline: none;
 
   &:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    border-color: #1a1a1a;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
   }
 
   &:disabled {
-    background: #f1f5f9;
-    color: #94a3b8;
+    background: #f5f5f5;
+    color: #999999;
     cursor: not-allowed;
   }
 
   &::placeholder {
-    color: #94a3b8;
+    color: #999999;
   }
 
   @media (max-width: 768px) {
@@ -206,11 +209,11 @@ const TextInput = styled.input<{ $readOnly?: boolean }>`
 const TextArea = styled.textarea<{ $readOnly?: boolean }>`
   width: 100%;
   padding: 0.875rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #e5e5e5;
   border-radius: 10px;
   font-size: 1rem;
-  color: #1e293b;
-  background: ${(props) => (props.$readOnly ? "#f8fafc" : "white")};
+  color: #1a1a1a;
+  background: ${(props) => (props.$readOnly ? "#fafafa" : "white")};
   transition: all 0.2s ease;
   outline: none;
   resize: vertical;
@@ -219,18 +222,18 @@ const TextArea = styled.textarea<{ $readOnly?: boolean }>`
   line-height: 1.5;
 
   &:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    border-color: #1a1a1a;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
   }
 
   &:disabled {
-    background: #f1f5f9;
-    color: #94a3b8;
+    background: #f5f5f5;
+    color: #999999;
     cursor: not-allowed;
   }
 
   &::placeholder {
-    color: #94a3b8;
+    color: #999999;
   }
 
   @media (max-width: 768px) {
@@ -245,7 +248,7 @@ const TextArea = styled.textarea<{ $readOnly?: boolean }>`
 const ModalFooter = styled.div`
   padding: 1.25rem 2rem;
   background: white;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #e5e5e5;
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
@@ -269,8 +272,8 @@ const ModalFooter = styled.div`
 
 const CancelButton = styled(Button)`
   &&& {
-    background: #f1f5f9;
-    color: #475569;
+    background: #f5f5f5;
+    color: #666666;
     border: none;
     padding: 0.875rem 1.5rem;
     font-weight: 600;
@@ -278,8 +281,8 @@ const CancelButton = styled(Button)`
     transition: all 0.2s ease;
 
     &:hover:not(:disabled) {
-      background: #e2e8f0;
-      color: #1e293b;
+      background: #e5e5e5;
+      color: #1a1a1a;
     }
 
     &:disabled {
@@ -290,27 +293,27 @@ const CancelButton = styled(Button)`
 
 const SubmitButton = styled(Button)`
   &&& {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #1a1a1a;
     color: white;
     border: none;
     padding: 0.875rem 1.5rem;
     font-weight: 600;
     border-radius: 10px;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 
     &:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.45);
+      background: #333333;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 
     &:active:not(:disabled) {
-      transform: translateY(0);
+      background: #000000;
     }
 
     &:disabled {
-      opacity: 0.6;
-      transform: none;
+      background: #cccccc;
+      box-shadow: none;
     }
   }
 `;
@@ -328,7 +331,7 @@ const CloseButton = styled.button`
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: rgba(255, 255, 255, 0.2);
+  background: #f5f5f5;
   border: none;
   border-radius: 50%;
   width: 36px;
@@ -338,10 +341,11 @@ const CloseButton = styled.button`
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: white;
+  color: #666666;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: #e5e5e5;
+    color: #1a1a1a;
   }
 
   @media (max-width: 768px) {
