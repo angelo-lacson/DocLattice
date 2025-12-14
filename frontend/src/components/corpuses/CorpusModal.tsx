@@ -91,11 +91,16 @@ const ModalBody = styled.div`
 
   @media (max-width: 768px) {
     padding: 1.25rem;
-    /* Add extra bottom padding so content can scroll above sticky footer */
-    padding-bottom: 120px;
+    /* Add extra bottom padding so content (including dropdowns) can scroll above sticky footer */
+    padding-bottom: 200px;
     max-height: calc(100vh - 80px);
     /* Smooth scrolling on iOS */
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Ensure Semantic UI dropdowns appear above the sticky footer */
+  .ui.dropdown .menu {
+    z-index: 20;
   }
 `;
 
