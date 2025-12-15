@@ -843,6 +843,25 @@ class CorpusAction(BaseOCModel):
     analyzer = django.db.models.ForeignKey(
         "analyzer.Analyzer", on_delete=django.db.models.SET_NULL, null=True, blank=True
     )
+    # Agent-based action fields
+    agent_config = django.db.models.ForeignKey(
+        "agents.AgentConfiguration",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="corpus_actions",
+        help_text="Agent configuration to use for this action",
+    )
+    agent_prompt = django.db.models.TextField(
+        blank=True,
+        default="",
+        help_text="Task-specific prompt for the agent (e.g., 'Summarize this document')",
+    )
+    pre_authorized_tools = django.db.models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Tools pre-authorized to run without approval. If empty, uses agent_config.available_tools",
+    )
     trigger = django.db.models.CharField(
         max_length=256, choices=CorpusActionTrigger.choices
     )
@@ -853,12 +872,29 @@ class CorpusAction(BaseOCModel):
 
     class Meta:
         constraints = [
+            # Exactly ONE of fieldset, analyzer, or agent_config must be set
             django.db.models.CheckConstraint(
                 check=(
-                    django.db.models.Q(fieldset__isnull=False, analyzer__isnull=True)
-                    | django.db.models.Q(fieldset__isnull=True, analyzer__isnull=False)
+                    # Fieldset only
+                    django.db.models.Q(
+                        fieldset__isnull=False,
+                        analyzer__isnull=True,
+                        agent_config__isnull=True,
+                    )
+                    # Analyzer only
+                    | django.db.models.Q(
+                        fieldset__isnull=True,
+                        analyzer__isnull=False,
+                        agent_config__isnull=True,
+                    )
+                    # Agent config only
+                    | django.db.models.Q(
+                        fieldset__isnull=True,
+                        analyzer__isnull=True,
+                        agent_config__isnull=False,
+                    )
                 ),
-                name="exactly_one_of_fieldset_or_analyzer",
+                name="exactly_one_of_fieldset_analyzer_or_agent",
             )
         ]
         permissions = (
@@ -872,17 +908,41 @@ class CorpusAction(BaseOCModel):
         )
 
     def clean(self):
-        if self.fieldset and self.analyzer:
-            raise ValidationError("Only one of fieldset or analyzer can be set.")
-        if not self.fieldset and not self.analyzer:
-            raise ValidationError("Either fieldset or analyzer must be set.")
+        # Count how many action types are set
+        action_types_set = sum(
+            [
+                self.fieldset is not None,
+                self.analyzer is not None,
+                self.agent_config is not None,
+            ]
+        )
+        if action_types_set > 1:
+            raise ValidationError(
+                "Only one of fieldset, analyzer, or agent_config can be set."
+            )
+        if action_types_set == 0:
+            raise ValidationError(
+                "One of fieldset, analyzer, or agent_config must be set."
+            )
+        # Validate agent_prompt is provided when agent_config is set
+        if self.agent_config and not self.agent_prompt:
+            raise ValidationError(
+                "agent_prompt is required when agent_config is set."
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
 
     def __str__(self):
-        action_type = "Fieldset" if self.fieldset else "Analyzer"
+        if self.fieldset:
+            action_type = "Fieldset"
+        elif self.analyzer:
+            action_type = "Analyzer"
+        elif self.agent_config:
+            action_type = "Agent"
+        else:
+            action_type = "Unknown"
         return f"CorpusAction for {self.corpus} - {action_type} - {self.get_trigger_display()}"
 
 

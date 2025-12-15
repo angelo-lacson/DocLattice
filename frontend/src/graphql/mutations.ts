@@ -2161,6 +2161,9 @@ export const CREATE_CORPUS_ACTION = gql`
     $name: String
     $fieldsetId: ID
     $analyzerId: ID
+    $agentConfigId: ID
+    $agentPrompt: String
+    $preAuthorizedTools: [String]
     $disabled: Boolean
     $runOnAllCorpuses: Boolean
   ) {
@@ -2170,6 +2173,9 @@ export const CREATE_CORPUS_ACTION = gql`
       name: $name
       fieldsetId: $fieldsetId
       analyzerId: $analyzerId
+      agentConfigId: $agentConfigId
+      agentPrompt: $agentPrompt
+      preAuthorizedTools: $preAuthorizedTools
       disabled: $disabled
       runOnAllCorpuses: $runOnAllCorpuses
     ) {
@@ -2189,6 +2195,13 @@ export const CREATE_CORPUS_ACTION = gql`
           id
           description
         }
+        agentConfig {
+          id
+          name
+          description
+        }
+        agentPrompt
+        preAuthorizedTools
       }
     }
   }
@@ -2200,6 +2213,9 @@ export interface CreateCorpusActionInput {
   name?: string;
   fieldsetId?: string;
   analyzerId?: string;
+  agentConfigId?: string;
+  agentPrompt?: string;
+  preAuthorizedTools?: string[];
   disabled?: boolean;
   runOnAllCorpuses?: boolean;
 }

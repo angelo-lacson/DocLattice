@@ -1096,9 +1096,10 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
               This system allows you to <strong>automate actions</strong> when
               documents are
               <span className="highlight"> added</span> or{" "}
-              <span className="highlight"> edited</span> in a corpus, either
-              running extractions via <strong>fieldsets</strong> or analyses via{" "}
-              <strong>analyzers</strong>.
+              <span className="highlight"> edited</span> in a corpus. You can
+              run extractions via <strong>fieldsets</strong>, analyses via{" "}
+              <strong>analyzers</strong>, or AI-powered tasks via{" "}
+              <strong>agents</strong>.
             </ActionNote>
 
             <ActionFlow>
@@ -1148,11 +1149,22 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                           color: "rgba(0,0,0,0.75)",
                           marginTop: "1rem",
                           fontSize: "0.95rem",
+                          flexWrap: "wrap",
                         }}
                       >
                         <div>
-                          <Icon name="code" />
-                          {action.fieldset
+                          <Icon
+                            name={
+                              action.agentConfig
+                                ? "microchip"
+                                : action.fieldset
+                                ? "table"
+                                : "cogs"
+                            }
+                          />
+                          {action.agentConfig
+                            ? `Agent: ${action.agentConfig.name}`
+                            : action.fieldset
                             ? `Fieldset: ${action.fieldset.name}`
                             : `Analyzer: ${action.analyzer?.name}`}
                         </div>
@@ -1165,6 +1177,55 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                           {new Date(action.created).toLocaleDateString()}
                         </div>
                       </div>
+                      {action.agentConfig && action.agentPrompt && (
+                        <div
+                          style={{
+                            marginTop: "0.75rem",
+                            padding: "0.75rem",
+                            background: "rgba(99, 102, 241, 0.05)",
+                            borderRadius: "8px",
+                            borderLeft: "3px solid #6366f1",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              color: "#64748b",
+                              marginBottom: "0.25rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Agent Prompt:
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "0.9rem",
+                              color: "#1e293b",
+                              fontStyle: "italic",
+                            }}
+                          >
+                            "
+                            {action.agentPrompt.length > 100
+                              ? `${action.agentPrompt.substring(0, 100)}...`
+                              : action.agentPrompt}
+                            "
+                          </div>
+                          {action.preAuthorizedTools &&
+                            action.preAuthorizedTools.length > 0 && (
+                              <div
+                                style={{
+                                  marginTop: "0.5rem",
+                                  fontSize: "0.8rem",
+                                  color: "#64748b",
+                                }}
+                              >
+                                <Icon name="check circle" color="green" />
+                                Pre-authorized tools:{" "}
+                                {action.preAuthorizedTools.join(", ")}
+                              </div>
+                            )}
+                        </div>
+                      )}
                     </div>
 
                     <div

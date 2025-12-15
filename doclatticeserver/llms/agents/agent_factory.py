@@ -84,6 +84,12 @@ class UnifiedAgentFactory:
         if store_llm_messages is not None:
             persistence_flags["store_llm_messages"] = store_llm_messages
 
+        # Extract deps-specific kwargs that shouldn't go to AgentConfig
+        # These are passed directly to the agent's create method
+        deps_kwargs: dict[str, any] = {}
+        if "skip_approval_gate" in kwargs:
+            deps_kwargs["skip_approval_gate"] = kwargs.pop("skip_approval_gate")
+
         config = get_default_config(
             user_id=user_id,
             model_name=model or kwargs.get("model_name", "gpt-4o-mini"),
@@ -163,7 +169,7 @@ class UnifiedAgentFactory:
             )
 
             return await PydanticAIDocumentAgent.create(
-                document, corpus, config, framework_tools
+                document, corpus, config, framework_tools, **deps_kwargs
             )
         else:
             raise ValueError(f"Unsupported framework: {framework}")
@@ -229,6 +235,12 @@ class UnifiedAgentFactory:
         if store_llm_messages is not None:
             persistence_flags["store_llm_messages"] = store_llm_messages
 
+        # Extract deps-specific kwargs that shouldn't go to AgentConfig
+        # These are passed directly to the agent's create method
+        deps_kwargs: dict[str, any] = {}
+        if "skip_approval_gate" in kwargs:
+            deps_kwargs["skip_approval_gate"] = kwargs.pop("skip_approval_gate")
+
         config = get_default_config(
             user_id=user_id,
             model_name=model or kwargs.get("model_name", "gpt-4o-mini"),
@@ -292,7 +304,9 @@ class UnifiedAgentFactory:
                 PydanticAICorpusAgent,
             )
 
-            return await PydanticAICorpusAgent.create(corpus, config, framework_tools)
+            return await PydanticAICorpusAgent.create(
+                corpus, config, framework_tools, **deps_kwargs
+            )
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 

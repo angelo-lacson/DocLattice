@@ -466,6 +466,104 @@ class TestAgentConfigurationGraphQL(TestCase):
         agents = result["data"]["agents"]["edges"]
         self.assertEqual(len(agents), 2)
 
+    def test_query_agent_tools_returns_arrays(self):
+        """Test that availableTools and permissionRequiredTools are returned as arrays.
+
+        This test verifies the fix for the issue where JSONField values were not
+        being properly serialized as arrays in GraphQL responses, causing the
+        frontend to not display selected tools when editing an agent.
+        """
+        # Create agent with specific tools
+        agent = AgentConfiguration.objects.create(
+            name="Tool Test Agent",
+            description="Agent for testing tool array serialization",
+            system_instructions="Test instructions",
+            scope="GLOBAL",
+            available_tools=["similarity_search", "load_document_text", "search_exact_text"],
+            permission_required_tools=["update_corpus_description"],
+            creator=self.admin_user,
+            is_public=True,
+            is_active=True,
+        )
+
+        # Query the agent to verify tools are returned as arrays
+        agent_gid = to_global_id("AgentConfigurationType", agent.id)
+        query = f"""
+            query {{
+                agent(id: "{agent_gid}") {{
+                    id
+                    name
+                    availableTools
+                    permissionRequiredTools
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            query, context_value=type("Request", (), {"user": self.admin_user})()
+        )
+
+        # Verify no errors
+        self.assertIsNone(result.get("errors"))
+
+        # Verify the agent data
+        agent_data = result["data"]["agent"]
+        self.assertEqual(agent_data["name"], "Tool Test Agent")
+
+        # CRITICAL: Verify availableTools is an array with correct values
+        available_tools = agent_data["availableTools"]
+        self.assertIsInstance(available_tools, list, "availableTools should be a list")
+        self.assertEqual(len(available_tools), 3)
+        self.assertIn("similarity_search", available_tools)
+        self.assertIn("load_document_text", available_tools)
+        self.assertIn("search_exact_text", available_tools)
+
+        # CRITICAL: Verify permissionRequiredTools is an array with correct values
+        permission_tools = agent_data["permissionRequiredTools"]
+        self.assertIsInstance(permission_tools, list, "permissionRequiredTools should be a list")
+        self.assertEqual(len(permission_tools), 1)
+        self.assertIn("update_corpus_description", permission_tools)
+
+    def test_query_agent_empty_tools_returns_empty_arrays(self):
+        """Test that empty tool lists are returned as empty arrays, not null."""
+        # Create agent with no tools
+        agent = AgentConfiguration.objects.create(
+            name="No Tools Agent",
+            description="Agent with no tools",
+            system_instructions="Test instructions",
+            scope="GLOBAL",
+            available_tools=[],  # Empty list
+            permission_required_tools=[],  # Empty list
+            creator=self.admin_user,
+            is_public=True,
+            is_active=True,
+        )
+
+        agent_gid = to_global_id("AgentConfigurationType", agent.id)
+        query = f"""
+            query {{
+                agent(id: "{agent_gid}") {{
+                    id
+                    availableTools
+                    permissionRequiredTools
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            query, context_value=type("Request", (), {"user": self.admin_user})()
+        )
+
+        self.assertIsNone(result.get("errors"))
+
+        agent_data = result["data"]["agent"]
+
+        # Verify empty arrays are returned (not null)
+        self.assertIsInstance(agent_data["availableTools"], list)
+        self.assertEqual(agent_data["availableTools"], [])
+        self.assertIsInstance(agent_data["permissionRequiredTools"], list)
+        self.assertEqual(agent_data["permissionRequiredTools"], [])
+
     def test_create_global_agent_mutation(self):
         """Test creating a global agent via GraphQL mutation."""
         mutation = """
