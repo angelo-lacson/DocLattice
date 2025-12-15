@@ -3190,3 +3190,46 @@ export interface RestoreDeletedDocumentOutput {
     } | null;
   };
 }
+
+export const PERMANENTLY_DELETE_DOCUMENT = gql`
+  mutation PermanentlyDeleteDocument($documentId: ID!, $corpusId: ID!) {
+    permanentlyDeleteDocument(documentId: $documentId, corpusId: $corpusId) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface PermanentlyDeleteDocumentInput {
+  documentId: string;
+  corpusId: string;
+}
+
+export interface PermanentlyDeleteDocumentOutput {
+  permanentlyDeleteDocument: {
+    ok: boolean;
+    message: string;
+  };
+}
+
+export const EMPTY_TRASH = gql`
+  mutation EmptyTrash($corpusId: ID!) {
+    emptyTrash(corpusId: $corpusId) {
+      ok
+      message
+      deletedCount
+    }
+  }
+`;
+
+export interface EmptyTrashInput {
+  corpusId: string;
+}
+
+export interface EmptyTrashOutput {
+  emptyTrash: {
+    ok: boolean;
+    message: string;
+    deletedCount: number;
+  };
+}
