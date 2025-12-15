@@ -596,7 +596,8 @@ async def _run_agent_corpus_action_async(
     except Exception as e:
         # Update result with failure
         result.status = AgentActionResult.Status.FAILED
-        result.error_message = str(e)
+        # Truncate error message to prevent database bloat from long stack traces
+        result.error_message = str(e)[:1000]
         result.completed_at = timezone.now()
 
         @database_sync_to_async

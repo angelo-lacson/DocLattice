@@ -1883,10 +1883,8 @@ class AgentActionResultType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         return self.tools_executed or []
 
     def resolve_execution_metadata(self, info):
-        """Resolve execution_metadata as JSON."""
-        import json
-
-        return json.dumps(self.execution_metadata) if self.execution_metadata else "{}"
+        """Resolve execution_metadata as JSON dict."""
+        return self.execution_metadata or {}
 
     def resolve_duration_seconds(self, info):
         """Resolve duration from the model property."""

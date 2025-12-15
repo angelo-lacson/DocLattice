@@ -107,7 +107,8 @@ def handle_document_processing_complete(sender, document, user_id, **kwargs):
         user_id: The ID of the user who created the document
     """
     # Get all corpuses this document belongs to
-    corpuses = Corpus.objects.filter(documents=document)
+    # Use select_related to avoid N+1 queries when accessing creator
+    corpuses = Corpus.objects.filter(documents=document).select_related("creator")
 
     if not corpuses.exists():
         logger.debug(
