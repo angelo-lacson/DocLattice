@@ -2360,34 +2360,13 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Anonymous users can only see public conversations.
         Authenticated users can see public, their own, or explicitly shared.
         """
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        logger.info(f"🔍 ConversationType.get_node called with id: {id}")
-        logger.info(f"   User: {info.context.user}")
-        logger.info(f"   User type: {type(info.context.user)}")
-        is_auth = (
-            info.context.user.is_authenticated
-            if hasattr(info.context.user, "is_authenticated")
-            else "N/A"
-        )
-        logger.info(f"   Is authenticated: {is_auth}")
+        if id is None:
+            return None
 
         try:
             queryset = Conversation.objects.visible_to_user(info.context.user)
-            logger.info(f"   Queryset count: {queryset.count()}")
-
-            conversation = queryset.get(pk=id)
-            logger.info(
-                f"   ✅ Found conversation: {conversation.id} - {conversation.title}"
-            )
-            return conversation
+            return queryset.get(pk=id)
         except Conversation.DoesNotExist:
-            logger.warning(f"   ❌ Conversation {id} not found or not visible to user")
-            return None
-        except Exception as e:
-            logger.error(f"   ❌ Error in get_node: {e}", exc_info=True)
             return None
 
     class Meta:
