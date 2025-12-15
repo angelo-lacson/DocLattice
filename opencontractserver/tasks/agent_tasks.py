@@ -472,6 +472,7 @@ async def _run_agent_corpus_action_async(
     """Async implementation of agent corpus action execution."""
     from channels.db import database_sync_to_async
     from django.conf import settings
+    from django.db import transaction
     from django.utils import timezone
 
     from opencontractserver.agents.models import AgentActionResult
@@ -491,27 +492,51 @@ async def _run_agent_corpus_action_async(
         f"'{document.title}' (id={document_id})"
     )
 
-    # Create or get result record
+    # Create or get result record with row-level locking to prevent race conditions.
+    # Uses select_for_update() to ensure only one task can process a given
+    # (corpus_action, document) pair at a time.
     @database_sync_to_async
     def get_or_create_result():
-        return AgentActionResult.objects.get_or_create(
-            corpus_action=action,
-            document=document,
-            defaults={
-                "creator_id": user_id,
-                "status": AgentActionResult.Status.RUNNING,
-                "started_at": timezone.now(),
-            },
-        )
+        with transaction.atomic():
+            # Try to get existing record with row lock
+            existing = (
+                AgentActionResult.objects.select_for_update()
+                .filter(
+                    corpus_action=action,
+                    document=document,
+                )
+                .first()
+            )
+
+            if existing:
+                return existing, False
+
+            # Create new record if none exists
+            return (
+                AgentActionResult.objects.create(
+                    corpus_action=action,
+                    document=document,
+                    creator_id=user_id,
+                    status=AgentActionResult.Status.RUNNING,
+                    started_at=timezone.now(),
+                ),
+                True,
+            )
 
     result, created = await get_or_create_result()
 
-    # If already completed successfully, skip re-execution
-    if not created and result.status == AgentActionResult.Status.COMPLETED:
+    # Skip re-execution if already completed or currently running.
+    # This prevents duplicate agent executions from race conditions (e.g., Celery
+    # task retries, simultaneous signal triggers).
+    if not created and result.status in (
+        AgentActionResult.Status.COMPLETED,
+        AgentActionResult.Status.RUNNING,
+    ):
         logger.info(
-            f"[AgentCorpusAction] Already completed for doc {document_id}, skipping"
+            f"[AgentCorpusAction] Already {result.status} for doc {document_id}, "
+            "skipping"
         )
-        return {"status": "already_completed", "result_id": result.id}
+        return {"status": f"already_{result.status}", "result_id": result.id}
 
     # Update status to running
     result.status = AgentActionResult.Status.RUNNING
