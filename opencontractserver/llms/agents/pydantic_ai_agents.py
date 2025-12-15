@@ -1116,9 +1116,13 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     break
 
             # Helper stub ctx carrying call-id for wrappers that expect it.
+            class _EmptyDeps:  # noqa: D401 – simple placeholder for deps
+                skip_approval_gate = True
+
             class _EmptyCtx:  # noqa: D401 – simple placeholder
                 tool_call_id = pending.get("tool_call_id")
                 skip_approval_gate = True
+                deps = _EmptyDeps()
 
             import inspect
 

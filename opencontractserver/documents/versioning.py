@@ -683,12 +683,14 @@ def permanently_delete_document(
         )
 
         # Step 5: Delete relationships involving these annotations first (FK constraint)
+        # Use Q objects to delete in one operation to avoid counting duplicates
+        # (same relationship could have both source and target in annotation_ids)
+        from django.db.models import Q
+
         annotation_ids = list(user_annotations.values_list("id", flat=True))
         relationship_count = Relationship.objects.filter(
-            source_annotations__id__in=annotation_ids
-        ).delete()[0]
-        relationship_count += Relationship.objects.filter(
-            target_annotations__id__in=annotation_ids
+            Q(source_annotations__id__in=annotation_ids)
+            | Q(target_annotations__id__in=annotation_ids)
         ).delete()[0]
         logger.debug(f"Deleted {relationship_count} Relationship records")
 
@@ -723,12 +725,25 @@ def permanently_delete_all_in_trash(
     """
     Permanently delete ALL soft-deleted documents in a corpus (empty trash).
 
+    This function processes deletions one-by-one and allows partial success.
+    Each document deletion is wrapped in its own atomic transaction via
+    `permanently_delete_document`, so if one fails, others may still succeed.
+
+    Design Decision: Partial deletions are intentionally allowed because:
+    1. Document-level isolation: Each document's deletion is independent
+    2. Better UX: Users get feedback on what succeeded/failed
+    3. Recoverability: Failed items remain in trash for retry
+    4. Each individual deletion is fully atomic (all-or-nothing at doc level)
+
     Args:
         corpus: The corpus to empty trash for
         user: The user performing the deletion
 
     Returns:
-        Tuple of (deleted_count, list_of_errors)
+        Tuple of (deleted_count, list_of_errors) where:
+        - deleted_count: Number of documents successfully deleted
+        - list_of_errors: List of error messages for failed deletions
+        Note: deleted_count > 0 with non-empty errors indicates partial success.
     """
     # Get all currently soft-deleted documents
     deleted_paths = DocumentPath.objects.filter(

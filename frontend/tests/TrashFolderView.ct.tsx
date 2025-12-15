@@ -232,14 +232,17 @@ test.describe("TrashFolderView", () => {
     await expect(page.getByText("Empty Trash")).not.toBeVisible();
   });
 
-  test("empty trash button is disabled", async ({ mount, page }) => {
+  test("empty trash button is enabled when trash has items", async ({
+    mount,
+    page,
+  }) => {
     await mount(<TrashFolderViewTestWrapper />);
 
     await page.waitForSelector('text="Deleted Document 1"', { timeout: 10000 });
 
     const emptyTrashButton = page.getByRole("button", { name: /Empty Trash/ });
     await expect(emptyTrashButton).toBeVisible();
-    await expect(emptyTrashButton).toBeDisabled();
+    await expect(emptyTrashButton).toBeEnabled();
   });
 
   test("shows partial success and failure on bulk restore", async ({

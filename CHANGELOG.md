@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Permanent Deletion (Empty Trash) Functionality (PR #707)
+- **Core deletion logic** (`opencontractserver/documents/versioning.py:617-760`):
+  - `permanently_delete_document()`: Irreversible deletion with cascade cleanup
+  - `permanently_delete_all_in_trash()`: Bulk deletion (empty trash) with partial success support
+- **Cascade cleanup** deletes:
+  - All DocumentPath records for the document in the corpus (entire history)
+  - User annotations (non-structural) on the document
+  - Relationships involving those annotations (uses Q objects to avoid duplicate counting)
+  - DocumentSummaryRevision records for the document+corpus
+  - The Document itself if no other corpus references it (Rule Q1)
+- **Service layer** (`opencontractserver/corpuses/folder_service.py:1096-1181`): Permission-checked wrappers
+- **GraphQL mutations** (`config/graphql/mutations.py:4069-4187`):
+  - `PermanentlyDeleteDocument`: Delete single soft-deleted document
+  - `EmptyTrash`: Delete all soft-deleted documents in corpus
+  - Both enforce DELETE permission via django-guardian
+- **Frontend UI** (`frontend/src/components/corpuses/folders/TrashFolderView.tsx`):
+  - "Empty Trash" button with confirmation modal
+  - Warning message explaining what will be permanently deleted
+  - Auto-dismiss success/error messages with configurable durations
+  - TypeScript type safety for all mutation responses
+- **Comprehensive test suite** (`opencontractserver/tests/test_permanent_deletion.py`): 34 tests covering core logic, cascade cleanup, Rule Q1, permissions, GraphQL mutations, and edge cases
+
+### Technical Details
+- Partial deletions are allowed in bulk operations (each document deletion is atomic)
+- Structural annotations are preserved (shared via StructuralAnnotationSet)
+- Corpus-isolated deletion: Only affects target corpus, other corpus references preserved
+- Composite index `[corpus, is_current, is_deleted]` on DocumentPath for efficient trash queries
+
 #### Social Media Preview (OG Metadata) System (PR #701)
 - **Cloudflare Worker for social media previews** (`cloudflare-og-worker/`): Intercepts requests from social media crawlers (Facebook, Twitter, LinkedIn, Discord, Slack, etc.) and returns HTML with Open Graph meta tags for rich link previews
 - **Public OG metadata GraphQL queries** (`config/graphql/queries.py:3235-3403`): New unauthenticated queries for fetching public corpus, document, thread, and extract metadata
