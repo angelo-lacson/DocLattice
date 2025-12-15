@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.db.models.signals import m2m_changed
+from django.dispatch import Signal
 from django.utils import timezone
 
 from config.telemetry import record_event
@@ -20,6 +21,11 @@ from opencontractserver.tasks.embeddings_task import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Custom signal fired when document processing (parsing, thumbnailing) completes.
+# This is used to defer corpus actions until documents are fully ready.
+# Provides: document (Document instance), user_id (int)
+document_processing_complete = Signal()
 
 # Static dispatch UID for document creation signal
 DOC_CREATE_UID = "process_doc_on_create_atomic"

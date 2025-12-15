@@ -50,6 +50,13 @@ class PydanticAIDependencies(BaseModel):
         description="Side-channel callback that receives UnifiedStreamEvent objects",
     )
 
+    # Flag to bypass tool approval gates for automated/pre-authorized execution
+    # Used by agent-based corpus actions where tools are pre-authorized
+    skip_approval_gate: bool = Field(
+        default=False,
+        description="If True, skip approval prompts for all tools in this agent",
+    )
+
 
 class PydanticAIToolWrapper:
     """Modern Pydantic AI tool wrapper following latest patterns."""
@@ -116,9 +123,9 @@ class PydanticAIToolWrapper:
 
         def _maybe_raise(ctx: RunContext[PydanticAIDependencies], *a, **kw):
             """Raise ToolConfirmationRequired if this CoreTool needs approval."""
-            if self.core_tool.requires_approval and not getattr(
-                ctx, "skip_approval_gate", False
-            ):
+            # Check if approval is bypassed via deps (for automated corpus actions)
+            skip_approval = getattr(ctx.deps, "skip_approval_gate", False) if ctx.deps else False
+            if self.core_tool.requires_approval and not skip_approval:
                 bound = inspect.signature(original_func).bind(*a, **kw)
                 bound.apply_defaults()
 

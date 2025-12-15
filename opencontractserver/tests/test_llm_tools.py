@@ -18,13 +18,16 @@ from opencontractserver.llms.tools.core_tools import (
     add_document_note,
     aduplicate_annotations_with_label,
     aget_corpus_description,
+    aget_document_description,
     aload_document_txt_extract,
     asearch_document_notes,
     asearch_exact_text_as_sources,
     aupdate_corpus_description,
+    aupdate_document_description,
     aupdate_document_note,
     duplicate_annotations_with_label,
     get_corpus_description,
+    get_document_description,
     get_document_summary,
     get_document_summary_at_version,
     get_document_summary_diff,
@@ -33,6 +36,7 @@ from opencontractserver.llms.tools.core_tools import (
     search_document_notes,
     search_exact_text_as_sources,
     update_corpus_description,
+    update_document_description,
     update_document_note,
     update_document_summary,
 )
@@ -503,6 +507,95 @@ class TestLLMTools(TestCase):
 
         with self.assertRaisesRegex(ValueError, "Version 5 not found"):
             get_document_summary_at_version(self.doc.id, self.corpus.id, 5)
+
+    # ------------------------------------------------------------------
+    # Tests for document description helpers
+    # ------------------------------------------------------------------
+
+    def test_get_document_description(self):
+        """Test retrieving document description."""
+        # Document already has description from setUp
+        result = get_document_description(self.doc.id)
+        self.assertEqual(result, "Test Description")
+
+    def test_get_document_description_empty(self):
+        """Test retrieving description when it's empty."""
+        doc_no_desc = Document.objects.create(
+            creator=self.user,
+            title="No Description Doc",
+        )
+
+        result = get_document_description(doc_no_desc.id)
+        self.assertEqual(result, "")
+
+    def test_get_document_description_truncation_from_start(self):
+        """Test retrieving description with truncation from start."""
+        result = get_document_description(self.doc.id, truncate_length=4, from_start=True)
+        self.assertEqual(result, "Test")
+
+    def test_get_document_description_truncation_from_end(self):
+        """Test retrieving description with truncation from end."""
+        result = get_document_description(
+            self.doc.id, truncate_length=11, from_start=False
+        )
+        self.assertEqual(result, "Description")
+
+    def test_get_document_description_invalid_document(self):
+        """Test retrieving description for non-existent document."""
+        with self.assertRaisesRegex(
+            ValueError, "Document with id=999999 does not exist"
+        ):
+            get_document_description(999999)
+
+    def test_update_document_description(self):
+        """Test updating document description."""
+        new_description = "Updated description content"
+        result = update_document_description(
+            document_id=self.doc.id,
+            new_description=new_description,
+        )
+
+        self.assertTrue(result["updated"])
+        self.assertEqual(result["document_id"], self.doc.id)
+        self.assertIn("Test Description", result["previous_description"])
+        self.assertIn("Updated description", result["new_description_preview"])
+
+        # Verify actual change
+        self.doc.refresh_from_db()
+        self.assertEqual(self.doc.description, new_description)
+
+    def test_update_document_description_no_change(self):
+        """Test updating description with same content returns no change."""
+        result = update_document_description(
+            document_id=self.doc.id,
+            new_description="Test Description",  # Same as current
+        )
+
+        self.assertFalse(result["updated"])
+        self.assertEqual(result["message"], "No change in description")
+
+    def test_update_document_description_to_empty(self):
+        """Test updating description to empty string."""
+        result = update_document_description(
+            document_id=self.doc.id,
+            new_description="",
+        )
+
+        self.assertTrue(result["updated"])
+
+        # Verify actual change
+        self.doc.refresh_from_db()
+        self.assertEqual(self.doc.description, "")
+
+    def test_update_document_description_invalid_document(self):
+        """Test updating description for non-existent document."""
+        with self.assertRaisesRegex(
+            ValueError, "Document with id=999999 does not exist"
+        ):
+            update_document_description(
+                document_id=999999,
+                new_description="New description",
+            )
 
     # ------------------------------------------------------------------
     # Tests for exact text search and SourceNode transformation
@@ -1851,3 +1944,82 @@ class AsyncTestSearchExactTextAsSources(TransactionTestCase):
 
         # All should be negative
         self.assertTrue(all(aid < 0 for aid in annotation_ids))
+
+
+class AsyncTestUpdateDocumentDescription(TransactionTestCase):
+    """Async tests ensuring :func:`aupdate_document_description` behaves correctly."""
+
+    def setUp(self):  # noqa: D401 – simple helper, not public API
+        """Prepare a fresh document with an initial description for every test."""
+        self.user = User.objects.create_user(
+            username="async_desc_user", password="pw"
+        )
+        self.doc = Document.objects.create(
+            creator=self.user,
+            title="Test Document",
+            description="Initial description",
+        )
+
+    # ------------------------------------------------------------------
+    # Success paths
+    # ------------------------------------------------------------------
+
+    async def test_aget_document_description(self):
+        """Test async retrieval of document description."""
+        result = await aget_document_description(self.doc.id)
+        self.assertEqual(result, "Initial description")
+
+    async def test_aget_document_description_with_truncation(self):
+        """Test async retrieval with truncation."""
+        result = await aget_document_description(
+            self.doc.id, truncate_length=7, from_start=True
+        )
+        self.assertEqual(result, "Initial")
+
+    async def test_aupdate_document_description(self):
+        """Test async update of document description."""
+        new_description = "Updated async description"
+        result = await aupdate_document_description(
+            document_id=self.doc.id,
+            new_description=new_description,
+        )
+
+        self.assertTrue(result["updated"])
+        self.assertEqual(result["document_id"], self.doc.id)
+
+        # Verify actual change
+        from channels.db import database_sync_to_async
+
+        doc = await database_sync_to_async(Document.objects.get)(pk=self.doc.id)
+        self.assertEqual(doc.description, new_description)
+
+    async def test_aupdate_document_description_no_change(self):
+        """Test async update with no change returns appropriate response."""
+        result = await aupdate_document_description(
+            document_id=self.doc.id,
+            new_description="Initial description",  # Same as current
+        )
+
+        self.assertFalse(result["updated"])
+        self.assertEqual(result["message"], "No change in description")
+
+    # ------------------------------------------------------------------
+    # Failure paths
+    # ------------------------------------------------------------------
+
+    async def test_aget_document_description_invalid_document(self):
+        """Test async retrieval for non-existent document."""
+        with self.assertRaisesRegex(
+            ValueError, "Document with id=999999 does not exist"
+        ):
+            await aget_document_description(999999)
+
+    async def test_aupdate_document_description_invalid_document(self):
+        """Test async update for non-existent document."""
+        with self.assertRaisesRegex(
+            ValueError, "Document with id=999999 does not exist"
+        ):
+            await aupdate_document_description(
+                document_id=999999,
+                new_description="New description",
+            )

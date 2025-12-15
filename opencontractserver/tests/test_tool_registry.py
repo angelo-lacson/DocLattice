@@ -36,8 +36,8 @@ class TestToolRegistry:
         assert result["name"] == "test_tool"
         assert result["description"] == "A test tool"
         assert result["category"] == "search"
-        assert result["requires_corpus"] is True
-        assert result["requires_approval"] is True
+        assert result["requiresCorpus"] is True
+        assert result["requiresApproval"] is True
         assert len(result["parameters"]) == 2
         assert result["parameters"][0] == {
             "name": "query",
@@ -183,21 +183,21 @@ class TestToolRegistry:
         # update_corpus_description should require approval
         tool = get_tool_by_name("update_corpus_description")
         assert tool is not None
-        assert tool["requires_approval"] is True
+        assert tool["requiresApproval"] is True
 
         # similarity_search should not require approval
         tool = get_tool_by_name("similarity_search")
         assert tool is not None
-        assert tool["requires_approval"] is False
+        assert tool["requiresApproval"] is False
 
     def test_corpus_required_tools_marked(self):
         """Test that tools requiring corpus are marked correctly."""
         # get_corpus_description requires corpus
         tool = get_tool_by_name("get_corpus_description")
         assert tool is not None
-        assert tool["requires_corpus"] is True
+        assert tool["requiresCorpus"] is True
 
         # similarity_search doesn't require corpus
         tool = get_tool_by_name("similarity_search")
         assert tool is not None
-        assert tool["requires_corpus"] is False
+        assert tool["requiresCorpus"] is False

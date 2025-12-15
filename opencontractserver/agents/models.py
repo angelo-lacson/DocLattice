@@ -181,3 +181,158 @@ class AgentConfigurationGroupObjectPermission(GroupObjectPermissionBase):
     """Permissions for AgentConfiguration objects at the group level."""
 
     content_object = models.ForeignKey("AgentConfiguration", on_delete=models.CASCADE)
+
+
+# --------------------------------------------------------------------------- #
+# AgentActionResult - Stores results from agent-based corpus actions
+# --------------------------------------------------------------------------- #
+
+
+class AgentActionResultQuerySet(models.QuerySet):
+    """QuerySet with permission filtering for AgentActionResult."""
+
+    def visible_to_user(self, user):
+        """
+        Return results visible to the user based on corpus permissions.
+        Users can see results for corpuses they have access to.
+        """
+        from opencontractserver.corpuses.models import Corpus
+
+        if not user or not user.is_authenticated:
+            # Anonymous users see results for public corpuses only
+            return self.filter(corpus_action__corpus__is_public=True)
+
+        if user.is_superuser:
+            return self.all()
+
+        # Users see results for corpuses they can access
+        accessible_corpuses = Corpus.objects.visible_to_user(user)
+        return self.filter(corpus_action__corpus__in=accessible_corpuses).distinct()
+
+
+class AgentActionResultManager(BaseVisibilityManager):
+    """Manager for AgentActionResult with permission filtering."""
+
+    def get_queryset(self):
+        return AgentActionResultQuerySet(self.model, using=self._db)
+
+    def visible_to_user(self, user):
+        return self.get_queryset().visible_to_user(user)
+
+
+class AgentActionResult(BaseOCModel):
+    """
+    Stores results from agent-based corpus actions.
+    One record per (corpus_action, document) execution.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    corpus_action = models.ForeignKey(
+        "corpuses.CorpusAction",
+        on_delete=models.CASCADE,
+        related_name="agent_results",
+        help_text="The corpus action that triggered this execution",
+    )
+    document = models.ForeignKey(
+        "documents.Document",
+        on_delete=models.CASCADE,
+        related_name="agent_action_results",
+        help_text="The document this action was run on",
+    )
+    conversation = models.ForeignKey(
+        "conversations.Conversation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="corpus_action_results",
+        help_text="Conversation record containing the full agent interaction",
+    )
+
+    # Execution tracking
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Results
+    agent_response = models.TextField(
+        blank=True,
+        help_text="Final response content from the agent",
+    )
+    tools_executed = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of tools executed: [{name, args, result, timestamp}]",
+    )
+    error_message = models.TextField(
+        blank=True,
+        help_text="Error message if status is FAILED",
+    )
+
+    # Audit trail
+    execution_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional execution metadata (model used, token counts, etc.)",
+    )
+
+    # Manager
+    objects = AgentActionResultManager()
+
+    class Meta:
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["corpus_action", "document"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["started_at"]),
+        ]
+        # Unique constraint: one result per (corpus_action, document) combination
+        # This prevents duplicate executions for the same action+document
+        constraints = [
+            models.UniqueConstraint(
+                fields=["corpus_action", "document"],
+                name="unique_corpus_action_document_result",
+            )
+        ]
+        permissions = (
+            ("permission_agentactionresult", "permission agentactionresult"),
+            ("publish_agentactionresult", "publish agentactionresult"),
+            ("create_agentactionresult", "create agentactionresult"),
+            ("read_agentactionresult", "read agentactionresult"),
+            ("update_agentactionresult", "update agentactionresult"),
+            ("remove_agentactionresult", "delete agentactionresult"),
+        )
+
+    def __str__(self):
+        return (
+            f"AgentActionResult({self.corpus_action.name} on doc {self.document_id}: "
+            f"{self.status})"
+        )
+
+    @property
+    def duration_seconds(self) -> float | None:
+        """Calculate execution duration in seconds."""
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
+
+
+class AgentActionResultUserObjectPermission(UserObjectPermissionBase):
+    """Permissions for AgentActionResult objects at the user level."""
+
+    content_object = models.ForeignKey("AgentActionResult", on_delete=models.CASCADE)
+
+
+class AgentActionResultGroupObjectPermission(GroupObjectPermissionBase):
+    """Permissions for AgentActionResult objects at the group level."""
+
+    content_object = models.ForeignKey("AgentActionResult", on_delete=models.CASCADE)

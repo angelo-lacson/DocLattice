@@ -4,6 +4,7 @@ from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
+from opencontractserver.agents.models import AgentConfiguration
 from opencontractserver.analyzer.models import Analyzer
 from opencontractserver.corpuses.models import Corpus, CorpusAction
 from opencontractserver.extracts.models import Fieldset
@@ -46,6 +47,18 @@ class CorpusActionMutationTestCase(TestCase):
             description="Test Description",
             creator=self.user,
             task_name="totally.not.a.real.task",
+        )
+
+        # Create test agent configuration
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Test Agent Config",
+            description="Test agent configuration",
+            system_instructions="You are a helpful assistant",
+            is_active=True,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, self.agent_config, [PermissionTypes.CRUD]
         )
 
     def test_create_corpus_action_with_fieldset(self):
@@ -188,7 +201,7 @@ class CorpusActionMutationTestCase(TestCase):
         self.assertFalse(result["data"]["createCorpusAction"]["ok"])
         self.assertEqual(
             result["data"]["createCorpusAction"]["message"],
-            "Exactly one of fieldset_id or analyzer_id must be provided",
+            "Exactly one of fieldset_id, analyzer_id, or agent_config_id must be provided",
         )
 
     def test_delete_corpus_action(self):
@@ -285,4 +298,146 @@ class CorpusActionMutationTestCase(TestCase):
         self.assertEqual(len(result["data"]["corpusActions"]["edges"]), 1)
         self.assertEqual(
             result["data"]["corpusActions"]["edges"][0]["node"]["name"], "Test Action 2"
+        )
+
+    def test_create_corpus_action_with_agent_config(self):
+        """Test creating a corpus action with an agent configuration."""
+        mutation = """
+            mutation CreateCorpusAction(
+                $corpusId: ID!,
+                $name: String,
+                $trigger: String!,
+                $agentConfigId: ID,
+                $agentPrompt: String,
+                $preAuthorizedTools: [String],
+                $disabled: Boolean
+            ) {
+                createCorpusAction(
+                    corpusId: $corpusId,
+                    name: $name,
+                    trigger: $trigger,
+                    agentConfigId: $agentConfigId,
+                    agentPrompt: $agentPrompt,
+                    preAuthorizedTools: $preAuthorizedTools,
+                    disabled: $disabled
+                ) {
+                    ok
+                    message
+                    obj {
+                        id
+                        name
+                        trigger
+                        disabled
+                        agentPrompt
+                        preAuthorizedTools
+                    }
+                }
+            }
+        """
+
+        variables = {
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
+            "name": "Test Agent Action",
+            "trigger": "add_document",
+            "agentConfigId": to_global_id("AgentConfigurationType", self.agent_config.id),
+            "agentPrompt": "Summarize this document and update its description",
+            "preAuthorizedTools": ["update_document_description", "search_annotations"],
+            "disabled": False,
+        }
+
+        result = self.client.execute(mutation, variables=variables)
+
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["createCorpusAction"]["ok"])
+        self.assertEqual(
+            result["data"]["createCorpusAction"]["message"],
+            "Successfully created corpus action",
+        )
+        self.assertEqual(
+            result["data"]["createCorpusAction"]["obj"]["name"], "Test Agent Action"
+        )
+        self.assertEqual(
+            result["data"]["createCorpusAction"]["obj"]["trigger"], "ADD_DOCUMENT"
+        )
+        self.assertEqual(
+            result["data"]["createCorpusAction"]["obj"]["agentPrompt"],
+            "Summarize this document and update its description",
+        )
+        self.assertEqual(
+            result["data"]["createCorpusAction"]["obj"]["preAuthorizedTools"],
+            ["update_document_description", "search_annotations"],
+        )
+
+    def test_create_corpus_action_with_agent_config_missing_prompt(self):
+        """Test that creating an agent action without a prompt fails."""
+        mutation = """
+            mutation CreateCorpusAction(
+                $corpusId: ID!,
+                $trigger: String!,
+                $agentConfigId: ID
+            ) {
+                createCorpusAction(
+                    corpusId: $corpusId,
+                    trigger: $trigger,
+                    agentConfigId: $agentConfigId
+                ) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        variables = {
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
+            "trigger": "add_document",
+            "agentConfigId": to_global_id("AgentConfigurationType", self.agent_config.id),
+        }
+
+        result = self.client.execute(mutation, variables=variables)
+
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["createCorpusAction"]["ok"])
+        self.assertEqual(
+            result["data"]["createCorpusAction"]["message"],
+            "agent_prompt is required when agent_config_id is provided",
+        )
+
+    def test_create_corpus_action_with_agent_and_fieldset_fails(self):
+        """Test that providing both agent_config and fieldset fails."""
+        mutation = """
+            mutation CreateCorpusAction(
+                $corpusId: ID!,
+                $trigger: String!,
+                $agentConfigId: ID,
+                $agentPrompt: String,
+                $fieldsetId: ID
+            ) {
+                createCorpusAction(
+                    corpusId: $corpusId,
+                    trigger: $trigger,
+                    agentConfigId: $agentConfigId,
+                    agentPrompt: $agentPrompt,
+                    fieldsetId: $fieldsetId
+                ) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        variables = {
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
+            "trigger": "add_document",
+            "agentConfigId": to_global_id("AgentConfigurationType", self.agent_config.id),
+            "agentPrompt": "Test prompt",
+            "fieldsetId": to_global_id("FieldsetType", self.fieldset.id),
+        }
+
+        result = self.client.execute(mutation, variables=variables)
+
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["createCorpusAction"]["ok"])
+        self.assertEqual(
+            result["data"]["createCorpusAction"]["message"],
+            "Exactly one of fieldset_id, analyzer_id, or agent_config_id must be provided",
         )

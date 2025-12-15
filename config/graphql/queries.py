@@ -52,6 +52,7 @@ from config.graphql.graphene_types import (
     ColumnType,
     CommunityStatsType,
     ConversationType,
+    AgentActionResultType,
     CorpusActionType,
     CorpusFolderType,
     CorpusQueryType,
@@ -2177,6 +2178,43 @@ class Query(graphene.ObjectType):
         disabled = kwargs.get("disabled")
         if disabled is not None:
             queryset = queryset.filter(disabled=disabled)
+
+        return queryset.order_by("-created")
+
+    agent_action_results = DjangoConnectionField(
+        AgentActionResultType,
+        corpus_action_id=graphene.ID(required=False),
+        document_id=graphene.ID(required=False),
+        status=graphene.String(required=False),
+    )
+
+    @login_required
+    def resolve_agent_action_results(self, info, **kwargs):
+        """
+        Resolver for agent_action_results that returns results visible to the current user.
+        Can be filtered by corpus_action_id, document_id, and status.
+        """
+        from opencontractserver.agents.models import AgentActionResult
+
+        user = info.context.user
+        queryset = AgentActionResult.objects.visible_to_user(user)
+
+        # Filter by corpus_action if provided
+        corpus_action_id = kwargs.get("corpus_action_id")
+        if corpus_action_id:
+            corpus_action_pk = from_global_id(corpus_action_id)[1]
+            queryset = queryset.filter(corpus_action_id=corpus_action_pk)
+
+        # Filter by document if provided
+        document_id = kwargs.get("document_id")
+        if document_id:
+            document_pk = from_global_id(document_id)[1]
+            queryset = queryset.filter(document_id=document_pk)
+
+        # Filter by status if provided
+        status = kwargs.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
 
         return queryset.order_by("-created")
 

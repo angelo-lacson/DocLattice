@@ -144,15 +144,36 @@ def process_analyzer(
 
 @shared_task
 def process_corpus_action(
-    corpus_id: str | int, document_ids: list[str | int], user_id: str | int
+    corpus_id: str | int,
+    document_ids: list[str | int],
+    user_id: str | int,
+    trigger: str | None = None,
 ):
+    """
+    Process corpus actions for given documents.
 
-    logger.info("process_corpus_action()...")
-
-    actions = CorpusAction.objects.filter(
-        Q(corpus_id=corpus_id, disabled=False)
-        | Q(run_on_all_corpuses=True, disabled=False)
+    Args:
+        corpus_id: The corpus ID
+        document_ids: List of document IDs to process
+        user_id: The user ID who triggered the action
+        trigger: Optional trigger type to filter actions by (e.g., "add_document", "edit_document").
+                 If None, all non-disabled actions for the corpus will run.
+    """
+    logger.info(
+        f"process_corpus_action() - corpus_id={corpus_id}, "
+        f"document_ids={document_ids}, trigger={trigger}"
     )
+
+    # Build the base query for corpus actions
+    base_query = Q(corpus_id=corpus_id, disabled=False) | Q(
+        run_on_all_corpuses=True, disabled=False
+    )
+
+    # Filter by trigger type if specified
+    if trigger:
+        base_query &= Q(trigger=trigger)
+
+    actions = CorpusAction.objects.filter(base_query)
 
     for action in actions:
 
@@ -228,9 +249,25 @@ def process_corpus_action(
                 corpus_action=action,
             )
 
+        elif action.agent_config:
+            # Agent-based corpus action
+            from opencontractserver.tasks.agent_tasks import run_agent_corpus_action
+
+            logger.info(
+                f"Triggering agent corpus action '{action.name}' "
+                f"for {len(document_ids)} document(s)"
+            )
+
+            for document_id in document_ids:
+                run_agent_corpus_action.delay(
+                    corpus_action_id=action.id,
+                    document_id=document_id,
+                    user_id=user_id,
+                )
+
         else:
             raise ValueError(
-                "Unexpected action configuration... no analyzer or fieldset."
+                "Unexpected action configuration... no analyzer, fieldset, or agent_config."
             )
 
     return True

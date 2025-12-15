@@ -657,7 +657,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
     <Container>
       <SectionHeader>
         <SectionTitle as="h3">
-          <Icon name="microchip" /> Corpus Agents
+          <Icon name="microchip" /> Agent Configurations
         </SectionTitle>
         <Button
           primary
@@ -675,9 +675,23 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
       </SectionHeader>
 
       <HelperText>
-        Create custom AI agents specifically for this corpus. Corpus agents can
-        be tailored with specialized instructions and tools for analyzing
-        documents in this collection.
+        Create agent configurations for this corpus. These define the AI's
+        capabilities, instructions, and available tools. The same configuration
+        can be used in different contexts:
+        <ul style={{ margin: "0.5rem 0 0 1.25rem", padding: 0 }}>
+          <li>
+            <strong>Corpus Actions</strong> — Agent operates on{" "}
+            <em>individual documents</em> when triggered by add/edit events
+          </li>
+          <li>
+            <strong>Corpus Chat</strong> — Agent can access the{" "}
+            <em>entire corpus</em> for research and analysis
+          </li>
+          <li>
+            <strong>Document Chat</strong> — Agent focuses on a{" "}
+            <em>single document</em> for detailed Q&A
+          </li>
+        </ul>
       </HelperText>
 
       {agents.length === 0 ? (
@@ -685,10 +699,10 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
           <EmptyStateIcon>
             <Icon name="microchip" size="large" />
           </EmptyStateIcon>
-          <EmptyStateTitle>No Corpus Agents</EmptyStateTitle>
+          <EmptyStateTitle>No Agent Configurations</EmptyStateTitle>
           <EmptyStateDescription>
-            Create your first corpus-specific agent to provide specialized AI
-            assistance for documents in this corpus.
+            Create an agent configuration to enable AI-powered actions, chat,
+            and document analysis for this corpus.
           </EmptyStateDescription>
           <Button
             primary
@@ -790,8 +804,24 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
         onClose={() => setShowCreateModal(false)}
         size="large"
       >
-        <Modal.Header>Create Corpus Agent</Modal.Header>
+        <Modal.Header>Create Agent Configuration</Modal.Header>
         <Modal.Content scrolling>
+          <Message info size="small" style={{ marginBottom: "1rem" }}>
+            <Message.Header>How Agent Scope Works</Message.Header>
+            <p style={{ marginTop: "0.5rem" }}>
+              This configuration defines the agent's capabilities. When used:
+            </p>
+            <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
+              <li>
+                In <strong>Corpus Actions</strong>: Agent processes individual
+                documents automatically
+              </li>
+              <li>
+                In <strong>Chat</strong>: Agent scope depends on the
+                conversation context (document or corpus)
+              </li>
+            </ul>
+          </Message>
           <Form>
             <Form.Field required>
               <label>Name</label>
@@ -1009,7 +1039,9 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
         onClose={() => setShowEditModal(false)}
         size="large"
       >
-        <Modal.Header>Edit Agent: {agentToEdit?.name}</Modal.Header>
+        <Modal.Header>
+          Edit Agent Configuration: {agentToEdit?.name}
+        </Modal.Header>
         <Modal.Content scrolling>
           <Form>
             <Form.Field required>
