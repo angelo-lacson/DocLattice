@@ -39,6 +39,7 @@ from config.graphql.filters import (
     UserBadgeFilter,
 )
 from config.graphql.graphene_types import (
+    AgentActionResultType,
     AgentConfigurationType,
     AnalysisType,
     AnalyzerType,
@@ -52,7 +53,6 @@ from config.graphql.graphene_types import (
     ColumnType,
     CommunityStatsType,
     ConversationType,
-    AgentActionResultType,
     CorpusActionType,
     CorpusFolderType,
     CorpusQueryType,
@@ -2219,48 +2219,6 @@ class Query(graphene.ObjectType):
         return queryset.order_by("-created")
 
     conversation = relay.Node.Field(ConversationType)
-
-    def resolve_conversation(self, info, **kwargs):
-        """
-        Resolver to fetch a single Conversation by ID.
-
-        Anonymous users can see public conversations.
-        Authenticated users see public conversations, their own, or explicitly shared.
-        """
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        conversation_id = kwargs.get("id", None)
-        logger.info(f"🔍 resolve_conversation called with id: {conversation_id}")
-        logger.info(f"   User: {info.context.user}")
-        is_auth = (
-            info.context.user.is_authenticated
-            if hasattr(info.context.user, "is_authenticated")
-            else "N/A"
-        )
-        logger.info(f"   Is authenticated: {is_auth}")
-
-        try:
-            django_pk = from_global_id(conversation_id)[1]
-            logger.info(f"   Decoded django_pk: {django_pk}")
-
-            queryset = Conversation.objects.visible_to_user(info.context.user)
-            logger.info(f"   Visible conversations count: {queryset.count()}")
-
-            conversation = queryset.get(id=django_pk)
-            logger.info(
-                f"   ✅ Found conversation: {conversation.id} - {conversation.title}"
-            )
-            return conversation
-        except Conversation.DoesNotExist:
-            logger.warning(
-                f"   ❌ Conversation {django_pk} not found or not visible to user"
-            )
-            return None
-        except Exception as e:
-            logger.error(f"   ❌ Error resolving conversation: {e}", exc_info=True)
-            return None
 
     # BULK DOCUMENT UPLOAD STATUS QUERY ###########################################
     bulk_document_upload_status = graphene.Field(
