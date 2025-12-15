@@ -578,7 +578,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                     </div>
                     <div className="meta-row">
                       <Icon name="user" className="icon" />
-                      Deleted by {docPath.createdBy.username}
+                      Deleted by {docPath.creator.username}
                     </div>
                     {docPath.folder && (
                       <div className="meta-row">

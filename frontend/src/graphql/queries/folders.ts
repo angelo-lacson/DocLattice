@@ -89,7 +89,7 @@ export interface DeletedDocumentPathType {
   path: string;
   versionNumber: number;
   modified: string;
-  createdBy: {
+  creator: {
     id: string;
     username: string;
   };
@@ -123,7 +123,7 @@ export const GET_DELETED_DOCUMENTS_IN_CORPUS = gql`
       path
       versionNumber
       modified
-      createdBy {
+      creator {
         id
         username
       }
