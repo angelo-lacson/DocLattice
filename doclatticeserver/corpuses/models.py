@@ -926,9 +926,7 @@ class CorpusAction(BaseOCModel):
             )
         # Validate agent_prompt is provided when agent_config is set
         if self.agent_config and not self.agent_prompt:
-            raise ValidationError(
-                "agent_prompt is required when agent_config is set."
-            )
+            raise ValidationError("agent_prompt is required when agent_config is set.")
 
     def save(self, *args, **kwargs):
         self.full_clean()

@@ -124,7 +124,9 @@ class PydanticAIToolWrapper:
         def _maybe_raise(ctx: RunContext[PydanticAIDependencies], *a, **kw):
             """Raise ToolConfirmationRequired if this CoreTool needs approval."""
             # Check if approval is bypassed via deps (for automated corpus actions)
-            skip_approval = getattr(ctx.deps, "skip_approval_gate", False) if ctx.deps else False
+            skip_approval = (
+                getattr(ctx.deps, "skip_approval_gate", False) if ctx.deps else False
+            )
             if self.core_tool.requires_approval and not skip_approval:
                 bound = inspect.signature(original_func).bind(*a, **kw)
                 bound.apply_defaults()

@@ -339,7 +339,9 @@ class CorpusActionMutationTestCase(TestCase):
             "corpusId": to_global_id("CorpusType", self.corpus.id),
             "name": "Test Agent Action",
             "trigger": "add_document",
-            "agentConfigId": to_global_id("AgentConfigurationType", self.agent_config.id),
+            "agentConfigId": to_global_id(
+                "AgentConfigurationType", self.agent_config.id
+            ),
             "agentPrompt": "Summarize this document and update its description",
             "preAuthorizedTools": ["update_document_description", "search_annotations"],
             "disabled": False,
@@ -390,7 +392,9 @@ class CorpusActionMutationTestCase(TestCase):
         variables = {
             "corpusId": to_global_id("CorpusType", self.corpus.id),
             "trigger": "add_document",
-            "agentConfigId": to_global_id("AgentConfigurationType", self.agent_config.id),
+            "agentConfigId": to_global_id(
+                "AgentConfigurationType", self.agent_config.id
+            ),
         }
 
         result = self.client.execute(mutation, variables=variables)
@@ -428,7 +432,9 @@ class CorpusActionMutationTestCase(TestCase):
         variables = {
             "corpusId": to_global_id("CorpusType", self.corpus.id),
             "trigger": "add_document",
-            "agentConfigId": to_global_id("AgentConfigurationType", self.agent_config.id),
+            "agentConfigId": to_global_id(
+                "AgentConfigurationType", self.agent_config.id
+            ),
             "agentPrompt": "Test prompt",
             "fieldsetId": to_global_id("FieldsetType", self.fieldset.id),
         }
