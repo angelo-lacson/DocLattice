@@ -143,6 +143,8 @@ const createExtractTestMocks = (
   ...graphqlMocks,
   ...createSummaryMocks(documentId, corpusId),
   createDatacellsForExtractMock(extractId),
+  // Include annotations-only mock for PDF re-renders (no analysis selected)
+  createDocumentAnnotationsOnlyMock(documentId, corpusId, null),
 ];
 
 // Helper to create complete mock set for analysis tests
@@ -154,6 +156,10 @@ const createAnalysisTestMocks = (
   ...graphqlMocks,
   ...createSummaryMocks(documentId, corpusId),
   createAnnotationsForAnalysisMock(analysisId, documentId),
+  // Include annotations-only mock for PDF re-renders with analysis
+  createDocumentAnnotationsOnlyMock(documentId, corpusId, analysisId),
+  // Also include null variant for initial load before analysis is selected
+  createDocumentAnnotationsOnlyMock(documentId, corpusId, null),
 ];
 
 test.use({ viewport: { width: 1280, height: 720 } });

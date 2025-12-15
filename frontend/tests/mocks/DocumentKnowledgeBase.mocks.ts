@@ -509,14 +509,14 @@ export const createDocumentKnowledgeMockWithAnalysisAnnotations = (
 export const createDocumentAnnotationsOnlyMock = (
   documentId: string,
   corpusId: string,
-  analysisId: string
+  analysisId: string | null | undefined
 ) => ({
   request: {
     query: GET_DOCUMENT_ANNOTATIONS_ONLY,
     variables: {
       documentId,
       corpusId,
-      analysisId,
+      analysisId: analysisId ?? null,
     },
   },
   result: {
@@ -524,7 +524,9 @@ export const createDocumentAnnotationsOnlyMock = (
       document: {
         id: documentId,
         allStructuralAnnotations: [],
-        allAnnotations: [mockAnalysisAnnotation1, mockAnalysisAnnotation2],
+        allAnnotations: analysisId
+          ? [mockAnalysisAnnotation1, mockAnalysisAnnotation2]
+          : [],
         allRelationships: [],
         __typename: "DocumentType",
       },
