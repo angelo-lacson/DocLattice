@@ -15,7 +15,12 @@ import {
   GET_DELETED_DOCUMENTS_IN_CORPUS,
   DeletedDocumentPathType,
 } from "../../../graphql/queries/folders";
-import { RESTORE_DELETED_DOCUMENT } from "../../../graphql/mutations";
+import {
+  RESTORE_DELETED_DOCUMENT,
+  EMPTY_TRASH,
+  EmptyTrashInput,
+  EmptyTrashOutput,
+} from "../../../graphql/mutations";
 import fallback_doc_icon from "../../../assets/images/defaults/default_doc_icon.jpg";
 
 const Container = styled.div`
@@ -255,6 +260,29 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     }
   );
 
+  const [emptyTrash, { loading: emptyTrashLoading }] = useMutation<
+    EmptyTrashOutput,
+    EmptyTrashInput
+  >(EMPTY_TRASH, {
+    onCompleted: (data) => {
+      if (data.emptyTrash.ok) {
+        setRestoreSuccess(data.emptyTrash.message);
+        setRestoreError(null);
+        refetch();
+        setSelectedDocuments(new Set());
+      } else {
+        setRestoreError(data.emptyTrash.message || "Failed to empty trash");
+        setRestoreSuccess(null);
+      }
+      setConfirmEmptyTrash(false);
+    },
+    onError: (error) => {
+      setRestoreError(error.message || "An unexpected error occurred");
+      setRestoreSuccess(null);
+      setConfirmEmptyTrash(false);
+    },
+  });
+
   const deletedDocuments: DeletedDocumentPathType[] =
     data?.deletedDocumentsInCorpus || [];
 
@@ -450,8 +478,9 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               basic
               color="red"
               onClick={() => setConfirmEmptyTrash(true)}
-              disabled={true} // Permanent deletion not yet implemented
-              title="Permanent deletion feature coming soon"
+              disabled={emptyTrashLoading}
+              loading={emptyTrashLoading}
+              title="Permanently delete all items in trash"
             >
               <Icon name="trash" />
               Empty Trash
@@ -620,24 +649,47 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
         open={confirmEmptyTrash}
         onClose={() => setConfirmEmptyTrash(false)}
       >
-        <Modal.Header>Empty Trash</Modal.Header>
+        <Modal.Header>
+          <Icon name="warning sign" color="red" />
+          Empty Trash - Permanent Deletion
+        </Modal.Header>
         <Modal.Content>
-          <Message warning>
-            <Message.Header>Feature Not Yet Available</Message.Header>
+          <Message negative>
+            <Message.Header>This action cannot be undone!</Message.Header>
             <p>
-              Permanent deletion of documents is not yet implemented. Documents
-              in the trash can be restored but cannot be permanently deleted at
-              this time.
+              You are about to permanently delete{" "}
+              <strong>{deletedDocuments.length}</strong>{" "}
+              {deletedDocuments.length === 1 ? "document" : "documents"} from
+              the trash. This will remove:
+            </p>
+            <ul>
+              <li>All document history and versions in this corpus</li>
+              <li>All annotations you created on these documents</li>
+              <li>All relationships involving those annotations</li>
+              <li>All document summary revisions</li>
+            </ul>
+            <p>
+              <strong>
+                Documents that exist in other corpuses will NOT be affected.
+              </strong>
             </p>
           </Message>
-          <p>
-            <strong>Planned Behavior:</strong> This will permanently delete all{" "}
-            {deletedDocuments.length} documents in the trash. This action cannot
-            be undone.
-          </p>
         </Modal.Content>
         <Modal.Actions>
-          <Button onClick={() => setConfirmEmptyTrash(false)}>Close</Button>
+          <Button onClick={() => setConfirmEmptyTrash(false)}>Cancel</Button>
+          <Button
+            negative
+            loading={emptyTrashLoading}
+            disabled={emptyTrashLoading}
+            onClick={() => {
+              emptyTrash({
+                variables: { corpusId },
+              });
+            }}
+          >
+            <Icon name="trash" />
+            Permanently Delete All
+          </Button>
         </Modal.Actions>
       </Modal>
     </Container>

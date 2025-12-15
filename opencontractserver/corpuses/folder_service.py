@@ -1092,6 +1092,94 @@ class DocumentFolderService:
             )
             return True, ""
 
+    @classmethod
+    def permanently_delete_document(
+        cls,
+        user: User,
+        document: Document,
+        corpus: Corpus,
+    ) -> tuple[bool, str]:
+        """
+        Permanently delete a soft-deleted document from corpus.
+
+        This is IRREVERSIBLE and removes:
+        - All DocumentPath history for the document in this corpus
+        - User annotations (non-structural) on the document
+        - Relationships involving those annotations
+        - DocumentSummaryRevision records
+        - The Document itself if no other corpus references it
+
+        Args:
+            user: User performing the deletion
+            document: Document to permanently delete
+            corpus: Corpus context
+
+        Returns:
+            (success, error_message)
+
+        Permissions:
+            Requires corpus DELETE permission
+        """
+        from opencontractserver.documents.versioning import permanently_delete_document
+
+        # Permission check - same as soft delete
+        if not cls.check_corpus_delete_permission(user, corpus):
+            return (
+                False,
+                "Permission denied: You do not have delete access to this corpus",
+            )
+
+        # Validate document belongs to corpus (has any path record)
+        if not cls.check_document_in_corpus(document, corpus):
+            return False, "Document does not belong to this corpus"
+
+        # Delegate to versioning module
+        return permanently_delete_document(corpus, document, user)
+
+    @classmethod
+    def empty_trash(
+        cls,
+        user: User,
+        corpus: Corpus,
+    ) -> tuple[int, str]:
+        """
+        Permanently delete ALL soft-deleted documents in a corpus.
+
+        This empties the trash by permanently deleting all documents
+        that are currently soft-deleted.
+
+        Args:
+            user: User performing the deletion
+            corpus: Corpus to empty trash for
+
+        Returns:
+            (deleted_count, error_message)
+
+        Permissions:
+            Requires corpus DELETE permission
+        """
+        from opencontractserver.documents.versioning import (
+            permanently_delete_all_in_trash,
+        )
+
+        # Permission check
+        if not cls.check_corpus_delete_permission(user, corpus):
+            return (
+                0,
+                "Permission denied: You do not have delete access to this corpus",
+            )
+
+        # Delegate to versioning module
+        deleted_count, errors = permanently_delete_all_in_trash(corpus, user)
+
+        if errors:
+            error_msg = f"Deleted {deleted_count} documents with {len(errors)} errors: {'; '.join(errors[:3])}"
+            if len(errors) > 3:
+                error_msg += f" (and {len(errors) - 3} more)"
+            return deleted_count, error_msg
+
+        return deleted_count, ""
+
     # =========================================================================
     # UTILITY METHODS
     # =========================================================================

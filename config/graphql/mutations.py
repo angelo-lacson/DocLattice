@@ -4069,6 +4069,126 @@ class RestoreDeletedDocument(graphene.Mutation):
             )
 
 
+class PermanentlyDeleteDocument(graphene.Mutation):
+    """
+    Permanently delete a soft-deleted document from a corpus.
+
+    This is IRREVERSIBLE and removes:
+    - All DocumentPath history for the document in this corpus
+    - User annotations (non-structural) on the document
+    - Relationships involving those annotations
+    - DocumentSummaryRevision records
+    - The Document itself if no other corpus references it
+
+    Requires DELETE permission on the corpus.
+    """
+
+    class Arguments:
+        document_id = graphene.String(
+            required=True, description="Global ID of the document to permanently delete"
+        )
+        corpus_id = graphene.String(
+            required=True, description="Global ID of the corpus"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
+    def mutate(root, info, document_id, corpus_id):
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+
+        user = info.context.user
+
+        try:
+            doc_pk = from_global_id(document_id)[1]
+            corpus_pk = from_global_id(corpus_id)[1]
+
+            document = Document.objects.get(pk=doc_pk)
+            corpus = Corpus.objects.get(pk=corpus_pk)
+
+            success, error = DocumentFolderService.permanently_delete_document(
+                user=user,
+                document=document,
+                corpus=corpus,
+            )
+
+            if not success:
+                return PermanentlyDeleteDocument(ok=False, message=error)
+
+            return PermanentlyDeleteDocument(
+                ok=True, message="Document permanently deleted"
+            )
+
+        except Document.DoesNotExist:
+            return PermanentlyDeleteDocument(ok=False, message="Document not found")
+        except Corpus.DoesNotExist:
+            return PermanentlyDeleteDocument(ok=False, message="Corpus not found")
+        except Exception as e:
+            logger.error(f"Failed to permanently delete document: {str(e)}")
+            return PermanentlyDeleteDocument(
+                ok=False, message=f"Failed to permanently delete document: {str(e)}"
+            )
+
+
+class EmptyTrash(graphene.Mutation):
+    """
+    Permanently delete ALL soft-deleted documents in a corpus (empty trash).
+
+    This is IRREVERSIBLE and removes all documents currently in the corpus trash.
+
+    Requires DELETE permission on the corpus.
+    """
+
+    class Arguments:
+        corpus_id = graphene.String(
+            required=True, description="Global ID of the corpus to empty trash for"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    deleted_count = graphene.Int()
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
+    def mutate(root, info, corpus_id):
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+
+        user = info.context.user
+
+        try:
+            corpus_pk = from_global_id(corpus_id)[1]
+            corpus = Corpus.objects.get(pk=corpus_pk)
+
+            deleted_count, error = DocumentFolderService.empty_trash(
+                user=user,
+                corpus=corpus,
+            )
+
+            if error:
+                # Partial success case - some deleted but with errors
+                return EmptyTrash(
+                    ok=deleted_count > 0,
+                    message=error,
+                    deleted_count=deleted_count,
+                )
+
+            return EmptyTrash(
+                ok=True,
+                message=f"Successfully deleted {deleted_count} document(s) from trash",
+                deleted_count=deleted_count,
+            )
+
+        except Corpus.DoesNotExist:
+            return EmptyTrash(ok=False, message="Corpus not found", deleted_count=0)
+        except Exception as e:
+            logger.error(f"Failed to empty trash: {str(e)}")
+            return EmptyTrash(
+                ok=False, message=f"Failed to empty trash: {str(e)}", deleted_count=0
+            )
+
+
 class RestoreDocumentToVersion(graphene.Mutation):
     """
     Restore a document to a previous content version.
@@ -4299,6 +4419,8 @@ class Mutation(graphene.ObjectType):
     # DOCUMENT VERSIONING MUTATIONS ############################################
     restore_deleted_document = RestoreDeletedDocument.Field()
     restore_document_to_version = RestoreDocumentToVersion.Field()
+    permanently_delete_document = PermanentlyDeleteDocument.Field()
+    empty_trash = EmptyTrash.Field()
 
     # CORPUS MUTATIONS #########################################################
     fork_corpus = StartCorpusFork.Field()
