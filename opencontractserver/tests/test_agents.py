@@ -479,7 +479,11 @@ class TestAgentConfigurationGraphQL(TestCase):
             description="Agent for testing tool array serialization",
             system_instructions="Test instructions",
             scope="GLOBAL",
-            available_tools=["similarity_search", "load_document_text", "search_exact_text"],
+            available_tools=[
+                "similarity_search",
+                "load_document_text",
+                "search_exact_text",
+            ],
             permission_required_tools=["update_corpus_description"],
             creator=self.admin_user,
             is_public=True,
@@ -520,7 +524,9 @@ class TestAgentConfigurationGraphQL(TestCase):
 
         # CRITICAL: Verify permissionRequiredTools is an array with correct values
         permission_tools = agent_data["permissionRequiredTools"]
-        self.assertIsInstance(permission_tools, list, "permissionRequiredTools should be a list")
+        self.assertIsInstance(
+            permission_tools, list, "permissionRequiredTools should be a list"
+        )
         self.assertEqual(len(permission_tools), 1)
         self.assertIn("update_corpus_description", permission_tools)
 

@@ -530,7 +530,9 @@ class TestLLMTools(TestCase):
 
     def test_get_document_description_truncation_from_start(self):
         """Test retrieving description with truncation from start."""
-        result = get_document_description(self.doc.id, truncate_length=4, from_start=True)
+        result = get_document_description(
+            self.doc.id, truncate_length=4, from_start=True
+        )
         self.assertEqual(result, "Test")
 
     def test_get_document_description_truncation_from_end(self):
@@ -1951,9 +1953,7 @@ class AsyncTestUpdateDocumentDescription(TransactionTestCase):
 
     def setUp(self):  # noqa: D401 – simple helper, not public API
         """Prepare a fresh document with an initial description for every test."""
-        self.user = User.objects.create_user(
-            username="async_desc_user", password="pw"
-        )
+        self.user = User.objects.create_user(username="async_desc_user", password="pw")
         self.doc = Document.objects.create(
             creator=self.user,
             title="Test Document",

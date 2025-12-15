@@ -1081,7 +1081,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     logger.info(f"String arg for update_document_summary: {tool_args}")
                 elif tool_name == "update_document_description":
                     tool_args = {"new_description": tool_args_raw}
-                    logger.info(f"String arg for update_document_description: {tool_args}")
+                    logger.info(
+                        f"String arg for update_document_description: {tool_args}"
+                    )
                 else:
                     # Generic fallback for other tools
                     logger.warning(
@@ -1719,7 +1721,9 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
 
         async def update_document_description_tool(new_description: str) -> dict:
             """Update the document's description field."""
-            logger.info(f"Updating document description with content: {new_description}")
+            logger.info(
+                f"Updating document description with content: {new_description}"
+            )
             return await aupdate_document_description(
                 document_id=context.document.id,
                 new_description=new_description,

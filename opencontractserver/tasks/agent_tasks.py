@@ -480,9 +480,9 @@ async def _run_agent_corpus_action_async(
     from opencontractserver.llms import agents
 
     # Load the action and document
-    action = await CorpusAction.objects.select_related(
-        "agent_config", "corpus"
-    ).aget(id=corpus_action_id)
+    action = await CorpusAction.objects.select_related("agent_config", "corpus").aget(
+        id=corpus_action_id
+    )
 
     document = await Document.objects.aget(id=document_id)
 

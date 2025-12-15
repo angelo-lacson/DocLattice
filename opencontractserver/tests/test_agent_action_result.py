@@ -91,7 +91,10 @@ class AgentActionResultModelTestCase(TestCase):
             agent_response="Document description updated.",
             tools_executed=[
                 {"tool": "search_annotations", "args": {"query": "summary"}},
-                {"tool": "update_document_description", "args": {"description": "New desc"}},
+                {
+                    "tool": "update_document_description",
+                    "args": {"description": "New desc"},
+                },
             ],
             creator=self.user,
         )
