@@ -3224,6 +3224,13 @@ export const GET_CORPUS_ACTIONS = gql`
             id
             analyzerId
           }
+          agentConfig {
+            id
+            name
+            description
+          }
+          agentPrompt
+          preAuthorizedTools
           created
           modified
         }
@@ -3257,6 +3264,13 @@ export interface GetCorpusActionsOutput {
           id: string;
           name: string;
         };
+        agentConfig?: {
+          id: string;
+          name: string;
+          description: string;
+        };
+        agentPrompt?: string;
+        preAuthorizedTools?: string[];
         created: string;
         modified: string;
       };
@@ -4134,6 +4148,59 @@ export const SEARCH_AGENTS_FOR_MENTION = gql`
           description
           scope
           mentionFormat
+          corpus {
+            id
+            title
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * GET_AGENT_CONFIGURATIONS - Get available agent configurations for corpus actions
+ * Used in CreateCorpusActionModal to allow selecting an agent for automated actions
+ */
+export interface GetAgentConfigurationsInput {
+  corpusId?: string;
+  isActive?: boolean;
+}
+
+export interface GetAgentConfigurationsOutput {
+  agentConfigurations: {
+    edges: Array<{
+      node: {
+        id: string;
+        name: string;
+        slug: string;
+        description: string;
+        systemInstructions: string;
+        availableTools: string[];
+        scope: "GLOBAL" | "CORPUS";
+        isActive: boolean;
+        corpus?: {
+          id: string;
+          title: string;
+        };
+      };
+    }>;
+  };
+}
+
+export const GET_AGENT_CONFIGURATIONS = gql`
+  query GetAgentConfigurations($corpusId: String, $isActive: Boolean) {
+    agentConfigurations(corpusId: $corpusId, isActive: $isActive) {
+      edges {
+        node {
+          id
+          name
+          slug
+          description
+          systemInstructions
+          availableTools
+          scope
+          isActive
           corpus {
             id
             title

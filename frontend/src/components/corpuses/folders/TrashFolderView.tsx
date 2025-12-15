@@ -15,8 +15,19 @@ import {
   GET_DELETED_DOCUMENTS_IN_CORPUS,
   DeletedDocumentPathType,
 } from "../../../graphql/queries/folders";
-import { RESTORE_DELETED_DOCUMENT } from "../../../graphql/mutations";
+import {
+  RESTORE_DELETED_DOCUMENT,
+  RestoreDeletedDocumentInput,
+  RestoreDeletedDocumentOutput,
+  EMPTY_TRASH,
+  EmptyTrashInput,
+  EmptyTrashOutput,
+} from "../../../graphql/mutations";
 import fallback_doc_icon from "../../../assets/images/defaults/default_doc_icon.jpg";
+
+// Message auto-dismiss durations (in milliseconds)
+const SUCCESS_MESSAGE_DURATION = 5000;
+const ERROR_MESSAGE_DURATION = 10000;
 
 const Container = styled.div`
   padding: 20px;
@@ -232,28 +243,51 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     }
   );
 
-  const [restoreDocument, { loading: restoreLoading }] = useMutation(
-    RESTORE_DELETED_DOCUMENT,
-    {
-      onCompleted: (data) => {
-        if (data.restoreDeletedDocument.ok) {
-          setRestoreSuccess("Document restored successfully");
-          setRestoreError(null);
-          refetch();
-          setSelectedDocuments(new Set());
-        } else {
-          setRestoreError(
-            data.restoreDeletedDocument.message || "Failed to restore document"
-          );
-          setRestoreSuccess(null);
-        }
-      },
-      onError: (error) => {
-        setRestoreError(error.message || "An unexpected error occurred");
+  const [restoreDocument, { loading: restoreLoading }] = useMutation<
+    RestoreDeletedDocumentOutput,
+    RestoreDeletedDocumentInput
+  >(RESTORE_DELETED_DOCUMENT, {
+    onCompleted: (data) => {
+      if (data.restoreDeletedDocument.ok) {
+        setRestoreSuccess("Document restored successfully");
+        setRestoreError(null);
+        refetch();
+        setSelectedDocuments(new Set());
+      } else {
+        setRestoreError(
+          data.restoreDeletedDocument.message || "Failed to restore document"
+        );
         setRestoreSuccess(null);
-      },
-    }
-  );
+      }
+    },
+    onError: (error) => {
+      setRestoreError(error.message || "An unexpected error occurred");
+      setRestoreSuccess(null);
+    },
+  });
+
+  const [emptyTrash, { loading: emptyTrashLoading }] = useMutation<
+    EmptyTrashOutput,
+    EmptyTrashInput
+  >(EMPTY_TRASH, {
+    onCompleted: (data) => {
+      if (data.emptyTrash.ok) {
+        setRestoreSuccess(data.emptyTrash.message);
+        setRestoreError(null);
+        refetch();
+        setSelectedDocuments(new Set());
+      } else {
+        setRestoreError(data.emptyTrash.message || "Failed to empty trash");
+        setRestoreSuccess(null);
+      }
+      setConfirmEmptyTrash(false);
+    },
+    onError: (error) => {
+      setRestoreError(error.message || "An unexpected error occurred");
+      setRestoreSuccess(null);
+      setConfirmEmptyTrash(false);
+    },
+  });
 
   const deletedDocuments: DeletedDocumentPathType[] =
     data?.deletedDocumentsInCorpus || [];
@@ -380,18 +414,24 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     []
   );
 
-  // Auto-dismiss success messages after 5 seconds
+  // Auto-dismiss success messages
   useEffect(() => {
     if (restoreSuccess) {
-      const timer = setTimeout(() => setRestoreSuccess(null), 5000);
+      const timer = setTimeout(
+        () => setRestoreSuccess(null),
+        SUCCESS_MESSAGE_DURATION
+      );
       return () => clearTimeout(timer);
     }
   }, [restoreSuccess]);
 
-  // Auto-dismiss error messages after 10 seconds
+  // Auto-dismiss error messages
   useEffect(() => {
     if (restoreError) {
-      const timer = setTimeout(() => setRestoreError(null), 10000);
+      const timer = setTimeout(
+        () => setRestoreError(null),
+        ERROR_MESSAGE_DURATION
+      );
       return () => clearTimeout(timer);
     }
   }, [restoreError]);
@@ -450,8 +490,9 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               basic
               color="red"
               onClick={() => setConfirmEmptyTrash(true)}
-              disabled={true} // Permanent deletion not yet implemented
-              title="Permanent deletion feature coming soon"
+              disabled={emptyTrashLoading}
+              loading={emptyTrashLoading}
+              title="Permanently delete all items in trash"
             >
               <Icon name="trash" />
               Empty Trash
@@ -578,7 +619,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                     </div>
                     <div className="meta-row">
                       <Icon name="user" className="icon" />
-                      Deleted by {docPath.createdBy.username}
+                      Deleted by {docPath.creator.username}
                     </div>
                     {docPath.folder && (
                       <div className="meta-row">
@@ -620,24 +661,47 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
         open={confirmEmptyTrash}
         onClose={() => setConfirmEmptyTrash(false)}
       >
-        <Modal.Header>Empty Trash</Modal.Header>
+        <Modal.Header>
+          <Icon name="warning sign" color="red" />
+          Empty Trash - Permanent Deletion
+        </Modal.Header>
         <Modal.Content>
-          <Message warning>
-            <Message.Header>Feature Not Yet Available</Message.Header>
+          <Message negative>
+            <Message.Header>This action cannot be undone!</Message.Header>
             <p>
-              Permanent deletion of documents is not yet implemented. Documents
-              in the trash can be restored but cannot be permanently deleted at
-              this time.
+              You are about to permanently delete{" "}
+              <strong>{deletedDocuments.length}</strong>{" "}
+              {deletedDocuments.length === 1 ? "document" : "documents"} from
+              the trash. This will remove:
+            </p>
+            <ul>
+              <li>All document history and versions in this corpus</li>
+              <li>All annotations you created on these documents</li>
+              <li>All relationships involving those annotations</li>
+              <li>All document summary revisions</li>
+            </ul>
+            <p>
+              <strong>
+                Documents that exist in other corpuses will NOT be affected.
+              </strong>
             </p>
           </Message>
-          <p>
-            <strong>Planned Behavior:</strong> This will permanently delete all{" "}
-            {deletedDocuments.length} documents in the trash. This action cannot
-            be undone.
-          </p>
         </Modal.Content>
         <Modal.Actions>
-          <Button onClick={() => setConfirmEmptyTrash(false)}>Close</Button>
+          <Button onClick={() => setConfirmEmptyTrash(false)}>Cancel</Button>
+          <Button
+            negative
+            loading={emptyTrashLoading}
+            disabled={emptyTrashLoading}
+            onClick={() => {
+              emptyTrash({
+                variables: { corpusId },
+              });
+            }}
+          >
+            <Icon name="trash" />
+            Permanently Delete All
+          </Button>
         </Modal.Actions>
       </Modal>
     </Container>

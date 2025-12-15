@@ -32,13 +32,17 @@ class ToolDefinition:
     parameters: tuple[tuple[str, str, bool], ...] = ()  # (name, description, required)
 
     def to_dict(self) -> dict:
-        """Convert to dictionary for GraphQL response."""
+        """Convert to dictionary for GraphQL response.
+
+        Uses camelCase keys to match GraphQL field names in AvailableToolType,
+        since plain graphene.ObjectType doesn't auto-convert snake_case.
+        """
         return {
             "name": self.name,
             "description": self.description,
             "category": self.category.value,
-            "requires_corpus": self.requires_corpus,
-            "requires_approval": self.requires_approval,
+            "requiresCorpus": self.requires_corpus,
+            "requiresApproval": self.requires_approval,
             "parameters": [
                 {"name": p[0], "description": p[1], "required": p[2]}
                 for p in self.parameters
@@ -136,6 +140,31 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
             ("image_format", "Image format: 'jpeg' or 'png' (default 'jpeg')", False),
             ("dpi", "Resolution in DPI (default 150)", False),
         ),
+    ),
+    # -------------------------------------------------------------------------
+    # DOCUMENT DESCRIPTION TOOLS
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="get_document_description",
+        description=(
+            "Get the document's description field. This is a simple text field "
+            "that can be used to store metadata about the document."
+        ),
+        category=ToolCategory.DOCUMENT,
+        parameters=(
+            ("truncate_length", "Optional max characters to return", False),
+            ("from_start", "If True truncate from beginning, else from end", False),
+        ),
+    ),
+    ToolDefinition(
+        name="update_document_description",
+        description=(
+            "Update the document's description field. "
+            "Returns information about the update including previous description."
+        ),
+        category=ToolCategory.DOCUMENT,
+        requires_approval=True,
+        parameters=(("new_description", "The new description content", True),),
     ),
     # -------------------------------------------------------------------------
     # DOCUMENT SUMMARY VERSIONING TOOLS

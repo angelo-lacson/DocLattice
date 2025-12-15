@@ -30,7 +30,7 @@ class BaseOCModel(models.Model):
         db_index=True,
     )
     # This should be set to true if a long-running job is set on a model (e.g. change permissions or delete)
-    backend_lock = django.db.models.BooleanField(default=False)
+    backend_lock = django.db.models.BooleanField(default=False, db_index=True)
 
     # Sharing
     is_public = django.db.models.BooleanField(default=False)

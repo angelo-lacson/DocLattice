@@ -637,6 +637,128 @@ async def aupdate_corpus_description(
 
 
 # --------------------------------------------------------------------------- #
+# Document description helpers                                                #
+# --------------------------------------------------------------------------- #
+
+
+def get_document_description(
+    document_id: int,
+    truncate_length: int | None = None,
+    from_start: bool = True,
+) -> str:
+    """Return the description for a document.
+
+    Parameters
+    ----------
+    document_id: int
+        Primary key of the Document.
+    truncate_length: int | None, optional
+        If provided, returns at most this many characters.
+    from_start: bool
+        If True truncates from the beginning; otherwise from the end.
+
+    Returns
+    -------
+    str
+        The document description, or empty string if none exists.
+
+    Raises
+    ------
+    ValueError
+        If document doesn't exist.
+    """
+    try:
+        doc = Document.objects.get(pk=document_id)
+    except Document.DoesNotExist as exc:
+        raise ValueError(f"Document with id={document_id} does not exist.") from exc
+
+    content = doc.description or ""
+
+    if truncate_length and truncate_length > 0:
+        content = (
+            content[:truncate_length] if from_start else content[-truncate_length:]
+        )
+
+    return content
+
+
+async def aget_document_description(
+    document_id: int,
+    truncate_length: int | None = None,
+    from_start: bool = True,
+) -> str:
+    """Async version of get_document_description."""
+    return await _db_sync_to_async(get_document_description)(
+        document_id=document_id,
+        truncate_length=truncate_length,
+        from_start=from_start,
+    )
+
+
+def update_document_description(
+    *,
+    document_id: int,
+    new_description: str,
+) -> dict[str, Any]:
+    """Update a document's description.
+
+    Parameters
+    ----------
+    document_id: int
+        Primary key of the Document.
+    new_description: str
+        The new description content.
+
+    Returns
+    -------
+    dict[str, Any]
+        Information about the update including previous and new description.
+
+    Raises
+    ------
+    ValueError
+        If document doesn't exist.
+    """
+    try:
+        doc = Document.objects.get(pk=document_id)
+    except Document.DoesNotExist as exc:
+        raise ValueError(f"Document with id={document_id} does not exist.") from exc
+
+    old_description = doc.description or ""
+
+    # Check if there's actually a change
+    if old_description == new_description:
+        return {
+            "updated": False,
+            "document_id": document_id,
+            "message": "No change in description",
+        }
+
+    # Update the description
+    doc.description = new_description
+    doc.save(update_fields=["description", "modified"])
+
+    return {
+        "updated": True,
+        "document_id": document_id,
+        "previous_description": old_description[:200] if old_description else None,
+        "new_description_preview": new_description[:200] if new_description else None,
+    }
+
+
+async def aupdate_document_description(
+    *,
+    document_id: int,
+    new_description: str,
+) -> dict[str, Any]:
+    """Async version of update_document_description."""
+    return await _db_sync_to_async(update_document_description)(
+        document_id=document_id,
+        new_description=new_description,
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Document summary helpers                                                    #
 # --------------------------------------------------------------------------- #
 

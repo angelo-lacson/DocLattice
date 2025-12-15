@@ -381,11 +381,11 @@ test.describe("CorpusAgentManagement Component", () => {
     );
 
     // Check for empty state
-    await expect(page.locator("text=No Corpus Agents")).toBeVisible({
+    await expect(page.locator("text=No Agent Configurations")).toBeVisible({
       timeout: 5000,
     });
     await expect(
-      page.locator("text=Create your first corpus-specific agent")
+      page.locator("text=Create an agent configuration to enable AI-powered")
     ).toBeVisible();
 
     await component.unmount();
@@ -405,7 +405,9 @@ test.describe("CorpusAgentManagement Component", () => {
 
     // Should show permission denied message
     await expect(
-      page.locator("text=You do not have permission to manage agents")
+      page.locator(
+        "text=You do not have permission to manage agents for this corpus"
+      )
     ).toBeVisible({ timeout: 5000 });
 
     await component.unmount();
@@ -438,7 +440,7 @@ test.describe("CorpusAgentManagement Component", () => {
     );
 
     // Wait for content to load
-    await expect(page.locator("text=No Corpus Agents")).toBeVisible({
+    await expect(page.locator("text=No Agent Configurations")).toBeVisible({
       timeout: 5000,
     });
 
@@ -446,7 +448,11 @@ test.describe("CorpusAgentManagement Component", () => {
     await page.locator('button:has-text("Create Agent")').first().click();
 
     // Modal should open with corpus-specific title
-    await expect(page.locator("text=Create Corpus Agent")).toBeVisible();
+    await expect(
+      page
+        .locator(".header")
+        .getByText("Create Agent Configuration", { exact: true })
+    ).toBeVisible();
 
     await component.unmount();
   });
@@ -476,7 +482,7 @@ test.describe("CorpusAgentManagement Component", () => {
 
     // Check helper text is displayed
     await expect(
-      page.locator("text=Create custom AI agents specifically for this corpus")
+      page.locator("text=Create agent configurations for this corpus")
     ).toBeVisible({ timeout: 5000 });
 
     await component.unmount();
