@@ -778,15 +778,27 @@ def handle_document_processing_complete(sender, document, user_id, **kwargs):
 | Doc in multiple corpuses | N/A | Triggers for ALL corpuses |
 | Doc not in any corpus | N/A | No action |
 
-### Idempotency
+### Idempotency Requirements
 
-Most corpus actions are idempotent by design:
+**Important**: Corpus actions SHOULD be designed to be idempotent. Due to the deferred execution
+architecture, the same action may be triggered multiple times for the same document in edge cases:
+
+1. Document added to corpus while still processing → triggers via `document_processing_complete`
+2. Document later re-added or corpus action re-run → may trigger again
+
+Most built-in corpus actions are idempotent by design:
 
 - **Fieldset extractions**: Use `Extract.objects.get_or_create()`
 - **Analyzers**: Create Analysis objects (tracked via CorpusAction)
-- **Agent actions**: Use `AgentActionResult.objects.get_or_create()`
+- **Agent actions**: Use `AgentActionResult.objects.get_or_create()` - skips if already completed
 
-If stricter duplicate prevention is needed, actions can check for existing results.
+**Recommendations for custom agent prompts**:
+
+1. **Check before creating**: Use tools like `load_document_summary` to check if work already exists
+2. **Update rather than duplicate**: Use `update_document_summary` which overwrites, not appends
+3. **Idempotent annotations**: Agent should check for existing annotations before creating new ones
+
+If stricter duplicate prevention is needed, actions can check for existing results before execution.
 
 ### Testing
 
