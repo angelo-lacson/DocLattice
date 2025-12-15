@@ -1120,6 +1120,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 tool_call_id = pending.get("tool_call_id")
                 skip_approval_gate = True
 
+                class deps:  # noqa: D401 – nested stub for PydanticAIDependencies
+                    skip_approval_gate = True
+
             import inspect
 
             async def _maybe_await(call_result):  # noqa: D401 – small helper
