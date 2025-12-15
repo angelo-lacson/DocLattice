@@ -127,9 +127,9 @@ const ActionCard = styled.div`
   }
 `;
 
-const TriggerBadge = styled.span<{ trigger: "add_document" | "edit_document" }>`
+const TriggerBadge = styled.span<{ trigger: string }>`
   background: ${(props) =>
-    props.trigger === "add_document"
+    props.trigger.toLowerCase().includes("add")
       ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
       : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"};
   color: white;
@@ -139,7 +139,7 @@ const TriggerBadge = styled.span<{ trigger: "add_document" | "edit_document" }>`
   font-weight: 600;
   letter-spacing: 0.025em;
   box-shadow: ${(props) =>
-    props.trigger === "add_document"
+    props.trigger.toLowerCase().includes("add")
       ? "0 4px 14px rgba(16, 185, 129, 0.35)"
       : "0 4px 14px rgba(59, 130, 246, 0.35)"};
   display: inline-flex;
@@ -150,7 +150,7 @@ const TriggerBadge = styled.span<{ trigger: "add_document" | "edit_document" }>`
   &:hover {
     transform: translateY(-1px);
     box-shadow: ${(props) =>
-      props.trigger === "add_document"
+      props.trigger.toLowerCase().includes("add")
         ? "0 6px 20px rgba(16, 185, 129, 0.4)"
         : "0 6px 20px rgba(59, 130, 246, 0.4)"};
   }
@@ -1131,12 +1131,8 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                         >
                           {action.name}
                         </h3>
-                        <TriggerBadge
-                          trigger={
-                            action.trigger as "add_document" | "edit_document"
-                          }
-                        >
-                          {action.trigger === "add_document"
+                        <TriggerBadge trigger={action.trigger}>
+                          {action.trigger.toLowerCase().includes("add")
                             ? "📥 On Add"
                             : "✏️ On Edit"}
                         </TriggerBadge>
