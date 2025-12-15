@@ -44,11 +44,11 @@ const UploadContainer = styled(Segment)<{ $isReadOnly: boolean }>`
 
 const ImagePreview = styled.img`
   width: 100%;
-  height: 300px;
+  height: 150px;
   object-fit: contain;
   background: #fff;
   margin: 0;
-  padding: 1rem;
+  padding: 0.75rem;
   display: block;
 `;
 
@@ -180,7 +180,9 @@ export const FilePreviewAndUpload = ({
         <>
           <ImagePreview
             src={
-              typeof displayedFile === "string" ? displayedFile : default_image
+              typeof displayedFile === "string" && displayedFile
+                ? displayedFile
+                : default_image
             }
             alt="Preview"
           />

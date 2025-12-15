@@ -647,7 +647,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
     setPublicDraft(Boolean(corpus.isPublic));
   }, [corpus]);
 
-  const [updateCorpusMutation, { loading: updatingVisibility }] = useMutation<
+  const [updateCorpusMutation, { loading: updatingCorpus }] = useMutation<
     UpdateCorpusOutputs,
     UpdateCorpusInputs
   >(UPDATE_CORPUS, {
@@ -655,16 +655,42 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
       if (data.updateCorpus?.ok) {
         toast.success("Updated corpus settings");
 
+        // Update local state to reflect the saved value
+        setOriginalSlug(slugDraft);
+
         // If slug was updated, navigate to the new URL
         if (slugDraft && slugDraft !== originalSlug && corpus.creator?.slug) {
           const newUrl = `/c/${corpus.creator.slug}/${slugDraft}`;
           navigate(newUrl, { replace: true });
         }
       } else {
+        // Revert local state on failure
+        setSlugDraft(originalSlug);
         toast.error(data.updateCorpus?.message || "Failed to update corpus");
       }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      // Revert local state on error
+      setSlugDraft(originalSlug);
+      toast.error(err.message);
+    },
+    update: (cache, { data }) => {
+      if (data?.updateCorpus?.ok && corpus.id) {
+        // Update the corpus in cache with the new slug
+        const cacheId = cache.identify({
+          __typename: "CorpusType",
+          id: corpus.id,
+        });
+        if (cacheId) {
+          cache.modify({
+            id: cacheId,
+            fields: {
+              slug: () => slugDraft || null,
+            },
+          });
+        }
+      }
+    },
   });
 
   // Separate mutation for visibility changes (uses proper permission checks)
@@ -675,13 +701,37 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
     onCompleted: (data) => {
       if (data.setCorpusVisibility?.ok) {
         toast.success(data.setCorpusVisibility.message);
+        // Local state already updated optimistically, no need to change
       } else {
+        // Revert local state on failure
+        setPublicDraft(Boolean(corpus.isPublic));
         toast.error(
           data.setCorpusVisibility?.message || "Failed to update visibility"
         );
       }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      // Revert local state on error
+      setPublicDraft(Boolean(corpus.isPublic));
+      toast.error(err.message);
+    },
+    update: (cache, { data }) => {
+      if (data?.setCorpusVisibility?.ok && corpus.id) {
+        // Update the corpus in cache with the new visibility
+        const cacheId = cache.identify({
+          __typename: "CorpusType",
+          id: corpus.id,
+        });
+        if (cacheId) {
+          cache.modify({
+            id: cacheId,
+            fields: {
+              isPublic: () => publicDraft,
+            },
+          });
+        }
+      }
+    },
   });
 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -1015,7 +1065,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
               <div style={{ gridColumn: "1 / span 2", marginTop: "1rem" }}>
                 <Button
                   primary
-                  loading={updatingVisibility || settingVisibility}
+                  loading={updatingCorpus || settingVisibility}
                   disabled={!canUpdate && !canPermission}
                   onClick={() => {
                     // Use separate mutations for visibility vs other settings
