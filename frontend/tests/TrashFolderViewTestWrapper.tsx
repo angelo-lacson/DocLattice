@@ -14,7 +14,7 @@ const defaultDeletedDocuments: DeletedDocumentPathType[] = [
     path: "/documents/deleted-doc-1.pdf",
     versionNumber: 2,
     modified: "2025-01-15T10:00:00Z",
-    createdBy: {
+    creator: {
       id: "user-1",
       username: "john_doe",
     },
@@ -37,7 +37,7 @@ const defaultDeletedDocuments: DeletedDocumentPathType[] = [
     path: "/documents/deleted-doc-2.pdf",
     versionNumber: 1,
     modified: "2025-01-14T08:30:00Z",
-    createdBy: {
+    creator: {
       id: "user-2",
       username: "jane_smith",
     },

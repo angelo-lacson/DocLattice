@@ -17,11 +17,17 @@ import {
 } from "../../../graphql/queries/folders";
 import {
   RESTORE_DELETED_DOCUMENT,
+  RestoreDeletedDocumentInput,
+  RestoreDeletedDocumentOutput,
   EMPTY_TRASH,
   EmptyTrashInput,
   EmptyTrashOutput,
 } from "../../../graphql/mutations";
 import fallback_doc_icon from "../../../assets/images/defaults/default_doc_icon.jpg";
+
+// Message auto-dismiss durations (in milliseconds)
+const SUCCESS_MESSAGE_DURATION = 5000;
+const ERROR_MESSAGE_DURATION = 10000;
 
 const Container = styled.div`
   padding: 20px;
@@ -237,28 +243,28 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     }
   );
 
-  const [restoreDocument, { loading: restoreLoading }] = useMutation(
-    RESTORE_DELETED_DOCUMENT,
-    {
-      onCompleted: (data) => {
-        if (data.restoreDeletedDocument.ok) {
-          setRestoreSuccess("Document restored successfully");
-          setRestoreError(null);
-          refetch();
-          setSelectedDocuments(new Set());
-        } else {
-          setRestoreError(
-            data.restoreDeletedDocument.message || "Failed to restore document"
-          );
-          setRestoreSuccess(null);
-        }
-      },
-      onError: (error) => {
-        setRestoreError(error.message || "An unexpected error occurred");
+  const [restoreDocument, { loading: restoreLoading }] = useMutation<
+    RestoreDeletedDocumentOutput,
+    RestoreDeletedDocumentInput
+  >(RESTORE_DELETED_DOCUMENT, {
+    onCompleted: (data) => {
+      if (data.restoreDeletedDocument.ok) {
+        setRestoreSuccess("Document restored successfully");
+        setRestoreError(null);
+        refetch();
+        setSelectedDocuments(new Set());
+      } else {
+        setRestoreError(
+          data.restoreDeletedDocument.message || "Failed to restore document"
+        );
         setRestoreSuccess(null);
-      },
-    }
-  );
+      }
+    },
+    onError: (error) => {
+      setRestoreError(error.message || "An unexpected error occurred");
+      setRestoreSuccess(null);
+    },
+  });
 
   const [emptyTrash, { loading: emptyTrashLoading }] = useMutation<
     EmptyTrashOutput,
@@ -408,18 +414,24 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     []
   );
 
-  // Auto-dismiss success messages after 5 seconds
+  // Auto-dismiss success messages
   useEffect(() => {
     if (restoreSuccess) {
-      const timer = setTimeout(() => setRestoreSuccess(null), 5000);
+      const timer = setTimeout(
+        () => setRestoreSuccess(null),
+        SUCCESS_MESSAGE_DURATION
+      );
       return () => clearTimeout(timer);
     }
   }, [restoreSuccess]);
 
-  // Auto-dismiss error messages after 10 seconds
+  // Auto-dismiss error messages
   useEffect(() => {
     if (restoreError) {
-      const timer = setTimeout(() => setRestoreError(null), 10000);
+      const timer = setTimeout(
+        () => setRestoreError(null),
+        ERROR_MESSAGE_DURATION
+      );
       return () => clearTimeout(timer);
     }
   }, [restoreError]);
