@@ -38,17 +38,12 @@ import {
   CreateAndSearchBar,
   DropdownActionProps,
 } from "../components/layout/CreateAndSearchBar";
-import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
 import { CardLayout } from "../components/layout/CardLayout";
 import { CorpusBreadcrumbs } from "../components/corpuses/CorpusBreadcrumbs";
-import { LabelSetSelector } from "../components/widgets/CRUD/LabelSetSelector";
-import { EmbedderSelector } from "../components/widgets/CRUD/EmbedderSelector";
 import {
-  newCorpusForm_Ui_Schema,
-  newCorpusForm_Schema,
-  editCorpusForm_Schema,
-  editCorpusForm_Ui_Schema,
-} from "../components/forms/schemas";
+  CorpusModal,
+  CorpusFormData,
+} from "../components/corpuses/CorpusModal";
 
 import {
   openedCorpus,
@@ -1656,7 +1651,6 @@ export const Corpuses = () => {
    * -------------------------------------------------------------------------------------------------- */
 
   if (corpus_load_error) {
-    console.log("Corpuses.tsx - corpus_load_error", corpus_load_error);
     toast.error("ERROR\nUnable to fetch corpuses.");
   }
 
@@ -1847,27 +1841,6 @@ export const Corpuses = () => {
   // When query is skipped (no valid corpus ID), treat as not loading
   const effectiveStatsLoading = validCorpusId ? statsLoading : false;
 
-  // Debug logging for stats issues
-  useEffect(() => {
-    if (opened_corpus) {
-      console.log("Corpus Stats Debug:", {
-        corpusId: opened_corpus.id,
-        validCorpusId,
-        statsLoading,
-        effectiveStatsLoading,
-        hasStatsData: !!statsData?.corpusStats,
-        stats,
-      });
-    }
-  }, [
-    opened_corpus?.id,
-    validCorpusId,
-    statsLoading,
-    effectiveStatsLoading,
-    statsData,
-    stats,
-  ]);
-
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Query to shape item data
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1962,9 +1935,26 @@ export const Corpuses = () => {
     }
   };
 
-  // TODO - Improve typing.
-  const handleUpdateCorpus = (corpus_obj: any) => {
-    tryMutateCorpus({ variables: corpus_obj });
+  // Handle corpus update with properly typed form data
+  const handleUpdateCorpus = (formData: CorpusFormData) => {
+    const variables: UpdateCorpusInputs = {
+      id: formData.id!,
+    };
+
+    // Only include changed fields
+    if (formData.title !== undefined) variables.title = formData.title;
+    if (formData.description !== undefined)
+      variables.description = formData.description;
+    if (formData.slug !== undefined) variables.slug = formData.slug;
+    if (formData.labelSet !== undefined)
+      variables.labelSet = formData.labelSet ?? undefined;
+    if (formData.preferredEmbedder !== undefined)
+      variables.preferredEmbedder = formData.preferredEmbedder ?? undefined;
+    if (formData.icon !== undefined && formData.icon !== null) {
+      variables.icon = formData.icon;
+    }
+
+    tryMutateCorpus({ variables });
   };
 
   // TODO - Improve typing.
@@ -1999,11 +1989,29 @@ export const Corpuses = () => {
       });
   };
 
-  // TODO - Improve typing.
-  const handleCreateNewCorpus = (corpus_json: Record<string, any>) => {
-    tryCreateCorpus({ variables: corpus_json })
+  // Handle corpus creation with properly typed form data
+  const handleCreateNewCorpus = (formData: CorpusFormData) => {
+    // Runtime validation for required fields
+    if (!formData.title || !formData.description) {
+      toast.error("Title and description are required");
+      return;
+    }
+
+    const variables: CreateCorpusInputs = {
+      title: formData.title,
+      description: formData.description,
+    };
+
+    // Include optional fields if provided
+    if (formData.labelSet) variables.labelSet = formData.labelSet;
+    if (formData.preferredEmbedder)
+      variables.preferredEmbedder = formData.preferredEmbedder;
+    if (formData.icon) {
+      variables.icon = formData.icon;
+    }
+
+    tryCreateCorpus({ variables })
       .then((data) => {
-        console.log("Data", data);
         if (data.data?.createCorpus.ok) {
           toast.success("SUCCESS. Created corpus.");
         } else {
@@ -2560,7 +2568,6 @@ export const Corpuses = () => {
     opened_document !== null &&
     opened_document !== undefined
   ) {
-    console.log("Show annotator");
     content = <></>;
   }
 
@@ -2624,24 +2631,12 @@ export const Corpuses = () => {
             }
             visible={show_remove_docs_from_corpus_modal}
           />
-          <CRUDModal
+          <CorpusModal
             open={corpus_to_edit !== null}
             mode="EDIT"
-            oldInstance={corpus_to_edit ?? {}}
-            modelName="corpus"
-            uiSchema={editCorpusForm_Ui_Schema}
-            dataSchema={editCorpusForm_Schema}
+            corpus={corpus_to_edit}
             onSubmit={handleUpdateCorpus}
             onClose={() => editingCorpus(null)}
-            hasFile={true}
-            fileField={"icon"}
-            fileLabel="Corpus Icon"
-            fileIsImage={true}
-            acceptedFileTypes="image/*"
-            propertyWidgets={{
-              labelSet: <LabelSetSelector />,
-              preferredEmbedder: <EmbedderSelector />,
-            }}
             loading={update_corpus_loading}
           />
           {exporting_corpus ? (
@@ -2659,47 +2654,22 @@ export const Corpuses = () => {
             <></>
           )}
           {corpus_to_view !== null ? (
-            <CRUDModal
+            <CorpusModal
               open={corpus_to_view !== null}
               mode="VIEW"
-              oldInstance={corpus_to_view ? corpus_to_view : {}}
-              modelName="corpus"
-              uiSchema={editCorpusForm_Ui_Schema}
-              dataSchema={editCorpusForm_Schema}
+              corpus={corpus_to_view}
               onClose={() => viewingCorpus(null)}
-              hasFile={true}
-              fileField={"icon"}
-              fileLabel="Corpus Icon"
-              fileIsImage={true}
-              acceptedFileTypes="image/*"
-              propertyWidgets={{
-                labelSet: <LabelSetSelector read_only={true} />,
-                preferredEmbedder: <EmbedderSelector read_only={true} />,
-              }}
             />
           ) : (
             <></>
           )}
 
           {show_new_corpus_modal ? (
-            <CRUDModal
+            <CorpusModal
               open={show_new_corpus_modal}
               mode="CREATE"
-              oldInstance={{ shared_with: [], is_public: false }}
-              modelName="corpus"
-              uiSchema={newCorpusForm_Ui_Schema}
-              dataSchema={newCorpusForm_Schema}
               onSubmit={handleCreateNewCorpus}
-              onClose={() => setShowNewCorpusModal(!show_new_corpus_modal)}
-              hasFile={true}
-              fileField={"icon"}
-              fileLabel="Corpus Icon"
-              fileIsImage={true}
-              acceptedFileTypes="image/*"
-              propertyWidgets={{
-                labelSet: <LabelSetSelector />,
-                preferredEmbedder: <EmbedderSelector />,
-              }}
+              onClose={() => setShowNewCorpusModal(false)}
               loading={create_corpus_loading}
             />
           ) : (
