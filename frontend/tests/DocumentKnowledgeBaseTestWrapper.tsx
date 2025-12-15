@@ -4325,6 +4325,21 @@ const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
       return Observable.of({ data: threadDetailData });
     }
 
+    /* ✅  wildcard for DocumentData (documentCorpusActions) ------------ */
+    if (operation.operationName === "DocumentData") {
+      console.log("[MOCK HIT] DocumentData – wildcard match (empty response)");
+      return Observable.of({
+        data: {
+          documentCorpusActions: {
+            __typename: "DocumentCorpusActionsType",
+            corpusActions: [],
+            extracts: [],
+            analysisRows: [],
+          },
+        },
+      });
+    }
+
     // Delegate other operations to the default MockLink
     return defaultMockLink.request(operation) as any;
   });
