@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from opencontractserver.agents.models import AgentConfiguration
 from opencontractserver.analyzer.models import Analyzer
 from opencontractserver.corpuses.models import Corpus, CorpusAction, CorpusActionTrigger
 from opencontractserver.extracts.models import Fieldset
@@ -17,6 +18,13 @@ class CorpusActionModelTestCase(TestCase):
             description="Test Analyzer", creator=self.user, task_name="not.a.real.task"
         )
         self.fieldset = Fieldset.objects.create(name="Test Fieldset", creator=self.user)
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Test Agent Config",
+            description="Test agent configuration",
+            system_instructions="You are a helpful assistant",
+            is_active=True,
+            creator=self.user,
+        )
 
     def test_create_corpus_action_with_analyzer(self):
         corpus_action = CorpusAction.objects.create(
@@ -134,3 +142,83 @@ class CorpusActionModelTestCase(TestCase):
         corpus_action.trigger = CorpusActionTrigger.EDIT_DOCUMENT
         corpus_action.save()
         self.assertNotEqual(corpus_action.modified, original_modified)
+
+    def test_create_corpus_action_with_agent_config(self):
+        """Test creating a corpus action with an agent configuration."""
+        corpus_action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Summarize this document",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertIsNotNone(corpus_action.id)
+        self.assertEqual(corpus_action.corpus, self.corpus)
+        self.assertEqual(corpus_action.agent_config, self.agent_config)
+        self.assertEqual(corpus_action.agent_prompt, "Summarize this document")
+        self.assertIsNone(corpus_action.fieldset)
+        self.assertIsNone(corpus_action.analyzer)
+        self.assertEqual(corpus_action.trigger, CorpusActionTrigger.ADD_DOCUMENT)
+
+    def test_create_corpus_action_with_agent_config_and_tools(self):
+        """Test creating a corpus action with agent config and pre-authorized tools."""
+        corpus_action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Analyze the document and update its description",
+            pre_authorized_tools=["update_document_description", "search_annotations"],
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertIsNotNone(corpus_action.id)
+        self.assertEqual(
+            corpus_action.pre_authorized_tools,
+            ["update_document_description", "search_annotations"],
+        )
+
+    def test_create_corpus_action_with_agent_config_no_prompt_fails(self):
+        """Test that creating an agent corpus action without a prompt fails validation."""
+        with self.assertRaises(ValidationError) as context:
+            CorpusAction.objects.create(
+                corpus=self.corpus,
+                agent_config=self.agent_config,
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                creator=self.user,
+            )
+        self.assertIn("agent_prompt", str(context.exception))
+
+    def test_create_corpus_action_with_agent_and_analyzer_fails(self):
+        """Test that providing both agent_config and analyzer fails validation."""
+        with self.assertRaises(ValidationError):
+            CorpusAction.objects.create(
+                corpus=self.corpus,
+                agent_config=self.agent_config,
+                agent_prompt="Test prompt",
+                analyzer=self.analyzer,
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                creator=self.user,
+            )
+
+    def test_create_corpus_action_with_agent_and_fieldset_fails(self):
+        """Test that providing both agent_config and fieldset fails validation."""
+        with self.assertRaises(ValidationError):
+            CorpusAction.objects.create(
+                corpus=self.corpus,
+                agent_config=self.agent_config,
+                agent_prompt="Test prompt",
+                fieldset=self.fieldset,
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                creator=self.user,
+            )
+
+    def test_corpus_action_str_representation_for_agent(self):
+        """Test the string representation for agent-based corpus actions."""
+        corpus_action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Summarize this document",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        expected_str = f"CorpusAction for {self.corpus} - Agent - Add Document"
+        self.assertEqual(str(corpus_action), expected_str)

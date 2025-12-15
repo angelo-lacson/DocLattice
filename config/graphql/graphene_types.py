@@ -1834,6 +1834,9 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
 
 class CorpusActionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    # Expose agent-related fields explicitly
+    pre_authorized_tools = graphene.List(graphene.String)
+
     class Meta:
         model = CorpusAction
         interfaces = [relay.Node]
@@ -1844,9 +1847,48 @@ class CorpusActionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "corpus__id": ["exact"],
             "fieldset__id": ["exact"],
             "analyzer__id": ["exact"],
+            "agent_config__id": ["exact"],
             "trigger": ["exact"],
             "creator__id": ["exact"],
         }
+
+    def resolve_pre_authorized_tools(self, info):
+        """Resolve pre_authorized_tools as a list of strings."""
+        return self.pre_authorized_tools or []
+
+
+class AgentActionResultType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for AgentActionResult - results from agent-based corpus actions."""
+
+    tools_executed = graphene.List(graphene.JSONString)
+    execution_metadata = graphene.JSONString()
+    duration_seconds = graphene.Float()
+
+    class Meta:
+        from opencontractserver.agents.models import AgentActionResult
+
+        model = AgentActionResult
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+        filter_fields = {
+            "id": ["exact"],
+            "corpus_action__id": ["exact"],
+            "document__id": ["exact"],
+            "status": ["exact"],
+            "creator__id": ["exact"],
+        }
+
+    def resolve_tools_executed(self, info):
+        """Resolve tools_executed as a list of JSON objects."""
+        return self.tools_executed or []
+
+    def resolve_execution_metadata(self, info):
+        """Resolve execution_metadata as JSON dict."""
+        return self.execution_metadata or {}
+
+    def resolve_duration_seconds(self, info):
+        """Resolve duration from the model property."""
+        return self.duration_seconds
 
 
 class UserExportType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -2316,34 +2358,13 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Anonymous users can only see public conversations.
         Authenticated users can see public, their own, or explicitly shared.
         """
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        logger.info(f"🔍 ConversationType.get_node called with id: {id}")
-        logger.info(f"   User: {info.context.user}")
-        logger.info(f"   User type: {type(info.context.user)}")
-        is_auth = (
-            info.context.user.is_authenticated
-            if hasattr(info.context.user, "is_authenticated")
-            else "N/A"
-        )
-        logger.info(f"   Is authenticated: {is_auth}")
+        if id is None:
+            return None
 
         try:
             queryset = Conversation.objects.visible_to_user(info.context.user)
-            logger.info(f"   Queryset count: {queryset.count()}")
-
-            conversation = queryset.get(pk=id)
-            logger.info(
-                f"   ✅ Found conversation: {conversation.id} - {conversation.title}"
-            )
-            return conversation
+            return queryset.get(pk=id)
         except Conversation.DoesNotExist:
-            logger.warning(f"   ❌ Conversation {id} not found or not visible to user")
-            return None
-        except Exception as e:
-            logger.error(f"   ❌ Error in get_node: {e}", exc_info=True)
             return None
 
     class Meta:
@@ -2579,6 +2600,17 @@ class CriteriaTypeDefinitionType(graphene.ObjectType):
 class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for agent configurations."""
 
+    # Explicit field declarations for JSONField arrays to ensure proper typing
+    # Without these, JSONField converts to GenericScalar which may not serialize arrays correctly
+    available_tools = graphene.List(
+        graphene.String,
+        description="List of tool identifiers this agent can use",
+    )
+    permission_required_tools = graphene.List(
+        graphene.String,
+        description="Subset of tools that require explicit user permission to use",
+    )
+
     mention_format = graphene.String(
         description="The @ mention format for this agent (e.g., '@agent:research-assistant')"
     )
@@ -2620,6 +2652,14 @@ class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return f"@agent:{self.slug}"
         return None
 
+    def resolve_available_tools(self, info):
+        """Resolve available_tools as a list of strings, ensuring proper array type."""
+        return self.available_tools if self.available_tools else []
+
+    def resolve_permission_required_tools(self, info):
+        """Resolve permission_required_tools as a list of strings, ensuring proper array type."""
+        return self.permission_required_tools if self.permission_required_tools else []
+
 
 # ---------------- Agent Tool Types ----------------
 class ToolParameterType(graphene.ObjectType):
@@ -2650,10 +2690,11 @@ class AvailableToolType(graphene.ObjectType):
         required=True,
         description="Tool category (search, document, corpus, notes, annotations, coordination)",
     )
-    requires_corpus = graphene.Boolean(
+    # Use camelCase names to match GraphQL conventions (ObjectType doesn't auto-convert)
+    requiresCorpus = graphene.Boolean(
         required=True, description="Whether this tool requires a corpus context"
     )
-    requires_approval = graphene.Boolean(
+    requiresApproval = graphene.Boolean(
         required=True,
         description="Whether this tool requires user approval before execution",
     )

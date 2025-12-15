@@ -3627,7 +3627,7 @@ class DeleteExtract(DRFDeletion):
 class CreateCorpusAction(graphene.Mutation):
     """
     Create a new CorpusAction that will be triggered when documents are added or edited in a corpus.
-    The action can either run a fieldset extraction or an analyzer, but not both.
+    The action can run a fieldset extraction, an analyzer, or an agent - but exactly one must be specified.
     Requires UPDATE permission on the corpus to create actions.
     """
 
@@ -3645,6 +3645,19 @@ class CreateCorpusAction(graphene.Mutation):
         )
         analyzer_id = graphene.ID(
             required=False, description="ID of the analyzer to run"
+        )
+        # Agent-based action arguments
+        agent_config_id = graphene.ID(
+            required=False, description="ID of the agent configuration to use"
+        )
+        agent_prompt = graphene.String(
+            required=False,
+            description="Task prompt for the agent (required if agent_config_id is provided)",
+        )
+        pre_authorized_tools = graphene.List(
+            graphene.String,
+            required=False,
+            description="Tools pre-authorized to run without approval",
         )
         disabled = graphene.Boolean(
             required=False, description="Whether the action is disabled"
@@ -3666,9 +3679,14 @@ class CreateCorpusAction(graphene.Mutation):
         name: str = None,
         fieldset_id: str = None,
         analyzer_id: str = None,
+        agent_config_id: str = None,
+        agent_prompt: str = None,
+        pre_authorized_tools: list = None,
         disabled: bool = False,
         run_on_all_corpuses: bool = False,
     ):
+        from opencontractserver.agents.models import AgentConfiguration
+
         try:
             user = info.context.user
             corpus_pk = from_global_id(corpus_id)[1]
@@ -3684,17 +3702,33 @@ class CreateCorpusAction(graphene.Mutation):
                     obj=None,
                 )
 
-            # Validate that exactly one of fieldset_id or analyzer_id is provided
-            if bool(fieldset_id) == bool(analyzer_id):
+            # Validate that exactly one of fieldset_id, analyzer_id, or agent_config_id is provided
+            action_types_provided = sum(
+                [
+                    bool(fieldset_id),
+                    bool(analyzer_id),
+                    bool(agent_config_id),
+                ]
+            )
+            if action_types_provided != 1:
                 return CreateCorpusAction(
                     ok=False,
-                    message="Exactly one of fieldset_id or analyzer_id must be provided",
+                    message="Exactly one of fieldset_id, analyzer_id, or agent_config_id must be provided",
                     obj=None,
                 )
 
-            # Get fieldset or analyzer if provided
+            # Validate agent_prompt is provided when agent_config_id is set
+            if agent_config_id and not agent_prompt:
+                return CreateCorpusAction(
+                    ok=False,
+                    message="agent_prompt is required when agent_config_id is provided",
+                    obj=None,
+                )
+
+            # Get fieldset, analyzer, or agent_config if provided
             fieldset = None
             analyzer = None
+            agent_config = None
 
             if fieldset_id:
                 fieldset_pk = from_global_id(fieldset_id)[1]
@@ -3703,7 +3737,17 @@ class CreateCorpusAction(graphene.Mutation):
             if analyzer_id:
                 analyzer_pk = from_global_id(analyzer_id)[1]
                 analyzer = Analyzer.objects.get(pk=analyzer_pk)
-                # Analyzers don't have permissions currently, but we could add them here if needed
+
+            if agent_config_id:
+                agent_config_pk = from_global_id(agent_config_id)[1]
+                agent_config = AgentConfiguration.objects.get(pk=agent_config_pk)
+                # Verify agent config is active
+                if not agent_config.is_active:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message="The selected agent configuration is not active",
+                        obj=None,
+                    )
 
             # Create the corpus action
             corpus_action = CorpusAction.objects.create(
@@ -3711,6 +3755,9 @@ class CreateCorpusAction(graphene.Mutation):
                 corpus=corpus,
                 fieldset=fieldset,
                 analyzer=analyzer,
+                agent_config=agent_config,
+                agent_prompt=agent_prompt or "",
+                pre_authorized_tools=pre_authorized_tools or [],
                 trigger=trigger,
                 disabled=disabled,
                 run_on_all_corpuses=run_on_all_corpuses,
@@ -3721,6 +3768,13 @@ class CreateCorpusAction(graphene.Mutation):
 
             return CreateCorpusAction(
                 ok=True, message="Successfully created corpus action", obj=corpus_action
+            )
+
+        except AgentConfiguration.DoesNotExist:
+            return CreateCorpusAction(
+                ok=False,
+                message="Agent configuration not found",
+                obj=None,
             )
 
         except Exception as e:
@@ -4015,6 +4069,126 @@ class RestoreDeletedDocument(graphene.Mutation):
             )
 
 
+class PermanentlyDeleteDocument(graphene.Mutation):
+    """
+    Permanently delete a soft-deleted document from a corpus.
+
+    This is IRREVERSIBLE and removes:
+    - All DocumentPath history for the document in this corpus
+    - User annotations (non-structural) on the document
+    - Relationships involving those annotations
+    - DocumentSummaryRevision records
+    - The Document itself if no other corpus references it
+
+    Requires DELETE permission on the corpus.
+    """
+
+    class Arguments:
+        document_id = graphene.String(
+            required=True, description="Global ID of the document to permanently delete"
+        )
+        corpus_id = graphene.String(
+            required=True, description="Global ID of the corpus"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
+    def mutate(root, info, document_id, corpus_id):
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+
+        user = info.context.user
+
+        try:
+            doc_pk = from_global_id(document_id)[1]
+            corpus_pk = from_global_id(corpus_id)[1]
+
+            document = Document.objects.get(pk=doc_pk)
+            corpus = Corpus.objects.get(pk=corpus_pk)
+
+            success, error = DocumentFolderService.permanently_delete_document(
+                user=user,
+                document=document,
+                corpus=corpus,
+            )
+
+            if not success:
+                return PermanentlyDeleteDocument(ok=False, message=error)
+
+            return PermanentlyDeleteDocument(
+                ok=True, message="Document permanently deleted"
+            )
+
+        except Document.DoesNotExist:
+            return PermanentlyDeleteDocument(ok=False, message="Document not found")
+        except Corpus.DoesNotExist:
+            return PermanentlyDeleteDocument(ok=False, message="Corpus not found")
+        except Exception as e:
+            logger.error(f"Failed to permanently delete document: {str(e)}")
+            return PermanentlyDeleteDocument(
+                ok=False, message=f"Failed to permanently delete document: {str(e)}"
+            )
+
+
+class EmptyTrash(graphene.Mutation):
+    """
+    Permanently delete ALL soft-deleted documents in a corpus (empty trash).
+
+    This is IRREVERSIBLE and removes all documents currently in the corpus trash.
+
+    Requires DELETE permission on the corpus.
+    """
+
+    class Arguments:
+        corpus_id = graphene.String(
+            required=True, description="Global ID of the corpus to empty trash for"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    deleted_count = graphene.Int()
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
+    def mutate(root, info, corpus_id):
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+
+        user = info.context.user
+
+        try:
+            corpus_pk = from_global_id(corpus_id)[1]
+            corpus = Corpus.objects.get(pk=corpus_pk)
+
+            deleted_count, error = DocumentFolderService.empty_trash(
+                user=user,
+                corpus=corpus,
+            )
+
+            if error:
+                # Partial success case - some deleted but with errors
+                return EmptyTrash(
+                    ok=deleted_count > 0,
+                    message=error,
+                    deleted_count=deleted_count,
+                )
+
+            return EmptyTrash(
+                ok=True,
+                message=f"Successfully deleted {deleted_count} document(s) from trash",
+                deleted_count=deleted_count,
+            )
+
+        except Corpus.DoesNotExist:
+            return EmptyTrash(ok=False, message="Corpus not found", deleted_count=0)
+        except Exception as e:
+            logger.error(f"Failed to empty trash: {str(e)}")
+            return EmptyTrash(
+                ok=False, message=f"Failed to empty trash: {str(e)}", deleted_count=0
+            )
+
+
 class RestoreDocumentToVersion(graphene.Mutation):
     """
     Restore a document to a previous content version.
@@ -4245,6 +4419,8 @@ class Mutation(graphene.ObjectType):
     # DOCUMENT VERSIONING MUTATIONS ############################################
     restore_deleted_document = RestoreDeletedDocument.Field()
     restore_document_to_version = RestoreDocumentToVersion.Field()
+    permanently_delete_document = PermanentlyDeleteDocument.Field()
+    empty_trash = EmptyTrash.Field()
 
     # CORPUS MUTATIONS #########################################################
     fork_corpus = StartCorpusFork.Field()

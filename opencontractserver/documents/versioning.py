@@ -596,3 +596,178 @@ def is_content_truly_deleted(document: Document, corpus: Corpus) -> bool:
     return not DocumentPath.objects.filter(
         document=document, corpus=corpus, is_current=True, is_deleted=False
     ).exists()
+
+
+def has_references_in_other_corpuses(
+    document: Document, exclude_corpus: Corpus
+) -> bool:
+    """
+    Check if document has any DocumentPath references in other corpuses.
+
+    Used to determine if Document can be deleted when permanently removing
+    from a corpus (Rule Q1 extended).
+    """
+    return (
+        DocumentPath.objects.filter(document=document)
+        .exclude(corpus=exclude_corpus)
+        .exists()
+    )
+
+
+def permanently_delete_document(
+    corpus: Corpus, document: Document, user: User
+) -> tuple[bool, str]:
+    """
+    Permanently delete a soft-deleted document from a corpus.
+
+    This is IRREVERSIBLE and performs the following cleanup:
+    1. Deletes ALL DocumentPath records for this document in the corpus (entire history)
+    2. Deletes corpus-scoped user annotations (non-structural) on this document
+    3. Deletes relationships involving those annotations
+    4. Deletes DocumentSummaryRevision records for this document+corpus
+    5. If no other corpus references the document (Rule Q1), deletes Document itself
+
+    Args:
+        corpus: The corpus to permanently delete from
+        document: The document to permanently delete
+        user: The user performing the deletion (for logging)
+
+    Returns:
+        Tuple of (success, error_message)
+
+    Raises:
+        Does not raise - returns (False, error_message) on failure
+    """
+    from opencontractserver.annotations.models import Annotation, Relationship
+
+    with transaction.atomic():
+        # Step 1: Verify document is currently soft-deleted in this corpus
+        deleted_path = DocumentPath.objects.filter(
+            document=document,
+            corpus=corpus,
+            is_current=True,
+            is_deleted=True,
+        ).first()
+
+        if not deleted_path:
+            return False, "Document is not in trash (not soft-deleted) in this corpus"
+
+        # Step 2: Get all DocumentPath IDs for this document in this corpus
+        # (includes entire history, not just current)
+        path_ids = list(
+            DocumentPath.objects.filter(
+                document=document,
+                corpus=corpus,
+            ).values_list("id", flat=True)
+        )
+
+        logger.info(
+            f"Permanently deleting document {document.id} from corpus {corpus.id} "
+            f"({len(path_ids)} path records) by user {user.id}"
+        )
+
+        # Step 3: Delete DocumentSummaryRevision records for this doc+corpus
+        from opencontractserver.documents.models import DocumentSummaryRevision
+
+        summary_count = DocumentSummaryRevision.objects.filter(
+            document=document,
+            corpus=corpus,
+        ).delete()[0]
+        logger.debug(f"Deleted {summary_count} DocumentSummaryRevision records")
+
+        # Step 4: Delete user annotations (non-structural) for this document
+        # Structural annotations live in StructuralAnnotationSet and are shared
+        user_annotations = Annotation.objects.filter(
+            document=document,
+            structural_set__isnull=True,  # Only user annotations, not structural
+        )
+
+        # Step 5: Delete relationships involving these annotations first (FK constraint)
+        # Use Q objects to delete in one operation to avoid counting duplicates
+        # (same relationship could have both source and target in annotation_ids)
+        from django.db.models import Q
+
+        annotation_ids = list(user_annotations.values_list("id", flat=True))
+        relationship_count = Relationship.objects.filter(
+            Q(source_annotations__id__in=annotation_ids)
+            | Q(target_annotations__id__in=annotation_ids)
+        ).delete()[0]
+        logger.debug(f"Deleted {relationship_count} Relationship records")
+
+        # Step 6: Delete the user annotations
+        annotation_count = user_annotations.delete()[0]
+        logger.debug(f"Deleted {annotation_count} user Annotation records")
+
+        # Step 7: Delete all DocumentPath records for this document in corpus
+        DocumentPath.objects.filter(id__in=path_ids).delete()
+        logger.debug(f"Deleted {len(path_ids)} DocumentPath records")
+
+        # Step 8: Check if document should be deleted (Rule Q1 extended)
+        # Document can be deleted if no other corpus has any reference to it
+        if not has_references_in_other_corpuses(document, corpus):
+            doc_id = document.id
+            doc_title = document.title
+            document.delete()
+            logger.info(
+                f"Deleted Document {doc_id} ({doc_title}) - no other corpus references"
+            )
+        else:
+            logger.debug(
+                f"Document {document.id} preserved - has references in other corpuses"
+            )
+
+        return True, ""
+
+
+def permanently_delete_all_in_trash(
+    corpus: Corpus, user: User
+) -> tuple[int, list[str]]:
+    """
+    Permanently delete ALL soft-deleted documents in a corpus (empty trash).
+
+    This function processes deletions one-by-one and allows partial success.
+    Each document deletion is wrapped in its own atomic transaction via
+    `permanently_delete_document`, so if one fails, others may still succeed.
+
+    Design Decision: Partial deletions are intentionally allowed because:
+    1. Document-level isolation: Each document's deletion is independent
+    2. Better UX: Users get feedback on what succeeded/failed
+    3. Recoverability: Failed items remain in trash for retry
+    4. Each individual deletion is fully atomic (all-or-nothing at doc level)
+
+    Args:
+        corpus: The corpus to empty trash for
+        user: The user performing the deletion
+
+    Returns:
+        Tuple of (deleted_count, list_of_errors) where:
+        - deleted_count: Number of documents successfully deleted
+        - list_of_errors: List of error messages for failed deletions
+        Note: deleted_count > 0 with non-empty errors indicates partial success.
+    """
+    # Get all currently soft-deleted documents
+    deleted_paths = DocumentPath.objects.filter(
+        corpus=corpus,
+        is_current=True,
+        is_deleted=True,
+    ).select_related("document")
+
+    deleted_count = 0
+    errors = []
+
+    # Get unique documents (a document might have multiple deleted paths theoretically)
+    documents = {path.document for path in deleted_paths}
+
+    for document in documents:
+        success, error = permanently_delete_document(corpus, document, user)
+        if success:
+            deleted_count += 1
+        else:
+            errors.append(f"Document {document.id}: {error}")
+
+    logger.info(
+        f"Empty trash completed for corpus {corpus.id}: "
+        f"{deleted_count} deleted, {len(errors)} errors"
+    )
+
+    return deleted_count, errors

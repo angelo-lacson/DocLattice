@@ -391,3 +391,224 @@ def trigger_agent_responses_for_message(message_id: int, user_id: int) -> dict:
         "agents_triggered": len(task_ids),
         "task_ids": task_ids,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Agent-based Corpus Actions
+# --------------------------------------------------------------------------- #
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def run_agent_corpus_action(
+    self,
+    corpus_action_id: int,
+    document_id: int,
+    user_id: int,
+) -> dict:
+    """
+    Execute an agent-based corpus action on a single document.
+
+    This task runs synchronously but internally uses asyncio to call
+    the async agent API. It's triggered when a document is added or edited
+    in a corpus that has an agent-based corpus action configured.
+
+    Args:
+        corpus_action_id: ID of the CorpusAction to execute
+        document_id: ID of the Document to process
+        user_id: ID of the User triggering the action
+
+    Returns:
+        dict with status information and result_id
+    """
+    from django.utils import timezone
+
+    from opencontractserver.agents.models import AgentActionResult
+
+    logger.info(
+        f"[AgentCorpusAction] Starting: action={corpus_action_id}, "
+        f"doc={document_id}, user={user_id}"
+    )
+
+    try:
+        return asyncio.run(
+            _run_agent_corpus_action_async(
+                corpus_action_id=corpus_action_id,
+                document_id=document_id,
+                user_id=user_id,
+            )
+        )
+    except Exception as exc:
+        logger.error(
+            f"[AgentCorpusAction] Failed: action={corpus_action_id}, "
+            f"doc={document_id}, error={exc}",
+            exc_info=True,
+        )
+        # Update result record with failure before retrying
+        try:
+            result, _ = AgentActionResult.objects.get_or_create(
+                corpus_action_id=corpus_action_id,
+                document_id=document_id,
+                defaults={
+                    "creator_id": user_id,
+                    "status": AgentActionResult.Status.FAILED,
+                    "started_at": timezone.now(),
+                },
+            )
+            result.status = AgentActionResult.Status.FAILED
+            result.error_message = str(exc)
+            result.completed_at = timezone.now()
+            result.save(update_fields=["status", "error_message", "completed_at"])
+        except Exception as e:
+            logger.error(f"[AgentCorpusAction] Failed to mark result as failed: {e}")
+
+        raise self.retry(exc=exc)
+
+
+async def _run_agent_corpus_action_async(
+    corpus_action_id: int,
+    document_id: int,
+    user_id: int,
+) -> dict:
+    """Async implementation of agent corpus action execution."""
+    from channels.db import database_sync_to_async
+    from django.conf import settings
+    from django.utils import timezone
+
+    from opencontractserver.agents.models import AgentActionResult
+    from opencontractserver.corpuses.models import CorpusAction
+    from opencontractserver.documents.models import Document
+    from opencontractserver.llms import agents
+
+    # Load the action and document
+    action = await CorpusAction.objects.select_related("agent_config", "corpus").aget(
+        id=corpus_action_id
+    )
+
+    document = await Document.objects.aget(id=document_id)
+
+    logger.info(
+        f"[AgentCorpusAction] Executing '{action.name}' on document "
+        f"'{document.title}' (id={document_id})"
+    )
+
+    # Create or get result record
+    @database_sync_to_async
+    def get_or_create_result():
+        return AgentActionResult.objects.get_or_create(
+            corpus_action=action,
+            document=document,
+            defaults={
+                "creator_id": user_id,
+                "status": AgentActionResult.Status.RUNNING,
+                "started_at": timezone.now(),
+            },
+        )
+
+    result, created = await get_or_create_result()
+
+    # If already completed successfully, skip re-execution
+    if not created and result.status == AgentActionResult.Status.COMPLETED:
+        logger.info(
+            f"[AgentCorpusAction] Already completed for doc {document_id}, skipping"
+        )
+        return {"status": "already_completed", "result_id": result.id}
+
+    # Update status to running
+    result.status = AgentActionResult.Status.RUNNING
+    result.started_at = timezone.now()
+    result.error_message = ""  # Clear any previous error
+
+    @database_sync_to_async
+    def save_result_running():
+        result.save(update_fields=["status", "started_at", "error_message"])
+
+    await save_result_running()
+
+    try:
+        # Determine which tools to use
+        tools = action.pre_authorized_tools or []
+        if not tools and action.agent_config:
+            tools = action.agent_config.available_tools or []
+
+        # Build system prompt
+        system_prompt = None
+        if action.agent_config and action.agent_config.system_instructions:
+            system_prompt = action.agent_config.system_instructions
+
+        logger.debug(
+            f"[AgentCorpusAction] Creating agent with tools={tools}, "
+            f"prompt_length={len(action.agent_prompt)}"
+        )
+
+        # Create agent with pre-authorization (skip approval gate)
+        agent = await agents.for_document(
+            document=document,
+            corpus=action.corpus,
+            user_id=user_id,
+            system_prompt=system_prompt,
+            tools=tools,
+            streaming=False,
+            # Pre-authorize all tools for automated execution
+            skip_approval_gate=True,
+        )
+
+        # Execute the task prompt
+        logger.info(f"[AgentCorpusAction] Executing prompt for doc {document_id}")
+        response = await agent.chat(action.agent_prompt)
+
+        # Build execution metadata
+        execution_metadata = {
+            "model": getattr(settings, "LLMS_DEFAULT_MODEL", "unknown"),
+            "tools_available": tools,
+            "sources_count": len(response.sources) if response.sources else 0,
+            "agent_config_id": action.agent_config_id,
+            "agent_config_name": (
+                action.agent_config.name if action.agent_config else None
+            ),
+        }
+
+        # Update result with success
+        result.status = AgentActionResult.Status.COMPLETED
+        result.agent_response = response.content
+        result.conversation_id = agent.get_conversation_id()
+        result.completed_at = timezone.now()
+        result.execution_metadata = execution_metadata
+
+        @database_sync_to_async
+        def save_result_completed():
+            result.save()
+
+        await save_result_completed()
+
+        logger.info(
+            f"[AgentCorpusAction] Completed: action={corpus_action_id}, "
+            f"doc={document_id}, result={result.id}, "
+            f"response_length={len(response.content)}"
+        )
+
+        return {
+            "status": "completed",
+            "result_id": result.id,
+            "response_length": len(response.content),
+            "conversation_id": agent.get_conversation_id(),
+        }
+
+    except Exception as e:
+        # Update result with failure
+        result.status = AgentActionResult.Status.FAILED
+        # Truncate error message to prevent database bloat from long stack traces
+        result.error_message = str(e)[:1000]
+        result.completed_at = timezone.now()
+
+        @database_sync_to_async
+        def save_result_failed():
+            result.save()
+
+        await save_result_failed()
+
+        logger.error(
+            f"[AgentCorpusAction] Failed: action={corpus_action_id}, "
+            f"doc={document_id}, error={e}",
+            exc_info=True,
+        )
+        raise

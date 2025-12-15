@@ -60,6 +60,7 @@ from opencontractserver.llms.tools.core_tools import (
     aadd_document_note,
     aduplicate_annotations_with_label,
     aget_corpus_description,
+    aget_document_description,
     aget_document_summary,
     aget_document_summary_diff,
     aget_document_summary_versions,
@@ -70,6 +71,7 @@ from opencontractserver.llms.tools.core_tools import (
     asearch_document_notes,
     asearch_exact_text_as_sources,
     aupdate_corpus_description,
+    aupdate_document_description,
     aupdate_document_note,
     aupdate_document_summary,
 )
@@ -1077,6 +1079,11 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 if tool_name == "update_document_summary":
                     tool_args = {"new_content": tool_args_raw}
                     logger.info(f"String arg for update_document_summary: {tool_args}")
+                elif tool_name == "update_document_description":
+                    tool_args = {"new_description": tool_args_raw}
+                    logger.info(
+                        f"String arg for update_document_description: {tool_args}"
+                    )
                 else:
                     # Generic fallback for other tools
                     logger.warning(
@@ -1109,9 +1116,13 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     break
 
             # Helper stub ctx carrying call-id for wrappers that expect it.
+            class _EmptyDeps:  # noqa: D401 – simple placeholder for deps
+                skip_approval_gate = True
+
             class _EmptyCtx:  # noqa: D401 – simple placeholder
                 tool_call_id = pending.get("tool_call_id")
                 skip_approval_gate = True
+                deps = _EmptyDeps()
 
             import inspect
 
@@ -1170,6 +1181,8 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         # For known tools, use the correct parameter name
                         if tool_name == "update_document_summary":
                             tool_args = {"new_content": tool_args}
+                        elif tool_name == "update_document_description":
+                            tool_args = {"new_description": tool_args}
                         else:
                             tool_args = {"arg": tool_args}
                     else:
@@ -1687,6 +1700,50 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         )
 
         # -----------------------------
+        # Document description tools (corpus-agnostic)
+        # -----------------------------
+        async def get_document_description_tool(
+            truncate_length: int | None = None,
+            from_start: bool = True,
+        ) -> str:
+            """Get the document's description field."""
+            return await aget_document_description(
+                document_id=context.document.id,
+                truncate_length=truncate_length,
+                from_start=from_start,
+            )
+
+        get_description_wrapped = PydanticAIToolFactory.from_function(
+            get_document_description_tool,
+            name="get_document_description",
+            description="Get the document's description field.",
+            parameter_descriptions={
+                "truncate_length": "Optionally truncate to this many characters",
+                "from_start": "If true, truncate from beginning; otherwise from end",
+            },
+        )
+
+        async def update_document_description_tool(new_description: str) -> dict:
+            """Update the document's description field."""
+            logger.info(
+                f"Updating document description with content: {new_description}"
+            )
+            return await aupdate_document_description(
+                document_id=context.document.id,
+                new_description=new_description,
+            )
+
+        update_description_wrapped = PydanticAIToolFactory.from_function(
+            update_document_description_tool,
+            name="update_document_description",
+            description="Update the document's description field (requires approval).",
+            parameter_descriptions={
+                "new_description": "The new description content for the document",
+            },
+            requires_approval=True,
+        )
+
+        # -----------------------------
         # Document summary tools (new)
         # -----------------------------
         async def get_document_summary_tool(
@@ -1955,6 +2012,8 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             get_text_length_tool,  # corpus-agnostic
             load_text_tool,  # corpus-agnostic
             search_exact_text_wrapped,  # corpus-agnostic exact text search
+            get_description_wrapped,  # corpus-agnostic document description
+            update_description_wrapped,  # corpus-agnostic document description (requires approval)
         ]
 
         if context.corpus is not None:

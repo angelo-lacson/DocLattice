@@ -10,7 +10,10 @@ class CorpusesConfig(AppConfig):
 
     def ready(self):
         try:
-            pass
+            # Import signals to register signal handlers for corpus actions
+            # This enables automatic triggering of corpus actions when documents
+            # are added to a corpus via the M2M relationship
+            from opencontractserver.corpuses import signals  # noqa: F401
 
         except ImportError:
             pass

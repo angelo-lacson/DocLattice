@@ -1,5 +1,16 @@
 import React from "react";
-import { Modal, Form, Button, Dropdown, Message } from "semantic-ui-react";
+import {
+  Modal,
+  Form,
+  Button,
+  Dropdown,
+  Message,
+  TextArea,
+  Segment,
+  Header,
+  Icon,
+  Label,
+} from "semantic-ui-react";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import {
@@ -10,10 +21,13 @@ import {
 import {
   GET_FIELDSETS,
   GET_ANALYZERS,
+  GET_AGENT_CONFIGURATIONS,
   GetFieldsetsInputs,
   GetFieldsetsOutputs,
   GetAnalyzersInputs,
   GetAnalyzersOutputs,
+  GetAgentConfigurationsInput,
+  GetAgentConfigurationsOutput,
 } from "../../graphql/queries";
 
 interface CreateCorpusActionModalProps {
@@ -23,6 +37,8 @@ interface CreateCorpusActionModalProps {
   onSuccess: () => void;
 }
 
+type ActionType = "fieldset" | "analyzer" | "agent";
+
 export const CreateCorpusActionModal: React.FC<
   CreateCorpusActionModalProps
 > = ({ corpusId, open, onClose, onSuccess }) => {
@@ -30,25 +46,54 @@ export const CreateCorpusActionModal: React.FC<
   const [trigger, setTrigger] = React.useState<
     "add_document" | "edit_document"
   >("add_document");
+  const [actionType, setActionType] = React.useState<ActionType>("fieldset");
   const [selectedFieldsetId, setSelectedFieldsetId] = React.useState<
     string | null
   >(null);
   const [selectedAnalyzerId, setSelectedAnalyzerId] = React.useState<
     string | null
   >(null);
+  const [selectedAgentConfigId, setSelectedAgentConfigId] = React.useState<
+    string | null
+  >(null);
+  const [agentPrompt, setAgentPrompt] = React.useState("");
+  const [preAuthorizedTools, setPreAuthorizedTools] = React.useState<string[]>(
+    []
+  );
   const [disabled, setDisabled] = React.useState(false);
   const [runOnAllCorpuses, setRunOnAllCorpuses] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const resetForm = () => {
+    setName("");
+    setTrigger("add_document");
+    setActionType("fieldset");
+    setSelectedFieldsetId(null);
+    setSelectedAnalyzerId(null);
+    setSelectedAgentConfigId(null);
+    setAgentPrompt("");
+    setPreAuthorizedTools([]);
+    setDisabled(false);
+    setRunOnAllCorpuses(false);
+  };
 
   const [createCorpusAction] = useMutation<
     CreateCorpusActionOutput,
     CreateCorpusActionInput
   >(CREATE_CORPUS_ACTION, {
-    onCompleted: () => {
-      toast.success("Action created successfully");
-      setIsSubmitting(false);
-      onSuccess();
-      onClose();
+    onCompleted: (data) => {
+      if (data.createCorpusAction.ok) {
+        toast.success("Action created successfully");
+        setIsSubmitting(false);
+        resetForm();
+        onSuccess();
+        onClose();
+      } else {
+        toast.error(
+          data.createCorpusAction.message || "Failed to create action"
+        );
+        setIsSubmitting(false);
+      }
     },
     onError: (error) => {
       toast.error("Failed to create action");
@@ -67,10 +112,46 @@ export const CreateCorpusActionModal: React.FC<
     GetAnalyzersInputs
   >(GET_ANALYZERS);
 
+  const { data: agentConfigsData } = useQuery<
+    GetAgentConfigurationsOutput,
+    GetAgentConfigurationsInput
+  >(GET_AGENT_CONFIGURATIONS, {
+    variables: { isActive: true },
+  });
+
+  // Get available tools from selected agent config
+  const selectedAgentConfig = React.useMemo(() => {
+    if (!selectedAgentConfigId || !agentConfigsData) return null;
+    return agentConfigsData.agentConfigurations.edges.find(
+      (edge) => edge.node.id === selectedAgentConfigId
+    )?.node;
+  }, [selectedAgentConfigId, agentConfigsData]);
+
   const handleSubmit = async () => {
-    if (!name || (!selectedFieldsetId && !selectedAnalyzerId)) {
-      toast.error("Please fill in all required fields");
+    if (!name) {
+      toast.error("Please enter a name for the action");
       return;
+    }
+
+    if (actionType === "fieldset" && !selectedFieldsetId) {
+      toast.error("Please select a fieldset");
+      return;
+    }
+
+    if (actionType === "analyzer" && !selectedAnalyzerId) {
+      toast.error("Please select an analyzer");
+      return;
+    }
+
+    if (actionType === "agent") {
+      if (!selectedAgentConfigId) {
+        toast.error("Please select an agent configuration");
+        return;
+      }
+      if (!agentPrompt.trim()) {
+        toast.error("Please enter a prompt for the agent");
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -81,8 +162,23 @@ export const CreateCorpusActionModal: React.FC<
           corpusId,
           name,
           trigger,
-          fieldsetId: selectedFieldsetId || undefined,
-          analyzerId: selectedAnalyzerId || undefined,
+          fieldsetId:
+            actionType === "fieldset"
+              ? selectedFieldsetId || undefined
+              : undefined,
+          analyzerId:
+            actionType === "analyzer"
+              ? selectedAnalyzerId || undefined
+              : undefined,
+          agentConfigId:
+            actionType === "agent"
+              ? selectedAgentConfigId || undefined
+              : undefined,
+          agentPrompt: actionType === "agent" ? agentPrompt : undefined,
+          preAuthorizedTools:
+            actionType === "agent" && preAuthorizedTools.length > 0
+              ? preAuthorizedTools
+              : undefined,
           disabled,
           runOnAllCorpuses,
         },
@@ -95,6 +191,27 @@ export const CreateCorpusActionModal: React.FC<
   const triggerOptions = [
     { key: "add", text: "On Document Add", value: "add_document" },
     { key: "edit", text: "On Document Edit", value: "edit_document" },
+  ];
+
+  const actionTypeOptions = [
+    {
+      key: "fieldset",
+      text: "Fieldset (Extract data)",
+      value: "fieldset",
+      icon: "table",
+    },
+    {
+      key: "analyzer",
+      text: "Analyzer (Run analysis)",
+      value: "analyzer",
+      icon: "cogs",
+    },
+    {
+      key: "agent",
+      text: "Agent (AI-powered action)",
+      value: "agent",
+      icon: "microchip",
+    },
   ];
 
   interface DropdownOption {
@@ -123,9 +240,32 @@ export const CreateCorpusActionModal: React.FC<
     [analyzersData]
   );
 
+  const agentConfigOptions: DropdownOption[] = React.useMemo(
+    () =>
+      agentConfigsData?.agentConfigurations.edges.map((config) => ({
+        key: config.node.id,
+        text: `${config.node.name}${
+          config.node.scope === "CORPUS" ? " (Corpus)" : " (Global)"
+        }`,
+        value: config.node.id,
+      })) || [],
+    [agentConfigsData]
+  );
+
+  const toolOptions: DropdownOption[] = React.useMemo(() => {
+    if (!selectedAgentConfig?.availableTools) return [];
+    return selectedAgentConfig.availableTools.map((tool) => ({
+      key: tool,
+      text: tool.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+      value: tool,
+    }));
+  }, [selectedAgentConfig]);
+
   return (
     <Modal open={open} onClose={onClose} size="small">
-      <Modal.Header>Create New Corpus Action</Modal.Header>
+      <Modal.Header>
+        <Icon name="lightning" /> Create New Corpus Action
+      </Modal.Header>
       <Modal.Content>
         <Form loading={isSubmitting}>
           <Form.Field required>
@@ -149,42 +289,168 @@ export const CreateCorpusActionModal: React.FC<
             />
           </Form.Field>
 
-          <Message info>
-            Select either a fieldset OR an analyzer to run when the trigger
-            occurs.
-          </Message>
-
-          <Form.Field>
-            <label>Fieldset</label>
+          <Form.Field required>
+            <label>Action Type</label>
             <Dropdown
               selection
-              clearable
-              options={fieldsetOptions}
-              value={selectedFieldsetId || undefined}
+              options={actionTypeOptions}
+              value={actionType}
               onChange={(_, data) => {
-                setSelectedFieldsetId(data.value as string);
-                setSelectedAnalyzerId(null);
-              }}
-              placeholder="Select fieldset"
-              disabled={Boolean(selectedAnalyzerId)}
-            />
-          </Form.Field>
-
-          <Form.Field>
-            <label>Analyzer</label>
-            <Dropdown
-              selection
-              clearable
-              options={analyzerOptions}
-              value={selectedAnalyzerId || undefined}
-              onChange={(_, data) => {
-                setSelectedAnalyzerId(data.value as string);
+                setActionType(data.value as ActionType);
+                // Clear selections when changing type
                 setSelectedFieldsetId(null);
+                setSelectedAnalyzerId(null);
+                setSelectedAgentConfigId(null);
+                setAgentPrompt("");
+                setPreAuthorizedTools([]);
               }}
-              placeholder="Select analyzer"
-              disabled={Boolean(selectedFieldsetId)}
             />
           </Form.Field>
+
+          {actionType === "fieldset" && (
+            <Segment>
+              <Header as="h4">
+                <Icon name="table" />
+                <Header.Content>Fieldset Configuration</Header.Content>
+              </Header>
+              <Message info size="small">
+                Select a fieldset to automatically extract data from documents
+                when they are {trigger === "add_document" ? "added" : "edited"}.
+              </Message>
+              <Form.Field required>
+                <label>Fieldset</label>
+                <Dropdown
+                  selection
+                  clearable
+                  search
+                  options={fieldsetOptions}
+                  value={selectedFieldsetId || undefined}
+                  onChange={(_, data) =>
+                    setSelectedFieldsetId(data.value as string)
+                  }
+                  placeholder="Select fieldset"
+                />
+              </Form.Field>
+            </Segment>
+          )}
+
+          {actionType === "analyzer" && (
+            <Segment>
+              <Header as="h4">
+                <Icon name="cogs" />
+                <Header.Content>Analyzer Configuration</Header.Content>
+              </Header>
+              <Message info size="small">
+                Select an analyzer to automatically run analysis on documents
+                when they are {trigger === "add_document" ? "added" : "edited"}.
+              </Message>
+              <Form.Field required>
+                <label>Analyzer</label>
+                <Dropdown
+                  selection
+                  clearable
+                  search
+                  options={analyzerOptions}
+                  value={selectedAnalyzerId || undefined}
+                  onChange={(_, data) =>
+                    setSelectedAnalyzerId(data.value as string)
+                  }
+                  placeholder="Select analyzer"
+                />
+              </Form.Field>
+            </Segment>
+          )}
+
+          {actionType === "agent" && (
+            <Segment>
+              <Header as="h4">
+                <Icon name="microchip" />
+                <Header.Content>Agent Configuration</Header.Content>
+              </Header>
+              <Message info size="small">
+                <p>
+                  Select an AI agent to perform custom actions on{" "}
+                  <strong>individual documents</strong>. The agent will execute
+                  automatically when documents are{" "}
+                  {trigger === "add_document" ? "added" : "edited"}.
+                </p>
+                <p style={{ marginTop: "0.5em", marginBottom: 0 }}>
+                  <Icon name="info circle" />
+                  The agent will have access to document-scoped tools
+                  (read/update description, summary, notes, annotations).
+                </p>
+              </Message>
+              <Form.Field required>
+                <label>Agent</label>
+                <Dropdown
+                  selection
+                  clearable
+                  search
+                  options={agentConfigOptions}
+                  value={selectedAgentConfigId || undefined}
+                  onChange={(_, data) => {
+                    setSelectedAgentConfigId(data.value as string);
+                    setPreAuthorizedTools([]);
+                  }}
+                  placeholder="Select agent configuration"
+                />
+              </Form.Field>
+
+              {selectedAgentConfig && (
+                <>
+                  <Message size="small">
+                    <Message.Header>{selectedAgentConfig.name}</Message.Header>
+                    <p>{selectedAgentConfig.description}</p>
+                  </Message>
+
+                  <Form.Field required>
+                    <label>Agent Prompt</label>
+                    <TextArea
+                      value={agentPrompt}
+                      onChange={(e, data) =>
+                        setAgentPrompt(data.value as string)
+                      }
+                      placeholder="Enter the task prompt for the agent (e.g., 'Summarize this document and update its description')"
+                      rows={4}
+                    />
+                  </Form.Field>
+
+                  {toolOptions.length > 0 && (
+                    <Form.Field>
+                      <label>
+                        Pre-authorized Tools{" "}
+                        <Label size="tiny" color="blue">
+                          Optional
+                        </Label>
+                      </label>
+                      <Dropdown
+                        selection
+                        multiple
+                        search
+                        options={toolOptions}
+                        value={preAuthorizedTools}
+                        onChange={(_, data) =>
+                          setPreAuthorizedTools(data.value as string[])
+                        }
+                        placeholder="Select tools to pre-authorize (optional)"
+                      />
+                      <small
+                        style={{
+                          color: "#666",
+                          marginTop: "0.5em",
+                          display: "block",
+                        }}
+                      >
+                        Pre-authorized tools will execute without requiring
+                        approval. Leave empty to use all available tools with
+                        approval gates.
+                      </small>
+                    </Form.Field>
+                  )}
+                </>
+              )}
+            </Segment>
+          )}
 
           <Form.Field>
             <Form.Checkbox
@@ -204,7 +470,14 @@ export const CreateCorpusActionModal: React.FC<
         </Form>
       </Modal.Content>
       <Modal.Actions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          onClick={() => {
+            resetForm();
+            onClose();
+          }}
+        >
+          Cancel
+        </Button>
         <Button primary onClick={handleSubmit} loading={isSubmitting}>
           Create Action
         </Button>

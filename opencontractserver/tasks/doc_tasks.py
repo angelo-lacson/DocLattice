@@ -52,10 +52,34 @@ TEMP_DIR = "./tmp"
 
 @celery_app.task()
 def set_doc_lock_state(*args, locked: bool, doc_id: int):
+    """
+    Set the backend lock state for a document.
+
+    When unlocking (locked=False), fires the document_processing_complete signal
+    to notify other parts of the system that the document is ready for processing.
+    This enables deferred corpus actions - actions that were skipped because the
+    document was still being parsed/thumbnailed can now run.
+
+    See docs/architecture/agent_corpus_actions_design.md for the full architecture.
+    """
     document = Document.objects.get(pk=doc_id)
     document.backend_lock = locked
     document.processing_finished = timezone.now()
     document.save()
+
+    # Fire signal when unlocking to trigger deferred corpus actions
+    # This is the key integration point for the event-driven corpus action architecture
+    if not locked:
+        from opencontractserver.documents.signals import document_processing_complete
+
+        logger.info(
+            f"[set_doc_lock_state] Document {doc_id} processing complete, firing signal"
+        )
+        document_processing_complete.send(
+            sender=Document,
+            document=document,
+            user_id=document.creator_id,
+        )
 
 
 @shared_task(
