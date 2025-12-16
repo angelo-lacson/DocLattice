@@ -14,6 +14,7 @@ These tests verify that:
 Part of Phase 1 sharing implementation - see docs/architecture/sharing.md
 """
 
+import uuid
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -64,12 +65,16 @@ class TestSetCorpusVisibilityMutation(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        self.owner = User.objects.create_user(username="owner", password="test")
+        # Use unique usernames to avoid conflicts in parallel test runs
+        unique_id = uuid.uuid4().hex[:8]
+        self.owner = User.objects.create_user(
+            username=f"owner_{unique_id}", password="test"
+        )
         self.other_user = User.objects.create_user(
-            username="other_user", password="test"
+            username=f"other_user_{unique_id}", password="test"
         )
         self.superuser = User.objects.create_superuser(
-            username="admin", password="test"
+            username=f"admin_{unique_id}", password="test"
         )
         self.corpus = Corpus.objects.create(
             title="Test Corpus", creator=self.owner, is_public=False
