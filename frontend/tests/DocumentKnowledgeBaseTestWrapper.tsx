@@ -4325,20 +4325,9 @@ const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
       return Observable.of({ data: threadDetailData });
     }
 
-    /* ✅  wildcard for DocumentData (documentCorpusActions) ------------ */
-    if (operation.operationName === "DocumentData") {
-      console.log("[MOCK HIT] DocumentData – wildcard match (empty response)");
-      return Observable.of({
-        data: {
-          documentCorpusActions: {
-            __typename: "DocumentCorpusActionsType",
-            corpusActions: [],
-            extracts: [],
-            analysisRows: [],
-          },
-        },
-      });
-    }
+    // DocumentData queries are handled by the proper mocks in the MockLink.
+    // Do NOT add a wildcard handler here that returns empty data,
+    // as that would break tests that need actual analyses/extracts data.
 
     // Delegate other operations to the default MockLink
     return defaultMockLink.request(operation) as any;

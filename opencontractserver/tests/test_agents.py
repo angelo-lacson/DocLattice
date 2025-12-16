@@ -422,6 +422,9 @@ class TestAgentConfigurationGraphQL(TestCase):
 
     def test_query_agents(self):
         """Test querying agent configurations."""
+        # Count existing agents before creating new ones (e.g., default agents from migrations)
+        initial_count = AgentConfiguration.objects.count()
+
         # Create test agents
         AgentConfiguration.objects.create(
             name="Global Agent",
@@ -458,13 +461,13 @@ class TestAgentConfigurationGraphQL(TestCase):
             }
         """
 
-        # Admin should see both
+        # Admin should see all agents (initial + 2 new ones)
         result = self.client.execute(
             query, context_value=type("Request", (), {"user": self.admin_user})()
         )
         self.assertIsNone(result.get("errors"))
         agents = result["data"]["agents"]["edges"]
-        self.assertEqual(len(agents), 2)
+        self.assertEqual(len(agents), initial_count + 2)
 
     def test_query_agent_tools_returns_arrays(self):
         """Test that availableTools and permissionRequiredTools are returned as arrays.
