@@ -455,7 +455,7 @@ def run_agent_corpus_action(
                 },
             )
             result.status = AgentActionResult.Status.FAILED
-            result.error_message = str(exc)
+            result.error_message = str(exc)[:1000]  # Truncate to prevent DB bloat
             result.completed_at = timezone.now()
             result.save(update_fields=["status", "error_message", "completed_at"])
         except Exception as e:

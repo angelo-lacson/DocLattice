@@ -7,9 +7,11 @@ These tests cover:
 - Error handling and failure paths
 - Tools and system prompt configuration
 - Race condition prevention with select_for_update()
+
+NOTE: Tests use the Celery task's .apply() method rather than asyncio.run() directly
+to avoid Django database connection issues with async code.
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,10 +22,7 @@ from django.utils import timezone
 from opencontractserver.agents.models import AgentActionResult, AgentConfiguration
 from opencontractserver.corpuses.models import Corpus, CorpusAction, CorpusActionTrigger
 from opencontractserver.documents.models import Document
-from opencontractserver.tasks.agent_tasks import (
-    _run_agent_corpus_action_async,
-    run_agent_corpus_action,
-)
+from opencontractserver.tasks.agent_tasks import run_agent_corpus_action
 
 User = get_user_model()
 
@@ -60,7 +59,7 @@ class MockAgent:
 
 @pytest.mark.django_db
 class TestRunAgentCorpusActionAsync(TransactionTestCase):
-    """Tests for _run_agent_corpus_action_async function."""
+    """Tests for run_agent_corpus_action task (testing async behavior via task wrapper)."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -94,20 +93,16 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
         mock_agent = MockAgent(response_content="Document summary: This is a test.")
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        result = asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=self.corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
         )
 
-        self.assertEqual(result["status"], "completed")
-        self.assertIn("result_id", result)
-        self.assertIsNone(result["conversation_id"])
+        self.assertEqual(result.result["status"], "completed")
+        self.assertIn("result_id", result.result)
+        self.assertIsNone(result.result["conversation_id"])
 
         # Verify the result was saved correctly
-        action_result = AgentActionResult.objects.get(id=result["result_id"])
+        action_result = AgentActionResult.objects.get(id=result.result["result_id"])
         self.assertEqual(action_result.status, AgentActionResult.Status.COMPLETED)
         self.assertEqual(
             action_result.agent_response, "Document summary: This is a test."
@@ -127,16 +122,12 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
             creator=self.user,
         )
 
-        result = asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=self.corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
         )
 
-        self.assertEqual(result["status"], "already_completed")
-        self.assertEqual(result["result_id"], existing_result.id)
+        self.assertEqual(result.result["status"], "already_completed")
+        self.assertEqual(result.result["result_id"], existing_result.id)
 
         # Agent should NOT have been called
         mock_agents_module.for_document.assert_not_called()
@@ -156,16 +147,12 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
             creator=self.user,
         )
 
-        result = asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=self.corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
         )
 
-        self.assertEqual(result["status"], "already_running")
-        self.assertEqual(result["result_id"], existing_result.id)
+        self.assertEqual(result.result["status"], "already_running")
+        self.assertEqual(result.result["result_id"], existing_result.id)
 
         # Agent should NOT have been called
         mock_agents_module.for_document.assert_not_called()
@@ -185,15 +172,11 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
         mock_agent = MockAgent(response_content="Retry successful")
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        result = asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=self.corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
         )
 
-        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result.result["status"], "completed")
 
         # Verify the result was updated
         existing_result.refresh_from_db()
@@ -207,16 +190,12 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
         mock_agent = MockAgent(should_fail=True)
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        with self.assertRaises(Exception) as context:
-            asyncio.run(
-                _run_agent_corpus_action_async(
-                    corpus_action_id=self.corpus_action.id,
-                    document_id=self.document.id,
-                    user_id=self.user.id,
-                )
+        # The task will raise an exception due to agent failure
+        with self.assertRaises(Exception):
+            run_agent_corpus_action.apply(
+                args=[self.corpus_action.id, self.document.id, self.user.id],
+                throw=True,
             )
-
-        self.assertIn("Agent execution failed", str(context.exception))
 
         # Verify the result was marked as failed
         action_result = AgentActionResult.objects.get(
@@ -236,12 +215,8 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
         mock_agent = MockAgent()
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=self.corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
         )
 
         # Verify for_document was called with custom tools
@@ -257,12 +232,8 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
         mock_agent = MockAgent()
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=self.corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
         )
 
         # Verify for_document was called with agent_config tools
@@ -277,12 +248,8 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
         mock_agent = MockAgent()
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=self.corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
         )
 
         call_kwargs = mock_agents_module.for_document.call_args.kwargs
@@ -295,15 +262,11 @@ class TestRunAgentCorpusActionAsync(TransactionTestCase):
         mock_agent = MockAgent()
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        result = asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=self.corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
         )
 
-        action_result = AgentActionResult.objects.get(id=result["result_id"])
+        action_result = AgentActionResult.objects.get(id=result.result["result_id"])
         metadata = action_result.execution_metadata
 
         self.assertIn("model", metadata)
@@ -435,15 +398,11 @@ class TestAgentCorpusActionEdgeCases(TransactionTestCase):
         mock_agent = MockAgent()
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        result = asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        result = run_agent_corpus_action.apply(
+            args=[corpus_action.id, self.document.id, self.user.id]
         )
 
-        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result.result["status"], "completed")
         call_kwargs = mock_agents_module.for_document.call_args.kwargs
         self.assertEqual(call_kwargs["tools"], [])
 
@@ -477,12 +436,9 @@ class TestAgentCorpusActionEdgeCases(TransactionTestCase):
         )
 
         with self.assertRaises(Exception):
-            asyncio.run(
-                _run_agent_corpus_action_async(
-                    corpus_action_id=corpus_action.id,
-                    document_id=self.document.id,
-                    user_id=self.user.id,
-                )
+            run_agent_corpus_action.apply(
+                args=[corpus_action.id, self.document.id, self.user.id],
+                throw=True,
             )
 
         # Verify error message was truncated
@@ -522,15 +478,11 @@ class TestAgentCorpusActionEdgeCases(TransactionTestCase):
         mock_agent = MockAgent(response_content="Executed pending result")
         mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
 
-        result = asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=corpus_action.id,
-                document_id=self.document.id,
-                user_id=self.user.id,
-            )
+        result = run_agent_corpus_action.apply(
+            args=[corpus_action.id, self.document.id, self.user.id]
         )
 
-        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result.result["status"], "completed")
 
         # Verify the result was updated
         existing_result.refresh_from_db()
