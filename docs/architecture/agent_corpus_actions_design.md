@@ -16,7 +16,7 @@ This document describes the third type of corpus action: agent-based actions tha
 
 ## Versioning Safety
 
-**Critical**: All agent operations must respect the Document versioning architecture (see `docs/architecture/doc_and_path_versioning.md`).
+**Critical**: All agent operations must respect the Document versioning architecture (see `docs/architecture/document_versioning.md`).
 
 ### Safe Operations (No Document Version Created)
 | Tool/Operation | Target | Why Safe |
@@ -608,8 +608,8 @@ query GetActionResults($corpusActionId: ID!) {
 ### Key Files
 
 - **Models**: `opencontractserver/corpuses/models.py`, `opencontractserver/agents/models.py`
-- **Tasks**: `opencontractserver/tasks/agent_tasks.py`, `opencontractserver/tasks/corpus_tasks.py`
-- **Signals**: `opencontractserver/corpuses/signals.py`, `opencontractserver/documents/signals.py`
+- **Tasks**: `opencontractserver/tasks/agent_tasks.py`, `opencontractserver/tasks/corpus_tasks.py`, `opencontractserver/tasks/doc_tasks.py`
+- **Versioning**: `opencontractserver/documents/versioning.py` (import_document triggers actions)
 - **GraphQL**: `config/graphql/graphene_types.py`, `config/graphql/mutations.py`
 - **Frontend**: `frontend/src/components/corpuses/CorpusAgentManagement.tsx`
 
@@ -636,12 +636,13 @@ When a document is uploaded, it goes through a processing pipeline:
 2. **Document ingestion** - Parse PDF, extract text, create PAWLs layers
 3. **Unlock document** - Set `backend_lock=False`, `processing_finished=now()`
 
-If corpus actions fire immediately when a document is added to a corpus (via M2M signal),
+If corpus actions fire immediately when a document is added to a corpus,
 agent tools like `load_document_text` may fail because the document isn't fully parsed yet.
 
-### Solution: Event-Driven Deferred Actions
+### Solution: Direct Invocation with DocumentPath as Source of Truth
 
-Instead of polling/retrying, we use a purely event-driven architecture:
+We use direct invocation from the document lifecycle methods, with `DocumentPath` as the
+source of truth for corpus membership (not the M2M relationship):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -654,10 +655,10 @@ Instead of polling/retrying, we use a purely event-driven architecture:
 │  backend_lock = True ──────────────────┐                                    │
 │       │                                │                                    │
 │       ▼                                │                                    │
-│  Document Added to Corpus              │                                    │
+│  add_document() / import_document()    │                                    │
 │       │                                │                                    │
 │       ▼                                │                                    │
-│  M2M Signal Fires                      │                                    │
+│  Create DocumentPath                   │                                    │
 │       │                                │                                    │
 │       ▼                                │                                    │
 │  Check backend_lock                    │                                    │
@@ -668,122 +669,126 @@ Instead of polling/retrying, we use a purely event-driven architecture:
 │ TRUE     FALSE                        │ Processing Pipeline                │
 │  │         │                          │ (thumbnail, parse, embed)          │
 │  │         ▼                          │         │                          │
-│  │    Trigger Actions                 │         │                          │
-│  │    Immediately                     │         ▼                          │
+│  │    process_corpus_action           │         │                          │
+│  │    triggered directly              │         ▼                          │
 │  │                                    └──► set_doc_lock_state(False)       │
 │  │                                              │                          │
 │  │                                              ▼                          │
-│  │                                    document_processing_complete          │
-│  │                                         signal fires                     │
+│  │                                    Query DocumentPath for corpuses      │
 │  │                                              │                          │
 │  │                                              ▼                          │
-│  └──────────────────────────────────────► Check corpus membership          │
-│                                              │                              │
-│                                              ▼                              │
-│                                         Trigger Actions                     │
+│  └──────────────────────────────────────► process_corpus_action            │
 │                                         for each corpus                     │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Why DocumentPath Instead of M2M?
+
+The document versioning architecture (Issue #654) introduced `DocumentPath` as the source
+of truth for corpus-document relationships. The M2M relationship (`Corpus.documents`) is
+maintained for backwards compatibility but is not authoritative.
+
+Using DocumentPath ensures:
+- `import_document()` works correctly (it creates DocumentPath but not M2M)
+- Soft-deleted documents are properly excluded (`is_deleted=False`)
+- Only current paths are considered (`is_current=True`)
+
 ### Implementation Details
 
-#### Signal: `document_processing_complete`
+#### Direct Trigger: add_document()
 
-**File**: `opencontractserver/documents/signals.py`
+**File**: `opencontractserver/corpuses/models.py`
 
 ```python
-from django.dispatch import Signal
+def add_document(self, document, path, user, folder=None, ...):
+    # ... create corpus copy and DocumentPath ...
 
-# Fired when document processing (parsing, thumbnailing) completes
-# Provides: document (Document instance), user_id (int)
-document_processing_complete = Signal()
+    # Trigger corpus actions if document is ready (not still processing)
+    # If backend_lock=True, actions will be triggered by
+    # set_doc_lock_state in doc_tasks.py when processing completes.
+    if not corpus_copy.backend_lock:
+        from opencontractserver.tasks.corpus_tasks import process_corpus_action
+
+        transaction.on_commit(
+            lambda: process_corpus_action.delay(
+                corpus_id=self.pk,
+                document_ids=[corpus_copy.pk],
+                user_id=user.pk,
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            )
+        )
+
+    return corpus_copy, "added", new_path
 ```
 
-This signal is fired from `set_doc_lock_state` when unlocking a document:
+#### Direct Trigger: import_document()
+
+**File**: `opencontractserver/documents/versioning.py`
+
+Same pattern as `add_document()` - triggers actions directly if document is ready.
+
+#### Direct Trigger: set_doc_lock_state()
 
 **File**: `opencontractserver/tasks/doc_tasks.py`
 
 ```python
 @celery_app.task()
 def set_doc_lock_state(*args, locked: bool, doc_id: int):
+    """
+    Set the backend lock state for a document.
+
+    When unlocking (locked=False), triggers corpus actions for all corpuses
+    the document belongs to. Uses DocumentPath as the source of truth.
+    """
+    from opencontractserver.corpuses.models import CorpusActionTrigger
+    from opencontractserver.documents.models import DocumentPath
+    from opencontractserver.tasks.corpus_tasks import process_corpus_action
+
     document = Document.objects.get(pk=doc_id)
     document.backend_lock = locked
     document.processing_finished = timezone.now()
     document.save()
 
-    # Fire signal when unlocking to trigger deferred corpus actions
+    # Trigger corpus actions when unlocking (document is now ready)
+    # Query DocumentPath as the source of truth for corpus membership
     if not locked:
-        document_processing_complete.send(
-            sender=Document,
-            document=document,
-            user_id=document.creator_id,
+        corpus_data = (
+            DocumentPath.objects.filter(
+                document=document,
+                is_current=True,
+                is_deleted=False,
+            )
+            .select_related("corpus__creator")
+            .values("corpus_id", "corpus__creator_id")
+            .distinct()
         )
-```
 
-#### Handler: M2M Signal (Updated)
-
-**File**: `opencontractserver/corpuses/signals.py`
-
-```python
-@receiver(m2m_changed, sender=Corpus.documents.through)
-def handle_document_added_to_corpus(sender, instance, action, pk_set, **kwargs):
-    if action != "post_add" or not pk_set:
-        return
-
-    # Filter to only documents that are ready (not still processing)
-    ready_doc_ids = list(
-        Document.objects.filter(
-            id__in=pk_set,
-            backend_lock=False,  # Only ready documents
-        ).values_list("id", flat=True)
-    )
-
-    # Only trigger actions for ready documents
-    # Locked documents will be handled by document_processing_complete signal
-    if ready_doc_ids:
-        process_corpus_action.si(
-            corpus_id=instance.id,
-            document_ids=ready_doc_ids,
-            user_id=instance.creator.id,
-            trigger=CorpusActionTrigger.ADD_DOCUMENT,
-        ).apply_async()
-```
-
-#### Handler: Processing Complete Signal
-
-**File**: `opencontractserver/corpuses/signals.py`
-
-```python
-@receiver(document_processing_complete)
-def handle_document_processing_complete(sender, document, user_id, **kwargs):
-    # Get all corpuses this document belongs to
-    corpuses = Corpus.objects.filter(documents=document)
-
-    for corpus in corpuses:
-        process_corpus_action.si(
-            corpus_id=corpus.id,
-            document_ids=[document.id],
-            user_id=corpus.creator.id,
-            trigger=CorpusActionTrigger.ADD_DOCUMENT,
-        ).apply_async()
+        for data in corpus_data:
+            process_corpus_action.delay(
+                corpus_id=data["corpus_id"],
+                document_ids=[doc_id],
+                user_id=data["corpus__creator_id"],
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            )
 ```
 
 ### Behavior Matrix
 
-| Scenario | M2M Signal | Processing Complete Signal |
-|----------|------------|---------------------------|
-| New doc uploaded to corpus | Skipped (locked) | Triggers actions |
+| Scenario | add_document/import_document | set_doc_lock_state |
+|----------|------------------------------|-------------------|
+| New doc uploaded to corpus | Skipped (locked) | Triggers actions via DocumentPath |
 | Existing processed doc added | Triggers immediately | N/A (already unlocked) |
 | Doc in multiple corpuses | N/A | Triggers for ALL corpuses |
-| Doc not in any corpus | N/A | No action |
+| Doc not in any corpus | N/A | No action (no DocumentPath records) |
+| Soft-deleted doc | N/A | Ignored (is_deleted=True) |
 
 ### Idempotency Requirements
 
 **Important**: Corpus actions SHOULD be designed to be idempotent. Due to the deferred execution
 architecture, the same action may be triggered multiple times for the same document in edge cases:
 
-1. Document added to corpus while still processing → triggers via `document_processing_complete`
+1. Document added to corpus while still processing → triggers via `set_doc_lock_state`
 2. Document later re-added or corpus action re-run → may trigger again
 
 Most built-in corpus actions are idempotent by design:
@@ -804,16 +809,18 @@ If stricter duplicate prevention is needed, actions can check for existing resul
 
 See `opencontractserver/tests/test_corpus_document_actions.py` for tests covering:
 
-- `test_locked_document_skipped_by_m2m_signal` - Locked docs not triggered
-- `test_document_processing_complete_triggers_corpus_actions` - Signal triggers actions
-- `test_document_processing_complete_no_corpus_no_action` - Orphan docs ignored
-- `test_document_in_multiple_corpuses_triggers_all` - Multi-corpus support
+- `test_add_document_triggers_actions_for_ready_doc` - Ready docs trigger immediately
+- `test_add_document_skips_actions_for_locked_doc` - Locked docs deferred to set_doc_lock_state
+- `test_set_doc_lock_state_triggers_actions_via_document_path` - DocumentPath used as source of truth
+- `test_set_doc_lock_state_no_corpus_no_action` - Orphan docs ignored
+- `test_set_doc_lock_state_triggers_for_multiple_corpuses` - Multi-corpus support
+- `test_set_doc_lock_state_ignores_deleted_paths` - Soft-deleted paths excluded
 
 ---
 
 ## Related Documentation
 
 - [Corpus Actions Intro](../corpus_actions/intro_to_corpus_actions.md)
-- [Document Versioning](./doc_and_path_versioning.md)
+- [Document Versioning](./document_versioning.md)
 - [Agent Framework](../llms/README.md)
 - [Permissioning Guide](../permissioning/consolidated_permissioning_guide.md)
