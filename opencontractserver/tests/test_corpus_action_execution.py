@@ -713,3 +713,301 @@ class CorpusActionExecutionPermissionsTestCase(TestCase):
         # Should return CorpusActionExecutionQuerySet with custom methods
         self.assertTrue(hasattr(result, "for_corpus"))
         self.assertTrue(hasattr(result, "pending"))
+
+
+class PackageActionTrailTestCase(TestCase):
+    """Test package_action_trail export function."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.fieldset = Fieldset.objects.create(name="Test Fieldset", creator=self.user)
+        self.analyzer = Analyzer.objects.create(
+            description="Test Analyzer", creator=self.user, task_name="test.task"
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Test Agent",
+            description="Test agent config",
+            system_instructions="Test instructions",
+            is_active=True,
+            creator=self.user,
+        )
+        self.document = Document.objects.create(title="Test Doc", creator=self.user)
+
+    def test_package_action_trail_with_fieldset_action(self):
+        """package_action_trail exports fieldset actions correctly."""
+        from opencontractserver.utils.export_v2 import package_action_trail
+
+        CorpusAction.objects.create(
+            name="Fieldset Action",
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+        result = package_action_trail(self.corpus, include_executions=False)
+
+        self.assertEqual(len(result["actions"]), 1)
+        self.assertEqual(result["actions"][0]["name"], "Fieldset Action")
+        self.assertEqual(result["actions"][0]["action_type"], "fieldset")
+        self.assertEqual(result["actions"][0]["fieldset_id"], str(self.fieldset.id))
+        self.assertIsNone(result["actions"][0]["analyzer_id"])
+
+    def test_package_action_trail_with_analyzer_action(self):
+        """package_action_trail exports analyzer actions correctly."""
+        from opencontractserver.utils.export_v2 import package_action_trail
+
+        CorpusAction.objects.create(
+            name="Analyzer Action",
+            corpus=self.corpus,
+            analyzer=self.analyzer,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+        result = package_action_trail(self.corpus, include_executions=False)
+
+        self.assertEqual(len(result["actions"]), 1)
+        self.assertEqual(result["actions"][0]["action_type"], "analyzer")
+        self.assertIsNotNone(result["actions"][0]["analyzer_id"])
+
+    def test_package_action_trail_with_agent_action(self):
+        """package_action_trail exports agent actions correctly."""
+        from opencontractserver.utils.export_v2 import package_action_trail
+
+        CorpusAction.objects.create(
+            name="Agent Action",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Summarize this document",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+        result = package_action_trail(self.corpus, include_executions=False)
+
+        self.assertEqual(len(result["actions"]), 1)
+        self.assertEqual(result["actions"][0]["action_type"], "agent")
+        self.assertEqual(
+            result["actions"][0]["agent_prompt"], "Summarize this document"
+        )
+
+    def test_package_action_trail_with_executions(self):
+        """package_action_trail includes execution records."""
+        from opencontractserver.utils.export_v2 import package_action_trail
+
+        action = CorpusAction.objects.create(
+            name="Test Action",
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+        # Create execution records
+        now = timezone.now()
+        CorpusActionExecution.objects.create(
+            corpus_action=action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.FIELDSET,
+            status=CorpusActionExecution.Status.COMPLETED,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            queued_at=now - timedelta(hours=1),
+            started_at=now - timedelta(minutes=30),
+            completed_at=now,
+            creator=self.user,
+        )
+
+        result = package_action_trail(self.corpus, include_executions=True)
+
+        self.assertEqual(len(result["executions"]), 1)
+        self.assertEqual(result["executions"][0]["action_name"], "Test Action")
+        self.assertEqual(result["executions"][0]["status"], "completed")
+        self.assertIsNotNone(result["executions"][0]["queued_at"])
+        self.assertIsNotNone(result["executions"][0]["started_at"])
+        self.assertIsNotNone(result["executions"][0]["completed_at"])
+
+    def test_package_action_trail_with_since_filter(self):
+        """package_action_trail filters by since datetime."""
+        from opencontractserver.utils.export_v2 import package_action_trail
+
+        action = CorpusAction.objects.create(
+            name="Test Action",
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+        now = timezone.now()
+
+        # Old execution (should be filtered out)
+        CorpusActionExecution.objects.create(
+            corpus_action=action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.FIELDSET,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            queued_at=now - timedelta(days=10),
+            creator=self.user,
+        )
+
+        # Recent execution (should be included)
+        recent_exec = CorpusActionExecution.objects.create(
+            corpus_action=action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.FIELDSET,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            queued_at=now - timedelta(hours=1),
+            creator=self.user,
+        )
+
+        result = package_action_trail(
+            self.corpus, include_executions=True, since=now - timedelta(days=1)
+        )
+
+        self.assertEqual(len(result["executions"]), 1)
+        self.assertEqual(result["executions"][0]["id"], str(recent_exec.id))
+
+    def test_package_action_trail_with_execution_limit(self):
+        """package_action_trail respects execution_limit."""
+        from opencontractserver.utils.export_v2 import package_action_trail
+
+        action = CorpusAction.objects.create(
+            name="Test Action",
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+        now = timezone.now()
+
+        # Create multiple executions
+        for i in range(5):
+            CorpusActionExecution.objects.create(
+                corpus_action=action,
+                document=self.document,
+                corpus=self.corpus,
+                action_type=CorpusActionExecution.ActionType.FIELDSET,
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                queued_at=now - timedelta(hours=i),
+                creator=self.user,
+            )
+
+        result = package_action_trail(
+            self.corpus, include_executions=True, execution_limit=3
+        )
+
+        self.assertEqual(len(result["executions"]), 3)
+
+    def test_package_action_trail_stats(self):
+        """package_action_trail returns correct stats."""
+        from opencontractserver.utils.export_v2 import package_action_trail
+
+        action = CorpusAction.objects.create(
+            name="Test Action",
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+        now = timezone.now()
+
+        # Create executions with different statuses
+        CorpusActionExecution.objects.create(
+            corpus_action=action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.FIELDSET,
+            status=CorpusActionExecution.Status.COMPLETED,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            queued_at=now,
+            creator=self.user,
+        )
+        CorpusActionExecution.objects.create(
+            corpus_action=action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.FIELDSET,
+            status=CorpusActionExecution.Status.FAILED,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            queued_at=now,
+            creator=self.user,
+        )
+
+        result = package_action_trail(self.corpus, include_executions=True)
+
+        self.assertEqual(result["stats"]["total_executions"], 2)
+        self.assertEqual(result["stats"]["completed"], 1)
+        self.assertEqual(result["stats"]["failed"], 1)
+        self.assertEqual(result["stats"]["exported_count"], 2)
+
+    def test_package_action_trail_no_executions(self):
+        """package_action_trail with include_executions=False."""
+        from opencontractserver.utils.export_v2 import package_action_trail
+
+        action = CorpusAction.objects.create(
+            name="Test Action",
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+        # Create an execution that should NOT be exported
+        CorpusActionExecution.objects.create(
+            corpus_action=action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.FIELDSET,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            queued_at=timezone.now(),
+            creator=self.user,
+        )
+
+        result = package_action_trail(self.corpus, include_executions=False)
+
+        self.assertEqual(len(result["executions"]), 0)
+        # Stats should still be calculated
+        self.assertEqual(result["stats"]["total_executions"], 1)
+
+
+class ManagerMethodsTestCase(TestCase):
+    """Test manager methods that delegate to QuerySet."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.fieldset = Fieldset.objects.create(name="Test Fieldset", creator=self.user)
+        self.action = CorpusAction.objects.create(
+            name="Test Action",
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.document = Document.objects.create(title="Test Doc", creator=self.user)
+
+    def test_manager_recent_method(self):
+        """Manager.recent() delegates to QuerySet."""
+        now = timezone.now()
+
+        # Create a recent execution
+        recent_exec = CorpusActionExecution.objects.create(
+            corpus_action=self.action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.FIELDSET,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            queued_at=now - timedelta(hours=1),
+            creator=self.user,
+        )
+
+        result = list(CorpusActionExecution.objects.recent(hours=24))
+
+        self.assertIn(recent_exec, result)
