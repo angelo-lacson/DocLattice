@@ -2240,21 +2240,32 @@ class Query(graphene.ObjectType):
         Can be filtered by corpus_id, document_id, corpus_action_id, status,
         action_type, and since (datetime).
         """
-        from opencontractserver.corpuses.models import CorpusActionExecution
+        from opencontractserver.corpuses.models import Corpus, CorpusActionExecution
+        from opencontractserver.documents.models import Document
 
         user = info.context.user
         queryset = CorpusActionExecution.objects.visible_to_user(user)
 
-        # Filter by corpus if provided
+        # Filter by corpus if provided (with access check)
         corpus_id = kwargs.get("corpus_id")
         if corpus_id:
             corpus_pk = from_global_id(corpus_id)[1]
+            # Defense-in-depth: verify user has access to this corpus
+            if not Corpus.objects.visible_to_user(user).filter(pk=corpus_pk).exists():
+                return queryset.none()
             queryset = queryset.for_corpus(corpus_pk)
 
-        # Filter by document if provided
+        # Filter by document if provided (with access check)
         document_id = kwargs.get("document_id")
         if document_id:
             document_pk = from_global_id(document_id)[1]
+            # Defense-in-depth: verify user has access to this document
+            if (
+                not Document.objects.visible_to_user(user)
+                .filter(pk=document_pk)
+                .exists()
+            ):
+                return queryset.none()
             queryset = queryset.for_document(document_pk)
 
         # Filter by corpus_action if provided
@@ -2296,10 +2307,25 @@ class Query(graphene.ObjectType):
         """
         from django.db.models import Avg, Count, F, Q
 
-        from opencontractserver.corpuses.models import CorpusActionExecution
+        from opencontractserver.corpuses.models import Corpus, CorpusActionExecution
 
         user = info.context.user
         corpus_pk = from_global_id(corpus_id)[1]
+
+        # Defense-in-depth: verify user has access to this corpus
+        if not Corpus.objects.visible_to_user(user).filter(pk=corpus_pk).exists():
+            return CorpusActionTrailStatsType(
+                total_executions=0,
+                completed=0,
+                failed=0,
+                running=0,
+                queued=0,
+                skipped=0,
+                avg_duration_seconds=None,
+                fieldset_count=0,
+                analyzer_count=0,
+                agent_count=0,
+            )
 
         queryset = CorpusActionExecution.objects.visible_to_user(user)
         queryset = queryset.for_corpus(corpus_pk)

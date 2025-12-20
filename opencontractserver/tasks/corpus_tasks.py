@@ -186,13 +186,15 @@ def process_corpus_action(
         # Use trigger or default to add_document for backwards compatibility
         execution_trigger = trigger or "add_document"
 
-        # Queue execution records for all documents
-        executions = CorpusActionExecution.bulk_queue(
-            corpus_action=action,
-            document_ids=document_ids,
-            trigger=execution_trigger,
-            user_id=user_id,
-        )
+        # Queue execution records for all documents within a transaction
+        # to ensure atomicity with subsequent processing
+        with transaction.atomic():
+            executions = CorpusActionExecution.bulk_queue(
+                corpus_action=action,
+                document_ids=document_ids,
+                trigger=execution_trigger,
+                user_id=user_id,
+            )
         execution_map = {ex.document_id: ex for ex in executions}
 
         summary["actions_processed"] += 1
@@ -218,15 +220,17 @@ def process_corpus_action(
                 extract.save()
 
                 # Link executions to extract and mark as running
+                now = timezone.now()
                 for doc_id, execution in execution_map.items():
                     execution.extract = extract
                     execution.status = CorpusActionExecution.Status.RUNNING
-                    execution.started_at = timezone.now()
+                    execution.started_at = now
+                    execution.modified = now  # bulk_update doesn't auto-update
                     execution.add_affected_object("extract", extract.id)
 
                 CorpusActionExecution.objects.bulk_update(
                     list(execution_map.values()),
-                    ["extract", "status", "started_at", "affected_objects"],
+                    ["extract", "status", "started_at", "affected_objects", "modified"],
                 )
 
             fieldset = action.fieldset
