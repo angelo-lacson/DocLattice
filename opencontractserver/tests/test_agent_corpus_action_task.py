@@ -488,3 +488,190 @@ class TestAgentCorpusActionEdgeCases(TransactionTestCase):
         existing_result.refresh_from_db()
         self.assertEqual(existing_result.status, AgentActionResult.Status.COMPLETED)
         self.assertEqual(existing_result.agent_response, "Executed pending result")
+
+
+@pytest.mark.django_db
+class TestCorpusActionExecutionTracking(TransactionTestCase):
+    """Tests for CorpusActionExecution tracking in run_agent_corpus_action."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.document = Document.objects.create(
+            title="Test Document",
+            creator=self.user,
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Test Agent",
+            system_instructions="Test instructions",
+            is_active=True,
+            creator=self.user,
+        )
+        self.corpus_action = CorpusAction.objects.create(
+            name="Test Action",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Test prompt",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+
+    @patch(AGENTS_MODULE_PATH)
+    def test_execution_marked_started_when_provided(self, mock_agents_module):
+        """Test that execution is marked started when execution_id is provided."""
+        from opencontractserver.corpuses.models import CorpusActionExecution
+
+        # Create execution record
+        execution = CorpusActionExecution.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.AGENT,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            status=CorpusActionExecution.Status.QUEUED,
+            queued_at=timezone.now(),
+            creator=self.user,
+        )
+
+        mock_agent = MockAgent(response_content="Test response")
+        mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
+
+        run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id, execution.id]
+        )
+
+        execution.refresh_from_db()
+        # Execution should have been started (then completed)
+        self.assertIsNotNone(execution.started_at)
+
+    @patch(AGENTS_MODULE_PATH)
+    def test_execution_marked_completed_on_success(self, mock_agents_module):
+        """Test that execution is marked completed on successful agent run."""
+        from opencontractserver.corpuses.models import CorpusActionExecution
+
+        execution = CorpusActionExecution.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.AGENT,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            status=CorpusActionExecution.Status.QUEUED,
+            queued_at=timezone.now(),
+            creator=self.user,
+        )
+
+        mock_agent = MockAgent(response_content="Test response", conversation_id=None)
+        mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
+
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id, execution.id]
+        )
+
+        execution.refresh_from_db()
+        self.assertEqual(execution.status, CorpusActionExecution.Status.COMPLETED)
+        self.assertIsNotNone(execution.completed_at)
+        # Check affected_objects includes agent_result
+        self.assertTrue(len(execution.affected_objects) >= 1)
+        affected_types = [obj["type"] for obj in execution.affected_objects]
+        self.assertIn("agent_result", affected_types)
+        # Check agent_result is linked
+        self.assertEqual(execution.agent_result_id, result.result["result_id"])
+
+    @patch(AGENTS_MODULE_PATH)
+    def test_execution_marked_failed_on_error(self, mock_agents_module):
+        """Test that execution is marked failed when agent raises exception."""
+        from opencontractserver.corpuses.models import CorpusActionExecution
+
+        execution = CorpusActionExecution.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.AGENT,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            status=CorpusActionExecution.Status.QUEUED,
+            queued_at=timezone.now(),
+            creator=self.user,
+        )
+
+        mock_agent = MockAgent(should_fail=True)
+        mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
+
+        with self.assertRaises(Exception):
+            run_agent_corpus_action.apply(
+                args=[
+                    self.corpus_action.id,
+                    self.document.id,
+                    self.user.id,
+                    execution.id,
+                ],
+                throw=True,
+            )
+
+        execution.refresh_from_db()
+        self.assertEqual(execution.status, CorpusActionExecution.Status.FAILED)
+        self.assertIsNotNone(execution.error_message)
+        self.assertIn("Agent execution failed", execution.error_message)
+
+    @patch(AGENTS_MODULE_PATH)
+    def test_execution_missing_id_logs_warning(self, mock_agents_module):
+        """Test that a missing execution_id logs warning but continues."""
+        mock_agent = MockAgent(response_content="Test response")
+        mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
+
+        # Pass a non-existent execution_id
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id, 99999]
+        )
+
+        # Should still complete successfully
+        self.assertEqual(result.result["status"], "completed")
+
+    @patch(AGENTS_MODULE_PATH)
+    def test_execution_without_id_still_works(self, mock_agents_module):
+        """Test that task works normally without execution_id (backward compat)."""
+        mock_agent = MockAgent(response_content="Test response")
+        mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
+
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
+        )
+
+        self.assertEqual(result.result["status"], "completed")
+
+    @patch(AGENTS_MODULE_PATH)
+    def test_execution_includes_conversation_in_affected_objects(
+        self, mock_agents_module
+    ):
+        """Test that conversation_id is included in affected_objects when present."""
+        from opencontractserver.conversations.models import Conversation
+        from opencontractserver.corpuses.models import CorpusActionExecution
+
+        # Create a real conversation to use as conversation_id
+        conversation = Conversation.objects.create(
+            title="Test Conversation",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+
+        execution = CorpusActionExecution.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            corpus=self.corpus,
+            action_type=CorpusActionExecution.ActionType.AGENT,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            status=CorpusActionExecution.Status.QUEUED,
+            queued_at=timezone.now(),
+            creator=self.user,
+        )
+
+        mock_agent = MockAgent(response_content="Test", conversation_id=conversation.id)
+        mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
+
+        run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id, execution.id]
+        )
+
+        execution.refresh_from_db()
+        affected_types = [obj["type"] for obj in execution.affected_objects]
+        self.assertIn("conversation", affected_types)
