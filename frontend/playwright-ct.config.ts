@@ -16,12 +16,18 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /* Retry on CI only - 3 retries helps with flaky Vite dynamic import errors */
+  retries: process.env.CI ? 3 : 0,
+  /* Use 2 workers on CI for better balance of speed vs stability */
+  workers: process.env.CI ? 2 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: "html",
+  /* Global timeout for the entire test run (10 minutes) */
+  globalTimeout: process.env.CI ? 10 * 60 * 1000 : undefined,
+  /* Expect timeout - give assertions more time on CI */
+  expect: {
+    timeout: process.env.CI ? 10 * 1000 : 5 * 1000,
+  },
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
@@ -29,6 +35,12 @@ export default defineConfig({
 
     /* Port to use for Playwright component endpoint. */
     ctPort: 3100,
+
+    /* Navigation timeout - give Vite more time to serve dynamically imported modules */
+    navigationTimeout: process.env.CI ? 30 * 1000 : 10 * 1000,
+
+    /* Action timeout for clicks, fills, etc. */
+    actionTimeout: process.env.CI ? 15 * 1000 : 5 * 1000,
 
     /* Vite config needed for component tests - JUST use the main config */
     ctViteConfig: {

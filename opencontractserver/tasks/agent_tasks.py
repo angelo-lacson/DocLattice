@@ -455,7 +455,7 @@ def run_agent_corpus_action(
                 },
             )
             result.status = AgentActionResult.Status.FAILED
-            result.error_message = str(exc)
+            result.error_message = str(exc)[:1000]  # Truncate to prevent DB bloat
             result.completed_at = timezone.now()
             result.save(update_fields=["status", "error_message", "completed_at"])
         except Exception as e:
@@ -491,10 +491,16 @@ async def _run_agent_corpus_action_async(
         f"'{document.title}' (id={document_id})"
     )
 
-    # Create or get result record
+    # Create or get result record with atomic status claiming.
+    # Race condition prevention:
+    # 1. If record doesn't exist, create with RUNNING status
+    # 2. If record exists, atomically try to claim it by updating status to RUNNING
+    #    (only if not already RUNNING or COMPLETED)
+    # 3. If atomic update fails (0 rows affected), another task owns it - skip
     @database_sync_to_async
-    def get_or_create_result():
-        return AgentActionResult.objects.get_or_create(
+    def get_or_create_and_claim():
+        # First, try to get or create
+        result, created = AgentActionResult.objects.get_or_create(
             corpus_action=action,
             document=document,
             defaults={
@@ -504,25 +510,44 @@ async def _run_agent_corpus_action_async(
             },
         )
 
-    result, created = await get_or_create_result()
+        if created:
+            # We created it with RUNNING status, we own it
+            return result, "created"
 
-    # If already completed successfully, skip re-execution
-    if not created and result.status == AgentActionResult.Status.COMPLETED:
-        logger.info(
-            f"[AgentCorpusAction] Already completed for doc {document_id}, skipping"
+        # Record exists - try to atomically claim it
+        # Only update if status is NOT already RUNNING or COMPLETED
+        claimed = (
+            AgentActionResult.objects.filter(
+                pk=result.pk,
+            )
+            .exclude(
+                status__in=[
+                    AgentActionResult.Status.RUNNING,
+                    AgentActionResult.Status.COMPLETED,
+                ]
+            )
+            .update(
+                status=AgentActionResult.Status.RUNNING,
+                started_at=timezone.now(),
+                error_message="",
+            )
         )
-        return {"status": "already_completed", "result_id": result.id}
 
-    # Update status to running
-    result.status = AgentActionResult.Status.RUNNING
-    result.started_at = timezone.now()
-    result.error_message = ""  # Clear any previous error
+        if claimed:
+            # We successfully claimed it
+            result.refresh_from_db()
+            return result, "claimed"
 
-    @database_sync_to_async
-    def save_result_running():
-        result.save(update_fields=["status", "started_at", "error_message"])
+        # Couldn't claim - it's RUNNING or COMPLETED
+        result.refresh_from_db()
+        return result, f"already_{result.status}"
 
-    await save_result_running()
+    result, status = await get_or_create_and_claim()
+
+    # Skip if we couldn't claim the record
+    if status.startswith("already_"):
+        logger.info(f"[AgentCorpusAction] {status} for doc {document_id}, skipping")
+        return {"status": status, "result_id": result.id}
 
     try:
         # Determine which tools to use

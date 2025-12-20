@@ -507,6 +507,26 @@ class Corpus(TreeNode):
                 f"Added corpus-isolated doc {corpus_copy.pk} to corpus {self.pk} at {path}"
             )
 
+            # Trigger corpus actions if document is ready (not still processing)
+            # This handles the case where an already-processed document is added.
+            # If backend_lock=True, the document is still processing and actions
+            # will be triggered by set_doc_lock_state in doc_tasks.py when complete.
+            if not corpus_copy.backend_lock:
+                from opencontractserver.tasks.corpus_tasks import process_corpus_action
+
+                logger.info(
+                    f"[add_document] Doc {corpus_copy.pk} is ready, "
+                    f"triggering corpus actions for corpus {self.pk}"
+                )
+                transaction.on_commit(
+                    lambda: process_corpus_action.delay(
+                        corpus_id=self.pk,
+                        document_ids=[corpus_copy.pk],
+                        user_id=user.pk,
+                        trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                    )
+                )
+
             return corpus_copy, "added", new_path
 
     def import_content(

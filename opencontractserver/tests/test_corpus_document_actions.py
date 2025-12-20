@@ -1,19 +1,22 @@
 """
-Tests for corpus document actions and the deferred action architecture.
+Tests for corpus document actions and the direct invocation architecture.
 
 Architecture Overview:
 ---------------------
 Corpus actions (analyzers, fieldsets, agents) should only run AFTER documents
-are fully processed (parsed, thumbnailed). This is achieved through an event-driven
-architecture:
+are fully processed (parsed, thumbnailed). This is achieved through direct
+invocation in the document lifecycle methods:
 
-1. When a document is ADDED to a corpus (M2M signal):
+1. When a document is ADDED to a corpus via add_document() or import_document():
    - If document is READY (backend_lock=False): trigger actions immediately
-   - If document is PROCESSING (backend_lock=True): skip it (handled later)
+   - If document is PROCESSING (backend_lock=True): actions will be triggered
+     when set_doc_lock_state() unlocks the document
 
-2. When document processing COMPLETES (document_processing_complete signal):
-   - Check all corpuses the document belongs to
+2. When document processing COMPLETES (set_doc_lock_state unlocks):
+   - Query DocumentPath to find all corpuses the document belongs to
    - Trigger ADD_DOCUMENT actions for each corpus
+
+This uses DocumentPath as the source of truth for corpus membership (not M2M).
 
 See docs/architecture/agent_corpus_actions_design.md for full details.
 """
@@ -22,17 +25,11 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.db.models.signals import m2m_changed
 from django.test import TestCase
 
 from opencontractserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from opencontractserver.corpuses.models import Corpus, CorpusAction, CorpusActionTrigger
-from opencontractserver.corpuses.signals import (
-    handle_document_added_to_corpus,
-    handle_document_processing_complete,
-)
-from opencontractserver.documents.models import Document
-from opencontractserver.documents.signals import document_processing_complete
+from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.extracts.models import Column, Extract, Fieldset
 from opencontractserver.tasks.corpus_tasks import process_corpus_action
 
@@ -69,11 +66,28 @@ class TestCorpusDocumentActions(TestCase):
             creator=self.user,
         )
 
-    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.si")
-    def test_add_doc_signal(self, mock_task):
+    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.delay")
+    @patch("opencontractserver.corpuses.models.transaction.on_commit")
+    def test_add_document_triggers_actions_for_ready_doc(
+        self, mock_on_commit, mock_task
+    ):
+        """
+        Test that add_document() directly triggers corpus actions when the
+        document is ready (backend_lock=False).
+        """
+        # Make on_commit execute the callback immediately for testing
+        mock_on_commit.side_effect = lambda func: func()
 
+        # Create a ready document (not locked)
+        ready_doc = Document.objects.create(
+            title="Ready Document",
+            creator=self.user,
+            backend_lock=False,  # Ready for processing
+        )
+
+        # Add the ready document to corpus
         added_doc, status, doc_path = self.corpus.add_document(
-            document=self.document, user=self.user
+            document=ready_doc, user=self.user
         )
 
         # Verify the DocumentPath was created properly
@@ -83,17 +97,196 @@ class TestCorpusDocumentActions(TestCase):
         self.assertTrue(doc_path.is_current)
         self.assertFalse(doc_path.is_deleted)
 
-        # The M2M signal fires automatically when corpus.add_document() is called
-        # because it maintains the M2M relationship via self.documents.add().
-        # This triggers the handle_document_added_to_corpus signal which calls
-        # process_corpus_action.si().apply_async() automatically.
+        # add_document() should have directly triggered process_corpus_action
+        # because the document is ready (backend_lock=False)
         mock_task.assert_called_once_with(
             corpus_id=self.corpus.id,
             document_ids=[added_doc.id],
+            user_id=self.user.id,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+        )
+
+    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.delay")
+    def test_add_document_skips_actions_for_locked_doc(self, mock_task):
+        """
+        Test that add_document() does NOT trigger actions when the document
+        is still processing (backend_lock=True). Actions will be triggered
+        later by set_doc_lock_state when processing completes.
+        """
+        # Create a locked document (simulating one still being parsed)
+        locked_doc = Document.objects.create(
+            title="Locked Document",
+            creator=self.user,
+            backend_lock=True,  # Still processing
+        )
+
+        # Add the locked document to corpus
+        added_doc, status, doc_path = self.corpus.add_document(
+            document=locked_doc, user=self.user
+        )
+
+        # add_document() should NOT have triggered process_corpus_action
+        # because the document is still locked (actions deferred to set_doc_lock_state)
+        mock_task.assert_not_called()
+
+    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.delay")
+    def test_set_doc_lock_state_triggers_actions_via_document_path(self, mock_task):
+        """
+        Test that set_doc_lock_state triggers corpus actions using DocumentPath
+        as the source of truth (not M2M relationship).
+        """
+        from opencontractserver.tasks.doc_tasks import set_doc_lock_state
+
+        # Create a locked document
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+            backend_lock=True,
+        )
+
+        # Create DocumentPath linking doc to corpus (source of truth)
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/test/doc.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+
+        # Unlock the document (simulating processing completion)
+        set_doc_lock_state(locked=False, doc_id=doc.id)
+
+        # Should have triggered process_corpus_action using DocumentPath lookup
+        mock_task.assert_called_once_with(
+            corpus_id=self.corpus.id,
+            document_ids=[doc.id],
             user_id=self.corpus.creator.id,
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
         )
-        mock_task.return_value.apply_async.assert_called_once()
+
+    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.delay")
+    def test_set_doc_lock_state_no_corpus_no_action(self, mock_task):
+        """
+        Test that set_doc_lock_state does NOT trigger actions if the document
+        has no DocumentPath records (not in any corpus).
+        """
+        from opencontractserver.tasks.doc_tasks import set_doc_lock_state
+
+        # Create a document NOT in any corpus (no DocumentPath)
+        doc = Document.objects.create(
+            title="Orphan Doc",
+            creator=self.user,
+            backend_lock=True,
+        )
+
+        # Unlock the document
+        set_doc_lock_state(locked=False, doc_id=doc.id)
+
+        # Should NOT have triggered any corpus actions
+        mock_task.assert_not_called()
+
+    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.delay")
+    def test_set_doc_lock_state_triggers_for_multiple_corpuses(self, mock_task):
+        """
+        Test that when a document has DocumentPath records in multiple corpuses,
+        set_doc_lock_state triggers actions for ALL of them.
+        """
+        from opencontractserver.tasks.doc_tasks import set_doc_lock_state
+
+        # Create a second corpus
+        corpus2 = Corpus.objects.create(title="Second Corpus", creator=self.user)
+
+        # Create a locked document
+        doc = Document.objects.create(
+            title="Multi-corpus Doc",
+            creator=self.user,
+            backend_lock=True,
+        )
+
+        # Create DocumentPath records for both corpuses
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/test/doc.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus2,
+            path="/test/doc.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+
+        # Unlock the document
+        set_doc_lock_state(locked=False, doc_id=doc.id)
+
+        # Should have triggered process_corpus_action for BOTH corpuses
+        self.assertEqual(mock_task.call_count, 2)
+
+        # Verify both corpus IDs were called
+        called_corpus_ids = {
+            call.kwargs["corpus_id"] for call in mock_task.call_args_list
+        }
+        self.assertEqual(called_corpus_ids, {self.corpus.id, corpus2.id})
+
+    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.delay")
+    def test_set_doc_lock_state_ignores_deleted_paths(self, mock_task):
+        """
+        Test that set_doc_lock_state ignores DocumentPath records that are
+        soft-deleted (is_deleted=True) or not current (is_current=False).
+        """
+        from opencontractserver.tasks.doc_tasks import set_doc_lock_state
+
+        # Create a second corpus
+        corpus2 = Corpus.objects.create(title="Second Corpus", creator=self.user)
+
+        # Create a locked document
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+            backend_lock=True,
+        )
+
+        # Create an active DocumentPath in corpus1
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/test/doc.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+
+        # Create a DELETED DocumentPath in corpus2 (should be ignored)
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus2,
+            path="/test/doc.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=True,  # Soft deleted
+            creator=self.user,
+        )
+
+        # Unlock the document
+        set_doc_lock_state(locked=False, doc_id=doc.id)
+
+        # Should have triggered process_corpus_action for ONLY corpus1
+        mock_task.assert_called_once_with(
+            corpus_id=self.corpus.id,
+            document_ids=[doc.id],
+            user_id=self.corpus.creator.id,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+        )
 
     def test_process_corpus_action_with_task_based_analyzer(self):
         CorpusAction.objects.create(
@@ -154,127 +347,3 @@ class TestCorpusDocumentActions(TestCase):
         self.assertEqual(1, extracts.count())
         self.assertEqual(extracts[0].corpus.id, self.corpus.id)
         self.assertEqual(extracts[0].fieldset.id, self.fieldset.id)
-
-    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.si")
-    def test_locked_document_skipped_by_m2m_signal(self, mock_task):
-        """
-        Test that documents still being processed (backend_lock=True) are skipped
-        by the M2M signal. Actions for these docs will be triggered later when
-        document_processing_complete fires.
-        """
-        # Create a locked document (simulating one still being parsed)
-        locked_doc = Document.objects.create(
-            title="Locked Document",
-            creator=self.user,
-            backend_lock=True,  # Still processing
-        )
-
-        # Add the locked document to corpus
-        added_doc, status, doc_path = self.corpus.add_document(
-            document=locked_doc, user=self.user
-        )
-
-        # The M2M signal should NOT have triggered process_corpus_action
-        # because the document is still locked
-        mock_task.assert_not_called()
-
-    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.si")
-    def test_document_processing_complete_triggers_corpus_actions(self, mock_task):
-        """
-        Test that when document_processing_complete fires, it triggers
-        corpus actions for all corpuses the document belongs to.
-        """
-        # Create a document and add it to corpus (bypassing the signal for setup)
-        doc = Document.objects.create(
-            title="Test Doc",
-            creator=self.user,
-            backend_lock=False,
-        )
-
-        # Manually add to M2M to avoid triggering the M2M signal
-        self.corpus.documents.add(doc)
-        mock_task.reset_mock()
-
-        # Now fire the document_processing_complete signal
-        document_processing_complete.send(
-            sender=Document,
-            document=doc,
-            user_id=self.user.id,
-        )
-
-        # Should have triggered process_corpus_action for the corpus
-        mock_task.assert_called_once_with(
-            corpus_id=self.corpus.id,
-            document_ids=[doc.id],
-            user_id=self.corpus.creator.id,
-            trigger=CorpusActionTrigger.ADD_DOCUMENT,
-        )
-        mock_task.return_value.apply_async.assert_called_once()
-
-    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.si")
-    def test_document_processing_complete_no_corpus_no_action(self, mock_task):
-        """
-        Test that document_processing_complete does NOT trigger actions
-        if the document is not in any corpus.
-        """
-        # Create a document NOT in any corpus
-        doc = Document.objects.create(
-            title="Orphan Doc",
-            creator=self.user,
-            backend_lock=False,
-        )
-
-        # Fire the document_processing_complete signal
-        document_processing_complete.send(
-            sender=Document,
-            document=doc,
-            user_id=self.user.id,
-        )
-
-        # Should NOT have triggered any corpus actions
-        mock_task.assert_not_called()
-
-    @patch("opencontractserver.tasks.corpus_tasks.process_corpus_action.si")
-    def test_document_in_multiple_corpuses_triggers_all(self, mock_task):
-        """
-        Test that when a document is in multiple corpuses, document_processing_complete
-        triggers actions for ALL of them.
-        """
-        # Create a second corpus
-        corpus2 = Corpus.objects.create(title="Second Corpus", creator=self.user)
-
-        # Create a document
-        doc = Document.objects.create(
-            title="Multi-corpus Doc",
-            creator=self.user,
-            backend_lock=False,
-        )
-
-        # Add to both corpuses (bypassing signal for setup)
-        self.corpus.documents.add(doc)
-        corpus2.documents.add(doc)
-        mock_task.reset_mock()
-
-        # Fire the document_processing_complete signal
-        document_processing_complete.send(
-            sender=Document,
-            document=doc,
-            user_id=self.user.id,
-        )
-
-        # Should have triggered process_corpus_action for BOTH corpuses
-        self.assertEqual(mock_task.call_count, 2)
-
-        # Verify both corpus IDs were called
-        called_corpus_ids = {
-            call.kwargs["corpus_id"] for call in mock_task.call_args_list
-        }
-        self.assertEqual(called_corpus_ids, {self.corpus.id, corpus2.id})
-
-    def tearDown(self):
-        m2m_changed.disconnect(
-            handle_document_added_to_corpus, sender=Corpus.documents.through
-        )
-        document_processing_complete.disconnect(
-            handle_document_processing_complete, sender=Document
-        )

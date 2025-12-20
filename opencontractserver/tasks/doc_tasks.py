@@ -55,31 +55,56 @@ def set_doc_lock_state(*args, locked: bool, doc_id: int):
     """
     Set the backend lock state for a document.
 
-    When unlocking (locked=False), fires the document_processing_complete signal
-    to notify other parts of the system that the document is ready for processing.
-    This enables deferred corpus actions - actions that were skipped because the
-    document was still being parsed/thumbnailed can now run.
+    When unlocking (locked=False), triggers corpus actions for all corpuses
+    the document belongs to. This enables deferred corpus actions - actions
+    that were skipped because the document was still being parsed/thumbnailed
+    can now run.
+
+    Uses DocumentPath as the source of truth for corpus membership (not M2M).
 
     See docs/architecture/agent_corpus_actions_design.md for the full architecture.
     """
+    from opencontractserver.corpuses.models import CorpusActionTrigger
+    from opencontractserver.documents.models import DocumentPath
+    from opencontractserver.tasks.corpus_tasks import process_corpus_action
+
     document = Document.objects.get(pk=doc_id)
     document.backend_lock = locked
     document.processing_finished = timezone.now()
     document.save()
 
-    # Fire signal when unlocking to trigger deferred corpus actions
-    # This is the key integration point for the event-driven corpus action architecture
+    # Trigger corpus actions when unlocking (document is now ready)
+    # Query DocumentPath as the source of truth for corpus membership
     if not locked:
-        from opencontractserver.documents.signals import document_processing_complete
+        # Find all corpuses this document belongs to via DocumentPath
+        corpus_data = (
+            DocumentPath.objects.filter(
+                document=document,
+                is_current=True,
+                is_deleted=False,
+            )
+            .select_related("corpus__creator")
+            .values("corpus_id", "corpus__creator_id")
+            .distinct()
+        )
 
-        logger.info(
-            f"[set_doc_lock_state] Document {doc_id} processing complete, firing signal"
-        )
-        document_processing_complete.send(
-            sender=Document,
-            document=document,
-            user_id=document.creator_id,
-        )
+        if not corpus_data:
+            logger.debug(
+                f"[set_doc_lock_state] Document {doc_id} not in any corpus, "
+                "skipping corpus actions"
+            )
+        else:
+            logger.info(
+                f"[set_doc_lock_state] Document {doc_id} processing complete, "
+                f"triggering actions for {len(corpus_data)} corpus(es)"
+            )
+            for data in corpus_data:
+                process_corpus_action.delay(
+                    corpus_id=data["corpus_id"],
+                    document_ids=[doc_id],
+                    user_id=data["corpus__creator_id"],
+                    trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                )
 
 
 @shared_task(

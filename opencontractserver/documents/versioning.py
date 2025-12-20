@@ -257,6 +257,26 @@ def import_document(
                 f"doc {new_doc.id} v{new_path.version_number}"
             )
 
+            # Trigger corpus actions if document is ready (not still processing)
+            # If backend_lock=True, actions will be triggered by
+            # set_doc_lock_state in doc_tasks.py when processing completes.
+            if not new_doc.backend_lock:
+                from opencontractserver.corpuses.models import CorpusActionTrigger
+                from opencontractserver.tasks.corpus_tasks import process_corpus_action
+
+                logger.info(
+                    f"[import_document] Doc {new_doc.id} is ready, "
+                    f"triggering corpus actions for corpus {corpus.id}"
+                )
+                transaction.on_commit(
+                    lambda: process_corpus_action.delay(
+                        corpus_id=corpus.id,
+                        document_ids=[new_doc.id],
+                        user_id=user.id,
+                        trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                    )
+                )
+
             return new_doc, "updated", new_path
 
         else:
@@ -363,6 +383,26 @@ def import_document(
                 is_deleted=False,
                 creator=user,
             )
+
+            # Trigger corpus actions if document is ready (not still processing)
+            # If backend_lock=True, actions will be triggered by
+            # set_doc_lock_state in doc_tasks.py when processing completes.
+            if not doc.backend_lock:
+                from opencontractserver.corpuses.models import CorpusActionTrigger
+                from opencontractserver.tasks.corpus_tasks import process_corpus_action
+
+                logger.info(
+                    f"[import_document] Doc {doc.id} is ready, "
+                    f"triggering corpus actions for corpus {corpus.id}"
+                )
+                transaction.on_commit(
+                    lambda: process_corpus_action.delay(
+                        corpus_id=corpus.id,
+                        document_ids=[doc.id],
+                        user_id=user.id,
+                        trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                    )
+                )
 
             return doc, status, new_path
 
