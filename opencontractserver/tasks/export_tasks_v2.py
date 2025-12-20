@@ -30,6 +30,7 @@ from opencontractserver.types.enums import AnnotationFilterMode
 from opencontractserver.users.models import UserExport
 from opencontractserver.utils.etl import build_document_export, build_label_lookups
 from opencontractserver.utils.export_v2 import (
+    package_action_trail,
     package_agent_config,
     package_conversations,
     package_corpus_folders,
@@ -55,6 +56,8 @@ def package_corpus_export_v2(
     export_id: int,
     corpus_pk: int,
     include_conversations: bool = False,
+    include_action_trail: bool = False,
+    action_trail_limit: int = 1000,
     analysis_pk_list: list[int] | None = None,
     annotation_filter_mode: AnnotationFilterMode = AnnotationFilterMode.CORPUS_LABELSET_ONLY,
 ):
@@ -65,6 +68,8 @@ def package_corpus_export_v2(
         export_id: UserExport ID to store result
         corpus_pk: Corpus ID to export
         include_conversations: Whether to include conversations/messages
+        include_action_trail: Whether to include action execution history
+        action_trail_limit: Max number of executions to include (default 1000)
         analysis_pk_list: Optional list of analysis IDs to filter annotations
         annotation_filter_mode: How to filter annotations
     """
@@ -177,7 +182,18 @@ def package_corpus_export_v2(
                 corpus
             )
 
-        # ===== PART 10: Assemble Final V2 Export =====
+        # ===== PART 10: Export Action Trail (Optional) =====
+        action_trail_export = None
+
+        if include_action_trail:
+            logger.info("Including action trail in export")
+            action_trail_export = package_action_trail(
+                corpus=corpus,
+                include_executions=True,
+                execution_limit=action_trail_limit,
+            )
+
+        # ===== PART 11: Assemble Final V2 Export =====
         export_data: OpenContractsExportDataJsonV2Type = {
             "version": "2.0",
             # V1 fields
@@ -202,6 +218,10 @@ def package_corpus_export_v2(
             export_data["conversations"] = conversations_export
             export_data["messages"] = messages_export
             export_data["message_votes"] = votes_export
+
+        # Add action trail if requested
+        if include_action_trail and action_trail_export:
+            export_data["action_trail"] = action_trail_export
 
         # Write data.json to ZIP
         json_str = json.dumps(export_data, indent=2) + "\n"

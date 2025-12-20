@@ -53,6 +53,8 @@ from config.graphql.graphene_types import (
     ColumnType,
     CommunityStatsType,
     ConversationType,
+    CorpusActionExecutionType,
+    CorpusActionTrailStatsType,
     CorpusActionType,
     CorpusFolderType,
     CorpusQueryType,
@@ -2217,6 +2219,124 @@ class Query(graphene.ObjectType):
             queryset = queryset.filter(status=status)
 
         return queryset.order_by("-created")
+
+    # CORPUS ACTION EXECUTION QUERIES ##############################################
+    corpus_action_executions = DjangoConnectionField(
+        CorpusActionExecutionType,
+        corpus_id=graphene.ID(required=False),
+        document_id=graphene.ID(required=False),
+        corpus_action_id=graphene.ID(required=False),
+        status=graphene.String(required=False),
+        action_type=graphene.String(required=False),
+        since=graphene.DateTime(required=False),
+    )
+
+    @login_required
+    def resolve_corpus_action_executions(self, info, **kwargs):
+        """
+        Resolver for corpus_action_executions that returns executions visible to
+        the current user.
+
+        Can be filtered by corpus_id, document_id, corpus_action_id, status,
+        action_type, and since (datetime).
+        """
+        from opencontractserver.corpuses.models import CorpusActionExecution
+
+        user = info.context.user
+        queryset = CorpusActionExecution.objects.visible_to_user(user)
+
+        # Filter by corpus if provided
+        corpus_id = kwargs.get("corpus_id")
+        if corpus_id:
+            corpus_pk = from_global_id(corpus_id)[1]
+            queryset = queryset.for_corpus(corpus_pk)
+
+        # Filter by document if provided
+        document_id = kwargs.get("document_id")
+        if document_id:
+            document_pk = from_global_id(document_id)[1]
+            queryset = queryset.for_document(document_pk)
+
+        # Filter by corpus_action if provided
+        corpus_action_id = kwargs.get("corpus_action_id")
+        if corpus_action_id:
+            corpus_action_pk = from_global_id(corpus_action_id)[1]
+            queryset = queryset.filter(corpus_action_id=corpus_action_pk)
+
+        # Filter by status if provided
+        status = kwargs.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Filter by action_type if provided
+        action_type = kwargs.get("action_type")
+        if action_type:
+            queryset = queryset.by_type(action_type)
+
+        # Filter by since datetime if provided
+        since = kwargs.get("since")
+        if since:
+            queryset = queryset.filter(queued_at__gte=since)
+
+        return queryset.select_related("corpus_action", "document", "corpus").order_by(
+            "-queued_at"
+        )
+
+    corpus_action_trail_stats = graphene.Field(
+        CorpusActionTrailStatsType,
+        corpus_id=graphene.ID(required=True),
+        since=graphene.DateTime(required=False),
+    )
+
+    @login_required
+    def resolve_corpus_action_trail_stats(self, info, corpus_id, since=None):
+        """
+        Resolver for corpus_action_trail_stats that returns aggregated statistics
+        for corpus action executions.
+        """
+        from django.db.models import Avg, Count, F, Q
+
+        from opencontractserver.corpuses.models import CorpusActionExecution
+
+        user = info.context.user
+        corpus_pk = from_global_id(corpus_id)[1]
+
+        queryset = CorpusActionExecution.objects.visible_to_user(user)
+        queryset = queryset.for_corpus(corpus_pk)
+
+        if since:
+            queryset = queryset.filter(queued_at__gte=since)
+
+        stats = queryset.aggregate(
+            total=Count("id"),
+            completed=Count("id", filter=Q(status="completed")),
+            failed=Count("id", filter=Q(status="failed")),
+            running=Count("id", filter=Q(status="running")),
+            queued=Count("id", filter=Q(status="queued")),
+            skipped=Count("id", filter=Q(status="skipped")),
+            avg_duration=Avg(
+                F("completed_at") - F("started_at"),
+                filter=Q(completed_at__isnull=False, started_at__isnull=False),
+            ),
+            fieldset_count=Count("id", filter=Q(action_type="fieldset")),
+            analyzer_count=Count("id", filter=Q(action_type="analyzer")),
+            agent_count=Count("id", filter=Q(action_type="agent")),
+        )
+
+        return CorpusActionTrailStatsType(
+            total_executions=stats["total"],
+            completed=stats["completed"],
+            failed=stats["failed"],
+            running=stats["running"],
+            queued=stats["queued"],
+            skipped=stats["skipped"],
+            avg_duration_seconds=(
+                stats["avg_duration"].total_seconds() if stats["avg_duration"] else None
+            ),
+            fieldset_count=stats["fieldset_count"],
+            analyzer_count=stats["analyzer_count"],
+            agent_count=stats["agent_count"],
+        )
 
     conversation = relay.Node.Field(ConversationType)
 

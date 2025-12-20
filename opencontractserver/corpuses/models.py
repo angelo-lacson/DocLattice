@@ -14,6 +14,7 @@ from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from tree_queries.models import TreeNode
 
 from opencontractserver.annotations.models import Annotation
+from opencontractserver.corpuses.managers import CorpusActionExecutionManager
 from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.QuerySets import PermissionedTreeQuerySet
 from opencontractserver.shared.slug_utils import generate_unique_slug, sanitize_slug
@@ -1261,4 +1262,378 @@ class CorpusFolderGroupObjectPermission(GroupObjectPermissionBase):
 
     content_object = django.db.models.ForeignKey(
         "CorpusFolder", on_delete=django.db.models.CASCADE
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Corpus Action Execution Trail
+# --------------------------------------------------------------------------- #
+
+
+class CorpusActionExecution(BaseOCModel):
+    """
+    Tracks individual executions of corpus actions.
+
+    One record per (corpus_action, document, run) combination.
+    Provides unified querying across all action types (fieldset, analyzer, agent).
+
+    Design Notes:
+    - Uses JSONField for affected_objects instead of GenericForeignKey for query performance
+    - Append-mostly pattern: only status transitions after creation
+    - Denormalized corpus_id for fast corpus-level queries without joins
+    """
+
+    class Status(django.db.models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"  # Idempotent skip (already processed)
+
+    class ActionType(django.db.models.TextChoices):
+        FIELDSET = "fieldset", "Fieldset Extract"
+        ANALYZER = "analyzer", "Analyzer"
+        AGENT = "agent", "Agent"
+
+    # Core relationships
+    corpus_action = django.db.models.ForeignKey(
+        "CorpusAction",
+        on_delete=django.db.models.CASCADE,
+        related_name="executions",
+        help_text="The corpus action configuration that was executed",
+    )
+    document = django.db.models.ForeignKey(
+        "documents.Document",
+        on_delete=django.db.models.CASCADE,
+        related_name="corpus_action_executions",
+        help_text="The document this action was executed on",
+    )
+
+    # Denormalized for query performance (avoids join through corpus_action)
+    corpus = django.db.models.ForeignKey(
+        "Corpus",
+        on_delete=django.db.models.CASCADE,
+        related_name="action_executions",
+        help_text="Denormalized corpus reference for fast queries",
+        db_index=True,
+    )
+
+    # Denormalized action type for filtering without join
+    action_type = django.db.models.CharField(
+        max_length=20,
+        choices=ActionType.choices,
+        db_index=True,
+        help_text="Type of action (fieldset/analyzer/agent)",
+    )
+
+    # Execution lifecycle
+    status = django.db.models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.QUEUED,
+        db_index=True,
+    )
+    queued_at = django.db.models.DateTimeField(
+        db_index=True,
+        help_text="When the execution was queued (set explicitly for bulk_create)",
+    )
+    started_at = django.db.models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="When execution actually started",
+    )
+    completed_at = django.db.models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="When execution completed (success or failure)",
+    )
+
+    # Trigger context
+    trigger = django.db.models.CharField(
+        max_length=128,
+        choices=CorpusActionTrigger.choices,
+        help_text="What triggered this execution",
+    )
+
+    # Result tracking - uses JSON for flexibility and query performance
+    affected_objects = django.db.models.JSONField(
+        default=list,
+        blank=True,
+        help_text="""
+        List of objects created or modified by this execution.
+        Format: [
+            {"type": "extract", "id": 123},
+            {"type": "datacell", "id": 456, "column_name": "parties"},
+            {"type": "analysis", "id": 789},
+            {"type": "annotation", "id": 101, "label": "indemnification"},
+            {"type": "document_summary", "revision_id": 202},
+            {"type": "document_meta", "field": "description", "old": "...", "new": "..."},
+        ]
+        """,
+    )
+
+    # For agent actions, link to detailed result
+    agent_result = django.db.models.ForeignKey(
+        "agents.AgentActionResult",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_record",
+        help_text="Detailed agent result (for agent actions only)",
+    )
+
+    # For fieldset actions, link to extract
+    extract = django.db.models.ForeignKey(
+        "extracts.Extract",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_records",
+        help_text="Extract created (for fieldset actions only)",
+    )
+
+    # For analyzer actions, link to analysis
+    analysis = django.db.models.ForeignKey(
+        "analyzer.Analysis",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_records",
+        help_text="Analysis created (for analyzer actions only)",
+    )
+
+    # Error tracking
+    error_message = django.db.models.TextField(
+        blank=True,
+        default="",
+        help_text="Error message if status is FAILED",
+    )
+    error_traceback = django.db.models.TextField(
+        blank=True,
+        default="",
+        help_text="Full traceback for debugging (truncated to 10KB)",
+    )
+
+    # Execution metadata (model, tokens, retries, etc.)
+    execution_metadata = django.db.models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="""
+        Additional execution context:
+        {
+            "model": "gpt-4",
+            "tokens_used": 1500,
+            "retry_count": 0,
+            "celery_task_id": "abc-123",
+            "worker_id": "worker-1",
+        }
+        """,
+    )
+
+    # Custom manager for optimized queries
+    objects = CorpusActionExecutionManager()
+
+    class Meta:
+        ordering = ["-queued_at"]
+        permissions = (
+            ("permission_corpusactionexecution", "permission corpusactionexecution"),
+            ("publish_corpusactionexecution", "publish corpusactionexecution"),
+            ("create_corpusactionexecution", "create corpusactionexecution"),
+            ("read_corpusactionexecution", "read corpusactionexecution"),
+            ("update_corpusactionexecution", "update corpusactionexecution"),
+            ("remove_corpusactionexecution", "delete corpusactionexecution"),
+        )
+        indexes = [
+            # Primary query: "Get all executions for a corpus, newest first"
+            # Used by: corpus action trail UI, corpus dashboard
+            django.db.models.Index(
+                fields=["corpus", "-queued_at"],
+                name="corpusactionexec_corpus_queue",
+            ),
+            # Query: "Get executions for a specific action, newest first"
+            # Used by: action detail view, monitoring
+            django.db.models.Index(
+                fields=["corpus_action", "-queued_at"],
+                name="corpusactionexec_action_queue",
+            ),
+            # Query: "Get executions for a document across all actions"
+            # Used by: document history view
+            django.db.models.Index(
+                fields=["document", "-queued_at"],
+                name="corpusactionexec_doc_queue",
+            ),
+            # Query: "Get executions by status" (pending work, failures)
+            # Used by: monitoring, retry logic
+            django.db.models.Index(
+                fields=["status", "-queued_at"],
+                name="corpusactionexec_status_queue",
+            ),
+            # Query: "Get executions by type for a corpus"
+            # Used by: filtered trail views
+            django.db.models.Index(
+                fields=["corpus", "action_type", "-queued_at"],
+                name="corpusactionexec_type_queue",
+            ),
+            # Composite: Detect duplicate/concurrent executions
+            django.db.models.Index(
+                fields=["corpus_action", "document", "status"],
+                name="corpusactionexec_dedup",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.action_type}:{self.corpus_action.name}@{self.document_id} ({self.status})"
+
+    @property
+    def duration_seconds(self) -> Optional[float]:
+        """Calculate execution duration in seconds."""
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
+
+    @property
+    def wait_time_seconds(self) -> Optional[float]:
+        """Calculate time spent in queue before execution."""
+        if self.queued_at and self.started_at:
+            return (self.started_at - self.queued_at).total_seconds()
+        return None
+
+    def add_affected_object(self, obj_type: str, obj_id: int, **extra) -> None:
+        """
+        Add an affected object to the trail.
+
+        Usage:
+            execution.add_affected_object("datacell", datacell.id, column_name="parties")
+            execution.add_affected_object("annotation", ann.id, label="indemnification")
+        """
+        entry = {"type": obj_type, "id": obj_id, **extra}
+        if self.affected_objects is None:
+            self.affected_objects = []
+        self.affected_objects.append(entry)
+
+    def mark_started(self, save: bool = True) -> None:
+        """Mark execution as started. Use atomic update in concurrent scenarios."""
+        self.status = self.Status.RUNNING
+        self.started_at = timezone.now()
+        if save:
+            self.save(update_fields=["status", "started_at", "modified"])
+
+    def mark_completed(
+        self,
+        affected_objects: Optional[list[dict]] = None,
+        metadata: Optional[dict] = None,
+        save: bool = True,
+    ) -> None:
+        """Mark execution as successfully completed."""
+        self.status = self.Status.COMPLETED
+        self.completed_at = timezone.now()
+        if affected_objects:
+            self.affected_objects = affected_objects
+        if metadata:
+            self.execution_metadata.update(metadata)
+        if save:
+            self.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "affected_objects",
+                    "execution_metadata",
+                    "modified",
+                ]
+            )
+
+    def mark_failed(
+        self,
+        error_message: str,
+        error_traceback: str = "",
+        save: bool = True,
+    ) -> None:
+        """Mark execution as failed with error details."""
+        self.status = self.Status.FAILED
+        self.completed_at = timezone.now()
+        self.error_message = error_message[:5000]  # Truncate
+        self.error_traceback = error_traceback[:10000]  # Truncate
+        if save:
+            self.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "error_message",
+                    "error_traceback",
+                    "modified",
+                ]
+            )
+
+    def mark_skipped(self, reason: str = "", save: bool = True) -> None:
+        """Mark execution as skipped (idempotent - already processed)."""
+        self.status = self.Status.SKIPPED
+        self.completed_at = timezone.now()
+        if reason:
+            self.execution_metadata["skip_reason"] = reason
+        if save:
+            self.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "execution_metadata",
+                    "modified",
+                ]
+            )
+
+    @classmethod
+    def bulk_queue(
+        cls,
+        corpus_action: "CorpusAction",
+        document_ids: list[int],
+        trigger: str,
+        user_id: int,
+    ) -> list["CorpusActionExecution"]:
+        """
+        Efficiently queue multiple executions in a single INSERT.
+
+        Returns list of created execution records.
+        """
+        # Determine action type
+        # Note: Use 'is not None' instead of truthiness because some models
+        # (e.g., Analyzer) use CharField primary keys which may be empty strings
+        if corpus_action.fieldset_id is not None:
+            action_type = cls.ActionType.FIELDSET
+        elif corpus_action.analyzer_id is not None:
+            action_type = cls.ActionType.ANALYZER
+        else:
+            action_type = cls.ActionType.AGENT
+
+        now = timezone.now()
+        executions = [
+            cls(
+                corpus_action=corpus_action,
+                document_id=doc_id,
+                corpus_id=corpus_action.corpus_id,
+                action_type=action_type,
+                status=cls.Status.QUEUED,
+                trigger=trigger,
+                queued_at=now,
+                creator_id=user_id,
+            )
+            for doc_id in document_ids
+        ]
+
+        return cls.objects.bulk_create(executions)
+
+
+class CorpusActionExecutionUserObjectPermission(UserObjectPermissionBase):
+    """Guardian permission model for per-user execution permissions."""
+
+    content_object = django.db.models.ForeignKey(
+        "CorpusActionExecution", on_delete=django.db.models.CASCADE
+    )
+
+
+class CorpusActionExecutionGroupObjectPermission(GroupObjectPermissionBase):
+    """Guardian permission model for per-group execution permissions."""
+
+    content_object = django.db.models.ForeignKey(
+        "CorpusActionExecution", on_delete=django.db.models.CASCADE
     )
