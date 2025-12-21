@@ -22,8 +22,10 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle serial tests when running with xdist."""
-    # If not running with xdist, no special handling needed
-    if not hasattr(config, "workerinput"):
+    # Check if running with xdist by looking at numprocesses option
+    # Note: workerinput is only on workers, but collection happens on controller
+    numprocesses = getattr(config.option, "numprocesses", None)
+    if not numprocesses:
         return
 
     # When running with xdist, mark serial tests to run on the same worker
