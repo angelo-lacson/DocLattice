@@ -9,6 +9,7 @@ import asyncio
 import os
 
 import pytest
+from django import db
 
 
 def pytest_configure(config):
@@ -75,6 +76,11 @@ def pytest_runtest_setup(item):
         # Set worker ID in environment for tests that need to know
         os.environ["TEST_WORKER_ID"] = worker_id
 
+    # For serial tests (which often use async code), close old database connections
+    # to prevent stale connection issues from previous tests
+    if item.get_closest_marker("serial"):
+        db.close_old_connections()
+
     # Ensure a fresh event loop is available for each test.
     # This prevents "Event loop is closed" errors when using pydantic-ai's
     # run_sync() or other async code with pytest-xdist.
@@ -106,3 +112,10 @@ def pytest_runtest_teardown(item, nextitem):
     except RuntimeError:
         # No event loop, nothing to clean up
         pass
+
+    # For serial tests (which use async code with asyncio.run()), close ALL
+    # database connections to prevent stale/corrupted connections from affecting
+    # subsequent tests. asyncio.run() can leave connections in a bad state when
+    # it closes its event loop.
+    if item.get_closest_marker("serial"):
+        db.connections.close_all()
