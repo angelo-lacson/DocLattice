@@ -10,6 +10,9 @@ These tests cover:
 
 NOTE: Tests use the Celery task's .apply() method rather than asyncio.run() directly
 to avoid Django database connection issues with async code.
+
+NOTE: These tests are marked as serial because they use asyncio.run() inside
+celery tasks which can cause database connection pool exhaustion in parallel execution.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,6 +26,9 @@ from opencontractserver.agents.models import AgentActionResult, AgentConfigurati
 from opencontractserver.corpuses.models import Corpus, CorpusAction, CorpusActionTrigger
 from opencontractserver.documents.models import Document
 from opencontractserver.tasks.agent_tasks import run_agent_corpus_action
+
+# Mark all tests in this module as serial to avoid parallel execution issues
+pytestmark = pytest.mark.serial
 
 User = get_user_model()
 
