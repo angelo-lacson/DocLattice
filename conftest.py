@@ -38,15 +38,6 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.xdist_group(name="serial"))
 
 
-def pytest_xdist_setup(scheduler):
-    """
-    Configure xdist scheduler to ensure serial tests are scheduled together.
-
-    This hook runs on the controller after scheduler is created.
-    """
-    pass  # xdist_group marker should handle grouping
-
-
 @pytest.fixture(scope="session")
 def django_db_modify_db_settings(django_db_modify_db_settings_parallel_suffix):
     """
