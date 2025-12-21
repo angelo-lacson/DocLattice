@@ -135,5 +135,9 @@ class CorpusActionExecutionManager(BaseVisibilityManager):
         """
         # Get the base filtered queryset from parent
         base_qs = super().visible_to_user(user)
-        # Re-apply through our custom queryset to enable custom methods
+        # If base_qs is already our custom QuerySet type, return it directly
+        # to avoid creating a subquery with pk__in
+        if isinstance(base_qs, CorpusActionExecutionQuerySet):
+            return base_qs
+        # Otherwise, re-apply through our custom queryset to enable custom methods
         return self.get_queryset().filter(pk__in=base_qs.values("pk"))

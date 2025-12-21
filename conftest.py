@@ -13,11 +13,13 @@ import pytest
 
 def pytest_configure(config):
     """Configure pytest settings, including xdist worker handling."""
-    # Set a marker for tests that cannot run in parallel
-    config.addinivalue_line(
-        "markers",
-        "serial: mark test to run serially (not in parallel with other tests)",
-    )
+    # Ensure the serial marker is registered only once
+    if not hasattr(config, "_serial_marker_registered"):
+        config.addinivalue_line(
+            "markers",
+            "serial: mark test to run serially (not in parallel with other tests)",
+        )
+        config._serial_marker_registered = True
 
 
 def pytest_collection_modifyitems(config, items):
@@ -28,11 +30,21 @@ def pytest_collection_modifyitems(config, items):
     if not numprocesses:
         return
 
-    # When running with xdist, mark serial tests to run on the same worker
+    # When running with xdist, mark serial tests to run on worker gw0 only
+    # This ensures they run sequentially without interference from other workers
     for item in items:
         if item.get_closest_marker("serial"):
-            # Add a marker to group all serial tests together
+            # Add xdist_group to ensure all serial tests run on same worker
             item.add_marker(pytest.mark.xdist_group(name="serial"))
+
+
+def pytest_xdist_setup(scheduler):
+    """
+    Configure xdist scheduler to ensure serial tests are scheduled together.
+
+    This hook runs on the controller after scheduler is created.
+    """
+    pass  # xdist_group marker should handle grouping
 
 
 @pytest.fixture(scope="session")

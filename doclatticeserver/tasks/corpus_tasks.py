@@ -289,26 +289,18 @@ def process_corpus_action(
 
             def on_commit_callback():
                 chord(group(*tasks))(mark_extract_complete.si(extract_id_for_closure))
-                # Mark executions as completed when extract processing starts
-                # Note: Final completion status handled by mark_extract_complete
+                # Mark executions as running - they will be marked completed
+                # by mark_extract_complete when all tasks finish
                 CorpusActionExecution.objects.filter(
                     id__in=execution_ids_for_closure
                 ).update(
-                    status=CorpusActionExecution.Status.COMPLETED,
-                    completed_at=timezone.now(),
+                    status=CorpusActionExecution.Status.RUNNING,
+                    started_at=timezone.now(),
                 )
 
             transaction.on_commit(on_commit_callback)
 
         elif action.analyzer:
-            # Mark executions as running
-            CorpusActionExecution.objects.filter(
-                id__in=[ex.id for ex in executions]
-            ).update(
-                status=CorpusActionExecution.Status.RUNNING,
-                started_at=timezone.now(),
-            )
-
             analysis = process_analyzer(
                 user_id=user_id,
                 analyzer=action.analyzer,
@@ -317,14 +309,16 @@ def process_corpus_action(
                 corpus_action=action,
             )
 
-            # Link executions to analysis and mark as completed
+            # Link executions to analysis and mark as running
+            # They will be marked COMPLETED by mark_analysis_complete when
+            # the analysis actually finishes
             if analysis:
                 CorpusActionExecution.objects.filter(
                     id__in=[ex.id for ex in executions]
                 ).update(
                     analysis=analysis,
-                    status=CorpusActionExecution.Status.COMPLETED,
-                    completed_at=timezone.now(),
+                    status=CorpusActionExecution.Status.RUNNING,
+                    started_at=timezone.now(),
                     affected_objects=[{"type": "analysis", "id": analysis.id}],
                 )
 
