@@ -16,12 +16,26 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def mark_extract_complete(extract_id):
-    """Mark extract as complete."""
+    """Mark extract as complete and update any related CorpusActionExecutions."""
+    from opencontractserver.corpuses.models import CorpusActionExecution
+
     extract = Extract.objects.get(pk=extract_id)
     extract.finished = timezone.now()
     extract.save()
 
-    logger.info(f"Extract {extract_id} marked complete")
+    # Mark any related CorpusActionExecutions as completed
+    # These were set to RUNNING when the extract tasks were queued
+    updated_count = CorpusActionExecution.objects.filter(
+        extract_id=extract_id, status=CorpusActionExecution.Status.RUNNING
+    ).update(status=CorpusActionExecution.Status.COMPLETED, completed_at=timezone.now())
+
+    if updated_count:
+        logger.info(
+            f"Extract {extract_id} marked complete, "
+            f"updated {updated_count} CorpusActionExecution(s)"
+        )
+    else:
+        logger.info(f"Extract {extract_id} marked complete")
 
 
 @shared_task

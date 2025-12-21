@@ -2197,14 +2197,22 @@ class Query(graphene.ObjectType):
         Can be filtered by corpus_action_id, document_id, and status.
         """
         from opencontractserver.agents.models import AgentActionResult
+        from opencontractserver.corpuses.models import CorpusAction
 
         user = info.context.user
         queryset = AgentActionResult.objects.visible_to_user(user)
 
-        # Filter by corpus_action if provided
+        # Filter by corpus_action if provided (with access check)
         corpus_action_id = kwargs.get("corpus_action_id")
         if corpus_action_id:
             corpus_action_pk = from_global_id(corpus_action_id)[1]
+            # Defense-in-depth: verify user has access to this corpus action
+            if (
+                not CorpusAction.objects.visible_to_user(user)
+                .filter(pk=corpus_action_pk)
+                .exists()
+            ):
+                return queryset.none()
             queryset = queryset.filter(corpus_action_id=corpus_action_pk)
 
         # Filter by document if provided
@@ -2268,10 +2276,19 @@ class Query(graphene.ObjectType):
                 return queryset.none()
             queryset = queryset.for_document(document_pk)
 
-        # Filter by corpus_action if provided
+        # Filter by corpus_action if provided (with access check)
         corpus_action_id = kwargs.get("corpus_action_id")
         if corpus_action_id:
+            from opencontractserver.corpuses.models import CorpusAction
+
             corpus_action_pk = from_global_id(corpus_action_id)[1]
+            # Defense-in-depth: verify user has access to this corpus action
+            if (
+                not CorpusAction.objects.visible_to_user(user)
+                .filter(pk=corpus_action_pk)
+                .exists()
+            ):
+                return queryset.none()
             queryset = queryset.filter(corpus_action_id=corpus_action_pk)
 
         # Filter by status if provided
