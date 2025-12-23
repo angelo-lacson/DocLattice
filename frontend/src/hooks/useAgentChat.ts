@@ -262,6 +262,9 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Reconnect trigger - increment to force reconnection (Issue #697)
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
+
   // Message state
   const [messages, setMessages] = useState<ChatMessageProps[]>([]);
 
@@ -740,6 +743,7 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
     context.agentId,
     context.conversationId,
     auth_token,
+    reconnectTrigger, // Added for Issue #697 - triggers reconnection when incremented
     appendStreamingToken,
     appendThought,
     mergeSourcesIntoMessage,
@@ -792,23 +796,23 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
         socketRef.current?.readyState !== WebSocket.OPEN &&
         socketRef.current?.readyState !== WebSocket.CONNECTING
       ) {
-        console.log("[useAgentChat] WebSocket disconnected, page needs refresh");
-        // Note: We don't auto-reconnect here because the WebSocket connection
-        // is managed by the useEffect with context dependencies. Instead, we
-        // set a flag that could trigger a reconnection or notify the user.
-        setError("Connection lost. Please refresh to reconnect.");
+        console.log("[useAgentChat] WebSocket disconnected, triggering reconnection...");
+        // Trigger reconnection by incrementing the reconnectTrigger
+        // This will cause the WebSocket useEffect to re-run and establish a new connection
+        setReconnectTrigger((prev) => prev + 1);
       }
     },
     onOnline: () => {
       console.log("[useAgentChat] Network online, checking connection...");
 
-      // Check if we need to show a reconnection message
+      // Reconnect if WebSocket is disconnected
       if (
         hasContext &&
         socketRef.current?.readyState !== WebSocket.OPEN &&
         socketRef.current?.readyState !== WebSocket.CONNECTING
       ) {
-        setError("Connection lost. Please refresh to reconnect.");
+        console.log("[useAgentChat] Triggering reconnection after network recovery...");
+        setReconnectTrigger((prev) => prev + 1);
       }
     },
     resumeThreshold: 1000, // 1 second hidden threshold

@@ -420,7 +420,12 @@ export function useThreadWebSocket(
         console.log(
           "[useThreadWebSocket] WebSocket disconnected, reconnecting..."
         );
-        connect();
+        try {
+          connect();
+        } catch (error) {
+          console.error("[useThreadWebSocket] Reconnection failed:", error);
+          setConnectionState("error");
+        }
       } else if (wsRef.current?.readyState === WebSocket.OPEN) {
         // Send a ping to verify connection is still alive
         sendPing();
@@ -435,7 +440,12 @@ export function useThreadWebSocket(
         wsRef.current?.readyState !== WebSocket.OPEN &&
         wsRef.current?.readyState !== WebSocket.CONNECTING
       ) {
-        connect();
+        try {
+          connect();
+        } catch (error) {
+          console.error("[useThreadWebSocket] Reconnection after network recovery failed:", error);
+          setConnectionState("error");
+        }
       }
     },
     resumeThreshold: 1000, // 1 second hidden threshold

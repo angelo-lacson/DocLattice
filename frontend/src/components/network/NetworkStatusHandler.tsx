@@ -12,10 +12,9 @@
  */
 
 import { useCallback, useRef } from "react";
-import { useApolloClient, useReactiveVar } from "@apollo/client";
+import { useApolloClient } from "@apollo/client";
 import { toast } from "react-toastify";
 import { useNetworkStatus } from "../../hooks/useNetworkStatus";
-import { authStatusVar, authToken } from "../../graphql/cache";
 
 /**
  * Props for the NetworkStatusHandler component.
@@ -29,6 +28,8 @@ export interface NetworkStatusHandlerProps {
   refetchOnResume?: boolean;
   /** Whether to refetch queries when coming back online (default: true) */
   refetchOnOnline?: boolean;
+  /** Debounce interval (ms) for refetch operations to prevent rapid repeated calls (default: 2000) */
+  refetchDebounceMs?: number;
 }
 
 /**
@@ -50,10 +51,9 @@ export function NetworkStatusHandler({
   showToasts = true,
   refetchOnResume = true,
   refetchOnOnline = true,
+  refetchDebounceMs = 2000,
 }: NetworkStatusHandlerProps = {}) {
   const client = useApolloClient();
-  const auth_status = useReactiveVar(authStatusVar);
-  const token = useReactiveVar(authToken);
 
   // Track if we've shown the offline toast to avoid duplicates
   const offlineToastShownRef = useRef(false);
@@ -66,8 +66,8 @@ export function NetworkStatusHandler({
   const refetchActiveQueries = useCallback(
     async (reason: string) => {
       const now = Date.now();
-      // Debounce: don't refetch if we just did within the last 2 seconds
-      if (now - lastRefetchRef.current < 2000) {
+      // Debounce: don't refetch if we just did within the debounce interval
+      if (now - lastRefetchRef.current < refetchDebounceMs) {
         console.log(
           `[NetworkStatusHandler] Skipping refetch (debounced): ${reason}`
         );
@@ -92,7 +92,7 @@ export function NetworkStatusHandler({
         // The errorLink will handle showing appropriate error messages
       }
     },
-    [client]
+    [client, refetchDebounceMs]
   );
 
   /**
