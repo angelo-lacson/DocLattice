@@ -452,6 +452,121 @@ class DeleteConversationMutation(graphene.Mutation):
         return DeleteConversationMutation(ok=ok, message=message)
 
 
+class UpdateMessageMutation(graphene.Mutation):
+    """
+    Update the content of an existing message.
+
+    Security Note: Only the message creator or a moderator can edit messages.
+    Mention links are re-parsed when content is updated.
+    Part of Issue #686 - Mobile UI for Edit Message Modal
+    """
+
+    class Arguments:
+        message_id = graphene.String(
+            required=True, description="ID of the message to update"
+        )
+        content = graphene.String(
+            required=True, description="New content for the message"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    obj = graphene.Field(MessageType)
+
+    @login_required
+    @graphql_ratelimit(rate="30/m")
+    @transaction.atomic
+    def mutate(root, info, message_id, content):
+        ok = False
+        obj = None
+        message = ""
+
+        try:
+            user = info.context.user
+            message_pk = from_global_id(message_id)[1]
+
+            # Use .visible_to_user() pattern to prevent IDOR enumeration
+            # Returns same error whether object doesn't exist or user lacks permission
+            try:
+                chat_message = ChatMessage.objects.visible_to_user(user).get(
+                    pk=message_pk
+                )
+            except ChatMessage.DoesNotExist:
+                return UpdateMessageMutation(
+                    ok=False,
+                    message="You do not have permission to edit this message",
+                    obj=None,
+                )
+
+            # Check if user has permission to update (CRUD includes update)
+            has_update_permission = user_has_permission_for_obj(
+                user, chat_message, PermissionTypes.CRUD
+            )
+            is_moderator = chat_message.conversation.can_moderate(user)
+
+            if not has_update_permission and not is_moderator:
+                return UpdateMessageMutation(
+                    ok=False,
+                    message="You do not have permission to edit this message",
+                    obj=None,
+                )
+
+            # Check if conversation is locked
+            if chat_message.conversation.is_locked:
+                return UpdateMessageMutation(
+                    ok=False,
+                    message="This thread is locked",
+                    obj=None,
+                )
+
+            # Check if message is deleted
+            if chat_message.deleted_at:
+                return UpdateMessageMutation(
+                    ok=False,
+                    message="Cannot edit a deleted message",
+                    obj=None,
+                )
+
+            # Update the message content
+            chat_message.content = content
+            chat_message.save(update_fields=["content", "modified"])
+
+            # Clear existing resource links and re-parse mentions
+            chat_message.mentioned_documents.clear()
+            chat_message.mentioned_annotations.clear()
+            chat_message.mentioned_agents.clear()
+
+            try:
+                mentioned_ids = parse_mentions_from_content(content)
+                link_result = link_message_to_resources(chat_message, mentioned_ids)
+                logger.debug(f"Updated message {chat_message.pk} links: {link_result}")
+
+                # Trigger agent responses if any agents were mentioned
+                if link_result.get("agents_linked", 0) > 0:
+                    trigger_agent_responses_for_message.delay(
+                        message_id=chat_message.pk,
+                        user_id=user.pk,
+                    )
+                    logger.debug(
+                        f"Triggered agent responses for updated message {chat_message.pk}"
+                    )
+            except Exception as e:
+                # Don't fail the whole mutation if mention parsing fails
+                logger.error(f"Error re-parsing mentions in updated message: {e}")
+
+            ok = True
+            message = "Message updated successfully"
+            obj = chat_message
+
+        except ChatMessage.DoesNotExist:
+            message = "You do not have permission to edit this message"
+        except Exception as e:
+            logger.error(f"Error updating message: {e}")
+            message = "Failed to update message"
+
+        return UpdateMessageMutation(ok=ok, message=message, obj=obj)
+
+
 class DeleteMessageMutation(graphene.Mutation):
     """Soft delete a message."""
 
