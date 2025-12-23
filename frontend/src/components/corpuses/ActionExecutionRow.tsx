@@ -293,8 +293,13 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
   const [expanded, setExpanded] = useState(false);
   const navigate = useNavigate();
 
-  const status = STATUS_CONFIG[execution.status] || STATUS_CONFIG.queued;
-  const typeLabel = TYPE_LABELS[execution.actionType] || execution.actionType;
+  // Normalize status to lowercase for lookup
+  const statusKey = (execution.status || "queued").toLowerCase();
+  const status = STATUS_CONFIG[statusKey] || STATUS_CONFIG.queued;
+
+  // Normalize type to lowercase for lookup
+  const typeKey = (execution.actionType || "").toLowerCase();
+  const typeLabel = TYPE_LABELS[typeKey] || execution.actionType || "Action";
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -316,10 +321,17 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
 
   const renderObjectLabel = (obj: AffectedObjectEntry): string => {
     if (obj.label) return obj.label;
-    const objType = obj.type || "object";
-    if (obj.field) return `${obj.field}`;
-    if (obj.column_name) return `${obj.column_name}`;
-    return `${objType} #${obj.id}`;
+    const objType = obj.type || "item";
+    if (obj.field) return obj.field;
+    if (obj.column_name) return obj.column_name;
+    // Handle case where id might be undefined or 0
+    if (obj.id !== undefined && obj.id !== null) {
+      return `${objType} #${obj.id}`;
+    }
+    // Fallback: try to create a meaningful label from available fields
+    if (obj.new_value)
+      return `${objType}: ${obj.new_value.substring(0, 30)}...`;
+    return objType;
   };
 
   return (
