@@ -5,7 +5,35 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-14
+## [Unreleased] - 2025-12-23
+
+### Added
+
+#### Upload Modal Styling Improvements (Issue #696)
+- **New styled components for upload modals** (`frontend/src/components/widgets/modals/UploadModalStyles.ts`): Comprehensive styled-components library with 25+ responsive components including `StyledUploadModal`, `DropZone`, `StepIndicator`, `FileListItem`, and more
+- **Step indicator UI** for DocumentUploadModal showing progress through upload workflow (Select → Details → Corpus)
+- **Modern gradient header** with icon and subtitle for both upload modals
+- **Progress bar integration** showing real-time upload progress with success/error states
+
+### Changed
+
+#### Upload Modal Mobile Responsiveness (Issue #696)
+- **DocumentUploadModal** (`frontend/src/components/widgets/modals/DocumentUploadModal.tsx`): Refactored to use new styled components with responsive grid layout for edit step
+- **BulkUploadModal** (`frontend/src/components/widgets/modals/BulkUploadModal.tsx`): Complete visual overhaul with styled drop zone, file size display, and responsive layout
+- **DocumentUploadList** (`frontend/src/components/documents/DocumentUploadList.tsx`): New drop zone styling with drag-active feedback and pulse animation
+- **DocumentListItem** (`frontend/src/components/documents/DocumentListItem.tsx`): Improved file list items with proper touch targets (56px min-height, 64px on mobile), status icons, and delete button styling
+- **Mobile-first breakpoints**: All upload modal components now have explicit breakpoints at 480px (mobile) and 768px (tablet)
+- **Touch target compliance**: All interactive elements meet 44px minimum touch target size for mobile accessibility
+- **Responsive action buttons**: Modal actions stack vertically on mobile for full-width tappable buttons
+- **Custom scrollbar styling**: File list has styled scrollbars for visual polish
+
+### Technical Details
+
+#### Upload Modal Architecture
+- Styled-components with transient props (`$active`, `$selected`, `$status`) to prevent DOM attribute warnings
+- CSS keyframe animations for drag-active pulse effect and fade-in modal transitions
+- Gradient backgrounds using `linear-gradient(135deg, #667eea 0%, #764ba2 100%)` for visual consistency
+- Semantic UI React components wrapped with styled-components for enhanced styling while preserving functionality
 
 ### Added
 
