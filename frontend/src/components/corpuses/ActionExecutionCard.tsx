@@ -84,7 +84,9 @@ function formatDateTime(isoString: string | null): string {
  * @param type - Object type (e.g., "annotation", "extract", "analysis")
  * @returns Semantic-ui icon name
  */
-function getObjectTypeIcon(type: string): SemanticICONS {
+function getObjectTypeIcon(type: string | undefined | null): SemanticICONS {
+  if (!type) return "question circle";
+
   const iconMap: Record<string, SemanticICONS> = {
     annotation: "tag",
     extract: "database",
@@ -409,9 +411,10 @@ export const ActionExecutionCard: React.FC<ActionExecutionCardProps> = ({
    */
   const renderObjectLabel = (obj: AffectedObjectEntry): string => {
     if (obj.label) return obj.label;
-    if (obj.field) return `${obj.type}: ${obj.field}`;
-    if (obj.column_name) return `${obj.type}: ${obj.column_name}`;
-    return `${obj.type} #${obj.id}`;
+    const objType = obj.type || "object";
+    if (obj.field) return `${objType}: ${obj.field}`;
+    if (obj.column_name) return `${objType}: ${obj.column_name}`;
+    return `${objType} #${obj.id}`;
   };
 
   return (
@@ -531,9 +534,11 @@ export const ActionExecutionCard: React.FC<ActionExecutionCardProps> = ({
           <ObjectList role="list">
             {execution.affectedObjects.map((obj, index) => (
               <ObjectChip
-                key={`${obj.type}-${obj.id}-${index}`}
+                key={`${obj.type || "unknown"}-${obj.id}-${index}`}
                 onClick={() => handleObjectClick(obj)}
-                disabled={!["extract", "annotation"].includes(obj.type)}
+                disabled={
+                  !obj.type || !["extract", "annotation"].includes(obj.type)
+                }
                 aria-label={`Navigate to ${renderObjectLabel(obj)}`}
                 role="listitem"
               >
