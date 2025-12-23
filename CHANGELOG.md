@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2025-12-14
 
+### Fixed
+
+#### Trash View Error Prevention (Issue #691)
+- **State synchronization fix** (`frontend/src/components/corpuses/folders/FolderTreeSidebar.tsx:363-369`):
+  - Fixed trash folder click handler to use consistent state update pattern matching other folder navigation
+  - Added `handleTrashClick` callback that properly delegates to `onFolderSelect` when provided (URL-driven state)
+  - Removed direct Jotai atom manipulation that caused race conditions with CentralRouteManager
+- **Defensive null handling** (`frontend/src/components/corpuses/folders/TrashFolderView.tsx`):
+  - Added `safeFormatDistanceToNow()` and `safeFormat()` helper functions for robust date formatting
+  - Added optional chaining for `creator`, `document`, and nested properties to prevent runtime errors
+  - Added validation in `handleRestoreSingle()` and `handleRestoreSelected()` to check for valid document data
+- **Type safety improvements** (`frontend/src/graphql/queries/folders.ts:92-104`):
+  - Updated `DeletedDocumentPathType` interface to mark `creator` and `document` as potentially null
+  - Ensures TypeScript catches potential null access issues at compile time
+
 ### Added
 
 #### Permanent Deletion (Empty Trash) Functionality (PR #707)

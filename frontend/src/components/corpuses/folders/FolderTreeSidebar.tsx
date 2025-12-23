@@ -360,6 +360,14 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
     }
   }, [onFolderSelect, setSelectedFolderId]);
 
+  const handleTrashClick = useCallback(() => {
+    if (onFolderSelect) {
+      onFolderSelect("trash");
+    } else {
+      setSelectedFolderId("trash");
+    }
+  }, [onFolderSelect, setSelectedFolderId]);
+
   const handleCreateFolder = useCallback(() => {
     openCreateModal(null); // null = create at root
   }, [openCreateModal]);
@@ -420,10 +428,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
         {/* Trash Folder Item */}
         <TrashFolderItem
           isSelected={selectedFolderId === "trash"}
-          onClick={() => {
-            setSelectedFolderId("trash");
-            onFolderSelect?.("trash");
-          }}
+          onClick={handleTrashClick}
         />
 
         {/* Loading State */}

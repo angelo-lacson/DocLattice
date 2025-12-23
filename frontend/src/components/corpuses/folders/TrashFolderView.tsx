@@ -9,7 +9,7 @@ import {
   Checkbox,
   Modal,
 } from "semantic-ui-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow, format, isValid } from "date-fns";
 import { Trash2, RotateCcw, Archive, FolderOpen } from "lucide-react";
 import {
   GET_DELETED_DOCUMENTS_IN_CORPUS,
@@ -28,6 +28,41 @@ import fallback_doc_icon from "../../../assets/images/defaults/default_doc_icon.
 // Message auto-dismiss durations (in milliseconds)
 const SUCCESS_MESSAGE_DURATION = 5000;
 const ERROR_MESSAGE_DURATION = 10000;
+
+/**
+ * Safely format a date string to relative time (e.g., "2 hours ago").
+ * Returns fallback text if date is invalid.
+ */
+const safeFormatDistanceToNow = (
+  dateString: string | null | undefined
+): string => {
+  if (!dateString) return "Unknown time";
+  try {
+    const date = new Date(dateString);
+    if (!isValid(date)) return "Unknown time";
+    return formatDistanceToNow(date, { addSuffix: true });
+  } catch {
+    return "Unknown time";
+  }
+};
+
+/**
+ * Safely format a date string to a specific format.
+ * Returns fallback text if date is invalid.
+ */
+const safeFormat = (
+  dateString: string | null | undefined,
+  formatString: string
+): string => {
+  if (!dateString) return "Unknown date";
+  try {
+    const date = new Date(dateString);
+    if (!isValid(date)) return "Unknown date";
+    return format(date, formatString);
+  } catch {
+    return "Unknown date";
+  }
+};
 
 const Container = styled.div`
   padding: 20px;
@@ -317,9 +352,15 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     setRestoreSuccess(null);
 
     // Restore each selected document using Promise.allSettled for better error handling
-    const pathsToRestore = deletedDocuments.filter((doc) =>
-      selectedDocuments.has(doc.id)
+    // Filter out any documents with missing data
+    const pathsToRestore = deletedDocuments.filter(
+      (doc) => selectedDocuments.has(doc.id) && doc.document?.id
     );
+
+    if (pathsToRestore.length === 0) {
+      setRestoreError("No valid documents selected for restoration");
+      return;
+    }
 
     const results = await Promise.allSettled(
       pathsToRestore.map((docPath) =>
@@ -382,6 +423,10 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
   };
 
   const handleRestoreSingle = (docPath: DeletedDocumentPathType) => {
+    if (!docPath.document?.id) {
+      setRestoreError("Cannot restore: document information is missing");
+      return;
+    }
     setRestoreError(null);
     setRestoreSuccess(null);
     restoreDocument({
@@ -393,7 +438,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
   };
 
   const renderThumbnail = useCallback(
-    (doc: DeletedDocumentPathType["document"]) => (
+    (doc: NonNullable<DeletedDocumentPathType["document"]>) => (
       <Thumbnail>
         {doc.icon ? (
           <img src={doc.icon} alt={doc.title} />
@@ -591,11 +636,11 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                   onClick={() => handleSelectDocument(docPath.id)}
                 >
                   <CardHeader>
-                    {renderThumbnail(docPath.document)}
+                    {docPath.document && renderThumbnail(docPath.document)}
                     <CardTitle>
-                      <h4>{docPath.document.title || "Untitled Document"}</h4>
+                      <h4>{docPath.document?.title || "Untitled Document"}</h4>
                       <span className="file-type">
-                        {docPath.document.fileType || "Unknown"}
+                        {docPath.document?.fileType || "Unknown"}
                       </span>
                     </CardTitle>
                     <Checkbox
@@ -608,18 +653,15 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                   <CardMeta>
                     <div className="meta-row">
                       <Icon name="trash" className="icon" />
-                      Deleted{" "}
-                      {formatDistanceToNow(new Date(docPath.modified), {
-                        addSuffix: true,
-                      })}
+                      Deleted {safeFormatDistanceToNow(docPath.modified)}
                     </div>
                     <div className="meta-row">
                       <Icon name="calendar" className="icon" />
-                      {format(new Date(docPath.modified), "MMM d, yyyy h:mm a")}
+                      {safeFormat(docPath.modified, "MMM d, yyyy h:mm a")}
                     </div>
                     <div className="meta-row">
                       <Icon name="user" className="icon" />
-                      Deleted by {docPath.creator.username}
+                      Deleted by {docPath.creator?.username || "Unknown user"}
                     </div>
                     {docPath.folder && (
                       <div className="meta-row">
@@ -629,7 +671,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                     )}
                     <div className="meta-row">
                       <Icon name="file outline" className="icon" />
-                      {docPath.document.pageCount || 0} pages
+                      {docPath.document?.pageCount || 0} pages
                     </div>
                   </CardMeta>
 
