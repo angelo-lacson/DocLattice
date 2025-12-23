@@ -35,10 +35,15 @@ export const EmbedderSelector = ({
   style,
   preferredEmbedder,
 }: EmbedderSelectorProps) => {
+  // Use cache-first policy since embedders rarely change
+  // This prevents slow loading when reopening the modal
   const { loading, error, data } = useQuery<
     GetEmbeddersOutput,
     GetEmbeddersInput
-  >(GET_EMBEDDERS);
+  >(GET_EMBEDDERS, {
+    fetchPolicy: "cache-first",
+    nextFetchPolicy: "cache-first",
+  });
 
   const handleChange = (_e: any, { value }: any) => {
     // If user has not actually changed the embedder, do nothing

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button, Icon } from "semantic-ui-react";
 import styled from "styled-components";
 import { LabelSetSelector } from "../widgets/CRUD/LabelSetSelector";
@@ -325,11 +325,11 @@ const SubmitButton = styled(Button)`
 `;
 
 const IconUploadWrapper = styled.div`
-  max-width: 300px;
+  max-width: 280px;
   margin: 0 auto;
 
   @media (max-width: 768px) {
-    max-width: 200px;
+    max-width: 150px;
   }
 `;
 
@@ -403,8 +403,20 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     preferredEmbedder: string | null;
   } | null>(null);
 
-  // Initialize form from corpus data
+  // Track whether the modal was previously open to detect open transitions
+  // This prevents re-initializing form when user is typing on mobile
+  const wasOpenRef = useRef(false);
+
+  // Initialize form from corpus data only when modal opens (not on every render)
   useEffect(() => {
+    // Only initialize form when modal transitions from closed to open
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+
+    if (!justOpened) {
+      return;
+    }
+
     if (corpus) {
       const corpusTitle = corpus.title || "";
       const corpusSlug = corpus.slug || "";
