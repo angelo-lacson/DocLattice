@@ -289,18 +289,24 @@ export function useUnifiedMentionSearch(
       annotationData?.searchAnnotationsForMention?.edges
         ?.slice(0, limitPerCategory)
         .map((edge) => {
-          // Create preview text from rawText or label
-          const previewText =
-            edge.node.rawText && edge.node.rawText.length > 60
-              ? edge.node.rawText.substring(0, 60) + "..."
-              : edge.node.rawText || `[${edge.node.annotationLabel.text}]`;
+          // Create short preview text (~24 chars) from rawText for primary display
+          // This makes the picker more user-friendly by showing actual content
+          // Fixes Issue #689 - Inline reference cards show cryptic information
+          const shortPreviewText = edge.node.rawText
+            ? edge.node.rawText.length > 24
+              ? edge.node.rawText.substring(0, 24) + "…"
+              : edge.node.rawText
+            : `[${edge.node.annotationLabel.text}]`;
 
           return {
             id: edge.node.id,
             type: "annotation" as const,
-            title: edge.node.annotationLabel.text,
-            subtitle: previewText,
-            metadata: `${edge.node.document.title} • page ${edge.node.page}`,
+            // Show actual text content as primary title for clarity
+            title: shortPreviewText,
+            // Show label and page info as secondary context
+            subtitle: `${edge.node.annotationLabel.text} • Page ${edge.node.page}`,
+            // Show document title as metadata
+            metadata: `in "${edge.node.document.title}"`,
             annotation: {
               rawText: edge.node.rawText,
               page: edge.node.page,

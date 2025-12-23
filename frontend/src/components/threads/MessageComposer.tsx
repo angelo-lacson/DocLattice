@@ -349,8 +349,9 @@ export function MessageComposer({
                         };
 
                       case "corpus":
+                        // Issue #689: Show corpus name instead of cryptic slug
                         return {
-                          label: `@corpus:${resource.corpus!.slug}`,
+                          label: resource.title,
                           href: `/c/${resource.corpus!.creator.slug}/${
                             resource.corpus!.slug
                           }`,
@@ -360,10 +361,13 @@ export function MessageComposer({
                       case "document":
                         const doc = resource.document!;
                         const corpus = doc.corpus;
+                        // Issue #689: Show document title instead of cryptic slug format
+                        // Include corpus context if available
+                        const docLabel = corpus
+                          ? `${resource.title} (in ${corpus.title})`
+                          : resource.title;
                         return {
-                          label: corpus
-                            ? `@corpus:${corpus.slug}/document:${doc.slug}`
-                            : `@document:${doc.slug}`,
+                          label: docLabel,
                           href: corpus
                             ? `/d/${corpus.creator.slug}/${corpus.slug}/${doc.slug}`
                             : `/d/${doc.creator.slug}/${doc.slug}`,
@@ -379,8 +383,16 @@ export function MessageComposer({
                         const baseUrl = annCorpus
                           ? `/d/${annCorpus.creator.slug}/${annCorpus.slug}/${annDoc.slug}`
                           : `/d/${annDoc.creator.slug}/${annDoc.slug}`;
+                        // Issue #689: Show annotation text preview (~24 chars) instead of cryptic ID
+                        // Format: "Text preview..." (Label) in Document
+                        const annTextPreview = ann.rawText
+                          ? ann.rawText.length > 24
+                            ? `"${ann.rawText.substring(0, 24)}…"`
+                            : `"${ann.rawText}"`
+                          : `[${ann.label.text}]`;
+                        const annLabel = `${annTextPreview} (${ann.label.text})`;
                         return {
-                          label: `@annotation:${resource.id}`,
+                          label: annLabel,
                           href: `${baseUrl}?ann=${resource.id}&structural=true`,
                           type: "annotation",
                         };
