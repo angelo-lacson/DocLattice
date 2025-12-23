@@ -1,6 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import styled from "styled-components";
-import { User, MoreVertical, Pin, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  User,
+  Bot,
+  MoreVertical,
+  Pin,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { useSetAtom } from "jotai";
 import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
@@ -9,13 +16,38 @@ import { RelativeTime } from "./RelativeTime";
 import { MessageBadges } from "../badges/MessageBadges";
 import { MarkdownMessageRenderer } from "./MarkdownMessageRenderer";
 import { formatUsername } from "./userUtils";
-import { UserBadgeType } from "../../types/graphql-api";
+import { UserBadgeType, AgentConfigurationType } from "../../types/graphql-api";
 import {
   mapWebSocketSourcesToChatMessageSources,
   ChatMessageSource,
   chatSourcesAtom,
 } from "../annotator/context/ChatSourceAtom";
 import { WebSocketSources } from "../knowledge_base/document/right_tray/ChatTray";
+
+/**
+ * Helper to extract agent display data from configuration
+ */
+interface AgentDisplayData {
+  name: string;
+  color: string;
+  icon: string;
+}
+
+function getAgentDisplayData(
+  agentConfig: AgentConfigurationType | null | undefined
+): AgentDisplayData | null {
+  if (!agentConfig) return null;
+
+  const badgeConfig = agentConfig.badgeConfig as
+    | { color?: string; icon?: string }
+    | null;
+
+  return {
+    name: agentConfig.name,
+    color: badgeConfig?.color || "#4A90E2", // Default blue for agents
+    icon: badgeConfig?.icon || "Bot",
+  };
+}
 
 interface MessageItemProps {
   message: MessageNode;
@@ -24,10 +56,21 @@ interface MessageItemProps {
   userBadges?: UserBadgeType[];
 }
 
+/**
+ * Helper to create a lighter tint of a hex color
+ */
+function hexToRgba(hex: string, alpha: number): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return `rgba(74, 144, 226, ${alpha})`;
+  return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`;
+}
+
 const MessageContainer = styled.div<{
   $depth: number;
   $isHighlighted?: boolean;
   $isDeleted?: boolean;
+  $isAgent?: boolean;
+  $agentColor?: string;
 }>`
   /* CRITICAL: Block-level display to prevent shrinking */
   display: block;
@@ -49,12 +92,18 @@ const MessageContainer = styled.div<{
     if (props.$isDeleted) return "#f3f4f6";
     if (props.$isHighlighted)
       return `linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)`;
+    if (props.$isAgent) {
+      // Subtle gradient using agent color with very low opacity
+      const agentColor = props.$agentColor || "#4A90E2";
+      return `linear-gradient(135deg, ${hexToRgba(agentColor, 0.08)} 0%, ${hexToRgba(agentColor, 0.03)} 100%)`;
+    }
     return "#ffffff";
   }};
 
   border: 1px solid
     ${(props) => {
       if (props.$isHighlighted) return "#3b82f6";
+      if (props.$isAgent) return props.$agentColor || "#4A90E2";
       return "#d1d5db";
     }};
 
@@ -64,6 +113,7 @@ const MessageContainer = styled.div<{
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08);
   position: relative;
 
+  /* Accent strip for highlighted messages */
   ${(props) =>
     props.$isHighlighted &&
     `
@@ -79,10 +129,31 @@ const MessageContainer = styled.div<{
     }
   `}
 
+  /* Accent strip for agent messages (Issue #688) */
+  ${(props) =>
+    props.$isAgent &&
+    !props.$isHighlighted &&
+    `
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: linear-gradient(180deg, ${props.$agentColor || "#4A90E2"} 0%, ${props.$agentColor || "#4A90E2"}88 100%);
+      border-radius: 12px 0 0 12px;
+    }
+  `}
+
   &:hover {
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.05);
     transform: translateY(-1px);
-    border-color: ${(props) => (props.$isHighlighted ? "#2563eb" : "#9ca3af")};
+    border-color: ${(props) => {
+      if (props.$isHighlighted) return "#2563eb";
+      if (props.$isAgent) return props.$agentColor || "#4A90E2";
+      return "#9ca3af";
+    }};
   }
 
   ${(props) =>
@@ -137,11 +208,14 @@ const MessageHeaderLeft = styled.div`
   min-width: 0;
 `;
 
-const UserAvatar = styled.div`
+const UserAvatar = styled.div<{ $isAgent?: boolean; $agentColor?: string }>`
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: ${(props) =>
+    props.$isAgent
+      ? `linear-gradient(135deg, ${props.$agentColor || "#4A90E2"} 0%, ${props.$agentColor || "#4A90E2"}dd 100%)`
+      : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)"};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -149,12 +223,18 @@ const UserAvatar = styled.div`
   font-weight: 700;
   font-size: 16px;
   flex-shrink: 0;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+  box-shadow: ${(props) =>
+    props.$isAgent
+      ? `0 4px 14px ${hexToRgba(props.$agentColor || "#4A90E2", 0.4)}`
+      : "0 4px 14px rgba(99, 102, 241, 0.3)"};
   transition: all 0.2s ease;
 
   &:hover {
     transform: scale(1.05);
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+    box-shadow: ${(props) =>
+      props.$isAgent
+        ? `0 6px 16px ${hexToRgba(props.$agentColor || "#4A90E2", 0.5)}`
+        : "0 6px 16px rgba(102, 126, 234, 0.35)"};
   }
 
   @media (max-width: 480px) {
@@ -378,6 +458,13 @@ export const MessageItem = React.memo(function MessageItem({
     message.creator?.email
   );
 
+  // Detect if message is from an agent (Issue #688)
+  const agentData = useMemo(
+    () => getAgentDisplayData(message.agentConfiguration),
+    [message.agentConfiguration]
+  );
+  const isAgent = agentData !== null;
+
   // State for sources expansion and selection
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
   const [selectedSourceIndex, setSelectedSourceIndex] = useState<
@@ -446,14 +533,20 @@ export const MessageItem = React.memo(function MessageItem({
       $depth={message.depth}
       $isHighlighted={isHighlighted}
       $isDeleted={isDeleted}
+      $isAgent={isAgent}
+      $agentColor={agentData?.color}
       role="article"
-      aria-label={`Message from ${username}`}
+      aria-label={`Message from ${isAgent ? `${agentData.name} (AI Agent)` : username}`}
     >
       {/* Header */}
       <MessageHeader>
         <MessageHeaderLeft>
-          <UserAvatar title={username}>
-            <User size={16} />
+          <UserAvatar
+            title={isAgent ? `${agentData.name} (AI Agent)` : username}
+            $isAgent={isAgent}
+            $agentColor={agentData?.color}
+          >
+            {isAgent ? <Bot size={18} /> : <User size={16} />}
           </UserAvatar>
           <UserInfo>
             <UsernameRow>
