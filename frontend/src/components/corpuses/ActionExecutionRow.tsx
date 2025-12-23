@@ -2,11 +2,8 @@ import React, { useState } from "react";
 import { Icon, Label } from "semantic-ui-react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import {
-  CorpusActionExecutionNode,
-  AffectedObjectEntry,
-} from "../../graphql/queries";
-import { getDocumentUrl, getExtractUrl } from "../../utils/navigationUtils";
+import { CorpusActionExecutionNode } from "../../graphql/queries";
+import { getDocumentUrl } from "../../utils/navigationUtils";
 
 /**
  * Status configuration
@@ -217,47 +214,6 @@ const DetailItem = styled.div`
   }
 `;
 
-const AffectedSection = styled.div`
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed #e2e8f0;
-`;
-
-const AffectedTitle = styled.div`
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #94a3b8;
-  margin-bottom: 8px;
-`;
-
-const AffectedList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`;
-
-const AffectedChip = styled.button`
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  padding: 4px 10px;
-  font-size: 0.75rem;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover:not(:disabled) {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-  }
-
-  &:disabled {
-    cursor: default;
-    opacity: 0.7;
-  }
-`;
-
 const ErrorBox = styled.div`
   margin-top: 12px;
   padding: 10px 12px;
@@ -305,33 +261,6 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
     e.stopPropagation();
     const url = getDocumentUrl(execution.document, execution.corpus, undefined);
     if (url !== "#") navigate(url);
-  };
-
-  const handleObjectClick = (obj: AffectedObjectEntry) => {
-    if (obj.type === "extract" && execution.extract) {
-      const url = getExtractUrl(execution.extract, undefined);
-      if (url !== "#") navigate(url);
-    } else if (obj.type === "annotation") {
-      const url = getDocumentUrl(execution.document, execution.corpus, {
-        annotationIds: [obj.id.toString()],
-      });
-      if (url !== "#") navigate(url);
-    }
-  };
-
-  const renderObjectLabel = (obj: AffectedObjectEntry): string => {
-    if (obj.label) return obj.label;
-    const objType = obj.type || "item";
-    if (obj.field) return obj.field;
-    if (obj.column_name) return obj.column_name;
-    // Handle case where id might be undefined or 0
-    if (obj.id !== undefined && obj.id !== null) {
-      return `${objType} #${obj.id}`;
-    }
-    // Fallback: try to create a meaningful label from available fields
-    if (obj.new_value)
-      return `${objType}: ${obj.new_value.substring(0, 30)}...`;
-    return objType;
   };
 
   return (
@@ -421,29 +350,6 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
               <div className="value">{execution.creator.username}</div>
             </DetailItem>
           </DetailGrid>
-
-          {execution.affectedObjects &&
-            execution.affectedObjects.length > 0 && (
-              <AffectedSection>
-                <AffectedTitle>
-                  Affected Objects ({execution.affectedObjects.length})
-                </AffectedTitle>
-                <AffectedList>
-                  {execution.affectedObjects.map((obj, idx) => (
-                    <AffectedChip
-                      key={`${obj.type || "obj"}-${obj.id}-${idx}`}
-                      onClick={() => handleObjectClick(obj)}
-                      disabled={
-                        !obj.type ||
-                        !["extract", "annotation"].includes(obj.type)
-                      }
-                    >
-                      {renderObjectLabel(obj)}
-                    </AffectedChip>
-                  ))}
-                </AffectedList>
-              </AffectedSection>
-            )}
 
           {execution.status === "failed" && execution.errorMessage && (
             <ErrorBox>{execution.errorMessage}</ErrorBox>
