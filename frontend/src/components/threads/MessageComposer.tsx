@@ -10,6 +10,7 @@ import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
 import { color } from "../../theme/colors";
+import { MENTION_PREVIEW_LENGTH } from "../../assets/configurations/constants";
 import {
   UnifiedMentionPicker,
   UnifiedMentionPickerRef,
@@ -18,6 +19,7 @@ import {
   useUnifiedMentionSearch,
   UnifiedMentionResource,
 } from "./hooks/useUnifiedMentionSearch";
+import { sanitizeForMention } from "../../utils/textSanitization";
 import type { MarkdownStorage } from "tiptap-markdown";
 
 const ComposerContainer = styled.div`
@@ -383,12 +385,16 @@ export function MessageComposer({
                         const baseUrl = annCorpus
                           ? `/d/${annCorpus.creator.slug}/${annCorpus.slug}/${annDoc.slug}`
                           : `/d/${annDoc.creator.slug}/${annDoc.slug}`;
-                        // Issue #689: Show annotation text preview (~24 chars) instead of cryptic ID
+                        // Issue #689: Show annotation text preview instead of cryptic ID
                         // Format: "Text preview..." (Label) in Document
-                        const annTextPreview = ann.rawText
-                          ? ann.rawText.length > 24
-                            ? `"${ann.rawText.substring(0, 24)}…"`
-                            : `"${ann.rawText}"`
+                        // Sanitize user-generated content to prevent XSS (per CLAUDE.md)
+                        const sanitizedRawText = ann.rawText
+                          ? sanitizeForMention(ann.rawText)
+                          : null;
+                        const annTextPreview = sanitizedRawText
+                          ? sanitizedRawText.length > MENTION_PREVIEW_LENGTH
+                            ? `"${sanitizedRawText.substring(0, MENTION_PREVIEW_LENGTH)}…"`
+                            : `"${sanitizedRawText}"`
                           : `[${ann.label.text}]`;
                         const annLabel = `${annTextPreview} (${ann.label.text})`;
                         return {

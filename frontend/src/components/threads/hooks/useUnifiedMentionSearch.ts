@@ -17,6 +17,8 @@ import {
   SearchAgentsForMentionInput,
   SearchAgentsForMentionOutput,
 } from "../../../graphql/queries";
+import { MENTION_PREVIEW_LENGTH } from "../../../assets/configurations/constants";
+import { sanitizeForMention } from "../../../utils/textSanitization";
 
 export interface UnifiedMentionResource {
   id: string;
@@ -289,13 +291,17 @@ export function useUnifiedMentionSearch(
       annotationData?.searchAnnotationsForMention?.edges
         ?.slice(0, limitPerCategory)
         .map((edge) => {
-          // Create short preview text (~24 chars) from rawText for primary display
+          // Create short preview text from rawText for primary display
           // This makes the picker more user-friendly by showing actual content
           // Fixes Issue #689 - Inline reference cards show cryptic information
-          const shortPreviewText = edge.node.rawText
-            ? edge.node.rawText.length > 24
-              ? edge.node.rawText.substring(0, 24) + "…"
-              : edge.node.rawText
+          // Sanitize user-generated content to prevent XSS (per CLAUDE.md)
+          const sanitizedRawText = edge.node.rawText
+            ? sanitizeForMention(edge.node.rawText)
+            : null;
+          const shortPreviewText = sanitizedRawText
+            ? sanitizedRawText.length > MENTION_PREVIEW_LENGTH
+              ? sanitizedRawText.substring(0, MENTION_PREVIEW_LENGTH) + "…"
+              : sanitizedRawText
             : `[${edge.node.annotationLabel.text}]`;
 
           return {

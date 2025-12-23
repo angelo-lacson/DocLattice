@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { Database, FileText, ExternalLink, Tag } from "lucide-react";
 import { color } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
+import { MENTION_PREVIEW_LENGTH } from "../../assets/configurations/constants";
+import { sanitizeForMention } from "../../utils/textSanitization";
 
 const ChipContainer = styled.span<{
   $type: "corpus" | "document" | "annotation";
@@ -28,6 +29,11 @@ const ChipContainer = styled.span<{
         return "linear-gradient(135deg, #f093fb15 0%, #f5576c15 100%)";
       case "annotation":
         return "linear-gradient(135deg, #43e97b15 0%, #38f9d715 100%)";
+      default: {
+        const exhaustiveCheck: never = props.$type;
+        console.error(`Unhandled chip type: ${exhaustiveCheck}`);
+        return "linear-gradient(135deg, #e0e0e015 0%, #c0c0c015 100%)";
+      }
     }
   }};
 
@@ -40,6 +46,11 @@ const ChipContainer = styled.span<{
           return "#f5576c40";
         case "annotation":
           return "#38f9d780";
+        default: {
+          const exhaustiveCheck: never = props.$type;
+          console.error(`Unhandled chip type for border: ${exhaustiveCheck}`);
+          return color.N4;
+        }
       }
     }};
 
@@ -51,6 +62,11 @@ const ChipContainer = styled.span<{
         return "#c41e3a";
       case "annotation":
         return "#0d9488";
+      default: {
+        const exhaustiveCheck: never = props.$type;
+        console.error(`Unhandled chip type for color: ${exhaustiveCheck}`);
+        return color.N8;
+      }
     }
   }};
 
@@ -63,6 +79,11 @@ const ChipContainer = styled.span<{
           return "linear-gradient(135deg, #f093fb25 0%, #f5576c25 100%)";
         case "annotation":
           return "linear-gradient(135deg, #43e97b25 0%, #38f9d725 100%)";
+        default: {
+          const exhaustiveCheck: never = props.$type;
+          console.error(`Unhandled chip type for hover bg: ${exhaustiveCheck}`);
+          return "linear-gradient(135deg, #e0e0e025 0%, #c0c0c025 100%)";
+        }
       }
     }};
 
@@ -74,6 +95,13 @@ const ChipContainer = styled.span<{
           return "#f5576c80";
         case "annotation":
           return "#38f9d7";
+        default: {
+          const exhaustiveCheck: never = props.$type;
+          console.error(
+            `Unhandled chip type for hover border: ${exhaustiveCheck}`
+          );
+          return color.N6;
+        }
       }
     }};
 
@@ -148,7 +176,10 @@ export interface MentionChipProps {
 export function MentionChip({ resource, onClick }: MentionChipProps) {
   const navigate = useNavigate();
 
-  const handleClick = (e: React.MouseEvent) => {
+  // Handle both mouse click and keyboard activation
+  const handleActivation = (
+    e: React.MouseEvent | React.KeyboardEvent
+  ): void => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -162,7 +193,7 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
   };
 
   // Get appropriate icon based on resource type
-  const getIcon = () => {
+  const getIcon = (): React.ReactNode => {
     switch (resource.type) {
       case "CORPUS":
         return <Database size={14} />;
@@ -170,18 +201,25 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
         return <FileText size={14} />;
       case "ANNOTATION":
         return <Tag size={14} />;
+      default: {
+        const exhaustiveCheck: never = resource.type;
+        console.error(`Unhandled resource type for icon: ${exhaustiveCheck}`);
+        return <FileText size={14} />;
+      }
     }
   };
 
   // Get display text for the chip
-  // For annotations: show ~24 chars of text (Issue #689)
+  // For annotations: show text preview (Issue #689)
+  // Sanitize user-generated content to prevent XSS (per CLAUDE.md)
   const getDisplayText = (): string => {
     if (resource.type === "ANNOTATION") {
-      // Show first ~24 chars of raw text for annotations
+      // Show first MENTION_PREVIEW_LENGTH chars of raw text for annotations
       if (resource.rawText) {
-        return resource.rawText.length > 24
-          ? resource.rawText.substring(0, 24) + "…"
-          : resource.rawText;
+        const sanitizedText = sanitizeForMention(resource.rawText);
+        return sanitizedText.length > MENTION_PREVIEW_LENGTH
+          ? sanitizedText.substring(0, MENTION_PREVIEW_LENGTH) + "…"
+          : sanitizedText;
       }
       // Fallback to label if no raw text
       return resource.annotationLabel || resource.title;
@@ -192,12 +230,13 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
 
   // Get tooltip text (full content on hover)
   // For annotations: show full raw text (Issue #689)
+  // Note: React's title prop auto-escapes, but we sanitize for consistency
   const getTooltipText = (): string => {
     if (resource.type === "ANNOTATION") {
       const parts: string[] = [];
-      // Show full raw text
+      // Show full raw text (sanitized to remove markdown-breaking chars)
       if (resource.rawText) {
-        parts.push(resource.rawText);
+        parts.push(sanitizeForMention(resource.rawText));
       }
       // Add context info
       if (resource.annotationLabel) {
@@ -223,19 +262,24 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
         return "document";
       case "ANNOTATION":
         return "annotation";
+      default: {
+        const exhaustiveCheck: never = resource.type;
+        console.error(`Unhandled resource type: ${exhaustiveCheck}`);
+        return "document"; // Fallback to document styling
+      }
     }
   };
 
   return (
     <ChipContainer
       $type={getChipType()}
-      onClick={handleClick}
+      onClick={handleActivation}
       title={getTooltipText()}
       role="link"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
-          handleClick(e as any);
+          handleActivation(e);
         }
       }}
     >
