@@ -18,6 +18,7 @@ See: https://code.djangoproject.com/ticket/32409
 
 from unittest.mock import patch
 
+from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
@@ -158,11 +159,13 @@ class TestRunAgentCorpusActionAsync(TestCase):
         )
 
         # Simulate the async function updating the result
-        def update_and_return(*args, **kwargs):
+        # Must be async and use sync_to_async because asyncio.run() creates
+        # an async context where sync Django ORM calls are not allowed
+        async def update_and_return(*args, **kwargs):
             existing_result.status = AgentActionResult.Status.COMPLETED
             existing_result.agent_response = "Retry successful"
             existing_result.error_message = ""
-            existing_result.save()
+            await sync_to_async(existing_result.save)()
             return {
                 "status": "completed",
                 "result_id": existing_result.id,
@@ -402,10 +405,12 @@ class TestAgentCorpusActionEdgeCases(TestCase):
         )
 
         # Simulate the async function updating the result
-        def update_and_return(*args, **kwargs):
+        # Must be async and use sync_to_async because asyncio.run() creates
+        # an async context where sync Django ORM calls are not allowed
+        async def update_and_return(*args, **kwargs):
             existing_result.status = AgentActionResult.Status.COMPLETED
             existing_result.agent_response = "Executed pending result"
-            existing_result.save()
+            await sync_to_async(existing_result.save)()
             return {
                 "status": "completed",
                 "result_id": existing_result.id,
@@ -481,13 +486,15 @@ class TestCorpusActionExecutionTracking(TestCase):
         )
 
         # Simulate the async function updating execution and returning result
-        def update_execution_and_return(*args, **kwargs):
-            execution.mark_started()
-            execution.mark_completed(
+        # Must be async and use sync_to_async because asyncio.run() creates
+        # an async context where sync Django ORM calls are not allowed
+        async def update_execution_and_return(*args, **kwargs):
+            await sync_to_async(execution.mark_started)()
+            await sync_to_async(execution.mark_completed)(
                 affected_objects=[{"type": "agent_result", "id": action_result.id}]
             )
             execution.agent_result = action_result
-            execution.save()
+            await sync_to_async(execution.save)()
             return {
                 "status": "completed",
                 "result_id": action_result.id,

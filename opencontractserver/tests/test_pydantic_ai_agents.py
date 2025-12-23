@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 from pydantic import BaseModel
 from pydantic_ai.agent import Agent
 from pydantic_ai.models.test import TestModel
@@ -112,115 +112,120 @@ class _DummyStreamResult:
 
 
 @pytest.mark.serial
-class TestPydanticAIAgents(TestCase):
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
+class TestPydanticAIAgents(TransactionTestCase):
     """Test suite for PydanticAI agent implementations.
+
+    Uses TransactionTestCase because async test methods with Django ORM calls
+    don't work well with TestCase's transaction-based isolation. The async code
+    runs in a different thread context that can't share the test transaction.
 
     Marked as serial because PydanticAI's run_sync() requires an active event loop,
     which pytest-xdist workers may close between test batches.
     """
 
-    @classmethod
-    def setUpTestData(cls) -> None:
-        """Create test data following the vector store test patterns."""
-        with transaction.atomic():
-            cls.user = User.objects.create_user(
-                username="testuser",
-                password="testpass",
-            )
+    def setUp(self) -> None:
+        """Create test data for each test.
 
-            cls.corpus = Corpus.objects.create(
-                title="Test Corpus",
-                description="A test corpus for agent testing",
-                creator=cls.user,
-                is_public=True,
-            )
+        Using setUp instead of setUpTestData because TransactionTestCase
+        doesn't support the transaction-based isolation that setUpTestData relies on.
+        """
+        self.user = User.objects.create_user(
+            username="testuser",
+            password="testpass",
+        )
 
-            cls.doc1 = Document.objects.create(
-                title="Test Document 1",
-                description="First test document",
-                creator=cls.user,
-                is_public=True,
-            )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            description="A test corpus for agent testing",
+            creator=self.user,
+            is_public=True,
+        )
 
-            cls.doc2 = Document.objects.create(
-                title="Test Document 2",
-                description="Second test document",
-                creator=cls.user,
-                is_public=True,
-            )
+        self.doc1 = Document.objects.create(
+            title="Test Document 1",
+            description="First test document",
+            creator=self.user,
+            is_public=True,
+        )
 
-            # Add documents to corpus
-            cls.corpus.add_document(document=cls.doc1, user=cls.user)
-            cls.corpus.add_document(document=cls.doc2, user=cls.user)
+        self.doc2 = Document.objects.create(
+            title="Test Document 2",
+            description="Second test document",
+            creator=self.user,
+            is_public=True,
+        )
 
-            # Create DocumentPath records for dual-tree versioning
-            # This is required for the vector store to find documents
-            DocumentPath.objects.create(
-                document=cls.doc1,
-                corpus=cls.corpus,
-                path="/test_doc1.pdf",
-                version_number=1,
-                is_deleted=False,
-                is_current=True,
-                creator=cls.user,
-            )
-            DocumentPath.objects.create(
-                document=cls.doc2,
-                corpus=cls.corpus,
-                path="/test_doc2.pdf",
-                version_number=1,
-                is_deleted=False,
-                is_current=True,
-                creator=cls.user,
-            )
+        # Add documents to corpus
+        self.corpus.add_document(document=self.doc1, user=self.user)
+        self.corpus.add_document(document=self.doc2, user=self.user)
 
-            # Create annotation labels
-            cls.label_important = AnnotationLabel.objects.create(
-                text="Important Label",
-                creator=cls.user,
-            )
+        # Create DocumentPath records for dual-tree versioning
+        # This is required for the vector store to find documents
+        DocumentPath.objects.create(
+            document=self.doc1,
+            corpus=self.corpus,
+            path="/test_doc1.pdf",
+            version_number=1,
+            is_deleted=False,
+            is_current=True,
+            creator=self.user,
+        )
+        DocumentPath.objects.create(
+            document=self.doc2,
+            corpus=self.corpus,
+            path="/test_doc2.pdf",
+            version_number=1,
+            is_deleted=False,
+            is_current=True,
+            creator=self.user,
+        )
 
-            cls.label_summary = AnnotationLabel.objects.create(
-                text="Summary",
-                creator=cls.user,
-            )
+        # Create annotation labels
+        self.label_important = AnnotationLabel.objects.create(
+            text="Important Label",
+            creator=self.user,
+        )
 
-            # Create annotations with text content
-            cls.anno1 = Annotation.objects.create(
-                document=cls.doc1,
-                corpus=cls.corpus,
-                creator=cls.user,
-                raw_text="This is the first annotation text about important topics",
-                annotation_label=cls.label_important,
-                is_public=True,
-            )
+        self.label_summary = AnnotationLabel.objects.create(
+            text="Summary",
+            creator=self.user,
+        )
 
-            cls.anno2 = Annotation.objects.create(
-                document=cls.doc1,
-                corpus=cls.corpus,
-                creator=cls.user,
-                raw_text="Another annotation in the same document about different topics",
-                annotation_label=cls.label_summary,
-                is_public=True,
-            )
+        # Create annotations with text content
+        self.anno1 = Annotation.objects.create(
+            document=self.doc1,
+            corpus=self.corpus,
+            creator=self.user,
+            raw_text="This is the first annotation text about important topics",
+            annotation_label=self.label_important,
+            is_public=True,
+        )
 
-            cls.anno3 = Annotation.objects.create(
-                document=cls.doc2,
-                corpus=cls.corpus,
-                creator=cls.user,
-                raw_text="Annotation text for doc2, also marked as important",
-                annotation_label=cls.label_important,
-                is_public=True,
-            )
+        self.anno2 = Annotation.objects.create(
+            document=self.doc1,
+            corpus=self.corpus,
+            creator=self.user,
+            raw_text="Another annotation in the same document about different topics",
+            annotation_label=self.label_summary,
+            is_public=True,
+        )
+
+        self.anno3 = Annotation.objects.create(
+            document=self.doc2,
+            corpus=self.corpus,
+            creator=self.user,
+            raw_text="Annotation text for doc2, also marked as important",
+            annotation_label=self.label_important,
+            is_public=True,
+        )
 
         # Add embeddings to annotations
         embedder_path = "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder"
-        cls.anno1.add_embedding(embedder_path, constant_vector(384, 0.1))
-        cls.anno2.add_embedding(embedder_path, constant_vector(384, 0.2))
-        cls.anno3.add_embedding(embedder_path, constant_vector(384, 0.3))
+        self.anno1.add_embedding(embedder_path, constant_vector(384, 0.1))
+        self.anno2.add_embedding(embedder_path, constant_vector(384, 0.2))
+        self.anno3.add_embedding(embedder_path, constant_vector(384, 0.3))
 
-    def setUp(self) -> None:
-        """Set up test case."""
         self.test_deps = TestDependencies(
             user_id=self.user.id,
             document_id=self.doc1.id,
@@ -685,33 +690,35 @@ class TestPydanticAIAgents(TestCase):
 
 
 @pytest.mark.serial
-class TestPydanticAIAgentsCoverage(TestCase):
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
+class TestPydanticAIAgentsCoverage(TransactionTestCase):
     """Additional tests to improve coverage of pydantic_ai_agents.py.
+
+    Uses TransactionTestCase because async test methods with Django ORM calls
+    don't work well with TestCase's transaction-based isolation.
 
     Marked as serial because PydanticAI's run_sync() requires an active event loop.
     """
 
-    @classmethod
-    def setUpTestData(cls) -> None:
-        """Create test data."""
-        with transaction.atomic():
-            cls.user = User.objects.create_user(
-                username="coverageuser",
-                password="testpass",
-            )
-            cls.corpus = Corpus.objects.create(
-                title="Coverage Test Corpus",
-                description="Test corpus for coverage",
-                creator=cls.user,
-                is_public=True,
-            )
-            cls.doc1 = Document.objects.create(
-                title="Coverage Document",
-                description="Test document for coverage",
-                creator=cls.user,
-                is_public=True,
-            )
-            cls.corpus.add_document(document=cls.doc1, user=cls.user)
+    def setUp(self) -> None:
+        """Create test data for each test."""
+        self.user = User.objects.create_user(
+            username="coverageuser",
+            password="testpass",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Coverage Test Corpus",
+            description="Test corpus for coverage",
+            creator=self.user,
+            is_public=True,
+        )
+        self.doc1 = Document.objects.create(
+            title="Coverage Document",
+            description="Test document for coverage",
+            creator=self.user,
+            is_public=True,
+        )
+        self.corpus.add_document(document=self.doc1, user=self.user)
 
     # ========================================================================
     # Group 1: Helper function tests (_to_source_node)
