@@ -404,6 +404,7 @@ def run_agent_corpus_action(
     corpus_action_id: int,
     document_id: int,
     user_id: int,
+    execution_id: int | None = None,
 ) -> dict:
     """
     Execute an agent-based corpus action on a single document.
@@ -416,33 +417,74 @@ def run_agent_corpus_action(
         corpus_action_id: ID of the CorpusAction to execute
         document_id: ID of the Document to process
         user_id: ID of the User triggering the action
+        execution_id: Optional ID of CorpusActionExecution record for tracking
 
     Returns:
         dict with status information and result_id
     """
+    import traceback
+
     from django.utils import timezone
 
     from opencontractserver.agents.models import AgentActionResult
+    from opencontractserver.corpuses.models import CorpusActionExecution
 
     logger.info(
         f"[AgentCorpusAction] Starting: action={corpus_action_id}, "
-        f"doc={document_id}, user={user_id}"
+        f"doc={document_id}, user={user_id}, execution={execution_id}"
     )
 
+    # Mark execution as started if tracking
+    execution = None
+    if execution_id:
+        try:
+            execution = CorpusActionExecution.objects.get(id=execution_id)
+            execution.mark_started()
+        except CorpusActionExecution.DoesNotExist:
+            logger.warning(f"[AgentCorpusAction] Execution {execution_id} not found")
+
     try:
-        return asyncio.run(
+        result = asyncio.run(
             _run_agent_corpus_action_async(
                 corpus_action_id=corpus_action_id,
                 document_id=document_id,
                 user_id=user_id,
             )
         )
+
+        # Mark execution as completed
+        if execution:
+            affected_objects = [{"type": "agent_result", "id": result.get("result_id")}]
+            if result.get("conversation_id"):
+                affected_objects.append(
+                    {"type": "conversation", "id": result.get("conversation_id")}
+                )
+            execution.mark_completed(
+                affected_objects=affected_objects,
+                metadata={
+                    "response_length": result.get("response_length"),
+                    "status": result.get("status"),
+                },
+            )
+
+            # Link to agent result
+            if result.get("result_id"):
+                execution.agent_result_id = result.get("result_id")
+                execution.save(update_fields=["agent_result"])
+
+        return result
+
     except Exception as exc:
         logger.error(
             f"[AgentCorpusAction] Failed: action={corpus_action_id}, "
             f"doc={document_id}, error={exc}",
             exc_info=True,
         )
+
+        # Mark execution as failed
+        if execution:
+            execution.mark_failed(str(exc), traceback.format_exc())
+
         # Update result record with failure before retrying
         try:
             result, _ = AgentActionResult.objects.get_or_create(

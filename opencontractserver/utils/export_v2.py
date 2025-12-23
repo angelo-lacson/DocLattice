@@ -427,3 +427,122 @@ def package_conversations(
         logger.error(f"Error packaging conversations for corpus {corpus.id}: {e}")
 
     return conversations_export, messages_export, votes_export
+
+
+def package_action_trail(
+    corpus: Corpus,
+    include_executions: bool = True,
+    execution_limit: int | None = 1000,
+    since=None,
+):
+    """
+    Package corpus action trail for export.
+
+    Args:
+        corpus: Corpus to export actions for
+        include_executions: Whether to include execution history
+        execution_limit: Max executions to include (None = unlimited)
+        since: Only include executions after this datetime
+
+    Returns:
+        ActionTrailExport dict with actions, executions, and stats
+    """
+    from django.db.models import Count, Q
+
+    from opencontractserver.corpuses.models import CorpusActionExecution
+
+    # Export action configurations
+    actions = []
+    for action in corpus.actions.all():
+        # Determine action type - use 'is not None' to handle CharField PKs
+        if action.fieldset_id is not None:
+            action_type = "fieldset"
+        elif action.analyzer_id is not None:
+            action_type = "analyzer"
+        else:
+            action_type = "agent"
+
+        actions.append(
+            {
+                "id": str(action.id),
+                "name": action.name,
+                "action_type": action_type,
+                "trigger": action.trigger,
+                "disabled": action.disabled,
+                "fieldset_id": (
+                    str(action.fieldset_id) if action.fieldset_id is not None else None
+                ),
+                "analyzer_id": (
+                    str(action.analyzer_id) if action.analyzer_id is not None else None
+                ),
+                "agent_config_id": (
+                    str(action.agent_config_id)
+                    if action.agent_config_id is not None
+                    else None
+                ),
+                "agent_prompt": action.agent_prompt or "",
+                "pre_authorized_tools": action.pre_authorized_tools or [],
+            }
+        )
+
+    # Export executions if requested
+    executions = []
+    if include_executions:
+        qs = CorpusActionExecution.objects.filter(corpus=corpus)
+
+        if since:
+            qs = qs.filter(queued_at__gte=since)
+
+        qs = qs.select_related("corpus_action", "document").order_by("-queued_at")
+
+        if execution_limit:
+            qs = qs[:execution_limit]
+
+        for exec_record in qs:
+            executions.append(
+                {
+                    "id": str(exec_record.id),
+                    "action_name": exec_record.corpus_action.name,
+                    "action_type": exec_record.action_type,
+                    "document_id": str(exec_record.document_id),
+                    "status": exec_record.status,
+                    "trigger": exec_record.trigger,
+                    "queued_at": (
+                        exec_record.queued_at.isoformat()
+                        if exec_record.queued_at
+                        else None
+                    ),
+                    "started_at": (
+                        exec_record.started_at.isoformat()
+                        if exec_record.started_at
+                        else None
+                    ),
+                    "completed_at": (
+                        exec_record.completed_at.isoformat()
+                        if exec_record.completed_at
+                        else None
+                    ),
+                    "duration_seconds": exec_record.duration_seconds,
+                    "affected_objects": exec_record.affected_objects or [],
+                    "error_message": exec_record.error_message or "",
+                    "execution_metadata": exec_record.execution_metadata or {},
+                }
+            )
+
+    # Calculate stats
+    stats = CorpusActionExecution.objects.filter(corpus=corpus).aggregate(
+        total=Count("id"),
+        completed=Count("id", filter=Q(status="completed")),
+        failed=Count("id", filter=Q(status="failed")),
+    )
+
+    return {
+        "actions": actions,
+        "executions": executions,
+        "stats": {
+            "total_executions": stats["total"] or 0,
+            "completed": stats["completed"] or 0,
+            "failed": stats["failed"] or 0,
+            "exported_count": len(executions),
+        },
+    }

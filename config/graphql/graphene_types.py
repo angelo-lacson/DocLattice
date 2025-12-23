@@ -30,6 +30,7 @@ from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
+    CorpusActionExecution,
     CorpusDescriptionRevision,
     CorpusEngagementMetrics,
     CorpusFolder,
@@ -1889,6 +1890,64 @@ class AgentActionResultType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_duration_seconds(self, info):
         """Resolve duration from the model property."""
         return self.duration_seconds
+
+
+class CorpusActionExecutionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for CorpusActionExecution - action execution tracking records."""
+
+    # Computed fields
+    duration_seconds = graphene.Float()
+    wait_time_seconds = graphene.Float()
+
+    # JSON fields
+    affected_objects = graphene.List(graphene.JSONString)
+    execution_metadata = graphene.JSONString()
+
+    class Meta:
+        model = CorpusActionExecution
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+        filter_fields = {
+            "id": ["exact"],
+            "corpus__id": ["exact"],
+            "corpus_action__id": ["exact"],
+            "document__id": ["exact"],
+            "status": ["exact"],
+            "action_type": ["exact"],
+            "trigger": ["exact"],
+            "creator__id": ["exact"],
+        }
+
+    def resolve_duration_seconds(self, info):
+        """Resolve duration from the model property."""
+        return self.duration_seconds
+
+    def resolve_wait_time_seconds(self, info):
+        """Resolve wait time from the model property."""
+        return self.wait_time_seconds
+
+    def resolve_affected_objects(self, info):
+        """Resolve affected_objects as a list of JSON objects."""
+        return self.affected_objects or []
+
+    def resolve_execution_metadata(self, info):
+        """Resolve execution_metadata as JSON dict."""
+        return self.execution_metadata or {}
+
+
+class CorpusActionTrailStatsType(graphene.ObjectType):
+    """Aggregated statistics for corpus action trail."""
+
+    total_executions = graphene.Int()
+    completed = graphene.Int()
+    failed = graphene.Int()
+    running = graphene.Int()
+    queued = graphene.Int()
+    skipped = graphene.Int()
+    avg_duration_seconds = graphene.Float()
+    fieldset_count = graphene.Int()
+    analyzer_count = graphene.Int()
+    agent_count = graphene.Int()
 
 
 class UserExportType(AnnotatePermissionsForReadMixin, DjangoObjectType):

@@ -17,6 +17,7 @@ from opencontractserver.conversations.models import (
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
+    CorpusActionExecution,
     CorpusEngagementMetrics,
 )
 from opencontractserver.documents.models import DocumentAnalysisRow
@@ -150,7 +151,10 @@ def process_corpus_action(
     trigger: str | None = None,
 ):
     """
-    Process corpus actions for given documents.
+    Process corpus actions for given documents with execution tracking.
+
+    Creates CorpusActionExecution records for each (action, document) pair
+    to provide unified tracking across all action types.
 
     Args:
         corpus_id: The corpus ID
@@ -175,7 +179,26 @@ def process_corpus_action(
 
     actions = CorpusAction.objects.filter(base_query)
 
+    summary = {"actions_processed": 0, "executions_queued": 0}
+
     for action in actions:
+        # Create execution records for tracking
+        # Use trigger or default to add_document for backwards compatibility
+        execution_trigger = trigger or "add_document"
+
+        # Queue execution records for all documents within a transaction
+        # to ensure atomicity with subsequent processing
+        with transaction.atomic():
+            executions = CorpusActionExecution.bulk_queue(
+                corpus_action=action,
+                document_ids=document_ids,
+                trigger=execution_trigger,
+                user_id=user_id,
+            )
+        execution_map = {ex.document_id: ex for ex in executions}
+
+        summary["actions_processed"] += 1
+        summary["executions_queued"] += len(executions)
 
         if action.fieldset:
 
@@ -196,9 +219,24 @@ def process_corpus_action(
 
                 extract.save()
 
+                # Link executions to extract and mark as running
+                now = timezone.now()
+                for doc_id, execution in execution_map.items():
+                    execution.extract = extract
+                    execution.status = CorpusActionExecution.Status.RUNNING
+                    execution.started_at = now
+                    execution.modified = now  # bulk_update doesn't auto-update
+                    execution.add_affected_object("extract", extract.id)
+
+                CorpusActionExecution.objects.bulk_update(
+                    list(execution_map.values()),
+                    ["extract", "status", "started_at", "affected_objects", "modified"],
+                )
+
             fieldset = action.fieldset
 
             for document_id in document_ids:
+                execution = execution_map.get(document_id)
 
                 with transaction.atomic():
                     row_results = DocumentAnalysisRow(
@@ -224,6 +262,12 @@ def process_corpus_action(
                         # Add data cell to tracking
                         row_results.data.add(cell)
 
+                        # Track affected datacell in execution record
+                        if execution:
+                            execution.add_affected_object(
+                                "datacell", cell.id, column_name=column.name
+                            )
+
                         # Get the task function dynamically based on the column's task_name
                         task_func = get_task_by_name(column.task_name)
                         if task_func is None:
@@ -235,19 +279,48 @@ def process_corpus_action(
                         # Add the task to the group
                         tasks.append(task_func.si(cell.pk))
 
-            transaction.on_commit(
-                lambda: chord(group(*tasks))(mark_extract_complete.si(extract.id))
-            )
+                # Save updated affected_objects for this execution
+                if execution:
+                    execution.save(update_fields=["affected_objects"])
+
+            # Capture extract_id and execution_ids for the lambda closure
+            extract_id_for_closure = extract.id
+            execution_ids_for_closure = [ex.id for ex in executions]
+
+            def on_commit_callback():
+                chord(group(*tasks))(mark_extract_complete.si(extract_id_for_closure))
+                # Mark executions as running - they will be marked completed
+                # by mark_extract_complete when all tasks finish
+                CorpusActionExecution.objects.filter(
+                    id__in=execution_ids_for_closure
+                ).update(
+                    status=CorpusActionExecution.Status.RUNNING,
+                    started_at=timezone.now(),
+                )
+
+            transaction.on_commit(on_commit_callback)
 
         elif action.analyzer:
-
-            process_analyzer(
+            analysis = process_analyzer(
                 user_id=user_id,
                 analyzer=action.analyzer,
                 corpus_id=corpus_id,
                 document_ids=document_ids,
                 corpus_action=action,
             )
+
+            # Link executions to analysis and mark as running
+            # They will be marked COMPLETED by mark_analysis_complete when
+            # the analysis actually finishes
+            if analysis:
+                CorpusActionExecution.objects.filter(
+                    id__in=[ex.id for ex in executions]
+                ).update(
+                    analysis=analysis,
+                    status=CorpusActionExecution.Status.RUNNING,
+                    started_at=timezone.now(),
+                    affected_objects=[{"type": "analysis", "id": analysis.id}],
+                )
 
         elif action.agent_config:
             # Agent-based corpus action
@@ -258,11 +331,14 @@ def process_corpus_action(
                 f"for {len(document_ids)} document(s)"
             )
 
+            # Pass execution_id to agent task for tracking
             for document_id in document_ids:
+                execution = execution_map.get(document_id)
                 run_agent_corpus_action.delay(
                     corpus_action_id=action.id,
                     document_id=document_id,
                     user_id=user_id,
+                    execution_id=execution.id if execution else None,
                 )
 
         else:
@@ -270,7 +346,12 @@ def process_corpus_action(
                 "Unexpected action configuration... no analyzer, fieldset, or agent_config."
             )
 
-    return True
+    logger.info(
+        f"process_corpus_action() completed - {summary['actions_processed']} actions, "
+        f"{summary['executions_queued']} executions queued"
+    )
+
+    return summary
 
 
 # --------------------------------------------------------------------------- #

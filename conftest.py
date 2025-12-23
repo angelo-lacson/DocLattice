@@ -9,27 +9,33 @@ import asyncio
 import os
 
 import pytest
+from django import db
 
 
 def pytest_configure(config):
     """Configure pytest settings, including xdist worker handling."""
-    # Set a marker for tests that cannot run in parallel
-    config.addinivalue_line(
-        "markers",
-        "serial: mark test to run serially (not in parallel with other tests)",
-    )
+    # Ensure the serial marker is registered only once
+    if not hasattr(config, "_serial_marker_registered"):
+        config.addinivalue_line(
+            "markers",
+            "serial: mark test to run serially (not in parallel with other tests)",
+        )
+        config._serial_marker_registered = True
 
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle serial tests when running with xdist."""
-    # If not running with xdist, no special handling needed
-    if not hasattr(config, "workerinput"):
+    # Check if running with xdist by looking at numprocesses option
+    # Note: workerinput is only on workers, but collection happens on controller
+    numprocesses = getattr(config.option, "numprocesses", None)
+    if not numprocesses:
         return
 
-    # When running with xdist, mark serial tests to run on the same worker
+    # When running with xdist, mark serial tests to run on worker gw0 only
+    # This ensures they run sequentially without interference from other workers
     for item in items:
         if item.get_closest_marker("serial"):
-            # Add a marker to group all serial tests together
+            # Add xdist_group to ensure all serial tests run on same worker
             item.add_marker(pytest.mark.xdist_group(name="serial"))
 
 
@@ -70,6 +76,12 @@ def pytest_runtest_setup(item):
         # Set worker ID in environment for tests that need to know
         os.environ["TEST_WORKER_ID"] = worker_id
 
+    # NOTE: We intentionally do NOT call db.close_old_connections() here.
+    # Hooks run BEFORE pytest-django's db fixtures are applied, so calling
+    # db.close_old_connections() would fail with "Database access not allowed".
+    # Connection cleanup is handled in pytest_runtest_teardown() instead,
+    # which runs AFTER the test when database access is available.
+
     # Ensure a fresh event loop is available for each test.
     # This prevents "Event loop is closed" errors when using pydantic-ai's
     # run_sync() or other async code with pytest-xdist.
@@ -101,3 +113,20 @@ def pytest_runtest_teardown(item, nextitem):
     except RuntimeError:
         # No event loop, nothing to clean up
         pass
+
+    # For serial tests (which use async code with asyncio.run()), close ALL
+    # database connections to prevent stale/corrupted connections from affecting
+    # subsequent tests. asyncio.run() can leave connections in a bad state when
+    # it closes its event loop.
+    #
+    # NOTE: Unlike db.close_old_connections() which checks connection state
+    # (and requires DB access to be allowed), db.connections.close_all() just
+    # directly closes connections without state checks. This should be safe
+    # in teardown, but we wrap in try/except for robustness.
+    if item.get_closest_marker("serial"):
+        try:
+            db.connections.close_all()
+        except Exception:
+            # If connection cleanup fails, log but don't fail the test
+            # This can happen in edge cases with pytest-django fixture teardown
+            pass

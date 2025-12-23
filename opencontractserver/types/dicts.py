@@ -501,6 +501,62 @@ class MessageVoteExport(TypedDict):
     created: str
 
 
+# ============================================================================
+# Action Trail Export Types
+# ============================================================================
+
+
+class CorpusActionExecutionExport(TypedDict):
+    """Export format for a single action execution."""
+
+    id: str
+    action_name: str
+    action_type: str  # fieldset, analyzer, agent
+    document_id: str
+    status: str
+    trigger: str
+    queued_at: Optional[str]  # ISO format
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    duration_seconds: Optional[float]
+    affected_objects: list[dict]
+    error_message: str
+    execution_metadata: dict
+
+
+class CorpusActionExport(TypedDict):
+    """Export format for a corpus action configuration."""
+
+    id: str
+    name: str
+    action_type: str
+    trigger: str
+    disabled: bool
+    # Type-specific config
+    fieldset_id: Optional[str]
+    analyzer_id: Optional[str]
+    agent_config_id: Optional[str]
+    agent_prompt: str
+    pre_authorized_tools: list[str]
+
+
+class ActionTrailStatsExport(TypedDict):
+    """Statistics for action trail export."""
+
+    total_executions: int
+    completed: int
+    failed: int
+    exported_count: int
+
+
+class ActionTrailExport(TypedDict):
+    """Complete action trail for export."""
+
+    actions: list[CorpusActionExport]
+    executions: list[CorpusActionExecutionExport]
+    stats: ActionTrailStatsExport
+
+
 class OpenContractsExportDataJsonV2Type(TypedDict):
     """
     Export format V2.0 - Comprehensive corpus export including all new features
@@ -552,3 +608,6 @@ class OpenContractsExportDataJsonV2Type(TypedDict):
     conversations: NotRequired[list[ConversationExport]]
     messages: NotRequired[list[ChatMessageExport]]
     message_votes: NotRequired[list[MessageVoteExport]]
+
+    # Action trail (only if include_action_trail=True)
+    action_trail: NotRequired[ActionTrailExport]
