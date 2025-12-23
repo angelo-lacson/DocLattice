@@ -403,15 +403,15 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     preferredEmbedder: string | null;
   } | null>(null);
 
-  // Track whether the modal was previously open to detect open transitions
+  // Track the previous open state to detect modal open transitions
   // This prevents re-initializing form when user is typing on mobile
-  const wasOpenRef = useRef(false);
+  const prevOpenRef = useRef(open);
 
   // Initialize form from corpus data only when modal opens (not on every render)
   useEffect(() => {
     // Only initialize form when modal transitions from closed to open
-    const justOpened = open && !wasOpenRef.current;
-    wasOpenRef.current = open;
+    const justOpened = open && !prevOpenRef.current;
+    prevOpenRef.current = open;
 
     if (!justOpened) {
       return;

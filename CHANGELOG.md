@@ -69,6 +69,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### New Corpus Modal Mobile Issues (Issue #702)
+- **Mobile form data loss in CorpusModal** (`frontend/src/components/corpuses/CorpusModal.tsx:406-418`):
+  - Fixed fields clearing when typing on mobile by tracking modal open transitions with `prevOpenRef` instead of resetting form on every render
+  - The original `useEffect` was running on every `corpus` or `open` change, causing form state to reset during keyboard/focus events on mobile
+- **Slow embedder loading** (`frontend/src/components/widgets/CRUD/EmbedderSelector.tsx:43-46`):
+  - Changed Apollo query to `cache-first` policy since embedders rarely change
+  - Prevents unnecessary network requests when reopening CorpusModal
+- **Cramped mobile layout** (`frontend/src/components/corpuses/CorpusModal.tsx:327-333`, `frontend/src/components/widgets/file-controls/FilePreviewAndUpload.tsx:54-57,129-135`):
+  - Reduced icon upload area max-width from 200px to 150px on mobile
+  - Reduced ImagePreview height from 150px to 100px on mobile
+  - Made EditBadge smaller and better positioned on mobile viewports
+
 #### Production Deployment
 - **Missing COLLECTFAST_STRATEGY for GCP storage backend** (`config/settings/base.py:436`): Added `collectfast.strategies.gcloud.GoogleCloudStrategy` for GCP deployments. Previously, `collectfast` was installed in production but `COLLECTFAST_STRATEGY` was only configured for AWS, causing `collectstatic` to fail with `ImproperlyConfigured: No strategy configured` error when using `STORAGE_BACKEND=GCP`.
 - **GCS static files ACL incompatible with uniform bucket-level access** (`opencontractserver/utils/storages.py:38`): Changed `StaticRootGoogleCloudStorage.default_acl` from `"publicRead"` to `None`. GCS buckets with uniform bucket-level access enabled cannot use per-object ACLs; access must be controlled via IAM policies at the bucket level instead.
