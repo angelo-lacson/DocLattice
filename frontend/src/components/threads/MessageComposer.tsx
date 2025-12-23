@@ -388,6 +388,7 @@ export function MessageComposer({
                         // Issue #689: Show annotation text preview instead of cryptic ID
                         // Format: "Text preview..." (Label) in Document
                         // Sanitize user-generated content to prevent XSS (per CLAUDE.md)
+                        const labelText = ann.label?.text ?? "Annotation";
                         const sanitizedRawText = ann.rawText
                           ? sanitizeForMention(ann.rawText)
                           : null;
@@ -395,8 +396,8 @@ export function MessageComposer({
                           ? sanitizedRawText.length > MENTION_PREVIEW_LENGTH
                             ? `"${sanitizedRawText.substring(0, MENTION_PREVIEW_LENGTH)}…"`
                             : `"${sanitizedRawText}"`
-                          : `[${ann.label.text}]`;
-                        const annLabel = `${annTextPreview} (${ann.label.text})`;
+                          : `[${labelText}]`;
+                        const annLabel = `${annTextPreview} (${labelText})`;
                         return {
                           label: annLabel,
                           href: `${baseUrl}?ann=${resource.id}&structural=true`,

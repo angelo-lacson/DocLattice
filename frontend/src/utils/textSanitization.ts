@@ -29,8 +29,27 @@ export function escapeHtml(text: string): string {
 }
 
 /**
- * Sanitize text for use in mention labels and tooltips.
- * Escapes characters that could break markdown rendering or enable XSS.
+ * Sanitize text for use in tooltips and aria-labels.
+ * Normalizes whitespace for clean single-line display.
+ *
+ * Note: React's title prop provides implicit HTML escaping, but we still
+ * normalize whitespace for better readability.
+ *
+ * @param text - The text to sanitize for tooltip display
+ * @returns Sanitized text safe for use in tooltips
+ */
+export function sanitizeForTooltip(text: string): string {
+  return text
+    .replace(/\r\n/g, " ") // Replace Windows newlines with spaces
+    .replace(/\n/g, " ") // Replace Unix newlines with spaces
+    .replace(/\r/g, "") // Remove any remaining carriage returns
+    .replace(/\s+/g, " ") // Collapse multiple spaces
+    .trim();
+}
+
+/**
+ * Sanitize text for use in mention labels that will be rendered in markdown.
+ * Escapes characters that could break markdown link syntax.
  *
  * For mention labels that will be converted to markdown links, we need to
  * escape brackets and special markdown characters.
@@ -70,4 +89,38 @@ export function truncateText(
     return processedText;
   }
   return processedText.substring(0, maxLength) + "…";
+}
+
+/**
+ * Create a preview of annotation text for display in mention chips and pickers.
+ * Handles sanitization and truncation in one place for consistency.
+ *
+ * @param rawText - The raw annotation text (may be null)
+ * @param fallbackLabel - Label to use if rawText is not available
+ * @param maxLength - Maximum length for truncation
+ * @returns Object with displayText (truncated) and fullText (for tooltip)
+ */
+export function createAnnotationPreview(
+  rawText: string | null | undefined,
+  fallbackLabel: string,
+  maxLength: number
+): { displayText: string; tooltipText: string } {
+  if (!rawText) {
+    return {
+      displayText: fallbackLabel,
+      tooltipText: fallbackLabel,
+    };
+  }
+
+  // For display: sanitize for markdown context and truncate
+  const sanitizedForDisplay = sanitizeForMention(rawText);
+  const displayText =
+    sanitizedForDisplay.length > maxLength
+      ? sanitizedForDisplay.substring(0, maxLength) + "…"
+      : sanitizedForDisplay;
+
+  // For tooltip: just normalize whitespace (React handles HTML escaping)
+  const tooltipText = sanitizeForTooltip(rawText);
+
+  return { displayText, tooltipText };
 }

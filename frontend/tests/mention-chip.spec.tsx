@@ -251,4 +251,62 @@ test.describe("MentionChip Component", () => {
       await component.unmount();
     });
   });
+
+  test.describe("Accessibility", () => {
+    test("corpus chip should have aria-label with full context", async ({
+      mount,
+      page,
+    }) => {
+      const component = await mount(
+        <TestWrapper>
+          <MentionChip resource={mockCorpusResource} />
+        </TestWrapper>
+      );
+
+      const chip = page.locator('[role="link"]');
+      const ariaLabel = await chip.getAttribute("aria-label");
+      expect(ariaLabel).toContain("Corpus");
+      expect(ariaLabel).toContain("Test Corpus Title");
+
+      await component.unmount();
+    });
+
+    test("document chip should have aria-label with corpus context", async ({
+      mount,
+      page,
+    }) => {
+      const component = await mount(
+        <TestWrapper>
+          <MentionChip resource={mockDocumentResource} />
+        </TestWrapper>
+      );
+
+      const chip = page.locator('[role="link"]');
+      const ariaLabel = await chip.getAttribute("aria-label");
+      expect(ariaLabel).toContain("Document");
+      expect(ariaLabel).toContain("Test Document Title");
+      expect(ariaLabel).toContain("Parent Corpus");
+
+      await component.unmount();
+    });
+
+    test("annotation chip should have aria-label with full annotation text", async ({
+      mount,
+      page,
+    }) => {
+      const component = await mount(
+        <TestWrapper>
+          <MentionChip resource={mockAnnotationResource} />
+        </TestWrapper>
+      );
+
+      const chip = page.locator('[role="link"]');
+      const ariaLabel = await chip.getAttribute("aria-label");
+      expect(ariaLabel).toContain("Annotation");
+      expect(ariaLabel).toContain("Definition"); // The label
+      expect(ariaLabel).toContain("Source Document"); // The document
+
+      await component.unmount();
+    });
+  });
 });

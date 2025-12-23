@@ -4,7 +4,10 @@ import styled from "styled-components";
 import { Database, FileText, ExternalLink, Tag } from "lucide-react";
 import { color } from "../../theme/colors";
 import { MENTION_PREVIEW_LENGTH } from "../../assets/configurations/constants";
-import { sanitizeForMention } from "../../utils/textSanitization";
+import {
+  createAnnotationPreview,
+  sanitizeForTooltip,
+} from "../../utils/textSanitization";
 
 const ChipContainer = styled.span<{
   $type: "corpus" | "document" | "annotation";
@@ -209,34 +212,34 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
     }
   };
 
+  // For annotations: compute preview text and tooltip using shared utility
+  // This ensures consistent sanitization and truncation (Issue #689)
+  const annotationPreview =
+    resource.type === "ANNOTATION"
+      ? createAnnotationPreview(
+          resource.rawText,
+          resource.annotationLabel || resource.title,
+          MENTION_PREVIEW_LENGTH
+        )
+      : null;
+
   // Get display text for the chip
-  // For annotations: show text preview (Issue #689)
-  // Sanitize user-generated content to prevent XSS (per CLAUDE.md)
   const getDisplayText = (): string => {
-    if (resource.type === "ANNOTATION") {
-      // Show first MENTION_PREVIEW_LENGTH chars of raw text for annotations
-      if (resource.rawText) {
-        const sanitizedText = sanitizeForMention(resource.rawText);
-        return sanitizedText.length > MENTION_PREVIEW_LENGTH
-          ? sanitizedText.substring(0, MENTION_PREVIEW_LENGTH) + "…"
-          : sanitizedText;
-      }
-      // Fallback to label if no raw text
-      return resource.annotationLabel || resource.title;
+    if (resource.type === "ANNOTATION" && annotationPreview) {
+      return annotationPreview.displayText;
     }
     // Corpus and Document show title
     return resource.title;
   };
 
   // Get tooltip text (full content on hover)
-  // For annotations: show full raw text (Issue #689)
-  // Note: React's title prop auto-escapes, but we sanitize for consistency
+  // Uses sanitizeForTooltip (not sanitizeForMention) to avoid escaped backslashes
   const getTooltipText = (): string => {
     if (resource.type === "ANNOTATION") {
       const parts: string[] = [];
-      // Show full raw text (sanitized to remove markdown-breaking chars)
-      if (resource.rawText) {
-        parts.push(sanitizeForMention(resource.rawText));
+      // Show full raw text (normalized whitespace for clean display)
+      if (annotationPreview) {
+        parts.push(annotationPreview.tooltipText);
       }
       // Add context info
       if (resource.annotationLabel) {
@@ -245,12 +248,38 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
       if (resource.document) {
         parts.push(`Document: ${resource.document.title}`);
       }
-      return parts.join("\n");
+      return parts.join(" | ");
     }
     // Corpus and Document
     return `${resource.title}${
       resource.corpus ? ` (in ${resource.corpus.title})` : ""
     }`;
+  };
+
+  // Get aria-label for screen readers (provides full context)
+  const getAriaLabel = (): string => {
+    const typeLabel =
+      resource.type === "CORPUS"
+        ? "Corpus"
+        : resource.type === "DOCUMENT"
+          ? "Document"
+          : "Annotation";
+
+    if (resource.type === "ANNOTATION") {
+      const textPart = annotationPreview?.tooltipText || resource.title;
+      const labelPart = resource.annotationLabel
+        ? `, labeled ${resource.annotationLabel}`
+        : "";
+      const docPart = resource.document
+        ? `, in document ${resource.document.title}`
+        : "";
+      return `${typeLabel}: ${textPart}${labelPart}${docPart}`;
+    }
+
+    const contextPart = resource.corpus
+      ? `, in corpus ${resource.corpus.title}`
+      : "";
+    return `${typeLabel}: ${resource.title}${contextPart}`;
   };
 
   // Get chip type for styling
@@ -275,6 +304,7 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
       $type={getChipType()}
       onClick={handleActivation}
       title={getTooltipText()}
+      aria-label={getAriaLabel()}
       role="link"
       tabIndex={0}
       onKeyDown={(e) => {
