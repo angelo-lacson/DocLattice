@@ -88,6 +88,189 @@ Most tests are safe for parallel execution by default:
 
 The `--dist loadscope` option keeps tests from the same class together, which is important for `setUpClass`/`setUpTestData` patterns.
 
+## Testing Async and Agentic Code
+
+Django's async ORM has a critical limitation when combined with `asyncio.run()` that causes database connection corruption. Understanding this is essential for writing reliable tests for agent tasks.
+
+### The Core Problem
+
+When `asyncio.run()` is called (as in Celery task wrappers that invoke async functions):
+
+1. `asyncio.run()` creates its own event loop in a **different thread context**
+2. Django's database connections are **thread-bound**
+3. When `asyncio.run()` closes its event loop, connections get corrupted
+4. Subsequent tests fail with "connection already closed" or "terminating connection due to administrator command" errors
+
+Reference: [Django Ticket #32409](https://code.djangoproject.com/ticket/32409)
+
+### Pattern 1: Testing Agent Implementations Directly
+
+Use this pattern when testing the actual async agent code (chat methods, streaming, vector search).
+
+**Example from `test_pydantic_ai_agents.py`:**
+
+```python
+import pytest
+from django.test import TransactionTestCase, override_settings
+
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
+class TestPydanticAIAgents(TransactionTestCase):
+    """Tests for PydanticAI agent implementations.
+
+    Uses TransactionTestCase because async test methods with Django ORM calls
+    don't work well with TestCase's transaction-based isolation. The async code
+    runs in a different thread context that can't share the test transaction.
+
+    Marked as serial because PydanticAI's run_sync() requires an active event loop,
+    which pytest-xdist workers may close between test batches.
+    """
+
+    def setUp(self):
+        # Use setUp, not setUpTestData - TransactionTestCase doesn't support it
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        # ... create test fixtures
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_agent_chat(self, mock_agent_cls):
+        """Test agent chat functionality."""
+        mock_llm = MagicMock()
+        mock_llm.run = AsyncMock(return_value=MockResult("Response"))
+        mock_agent_cls.return_value = mock_llm
+
+        # Test async code directly
+        response = await agent.chat("Hello")
+        self.assertIn("Response", response.content)
+```
+
+**Key characteristics:**
+- `TransactionTestCase` — async code can't share `TestCase`'s transaction
+- `@pytest.mark.serial` — runs sequentially, avoids xdist worker conflicts
+- `@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})` — prevents connection pooling issues
+- Mock at the **agent class level** (e.g., `PydanticAIAgent`) or use `TestModel()` for in-memory tests
+- Use `AsyncMock` for async methods
+- Run async tests natively (pytest-asyncio)
+
+### Pattern 2: Testing Celery Task Wrappers
+
+Use this pattern when testing Celery tasks that call `asyncio.run()` internally.
+
+**Example from `test_agent_corpus_action_task.py`:**
+
+```python
+from unittest.mock import patch
+from django.test import TestCase
+
+# Path to patch the async function - mock the ENTIRE async function
+ASYNC_FUNC_PATH = "opencontractserver.tasks.agent_tasks._run_agent_corpus_action_async"
+
+class TestRunAgentCorpusActionTask(TestCase):
+    """Tests for run_agent_corpus_action Celery task.
+
+    These tests mock _run_agent_corpus_action_async to avoid async ORM connection
+    issues, and verify the task wrapper correctly handles various scenarios.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        # ... create test fixtures
+
+    @patch(ASYNC_FUNC_PATH)
+    def test_successful_execution(self, mock_async_func):
+        """Test that successful execution creates expected result."""
+        # Create the result that the async function would create
+        action_result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            status=AgentActionResult.Status.COMPLETED,
+            agent_response="Test response",
+            creator=self.user,
+        )
+
+        # Mock returns what the real async function would return
+        mock_async_func.return_value = {
+            "status": "completed",
+            "result_id": action_result.id,
+            "conversation_id": None,
+        }
+
+        result = run_agent_corpus_action.apply(
+            args=[self.corpus_action.id, self.document.id, self.user.id]
+        )
+
+        self.assertEqual(result.result["status"], "completed")
+        mock_async_func.assert_called_once()
+```
+
+**Key characteristics:**
+- Regular `TestCase` (faster, no serial marker needed)
+- **Mock the entire async function** — `asyncio.run()` never runs real Django async ORM
+- Tests task wrapper behavior (error handling, argument passing, status tracking)
+- If a test needs to update DB in the mock, use `sync_to_async`:
+
+```python
+from asgiref.sync import sync_to_async
+
+@patch(ASYNC_FUNC_PATH)
+def test_retry_failed_result(self, mock_async_func):
+    """Test that failed results can be retried."""
+    existing_result = AgentActionResult.objects.create(
+        status=AgentActionResult.Status.FAILED,
+        # ...
+    )
+
+    # Simulate the async function updating the result
+    async def update_and_return(*args, **kwargs):
+        existing_result.status = AgentActionResult.Status.COMPLETED
+        existing_result.agent_response = "Retry successful"
+        await sync_to_async(existing_result.save)()
+        return {
+            "status": "completed",
+            "result_id": existing_result.id,
+            "conversation_id": None,
+        }
+
+    mock_async_func.side_effect = update_and_return
+
+    result = run_agent_corpus_action.apply(args=[...])
+    self.assertEqual(result.result["status"], "completed")
+```
+
+### Decision Tree: Which Pattern to Use
+
+| What you're testing | Pattern | Base Class | Markers |
+|---------------------|---------|------------|---------|
+| Celery task that calls `asyncio.run()` | Mock entire async function | `TestCase` | None |
+| Agent implementation (async methods) | Mock agent internals | `TransactionTestCase` | `@pytest.mark.serial` |
+| PydanticAI with `run_sync()` | Mock or use `TestModel()` | `TransactionTestCase` | `@pytest.mark.serial` |
+| WebSocket consumers | Test async consumers | `TransactionTestCase` | `@pytest.mark.serial` |
+
+### Common Mistakes
+
+**Wrong: Mocking at the wrong level**
+```python
+# BROKEN - still runs real async ORM inside _run_agent_corpus_action_async
+@patch("opencontractserver.llms.agents")
+def test_task(self, mock_agents_module):
+    mock_agents_module.for_document = AsyncMock(return_value=mock_agent)
+    # The Celery task still calls asyncio.run() with real Django async ORM
+```
+
+**Right: Mock the entire async function**
+```python
+# WORKING - asyncio.run() calls mock, no real async ORM executes
+@patch("opencontractserver.tasks.agent_tasks._run_agent_corpus_action_async")
+def test_task(self, mock_async_func):
+    mock_async_func.return_value = {"status": "completed", ...}
+```
+
+### Infrastructure Support
+
+The `conftest.py` provides infrastructure to help with async tests:
+
+1. **Fresh event loops** — Creates new event loop for each test if the current one is closed
+2. **Connection cleanup** — Closes all database connections after `@pytest.mark.serial` tests to prevent corruption from leaking
+
 ## Production Stack Testing
 
 We have a dedicated test setup for validating the production Docker Compose stack, including Traefik rate limiting configuration with proper 429 response handling.

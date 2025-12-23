@@ -7,8 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import TransactionTestCase, override_settings
 from pydantic import BaseModel
 from pydantic_ai.agent import Agent
 from pydantic_ai.models.test import TestModel
@@ -129,7 +128,14 @@ class TestPydanticAIAgents(TransactionTestCase):
 
         Using setUp instead of setUpTestData because TransactionTestCase
         doesn't support the transaction-based isolation that setUpTestData relies on.
+
+        We close old connections at the start to ensure fresh connections after
+        any async operations from previous tests may have corrupted them.
         """
+        from django import db
+
+        db.close_old_connections()
+
         self.user = User.objects.create_user(
             username="testuser",
             password="testpass",
@@ -701,7 +707,15 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
     """
 
     def setUp(self) -> None:
-        """Create test data for each test."""
+        """Create test data for each test.
+
+        We close old connections at the start to ensure fresh connections after
+        any async operations from previous tests may have corrupted them.
+        """
+        from django import db
+
+        db.close_old_connections()
+
         self.user = User.objects.create_user(
             username="coverageuser",
             password="testpass",
