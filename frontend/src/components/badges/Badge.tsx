@@ -20,9 +20,24 @@ const StyledBadge = styled(Label)<{ $badgeColor: string }>`
     transition: all 0.2s ease;
     cursor: default;
 
+    /* Touch-friendly tap target */
+    @media (max-width: 768px) {
+      padding: 0.5em 0.85em;
+      min-height: 36px;
+      cursor: pointer;
+    }
+
     &:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Disable hover transforms on touch devices */
+    @media (hover: none) {
+      &:hover {
+        transform: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      }
     }
   }
 `;
@@ -38,6 +53,17 @@ const PopupContainer = styled.div<{ $show: boolean }>`
   opacity: ${(props) => (props.$show ? 1 : 0)};
   pointer-events: ${(props) => (props.$show ? "auto" : "none")};
   transition: opacity 0.2s ease;
+
+  /* Mobile-responsive popup */
+  @media (max-width: 768px) {
+    position: fixed;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%);
+    width: calc(100vw - 2rem);
+    max-width: 300px;
+    padding: 1.25em;
+  }
 `;
 
 const BadgeContent = styled.div`
@@ -65,6 +91,24 @@ const BadgeMetadata = styled.div`
   margin-top: 0.3em;
   border-top: 1px solid #e2e8f0;
   padding-top: 0.5em;
+`;
+
+const MobileOverlay = styled.div<{ $show: boolean }>`
+  display: none;
+
+  @media (max-width: 768px) {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    opacity: ${(props) => (props.$show ? 1 : 0)};
+    pointer-events: ${(props) => (props.$show ? "auto" : "none")};
+    transition: opacity 0.2s ease;
+  }
 `;
 
 export interface BadgeData {
@@ -98,14 +142,19 @@ export const Badge: React.FC<BadgeProps> = ({
   const [showPopup, setShowPopup] = useState(false);
   const badgeRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const isTouchDevice =
+    typeof window !== "undefined" && "ontouchstart" in window;
 
   // Dynamically get the icon component from lucide-react
   const IconComponent = (LucideIcons[badge.icon as keyof typeof LucideIcons] ||
     LucideIcons.Award) as React.ComponentType<{ size: number }>;
 
-  // Update popup position using floating-ui
+  // Update popup position using floating-ui (only on non-mobile)
   const updatePosition = async () => {
     if (!badgeRef.current || !popupRef.current) return;
+
+    // Skip positioning on mobile - we use fixed centered positioning via CSS
+    if (window.innerWidth <= 768) return;
 
     const { x, y } = await computePosition(badgeRef.current, popupRef.current, {
       placement: "top",
@@ -126,10 +175,26 @@ export const Badge: React.FC<BadgeProps> = ({
   }, [showPopup]);
 
   const handleMouseEnter = () => {
-    setShowPopup(true);
+    if (!isTouchDevice) {
+      setShowPopup(true);
+    }
   };
 
   const handleMouseLeave = () => {
+    if (!isTouchDevice) {
+      setShowPopup(false);
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (isTouchDevice) {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowPopup((prev) => !prev);
+    }
+  };
+
+  const handleOverlayClick = () => {
     setShowPopup(false);
   };
 
@@ -138,6 +203,7 @@ export const Badge: React.FC<BadgeProps> = ({
       ref={badgeRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={handleClick}
       style={{ display: "inline-block" }}
     >
       <StyledBadge $badgeColor={badge.color || "#05313d"} size={size}>
@@ -159,6 +225,7 @@ export const Badge: React.FC<BadgeProps> = ({
   return (
     <>
       {badgeElement}
+      <MobileOverlay $show={showPopup} onClick={handleOverlayClick} />
       <PopupContainer
         ref={popupRef}
         $show={showPopup}
