@@ -1,17 +1,13 @@
 import React, { useState, useCallback } from "react";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
-import { Dropdown, Icon, Button, Loader, Message } from "semantic-ui-react";
-import { ActionTrailStats } from "./ActionTrailStats";
-import { ActionExecutionCard } from "./ActionExecutionCard";
+import { Dropdown, Icon, Button, Loader } from "semantic-ui-react";
+import { ActionExecutionRow } from "./ActionExecutionRow";
 import {
   GET_CORPUS_ACTION_EXECUTIONS,
-  GET_CORPUS_ACTION_TRAIL_STATS,
   GET_CORPUS_ACTIONS,
   GetCorpusActionExecutionsInput,
   GetCorpusActionExecutionsOutput,
-  GetCorpusActionTrailStatsInput,
-  GetCorpusActionTrailStatsOutput,
   GetCorpusActionsInput,
   GetCorpusActionsOutput,
 } from "../../graphql/queries";
@@ -27,12 +23,12 @@ const TrailContainer = styled.div`
 const FiltersRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: center;
 
   @media (max-width: 768px) {
-    gap: 0.75rem;
+    gap: 8px;
   }
 
   @media (max-width: 480px) {
@@ -41,61 +37,67 @@ const FiltersRow = styled.div`
   }
 `;
 
-const FilterLabel = styled.label`
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #64748b;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-  display: block;
-`;
-
 const FilterGroup = styled.div`
-  min-width: 150px;
+  min-width: 130px;
+
+  .ui.dropdown {
+    min-width: 130px;
+    font-size: 0.85rem;
+  }
 
   @media (max-width: 480px) {
     min-width: 100%;
   }
 `;
 
+const ResultsInfo = styled.div`
+  color: #64748b;
+  font-size: 0.8rem;
+  margin-left: auto;
+
+  @media (max-width: 480px) {
+    margin-left: 0;
+    margin-top: 4px;
+  }
+`;
+
 const ExecutionsList = styled.div`
-  margin-top: 1rem;
+  margin-top: 8px;
 `;
 
 const LoadMoreContainer = styled.div`
   display: flex;
   justify-content: center;
-  margin-top: 1.5rem;
+  margin-top: 16px;
 `;
 
 const EmptyState = styled.div`
   text-align: center;
-  padding: 3rem 2rem;
-  color: #64748b;
+  padding: 40px 20px;
+  color: #94a3b8;
 
   .empty-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    opacity: 0.5;
+    font-size: 2rem;
+    margin-bottom: 12px;
+    opacity: 0.4;
   }
 
   .empty-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #475569;
-    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #64748b;
+    margin-bottom: 4px;
   }
 
   .empty-description {
-    font-size: 0.9375rem;
+    font-size: 0.85rem;
   }
 `;
 
-const ResultsCount = styled.div`
-  color: #64748b;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
+const LoadingContainer = styled.div`
+  text-align: center;
+  padding: 40px;
+  color: #94a3b8;
 `;
 
 const STATUS_OPTIONS = [
@@ -122,49 +124,34 @@ const TIME_RANGE_OPTIONS = [
   { key: "30d", value: "720", text: "Last 30 Days" },
 ];
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 25;
 
 /**
- * ActionExecutionTrail component displays the execution history of corpus actions.
+ * ActionExecutionTrail - Displays corpus action execution history
  *
  * Features:
- * - Stats summary showing execution counts by status
- * - Filtering by status, action type, specific action, and time range
- * - Paginated list of execution cards with load more
- * - Responsive layout with mobile breakpoints
- * - Full keyboard and screen reader accessibility
+ * - Compact row-based view with expand for details
+ * - Filtering by status, type, action, time range
+ * - Pagination with load more
+ * - Responsive layout
  *
  * Routing Compliance:
- * - NEVER sets reactive vars directly
- * - All navigation handled via getDocumentUrl/getExtractUrl utilities in ActionExecutionCard
- * - CentralRouteManager handles URL → state mapping
- *
- * @param corpusId - The ID of the corpus to show execution history for
+ * - Uses getDocumentUrl/getExtractUrl utilities
+ * - Never sets reactive vars directly
  */
 export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
   corpusId,
 }) => {
-  // Filter state
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [actionFilter, setActionFilter] = useState<string>("");
   const [timeRangeHours, setTimeRangeHours] = useState<string>("");
 
-  // Calculate since datetime from hours
   const sinceDateTime = timeRangeHours
     ? new Date(
         Date.now() - parseInt(timeRangeHours) * 60 * 60 * 1000
       ).toISOString()
     : undefined;
-
-  // Fetch stats
-  const { data: statsData, loading: statsLoading } = useQuery<
-    GetCorpusActionTrailStatsOutput,
-    GetCorpusActionTrailStatsInput
-  >(GET_CORPUS_ACTION_TRAIL_STATS, {
-    variables: { corpusId, since: sinceDateTime },
-    fetchPolicy: "cache-and-network",
-  });
 
   // Fetch actions for filter dropdown
   const { data: actionsData } = useQuery<
@@ -175,7 +162,6 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
     fetchPolicy: "cache-first",
   });
 
-  // Build action options for filter
   const actionOptions = [
     { key: "all", value: "", text: "All Actions" },
     ...(actionsData?.corpusActions?.edges?.map(({ node }) => ({
@@ -185,11 +171,10 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
     })) || []),
   ];
 
-  // Fetch executions with pagination
+  // Fetch executions
   const {
     data: executionsData,
     loading: executionsLoading,
-    error: executionsError,
     fetchMore,
   } = useQuery<GetCorpusActionExecutionsOutput, GetCorpusActionExecutionsInput>(
     GET_CORPUS_ACTION_EXECUTIONS,
@@ -235,113 +220,87 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
 
   return (
     <TrailContainer>
-      {/* Stats Summary */}
-      <ActionTrailStats
-        stats={statsData?.corpusActionTrailStats || null}
-        loading={statsLoading}
-      />
-
-      {/* Filters */}
       <FiltersRow role="search" aria-label="Filter action executions">
         <FilterGroup>
-          <FilterLabel htmlFor="status-filter">Status</FilterLabel>
           <Dropdown
-            id="status-filter"
             selection
             fluid
             options={STATUS_OPTIONS}
             value={statusFilter}
             onChange={(_, { value }) => setStatusFilter(value as string)}
             aria-label="Filter by status"
+            placeholder="Status"
           />
         </FilterGroup>
 
         <FilterGroup>
-          <FilterLabel htmlFor="type-filter">Type</FilterLabel>
           <Dropdown
-            id="type-filter"
             selection
             fluid
             options={TYPE_OPTIONS}
             value={typeFilter}
             onChange={(_, { value }) => setTypeFilter(value as string)}
-            aria-label="Filter by action type"
+            aria-label="Filter by type"
+            placeholder="Type"
           />
         </FilterGroup>
 
         <FilterGroup>
-          <FilterLabel htmlFor="action-filter">Action</FilterLabel>
           <Dropdown
-            id="action-filter"
             selection
             fluid
             options={actionOptions}
             value={actionFilter}
             onChange={(_, { value }) => setActionFilter(value as string)}
-            aria-label="Filter by specific action"
+            aria-label="Filter by action"
+            placeholder="Action"
           />
         </FilterGroup>
 
         <FilterGroup>
-          <FilterLabel htmlFor="time-filter">Time Range</FilterLabel>
           <Dropdown
-            id="time-filter"
             selection
             fluid
             options={TIME_RANGE_OPTIONS}
             value={timeRangeHours}
             onChange={(_, { value }) => setTimeRangeHours(value as string)}
-            aria-label="Filter by time range"
+            aria-label="Filter by time"
+            placeholder="Time"
           />
         </FilterGroup>
+
+        {totalCount > 0 && (
+          <ResultsInfo role="status">
+            {executions.length} of {totalCount}
+          </ResultsInfo>
+        )}
       </FiltersRow>
-
-      {/* Results Count */}
-      {totalCount > 0 && (
-        <ResultsCount role="status" aria-live="polite">
-          Showing {executions.length} of {totalCount} executions
-        </ResultsCount>
-      )}
-
-      {/* Error State */}
-      {executionsError && (
-        <Message negative role="alert">
-          <Message.Header>Error Loading Executions</Message.Header>
-          <p>{executionsError.message}</p>
-        </Message>
-      )}
 
       {/* Loading State */}
       {executionsLoading && executions.length === 0 && (
-        <div
-          style={{ textAlign: "center", padding: "3rem" }}
-          role="status"
-          aria-live="polite"
-        >
-          <Loader active inline="centered" aria-label="Loading executions" />
-          <p style={{ marginTop: "1rem", color: "#64748b" }}>
-            Loading execution history...
-          </p>
-        </div>
+        <LoadingContainer role="status">
+          <Loader active inline="centered" size="small" />
+          <p style={{ marginTop: "12px" }}>Loading executions...</p>
+        </LoadingContainer>
       )}
 
       {/* Empty State */}
-      {!executionsLoading && executions.length === 0 && !executionsError && (
+      {!executionsLoading && executions.length === 0 && (
         <EmptyState role="status">
-          <Icon name="history" className="empty-icon" aria-hidden="true" />
+          <Icon name="history" className="empty-icon" />
           <div className="empty-title">No Executions Found</div>
           <div className="empty-description">
             {statusFilter || typeFilter || actionFilter || timeRangeHours
-              ? "Try adjusting your filters to see more results."
-              : "Action executions will appear here when documents are added or edited."}
+              ? "Try adjusting your filters."
+              : "Executions will appear when documents are processed."}
           </div>
         </EmptyState>
       )}
 
       {/* Executions List */}
-      <ExecutionsList role="feed" aria-label="Action execution history">
+      <ExecutionsList role="list" aria-label="Action executions">
         {executions.map(({ node }) => (
-          <ActionExecutionCard key={node.id} execution={node} />
+          <ActionExecutionRow key={node.id} execution={node} />
         ))}
       </ExecutionsList>
 
@@ -349,12 +308,12 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
       {hasMore && (
         <LoadMoreContainer>
           <Button
+            basic
+            size="small"
             onClick={handleLoadMore}
             loading={executionsLoading}
             disabled={executionsLoading}
-            aria-label="Load more executions"
           >
-            <Icon name="arrow down" aria-hidden="true" />
             Load More
           </Button>
         </LoadMoreContainer>
