@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
-import { Dropdown, Icon, Button, Loader } from "semantic-ui-react";
+import { Dropdown, Icon, Loader } from "semantic-ui-react";
 import { ActionExecutionRow } from "./ActionExecutionRow";
 import {
   GET_CORPUS_ACTION_EXECUTIONS,
@@ -63,12 +63,39 @@ const ResultsInfo = styled.div`
 
 const ExecutionsList = styled.div`
   margin-top: 8px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 4px;
+
+  /* Subtle scrollbar styling */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
 `;
 
-const LoadMoreContainer = styled.div`
+const LoadingMore = styled.div`
   display: flex;
+  align-items: center;
   justify-content: center;
-  margin-top: 16px;
+  padding: 16px;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  gap: 8px;
+`;
+
+const ScrollSentinel = styled.div`
+  height: 1px;
 `;
 
 const EmptyState = styled.div`
@@ -192,14 +219,28 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
     }
   );
 
-  const handleLoadMore = useCallback(() => {
-    if (!executionsData?.corpusActionExecutions?.pageInfo?.hasNextPage) return;
+  const executions = executionsData?.corpusActionExecutions?.edges || [];
+  const hasMore = executionsData?.corpusActionExecutions?.pageInfo?.hasNextPage;
+  const totalCount = executionsData?.corpusActionExecutions?.totalCount || 0;
 
+  // Infinite scroll sentinel ref
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
+
+  const handleLoadMore = useCallback(() => {
+    if (
+      !executionsData?.corpusActionExecutions?.pageInfo?.hasNextPage ||
+      loadingMoreRef.current
+    )
+      return;
+
+    loadingMoreRef.current = true;
     fetchMore({
       variables: {
         after: executionsData.corpusActionExecutions.pageInfo.endCursor,
       },
       updateQuery: (prev, { fetchMoreResult }) => {
+        loadingMoreRef.current = false;
         if (!fetchMoreResult) return prev;
         return {
           corpusActionExecutions: {
@@ -214,9 +255,23 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
     });
   }, [executionsData, fetchMore]);
 
-  const executions = executionsData?.corpusActionExecutions?.edges || [];
-  const hasMore = executionsData?.corpusActionExecutions?.pageInfo?.hasNextPage;
-  const totalCount = executionsData?.corpusActionExecutions?.totalCount || 0;
+  // Infinite scroll observer
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !executionsLoading) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, executionsLoading, handleLoadMore]);
 
   return (
     <TrailContainer>
@@ -297,26 +352,24 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
         </EmptyState>
       )}
 
-      {/* Executions List */}
-      <ExecutionsList role="list" aria-label="Action executions">
-        {executions.map(({ node }) => (
-          <ActionExecutionRow key={node.id} execution={node} />
-        ))}
-      </ExecutionsList>
+      {/* Executions List with infinite scroll */}
+      {executions.length > 0 && (
+        <ExecutionsList role="list" aria-label="Action executions">
+          {executions.map(({ node }) => (
+            <ActionExecutionRow key={node.id} execution={node} />
+          ))}
 
-      {/* Load More */}
-      {hasMore && (
-        <LoadMoreContainer>
-          <Button
-            basic
-            size="small"
-            onClick={handleLoadMore}
-            loading={executionsLoading}
-            disabled={executionsLoading}
-          >
-            Load More
-          </Button>
-        </LoadMoreContainer>
+          {/* Infinite scroll sentinel */}
+          <ScrollSentinel ref={sentinelRef} />
+
+          {/* Loading more indicator */}
+          {executionsLoading && executions.length > 0 && (
+            <LoadingMore>
+              <Loader active inline size="tiny" />
+              Loading more...
+            </LoadingMore>
+          )}
+        </ExecutionsList>
       )}
     </TrailContainer>
   );
