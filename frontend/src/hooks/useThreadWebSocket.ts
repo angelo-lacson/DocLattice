@@ -11,6 +11,7 @@
  * - Tool call notifications
  * - Error handling with reconnection
  * - Heartbeat/ping-pong for connection health
+ * - Automatic reconnection on page visibility change (Issue #697)
  *
  * Part of Issue #623 - @ Mentions Feature (Extended) - Agent Mentions
  */
@@ -19,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useReactiveVar } from "@apollo/client";
 import { authToken } from "../graphql/cache";
 import { getThreadUpdatesWebSocket } from "../components/chat/get_websockets";
+import { useNetworkStatus } from "./useNetworkStatus";
 
 // ============================================================================
 // Types
@@ -402,6 +404,43 @@ export function useThreadWebSocket(
       connect();
     }
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reconnect when page becomes visible after being hidden (Issue #697)
+  // This handles mobile devices where the app may be suspended when screen is locked
+  useNetworkStatus({
+    onResume: () => {
+      console.log("[useThreadWebSocket] Page resumed, checking connection...");
+
+      // Check if WebSocket is still connected
+      if (
+        conversationId &&
+        wsRef.current?.readyState !== WebSocket.OPEN &&
+        wsRef.current?.readyState !== WebSocket.CONNECTING
+      ) {
+        console.log(
+          "[useThreadWebSocket] WebSocket disconnected, reconnecting..."
+        );
+        connect();
+      } else if (wsRef.current?.readyState === WebSocket.OPEN) {
+        // Send a ping to verify connection is still alive
+        sendPing();
+      }
+    },
+    onOnline: () => {
+      console.log("[useThreadWebSocket] Network online, checking connection...");
+
+      // Reconnect if disconnected
+      if (
+        conversationId &&
+        wsRef.current?.readyState !== WebSocket.OPEN &&
+        wsRef.current?.readyState !== WebSocket.CONNECTING
+      ) {
+        connect();
+      }
+    },
+    resumeThreshold: 1000, // 1 second hidden threshold
+    enabled: !!conversationId,
+  });
 
   return {
     connectionState,
