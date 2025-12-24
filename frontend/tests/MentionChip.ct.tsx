@@ -35,6 +35,21 @@ const mockStandaloneDocResource: MentionedResource = {
   url: "/d/bob-jones/standalone-doc",
 };
 
+// Issue #689 - Annotation resource with full text for tooltip testing
+const mockAnnotationResource: MentionedResource = {
+  type: "ANNOTATION",
+  id: "ann-1",
+  slug: "annotation-1",
+  title: "Section Header",
+  url: "/d/john-doe/legal-contracts/contract-001?ann=ann-1&structural=true",
+  rawText:
+    "This is a much longer annotation text that should be truncated in the chip display but shown fully in the tooltip on hover.",
+  annotationLabel: "Section Header",
+  document: {
+    title: "Employment Agreement 2024",
+  },
+};
+
 test.describe("MentionChip", () => {
   test("renders corpus mention chip with database icon", async ({ mount }) => {
     const component = await mount(
@@ -78,6 +93,62 @@ test.describe("MentionChip", () => {
     // Should have at least 2 SVG icons (type icon + external link icon)
     const svgs = await component.locator("svg").all();
     expect(svgs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Issue #689 - Annotation chip with truncated preview and rich tooltip
+  test("renders annotation chip with truncated text preview", async ({
+    mount,
+  }) => {
+    const component = await mount(
+      <BrowserRouter>
+        <MentionChip resource={mockAnnotationResource} />
+      </BrowserRouter>
+    );
+
+    // The chip should show truncated text (first ~24 chars with ellipsis)
+    // The full text is: "This is a much longer annotation..."
+    // Truncated should show approximately: "This is a much longer an…"
+    const chipText = component.locator("span").filter({ hasText: "This is" });
+    await expect(chipText.first()).toBeVisible();
+
+    // Should have tag icon for annotations
+    const svg = await component.locator("svg").first();
+    await expect(svg).toBeVisible();
+  });
+
+  test("shows rich tooltip on annotation chip hover", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <BrowserRouter>
+        <MentionChip resource={mockAnnotationResource} />
+      </BrowserRouter>
+    );
+
+    // Verify chip is visible
+    const chip = component.locator("span").first();
+    await expect(chip).toBeVisible();
+
+    // Hover over the chip
+    await chip.hover();
+
+    // Wait for tooltip to appear
+    await page.waitForTimeout(200);
+
+    // The tooltip should contain the full annotation text
+    const fullTextTooltip = page.getByText(
+      "This is a much longer annotation text"
+    );
+    await expect(fullTextTooltip).toBeVisible({ timeout: 5000 });
+
+    // Should also show the annotation label
+    const labelInTooltip = page.getByText("Section Header");
+    await expect(labelInTooltip).toBeVisible();
+
+    // Should show the document title in the metadata
+    const docTitle = page.getByText("Employment Agreement 2024");
+    await expect(docTitle).toBeVisible();
   });
 });
 
