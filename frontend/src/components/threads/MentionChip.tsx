@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { Database, FileText, ExternalLink, Tag } from "lucide-react";
+import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import { color } from "../../theme/colors";
 import { MENTION_PREVIEW_LENGTH } from "../../assets/configurations/constants";
 import {
@@ -139,6 +140,70 @@ const ExternalIcon = styled(ExternalLink)`
   flex-shrink: 0;
 `;
 
+// Tooltip popup for annotations (Issue #689)
+const TooltipContainer = styled.div<{ $show: boolean }>`
+  position: absolute;
+  z-index: 10000;
+  background: white;
+  padding: 12px 14px;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
+  border: 1px solid ${color.N4};
+  max-width: 320px;
+  min-width: 200px;
+  opacity: ${(props) => (props.$show ? 1 : 0)};
+  pointer-events: ${(props) => (props.$show ? "auto" : "none")};
+  transition: opacity 0.15s ease;
+
+  @media (max-width: 640px) {
+    max-width: 280px;
+  }
+`;
+
+const TooltipContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const TooltipText = styled.div`
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${color.N10};
+  word-break: break-word;
+  white-space: pre-wrap;
+
+  /* Highlight quoted text */
+  &::before {
+    content: '"';
+    color: ${color.N6};
+  }
+  &::after {
+    content: '"';
+    color: ${color.N6};
+  }
+`;
+
+const TooltipMeta = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid ${color.N3};
+  font-size: 11px;
+  color: ${color.N7};
+`;
+
+const TooltipMetaItem = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  svg {
+    flex-shrink: 0;
+  }
+`;
+
 export interface MentionedResource {
   type: "CORPUS" | "DOCUMENT" | "ANNOTATION";
   id: string;
@@ -174,10 +239,39 @@ export interface MentionChipProps {
  * Navigation uses React Router for corpus (full page) or custom handler for document/annotation (sidebar)
  *
  * Part of Issue #623 - @ Mentions Feature
- * Updated for Issue #689 - Improved annotation display with ~24 char preview and full text on hover
+ * Updated for Issue #689 - Improved annotation display with ~24 char preview and rich tooltip on hover
  */
 export function MentionChip({ resource, onClick }: MentionChipProps) {
   const navigate = useNavigate();
+  const [showTooltip, setShowTooltip] = useState(false);
+  const chipRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  // Position the tooltip using floating-ui
+  const updateTooltipPosition = async () => {
+    if (!chipRef.current || !tooltipRef.current) return;
+
+    const { x, y } = await computePosition(
+      chipRef.current,
+      tooltipRef.current,
+      {
+        placement: "top",
+        middleware: [offset(8), flip(), shift({ padding: 8 })],
+      }
+    );
+
+    Object.assign(tooltipRef.current.style, {
+      left: `${x}px`,
+      top: `${y}px`,
+    });
+  };
+
+  // Update position when tooltip shows
+  useEffect(() => {
+    if (showTooltip) {
+      updateTooltipPosition();
+    }
+  }, [showTooltip]);
 
   // Handle both mouse click and keyboard activation
   const handleActivation = (
@@ -232,25 +326,9 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
     return resource.title;
   };
 
-  // Get tooltip text (full content on hover)
-  // Uses sanitizeForTooltip (not sanitizeForMention) to avoid escaped backslashes
-  const getTooltipText = (): string => {
-    if (resource.type === "ANNOTATION") {
-      const parts: string[] = [];
-      // Show full raw text (normalized whitespace for clean display)
-      if (annotationPreview) {
-        parts.push(annotationPreview.tooltipText);
-      }
-      // Add context info
-      if (resource.annotationLabel) {
-        parts.push(`Label: ${resource.annotationLabel}`);
-      }
-      if (resource.document) {
-        parts.push(`Document: ${resource.document.title}`);
-      }
-      return parts.join(" | ");
-    }
-    // Corpus and Document
+  // Get simple tooltip text for non-annotation types (using native title)
+  const getSimpleTooltipText = (): string => {
+    // Corpus and Document use simple title tooltip
     return `${resource.title}${
       resource.corpus ? ` (in ${resource.corpus.title})` : ""
     }`;
@@ -262,8 +340,8 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
       resource.type === "CORPUS"
         ? "Corpus"
         : resource.type === "DOCUMENT"
-          ? "Document"
-          : "Annotation";
+        ? "Document"
+        : "Annotation";
 
     if (resource.type === "ANNOTATION") {
       const textPart = annotationPreview?.tooltipText || resource.title;
@@ -299,24 +377,62 @@ export function MentionChip({ resource, onClick }: MentionChipProps) {
     }
   };
 
+  // For annotations, use rich tooltip popup; for others, use native title
+  const isAnnotation = resource.type === "ANNOTATION";
+
   return (
-    <ChipContainer
-      $type={getChipType()}
-      onClick={handleActivation}
-      title={getTooltipText()}
-      aria-label={getAriaLabel()}
-      role="link"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          handleActivation(e);
-        }
-      }}
-    >
-      <IconWrapper>{getIcon()}</IconWrapper>
-      <ChipText>{getDisplayText()}</ChipText>
-      <ExternalIcon size={12} />
-    </ChipContainer>
+    <>
+      <ChipContainer
+        ref={chipRef}
+        $type={getChipType()}
+        onClick={handleActivation}
+        title={isAnnotation ? undefined : getSimpleTooltipText()}
+        aria-label={getAriaLabel()}
+        role="link"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            handleActivation(e);
+          }
+        }}
+        onMouseEnter={() => isAnnotation && setShowTooltip(true)}
+        onMouseLeave={() => isAnnotation && setShowTooltip(false)}
+      >
+        <IconWrapper>{getIcon()}</IconWrapper>
+        <ChipText>{getDisplayText()}</ChipText>
+        <ExternalIcon size={12} />
+      </ChipContainer>
+
+      {/* Rich tooltip for annotations showing full text */}
+      {isAnnotation && (
+        <TooltipContainer
+          ref={tooltipRef}
+          $show={showTooltip}
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+        >
+          <TooltipContent>
+            {annotationPreview?.tooltipText && (
+              <TooltipText>{annotationPreview.tooltipText}</TooltipText>
+            )}
+            <TooltipMeta>
+              {resource.annotationLabel && (
+                <TooltipMetaItem>
+                  <Tag size={12} />
+                  {resource.annotationLabel}
+                </TooltipMetaItem>
+              )}
+              {resource.document && (
+                <TooltipMetaItem>
+                  <FileText size={12} />
+                  {resource.document.title}
+                </TooltipMetaItem>
+              )}
+            </TooltipMeta>
+          </TooltipContent>
+        </TooltipContainer>
+      )}
+    </>
   );
 }
 
