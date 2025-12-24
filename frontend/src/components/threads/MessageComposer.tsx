@@ -394,7 +394,10 @@ export function MessageComposer({
                           : null;
                         const annTextPreview = sanitizedRawText
                           ? sanitizedRawText.length > MENTION_PREVIEW_LENGTH
-                            ? `"${sanitizedRawText.substring(0, MENTION_PREVIEW_LENGTH)}…"`
+                            ? `"${sanitizedRawText.substring(
+                                0,
+                                MENTION_PREVIEW_LENGTH
+                              )}…"`
                             : `"${sanitizedRawText}"`
                           : `[${labelText}]`;
                         const annLabel = `${annTextPreview} (${labelText})`;

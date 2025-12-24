@@ -35,7 +35,9 @@ describe("textSanitization", () => {
 
   describe("sanitizeForTooltip", () => {
     it("normalizes newlines to spaces", () => {
-      expect(sanitizeForTooltip("line1\nline2\nline3")).toBe("line1 line2 line3");
+      expect(sanitizeForTooltip("line1\nline2\nline3")).toBe(
+        "line1 line2 line3"
+      );
     });
 
     it("handles Windows-style newlines", () => {
@@ -88,7 +90,7 @@ describe("textSanitization", () => {
 
     it("handles complex annotation text", () => {
       const input =
-        'This clause [Section 1.2] references (see Exhibit A)\nand continues...';
+        "This clause [Section 1.2] references (see Exhibit A)\nand continues...";
       const expected =
         "This clause \\[Section 1.2\\] references \\(see Exhibit A\\) and continues...";
       expect(sanitizeForMention(input)).toBe(expected);
