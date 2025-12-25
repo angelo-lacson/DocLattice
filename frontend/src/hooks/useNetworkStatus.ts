@@ -14,6 +14,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Time (ms) before justResumed flag is cleared */
+const JUST_RESUMED_CLEAR_DELAY = 100;
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -100,6 +107,11 @@ export function useNetworkStatus(
   // Track when page was hidden to calculate hidden duration
   const hiddenAtRef = useRef<number>(0);
 
+  // Track timeout IDs for cleanup to prevent memory leaks
+  const justResumedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
   // Store callbacks in refs to avoid effect re-runs
   const callbacksRef = useRef({
     onResume,
@@ -132,7 +144,8 @@ export function useNetworkStatus(
 
     if (isVisible) {
       // Page became visible
-      const hiddenDuration = hiddenAtRef.current > 0 ? now - hiddenAtRef.current : 0;
+      const hiddenDuration =
+        hiddenAtRef.current > 0 ? now - hiddenAtRef.current : 0;
       const shouldTriggerResume = hiddenDuration >= resumeThreshold;
 
       setStatus((prev) => ({
@@ -143,15 +156,21 @@ export function useNetworkStatus(
       }));
 
       if (shouldTriggerResume) {
-        console.log(
+        console.debug(
           `[useNetworkStatus] Page resumed after ${hiddenDuration}ms hidden`
         );
         callbacksRef.current.onResume?.();
 
+        // Clear any pending timeout before setting a new one
+        if (justResumedTimeoutRef.current) {
+          clearTimeout(justResumedTimeoutRef.current);
+        }
+
         // Clear justResumed after a short delay
-        setTimeout(() => {
+        justResumedTimeoutRef.current = setTimeout(() => {
           setStatus((prev) => ({ ...prev, justResumed: false }));
-        }, 100);
+          justResumedTimeoutRef.current = null;
+        }, JUST_RESUMED_CLEAR_DELAY);
       }
 
       hiddenAtRef.current = 0;
@@ -173,7 +192,7 @@ export function useNetworkStatus(
   // Handle online event
   const handleOnline = useCallback(() => {
     const now = Date.now();
-    console.log("[useNetworkStatus] Network came online");
+    console.debug("[useNetworkStatus] Network came online");
 
     setStatus((prev) => ({
       ...prev,
@@ -187,7 +206,7 @@ export function useNetworkStatus(
   // Handle offline event
   const handleOffline = useCallback(() => {
     const now = Date.now();
-    console.log("[useNetworkStatus] Network went offline");
+    console.debug("[useNetworkStatus] Network went offline");
 
     setStatus((prev) => ({
       ...prev,
@@ -200,18 +219,28 @@ export function useNetworkStatus(
 
   // Manual trigger for testing or programmatic use
   const triggerResume = useCallback(() => {
-    console.log("[useNetworkStatus] Manual resume triggered");
+    console.debug("[useNetworkStatus] Manual resume triggered");
     setStatus((prev) => ({ ...prev, justResumed: true }));
     callbacksRef.current.onResume?.();
 
-    setTimeout(() => {
+    // Clear any pending timeout before setting a new one
+    if (justResumedTimeoutRef.current) {
+      clearTimeout(justResumedTimeoutRef.current);
+    }
+
+    justResumedTimeoutRef.current = setTimeout(() => {
       setStatus((prev) => ({ ...prev, justResumed: false }));
-    }, 100);
+      justResumedTimeoutRef.current = null;
+    }, JUST_RESUMED_CLEAR_DELAY);
   }, []);
 
   // Set up event listeners
   useEffect(() => {
-    if (!enabled || typeof document === "undefined" || typeof window === "undefined") {
+    if (
+      !enabled ||
+      typeof document === "undefined" ||
+      typeof window === "undefined"
+    ) {
       return;
     }
 
@@ -231,6 +260,12 @@ export function useNetworkStatus(
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+
+      // Clean up any pending timeout to prevent memory leaks
+      if (justResumedTimeoutRef.current) {
+        clearTimeout(justResumedTimeoutRef.current);
+        justResumedTimeoutRef.current = null;
+      }
     };
   }, [enabled, handleVisibilityChange, handleOnline, handleOffline]);
 

@@ -6,7 +6,7 @@
  * Related to Issue #697 - Error on screen unlock
  */
 
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react-hooks";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useNetworkStatus } from "../useNetworkStatus";
 
@@ -107,9 +107,7 @@ describe("useNetworkStatus", () => {
 
     it("should call onResume when page becomes visible after threshold", () => {
       const onResume = vi.fn();
-      renderHook(() =>
-        useNetworkStatus({ onResume, resumeThreshold: 1000 })
-      );
+      renderHook(() => useNetworkStatus({ onResume, resumeThreshold: 1000 }));
 
       // Hide the page
       act(() => {
@@ -141,9 +139,7 @@ describe("useNetworkStatus", () => {
 
     it("should NOT call onResume when hidden duration is below threshold", () => {
       const onResume = vi.fn();
-      renderHook(() =>
-        useNetworkStatus({ onResume, resumeThreshold: 1000 })
-      );
+      renderHook(() => useNetworkStatus({ onResume, resumeThreshold: 1000 }));
 
       // Hide the page
       act(() => {

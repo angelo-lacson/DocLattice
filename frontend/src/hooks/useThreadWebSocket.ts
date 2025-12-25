@@ -168,8 +168,8 @@ export function useThreadWebSocket(
 
   const token = useReactiveVar(authToken);
   const wsRef = useRef<WebSocket | null>(null);
-  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamingResponsesRef = useRef<Map<string, StreamingAgentResponse>>(
     new Map()
   );
@@ -409,7 +409,9 @@ export function useThreadWebSocket(
   // This handles mobile devices where the app may be suspended when screen is locked
   useNetworkStatus({
     onResume: () => {
-      console.log("[useThreadWebSocket] Page resumed, checking connection...");
+      console.debug(
+        "[useThreadWebSocket] Page resumed, checking connection..."
+      );
 
       // Check if WebSocket is still connected
       if (
@@ -417,7 +419,7 @@ export function useThreadWebSocket(
         wsRef.current?.readyState !== WebSocket.OPEN &&
         wsRef.current?.readyState !== WebSocket.CONNECTING
       ) {
-        console.log(
+        console.debug(
           "[useThreadWebSocket] WebSocket disconnected, reconnecting..."
         );
         try {
@@ -432,7 +434,9 @@ export function useThreadWebSocket(
       }
     },
     onOnline: () => {
-      console.log("[useThreadWebSocket] Network online, checking connection...");
+      console.debug(
+        "[useThreadWebSocket] Network online, checking connection..."
+      );
 
       // Reconnect if disconnected
       if (
@@ -443,7 +447,10 @@ export function useThreadWebSocket(
         try {
           connect();
         } catch (error) {
-          console.error("[useThreadWebSocket] Reconnection after network recovery failed:", error);
+          console.error(
+            "[useThreadWebSocket] Reconnection after network recovery failed:",
+            error
+          );
           setConnectionState("error");
         }
       }

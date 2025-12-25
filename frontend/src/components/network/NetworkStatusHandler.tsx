@@ -16,6 +16,20 @@ import { useApolloClient } from "@apollo/client";
 import { toast } from "react-toastify";
 import { useNetworkStatus } from "../../hooks/useNetworkStatus";
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** Toast IDs for network status notifications */
+const TOAST_IDS = {
+  RECONNECTING: "network-reconnecting",
+  ONLINE: "network-online",
+  OFFLINE: "network-offline",
+} as const;
+
+/** Delay (ms) before refetching after network comes online */
+const NETWORK_STABILIZATION_DELAY = 500;
+
 /**
  * Props for the NetworkStatusHandler component.
  */
@@ -68,7 +82,7 @@ export function NetworkStatusHandler({
       const now = Date.now();
       // Debounce: don't refetch if we just did within the debounce interval
       if (now - lastRefetchRef.current < refetchDebounceMs) {
-        console.log(
+        console.debug(
           `[NetworkStatusHandler] Skipping refetch (debounced): ${reason}`
         );
         return;
@@ -76,7 +90,9 @@ export function NetworkStatusHandler({
       lastRefetchRef.current = now;
 
       try {
-        console.log(`[NetworkStatusHandler] Refetching active queries: ${reason}`);
+        console.debug(
+          `[NetworkStatusHandler] Refetching active queries: ${reason}`
+        );
 
         // Refetch all active (observed) queries
         // This will re-execute queries that components are currently watching
@@ -84,9 +100,12 @@ export function NetworkStatusHandler({
           include: "active",
         });
 
-        console.log("[NetworkStatusHandler] Refetch completed successfully");
+        console.debug("[NetworkStatusHandler] Refetch completed successfully");
       } catch (error) {
-        console.error("[NetworkStatusHandler] Error refetching queries:", error);
+        console.error(
+          "[NetworkStatusHandler] Error refetching queries:",
+          error
+        );
 
         // If refetch fails, it might be a network issue
         // The errorLink will handle showing appropriate error messages
@@ -99,17 +118,15 @@ export function NetworkStatusHandler({
    * Handle page resume (visibility change from hidden to visible).
    */
   const handleResume = useCallback(() => {
-    console.log("[NetworkStatusHandler] Page resumed from background");
+    console.debug("[NetworkStatusHandler] Page resumed from background");
 
-    // Only refetch if we have authentication or are in anonymous mode
-    // and refetchOnResume is enabled
     if (!refetchOnResume) {
       return;
     }
 
     // Check if we're online before attempting refetch
     if (!navigator.onLine) {
-      console.log(
+      console.debug(
         "[NetworkStatusHandler] Skipping refetch: device is offline"
       );
       return;
@@ -121,7 +138,7 @@ export function NetworkStatusHandler({
     // Show a subtle notification that we're reconnecting
     if (showToasts) {
       toast.info("Reconnecting...", {
-        toastId: "network-reconnecting",
+        toastId: TOAST_IDS.RECONNECTING,
         autoClose: 1500,
         position: "bottom-right",
       });
@@ -132,7 +149,7 @@ export function NetworkStatusHandler({
    * Handle page hide (visibility change from visible to hidden).
    */
   const handleHide = useCallback(() => {
-    console.log("[NetworkStatusHandler] Page hidden");
+    console.debug("[NetworkStatusHandler] Page hidden");
     // We could optionally pause polling queries here, but for now we just log
   }, []);
 
@@ -140,17 +157,17 @@ export function NetworkStatusHandler({
    * Handle network coming back online.
    */
   const handleOnline = useCallback(() => {
-    console.log("[NetworkStatusHandler] Network came online");
+    console.debug("[NetworkStatusHandler] Network came online");
 
     // Clear the offline toast tracking
     offlineToastShownRef.current = false;
 
     if (showToasts) {
       // Dismiss any offline toast
-      toast.dismiss("network-offline");
+      toast.dismiss(TOAST_IDS.OFFLINE);
 
       toast.success("Connection restored", {
-        toastId: "network-online",
+        toastId: TOAST_IDS.ONLINE,
         autoClose: 3000,
         position: "bottom-right",
       });
@@ -160,7 +177,7 @@ export function NetworkStatusHandler({
       // Slight delay to allow network to stabilize
       setTimeout(() => {
         refetchActiveQueries("network came online");
-      }, 500);
+      }, NETWORK_STABILIZATION_DELAY);
     }
   }, [showToasts, refetchOnOnline, refetchActiveQueries]);
 
@@ -168,13 +185,13 @@ export function NetworkStatusHandler({
    * Handle network going offline.
    */
   const handleOffline = useCallback(() => {
-    console.log("[NetworkStatusHandler] Network went offline");
+    console.debug("[NetworkStatusHandler] Network went offline");
 
     if (showToasts && !offlineToastShownRef.current) {
       offlineToastShownRef.current = true;
 
       toast.warning("You appear to be offline. Some features may not work.", {
-        toastId: "network-offline",
+        toastId: TOAST_IDS.OFFLINE,
         autoClose: false, // Keep visible until online
         position: "bottom-right",
       });
