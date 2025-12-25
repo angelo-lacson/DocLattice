@@ -406,6 +406,11 @@ const ConfirmButton = styled.button<{ $variant: "cancel" | "delete" }>`
     width: 100%;
   }
 
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
   ${(props) =>
     props.$variant === "cancel" &&
     `
@@ -413,7 +418,7 @@ const ConfirmButton = styled.button<{ $variant: "cancel" | "delete" }>`
     border: 1px solid ${color.N4};
     color: ${color.N8};
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: ${color.N3};
     }
   `}
@@ -425,7 +430,7 @@ const ConfirmButton = styled.button<{ $variant: "cancel" | "delete" }>`
     border: none;
     color: white;
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: ${color.R7};
     }
   `}
@@ -671,14 +676,11 @@ export const MessageItem = React.memo(function MessageItem({
     setShowDeleteConfirm(false);
   }, []);
 
-  const handleEdit = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setIsDropdownOpen(false);
-      setIsEditModalOpen(true);
-    },
-    []
-  );
+  const handleEdit = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDropdownOpen(false);
+    setIsEditModalOpen(true);
+  }, []);
 
   const handleDeleteClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -806,7 +808,10 @@ export const MessageItem = React.memo(function MessageItem({
         {/* Message Actions Dropdown */}
         {hasActions && !isDeleted && (
           <>
-            <DropdownBackdrop $isOpen={isDropdownOpen} onClick={closeBackdrop} />
+            <DropdownBackdrop
+              $isOpen={isDropdownOpen}
+              onClick={closeBackdrop}
+            />
             <MessageActionsContainer ref={dropdownRef}>
               <MessageActionsButton
                 aria-label="Message actions"
