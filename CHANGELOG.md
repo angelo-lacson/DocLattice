@@ -5,7 +5,7 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-23
+## [Unreleased] - 2025-12-25
 
 ### Added
 
@@ -26,7 +26,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Debounced refetch to prevent rapid repeated calls
 - Graceful degradation: continues to work if events are not supported
 
+#### Upload Modal Styling Improvements (Issue #696)
+- **New styled components for upload modals** (`frontend/src/components/widgets/modals/UploadModalStyles.ts`): Comprehensive styled-components library with 25+ responsive components including `StyledUploadModal`, `DropZone`, `StepIndicator`, `FileListItem`, and more
+- **Step indicator UI** for DocumentUploadModal showing progress through upload workflow (Select → Details → Corpus)
+- **Modern gradient header** with icon and subtitle for both upload modals
+- **Progress bar integration** showing real-time upload progress with success/error states
+
+### Changed
+
+#### Upload Modal Mobile Responsiveness (Issue #696)
+- **DocumentUploadModal** (`frontend/src/components/widgets/modals/DocumentUploadModal.tsx`): Refactored to use new styled components with responsive grid layout for edit step
+- **BulkUploadModal** (`frontend/src/components/widgets/modals/BulkUploadModal.tsx`): Complete visual overhaul with styled drop zone, file size display, and responsive layout
+- **DocumentUploadList** (`frontend/src/components/documents/DocumentUploadList.tsx`): New drop zone styling with drag-active feedback and pulse animation
+- **DocumentListItem** (`frontend/src/components/documents/DocumentListItem.tsx`): Improved file list items with proper touch targets (56px min-height, 64px on mobile), status icons, and delete button styling
+- **Mobile-first breakpoints**: All upload modal components now have explicit breakpoints at 480px (mobile) and 768px (tablet)
+- **Touch target compliance**: All interactive elements meet 44px minimum touch target size for mobile accessibility
+- **Responsive action buttons**: Modal actions stack vertically on mobile for full-width tappable buttons
+- **Custom scrollbar styling**: File list has styled scrollbars for visual polish
+
+### Technical Details
+
+#### Upload Modal Architecture
+- Styled-components with transient props (`$active`, `$selected`, `$status`) to prevent DOM attribute warnings
+- CSS keyframe animations for drag-active pulse effect and fade-in modal transitions
+- Gradient backgrounds using `linear-gradient(135deg, #667eea 0%, #764ba2 100%)` for visual consistency
+- Semantic UI React components wrapped with styled-components for enhanced styling while preserving functionality
+
 ### Added
+
+#### Improved Inline Reference Cards for Mentions (Issue #689)
+- **Annotation mentions** now display the first ~24 characters of annotation text instead of cryptic IDs
+  - Full annotation text accessible via hover tooltip
+  - Falls back to label type if no raw text available
+  - Location: `frontend/src/components/threads/MentionChip.tsx:212-229`
+- **Document mentions** show document title with corpus context (e.g., "Document Title (in Corpus Name)")
+  - Location: `frontend/src/components/threads/MessageComposer.tsx:361-375`
+- **Corpus mentions** show corpus name instead of `@corpus:slug` format
+  - Location: `frontend/src/components/threads/MessageComposer.tsx:351-359`
+- **Shared constant** `MENTION_PREVIEW_LENGTH = 24` for consistent truncation across components
+  - Location: `frontend/src/assets/configurations/constants.ts:6-8`
+- **Text sanitization utility** for user-generated content to prevent XSS
+  - Location: `frontend/src/utils/textSanitization.ts`
+  - Unit tests: `frontend/src/utils/textSanitization.test.ts`
+- **Component tests** for MentionChip covering all resource types and text truncation
+  - Location: `frontend/tests/mention-chip.spec.tsx`
+
+### Changed
+
+#### MentionChip Component Improvements (Issue #689)
+- Extended `MentionChip` to support ANNOTATION type with green gradient styling
+- Added default cases to all switch statements for TypeScript exhaustiveness checking
+- Refactored `handleClick` to `handleActivation` accepting `React.MouseEvent | React.KeyboardEvent` union type (fixes unsafe `as any` assertion)
+- Sanitized user-generated annotation text before display to prevent XSS
 
 #### Permanent Deletion (Empty Trash) Functionality (PR #707)
 - **Core deletion logic** (`opencontractserver/documents/versioning.py:617-760`):
@@ -87,6 +138,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive documentation** (`docs/architecture/social-media-previews.md`): Architecture overview, deployment guide, and testing instructions
 
 ### Fixed
+
+#### New Corpus Modal Mobile Issues (Issue #702)
+- **Mobile form data loss in CorpusModal** (`frontend/src/components/corpuses/CorpusModal.tsx:406-418`):
+  - Fixed fields clearing when typing on mobile by tracking modal open transitions with `prevOpenRef` instead of resetting form on every render
+  - The original `useEffect` was running on every `corpus` or `open` change, causing form state to reset during keyboard/focus events on mobile
+- **Slow embedder loading** (`frontend/src/components/widgets/CRUD/EmbedderSelector.tsx:43-46`):
+  - Changed Apollo query to `cache-first` policy since embedders rarely change
+  - Prevents unnecessary network requests when reopening CorpusModal
+- **Cramped mobile layout** (`frontend/src/components/corpuses/CorpusModal.tsx:327-333`, `frontend/src/components/widgets/file-controls/FilePreviewAndUpload.tsx:54-57,129-135`):
+  - Reduced icon upload area max-width from 200px to 150px on mobile
+  - Reduced ImagePreview height from 150px to 100px on mobile
+  - Made EditBadge smaller and better positioned on mobile viewports
 
 #### Production Deployment
 - **Missing COLLECTFAST_STRATEGY for GCP storage backend** (`config/settings/base.py:436`): Added `collectfast.strategies.gcloud.GoogleCloudStrategy` for GCP deployments. Previously, `collectfast` was installed in production but `COLLECTFAST_STRATEGY` was only configured for AWS, causing `collectstatic` to fail with `ImproperlyConfigured: No strategy configured` error when using `STORAGE_BACKEND=GCP`.

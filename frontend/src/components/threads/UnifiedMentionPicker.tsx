@@ -351,12 +351,15 @@ export const UnifiedMentionPicker = forwardRef<
           <CategoryHeader>Annotations</CategoryHeader>
           {annotations.map((resource) => {
             const globalIndex = resources.indexOf(resource);
+            // Get full annotation text for tooltip (Issue #689)
+            const fullAnnotationText = resource.annotation?.rawText;
             return (
               <MenuItem
                 key={resource.id}
                 $isSelected={globalIndex === selected}
                 onClick={() => onSelect(resource)}
                 onMouseEnter={() => setSelected(globalIndex)}
+                title={fullAnnotationText || undefined}
               >
                 <IconContainer $type="annotation">
                   {getIcon("annotation")}

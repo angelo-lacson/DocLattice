@@ -1,8 +1,15 @@
-import React, { useCallback, useRef } from "react";
-import { Icon, Button, List, Segment, Header } from "semantic-ui-react";
+import React, { useCallback, useMemo, useRef } from "react";
+import { Icon, List } from "semantic-ui-react";
 import { DropEvent, FileRejection, useDropzone } from "react-dropzone";
 import { ContractListItem } from "./DocumentListItem";
 import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
+import {
+  DropZone,
+  DropZoneIcon,
+  DropZoneText,
+  DropZoneButton,
+  FileListContainer,
+} from "../widgets/modals/UploadModalStyles";
 
 interface DocumentUploadListProps {
   documents: FileUploadPackageProps[];
@@ -42,8 +49,14 @@ export function DocumentUploadList(props: DocumentUploadListProps) {
     [props]
   );
 
-  const { getRootProps, getInputProps } = useDropzone({
-    disabled: documents && Object.keys(documents).length > 0,
+  // Memoize disabled state to prevent unnecessary dropzone re-initialization
+  const isDisabled = useMemo(
+    () => documents && documents.length > 0,
+    [documents]
+  );
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    disabled: isDisabled,
     onDrop,
   });
 
@@ -81,35 +94,32 @@ export function DocumentUploadList(props: DocumentUploadListProps) {
 
   return (
     <div style={{ height: "100%" }}>
-      <div
-        {...getRootProps()}
-        style={{
-          height: "40vh",
-          width: "100%",
-          padding: "1rem",
-        }}
-      >
+      <div {...getRootProps()}>
         {documents && documents.length > 0 ? (
-          <Segment
-            style={{ height: "100%", width: "100%", overflowY: "scroll" }}
-          >
-            <List celled>{grid}</List>
-          </Segment>
+          <FileListContainer>
+            <List divided relaxed>
+              {grid}
+            </List>
+          </FileListContainer>
         ) : (
-          <Segment
-            placeholder
-            style={{ height: "100%", width: "100%", overflowY: "scroll" }}
-          >
-            <Header icon>
+          <DropZone $isDragActive={isDragActive} $hasFiles={false}>
+            <DropZoneIcon>
               <Icon name="file pdf outline" />
-              Drag Documents Here or Click "Add Document(s)" to Upload
-              <br />
-              <em>(Only *.pdf files supported for now)</em>
-            </Header>
-            <Button primary onClick={() => fileInputRef.current.click()}>
-              Add Document(s)
-            </Button>
-          </Segment>
+            </DropZoneIcon>
+            <DropZoneText>
+              <div className="primary-text">
+                {isDragActive
+                  ? "Drop your PDFs here..."
+                  : "Drag & drop PDF files here"}
+              </div>
+              <div className="secondary-text">
+                or click the button below to browse
+              </div>
+            </DropZoneText>
+            <DropZoneButton onClick={() => fileInputRef.current.click()}>
+              <Icon name="folder open" /> Browse Files
+            </DropZoneButton>
+          </DropZone>
         )}
         <input
           accept="application/pdf"
