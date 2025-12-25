@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
+import { Database, FileText, Tag, User } from "lucide-react";
 import { color } from "../../theme/colors";
+import { MentionedResourceType } from "../../types/graphql-api";
 
 const MarkdownContainer = styled.div`
   p {
@@ -52,7 +54,7 @@ const MentionLink = styled.a<{ $type: string }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
+  padding: 2px 8px 2px 6px;
   border-radius: 4px;
   font-weight: 500;
   cursor: pointer;
@@ -60,6 +62,7 @@ const MentionLink = styled.a<{ $type: string }>`
   text-decoration: none;
   vertical-align: middle;
   margin: 0 2px;
+  font-size: 0.9em;
 
   background: ${(props) => {
     if (props.$type === "user")
@@ -69,7 +72,7 @@ const MentionLink = styled.a<{ $type: string }>`
     if (props.$type === "document")
       return "linear-gradient(135deg, #f093fb15 0%, #f5576c15 100%)";
     if (props.$type === "annotation")
-      return "linear-gradient(135deg, #fbc2eb15 0%, #a6c1ee15 100%)";
+      return "linear-gradient(135deg, #43e97b15 0%, #38f9d715 100%)";
     return "linear-gradient(135deg, #e0e0e015 0%, #c0c0c015 100%)";
   }};
 
@@ -78,7 +81,7 @@ const MentionLink = styled.a<{ $type: string }>`
       if (props.$type === "user") return "#10b98160";
       if (props.$type === "corpus") return color.P4;
       if (props.$type === "document") return "#f5576c40";
-      if (props.$type === "annotation") return "#a6c1ee80";
+      if (props.$type === "annotation") return "#38f9d780";
       return color.N4;
     }};
 
@@ -86,7 +89,7 @@ const MentionLink = styled.a<{ $type: string }>`
     if (props.$type === "user") return "#0d9488";
     if (props.$type === "corpus") return color.P8;
     if (props.$type === "document") return "#c41e3a";
-    if (props.$type === "annotation") return "#4a5baf";
+    if (props.$type === "annotation") return "#0d9488";
     return color.N8;
   }};
 
@@ -99,7 +102,7 @@ const MentionLink = styled.a<{ $type: string }>`
       if (props.$type === "document")
         return "linear-gradient(135deg, #f093fb25 0%, #f5576c25 100%)";
       if (props.$type === "annotation")
-        return "linear-gradient(135deg, #fbc2eb25 0%, #a6c1ee25 100%)";
+        return "linear-gradient(135deg, #43e97b25 0%, #38f9d725 100%)";
       return "linear-gradient(135deg, #e0e0e025 0%, #c0c0c025 100%)";
     }};
 
@@ -107,7 +110,7 @@ const MentionLink = styled.a<{ $type: string }>`
       if (props.$type === "user") return "#10b981";
       if (props.$type === "corpus") return color.P6;
       if (props.$type === "document") return "#f5576c80";
-      if (props.$type === "annotation") return "#a6c1ee";
+      if (props.$type === "annotation") return "#38f9d7";
       return color.N6;
     }};
 
@@ -118,6 +121,13 @@ const MentionLink = styled.a<{ $type: string }>`
   &:active {
     transform: translateY(0);
   }
+`;
+
+const MentionIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 `;
 
 const RegularLink = styled.a`
@@ -131,6 +141,11 @@ const RegularLink = styled.a`
 
 interface MarkdownMessageRendererProps {
   content: string;
+  /**
+   * Optional mentioned resources from backend (Issue #689)
+   * Provides full metadata for rich tooltips on annotation mentions
+   */
+  mentionedResources?: MentionedResourceType[];
 }
 
 /**
@@ -138,11 +153,20 @@ interface MarkdownMessageRendererProps {
  * Detects mention links by their URL pattern and styles them differently
  *
  * Part of Issue #623 - @ Mentions Feature (Extended)
+ * Updated for Issue #689 - Rich tooltips for annotation mentions
  */
 export function MarkdownMessageRenderer({
   content,
+  mentionedResources = [],
 }: MarkdownMessageRendererProps) {
   const navigate = useNavigate();
+
+  // Build URL → Resource lookup map for rich tooltips (Issue #689)
+  const resourceByUrl = useMemo(() => {
+    const map = new Map<string, MentionedResourceType>();
+    mentionedResources.forEach((r) => map.set(r.url, r));
+    return map;
+  }, [mentionedResources]);
 
   /**
    * Detect mention type from URL pattern
@@ -168,6 +192,71 @@ export function MarkdownMessageRenderer({
     return null;
   };
 
+  /**
+   * Get icon component for mention type (Issue #689)
+   */
+  const getMentionIcon = (type: string): React.ReactNode => {
+    switch (type) {
+      case "user":
+        return <User size={14} />;
+      case "corpus":
+        return <Database size={14} />;
+      case "document":
+        return <FileText size={14} />;
+      case "annotation":
+        return <Tag size={14} />;
+      default:
+        return null;
+    }
+  };
+
+  /**
+   * Get tooltip text for mention (Issue #689)
+   * Uses rich metadata from mentionedResources when available
+   */
+  const getMentionTooltip = (
+    type: string,
+    text: string,
+    resource?: MentionedResourceType
+  ): string => {
+    // For annotations with rich metadata, build a detailed tooltip
+    if (type === "annotation" && resource?.rawText) {
+      const parts: string[] = [];
+
+      // Show full annotation text (truncated if very long)
+      const rawText = resource.rawText;
+      const truncatedText =
+        rawText.length > 200 ? `${rawText.slice(0, 200)}...` : rawText;
+      parts.push(`"${truncatedText}"`);
+
+      // Add label if available
+      if (resource.annotationLabel) {
+        parts.push(`Label: ${resource.annotationLabel}`);
+      }
+
+      // Add document context if available
+      if (resource.document?.title) {
+        parts.push(`Document: ${resource.document.title}`);
+      }
+
+      return parts.join("\n");
+    }
+
+    // Fallback to simple tooltips for other types
+    switch (type) {
+      case "user":
+        return `User: ${text}`;
+      case "corpus":
+        return `Corpus: ${resource?.title || text}`;
+      case "document":
+        return `Document: ${resource?.title || text}`;
+      case "annotation":
+        return `Annotation: ${text}`;
+      default:
+        return text;
+    }
+  };
+
   return (
     <MarkdownContainer>
       <ReactMarkdown
@@ -179,11 +268,23 @@ export function MarkdownMessageRenderer({
             const mentionType = detectMentionType(href || "");
 
             if (mentionType) {
-              // This is a mention link - style it specially
+              // Extract text content for tooltip fallback
+              const textContent =
+                typeof children === "string"
+                  ? children
+                  : Array.isArray(children)
+                  ? children.join("")
+                  : String(children);
+
+              // Look up rich metadata from mentionedResources (Issue #689)
+              const resource = href ? resourceByUrl.get(href) : undefined;
+
+              // This is a mention link - style it specially with icon (Issue #689)
               return (
                 <MentionLink
                   href={href}
                   $type={mentionType}
+                  title={getMentionTooltip(mentionType, textContent, resource)}
                   onClick={(e) => {
                     e.preventDefault();
                     if (href) {
@@ -192,6 +293,7 @@ export function MarkdownMessageRenderer({
                   }}
                   {...props}
                 >
+                  <MentionIcon>{getMentionIcon(mentionType)}</MentionIcon>
                   {children}
                 </MentionLink>
               );

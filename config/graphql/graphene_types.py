@@ -2194,21 +2194,24 @@ class CorpusStatsType(graphene.ObjectType):
 
 class MentionedResourceType(graphene.ObjectType):
     """
-    Represents a corpus or document mentioned in a message using @ syntax.
+    Represents a corpus, document, or annotation mentioned in a message.
 
-    Examples:
+    Mention patterns:
       @corpus:legal-contracts
       @document:contract-template
       @corpus:legal-contracts/document:contract-template
+      [text](/d/.../doc?ann=id) → Annotation mention via markdown link
 
+    For annotations, includes full metadata for rich tooltip display.
     Permission-safe: Only returns resources visible to the requesting user.
     """
 
     type = graphene.String(
-        required=True, description='Resource type: "corpus" or "document"'
+        required=True,
+        description='Resource type: "corpus", "document", or "annotation"',
     )
     id = graphene.ID(required=True, description="Global ID of the resource")
-    slug = graphene.String(required=True, description="URL-safe slug of the resource")
+    slug = graphene.String(description="URL-safe slug (null for annotations)")
     title = graphene.String(required=True, description="Display title of the resource")
     url = graphene.String(
         required=True, description="Frontend URL path to navigate to the resource"
@@ -2216,6 +2219,16 @@ class MentionedResourceType(graphene.ObjectType):
     corpus = graphene.Field(
         lambda: MentionedResourceType,
         description="Parent corpus context (for documents within a corpus)",
+    )
+
+    # Annotation-specific fields (Issue #689)
+    raw_text = graphene.String(description="Full annotation text content")
+    annotation_label = graphene.String(
+        description="Annotation label name (e.g., 'Section Header', 'Definition')"
+    )
+    document = graphene.Field(
+        lambda: MentionedResourceType,
+        description="Parent document (for annotations)",
     )
 
 
@@ -2285,11 +2298,48 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
           @corpus:slug → Corpus
           @document:slug → Document
           @corpus:corpus-slug/document:doc-slug → Document in Corpus
+          [text](/d/.../doc?ann=id) → Annotation (via markdown link)
 
         SECURITY: Uses .visible_to_user() to enforce permissions.
         Mentions to inaccessible resources are silently ignored.
         """
+        import base64
         import re
+        from urllib.parse import parse_qs, urlparse
+
+        def _extract_annotation_id(url: str):
+            """
+            Extract annotation ID from URL query params.
+
+            Handles both plain IDs and Base64-encoded Relay global IDs.
+
+            Examples:
+                /d/user/doc?ann=123 → 123
+                /d/user/corpus/doc?ann=QW5ub3RhdGlvblR5cGU6Mw== → 3
+            """
+            parsed = urlparse(url)
+            query = parse_qs(parsed.query)
+            ann_ids = query.get("ann", [])
+
+            if not ann_ids:
+                return None
+
+            ann_id = ann_ids[0]
+
+            # Handle Relay-style Base64 global IDs (e.g., "QW5ub3RhdGlvblR5cGU6Mw==")
+            try:
+                decoded = base64.b64decode(ann_id).decode("utf-8")
+                if ":" in decoded:
+                    # Format: "AnnotationType:123" → extract "123"
+                    return int(decoded.split(":")[1])
+            except Exception:
+                pass
+
+            # Already a plain ID
+            try:
+                return int(ann_id)
+            except ValueError:
+                return None
 
         content = self.content or ""
         mentions = []
@@ -2383,6 +2433,43 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                     )
                 )
             except Document.DoesNotExist:
+                # Permission denied or doesn't exist - silently ignore
+                continue
+
+        # Pattern 4: Annotation mentions via markdown links (Issue #689)
+        # Matches: [any text](/d/path?...ann=id...)
+        # Handles both corpus-scoped and non-corpus-scoped document URLs
+        link_pattern = r"\[([^\]]+)\]\((/d/[^)]+\?[^)]*ann=[^)]+)\)"
+
+        for _link_text, url in re.findall(link_pattern, content):
+            ann_id = _extract_annotation_id(url)
+            if not ann_id:
+                continue
+
+            try:
+                annotation = Annotation.objects.visible_to_user(user).get(id=ann_id)
+                doc = annotation.document
+                label = annotation.annotation_label
+
+                mentions.append(
+                    MentionedResourceType(
+                        type="annotation",
+                        id=annotation.id,
+                        slug=None,  # Annotations don't have slugs
+                        title=label.text if label else "Annotation",
+                        url=url,  # Preserve original URL for navigation
+                        raw_text=annotation.raw_text,
+                        annotation_label=label.text if label else None,
+                        document=MentionedResourceType(
+                            type="document",
+                            id=doc.id,
+                            slug=doc.slug,
+                            title=doc.title,
+                            url=f"/d/{doc.creator.slug}/{doc.slug}",
+                        ),
+                    )
+                )
+            except Annotation.DoesNotExist:
                 # Permission denied or doesn't exist - silently ignore
                 continue
 
