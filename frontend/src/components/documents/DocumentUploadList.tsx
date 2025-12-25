@@ -49,7 +49,7 @@ export function DocumentUploadList(props: DocumentUploadListProps) {
     [props]
   );
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     disabled: documents && Object.keys(documents).length > 0,
     onDrop,
   });
@@ -85,13 +85,6 @@ export function DocumentUploadList(props: DocumentUploadListProps) {
       onDrop(files, [], event);
     }
   }
-
-  const { isDragActive } = useDropzone({
-    disabled: documents && Object.keys(documents).length > 0,
-    onDrop,
-    noClick: true,
-    noKeyboard: true,
-  });
 
   return (
     <div style={{ height: "100%" }}>

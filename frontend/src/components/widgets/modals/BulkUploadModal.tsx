@@ -178,10 +178,7 @@ export const BulkUploadModal = () => {
       toast.error(`Upload failed: ${errorMessage}`);
       setUploadProgress(0); // Reset progress on error
     } finally {
-      // Don't set loading to false immediately if progress is 100,
-      // let the success/error handling manage it or add a slight delay.
-      // setLoading(false); // Moved setting loading false to handleClose or error block
-      if (!loading) setLoading(false); // Ensure loading is false if an error occurred before finally
+      setLoading(false);
     }
   };
 
@@ -255,7 +252,9 @@ export const BulkUploadModal = () => {
                 <DropZoneButton
                   onClick={(e: React.MouseEvent) => {
                     e.stopPropagation();
-                    handleDropZoneClick();
+                    if (!loading && fileInputRef.current) {
+                      fileInputRef.current.click();
+                    }
                   }}
                 >
                   <Icon name="exchange" /> Change File

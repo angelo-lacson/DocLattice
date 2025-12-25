@@ -589,49 +589,6 @@ export const ActionButton = styled(Button)<{
   }
 `;
 
-// Bulk upload specific styles
-export const BulkUploadContent = styled.div`
-  .file-input-wrapper {
-    position: relative;
-    margin-bottom: 1.5rem;
-
-    input[type="file"] {
-      position: absolute;
-      left: 0;
-      top: 0;
-      opacity: 0;
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
-    }
-  }
-
-  .selected-file-info {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem;
-    background: #f8f9fa;
-    border-radius: 8px;
-    margin-top: 0.75rem;
-
-    .icon {
-      color: #667eea;
-    }
-
-    .file-name {
-      flex: 1;
-      font-weight: 500;
-      color: #495057;
-    }
-
-    .file-size {
-      font-size: 0.875rem;
-      color: #868e96;
-    }
-  }
-`;
-
 export const FieldLabel = styled.label`
   display: block;
   font-weight: 500;

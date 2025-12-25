@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { gql, useReactiveVar } from "@apollo/client";
-import { Button, Icon, Segment, Header } from "semantic-ui-react";
+import { Icon, Header } from "semantic-ui-react";
 import _ from "lodash";
 
 import Form from "@rjsf/semantic-ui";
@@ -510,9 +510,12 @@ export function DocumentUploadModal(props: DocumentUploadModalProps) {
               </ActionButton>
             ) : (
               <>
-                <Button basic onClick={() => uploadFiles()}>
+                <ActionButton
+                  $variant="secondary"
+                  onClick={() => uploadFiles()}
+                >
                   Skip Corpus
-                </Button>
+                </ActionButton>
                 <ActionButton
                   $variant="primary"
                   onClick={() => setStep("corpus")}
@@ -528,9 +531,9 @@ export function DocumentUploadModal(props: DocumentUploadModalProps) {
             <ActionButton $variant="secondary" onClick={() => setStep("edit")}>
               <Icon name="arrow left" /> Back
             </ActionButton>
-            <Button basic onClick={() => uploadFiles()}>
+            <ActionButton $variant="secondary" onClick={() => uploadFiles()}>
               Skip
-            </Button>
+            </ActionButton>
             <ActionButton $variant="primary" onClick={() => uploadFiles()}>
               <Icon name="cloud upload" /> Upload
             </ActionButton>
