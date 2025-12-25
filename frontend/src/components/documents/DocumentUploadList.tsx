@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import { Icon, List } from "semantic-ui-react";
 import { DropEvent, FileRejection, useDropzone } from "react-dropzone";
 import { ContractListItem } from "./DocumentListItem";
@@ -49,8 +49,14 @@ export function DocumentUploadList(props: DocumentUploadListProps) {
     [props]
   );
 
+  // Memoize disabled state to prevent unnecessary dropzone re-initialization
+  const isDisabled = useMemo(
+    () => documents && documents.length > 0,
+    [documents]
+  );
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    disabled: documents && Object.keys(documents).length > 0,
+    disabled: isDisabled,
     onDrop,
   });
 

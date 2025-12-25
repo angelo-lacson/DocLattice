@@ -172,8 +172,11 @@ export const BulkUploadModal = () => {
       }
     } catch (err: any) {
       console.error("Upload error:", err);
+      // Extract GraphQL errors explicitly, falling back to general message
       const errorMessage =
-        err.message || "An unexpected error occurred during upload.";
+        err.graphQLErrors?.[0]?.message ||
+        err.message ||
+        "An unexpected error occurred during upload.";
       setError(errorMessage);
       toast.error(`Upload failed: ${errorMessage}`);
       setUploadProgress(0); // Reset progress on error
@@ -231,11 +234,13 @@ export const BulkUploadModal = () => {
             style={{ marginBottom: "1.5rem" }}
           >
             <input
+              id="bulk-upload-file-input"
               ref={fileInputRef}
               type="file"
               accept=".zip,application/zip"
               onChange={handleFileChange}
               disabled={loading}
+              aria-label="Select ZIP file for bulk upload"
               style={{ display: "none" }}
             />
             {selectedFile ? (
