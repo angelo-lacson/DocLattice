@@ -43,10 +43,11 @@ vi.mock("../../../hooks/useNetworkStatus", () => ({
     enabled?: boolean;
   }) => {
     // Store callbacks so tests can trigger them
-    mockOnResume.mockImplementation(options.onResume);
-    mockOnHide.mockImplementation(options.onHide);
-    mockOnOnline.mockImplementation(options.onOnline);
-    mockOnOffline.mockImplementation(options.onOffline);
+    // Use arrow functions to safely call optional callbacks
+    mockOnResume.mockImplementation(() => options.onResume?.());
+    mockOnHide.mockImplementation(() => options.onHide?.());
+    mockOnOnline.mockImplementation(() => options.onOnline?.());
+    mockOnOffline.mockImplementation(() => options.onOffline?.());
 
     return {
       status: {
