@@ -50,6 +50,11 @@ const ImagePreview = styled.img`
   margin: 0;
   padding: 0.75rem;
   display: block;
+
+  @media (max-width: 768px) {
+    height: 100px;
+    padding: 0.5rem;
+  }
 `;
 
 const FilePreview = styled.div`
@@ -124,6 +129,14 @@ const EditBadge = styled.div`
 
   &:hover {
     opacity: 1;
+  }
+
+  @media (max-width: 768px) {
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.7rem;
+    gap: 0.25rem;
   }
 `;
 
