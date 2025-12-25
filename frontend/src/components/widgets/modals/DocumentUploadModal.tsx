@@ -1,20 +1,11 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { gql, useReactiveVar } from "@apollo/client";
-import {
-  Button,
-  Modal,
-  Grid,
-  Divider,
-  Segment,
-  Header,
-  Icon,
-} from "semantic-ui-react";
+import { Icon, Header } from "semantic-ui-react";
 import _ from "lodash";
 
 import Form from "@rjsf/semantic-ui";
 import validator from "@rjsf/validator-ajv8";
 import { DocumentUploadList } from "../../documents/DocumentUploadList";
-import { HorizontallyCenteredDiv } from "../../layout/Wrappers";
 import { newDocForm_Schema, newDocForm_Ui_Schema } from "../../forms/schemas";
 import {
   ApolloError,
@@ -39,6 +30,20 @@ import { CorpusSelector } from "../../corpuses/CorpusSelector";
 import { uploadModalPreloadedFiles } from "../../../graphql/cache";
 import { GET_DOCUMENTS } from "../../../graphql/queries";
 import { GET_CORPUS_FOLDERS } from "../../../graphql/queries/folders";
+import {
+  StyledUploadModal,
+  ModalHeader,
+  ModalHeaderContent,
+  StepIndicator,
+  Step,
+  StepConnector,
+  EditSection,
+  EditPanel,
+  EditPanelHeader,
+  FormContainer,
+  UploadProgress,
+  ActionButton,
+} from "./UploadModalStyles";
 
 export const NOT_STARTED = "NOT_STARTED";
 export const SUCCESS = "SUCCESS";
@@ -65,7 +70,7 @@ interface RightColProps {
 function RightCol({ files, selected_file_num, handleChange }: RightColProps) {
   if (files && files.length > 0 && selected_file_num >= 0) {
     return (
-      <Segment style={{ height: "100%", width: "100%", padding: "2rem" }}>
+      <FormContainer>
         <Form
           schema={newDocForm_Schema}
           uiSchema={newDocForm_Ui_Schema}
@@ -75,19 +80,18 @@ function RightCol({ files, selected_file_num, handleChange }: RightColProps) {
         >
           <></>
         </Form>
-      </Segment>
+      </FormContainer>
     );
   }
   return (
-    <Segment
-      placeholder
-      style={{ height: "100%", width: "100%", padding: "2rem" }}
-    >
+    <FormContainer placeholder>
       <Header icon>
-        <Icon name="settings" />
-        Click on a document to update default title and descriptions.
+        <Icon name="edit outline" style={{ color: "#667eea" }} />
+        <Header.Content style={{ color: "#495057", fontSize: "1rem" }}>
+          Click on a document to edit its details
+        </Header.Content>
       </Header>
-    </Segment>
+    </FormContainer>
   );
 }
 
@@ -356,38 +360,27 @@ export function DocumentUploadModal(props: DocumentUploadModalProps) {
   );
 
   const renderEditStep = () => (
-    <Grid columns={2} stackable textAlign="center">
-      <Divider vertical>Details:</Divider>
-      <Grid.Row verticalAlign="middle">
-        <Grid.Column style={{ paddingRight: "2rem" }}>
-          <DocumentUploadList
-            selected_file_num={selected_file_num}
-            documents={files}
-            statuses={upload_state}
-            onAddFile={addFile}
-            onRemove={removeFile}
-            onSelect={toggleSelectedDoc}
-          />
-        </Grid.Column>
-        <Grid.Column style={{ paddingLeft: "2rem" }}>
-          <div style={{ height: "100%", width: "100%" }}>
-            <div
-              style={{
-                height: "40vh",
-                width: "100%",
-                padding: "1rem",
-              }}
-            >
-              <RightCol
-                files={files}
-                selected_file_num={selected_file_num}
-                handleChange={handleChange}
-              />
-            </div>
-          </div>
-        </Grid.Column>
-      </Grid.Row>
-    </Grid>
+    <EditSection>
+      <EditPanel>
+        <EditPanelHeader>Selected Files</EditPanelHeader>
+        <DocumentUploadList
+          selected_file_num={selected_file_num}
+          documents={files}
+          statuses={upload_state}
+          onAddFile={addFile}
+          onRemove={removeFile}
+          onSelect={toggleSelectedDoc}
+        />
+      </EditPanel>
+      <EditPanel>
+        <EditPanelHeader>Document Details</EditPanelHeader>
+        <RightCol
+          files={files}
+          selected_file_num={selected_file_num}
+          handleChange={handleChange}
+        />
+      </EditPanel>
+    </EditSection>
   );
 
   const renderCorpusStep = () => (
@@ -415,78 +408,138 @@ export function DocumentUploadModal(props: DocumentUploadModalProps) {
     </div>
   );
 
+  const getStepNumber = () => {
+    switch (step) {
+      case "upload":
+        return 1;
+      case "edit":
+        return 2;
+      case "corpus":
+        return 3;
+      case "uploading":
+        return 4;
+      default:
+        return 1;
+    }
+  };
+
+  const currentStep = getStepNumber();
+
   return (
-    <Modal open={open} onClose={() => onClose()}>
-      <HorizontallyCenteredDiv>
-        <div style={{ marginTop: "1rem", textAlign: "left" }}>
-          <Header as="h2">
-            <Icon name="file pdf outline" />
-            <Header.Content>
-              Upload Your Documents
-              <Header.Subheader>
-                {step === "upload" && "Select New Document Files to Upload"}
-                {step === "edit" && "Edit Document Details"}
-                {step === "corpus" && "Select a Corpus (Optional)"}
-                {step === "uploading" && "Uploading Documents"}
-              </Header.Subheader>
-            </Header.Content>
-          </Header>
-        </div>
-      </HorizontallyCenteredDiv>
-      <Modal.Content>
+    <StyledUploadModal open={open} onClose={() => onClose()}>
+      <StyledUploadModal.Header>
+        <ModalHeader>
+          <Icon name="cloud upload" size="large" />
+          <ModalHeaderContent>
+            <span className="title">Upload Documents</span>
+            <span className="subtitle">
+              {step === "upload" && "Select PDF files to upload"}
+              {step === "edit" && "Review and edit document details"}
+              {step === "corpus" && "Optionally add to a corpus"}
+              {step === "uploading" && "Processing your uploads..."}
+            </span>
+          </ModalHeaderContent>
+        </ModalHeader>
+      </StyledUploadModal.Header>
+      <StyledUploadModal.Content>
+        {!corpusId && step !== "uploading" && (
+          <StepIndicator>
+            <Step $active={currentStep === 1} $completed={currentStep > 1}>
+              <Icon name="file" /> Select
+            </Step>
+            <StepConnector $completed={currentStep > 1} />
+            <Step $active={currentStep === 2} $completed={currentStep > 2}>
+              <Icon name="edit" /> Details
+            </Step>
+            <StepConnector $completed={currentStep > 2} />
+            <Step $active={currentStep === 3} $completed={currentStep > 3}>
+              <Icon name="folder open" /> Corpus
+            </Step>
+          </StepIndicator>
+        )}
+        {corpusId && step !== "uploading" && (
+          <StepIndicator>
+            <Step $active={currentStep === 1} $completed={currentStep > 1}>
+              <Icon name="file" /> Select
+            </Step>
+            <StepConnector $completed={currentStep > 1} />
+            <Step $active={currentStep === 2} $completed={currentStep > 2}>
+              <Icon name="edit" /> Details
+            </Step>
+          </StepIndicator>
+        )}
+        {step === "uploading" && (
+          <UploadProgress
+            percent={
+              (upload_state.filter((s) => s === SUCCESS || s === FAILED)
+                .length /
+                upload_state.length) *
+              100
+            }
+            indicating={upload_status === UPLOADING}
+            success={upload_status === SUCCESS}
+            error={upload_status === FAILED}
+            progress
+          />
+        )}
         {step === "upload" && renderUploadStep()}
         {step === "edit" && renderEditStep()}
         {step === "corpus" && !corpusId && renderCorpusStep()}
         {step === "uploading" && renderUploadingStep()}
-      </Modal.Content>
-      <Modal.Actions>
-        <Button basic color="grey" onClick={() => onClose()}>
+      </StyledUploadModal.Content>
+      <StyledUploadModal.Actions>
+        <ActionButton $variant="secondary" onClick={() => onClose()}>
           <Icon name="remove" /> Close
-        </Button>
+        </ActionButton>
         {step === "upload" && files.length > 0 && (
-          <Button color="green" inverted onClick={() => setStep("edit")}>
-            <Icon name="checkmark" /> Next
-          </Button>
+          <ActionButton $variant="primary" onClick={() => setStep("edit")}>
+            Continue <Icon name="arrow right" />
+          </ActionButton>
         )}
         {step === "edit" && (
           <>
-            <Button color="grey" inverted onClick={() => setStep("upload")}>
+            <ActionButton
+              $variant="secondary"
+              onClick={() => setStep("upload")}
+            >
               <Icon name="arrow left" /> Back
-            </Button>
+            </ActionButton>
             {corpusId ? (
-              <Button color="green" inverted onClick={() => uploadFiles()}>
-                <Icon name="checkmark" /> Upload
-              </Button>
+              <ActionButton $variant="primary" onClick={() => uploadFiles()}>
+                <Icon name="cloud upload" /> Upload
+              </ActionButton>
             ) : (
               <>
-                <Button color="blue" inverted onClick={() => uploadFiles()}>
-                  <Icon name="arrow right" /> Skip
-                </Button>
-                <Button
-                  color="green"
-                  inverted
+                <ActionButton
+                  $variant="secondary"
+                  onClick={() => uploadFiles()}
+                >
+                  Skip Corpus
+                </ActionButton>
+                <ActionButton
+                  $variant="primary"
                   onClick={() => setStep("corpus")}
                 >
-                  <Icon name="checkmark" /> Next
-                </Button>
+                  Continue <Icon name="arrow right" />
+                </ActionButton>
               </>
             )}
           </>
         )}
         {step === "corpus" && !corpusId && (
           <>
-            <Button color="grey" inverted onClick={() => setStep("edit")}>
+            <ActionButton $variant="secondary" onClick={() => setStep("edit")}>
               <Icon name="arrow left" /> Back
-            </Button>
-            <Button color="blue" inverted onClick={() => uploadFiles()}>
-              <Icon name="arrow right" /> Skip
-            </Button>
-            <Button color="green" inverted onClick={() => uploadFiles()}>
-              <Icon name="checkmark" /> Upload
-            </Button>
+            </ActionButton>
+            <ActionButton $variant="secondary" onClick={() => uploadFiles()}>
+              Skip
+            </ActionButton>
+            <ActionButton $variant="primary" onClick={() => uploadFiles()}>
+              <Icon name="cloud upload" /> Upload
+            </ActionButton>
           </>
         )}
-      </Modal.Actions>
-    </Modal>
+      </StyledUploadModal.Actions>
+    </StyledUploadModal>
   );
 }
