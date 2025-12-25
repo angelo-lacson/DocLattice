@@ -24,12 +24,21 @@ import {
   UpdateMessageOutput,
 } from "../../graphql/mutations";
 
+/**
+ * Props for the EditMessageModal component.
+ */
 interface EditMessageModalProps {
+  /** Whether the modal is currently open */
   isOpen: boolean;
+  /** Callback to close the modal */
   onClose: () => void;
+  /** Global ID of the message being edited */
   messageId: string;
+  /** Initial content to populate the editor with */
   initialContent: string;
+  /** Corpus ID for mention context (enables @-mentions) */
   corpusId?: string;
+  /** Callback fired after successful message update */
   onSuccess?: () => void;
 }
 
@@ -271,7 +280,9 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
         onSuccess?.();
         onClose();
       } else {
-        setError(result.data?.updateMessage.message || "Failed to update message");
+        setError(
+          result.data?.updateMessage.message || "Failed to update message"
+        );
       }
     } catch (err) {
       console.error("Error updating message:", err);
@@ -333,7 +344,11 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
         </ModalContent>
 
         <ModalFooter>
-          <ActionButton $variant="secondary" onClick={handleClose} disabled={loading}>
+          <ActionButton
+            $variant="secondary"
+            onClick={handleClose}
+            disabled={loading}
+          >
             Cancel
           </ActionButton>
           <ActionButton
