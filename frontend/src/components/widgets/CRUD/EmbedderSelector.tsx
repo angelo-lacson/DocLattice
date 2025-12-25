@@ -35,10 +35,18 @@ export const EmbedderSelector = ({
   style,
   preferredEmbedder,
 }: EmbedderSelectorProps) => {
+  // Use cache-first policy since embedders rarely change during a user session
+  // (they are configured by admins and typically require app restart to add new ones).
+  // This prevents slow loading when reopening the modal repeatedly.
+  // Cache invalidation: The cache is refreshed on page reload, which is sufficient
+  // for the rare case when new embedders are added to the system.
   const { loading, error, data } = useQuery<
     GetEmbeddersOutput,
     GetEmbeddersInput
-  >(GET_EMBEDDERS);
+  >(GET_EMBEDDERS, {
+    fetchPolicy: "cache-first",
+    nextFetchPolicy: "cache-first",
+  });
 
   const handleChange = (_e: any, { value }: any) => {
     // If user has not actually changed the embedder, do nothing
