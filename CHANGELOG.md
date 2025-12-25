@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Improved Inline Reference Cards for Mentions (Issue #689)
+- **Annotation mentions** now display the first ~24 characters of annotation text instead of cryptic IDs
+  - Full annotation text accessible via hover tooltip
+  - Falls back to label type if no raw text available
+  - Location: `frontend/src/components/threads/MentionChip.tsx:212-229`
+- **Document mentions** show document title with corpus context (e.g., "Document Title (in Corpus Name)")
+  - Location: `frontend/src/components/threads/MessageComposer.tsx:361-375`
+- **Corpus mentions** show corpus name instead of `@corpus:slug` format
+  - Location: `frontend/src/components/threads/MessageComposer.tsx:351-359`
+- **Shared constant** `MENTION_PREVIEW_LENGTH = 24` for consistent truncation across components
+  - Location: `frontend/src/assets/configurations/constants.ts:6-8`
+- **Text sanitization utility** for user-generated content to prevent XSS
+  - Location: `frontend/src/utils/textSanitization.ts`
+  - Unit tests: `frontend/src/utils/textSanitization.test.ts`
+- **Component tests** for MentionChip covering all resource types and text truncation
+  - Location: `frontend/tests/mention-chip.spec.tsx`
+
+### Changed
+
+#### MentionChip Component Improvements (Issue #689)
+- Extended `MentionChip` to support ANNOTATION type with green gradient styling
+- Added default cases to all switch statements for TypeScript exhaustiveness checking
+- Refactored `handleClick` to `handleActivation` accepting `React.MouseEvent | React.KeyboardEvent` union type (fixes unsafe `as any` assertion)
+- Sanitized user-generated annotation text before display to prevent XSS
+
 #### Permanent Deletion (Empty Trash) Functionality (PR #707)
 - **Core deletion logic** (`opencontractserver/documents/versioning.py:617-760`):
   - `permanently_delete_document()`: Irreversible deletion with cascade cleanup
