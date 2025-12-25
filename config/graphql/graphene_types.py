@@ -2329,10 +2329,11 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             # Handle Relay-style Base64 global IDs (e.g., "QW5ub3RhdGlvblR5cGU6Mw==")
             try:
                 decoded = base64.b64decode(ann_id).decode("utf-8")
-                if ":" in decoded:
-                    # Format: "AnnotationType:123" → extract "123"
-                    return int(decoded.split(":")[1])
-            except Exception:
+                # Format: "AnnotationType:123" → extract "123"
+                parts = decoded.split(":")
+                if len(parts) == 2:
+                    return int(parts[1])
+            except (ValueError, base64.binascii.Error, UnicodeDecodeError):
                 pass
 
             # Already a plain ID

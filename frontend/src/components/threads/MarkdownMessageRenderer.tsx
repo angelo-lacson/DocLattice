@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { Database, FileText, Tag, User } from "lucide-react";
 import { color } from "../../theme/colors";
 import { MentionedResourceType } from "../../types/graphql-api";
+import { sanitizeForTooltip } from "../../utils/textSanitization";
 
 const MarkdownContainer = styled.div`
   p {
@@ -213,6 +214,7 @@ export function MarkdownMessageRenderer({
   /**
    * Get tooltip text for mention (Issue #689)
    * Uses rich metadata from mentionedResources when available
+   * Sanitizes all user-generated text to prevent XSS and normalize whitespace
    */
   const getMentionTooltip = (
     type: string,
@@ -223,37 +225,39 @@ export function MarkdownMessageRenderer({
     if (type === "annotation" && resource?.rawText) {
       const parts: string[] = [];
 
-      // Show full annotation text (truncated if very long)
-      const rawText = resource.rawText;
+      // Show full annotation text (truncated if very long), sanitized for tooltip
+      const sanitizedText = sanitizeForTooltip(resource.rawText);
       const truncatedText =
-        rawText.length > 200 ? `${rawText.slice(0, 200)}...` : rawText;
+        sanitizedText.length > 200
+          ? `${sanitizedText.slice(0, 200)}...`
+          : sanitizedText;
       parts.push(`"${truncatedText}"`);
 
-      // Add label if available
+      // Add label if available (sanitize user content)
       if (resource.annotationLabel) {
-        parts.push(`Label: ${resource.annotationLabel}`);
+        parts.push(`Label: ${sanitizeForTooltip(resource.annotationLabel)}`);
       }
 
-      // Add document context if available
+      // Add document context if available (sanitize user content)
       if (resource.document?.title) {
-        parts.push(`Document: ${resource.document.title}`);
+        parts.push(`Document: ${sanitizeForTooltip(resource.document.title)}`);
       }
 
       return parts.join("\n");
     }
 
-    // Fallback to simple tooltips for other types
+    // Fallback to simple tooltips for other types (sanitize all user content)
     switch (type) {
       case "user":
-        return `User: ${text}`;
+        return `User: ${sanitizeForTooltip(text)}`;
       case "corpus":
-        return `Corpus: ${resource?.title || text}`;
+        return `Corpus: ${sanitizeForTooltip(resource?.title || text)}`;
       case "document":
-        return `Document: ${resource?.title || text}`;
+        return `Document: ${sanitizeForTooltip(resource?.title || text)}`;
       case "annotation":
-        return `Annotation: ${text}`;
+        return `Annotation: ${sanitizeForTooltip(text)}`;
       default:
-        return text;
+        return sanitizeForTooltip(text);
     }
   };
 
