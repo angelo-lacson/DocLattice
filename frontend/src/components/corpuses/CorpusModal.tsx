@@ -405,7 +405,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
 
   // Track the previous open state to detect modal open transitions
   // This prevents re-initializing form when user is typing on mobile
-  const prevOpenRef = useRef(open);
+  // Initialize to false so that if modal starts open, we still initialize the form
+  const prevOpenRef = useRef(false);
 
   // Initialize form from corpus data only when modal opens (not on every render)
   useEffect(() => {
@@ -453,7 +454,10 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       setPreferredEmbedder(null);
       setOriginalValues(null);
     }
-  }, [corpus, open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // corpus intentionally omitted - we only want to initialize on modal open,
+    // not when corpus prop changes (which would overwrite user edits mid-form)
+  }, [open]);
 
   // Handle form field changes
   const handleTitleChange = useCallback(
