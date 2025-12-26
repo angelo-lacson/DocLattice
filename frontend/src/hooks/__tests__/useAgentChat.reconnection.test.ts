@@ -271,10 +271,10 @@ describe("useAgentChat WebSocket Reconnection Logic", () => {
             readyState !== OPEN &&
             readyState !== CONNECTING;
 
-          expect(shouldReconnect).toBe(
-            shouldTrigger,
+          expect(
+            shouldReconnect,
             `Test case ${index} failed: expected ${shouldTrigger}, got ${shouldReconnect}`
-          );
+          ).toBe(shouldTrigger);
         }
       );
     });
@@ -285,20 +285,38 @@ describe("useAgentChat WebSocket Reconnection Logic", () => {
       // Same logic as onResume - network recovery should reconnect
       // if WebSocket is not connected
 
-      const hasContext = true;
-      const isReconnecting = false;
-      const CLOSED = 3;
-      const OPEN = 1;
+      const WS_OPEN = 1;
+      const WS_CONNECTING = 0;
+      const WS_CLOSED = 3;
+
+      // Helper function that mirrors the reconnection logic
+      const shouldReconnect = (
+        hasContext: boolean,
+        isReconnecting: boolean,
+        readyState: number
+      ): boolean => {
+        return (
+          hasContext &&
+          !isReconnecting &&
+          readyState !== WS_OPEN &&
+          readyState !== WS_CONNECTING
+        );
+      };
 
       // Should trigger when WebSocket is closed
-      const shouldReconnectClosed =
-        hasContext && !isReconnecting && CLOSED !== OPEN && CLOSED !== 0;
-      expect(shouldReconnectClosed).toBe(true);
+      expect(shouldReconnect(true, false, WS_CLOSED)).toBe(true);
 
       // Should NOT trigger when WebSocket is open
-      const shouldReconnectOpen =
-        hasContext && !isReconnecting && OPEN !== OPEN && OPEN !== 0;
-      expect(shouldReconnectOpen).toBe(false);
+      expect(shouldReconnect(true, false, WS_OPEN)).toBe(false);
+
+      // Should NOT trigger when WebSocket is connecting
+      expect(shouldReconnect(true, false, WS_CONNECTING)).toBe(false);
+
+      // Should NOT trigger when no context
+      expect(shouldReconnect(false, false, WS_CLOSED)).toBe(false);
+
+      // Should NOT trigger when already reconnecting
+      expect(shouldReconnect(true, true, WS_CLOSED)).toBe(false);
     });
   });
 
