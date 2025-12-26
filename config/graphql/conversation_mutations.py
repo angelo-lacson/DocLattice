@@ -568,7 +568,22 @@ class UpdateMessageMutation(graphene.Mutation):
                     obj=None,
                 )
 
-            # Update the message content and clear source_document in a single save
+            # Parse mentions FIRST (before modifying database) to avoid race condition
+            # where parsing fails after mentions are cleared, leaving message with no mentions
+            mention_parse_success = True
+            mentioned_ids = {}
+            try:
+                mentioned_ids = parse_mentions_from_content(content)
+            except (AttributeError, KeyError, TypeError, ValueError) as e:
+                # Don't fail the whole mutation if mention parsing fails
+                # These are the expected exceptions from parsing logic
+                mention_parse_success = False
+                logger.warning(
+                    f"Error parsing mentions in updated message {chat_message.pk}: "
+                    f"{type(e).__name__}: {e}"
+                )
+
+            # Now atomically update content and clear all mention-related fields
             chat_message.content = content
             chat_message.source_document = None
             chat_message.save(update_fields=["content", "source_document", "modified"])
@@ -577,30 +592,34 @@ class UpdateMessageMutation(graphene.Mutation):
             chat_message.source_annotations.clear()
             chat_message.mentioned_agents.clear()
 
-            # Track if mention parsing succeeded for UX feedback
-            mention_parse_success = True
-            try:
-                mentioned_ids = parse_mentions_from_content(content)
-                link_result = link_message_to_resources(chat_message, mentioned_ids)
-                logger.debug(f"Updated message {chat_message.pk} links: {link_result}")
+            # Link new mentions (only if parsing succeeded)
+            if mention_parse_success and mentioned_ids:
+                try:
+                    link_result = link_message_to_resources(chat_message, mentioned_ids)
+                    logger.debug(f"Updated message {chat_message.pk} links: {link_result}")
 
-                # Trigger agent responses if any agents were mentioned
-                if link_result.get("agents_linked", 0) > 0:
-                    trigger_agent_responses_for_message.delay(
-                        message_id=chat_message.pk,
-                        user_id=user.pk,
+                    # Trigger agent responses if any agents were mentioned
+                    # NOTE: This triggers for ALL mentioned agents, including previously
+                    # mentioned ones. This means editing "@agent hello" to "@agent goodbye"
+                    # will trigger a new agent response. This is intentional to ensure
+                    # agents respond to updated context, but may result in multiple responses
+                    # if users repeatedly edit messages with the same mentions.
+                    if link_result.get("agents_linked", 0) > 0:
+                        trigger_agent_responses_for_message.delay(
+                            message_id=chat_message.pk,
+                            user_id=user.pk,
+                        )
+                        logger.debug(
+                            f"Triggered agent responses for updated message {chat_message.pk}"
+                        )
+                except (AttributeError, KeyError, TypeError, ValueError) as e:
+                    # Don't fail the whole mutation if mention linking fails
+                    # These are the expected exceptions from linking logic
+                    mention_parse_success = False
+                    logger.warning(
+                        f"Error linking mentions in updated message {chat_message.pk}: "
+                        f"{type(e).__name__}: {e}"
                     )
-                    logger.debug(
-                        f"Triggered agent responses for updated message {chat_message.pk}"
-                    )
-            except (AttributeError, KeyError, TypeError, ValueError) as e:
-                # Don't fail the whole mutation if mention parsing fails
-                # These are the expected exceptions from parsing/linking logic
-                mention_parse_success = False
-                logger.warning(
-                    f"Error re-parsing mentions in updated message {chat_message.pk}: "
-                    f"{type(e).__name__}: {e}"
-                )
 
             ok = True
             # Provide feedback if mentions failed to parse (UX improvement)

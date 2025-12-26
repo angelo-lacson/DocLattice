@@ -8,9 +8,13 @@
  * - Responsive layout that adapts to screen size
  * - Uses MessageComposer for consistent editing experience
  * - Loading states and error handling
+ *
+ * Security Note: User-generated content is rendered using MarkdownMessageRenderer
+ * which applies XSS protection via rehype-sanitize. All HTML in markdown content
+ * is sanitized before being rendered to prevent XSS attacks.
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { useMutation } from "@apollo/client";
@@ -244,6 +248,98 @@ const ErrorMessage = styled.div`
   }
 `;
 
+const UnsavedWarningOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: ${spacing.md};
+  z-index: 1000;
+`;
+
+const UnsavedWarningBox = styled.div`
+  background: white;
+  border-radius: 12px;
+  padding: ${spacing.lg};
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  @media (max-width: 600px) {
+    max-width: 90vw;
+  }
+`;
+
+const UnsavedWarningTitle = styled.h3`
+  margin: 0 0 ${spacing.sm} 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: ${color.N10};
+  display: flex;
+  align-items: center;
+  gap: ${spacing.xs};
+`;
+
+const UnsavedWarningText = styled.p`
+  margin: 0 0 ${spacing.md} 0;
+  color: ${color.N8};
+  font-size: 14px;
+  line-height: 1.5;
+`;
+
+const UnsavedWarningButtons = styled.div`
+  display: flex;
+  gap: ${spacing.sm};
+  justify-content: flex-end;
+
+  @media (max-width: 600px) {
+    flex-direction: column-reverse;
+  }
+`;
+
+const UnsavedWarningButton = styled.button<{ $variant: "cancel" | "discard" }>`
+  padding: ${spacing.sm} ${spacing.md};
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+
+  @media (max-width: 600px) {
+    padding: ${spacing.md};
+    width: 100%;
+  }
+
+  ${(props) =>
+    props.$variant === "cancel" &&
+    `
+    background: ${color.N2};
+    border: 1px solid ${color.N4};
+    color: ${color.N8};
+
+    &:hover {
+      background: ${color.N3};
+    }
+  `}
+
+  ${(props) =>
+    props.$variant === "discard" &&
+    `
+    background: ${color.R6};
+    color: white;
+
+    &:hover {
+      background: ${color.R7};
+    }
+  `}
+`;
+
 export const EditMessageModal: React.FC<EditMessageModalProps> = ({
   isOpen,
   onClose,
@@ -255,15 +351,36 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
 }) => {
   const [content, setContent] = useState(initialContent);
   const [error, setError] = useState<string | null>(null);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
 
   const [updateMessage, { loading }] = useMutation<
     UpdateMessageOutput,
     UpdateMessageInput
   >(UPDATE_MESSAGE);
 
+  // Debounce timer ref for content changes (Issue #686 - Performance optimization)
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleContentChange = useCallback((newContent: string) => {
-    setContent(newContent);
-    setError(null);
+    // Clear any pending debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Debounce content updates to reduce re-renders on rapid typing
+    debounceTimerRef.current = setTimeout(() => {
+      setContent(newContent);
+      setError(null);
+    }, 150);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -309,19 +426,22 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
   const handleClose = useCallback(() => {
     // Check for unsaved changes
     if (content !== initialContent) {
-      if (
-        window.confirm(
-          "You have unsaved changes. Are you sure you want to close?"
-        )
-      ) {
-        setContent(initialContent);
-        setError(null);
-        onClose();
-      }
+      setShowUnsavedWarning(true);
     } else {
       onClose();
     }
   }, [content, initialContent, onClose]);
+
+  const handleConfirmClose = useCallback(() => {
+    setContent(initialContent);
+    setError(null);
+    setShowUnsavedWarning(false);
+    onClose();
+  }, [initialContent, onClose]);
+
+  const handleCancelClose = useCallback(() => {
+    setShowUnsavedWarning(false);
+  }, []);
 
   const hasChanges = content !== initialContent;
 
@@ -331,7 +451,7 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
       onClose={handleClose}
       closeOnDimmerClick={!hasChanges}
     >
-      <Modal.Content>
+      <Modal.Content style={{ position: "relative" }}>
         <ModalHeader>
           <ModalTitle>Edit Message</ModalTitle>
           <CloseButton onClick={handleClose} aria-label="Close modal">
@@ -378,6 +498,36 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
             Save Changes
           </ActionButton>
         </ModalFooter>
+
+        {/* Unsaved changes warning overlay */}
+        {showUnsavedWarning && (
+          <UnsavedWarningOverlay>
+            <UnsavedWarningBox>
+              <UnsavedWarningTitle>
+                <AlertCircle size={20} />
+                Unsaved Changes
+              </UnsavedWarningTitle>
+              <UnsavedWarningText>
+                You have unsaved changes. Are you sure you want to close without
+                saving?
+              </UnsavedWarningText>
+              <UnsavedWarningButtons>
+                <UnsavedWarningButton
+                  $variant="cancel"
+                  onClick={handleCancelClose}
+                >
+                  Continue Editing
+                </UnsavedWarningButton>
+                <UnsavedWarningButton
+                  $variant="discard"
+                  onClick={handleConfirmClose}
+                >
+                  Discard Changes
+                </UnsavedWarningButton>
+              </UnsavedWarningButtons>
+            </UnsavedWarningBox>
+          </UnsavedWarningOverlay>
+        )}
       </Modal.Content>
     </StyledModal>
   );

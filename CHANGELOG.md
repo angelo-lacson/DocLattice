@@ -16,17 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Progress bar integration** showing real-time upload progress with success/error states
 
 #### Mobile UI Improvements for Picker and Edit Message Modal (Issue #686)
-- **Backend UpdateMessage mutation** (`config/graphql/conversation_mutations.py:455-567`):
+- **Backend UpdateMessage mutation** (`config/graphql/conversation_mutations.py:455-619`):
   - New `UpdateMessageMutation` for editing existing thread messages
   - Validates CRUD permission on message or moderator status
-  - Re-parses mentions when content is updated
+  - Re-parses mentions when content is updated (with race condition protection - parsing happens before DB modifications)
   - Triggers agent responses for newly mentioned agents
+  - Documented behavior: agents respond to ALL mentions, including re-mentions in edited messages
 - **Frontend UPDATE_MESSAGE mutation** (`frontend/src/graphql/mutations.ts:2726-2760`): GraphQL mutation with TypeScript types
 - **EditMessageModal component** (`frontend/src/components/threads/EditMessageModal.tsx`):
   - Full-screen modal on mobile for better touch interaction
   - Uses MessageComposer for consistent editing experience
   - Safe area insets for notched devices
   - Loading states and error handling
+  - Custom unsaved changes confirmation modal (replaces browser `window.confirm()`)
+  - Debounced content updates (150ms) for improved performance during typing
+  - XSS protection documented: uses MarkdownMessageRenderer with `rehype-sanitize`
 - **Message actions dropdown in MessageItem** (`frontend/src/components/threads/MessageItem.tsx:219-432`):
   - Desktop: Standard dropdown menu with Edit/Delete options
   - Mobile: Bottom sheet style for thumb-friendly interaction
@@ -84,6 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Increased gap between buttons for easier tapping
 
 ### Technical Details
+
+#### Message Editing Tests (Issue #686)
+- **New test for parent relationship preservation** (`opencontractserver/tests/test_conversation_mutations_graphql.py:1071-1168`):
+  - Verifies that editing a reply message preserves its `parent_message` field
+  - Ensures thread structure integrity when users edit replies
+  - Part of comprehensive UpdateMessage mutation test suite
 
 #### Upload Modal Architecture
 - Styled-components with transient props (`$active`, `$selected`, `$status`) to prevent DOM attribute warnings

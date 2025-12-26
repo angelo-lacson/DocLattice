@@ -1068,6 +1068,105 @@ class ConversationMutationsTestCase(TestCase):
             # (agent was mentioned, so task should be triggered)
             mock_task.delay.assert_called_once()
 
+    def test_update_message_preserves_parent_relationship(self):
+        """
+        Test that editing a reply message preserves its parent_message relationship.
+
+        When a message that is a reply (has parent_message set) is edited, the
+        parent_message field should remain unchanged. This ensures that thread
+        structure is preserved when users edit their replies.
+
+        Part of Issue #686 code review feedback.
+        """
+        # Create a thread
+        conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        # Create parent message
+        parent_message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Parent message content",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, parent_message, [PermissionTypes.CRUD]
+        )
+
+        # Create reply message
+        reply_message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Original reply content",
+            creator=self.user,
+            parent_message=parent_message,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, reply_message, [PermissionTypes.CRUD]
+        )
+
+        # Verify parent relationship is set
+        self.assertEqual(reply_message.parent_message, parent_message)
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                    obj {
+                        id
+                        content
+                    }
+                }
+            }
+        """
+
+        variables = {
+            "messageId": to_global_id("MessageType", reply_message.pk),
+            "content": "Updated reply content",
+        }
+
+        # Mock the request context with authenticated user
+        class MockRequest:
+            def __init__(self, user):
+                self.user = user
+
+        mock_request = MockRequest(self.user)
+
+        # Execute mutation
+        schema = graphene.Schema(query=Query, mutation=Mutation)
+        result = schema.execute(
+            mutation,
+            variables=variables,
+            context_value=mock_request,
+        )
+
+        # Assert no errors
+        self.assertIsNone(result.errors, f"GraphQL errors: {result.errors}")
+
+        # Assert mutation was successful
+        data = result.data["updateMessage"]
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["message"], "Message updated successfully")
+
+        # Verify content was updated
+        reply_message.refresh_from_db()
+        self.assertEqual(reply_message.content, "Updated reply content")
+
+        # CRITICAL: Verify parent_message relationship is preserved
+        self.assertEqual(
+            reply_message.parent_message,
+            parent_message,
+            "Parent message relationship should be preserved after editing",
+        )
+
 
 class DualContextThreadAccessControlTestCase(TestCase):
     """
