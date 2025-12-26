@@ -462,7 +462,7 @@ class UpdateMessageMutation(graphene.Mutation):
     """
 
     class Arguments:
-        message_id = graphene.String(
+        message_id = graphene.ID(
             required=True, description="ID of the message to update"
         )
         content = graphene.String(
@@ -496,9 +496,12 @@ class UpdateMessageMutation(graphene.Mutation):
             # Use visible_to_user() which now includes moderator access
             # (moderators can see all messages in conversations they moderate)
             # This prevents IDOR enumeration while properly handling moderator access.
+            # Use select_for_update() to prevent race conditions from concurrent edits.
             try:
-                chat_message = ChatMessage.objects.visible_to_user(user).get(
-                    pk=message_pk
+                chat_message = (
+                    ChatMessage.objects.visible_to_user(user)
+                    .select_for_update()
+                    .get(pk=message_pk)
                 )
             except ChatMessage.DoesNotExist:
                 # Check if this is a deleted message that user should be able to see
@@ -591,7 +594,7 @@ class DeleteMessageMutation(graphene.Mutation):
     """Soft delete a message."""
 
     class Arguments:
-        message_id = graphene.String(
+        message_id = graphene.ID(
             required=True, description="ID of the message to delete"
         )
 

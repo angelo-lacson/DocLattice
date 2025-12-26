@@ -2,7 +2,8 @@ import React, { useCallback } from "react";
 import { MessageNode } from "./utils";
 import { MessageItem } from "./MessageItem";
 import { ReplyForm } from "./ReplyForm";
-import { UserBadgeType, PermissionTypes } from "../../types/graphql-api";
+import { UserBadgeType } from "../../types/graphql-api";
+import { PermissionTypes } from "../types";
 
 /**
  * Props for the MessageTree component.
@@ -65,19 +66,20 @@ export const MessageTree = React.memo(function MessageTree({
       const isCreator = currentUserId && message.creator?.id === currentUserId;
 
       // Check if user has CRUD permissions from myPermissions
+      // Cast to string to handle both enum values and raw Django permission strings
       const hasCrudPermission = message.myPermissions?.some(
         (perm) =>
           perm === PermissionTypes.CAN_UPDATE ||
-          perm === "update_chatmessage" ||
-          perm === "crud_chatmessage"
+          (perm as string) === "update_chatmessage" ||
+          (perm as string) === "crud_chatmessage"
       );
 
       const hasDeletePermission = message.myPermissions?.some(
         (perm) =>
           perm === PermissionTypes.CAN_REMOVE ||
-          perm === "delete_chatmessage" ||
-          perm === "remove_chatmessage" ||
-          perm === "crud_chatmessage"
+          (perm as string) === "delete_chatmessage" ||
+          (perm as string) === "remove_chatmessage" ||
+          (perm as string) === "crud_chatmessage"
       );
 
       return {

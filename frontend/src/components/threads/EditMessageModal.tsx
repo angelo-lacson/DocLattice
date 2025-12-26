@@ -372,6 +372,7 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
             onClick={handleSave}
             disabled={loading || !hasChanges || !content.trim()}
             loading={loading}
+            aria-label={loading ? "Saving changes..." : "Save message changes"}
           >
             <Save size={16} />
             Save Changes
