@@ -1,20 +1,26 @@
 // frontend/src/components/widgets/modals/BulkUploadModal.tsx
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useMutation, useReactiveVar } from "@apollo/client";
-import {
-  Modal,
-  Button,
-  Form,
-  Message,
-  Progress,
-  FormField, // Import FormField
-} from "semantic-ui-react";
+import { Button, Form, Message, FormField, Icon } from "semantic-ui-react";
 import { toast } from "react-toastify";
-import { gql } from "@apollo/client"; // Import gql
+import { gql } from "@apollo/client";
 
-import { showBulkUploadModal } from "../../../graphql/cache"; // Removed filterToCorpus import as it's unused
-import { CorpusType } from "../../../types/graphql-api"; // Import CorpusType
-import { CorpusDropdown } from "../selectors/CorpusDropdown"; // Import CorpusDropdown
+import { showBulkUploadModal } from "../../../graphql/cache";
+import { CorpusType } from "../../../types/graphql-api";
+import { CorpusDropdown } from "../selectors/CorpusDropdown";
+import {
+  StyledUploadModal,
+  ModalHeader,
+  ModalHeaderContent,
+  DropZone,
+  DropZoneIcon,
+  DropZoneText,
+  DropZoneButton,
+  UploadProgress,
+  ActionButton,
+  FieldLabel,
+  ErrorMessage,
+} from "./UploadModalStyles";
 
 // Define the mutation GraphQL string (Renamed back)
 const UPLOAD_DOCUMENTS_ZIP = gql`
@@ -166,102 +172,168 @@ export const BulkUploadModal = () => {
       }
     } catch (err: any) {
       console.error("Upload error:", err);
+      // Extract GraphQL errors explicitly, falling back to general message
       const errorMessage =
-        err.message || "An unexpected error occurred during upload.";
+        err.graphQLErrors?.[0]?.message ||
+        err.message ||
+        "An unexpected error occurred during upload.";
       setError(errorMessage);
       toast.error(`Upload failed: ${errorMessage}`);
       setUploadProgress(0); // Reset progress on error
     } finally {
-      // Don't set loading to false immediately if progress is 100,
-      // let the success/error handling manage it or add a slight delay.
-      // setLoading(false); // Moved setting loading false to handleClose or error block
-      if (!loading) setLoading(false); // Ensure loading is false if an error occurred before finally
+      setLoading(false);
     }
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDropZoneClick = () => {
+    if (!loading && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
   return (
-    <Modal open={visible} onClose={handleClose} size="tiny">
-      <Modal.Header>Bulk Upload Documents (.zip)</Modal.Header>
-      <Modal.Content>
+    <StyledUploadModal open={visible} onClose={handleClose} size="small">
+      <StyledUploadModal.Header>
+        <ModalHeader>
+          <Icon name="file archive" size="large" />
+          <ModalHeaderContent>
+            <span className="title">Bulk Upload Documents</span>
+            <span className="subtitle">
+              Upload multiple PDFs from a ZIP file
+            </span>
+          </ModalHeaderContent>
+        </ModalHeader>
+      </StyledUploadModal.Header>
+      <StyledUploadModal.Content>
         <Form loading={loading} error={!!error}>
           {/* Error Message Display */}
-          <Message
-            error
-            header="Upload Error"
-            content={error}
-            visible={!!error} // Control visibility directly
-            onDismiss={() => setError(null)}
-          />
+          {error && (
+            <ErrorMessage>
+              <Icon name="exclamation circle" size="large" className="icon" />
+              <div className="content">
+                <div className="header">Upload Error</div>
+                <div className="message">{error}</div>
+              </div>
+            </ErrorMessage>
+          )}
 
-          {/* File Input Field */}
-          <Form.Field required>
-            {" "}
-            {/* Mark as required */}
-            <label>Select Zip File</label>
+          {/* File Drop Zone */}
+          <DropZone
+            $hasFiles={!!selectedFile}
+            onClick={handleDropZoneClick}
+            style={{ marginBottom: "1.5rem" }}
+          >
             <input
+              id="bulk-upload-file-input"
+              ref={fileInputRef}
               type="file"
               accept=".zip,application/zip"
               onChange={handleFileChange}
               disabled={loading}
-              // Add required attribute for browser validation (optional)
-              // required
+              aria-label="Select ZIP file for bulk upload"
+              style={{ display: "none" }}
             />
-            {selectedFile && (
-              <p style={{ marginTop: "5px", color: "#666" }}>
-                Selected: {selectedFile.name}
-              </p>
+            {selectedFile ? (
+              <>
+                <DropZoneIcon>
+                  <Icon name="file archive" />
+                </DropZoneIcon>
+                <DropZoneText>
+                  <div className="primary-text">{selectedFile.name}</div>
+                  <div className="secondary-text">
+                    {formatFileSize(selectedFile.size)}
+                  </div>
+                </DropZoneText>
+                <DropZoneButton
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    if (!loading && fileInputRef.current) {
+                      fileInputRef.current.click();
+                    }
+                  }}
+                >
+                  <Icon name="exchange" /> Change File
+                </DropZoneButton>
+              </>
+            ) : (
+              <>
+                <DropZoneIcon>
+                  <Icon name="cloud upload" />
+                </DropZoneIcon>
+                <DropZoneText>
+                  <div className="primary-text">Click to select a ZIP file</div>
+                  <div className="secondary-text">
+                    The ZIP should contain PDF documents
+                  </div>
+                </DropZoneText>
+                <DropZoneButton>
+                  <Icon name="folder open" /> Browse Files
+                </DropZoneButton>
+              </>
             )}
-          </Form.Field>
+          </DropZone>
 
           {/* Corpus Selection Field */}
           <FormField>
-            {" "}
-            {/* Wrap Dropdown in FormField for consistent styling */}
-            <label>Add to Corpus (Optional)</label>
+            <FieldLabel>
+              Add to Corpus{" "}
+              <span style={{ color: "#868e96", fontWeight: 400 }}>
+                (Optional)
+              </span>
+            </FieldLabel>
             <CorpusDropdown
-              value={targetCorpus?.id ?? null} // Pass controlled value (will be handled in CorpusDropdown)
-              onChange={setTargetCorpus} // Pass state setter
+              value={targetCorpus?.id ?? null}
+              onChange={setTargetCorpus}
               clearable={true}
               placeholder="Select a corpus..."
             />
           </FormField>
 
-          {/* Optional: Add fields for title prefix, description, make public checkbox */}
-          {/* Example:
-          <Form.Input label="Title Prefix (Optional)" placeholder="e.g., ProjectX-" />
-          <Form.Checkbox label="Make documents public" defaultChecked />
-          */}
-
-          {/* Remove the message about the currently selected corpus */}
-          {/* {currentCorpus && ( ... )} */}
-
           {/* Loading Progress */}
-          {loading &&
-            uploadProgress > 0 && ( // Show progress only when loading and progress > 0
-              <Progress
-                percent={uploadProgress}
-                indicating={uploadProgress < 100} // Only indicating while in progress
-                success={uploadProgress === 100} // Show success state at 100%
-                progress
-                size="small"
-                style={{ marginTop: "1em" }} // Add some margin
-              />
-            )}
+          {loading && uploadProgress > 0 && (
+            <UploadProgress
+              percent={uploadProgress}
+              indicating={uploadProgress < 100}
+              success={uploadProgress === 100}
+              progress
+            />
+          )}
         </Form>
-      </Modal.Content>
-      <Modal.Actions>
-        <Button onClick={handleClose} disabled={loading}>
+      </StyledUploadModal.Content>
+      <StyledUploadModal.Actions>
+        <ActionButton
+          $variant="secondary"
+          onClick={handleClose}
+          disabled={loading}
+        >
           Cancel
-        </Button>
-        <Button
-          primary
+        </ActionButton>
+        <ActionButton
+          $variant="primary"
           onClick={handleSubmit}
           disabled={!selectedFile || !base64File || loading}
-          loading={loading && uploadProgress < 100} // Show loading spinner only during active upload
         >
-          {loading && uploadProgress < 100 ? "Uploading..." : "Upload"}
-        </Button>
-      </Modal.Actions>
-    </Modal>
+          {loading && uploadProgress < 100 ? (
+            <>
+              <Icon name="spinner" loading /> Uploading...
+            </>
+          ) : (
+            <>
+              <Icon name="cloud upload" /> Upload ZIP
+            </>
+          )}
+        </ActionButton>
+      </StyledUploadModal.Actions>
+    </StyledUploadModal>
   );
 };

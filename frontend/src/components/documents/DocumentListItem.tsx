@@ -1,5 +1,4 @@
-import { Icon, List, Message } from "semantic-ui-react";
-import { SemanticCOLORS } from "semantic-ui-react/dist/commonjs/generic";
+import { Icon } from "semantic-ui-react";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 
 import {
@@ -9,6 +8,14 @@ import {
   FAILED,
   FileDetailsProps,
 } from "../widgets/modals/DocumentUploadModal";
+import {
+  FileListItem,
+  FileItemContent,
+  FileItemIcon,
+  FileItemDetails,
+  FileItemActions,
+  DeleteButton,
+} from "../widgets/modals/UploadModalStyles";
 
 interface ContractListItemProps {
   document: FileDetailsProps;
@@ -25,54 +32,72 @@ export const ContractListItem = ({
   onRemove,
   onSelect,
 }: ContractListItemProps) => {
-  let icon_color = "gray";
-  if (status === SUCCESS) {
-    icon_color = "green";
-  } else if (status === FAILED) {
-    icon_color = "red";
-  }
+  const getStatusIcon = () => {
+    switch (status) {
+      case SUCCESS:
+        return "check circle";
+      case FAILED:
+        return "times circle";
+      case UPLOADING:
+        return "spinner";
+      default:
+        return "file pdf outline";
+    }
+  };
+
+  const getStatusText = () => {
+    switch (status) {
+      case SUCCESS:
+        return "Uploaded successfully";
+      case FAILED:
+        return "Upload failed";
+      case UPLOADING:
+        return "Uploading...";
+      default:
+        return "Ready to upload";
+    }
+  };
+
+  const handleRemoveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRemove();
+  };
 
   return (
-    <List.Item
-      style={
-        selected
-          ? { backgroundColor: "#e2ffdb", position: "relative" }
-          : { position: "relative" }
-      }
-      onClick={onSelect}
-    >
+    <FileListItem $selected={selected} $status={status} onClick={onSelect}>
       <LoadingOverlay
         active={status === UPLOADING}
         inverted
-        content="Loading"
+        content="Uploading..."
       />
-      {status === NOT_STARTED ? (
-        <div style={{ float: "right", cursor: "pointer" }}>
-          <Icon name="trash" color="red" onClick={onRemove} />
-        </div>
-      ) : (
-        <></>
+      <FileItemContent>
+        <FileItemIcon $status={status}>
+          <Icon name={getStatusIcon()} loading={status === UPLOADING} />
+        </FileItemIcon>
+        <FileItemDetails>
+          <div className="file-name">
+            {document?.title || "Untitled Document"}
+          </div>
+          <div
+            className={`file-status ${
+              status === FAILED ? "error" : status === SUCCESS ? "success" : ""
+            }`}
+          >
+            {getStatusText()}
+          </div>
+        </FileItemDetails>
+      </FileItemContent>
+      {status === NOT_STARTED && (
+        <FileItemActions>
+          <DeleteButton
+            icon
+            onClick={handleRemoveClick}
+            aria-label="Remove file"
+          >
+            <Icon name="trash alternate outline" />
+          </DeleteButton>
+        </FileItemActions>
       )}
-      <List.Icon
-        name="file alternate"
-        size="large"
-        color={icon_color as SemanticCOLORS}
-        verticalAlign="middle"
-      />
-      <List.Content>
-        <List.Header>
-          {status === FAILED ? (
-            <Message negative>
-              <Message.Header>
-                ERROR UPLOADING:{" "}
-                {document?.title ? document.title : "No contracts"}{" "}
-              </Message.Header>
-            </Message>
-          ) : (
-            <p>{document?.title ? document.title : "No contracts"}</p>
-          )}
-        </List.Header>
-      </List.Content>
-    </List.Item>
+    </FileListItem>
   );
 };

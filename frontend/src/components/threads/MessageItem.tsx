@@ -590,8 +590,11 @@ export const MessageItem = React.memo(function MessageItem({
         {isDeleted ? (
           <p>[This message has been deleted]</p>
         ) : (
-          // Render markdown content with styled mentions (Issue #623)
-          <MarkdownMessageRenderer content={message.content || ""} />
+          // Render markdown content with styled mentions (Issue #623, #689)
+          <MarkdownMessageRenderer
+            content={message.content || ""}
+            mentionedResources={message.mentionedResources ?? undefined}
+          />
         )}
       </MessageContent>
 

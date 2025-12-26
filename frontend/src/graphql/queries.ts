@@ -2359,7 +2359,7 @@ export const GET_THREAD_DETAIL = gql`
         # Soft delete
         deletedAt
 
-        # Mentioned resources (Issue #623)
+        # Mentioned resources (Issue #623, #689)
         mentionedResources {
           type
           id
@@ -2367,6 +2367,14 @@ export const GET_THREAD_DETAIL = gql`
           title
           url
           corpus {
+            slug
+            title
+          }
+          # Annotation-specific fields (Issue #689)
+          rawText
+          annotationLabel
+          document {
+            id
             slug
             title
           }
@@ -4210,3 +4218,215 @@ export const GET_AGENT_CONFIGURATIONS = gql`
     }
   }
 `;
+
+// ============================================================
+// CORPUS ACTION EXECUTION QUERIES
+// ============================================================
+
+/**
+ * Query to fetch corpus action executions (action trail/audit log).
+ * Shows all executions of corpus actions with status, timing, and affected objects.
+ * Permission-gated: only visible to users with CAN_UPDATE or CAN_PERMISSION.
+ */
+export const GET_CORPUS_ACTION_EXECUTIONS = gql`
+  query GetCorpusActionExecutions(
+    $corpusId: ID!
+    $corpusActionId: ID
+    $status: String
+    $actionType: String
+    $since: DateTime
+    $first: Int
+    $after: String
+  ) {
+    corpusActionExecutions(
+      corpusId: $corpusId
+      corpusActionId: $corpusActionId
+      status: $status
+      actionType: $actionType
+      since: $since
+      first: $first
+      after: $after
+    ) {
+      edges {
+        node {
+          id
+          status
+          actionType
+          trigger
+          queuedAt
+          startedAt
+          completedAt
+          durationSeconds
+          waitTimeSeconds
+          errorMessage
+          affectedObjects
+          executionMetadata
+          corpusAction {
+            id
+            name
+            fieldset {
+              id
+              name
+            }
+            analyzer {
+              id
+              analyzerId
+            }
+            agentConfig {
+              id
+              name
+            }
+          }
+          document {
+            id
+            title
+            slug
+            creator {
+              id
+              slug
+            }
+          }
+          corpus {
+            id
+            slug
+            creator {
+              id
+              slug
+            }
+          }
+          extract {
+            id
+            name
+          }
+          analysis {
+            id
+          }
+          agentResult {
+            id
+          }
+          creator {
+            id
+            username
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
+    }
+  }
+`;
+
+export interface AffectedObjectEntry {
+  type: string;
+  id: number;
+  column_name?: string;
+  label?: string;
+  field?: string;
+  old_value?: string;
+  new_value?: string;
+  revision_id?: number;
+}
+
+export interface CorpusActionExecutionNode {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed" | "skipped";
+  actionType: "fieldset" | "analyzer" | "agent";
+  trigger: string;
+  queuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationSeconds: number | null;
+  waitTimeSeconds: number | null;
+  errorMessage: string;
+  affectedObjects: AffectedObjectEntry[];
+  executionMetadata: Record<string, unknown>;
+  corpusAction: {
+    id: string;
+    name: string;
+    fieldset?: { id: string; name: string } | null;
+    analyzer?: { id: string; analyzerId: string } | null;
+    agentConfig?: { id: string; name: string } | null;
+  };
+  document: {
+    id: string;
+    title: string;
+    slug: string;
+    creator: { id: string; slug: string };
+  };
+  corpus: {
+    id: string;
+    slug: string;
+    creator: { id: string; slug: string };
+  };
+  extract?: { id: string; name: string } | null;
+  analysis?: { id: string } | null;
+  agentResult?: { id: string } | null;
+  creator: { id: string; username: string };
+}
+
+export interface GetCorpusActionExecutionsInput {
+  corpusId: string;
+  corpusActionId?: string;
+  status?: string;
+  actionType?: string;
+  since?: string;
+  first?: number;
+  after?: string;
+}
+
+export interface GetCorpusActionExecutionsOutput {
+  corpusActionExecutions: {
+    edges: Array<{ node: CorpusActionExecutionNode }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string | null;
+    };
+    totalCount: number;
+  };
+}
+
+/**
+ * Query to fetch aggregated statistics for corpus action executions.
+ * Used for the stats summary at the top of the action trail.
+ */
+export const GET_CORPUS_ACTION_TRAIL_STATS = gql`
+  query GetCorpusActionTrailStats($corpusId: ID!, $since: DateTime) {
+    corpusActionTrailStats(corpusId: $corpusId, since: $since) {
+      totalExecutions
+      completed
+      failed
+      running
+      queued
+      skipped
+      avgDurationSeconds
+      fieldsetCount
+      analyzerCount
+      agentCount
+    }
+  }
+`;
+
+export interface CorpusActionTrailStats {
+  totalExecutions: number;
+  completed: number;
+  failed: number;
+  running: number;
+  queued: number;
+  skipped: number;
+  avgDurationSeconds: number | null;
+  fieldsetCount: number;
+  analyzerCount: number;
+  agentCount: number;
+}
+
+export interface GetCorpusActionTrailStatsInput {
+  corpusId: string;
+  since?: string;
+}
+
+export interface GetCorpusActionTrailStatsOutput {
+  corpusActionTrailStats: CorpusActionTrailStats;
+}

@@ -27,6 +27,7 @@ import { CreateCorpusActionModal } from "./CreateCorpusActionModal";
 import { CorpusMetadataSettings } from "./CorpusMetadataSettings";
 import { CorpusAgentSettings } from "./CorpusAgentSettings";
 import { CorpusAgentManagement } from "./CorpusAgentManagement";
+import { ActionExecutionTrail } from "./ActionExecutionTrail";
 import {
   UPDATE_CORPUS,
   UpdateCorpusInputs,
@@ -1317,6 +1318,28 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
             </ActionFlow>
           </ActionContent>
         </InfoSection>
+
+        {/* Action Execution History - Permission Gated to owner/admin/editor */}
+        {(canUpdate || canPermission) && (
+          <InfoSection id="action-execution-history-section">
+            <SectionHeader>
+              <SectionTitle>Action Execution History</SectionTitle>
+            </SectionHeader>
+            <ActionContent>
+              <ActionNote>
+                This section shows the <strong>execution history</strong> of all
+                corpus actions. You can see when actions were{" "}
+                <span className="highlight">triggered</span>, their{" "}
+                <span className="highlight">status</span>, and what{" "}
+                <span className="highlight">
+                  objects they created or modified
+                </span>
+                . Click on affected objects to navigate to them.
+              </ActionNote>
+              <ActionExecutionTrail corpusId={corpus.id} />
+            </ActionContent>
+          </InfoSection>
+        )}
 
         <InfoSection>
           <SectionHeader>
