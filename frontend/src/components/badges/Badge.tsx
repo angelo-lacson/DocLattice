@@ -44,7 +44,7 @@ const StyledBadge = styled(Label)<{ $badgeColor: string }>`
 
 const PopupContainer = styled.div<{ $show: boolean }>`
   position: absolute;
-  z-index: 10000;
+  z-index: 201;
   background: white;
   padding: 1em;
   border-radius: 12px;
@@ -104,7 +104,7 @@ const MobileOverlay = styled.div<{ $show: boolean }>`
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.3);
-    z-index: 9999;
+    z-index: 200;
     opacity: ${(props) => (props.$show ? 1 : 0)};
     pointer-events: ${(props) => (props.$show ? "auto" : "none")};
     transition: opacity 0.2s ease;
@@ -142,8 +142,14 @@ export const Badge: React.FC<BadgeProps> = ({
   const [showPopup, setShowPopup] = useState(false);
   const badgeRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+
+  // Check if we're on a touch device or mobile viewport
+  // Using both touch detection and viewport width ensures mobile UX in both real devices and tests
+  const isMobileViewport =
+    typeof window !== "undefined" && window.innerWidth <= 768;
   const isTouchDevice =
     typeof window !== "undefined" && "ontouchstart" in window;
+  const useMobileBehavior = isTouchDevice || isMobileViewport;
 
   // Dynamically get the icon component from lucide-react
   const IconComponent = (LucideIcons[badge.icon as keyof typeof LucideIcons] ||
@@ -175,19 +181,19 @@ export const Badge: React.FC<BadgeProps> = ({
   }, [showPopup]);
 
   const handleMouseEnter = () => {
-    if (!isTouchDevice) {
+    if (!useMobileBehavior) {
       setShowPopup(true);
     }
   };
 
   const handleMouseLeave = () => {
-    if (!isTouchDevice) {
+    if (!useMobileBehavior) {
       setShowPopup(false);
     }
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    if (isTouchDevice) {
+    if (useMobileBehavior) {
       e.preventDefault();
       e.stopPropagation();
       setShowPopup((prev) => !prev);
@@ -225,7 +231,11 @@ export const Badge: React.FC<BadgeProps> = ({
   return (
     <>
       {badgeElement}
-      <MobileOverlay $show={showPopup} onClick={handleOverlayClick} />
+      <MobileOverlay
+        $show={showPopup}
+        onClick={handleOverlayClick}
+        data-testid="badge-mobile-overlay"
+      />
       <PopupContainer
         ref={popupRef}
         $show={showPopup}

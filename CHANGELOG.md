@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Mobile Responsive Styling for Settings and Badge Widgets (Issue #690)
+- **Badge component z-index optimization** (`frontend/src/components/badges/Badge.tsx:47,107`): Lowered z-index values from 9999/10000 to 200/201 to avoid conflicts with other UI elements while maintaining proper layering
+- **Unified mobile behavior detection** (`frontend/src/components/badges/Badge.tsx:148-152`): Combined touch device detection with viewport width check to ensure mobile UX works consistently across real devices and test environments
+- **Test wrapper extraction** (`frontend/tests/UserBadgesTestWrapper.tsx`, `frontend/tests/GlobalSettingsPanelTestWrapper.tsx`): Moved test wrappers to separate files following Playwright component testing best practices
+- **Improved test reliability** (`frontend/tests/mobile-responsive.ct.tsx`): Fixed element disambiguation issues using proper locator strategies
+
 #### Agent Chat Processing Indicator (PR #687)
 - **Added visual feedback for agent processing** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1342-1405`): When an agent starts processing a response, an animated "Agent is thinking..." indicator now displays instead of an empty message bubble
 - **Processing indicator conditions**: Shows when assistant message is incomplete with no content and no timeline entries
