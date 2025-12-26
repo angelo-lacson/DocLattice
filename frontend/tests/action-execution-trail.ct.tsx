@@ -119,7 +119,7 @@ const createMocks = (
       query: GET_CORPUS_ACTION_EXECUTIONS,
       variables: {
         corpusId: "corpus-1",
-        first: 20,
+        first: 25,
       },
     },
     result: {
@@ -356,15 +356,12 @@ test.describe("ActionExecutionTrail Component", () => {
       </MemoryRouter>
     );
 
-    // Wait for data to load
-    await page.waitForSelector('[role="feed"]', { timeout: 10000 });
+    // Wait for data to load - component uses role="list"
+    await page.waitForSelector('[role="list"]', { timeout: 10000 });
 
-    // Stats should be visible
-    await expect(page.getByText("150")).toBeVisible();
-
-    // Execution card should be visible (use heading role to be specific)
+    // Execution row should be visible with action name (use role="button" from row header)
     await expect(
-      page.getByRole("heading", { name: "Extract Contract Fields" })
+      page.getByRole("button", { name: /Extract Contract Fields/ })
     ).toBeVisible();
     await expect(page.getByText("Sample Contract.pdf")).toBeVisible();
   });
@@ -379,13 +376,13 @@ test.describe("ActionExecutionTrail Component", () => {
     );
 
     // Wait for initial load
-    await page.waitForSelector('[role="feed"]', { timeout: 10000 });
+    await page.waitForSelector('[role="list"]', { timeout: 10000 });
 
-    // Check filter labels are visible (use locator for labels)
-    await expect(page.locator('label[for="status-filter"]')).toBeVisible();
-    await expect(page.locator('label[for="type-filter"]')).toBeVisible();
-    await expect(page.locator('label[for="action-filter"]')).toBeVisible();
-    await expect(page.locator('label[for="time-filter"]')).toBeVisible();
+    // Check filter dropdowns are visible (use aria-label selectors)
+    await expect(page.locator('[aria-label="Filter by status"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Filter by type"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Filter by action"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Filter by time"]')).toBeVisible();
   });
 
   test("should show empty state when no executions", async ({
@@ -408,7 +405,7 @@ test.describe("ActionExecutionTrail Component", () => {
       timeout: 10000,
     });
     await expect(
-      page.getByText(/Action executions will appear here/)
+      page.getByText(/Executions will appear when documents are processed/)
     ).toBeVisible();
   });
 
@@ -425,10 +422,10 @@ test.describe("ActionExecutionTrail Component", () => {
     );
 
     // Wait for data
-    await page.waitForSelector('[role="feed"]', { timeout: 10000 });
+    await page.waitForSelector('[role="list"]', { timeout: 10000 });
 
-    // Check for results count
-    await expect(page.getByText(/Showing 1 of 1 executions/)).toBeVisible();
+    // Check for results count - component shows "X of Y" format
+    await expect(page.getByText(/1 of 1/)).toBeVisible();
   });
 
   test("filters should have accessible search region", async ({
@@ -468,13 +465,7 @@ test.describe("ActionExecutionTrail Mobile Layout", () => {
     );
 
     // Wait for data
-    await page.waitForSelector('[role="feed"]', { timeout: 10000 });
-
-    // Stats region should adapt to smaller viewport
-    const statsRegion = page.getByRole("region", {
-      name: "Action execution statistics",
-    });
-    await expect(statsRegion).toBeVisible();
+    await page.waitForSelector('[role="list"]', { timeout: 10000 });
 
     // Filters should still be visible
     const searchRegion = page.getByRole("search", {
@@ -482,9 +473,9 @@ test.describe("ActionExecutionTrail Mobile Layout", () => {
     });
     await expect(searchRegion).toBeVisible();
 
-    // Execution card should be visible and readable (use heading role)
+    // Execution row should be visible and readable (use role="button" from row header)
     await expect(
-      page.getByRole("heading", { name: "Extract Contract Fields" })
+      page.getByRole("button", { name: /Extract Contract Fields/ })
     ).toBeVisible();
   });
 
@@ -527,23 +518,19 @@ test.describe("ActionExecutionTrail Desktop Layout", () => {
     );
 
     // Wait for data
-    await page.waitForSelector('[role="feed"]', { timeout: 10000 });
+    await page.waitForSelector('[role="list"]', { timeout: 10000 });
 
-    // Stats should show in full grid - scope to stats region to avoid dropdown matches
-    const statsRegion = page.getByRole("region", {
-      name: "Action execution statistics",
-    });
-    await expect(statsRegion.getByText("Total")).toBeVisible();
-    await expect(statsRegion.getByText("Completed")).toBeVisible();
-    await expect(statsRegion.getByText("Running")).toBeVisible();
-    await expect(statsRegion.getByText("Queued")).toBeVisible();
-    await expect(statsRegion.getByText("Failed")).toBeVisible();
+    // All filter dropdowns visible (use aria-label locators)
+    await expect(page.locator('[aria-label="Filter by status"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Filter by type"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Filter by action"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Filter by time"]')).toBeVisible();
 
-    // All filter labels visible (use label locators)
-    await expect(page.locator('label[for="status-filter"]')).toBeVisible();
-    await expect(page.locator('label[for="type-filter"]')).toBeVisible();
-    await expect(page.locator('label[for="action-filter"]')).toBeVisible();
-    await expect(page.locator('label[for="time-filter"]')).toBeVisible();
+    // Execution row should be visible (use role="button" from row header)
+    await expect(
+      page.getByRole("button", { name: /Extract Contract Fields/ })
+    ).toBeVisible();
+    await expect(page.getByText("Sample Contract.pdf")).toBeVisible();
   });
 });
 
@@ -562,17 +549,14 @@ test.describe("ActionExecutionTrail Accessibility", () => {
     );
 
     // Wait for data
-    await page.waitForSelector('[role="feed"]', { timeout: 10000 });
+    await page.waitForSelector('[role="list"]', { timeout: 10000 });
 
-    // Check main regions
-    await expect(
-      page.getByRole("region", { name: "Action execution statistics" })
-    ).toBeVisible();
+    // Check main regions - component has search region and list
     await expect(
       page.getByRole("search", { name: "Filter action executions" })
     ).toBeVisible();
     await expect(
-      page.getByRole("feed", { name: "Action execution history" })
+      page.getByRole("list", { name: "Action executions" })
     ).toBeVisible();
   });
 
@@ -589,7 +573,7 @@ test.describe("ActionExecutionTrail Accessibility", () => {
     );
 
     // Wait for data
-    await page.waitForSelector('[role="feed"]', { timeout: 10000 });
+    await page.waitForSelector('[role="list"]', { timeout: 10000 });
 
     // Check for live region with results count
     const statusElement = page.getByRole("status");
@@ -623,7 +607,7 @@ test.describe("ActionExecutionTrail Error Handling", () => {
           query: GET_CORPUS_ACTION_EXECUTIONS,
           variables: {
             corpusId: "corpus-1",
-            first: 20,
+            first: 25,
           },
         },
         error: new Error("Network error: Failed to fetch"),

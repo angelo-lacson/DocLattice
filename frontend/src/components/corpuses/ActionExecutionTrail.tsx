@@ -127,6 +127,30 @@ const LoadingContainer = styled.div`
   color: #94a3b8;
 `;
 
+const ErrorState = styled.div`
+  text-align: center;
+  padding: 40px 20px;
+  color: #dc2626;
+
+  .error-icon {
+    font-size: 2rem;
+    margin-bottom: 12px;
+    opacity: 0.7;
+  }
+
+  .error-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #991b1b;
+    margin-bottom: 4px;
+  }
+
+  .error-description {
+    font-size: 0.85rem;
+    color: #b91c1c;
+  }
+`;
+
 const STATUS_OPTIONS = [
   { key: "all", value: "", text: "All Statuses" },
   { key: "queued", value: "queued", text: "Queued" },
@@ -202,6 +226,7 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
   const {
     data: executionsData,
     loading: executionsLoading,
+    error: executionsError,
     fetchMore,
   } = useQuery<GetCorpusActionExecutionsOutput, GetCorpusActionExecutionsInput>(
     GET_CORPUS_ACTION_EXECUTIONS,
@@ -332,15 +357,26 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
       </FiltersRow>
 
       {/* Loading State */}
-      {executionsLoading && executions.length === 0 && (
+      {executionsLoading && executions.length === 0 && !executionsError && (
         <LoadingContainer role="status">
           <Loader active inline="centered" size="small" />
           <p style={{ marginTop: "12px" }}>Loading executions...</p>
         </LoadingContainer>
       )}
 
+      {/* Error State */}
+      {executionsError && (
+        <ErrorState role="alert">
+          <Icon name="exclamation triangle" className="error-icon" />
+          <div className="error-title">Error Loading Executions</div>
+          <div className="error-description">
+            Unable to load execution history. Please try again later.
+          </div>
+        </ErrorState>
+      )}
+
       {/* Empty State */}
-      {!executionsLoading && executions.length === 0 && (
+      {!executionsLoading && !executionsError && executions.length === 0 && (
         <EmptyState role="status">
           <Icon name="history" className="empty-icon" />
           <div className="empty-title">No Executions Found</div>
@@ -353,7 +389,7 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
       )}
 
       {/* Executions List with infinite scroll */}
-      {executions.length > 0 && (
+      {!executionsError && executions.length > 0 && (
         <ExecutionsList role="list" aria-label="Action executions">
           {executions.map(({ node }) => (
             <ActionExecutionRow key={node.id} execution={node} />
