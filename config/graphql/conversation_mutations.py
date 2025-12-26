@@ -458,6 +458,12 @@ class UpdateMessageMutation(graphene.Mutation):
 
     Security Note: Only the message creator or a moderator can edit messages.
     Mention links are re-parsed when content is updated.
+
+    XSS Prevention Note: The content field contains user-generated markdown text
+    that must be properly escaped when rendered in the frontend to prevent XSS
+    attacks. GraphQL's GenericScalar handles JSON serialization safely, but the
+    frontend must use a markdown renderer that sanitizes HTML output.
+
     Part of Issue #686 - Mobile UI for Edit Message Modal
     """
 
@@ -497,9 +503,17 @@ class UpdateMessageMutation(graphene.Mutation):
             # (moderators can see all messages in conversations they moderate)
             # This prevents IDOR enumeration while properly handling moderator access.
             # Use select_for_update() to prevent race conditions from concurrent edits.
+            # Use select_related() to avoid N+1 queries when accessing conversation/corpus
+            # for mention parsing and moderator checks.
             try:
                 chat_message = (
                     ChatMessage.objects.visible_to_user(user)
+                    .select_related(
+                        "conversation",
+                        "conversation__chat_with_corpus",
+                        "conversation__chat_with_document",
+                        "creator",
+                    )
                     .select_for_update()
                     .get(pk=message_pk)
                 )
@@ -558,6 +572,8 @@ class UpdateMessageMutation(graphene.Mutation):
             chat_message.source_annotations.clear()
             chat_message.mentioned_agents.clear()
 
+            # Track if mention parsing succeeded for UX feedback
+            mention_parse_success = True
             try:
                 mentioned_ids = parse_mentions_from_content(content)
                 link_result = link_message_to_resources(chat_message, mentioned_ids)
@@ -575,12 +591,20 @@ class UpdateMessageMutation(graphene.Mutation):
             except (AttributeError, KeyError, TypeError, ValueError) as e:
                 # Don't fail the whole mutation if mention parsing fails
                 # These are the expected exceptions from parsing/linking logic
+                mention_parse_success = False
                 logger.warning(
-                    f"Error re-parsing mentions in updated message {chat_message.pk}: {e}"
+                    f"Error re-parsing mentions in updated message {chat_message.pk}: "
+                    f"{type(e).__name__}: {e}"
                 )
 
             ok = True
-            message = "Message updated successfully"
+            # Provide feedback if mentions failed to parse (UX improvement)
+            if mention_parse_success:
+                message = "Message updated successfully"
+            else:
+                message = (
+                    "Message updated, but some mentions may not have been recognized"
+                )
             obj = chat_message
 
         except Exception as e:
