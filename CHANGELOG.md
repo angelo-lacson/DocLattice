@@ -5,7 +5,16 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-25
+## [Unreleased] - 2025-12-26
+
+### Fixed
+
+#### Agent Chat Processing Indicator (PR #687)
+- **Added visual feedback for agent processing** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1342-1405`): When an agent starts processing a response, an animated "Agent is thinking..." indicator now displays instead of an empty message bubble
+- **Processing indicator conditions**: Shows when assistant message is incomplete with no content and no timeline entries
+- **Accessibility improvements**: Added ARIA attributes (`role="status"`, `aria-live="polite"`, `aria-label`) for screen reader support
+- **Animation performance**: Added `will-change: transform, opacity` to animated dots for smoother rendering
+- **Component tests**: Added comprehensive Playwright component tests (`frontend/tests/chat-message-processing-indicator.ct.tsx`) covering indicator visibility, accessibility, and state transitions
 
 ### Added
 
