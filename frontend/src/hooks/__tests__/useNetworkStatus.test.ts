@@ -393,4 +393,186 @@ describe("useNetworkStatus", () => {
       windowRemoveEventListenerSpy.mockRestore();
     });
   });
+
+  describe("rapid visibility changes", () => {
+    it("should handle rapid hide/show cycles correctly", () => {
+      const onResume = vi.fn();
+      const onHide = vi.fn();
+      const { result } = renderHook(() =>
+        useNetworkStatus({ onResume, onHide, resumeThreshold: 1000 })
+      );
+
+      // Simulate rapid screen lock/unlock/lock/unlock cycle
+      // First hide
+      act(() => {
+        Object.defineProperty(document, "visibilityState", {
+          value: "hidden",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect(onHide).toHaveBeenCalledTimes(1);
+      expect(result.current.status.isVisible).toBe(false);
+
+      // Quick show (within threshold - should NOT trigger resume)
+      act(() => {
+        vi.advanceTimersByTime(200);
+        Object.defineProperty(document, "visibilityState", {
+          value: "visible",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect(onResume).not.toHaveBeenCalled();
+      expect(result.current.status.isVisible).toBe(true);
+
+      // Second hide
+      act(() => {
+        Object.defineProperty(document, "visibilityState", {
+          value: "hidden",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect(onHide).toHaveBeenCalledTimes(2);
+
+      // Quick show again (within threshold)
+      act(() => {
+        vi.advanceTimersByTime(300);
+        Object.defineProperty(document, "visibilityState", {
+          value: "visible",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect(onResume).not.toHaveBeenCalled();
+
+      // Third hide, then long delay (over threshold)
+      act(() => {
+        Object.defineProperty(document, "visibilityState", {
+          value: "hidden",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect(onHide).toHaveBeenCalledTimes(3);
+
+      act(() => {
+        vi.advanceTimersByTime(1500); // Over threshold
+        Object.defineProperty(document, "visibilityState", {
+          value: "visible",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      // NOW onResume should be called
+      expect(onResume).toHaveBeenCalledTimes(1);
+      expect(result.current.status.justResumed).toBe(true);
+    });
+
+    it("should properly clean up justResumed timeouts on rapid changes", () => {
+      const { result } = renderHook(() =>
+        useNetworkStatus({ resumeThreshold: 500 })
+      );
+
+      // First cycle - hide long enough to trigger resume
+      act(() => {
+        Object.defineProperty(document, "visibilityState", {
+          value: "hidden",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(600);
+        Object.defineProperty(document, "visibilityState", {
+          value: "visible",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(result.current.status.justResumed).toBe(true);
+
+      // Immediately hide again before justResumed timeout clears
+      act(() => {
+        vi.advanceTimersByTime(50); // Less than JUST_RESUMED_CLEAR_DELAY (100ms)
+        Object.defineProperty(document, "visibilityState", {
+          value: "hidden",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      // justResumed should be cleared when hiding
+      expect(result.current.status.justResumed).toBe(false);
+      expect(result.current.status.isVisible).toBe(false);
+
+      // Wait past the original timeout - should not cause issues
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      // State should remain stable
+      expect(result.current.status.isVisible).toBe(false);
+    });
+
+    it("should handle simultaneous visibility and network changes", () => {
+      const onResume = vi.fn();
+      const onOnline = vi.fn();
+      const onOffline = vi.fn();
+
+      renderHook(() =>
+        useNetworkStatus({
+          onResume,
+          onOnline,
+          onOffline,
+          resumeThreshold: 1000,
+        })
+      );
+
+      // Hide page and go offline simultaneously
+      act(() => {
+        Object.defineProperty(document, "visibilityState", {
+          value: "hidden",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+        window.dispatchEvent(new Event("offline"));
+      });
+
+      expect(onOffline).toHaveBeenCalledTimes(1);
+
+      // Wait past threshold
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+
+      // Come online and show page simultaneously
+      act(() => {
+        Object.defineProperty(document, "visibilityState", {
+          value: "visible",
+          writable: true,
+          configurable: true,
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+        window.dispatchEvent(new Event("online"));
+      });
+
+      expect(onResume).toHaveBeenCalledTimes(1);
+      expect(onOnline).toHaveBeenCalledTimes(1);
+    });
+  });
 });
