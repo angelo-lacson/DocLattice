@@ -304,7 +304,7 @@ This section provides a comprehensive reference for how permissions work across 
 | **Extract** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
 | **Conversation (CHAT)** | Context-based | `chat_with_corpus` OR `chat_with_document` | `is_public` flag | Only ONE context field can be set |
 | **Conversation (THREAD)** | Context-based | `chat_with_corpus` AND/OR `chat_with_document` | `is_public` flag | BOTH context fields can be set for doc-in-corpus threads |
-| **ChatMessage** | Inherited (Conversation) | Parent conversation permissions | None | Uses conversation's context permissions |
+| **ChatMessage** | Inherited (Conversation) + Moderator | Parent conversation permissions | Moderator access | Moderators see all messages; see [ChatMessage Visibility](#chatmessage-visibility-moderator-access) |
 | **UserBadge** | Privacy-filtered | Recipient's profile privacy | Corpus membership | Follows recipient's `is_profile_public` |
 | **User** | Privacy-controlled | `is_profile_public` | Corpus membership | Private users visible via shared corpus with > READ |
 
@@ -349,6 +349,45 @@ Access Check (only ONE of corpus/document set):
     can_access = has_corpus_permission OR corpus_is_public
   ELIF chat_with_document:
     can_access = has_document_permission OR document_is_public
+```
+
+#### ChatMessage Visibility (Moderator Access)
+
+ChatMessages use a custom `visible_to_user()` method that extends visibility to include moderator access. This ensures that corpus owners, document owners, and thread creators can see all messages in their conversations for moderation purposes.
+
+```
+Visibility Check (ChatMessage.visible_to_user):
+  can_see_message = is_superuser
+                    OR message is in public conversation
+                    OR user created the message
+                    OR user has explicit permission on the message
+                    OR user can moderate the conversation
+
+Moderator Conditions (for visibility):
+  can_moderate = conversation.creator == user
+                 OR user owns corpus (chat_with_corpus.creator == user)
+                 OR user owns document (chat_with_document.creator == user)
+```
+
+**Key Implementation Details:**
+- Located in `ChatMessageQuerySet.visible_to_user()` (`opencontractserver/conversations/models.py`)
+- Moderators can see ALL messages in conversations they moderate, even without explicit message permissions
+- This extends the base `SoftDeleteQuerySet.visible_to_user()` method
+- Mutations like UpdateMessage and DeleteMessage use this visibility check and additionally verify the user has edit/delete permissions (or is a moderator)
+
+**Example:**
+```python
+# Corpus owner can see all messages in threads linked to their corpus
+corpus = Corpus.objects.create(title="Legal Docs", creator=alice)
+thread = Conversation.objects.create(chat_with_corpus=corpus, creator=bob)
+message = ChatMessage.objects.create(conversation=thread, creator=charlie)
+
+# Alice can see and moderate charlie's message (as corpus owner)
+visible = ChatMessage.objects.visible_to_user(alice)
+assert message in visible  # Alice sees it
+
+# Alice can also edit the message (as moderator)
+can_edit = thread.can_moderate(alice)  # True
 ```
 
 ### Anonymous User Access Summary

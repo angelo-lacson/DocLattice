@@ -164,9 +164,99 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
     """
     QuerySet for ChatMessage model with vector search capabilities.
     Combines soft-delete filtering with vector similarity search.
+
+    IMPORTANT: This queryset extends visibility to include moderator access.
+    Users who are moderators of a conversation (via can_moderate()) can see
+    all messages in that conversation, even without explicit message permissions.
     """
 
     EMBEDDING_RELATED_NAME = "embedding_set"
+
+    def visible_to_user(self, user=None):
+        """
+        Returns queryset filtered to messages visible to the user.
+
+        A user can see a message if ANY of:
+        1. User is superuser
+        2. Message is in a public conversation
+        3. User created the message
+        4. User has explicit permission on the message
+        5. User can moderate the conversation (corpus/document/thread owner)
+
+        The moderator access (case 5) is the key extension over the base
+        SoftDeleteQuerySet.visible_to_user() method. This ensures that
+        corpus owners, document owners, and thread creators can see all
+        messages in their conversations for moderation purposes.
+        """
+        from django.contrib.auth.models import AnonymousUser
+        from django.db.models import Q
+
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import Document
+
+        # Handle None user as anonymous
+        if user is None:
+            user = AnonymousUser()
+
+        # Start with current queryset (already has soft-delete filtering)
+        queryset = self.filter(deleted_at__isnull=True)
+
+        # Superusers see everything
+        if hasattr(user, "is_superuser") and user.is_superuser:
+            return queryset.order_by("created")
+
+        # Anonymous users only see messages in public conversations
+        if user.is_anonymous:
+            return queryset.filter(conversation__is_public=True)
+
+        # Build visibility conditions for authenticated users
+        # Base conditions: created by them, explicitly shared, or public conversation
+        from django.apps import apps
+
+        try:
+            permission_model = apps.get_model(
+                "conversations", "chatmessageuserobjectpermission"
+            )
+            has_permission = Q(
+                id__in=permission_model.objects.filter(user=user).values_list(
+                    "content_object_id", flat=True
+                )
+            )
+        except LookupError:
+            has_permission = Q(pk__in=[])
+
+        base_conditions = (
+            Q(creator=user)  # User created the message
+            | has_permission  # User has explicit permission
+            | Q(conversation__is_public=True)  # Public conversation
+        )
+
+        # Moderator conditions: user can moderate the conversation
+        # This includes:
+        # - Conversation creator
+        # - Corpus owner (for corpus-linked threads)
+        # - Document owner (for document-linked threads)
+
+        # Get IDs of corpuses user owns
+        owned_corpus_ids = Corpus.objects.filter(creator=user).values_list(
+            "id", flat=True
+        )
+
+        # Get IDs of documents user owns
+        owned_document_ids = Document.objects.filter(creator=user).values_list(
+            "id", flat=True
+        )
+
+        moderator_conditions = (
+            Q(conversation__creator=user)  # Thread creator
+            | Q(conversation__chat_with_corpus_id__in=owned_corpus_ids)  # Corpus owner
+            | Q(
+                conversation__chat_with_document_id__in=owned_document_ids
+            )  # Document owner
+        )
+
+        # Combine all conditions with OR
+        return queryset.filter(base_conditions | moderator_conditions).distinct()
 
     def search_by_embedding(
         self,

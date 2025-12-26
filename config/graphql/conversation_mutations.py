@@ -493,53 +493,35 @@ class UpdateMessageMutation(graphene.Mutation):
                     obj=None,
                 )
 
-            # First try to get message using visible_to_user pattern (prevents IDOR)
-            # If not found, also check if user is a moderator of the conversation
-            chat_message = None
-            is_moderator = False
-
-            # Standard permission-based access
+            # Use visible_to_user() which now includes moderator access
+            # (moderators can see all messages in conversations they moderate)
+            # This prevents IDOR enumeration while properly handling moderator access.
             try:
                 chat_message = ChatMessage.objects.visible_to_user(user).get(
                     pk=message_pk
                 )
             except ChatMessage.DoesNotExist:
-                pass
-
-            # If not found via permissions, check moderator access or deleted message
-            # Moderators can access messages in conversations they moderate
-            # Also need to check if the user is the creator and message is deleted
-            # NOTE: Use all_objects to include soft-deleted messages for proper error handling
-            if chat_message is None:
-                try:
-                    # Query ALL messages (including deleted) using all_objects
-                    candidate = ChatMessage.all_objects.filter(pk=message_pk).first()
-                    if candidate:
-                        # Check if user can moderate OR is the message creator
-                        if candidate.conversation.can_moderate(user):
-                            chat_message = candidate
-                            is_moderator = True
-                        elif candidate.creator == user:
-                            # User is creator - allow them to see their own message
-                            # (even if deleted, so we can give proper error)
-                            chat_message = candidate
-                except Exception:
-                    pass
-
-            if chat_message is None:
-                return UpdateMessageMutation(
-                    ok=False,
-                    message="You do not have permission to edit this message",
-                    obj=None,
-                )
+                # Check if this is a deleted message that user should be able to see
+                # (to give proper "message is deleted" error instead of generic permission error)
+                candidate = ChatMessage.all_objects.filter(pk=message_pk).first()
+                if candidate and (
+                    candidate.creator == user
+                    or candidate.conversation.can_moderate(user)
+                ):
+                    chat_message = candidate
+                else:
+                    return UpdateMessageMutation(
+                        ok=False,
+                        message="You do not have permission to edit this message",
+                        obj=None,
+                    )
 
             # Check if user has permission to update (CRUD includes update)
+            # Moderators can always edit messages in conversations they moderate
             has_update_permission = user_has_permission_for_obj(
                 user, chat_message, PermissionTypes.CRUD
             )
-            # Re-check moderator status if not already determined
-            if not is_moderator:
-                is_moderator = chat_message.conversation.can_moderate(user)
+            is_moderator = chat_message.conversation.can_moderate(user)
 
             if not has_update_permission and not is_moderator:
                 return UpdateMessageMutation(
