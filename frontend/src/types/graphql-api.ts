@@ -1555,15 +1555,23 @@ export type ConversationTypeEdge = {
   cursor: Scalars["String"];
 };
 
-// Mentioned resource type for @corpus: and @document: mentions (Issue #623)
+// Mentioned resource type for @corpus:, @document:, and annotation mentions (Issue #623, #689)
 export type MentionedResourceType = {
   __typename?: "MentionedResourceType";
-  type: "CORPUS" | "DOCUMENT";
+  type: "CORPUS" | "DOCUMENT" | "ANNOTATION";
   id: Scalars["ID"];
-  slug: Scalars["String"];
+  slug?: Maybe<Scalars["String"]>; // Null for annotations
   title: Scalars["String"];
   url: Scalars["String"];
   corpus?: Maybe<{
+    slug: Scalars["String"];
+    title: Scalars["String"];
+  }>;
+  // Annotation-specific fields (Issue #689)
+  rawText?: Maybe<Scalars["String"]>;
+  annotationLabel?: Maybe<Scalars["String"]>;
+  document?: Maybe<{
+    id: Scalars["ID"];
     slug: Scalars["String"];
     title: Scalars["String"];
   }>;

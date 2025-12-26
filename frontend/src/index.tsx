@@ -13,6 +13,7 @@ import { errorLink } from "./graphql/errorLink";
 import { LooseObject } from "./components/types";
 import { getRuntimeEnv } from "./utils/env";
 import { HelmetProvider } from "react-helmet-async";
+import { NetworkStatusHandler } from "./components/network";
 
 import "./index.css";
 import reportWebVitals from "./reportWebVitals";
@@ -84,6 +85,7 @@ if (REACT_APP_USE_AUTH0) {
       >
         <Auth0ProviderWithHistory {...providerConfig}>
           <ApolloProvider client={client}>
+            <NetworkStatusHandler />
             <App />
           </ApolloProvider>
         </Auth0ProviderWithHistory>
@@ -96,6 +98,7 @@ if (REACT_APP_USE_AUTH0) {
   root.render(
     <HelmetProvider>
       <ApolloProvider client={client}>
+        <NetworkStatusHandler />
         <BrowserRouter
           future={{
             v7_startTransition: true,

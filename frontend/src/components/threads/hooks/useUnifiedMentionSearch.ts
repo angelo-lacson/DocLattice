@@ -17,6 +17,8 @@ import {
   SearchAgentsForMentionInput,
   SearchAgentsForMentionOutput,
 } from "../../../graphql/queries";
+import { MENTION_PREVIEW_LENGTH } from "../../../assets/configurations/constants";
+import { sanitizeForMention } from "../../../utils/textSanitization";
 
 export interface UnifiedMentionResource {
   id: string;
@@ -289,18 +291,28 @@ export function useUnifiedMentionSearch(
       annotationData?.searchAnnotationsForMention?.edges
         ?.slice(0, limitPerCategory)
         .map((edge) => {
-          // Create preview text from rawText or label
-          const previewText =
-            edge.node.rawText && edge.node.rawText.length > 60
-              ? edge.node.rawText.substring(0, 60) + "..."
-              : edge.node.rawText || `[${edge.node.annotationLabel.text}]`;
+          // Create short preview text from rawText for primary display
+          // This makes the picker more user-friendly by showing actual content
+          // Fixes Issue #689 - Inline reference cards show cryptic information
+          // Sanitize user-generated content to prevent XSS (per CLAUDE.md)
+          const sanitizedRawText = edge.node.rawText
+            ? sanitizeForMention(edge.node.rawText)
+            : null;
+          const shortPreviewText = sanitizedRawText
+            ? sanitizedRawText.length > MENTION_PREVIEW_LENGTH
+              ? sanitizedRawText.substring(0, MENTION_PREVIEW_LENGTH) + "…"
+              : sanitizedRawText
+            : `[${edge.node.annotationLabel.text}]`;
 
           return {
             id: edge.node.id,
             type: "annotation" as const,
-            title: edge.node.annotationLabel.text,
-            subtitle: previewText,
-            metadata: `${edge.node.document.title} • page ${edge.node.page}`,
+            // Show actual text content as primary title for clarity
+            title: shortPreviewText,
+            // Show label and page info as secondary context
+            subtitle: `${edge.node.annotationLabel.text} • Page ${edge.node.page}`,
+            // Show document title as metadata
+            metadata: `in "${edge.node.document.title}"`,
             annotation: {
               rawText: edge.node.rawText,
               page: edge.node.page,
