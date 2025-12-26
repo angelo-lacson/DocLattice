@@ -38,9 +38,10 @@ function getAgentDisplayData(
 ): AgentDisplayData | null {
   if (!agentConfig) return null;
 
-  const badgeConfig = agentConfig.badgeConfig as
-    | { color?: string; icon?: string }
-    | null;
+  const badgeConfig = agentConfig.badgeConfig as {
+    color?: string;
+    icon?: string;
+  } | null;
 
   return {
     name: agentConfig.name,
@@ -62,7 +63,10 @@ interface MessageItemProps {
 function hexToRgba(hex: string, alpha: number): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (!result) return `rgba(74, 144, 226, ${alpha})`;
-  return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`;
+  return `rgba(${parseInt(result[1], 16)}, ${parseInt(
+    result[2],
+    16
+  )}, ${parseInt(result[3], 16)}, ${alpha})`;
 }
 
 const MessageContainer = styled.div<{
@@ -95,7 +99,10 @@ const MessageContainer = styled.div<{
     if (props.$isAgent) {
       // Subtle gradient using agent color with very low opacity
       const agentColor = props.$agentColor || "#4A90E2";
-      return `linear-gradient(135deg, ${hexToRgba(agentColor, 0.08)} 0%, ${hexToRgba(agentColor, 0.03)} 100%)`;
+      return `linear-gradient(135deg, ${hexToRgba(
+        agentColor,
+        0.08
+      )} 0%, ${hexToRgba(agentColor, 0.03)} 100%)`;
     }
     return "#ffffff";
   }};
@@ -141,7 +148,9 @@ const MessageContainer = styled.div<{
       top: 0;
       bottom: 0;
       width: 4px;
-      background: linear-gradient(180deg, ${props.$agentColor || "#4A90E2"} 0%, ${props.$agentColor || "#4A90E2"}88 100%);
+      background: linear-gradient(180deg, ${
+        props.$agentColor || "#4A90E2"
+      } 0%, ${props.$agentColor || "#4A90E2"}88 100%);
       border-radius: 12px 0 0 12px;
     }
   `}
@@ -214,7 +223,9 @@ const UserAvatar = styled.div<{ $isAgent?: boolean; $agentColor?: string }>`
   border-radius: 50%;
   background: ${(props) =>
     props.$isAgent
-      ? `linear-gradient(135deg, ${props.$agentColor || "#4A90E2"} 0%, ${props.$agentColor || "#4A90E2"}dd 100%)`
+      ? `linear-gradient(135deg, ${props.$agentColor || "#4A90E2"} 0%, ${
+          props.$agentColor || "#4A90E2"
+        }dd 100%)`
       : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)"};
   display: flex;
   align-items: center;
@@ -536,7 +547,9 @@ export const MessageItem = React.memo(function MessageItem({
       $isAgent={isAgent}
       $agentColor={agentData?.color}
       role="article"
-      aria-label={`Message from ${isAgent ? `${agentData.name} (AI Agent)` : username}`}
+      aria-label={`Message from ${
+        isAgent ? `${agentData.name} (AI Agent)` : username
+      }`}
     >
       {/* Header */}
       <MessageHeader>
