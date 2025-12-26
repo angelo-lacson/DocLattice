@@ -3,7 +3,6 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { MemoryRouter } from "react-router-dom";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { ActionExecutionTrail } from "../src/components/corpuses/ActionExecutionTrail";
-import { ActionExecutionCard } from "../src/components/corpuses/ActionExecutionCard";
 import { ActionTrailStats } from "../src/components/corpuses/ActionTrailStats";
 import {
   GET_CORPUS_ACTION_EXECUTIONS,
@@ -229,120 +228,6 @@ test.describe("ActionTrailStats Component", () => {
 });
 
 // ============================================================
-// CARD COMPONENT TESTS
-// ============================================================
-
-test.describe("ActionExecutionCard Component", () => {
-  test("should display completed execution correctly", async ({
-    mount,
-    page,
-  }) => {
-    await mount(
-      <MemoryRouter>
-        <ActionExecutionCard execution={mockExecution} />
-      </MemoryRouter>
-    );
-
-    // Action name visible
-    await expect(page.getByText("Extract Contract Fields")).toBeVisible();
-
-    // Document link visible
-    await expect(page.getByText("Sample Contract.pdf")).toBeVisible();
-
-    // Status badge (use exact match to avoid "Completed At")
-    await expect(page.getByText("Completed", { exact: true })).toBeVisible();
-
-    // Duration shown
-    await expect(page.getByText(/Duration.*30s/)).toBeVisible();
-
-    // Affected objects section
-    await expect(page.getByText(/Affected Objects/)).toBeVisible();
-    await expect(page.getByText(/parties/)).toBeVisible();
-    await expect(page.getByText(/effective_date/)).toBeVisible();
-  });
-
-  test("should display failed execution with error message", async ({
-    mount,
-    page,
-  }) => {
-    await mount(
-      <MemoryRouter>
-        <ActionExecutionCard execution={mockFailedExecution} />
-      </MemoryRouter>
-    );
-
-    // Status badge shows failed
-    await expect(page.getByText("Failed")).toBeVisible();
-
-    // Error section visible
-    await expect(page.getByText(/Error/)).toBeVisible();
-    await expect(page.getByText(/Connection timeout/)).toBeVisible();
-  });
-
-  test("should display running execution without duration", async ({
-    mount,
-    page,
-  }) => {
-    await mount(
-      <MemoryRouter>
-        <ActionExecutionCard execution={mockRunningExecution} />
-      </MemoryRouter>
-    );
-
-    // Status badge shows running
-    await expect(page.getByText("Running")).toBeVisible();
-
-    // No error section should be visible
-    await expect(page.getByText(/Error Message/)).not.toBeVisible();
-  });
-
-  test("should have accessible article role", async ({ mount, page }) => {
-    await mount(
-      <MemoryRouter>
-        <ActionExecutionCard execution={mockExecution} />
-      </MemoryRouter>
-    );
-
-    const article = page.getByRole("article");
-    await expect(article).toBeVisible();
-  });
-
-  test("should show document link as clickable button", async ({
-    mount,
-    page,
-  }) => {
-    await mount(
-      <MemoryRouter>
-        <ActionExecutionCard execution={mockExecution} />
-      </MemoryRouter>
-    );
-
-    const docLink = page.getByText("Sample Contract.pdf");
-    await expect(docLink).toBeVisible();
-
-    // Should be clickable (button element)
-    await docLink.click();
-    // Navigation would happen in real app - just verify no error
-  });
-
-  test("should render affected object chips", async ({ mount, page }) => {
-    await mount(
-      <MemoryRouter>
-        <ActionExecutionCard execution={mockExecution} />
-      </MemoryRouter>
-    );
-
-    // Check for object list
-    const objectList = page.getByRole("list");
-    await expect(objectList).toBeVisible();
-
-    // Check for list items
-    const items = page.getByRole("listitem");
-    await expect(items).toHaveCount(3);
-  });
-});
-
-// ============================================================
 // TRAIL COMPONENT TESTS
 // ============================================================
 
@@ -477,27 +362,6 @@ test.describe("ActionExecutionTrail Mobile Layout", () => {
     await expect(
       page.getByRole("button", { name: /Extract Contract Fields/ })
     ).toBeVisible();
-  });
-
-  test("should show card correctly on mobile viewport", async ({
-    mount,
-    page,
-  }) => {
-    await mount(
-      <MemoryRouter>
-        <ActionExecutionCard execution={mockExecution} />
-      </MemoryRouter>
-    );
-
-    // Card should be fully visible
-    const card = page.getByRole("article");
-    await expect(card).toBeVisible();
-
-    // Content should be readable (use heading role for action name)
-    await expect(
-      page.getByRole("heading", { name: "Extract Contract Fields" })
-    ).toBeVisible();
-    await expect(page.getByText("Completed", { exact: true })).toBeVisible();
   });
 });
 

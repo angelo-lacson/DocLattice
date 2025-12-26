@@ -151,6 +151,31 @@ const ErrorState = styled.div`
   }
 `;
 
+const RetryButton = styled.button`
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: #b91c1c;
+  }
+
+  &:focus {
+    outline: 2px solid #dc2626;
+    outline-offset: 2px;
+  }
+`;
+
 const STATUS_OPTIONS = [
   { key: "all", value: "", text: "All Statuses" },
   { key: "queued", value: "queued", text: "Queued" },
@@ -228,6 +253,7 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
     loading: executionsLoading,
     error: executionsError,
     fetchMore,
+    refetch,
   } = useQuery<GetCorpusActionExecutionsOutput, GetCorpusActionExecutionsInput>(
     GET_CORPUS_ACTION_EXECUTIONS,
     {
@@ -372,6 +398,10 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
           <div className="error-description">
             Unable to load execution history. Please try again later.
           </div>
+          <RetryButton onClick={() => refetch()} aria-label="Retry loading">
+            <Icon name="refresh" />
+            Retry
+          </RetryButton>
         </ErrorState>
       )}
 
