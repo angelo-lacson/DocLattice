@@ -23,6 +23,7 @@ vi.mock("react-toastify", () => ({
     info: vi.fn(),
     success: vi.fn(),
     warning: vi.fn(),
+    error: vi.fn(),
     dismiss: vi.fn(),
   },
 }));
@@ -350,6 +351,51 @@ describe("NetworkStatusHandler", () => {
         "[NetworkStatusHandler] Error refetching queries:",
         expect.any(Error)
       );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("should show error toast when refetch fails and showToasts is true", async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      mockRefetchQueries.mockRejectedValueOnce(new Error("Network error"));
+
+      renderComponent({ showToasts: true });
+
+      await act(async () => {
+        mockOnResume();
+        // Wait a tick for the async rejection to be handled
+        await Promise.resolve();
+      });
+
+      expect(toast.error).toHaveBeenCalledWith(
+        "Failed to refresh data. Please reload the page.",
+        {
+          toastId: "network-refetch-error",
+          position: "bottom-right",
+          autoClose: 5000,
+        }
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("should NOT show error toast when refetch fails and showToasts is false", async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      mockRefetchQueries.mockRejectedValueOnce(new Error("Network error"));
+
+      renderComponent({ showToasts: false });
+
+      await act(async () => {
+        mockOnResume();
+        // Wait a tick for the async rejection to be handled
+        await Promise.resolve();
+      });
+
+      expect(toast.error).not.toHaveBeenCalled();
 
       consoleErrorSpy.mockRestore();
     });
