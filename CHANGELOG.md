@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Processing indicator conditions**: Shows when assistant message is incomplete with no content and no timeline entries
 - **Accessibility improvements**: Added ARIA attributes (`role="status"`, `aria-live="polite"`, `aria-label`) for screen reader support
 - **Animation performance**: Added `will-change: transform, opacity` to animated dots for smoother rendering
-- **Component tests**: Added comprehensive Playwright component tests (`frontend/tests/chat-message-processing-indicator.spec.tsx`) covering indicator visibility, accessibility, and state transitions
+- **Component tests**: Added comprehensive Playwright component tests (`frontend/tests/chat-message-processing-indicator.ct.tsx`) covering indicator visibility, accessibility, and state transitions
 
 ### Added
 

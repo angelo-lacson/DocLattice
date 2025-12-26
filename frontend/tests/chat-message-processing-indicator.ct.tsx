@@ -3,6 +3,7 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { ChatMessage } from "../src/components/widgets/chat/ChatMessage";
+import { ChatMessageTestWrapper } from "./ChatMessageTestWrapper";
 
 // Mock props for different message states
 const baseAssistantMessage = {
@@ -23,12 +24,14 @@ test.describe("ChatMessage Processing Indicator", () => {
     page,
   }) => {
     const component = await mount(
-      <ChatMessage
-        {...baseAssistantMessage}
-        content=""
-        isComplete={false}
-        timeline={[]}
-      />
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...baseAssistantMessage}
+          content=""
+          isComplete={false}
+          timeline={[]}
+        />
+      </ChatMessageTestWrapper>
     );
 
     // Processing indicator should be visible
@@ -52,12 +55,14 @@ test.describe("ChatMessage Processing Indicator", () => {
     page,
   }) => {
     const component = await mount(
-      <ChatMessage
-        {...baseAssistantMessage}
-        content=""
-        isComplete={false}
-        timeline={[]}
-      />
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...baseAssistantMessage}
+          content=""
+          isComplete={false}
+          timeline={[]}
+        />
+      </ChatMessageTestWrapper>
     );
 
     const indicator = page.locator('[data-testid="processing-indicator"]');
@@ -80,12 +85,14 @@ test.describe("ChatMessage Processing Indicator", () => {
   }) => {
     // First mount with no content
     const component = await mount(
-      <ChatMessage
-        {...baseAssistantMessage}
-        content=""
-        isComplete={false}
-        timeline={[]}
-      />
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...baseAssistantMessage}
+          content=""
+          isComplete={false}
+          timeline={[]}
+        />
+      </ChatMessageTestWrapper>
     );
 
     // Processing indicator should be visible initially
@@ -97,12 +104,14 @@ test.describe("ChatMessage Processing Indicator", () => {
 
     // Now mount with content
     const componentWithContent = await mount(
-      <ChatMessage
-        {...baseAssistantMessage}
-        content="Hello, I can help you with that."
-        isComplete={false}
-        timeline={[]}
-      />
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...baseAssistantMessage}
+          content="Hello, I can help you with that."
+          isComplete={false}
+          timeline={[]}
+        />
+      </ChatMessageTestWrapper>
     );
 
     // Processing indicator should NOT be visible
@@ -130,13 +139,15 @@ test.describe("ChatMessage Processing Indicator", () => {
     ];
 
     const component = await mount(
-      <ChatMessage
-        {...baseAssistantMessage}
-        content=""
-        isComplete={false}
-        timeline={timelineEntries}
-        hasTimeline={true}
-      />
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...baseAssistantMessage}
+          content=""
+          isComplete={false}
+          timeline={timelineEntries}
+          hasTimeline={true}
+        />
+      </ChatMessageTestWrapper>
     );
 
     // Processing indicator should NOT be visible
@@ -162,12 +173,14 @@ test.describe("ChatMessage Processing Indicator", () => {
     page,
   }) => {
     const component = await mount(
-      <ChatMessage
-        {...baseUserMessage}
-        content=""
-        isComplete={false}
-        timeline={[]}
-      />
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...baseUserMessage}
+          content=""
+          isComplete={false}
+          timeline={[]}
+        />
+      </ChatMessageTestWrapper>
     );
 
     // Processing indicator should NOT be visible for user messages
@@ -183,12 +196,14 @@ test.describe("ChatMessage Processing Indicator", () => {
     page,
   }) => {
     const component = await mount(
-      <ChatMessage
-        {...baseAssistantMessage}
-        content="Here is my response."
-        isComplete={true}
-        timeline={[]}
-      />
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...baseAssistantMessage}
+          content="Here is my response."
+          isComplete={true}
+          timeline={[]}
+        />
+      </ChatMessageTestWrapper>
     );
 
     // Processing indicator should NOT be visible when message is complete
@@ -207,12 +222,14 @@ test.describe("ChatMessage Processing Indicator", () => {
     page,
   }) => {
     const component = await mount(
-      <ChatMessage
-        {...baseAssistantMessage}
-        content=""
-        isComplete={false}
-        timeline={[]}
-      />
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...baseAssistantMessage}
+          content=""
+          isComplete={false}
+          timeline={[]}
+        />
+      </ChatMessageTestWrapper>
     );
 
     // Processing indicator should be visible
@@ -220,10 +237,11 @@ test.describe("ChatMessage Processing Indicator", () => {
       page.locator('[data-testid="processing-indicator"]')
     ).toBeVisible({ timeout: 3000 });
 
-    // Should have three animated dots (the dots are span elements inside ProcessingDots)
-    const dots = page.locator('[data-testid="processing-indicator"] span');
-    // ProcessingDots has 3 ProcessingDot children plus the ProcessingText
-    await expect(dots).toHaveCount(4); // 3 dots + 1 text span
+    // Should have three animated dots (the dots are span elements with aria-hidden="true")
+    const dots = page.locator(
+      '[data-testid="processing-indicator"] [aria-hidden="true"] > span'
+    );
+    await expect(dots).toHaveCount(3);
 
     await component.unmount();
   });
