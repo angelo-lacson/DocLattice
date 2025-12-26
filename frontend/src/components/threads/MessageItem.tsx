@@ -43,6 +43,8 @@ interface MessageItemProps {
   canDelete?: boolean;
   /** Corpus ID for mention context in edit modal */
   corpusId?: string;
+  /** Conversation ID for cache update after edit/delete */
+  conversationId?: string;
   /** Callback after successful message update */
   onMessageUpdated?: () => void;
   /** Callback after successful message deletion */
@@ -605,6 +607,7 @@ export const MessageItem = React.memo(function MessageItem({
   canEdit = false,
   canDelete = false,
   corpusId,
+  conversationId,
   onMessageUpdated,
   onMessageDeleted,
 }: MessageItemProps) {
@@ -880,6 +883,7 @@ export const MessageItem = React.memo(function MessageItem({
         messageId={message.id}
         initialContent={message.content || ""}
         corpusId={corpusId}
+        conversationId={conversationId}
         onSuccess={onMessageUpdated}
       />
 
