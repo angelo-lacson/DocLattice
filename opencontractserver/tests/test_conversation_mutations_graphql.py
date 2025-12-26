@@ -1052,8 +1052,6 @@ class ConversationMutationsTestCase(TestCase):
         with patch(
             "config.graphql.conversation_mutations.trigger_agent_responses_for_message"
         ) as mock_task:
-            mock_task.delay = lambda **kwargs: None
-
             result = self._execute_with_user(mutation, self.user, variables)
 
             self.assertIsNone(result.get("errors"))
@@ -1067,8 +1065,8 @@ class ConversationMutationsTestCase(TestCase):
             self.assertEqual(message.mentioned_agents.first(), agent)
 
             # Verify Celery task was called to trigger agent response
-            mock_task.delay.assert_not_called  # delay was replaced with lambda
-            # The mock verifies the method was accessed (patched)
+            # (agent was mentioned, so task should be triggered)
+            mock_task.delay.assert_called_once()
 
 
 class DualContextThreadAccessControlTestCase(TestCase):

@@ -502,7 +502,13 @@ class UpdateMessageMutation(graphene.Mutation):
             # Use visible_to_user() which now includes moderator access
             # (moderators can see all messages in conversations they moderate)
             # This prevents IDOR enumeration while properly handling moderator access.
-            # Use select_for_update() to prevent race conditions from concurrent edits.
+            #
+            # NOTE: We do not use select_for_update() here because:
+            # 1. visible_to_user() uses DISTINCT, which is incompatible with FOR UPDATE
+            # 2. select_related() with nullable FKs uses outer joins, also incompatible
+            # The @transaction.atomic decorator provides sufficient transactional integrity
+            # for message editing, which is not a high-concurrency operation.
+            #
             # Use select_related() to avoid N+1 queries when accessing conversation/corpus
             # for mention parsing and moderator checks.
             try:
@@ -514,7 +520,6 @@ class UpdateMessageMutation(graphene.Mutation):
                         "conversation__chat_with_document",
                         "creator",
                     )
-                    .select_for_update()
                     .get(pk=message_pk)
                 )
             except ChatMessage.DoesNotExist:
