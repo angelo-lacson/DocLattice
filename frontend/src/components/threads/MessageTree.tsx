@@ -113,6 +113,7 @@ export const MessageTree = React.memo(function MessageTree({
               canEdit={canEdit}
               canDelete={canDelete}
               corpusId={corpusId}
+              conversationId={conversationId}
               onMessageUpdated={onMessageUpdated}
               onMessageDeleted={onMessageDeleted}
             />

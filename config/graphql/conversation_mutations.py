@@ -546,17 +546,12 @@ class UpdateMessageMutation(graphene.Mutation):
                     obj=None,
                 )
 
-            # Update the message content
+            # Update the message content and clear source_document in a single save
             chat_message.content = content
-            chat_message.save(update_fields=["content", "modified"])
-
-            # Clear existing resource links and re-parse mentions
-            # Note: Use correct field names from ChatMessage model:
-            # - source_document (FK) - set to None
-            # - source_annotations (M2M) - clear
-            # - mentioned_agents (M2M) - clear
             chat_message.source_document = None
-            chat_message.save(update_fields=["source_document"])
+            chat_message.save(update_fields=["content", "source_document", "modified"])
+
+            # Clear M2M relationships (these don't require save())
             chat_message.source_annotations.clear()
             chat_message.mentioned_agents.clear()
 
@@ -574,16 +569,19 @@ class UpdateMessageMutation(graphene.Mutation):
                     logger.debug(
                         f"Triggered agent responses for updated message {chat_message.pk}"
                     )
-            except Exception as e:
+            except (AttributeError, KeyError, TypeError, ValueError) as e:
                 # Don't fail the whole mutation if mention parsing fails
-                logger.error(f"Error re-parsing mentions in updated message: {e}")
+                # These are the expected exceptions from parsing/linking logic
+                logger.warning(
+                    f"Error re-parsing mentions in updated message {chat_message.pk}: {e}"
+                )
 
             ok = True
             message = "Message updated successfully"
             obj = chat_message
 
         except Exception as e:
-            logger.error(f"Error updating message: {e}")
+            logger.error(f"Error updating message: {type(e).__name__}: {e}")
             message = "Failed to update message"
 
         return UpdateMessageMutation(ok=ok, message=message, obj=obj)

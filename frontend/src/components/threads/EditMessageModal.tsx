@@ -23,6 +23,7 @@ import {
   UpdateMessageInput,
   UpdateMessageOutput,
 } from "../../graphql/mutations";
+import { GET_THREAD_DETAIL } from "../../graphql/queries";
 
 /**
  * Props for the EditMessageModal component.
@@ -38,6 +39,8 @@ interface EditMessageModalProps {
   initialContent: string;
   /** Corpus ID for mention context (enables @-mentions) */
   corpusId?: string;
+  /** Conversation ID for refetching thread data after update */
+  conversationId?: string;
   /** Callback fired after successful message update */
   onSuccess?: () => void;
 }
@@ -247,6 +250,7 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
   messageId,
   initialContent,
   corpusId,
+  conversationId,
   onSuccess,
 }) => {
   const [content, setContent] = useState(initialContent);
@@ -269,11 +273,23 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
     }
 
     try {
+      // Build refetch queries if conversationId is available
+      const refetchQueries = conversationId
+        ? [
+            {
+              query: GET_THREAD_DETAIL,
+              variables: { conversationId },
+            },
+          ]
+        : [];
+
       const result = await updateMessage({
         variables: {
           messageId,
           content,
         },
+        refetchQueries,
+        awaitRefetchQueries: true,
       });
 
       if (result.data?.updateMessage.ok) {
@@ -288,7 +304,7 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
       console.error("Error updating message:", err);
       setError("An error occurred while updating the message");
     }
-  }, [content, messageId, updateMessage, onSuccess, onClose]);
+  }, [content, messageId, conversationId, updateMessage, onSuccess, onClose]);
 
   const handleClose = useCallback(() => {
     // Check for unsaved changes
