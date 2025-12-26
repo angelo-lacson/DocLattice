@@ -88,8 +88,8 @@ const MessageContainer = styled(motion.div)<{
     props.$isSelected
       ? "rgba(92,124,157,0.05)"
       : props.$isAssistant
-        ? "rgba(247, 249, 252, 0.3)"
-        : "rgba(247, 248, 249, 0.15)"};
+      ? "rgba(247, 249, 252, 0.3)"
+      : "rgba(247, 248, 249, 0.15)"};
 
   ${(props) =>
     props.$isSelected &&
@@ -102,8 +102,8 @@ const MessageContainer = styled(motion.div)<{
       props.$isSelected
         ? "rgba(92,124,157,0.08)"
         : props.$isAssistant
-          ? "rgba(247, 249, 252, 0.4)"
-          : "rgba(247, 248, 249, 0.25)"};
+        ? "rgba(247, 249, 252, 0.4)"
+        : "rgba(247, 248, 249, 0.25)"};
   }
 
   /* Add responsive padding */
@@ -715,7 +715,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
 
   const handleLabelSelect = (label: any) => {
     const msg = chatStateValue.messages.find(
-      (m: any) => m.messageId === messageId,
+      (m: any) => m.messageId === messageId
     );
     if (!msg) return setLabelMenuOpen(false);
     const sourceData = msg.sources[index];
@@ -741,7 +741,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
           [],
           false,
           false,
-          false,
+          false
         );
         createAnnotation(newAnnot);
       } else {
@@ -764,7 +764,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
           [],
           false,
           false,
-          false,
+          false
         );
         createAnnotation(newAnnot);
       }
@@ -1022,11 +1022,11 @@ const TimelinePreview: React.FC<TimelinePreviewProps> = ({
   /* Expansion state per entry ----------------------------------------- */
   const buildInitialExpandedStates = () =>
     timeline.map((_, idx) =>
-      expandLatestOnly ? idx === timeline.length - 1 : true,
+      expandLatestOnly ? idx === timeline.length - 1 : true
     );
 
   const [expandedStates, setExpandedStates] = useState<boolean[]>(
-    buildInitialExpandedStates(),
+    buildInitialExpandedStates()
   );
 
   // Calculate responsive threshold
@@ -1137,6 +1137,7 @@ const TimelinePreview: React.FC<TimelinePreviewProps> = ({
   return (
     <TimelineContainer
       className="timeline-container"
+      data-testid="timeline-container"
       onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
     >
       <TimelineHeader onClick={handleHeaderClick}>
@@ -1339,6 +1340,10 @@ const Timestamp = styled.div`
   }
 `;
 
+// Processing text - extracted for i18n readiness
+const PROCESSING_TEXT = "Agent is thinking...";
+const PROCESSING_ARIA_LABEL = "Agent is processing your request";
+
 // Processing indicator for when agent is working but hasn't sent content yet
 const ProcessingContainer = styled.div`
   display: flex;
@@ -1351,6 +1356,18 @@ const ProcessingContainer = styled.div`
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: 0 2px 8px rgba(23, 25, 35, 0.04);
   margin-bottom: 0.25rem;
+  /* Fade to subtle static state after 30s to reduce visual noise on long processing */
+  animation: processingFadeToSubtle 30s ease-out forwards;
+
+  @keyframes processingFadeToSubtle {
+    0%,
+    90% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0.6;
+    }
+  }
 `;
 
 const ProcessingDots = styled.div`
@@ -1392,7 +1409,7 @@ const ProcessingIndicator: React.FC = () => (
   <ProcessingContainer
     role="status"
     aria-live="polite"
-    aria-label="Agent is processing your request"
+    aria-label={PROCESSING_ARIA_LABEL}
     data-testid="processing-indicator"
   >
     <ProcessingDots aria-hidden="true">
@@ -1400,7 +1417,7 @@ const ProcessingIndicator: React.FC = () => (
       <ProcessingDot $delay={0.2} />
       <ProcessingDot $delay={0.4} />
     </ProcessingDots>
-    <ProcessingText>Agent is thinking...</ProcessingText>
+    <ProcessingText>{PROCESSING_TEXT}</ProcessingText>
   </ProcessingContainer>
 );
 
@@ -1502,7 +1519,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // Local collapse state for timeline when message is COMPLETE.
   // For short timelines (<=2 steps) we default to expanded even after completion
   const [tlCollapsed, setTlCollapsed] = useState<boolean>(
-    isComplete && timeline.length > 2,
+    isComplete && timeline.length > 2
   );
 
   // When message transitions to complete, collapse timeline automatically only if long
@@ -1551,7 +1568,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         {showProcessingIndicator && <ProcessingIndicator />}
         {/* Standard message content bubble */}
         {!showTimelineOnly && !showProcessingIndicator && (
-          <MessageContent $isAssistant={isAssistant}>
+          <MessageContent
+            $isAssistant={isAssistant}
+            data-testid="message-content"
+          >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
             {approvalStatus && (
               <div style={{ marginTop: "0.5rem" }}>

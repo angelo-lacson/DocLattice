@@ -28,19 +28,21 @@ test.describe("ChatMessage Processing Indicator", () => {
         content=""
         isComplete={false}
         timeline={[]}
-      />,
+      />
     );
 
     // Processing indicator should be visible
     await expect(
-      page.locator('[data-testid="processing-indicator"]'),
+      page.locator('[data-testid="processing-indicator"]')
     ).toBeVisible({ timeout: 3000 });
 
     // "Agent is thinking..." text should be visible
     await expect(page.locator("text=Agent is thinking...")).toBeVisible();
 
     // Message content bubble should NOT be visible
-    await expect(page.locator(".message-content")).not.toBeVisible();
+    await expect(
+      page.locator('[data-testid="message-content"]')
+    ).not.toBeVisible();
 
     await component.unmount();
   });
@@ -55,7 +57,7 @@ test.describe("ChatMessage Processing Indicator", () => {
         content=""
         isComplete={false}
         timeline={[]}
-      />,
+      />
     );
 
     const indicator = page.locator('[data-testid="processing-indicator"]');
@@ -66,7 +68,7 @@ test.describe("ChatMessage Processing Indicator", () => {
     await expect(indicator).toHaveAttribute("aria-live", "polite");
     await expect(indicator).toHaveAttribute(
       "aria-label",
-      "Agent is processing your request",
+      "Agent is processing your request"
     );
 
     await component.unmount();
@@ -83,12 +85,12 @@ test.describe("ChatMessage Processing Indicator", () => {
         content=""
         isComplete={false}
         timeline={[]}
-      />,
+      />
     );
 
     // Processing indicator should be visible initially
     await expect(
-      page.locator('[data-testid="processing-indicator"]'),
+      page.locator('[data-testid="processing-indicator"]')
     ).toBeVisible({ timeout: 3000 });
 
     await component.unmount();
@@ -100,17 +102,17 @@ test.describe("ChatMessage Processing Indicator", () => {
         content="Hello, I can help you with that."
         isComplete={false}
         timeline={[]}
-      />,
+      />
     );
 
     // Processing indicator should NOT be visible
     await expect(
-      page.locator('[data-testid="processing-indicator"]'),
+      page.locator('[data-testid="processing-indicator"]')
     ).not.toBeVisible();
 
     // Message content should be visible
     await expect(
-      page.locator("text=Hello, I can help you with that."),
+      page.locator("text=Hello, I can help you with that.")
     ).toBeVisible();
 
     await componentWithContent.unmount();
@@ -134,16 +136,18 @@ test.describe("ChatMessage Processing Indicator", () => {
         isComplete={false}
         timeline={timelineEntries}
         hasTimeline={true}
-      />,
+      />
     );
 
     // Processing indicator should NOT be visible
     await expect(
-      page.locator('[data-testid="processing-indicator"]'),
+      page.locator('[data-testid="processing-indicator"]')
     ).not.toBeVisible();
 
     // Timeline should be visible
-    await expect(page.locator(".timeline-container")).toBeVisible({
+    await expect(
+      page.locator('[data-testid="timeline-container"]')
+    ).toBeVisible({
       timeout: 3000,
     });
 
@@ -163,12 +167,12 @@ test.describe("ChatMessage Processing Indicator", () => {
         content=""
         isComplete={false}
         timeline={[]}
-      />,
+      />
     );
 
     // Processing indicator should NOT be visible for user messages
     await expect(
-      page.locator('[data-testid="processing-indicator"]'),
+      page.locator('[data-testid="processing-indicator"]')
     ).not.toBeVisible();
 
     await component.unmount();
@@ -184,12 +188,12 @@ test.describe("ChatMessage Processing Indicator", () => {
         content="Here is my response."
         isComplete={true}
         timeline={[]}
-      />,
+      />
     );
 
     // Processing indicator should NOT be visible when message is complete
     await expect(
-      page.locator('[data-testid="processing-indicator"]'),
+      page.locator('[data-testid="processing-indicator"]')
     ).not.toBeVisible();
 
     // Message content should be visible
@@ -208,12 +212,12 @@ test.describe("ChatMessage Processing Indicator", () => {
         content=""
         isComplete={false}
         timeline={[]}
-      />,
+      />
     );
 
     // Processing indicator should be visible
     await expect(
-      page.locator('[data-testid="processing-indicator"]'),
+      page.locator('[data-testid="processing-indicator"]')
     ).toBeVisible({ timeout: 3000 });
 
     // Should have three animated dots (the dots are span elements inside ProcessingDots)
