@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Network Recovery on Screen Unlock (Issue #697)
+- **New `useNetworkStatus` hook** (`frontend/src/hooks/useNetworkStatus.ts`): Monitors page visibility and network status changes to detect when the app resumes from background (e.g., screen unlock on mobile)
+- **New `NetworkStatusHandler` component** (`frontend/src/components/network/NetworkStatusHandler.tsx`): Automatically refetches active Apollo Client queries when:
+  - The page becomes visible after being hidden (screen unlock on mobile)
+  - The network comes back online after being offline
+- **WebSocket reconnection on resume**: Updated `useThreadWebSocket` and `useAgentChat` hooks to reconnect WebSockets when the page becomes visible
+- **Toast notifications**: Informs users of connectivity changes ("Reconnecting...", "Connection restored", "You appear to be offline")
+
+### Technical Details
+
+#### Network Recovery Implementation
+- Uses `visibilitychange` event to detect page visibility changes
+- Uses `online`/`offline` events to detect network status changes
+- Configurable resume threshold (default 2s for NetworkStatusHandler, 1s for WebSocket hooks)
+- Debounced refetch to prevent rapid repeated calls
+- Graceful degradation: continues to work if events are not supported
+
 #### Upload Modal Styling Improvements (Issue #696)
 - **New styled components for upload modals** (`frontend/src/components/widgets/modals/UploadModalStyles.ts`): Comprehensive styled-components library with 25+ responsive components including `StyledUploadModal`, `DropZone`, `StepIndicator`, `FileListItem`, and more
 - **Step indicator UI** for DocumentUploadModal showing progress through upload workflow (Select → Details → Corpus)
