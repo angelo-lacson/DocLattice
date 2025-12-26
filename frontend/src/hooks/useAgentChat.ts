@@ -11,11 +11,13 @@
  * - Source pinning integration with ChatSourceAtom
  * - Approval flow for permission-required tools
  * - Conversation persistence
+ * - Automatic reconnection on page visibility change (Issue #697)
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReactiveVar } from "@apollo/client";
 import { authToken, userObj } from "../graphql/cache";
+import { useNetworkStatus } from "./useNetworkStatus";
 import {
   useChatSourceState,
   mapWebSocketSourcesToChatMessageSources,
@@ -259,6 +261,11 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reconnect trigger - increment to force reconnection (Issue #697)
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
+  // Guard to prevent duplicate reconnection attempts
+  const isReconnectingRef = useRef<boolean>(false);
 
   // Message state
   const [messages, setMessages] = useState<ChatMessageProps[]>([]);
@@ -582,16 +589,21 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
       return;
     }
 
+    // Set reconnecting flag to prevent duplicate attempts
+    isReconnectingRef.current = true;
+
     const wsUrl = getUnifiedAgentWebSocketUrl(context, auth_token || undefined);
     const newSocket = new WebSocket(wsUrl);
 
     newSocket.onopen = () => {
+      isReconnectingRef.current = false;
       setIsConnected(true);
       setError(null);
-      console.log("[useAgentChat] WebSocket connected:", wsUrl);
+      console.debug("[useAgentChat] WebSocket connected:", wsUrl);
     };
 
     newSocket.onerror = (event) => {
+      isReconnectingRef.current = false;
       setIsConnected(false);
       setError("Error connecting to the chat server.");
       console.error("[useAgentChat] WebSocket error:", event);
@@ -720,13 +732,15 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
     };
 
     newSocket.onclose = (event) => {
+      isReconnectingRef.current = false;
       setIsConnected(false);
-      console.warn("[useAgentChat] WebSocket closed:", event);
+      console.debug("[useAgentChat] WebSocket closed:", event);
     };
 
     socketRef.current = newSocket;
 
     return () => {
+      isReconnectingRef.current = false;
       if (socketRef.current) {
         socketRef.current.close();
         socketRef.current = null;
@@ -738,6 +752,7 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
     context.agentId,
     context.conversationId,
     auth_token,
+    reconnectTrigger, // Added for Issue #697 - triggers reconnection when incremented
     appendStreamingToken,
     appendThought,
     mergeSourcesIntoMessage,
@@ -775,6 +790,53 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
       }, 100);
     }
   }, [isConnected, user_obj?.email]);
+
+  // Reconnect when page becomes visible after being hidden (Issue #697)
+  // This handles mobile devices where the app may be suspended when screen is locked
+  const hasContext = !!(
+    context.corpusId ||
+    context.documentId ||
+    context.agentId
+  );
+
+  useNetworkStatus({
+    onResume: () => {
+      console.debug("[useAgentChat] Page resumed, checking connection...");
+
+      // Check if WebSocket is still connected and not already reconnecting
+      if (
+        hasContext &&
+        !isReconnectingRef.current &&
+        socketRef.current?.readyState !== WebSocket.OPEN &&
+        socketRef.current?.readyState !== WebSocket.CONNECTING
+      ) {
+        console.debug(
+          "[useAgentChat] WebSocket disconnected, triggering reconnection..."
+        );
+        // Trigger reconnection by incrementing the reconnectTrigger
+        // This will cause the WebSocket useEffect to re-run and establish a new connection
+        setReconnectTrigger((prev) => prev + 1);
+      }
+    },
+    onOnline: () => {
+      console.debug("[useAgentChat] Network online, checking connection...");
+
+      // Reconnect if WebSocket is disconnected and not already reconnecting
+      if (
+        hasContext &&
+        !isReconnectingRef.current &&
+        socketRef.current?.readyState !== WebSocket.OPEN &&
+        socketRef.current?.readyState !== WebSocket.CONNECTING
+      ) {
+        console.debug(
+          "[useAgentChat] Triggering reconnection after network recovery..."
+        );
+        setReconnectTrigger((prev) => prev + 1);
+      }
+    },
+    resumeThreshold: 1000, // 1 second hidden threshold
+    enabled: hasContext,
+  });
 
   // ========================================================================
   // Actions
