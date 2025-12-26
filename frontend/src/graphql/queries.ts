@@ -2359,7 +2359,7 @@ export const GET_THREAD_DETAIL = gql`
         # Soft delete
         deletedAt
 
-        # Mentioned resources (Issue #623)
+        # Mentioned resources (Issue #623, #689)
         mentionedResources {
           type
           id
@@ -2367,6 +2367,14 @@ export const GET_THREAD_DETAIL = gql`
           title
           url
           corpus {
+            slug
+            title
+          }
+          # Annotation-specific fields (Issue #689)
+          rawText
+          annotationLabel
+          document {
+            id
             slug
             title
           }
