@@ -1115,6 +1115,8 @@ class ConversationMutationsTestCase(TestCase):
         # Verify parent relationship is set
         self.assertEqual(reply_message.parent_message, parent_message)
 
+        from graphql_relay import to_global_id
+
         mutation = """
             mutation UpdateMessage($messageId: ID!, $content: String!) {
                 updateMessage(messageId: $messageId, content: $content) {
@@ -1133,20 +1135,8 @@ class ConversationMutationsTestCase(TestCase):
             "content": "Updated reply content",
         }
 
-        # Mock the request context with authenticated user
-        class MockRequest:
-            def __init__(self, user):
-                self.user = user
-
-        mock_request = MockRequest(self.user)
-
         # Execute mutation
-        schema = graphene.Schema(query=Query, mutation=Mutation)
-        result = schema.execute(
-            mutation,
-            variables=variables,
-            context_value=mock_request,
-        )
+        result = self._execute_with_user(mutation, self.user, variables)
 
         # Assert no errors
         self.assertIsNone(result.errors, f"GraphQL errors: {result.errors}")

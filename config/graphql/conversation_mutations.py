@@ -596,7 +596,9 @@ class UpdateMessageMutation(graphene.Mutation):
             if mention_parse_success and mentioned_ids:
                 try:
                     link_result = link_message_to_resources(chat_message, mentioned_ids)
-                    logger.debug(f"Updated message {chat_message.pk} links: {link_result}")
+                    logger.debug(
+                        f"Updated message {chat_message.pk} links: {link_result}"
+                    )
 
                     # Trigger agent responses if any agents were mentioned
                     # NOTE: This triggers for ALL mentioned agents, including previously
