@@ -353,12 +353,16 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
 
     // Restore each selected document using Promise.allSettled for better error handling
     // Filter out any documents with missing data
-    const pathsToRestore = deletedDocuments.filter(
-      (doc) => selectedDocuments.has(doc.id) && doc.document?.id
+    const selectedDocs = deletedDocuments.filter((doc) =>
+      selectedDocuments.has(doc.id)
     );
+    const pathsToRestore = selectedDocs.filter((doc) => doc.document?.id);
+    const skippedCount = selectedDocs.length - pathsToRestore.length;
 
     if (pathsToRestore.length === 0) {
-      setRestoreError("No valid documents selected for restoration");
+      setRestoreError(
+        "Selected documents cannot be restored: document data is missing or corrupted"
+      );
       return;
     }
 
@@ -366,7 +370,8 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
       pathsToRestore.map((docPath) =>
         restoreDocument({
           variables: {
-            documentId: docPath.document.id,
+            // Safe to use ! here since we filtered for doc.document?.id above
+            documentId: docPath.document!.id,
             corpusId: corpusId,
           },
         })
@@ -397,6 +402,14 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
       refetch();
     }
 
+    // Build skipped warning message if any documents were filtered
+    const skippedWarning =
+      skippedCount > 0
+        ? `${skippedCount} document${
+            skippedCount === 1 ? "" : "s"
+          } skipped: missing or corrupted data`
+        : null;
+
     // Set appropriate messages
     if (successCount > 0 && failureCount === 0) {
       setRestoreSuccess(
@@ -404,21 +417,31 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
           successCount === 1 ? "" : "s"
         }`
       );
+      // Show skipped warning if any documents were skipped
+      if (skippedWarning) {
+        setRestoreError(skippedWarning);
+      }
     } else if (successCount > 0 && failureCount > 0) {
       setRestoreSuccess(
         `Restored ${successCount} document${successCount === 1 ? "" : "s"}`
       );
+      // Combine failure and skipped messages
+      const failureMsg = `Failed to restore ${failureCount} document${
+        failureCount === 1 ? "" : "s"
+      }. Please try again.`;
       setRestoreError(
-        `Failed to restore ${failureCount} document${
-          failureCount === 1 ? "" : "s"
-        }. Please try again.`
+        skippedWarning ? `${failureMsg} ${skippedWarning}` : failureMsg
       );
     } else if (failureCount > 0) {
+      const failureMsg = `Failed to restore ${failureCount} document${
+        failureCount === 1 ? "" : "s"
+      }. Please check permissions and try again.`;
       setRestoreError(
-        `Failed to restore ${failureCount} document${
-          failureCount === 1 ? "" : "s"
-        }. Please check permissions and try again.`
+        skippedWarning ? `${failureMsg} ${skippedWarning}` : failureMsg
       );
+    } else if (skippedWarning) {
+      // All documents were skipped (shouldn't happen since we check pathsToRestore.length above)
+      setRestoreError(skippedWarning);
     }
   };
 
