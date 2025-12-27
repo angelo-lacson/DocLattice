@@ -31,8 +31,11 @@ from config.websocket.consumers.notification_updates import (
 )
 from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.conversations.models import ChatMessage, Conversation
-from opencontractserver.notifications.models import Notification, NotificationTypeChoices
-from opencontractserver.tests.base import BaseFixtureTestCase
+from opencontractserver.notifications.models import (
+    Notification,
+    NotificationTypeChoices,
+)
+from opencontractserver.tests.base import WebsocketFixtureBaseTestCase
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -40,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 @override_settings(USE_AUTH0=False)
 @pytest.mark.django_db(transaction=True)
-class NotificationWebSocketTestCase(BaseFixtureTestCase):
+class NotificationWebSocketTestCase(WebsocketFixtureBaseTestCase):
     """Tests for notification WebSocket consumer."""
 
     def setUp(self):
@@ -275,7 +278,9 @@ class NotificationWebSocketTestCase(BaseFixtureTestCase):
         await communicator1.disconnect()
         await communicator2.disconnect()
 
-    @patch("opencontractserver.notifications.signals.broadcast_notification_via_websocket")
+    @patch(
+        "opencontractserver.notifications.signals.broadcast_notification_via_websocket"
+    )
     async def test_badge_award_triggers_broadcast(self, mock_broadcast):
         """Badge award should trigger WebSocket broadcast via signal."""
         # Create badge award (triggers signal)
