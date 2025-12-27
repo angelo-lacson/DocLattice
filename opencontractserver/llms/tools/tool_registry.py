@@ -18,6 +18,7 @@ class ToolCategory(str, Enum):
     NOTES = "notes"
     ANNOTATIONS = "annotations"
     COORDINATION = "coordination"
+    MODERATION = "moderation"
 
 
 @dataclass(frozen=True)
@@ -356,6 +357,106 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
                 "List of (label_text, exact_string, document_id, corpus_id) tuples",
                 True,
             ),
+        ),
+    ),
+    # -------------------------------------------------------------------------
+    # MODERATION TOOLS (for thread/message moderation)
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="get_thread_context",
+        description=(
+            "Get thread metadata including title, creator, lock/pin status, "
+            "message count, and linked corpus/document info."
+        ),
+        category=ToolCategory.MODERATION,
+        parameters=(("thread_id", "ID of the thread", True),),
+    ),
+    ToolDefinition(
+        name="get_thread_messages",
+        description=(
+            "Retrieve recent messages from a thread for context. Returns message content, "
+            "author info, timestamps, and vote counts."
+        ),
+        category=ToolCategory.MODERATION,
+        parameters=(
+            ("thread_id", "ID of the thread", True),
+            ("limit", "Maximum number of messages to return (default 20)", False),
+            ("include_deleted", "Include soft-deleted messages (default False)", False),
+        ),
+    ),
+    ToolDefinition(
+        name="get_message_content",
+        description="Get full content of a specific message including metadata.",
+        category=ToolCategory.MODERATION,
+        parameters=(("message_id", "ID of the message", True),),
+    ),
+    ToolDefinition(
+        name="delete_message",
+        description=(
+            "Soft delete a message from a thread. Creates a moderation audit log. "
+            "Use when content violates community guidelines."
+        ),
+        category=ToolCategory.MODERATION,
+        requires_approval=True,
+        parameters=(
+            ("message_id", "ID of the message to delete", True),
+            ("reason", "Reason for deletion (for audit log)", True),
+        ),
+    ),
+    ToolDefinition(
+        name="lock_thread",
+        description=(
+            "Lock a thread to prevent further messages. Use for resolved discussions "
+            "or threads that have become contentious."
+        ),
+        category=ToolCategory.MODERATION,
+        requires_approval=True,
+        parameters=(
+            ("thread_id", "ID of the thread to lock", True),
+            ("reason", "Reason for locking (for audit log)", True),
+        ),
+    ),
+    ToolDefinition(
+        name="unlock_thread",
+        description="Unlock a previously locked thread to allow new messages.",
+        category=ToolCategory.MODERATION,
+        requires_approval=True,
+        parameters=(
+            ("thread_id", "ID of the thread to unlock", True),
+            ("reason", "Reason for unlocking (for audit log)", True),
+        ),
+    ),
+    ToolDefinition(
+        name="add_thread_message",
+        description=(
+            "Add an agent message to a thread. Use for providing guidance, "
+            "warnings, or additional context to thread participants."
+        ),
+        category=ToolCategory.MODERATION,
+        requires_approval=True,
+        parameters=(
+            ("thread_id", "ID of the thread to post to", True),
+            ("content", "Message content (markdown supported)", True),
+        ),
+    ),
+    ToolDefinition(
+        name="pin_thread",
+        description="Pin a thread to appear at the top of the thread list.",
+        category=ToolCategory.MODERATION,
+        requires_approval=True,
+        parameters=(
+            ("thread_id", "ID of the thread to pin", True),
+            ("reason", "Reason for pinning (for audit log)", True),
+        ),
+    ),
+    ToolDefinition(
+        name="unpin_thread",
+        description="Unpin a previously pinned thread.",
+        category=ToolCategory.MODERATION,
+        requires_approval=True,
+        parameters=(
+            ("thread_id", "ID of the thread to unpin", True),
+            ("reason", "Reason for unpinning (for audit log)", True),
         ),
     ),
 )

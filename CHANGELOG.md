@@ -5,7 +5,41 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-26
+## [Unreleased] - 2025-12-27
+
+### Added
+
+#### Thread/Message Triggered Corpus Actions for Automated Moderation
+- **Extended CorpusActionTrigger enum** with `NEW_THREAD` and `NEW_MESSAGE` triggers (`opencontractserver/corpuses/models.py:849-854`) to enable automated moderation of discussion threads
+- **New moderation tools** (`opencontractserver/llms/tools/moderation_tools.py`): 9 tools for thread moderation including:
+  - `get_thread_context`: Retrieve thread metadata (title, creator, lock/pin status)
+  - `get_thread_messages`: Get recent messages for context
+  - `get_message_content`: Get full content of a specific message
+  - `delete_message`: Soft delete a message with audit logging
+  - `lock_thread`/`unlock_thread`: Control thread access
+  - `add_thread_message`: Post agent messages to threads
+  - `pin_thread`/`unpin_thread`: Feature important threads
+- **New MODERATION tool category** (`opencontractserver/llms/tools/tool_registry.py:42`) with 9 registered tools and proper approval requirements
+- **Signal handlers** for thread/message creation (`opencontractserver/corpuses/signals.py`) using `transaction.on_commit` pattern to trigger corpus actions
+- **New Celery tasks** (`opencontractserver/tasks/corpus_tasks.py`):
+  - `process_thread_corpus_action`: Processes actions when threads are created
+  - `process_message_corpus_action`: Processes actions when messages are posted
+- **Agent thread action task** (`opencontractserver/tasks/agent_tasks.py:run_agent_thread_action`): Runs AI agents with thread context and moderation tools
+- **Updated CorpusActionExecution model** (`opencontractserver/corpuses/models.py`) with optional `conversation` and `message` FKs for audit trail
+- **Updated AgentActionResult model** (`opencontractserver/agents/models.py`) with nullable document FK and new `triggering_conversation`/`triggering_message` FKs
+- **Frontend updates** (`frontend/src/components/corpuses/CreateCorpusActionModal.tsx`):
+  - Added "On New Thread" and "On New Message" trigger options
+  - Thread/message triggers automatically select agent action type
+  - Info message explaining available moderation tools
+- **Comprehensive test coverage**:
+  - Backend tests: `opencontractserver/tests/test_thread_corpus_actions.py`
+  - Frontend tests: `frontend/tests/create-corpus-action-modal.ct.tsx`
+
+#### Use Cases Enabled
+- Automated content moderation (e.g., auto-delete messages with prohibited content)
+- Thread management (e.g., auto-lock threads discussing prohibited topics)
+- Automated responses (e.g., welcome messages for new threads)
+- Content classification (e.g., auto-pin important announcements)
 
 ### Fixed
 

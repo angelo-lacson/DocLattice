@@ -518,3 +518,173 @@ def update_all_corpus_engagement_metrics():
         "queued_updates": len(corpus_ids),
         "corpus_ids": corpus_ids,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Thread/Message Corpus Action Tasks
+# --------------------------------------------------------------------------- #
+
+
+@shared_task
+def process_thread_corpus_action(
+    corpus_id: int | str,
+    conversation_id: int | str,
+    user_id: int | str,
+    trigger: str = "new_thread",
+):
+    """
+    Process corpus actions triggered by thread creation.
+
+    Similar to process_corpus_action but for thread context.
+    Supports both corpus-specific and run_on_all_corpuses actions.
+    Only processes agent-based actions (fieldset/analyzer don't apply to threads).
+
+    Args:
+        corpus_id: The corpus the thread belongs to
+        conversation_id: The conversation (thread) that was created
+        user_id: The user who created the thread
+        trigger: The trigger type (default "new_thread")
+
+    Returns:
+        dict: Summary of actions processed
+    """
+    logger.info(
+        f"process_thread_corpus_action() - corpus={corpus_id}, "
+        f"conversation={conversation_id}, trigger={trigger}"
+    )
+
+    try:
+        conversation = Conversation.objects.get(pk=conversation_id)
+    except Conversation.DoesNotExist:
+        logger.error(f"Conversation {conversation_id} not found")
+        return {"error": "Conversation not found"}
+
+    # Find matching corpus actions with this trigger
+    base_query = Q(corpus_id=corpus_id, disabled=False, trigger=trigger) | Q(
+        run_on_all_corpuses=True, disabled=False, trigger=trigger
+    )
+
+    actions = CorpusAction.objects.filter(base_query)
+
+    summary = {"actions_processed": 0, "executions_queued": 0}
+
+    for action in actions:
+        # Only agent-based actions support thread/message triggers
+        if not action.agent_config:
+            logger.debug(f"Skipping non-agent action {action.id} for thread trigger")
+            continue
+
+        # Create execution record
+        with transaction.atomic():
+            execution = CorpusActionExecution.objects.create(
+                corpus_action=action,
+                corpus_id=corpus_id,
+                document=None,  # No document for thread-based actions
+                conversation=conversation,
+                action_type=CorpusActionExecution.ActionType.AGENT,
+                trigger=trigger,
+                queued_at=timezone.now(),
+                status=CorpusActionExecution.Status.QUEUED,
+                creator_id=user_id,
+            )
+
+        summary["actions_processed"] += 1
+        summary["executions_queued"] += 1
+
+        # Queue the agent task
+        from opencontractserver.tasks.agent_tasks import run_agent_thread_action
+
+        run_agent_thread_action.delay(
+            corpus_action_id=action.id,
+            conversation_id=conversation_id,
+            message_id=None,  # No specific message for NEW_THREAD
+            user_id=user_id,
+            execution_id=execution.id,
+        )
+
+    logger.info(f"process_thread_corpus_action() completed - {summary}")
+    return summary
+
+
+@shared_task
+def process_message_corpus_action(
+    corpus_id: int | str,
+    conversation_id: int | str,
+    message_id: int | str,
+    user_id: int | str,
+    trigger: str = "new_message",
+):
+    """
+    Process corpus actions triggered by message creation.
+
+    Similar to process_thread_corpus_action but with message context.
+    Only processes agent-based actions.
+
+    Args:
+        corpus_id: The corpus the thread belongs to
+        conversation_id: The conversation (thread) containing the message
+        message_id: The message that was created
+        user_id: The user who created the message
+        trigger: The trigger type (default "new_message")
+
+    Returns:
+        dict: Summary of actions processed
+    """
+    logger.info(
+        f"process_message_corpus_action() - corpus={corpus_id}, "
+        f"conversation={conversation_id}, message={message_id}, trigger={trigger}"
+    )
+
+    try:
+        conversation = Conversation.objects.get(pk=conversation_id)
+        message = ChatMessage.objects.get(pk=message_id)
+    except (Conversation.DoesNotExist, ChatMessage.DoesNotExist) as e:
+        logger.error(f"Conversation or message not found: {e}")
+        return {"error": str(e)}
+
+    # Find matching corpus actions with this trigger
+    base_query = Q(corpus_id=corpus_id, disabled=False, trigger=trigger) | Q(
+        run_on_all_corpuses=True, disabled=False, trigger=trigger
+    )
+
+    actions = CorpusAction.objects.filter(base_query)
+
+    summary = {"actions_processed": 0, "executions_queued": 0}
+
+    for action in actions:
+        # Only agent-based actions support thread/message triggers
+        if not action.agent_config:
+            logger.debug(f"Skipping non-agent action {action.id} for message trigger")
+            continue
+
+        # Create execution record
+        with transaction.atomic():
+            execution = CorpusActionExecution.objects.create(
+                corpus_action=action,
+                corpus_id=corpus_id,
+                document=None,  # No document for message-based actions
+                conversation=conversation,
+                message=message,
+                action_type=CorpusActionExecution.ActionType.AGENT,
+                trigger=trigger,
+                queued_at=timezone.now(),
+                status=CorpusActionExecution.Status.QUEUED,
+                creator_id=user_id,
+            )
+
+        summary["actions_processed"] += 1
+        summary["executions_queued"] += 1
+
+        # Queue the agent task
+        from opencontractserver.tasks.agent_tasks import run_agent_thread_action
+
+        run_agent_thread_action.delay(
+            corpus_action_id=action.id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            user_id=user_id,
+            execution_id=execution.id,
+        )
+
+    logger.info(f"process_message_corpus_action() completed - {summary}")
+    return summary

@@ -44,7 +44,7 @@ export const CreateCorpusActionModal: React.FC<
 > = ({ corpusId, open, onClose, onSuccess }) => {
   const [name, setName] = React.useState("");
   const [trigger, setTrigger] = React.useState<
-    "add_document" | "edit_document"
+    "add_document" | "edit_document" | "new_thread" | "new_message"
   >("add_document");
   const [actionType, setActionType] = React.useState<ActionType>("fieldset");
   const [selectedFieldsetId, setSelectedFieldsetId] = React.useState<
@@ -191,7 +191,12 @@ export const CreateCorpusActionModal: React.FC<
   const triggerOptions = [
     { key: "add", text: "On Document Add", value: "add_document" },
     { key: "edit", text: "On Document Edit", value: "edit_document" },
+    { key: "new_thread", text: "On New Thread", value: "new_thread" },
+    { key: "new_message", text: "On New Message", value: "new_message" },
   ];
+
+  // Thread/message triggers only support agent-based actions
+  const isThreadTrigger = trigger === "new_thread" || trigger === "new_message";
 
   const actionTypeOptions = [
     {
@@ -283,9 +288,23 @@ export const CreateCorpusActionModal: React.FC<
               selection
               options={triggerOptions}
               value={trigger}
-              onChange={(_, data) =>
-                setTrigger(data.value as "add_document" | "edit_document")
-              }
+              onChange={(_, data) => {
+                const newTrigger = data.value as
+                  | "add_document"
+                  | "edit_document"
+                  | "new_thread"
+                  | "new_message";
+                setTrigger(newTrigger);
+                // Thread/message triggers only support agent-based actions
+                if (
+                  newTrigger === "new_thread" ||
+                  newTrigger === "new_message"
+                ) {
+                  setActionType("agent");
+                  setSelectedFieldsetId(null);
+                  setSelectedAnalyzerId(null);
+                }
+              }}
             />
           </Form.Field>
 
@@ -293,6 +312,7 @@ export const CreateCorpusActionModal: React.FC<
             <label>Action Type</label>
             <Dropdown
               selection
+              disabled={isThreadTrigger}
               options={actionTypeOptions}
               value={actionType}
               onChange={(_, data) => {
@@ -305,6 +325,13 @@ export const CreateCorpusActionModal: React.FC<
                 setPreAuthorizedTools([]);
               }}
             />
+            {isThreadTrigger && (
+              <small
+                style={{ color: "#666", marginTop: "0.5em", display: "block" }}
+              >
+                Thread/message triggers only support agent-based actions.
+              </small>
+            )}
           </Form.Field>
 
           {actionType === "fieldset" && (
@@ -367,19 +394,39 @@ export const CreateCorpusActionModal: React.FC<
                 <Icon name="microchip" />
                 <Header.Content>Agent Configuration</Header.Content>
               </Header>
-              <Message info size="small">
-                <p>
-                  Select an AI agent to perform custom actions on{" "}
-                  <strong>individual documents</strong>. The agent will execute
-                  automatically when documents are{" "}
-                  {trigger === "add_document" ? "added" : "edited"}.
-                </p>
-                <p style={{ marginTop: "0.5em", marginBottom: 0 }}>
-                  <Icon name="info circle" />
-                  The agent will have access to document-scoped tools
-                  (read/update description, summary, notes, annotations).
-                </p>
-              </Message>
+              {isThreadTrigger ? (
+                <Message info size="small">
+                  <p>
+                    <Icon name="comments" />
+                    Select an AI agent for <strong>automated moderation</strong>
+                    . The agent will execute automatically when{" "}
+                    {trigger === "new_thread"
+                      ? "a new discussion thread is created"
+                      : "a new message is posted to a thread"}{" "}
+                    in this corpus.
+                  </p>
+                  <p style={{ marginTop: "0.5em", marginBottom: 0 }}>
+                    <Icon name="shield" />
+                    <strong>Available moderation tools:</strong> delete_message,
+                    lock_thread, unlock_thread, add_thread_message, pin_thread,
+                    unpin_thread, get_thread_messages, get_thread_context
+                  </p>
+                </Message>
+              ) : (
+                <Message info size="small">
+                  <p>
+                    Select an AI agent to perform custom actions on{" "}
+                    <strong>individual documents</strong>. The agent will
+                    execute automatically when documents are{" "}
+                    {trigger === "add_document" ? "added" : "edited"}.
+                  </p>
+                  <p style={{ marginTop: "0.5em", marginBottom: 0 }}>
+                    <Icon name="info circle" />
+                    The agent will have access to document-scoped tools
+                    (read/update description, summary, notes, annotations).
+                  </p>
+                </Message>
+              )}
               <Form.Field required>
                 <label>Agent</label>
                 <Dropdown
