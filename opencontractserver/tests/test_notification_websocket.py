@@ -35,7 +35,7 @@ from opencontractserver.notifications.models import (
     Notification,
     NotificationTypeChoices,
 )
-from opencontractserver.tests.base import BaseFixtureTestCase
+from opencontractserver.tests.base import WebsocketFixtureBaseTestCase
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 @override_settings(USE_AUTH0=False)
 @pytest.mark.django_db(transaction=True)
-class NotificationWebSocketTestCase(BaseFixtureTestCase):
+class NotificationWebSocketTestCase(WebsocketFixtureBaseTestCase):
     """Tests for notification WebSocket consumer."""
 
     def setUp(self):
