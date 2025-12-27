@@ -66,9 +66,12 @@ export const AuthGate: React.FC<AuthGateProps> = ({
           if (token) {
             console.log("[AuthGate] Token obtained successfully");
 
-            // Set auth state FIRST - this ensures any subsequent queries use
-            // the new auth context. Cache clear happens AFTER to prevent race
-            // condition where queries fetch with wrong auth state.
+            // RACE CONDITION PREVENTION: Auth state MUST be set synchronously BEFORE
+            // cache clear. clearStore() is async and may trigger Apollo query refetches.
+            // If auth state isn't set first, those refetches would execute with stale/missing
+            // credentials, causing auth errors or returning anonymous data that gets cached.
+            // By setting token/user/status synchronously here, any subsequent queries
+            // (whether from cache clear or component mounts) will use correct auth context.
             authToken(token);
             userObj(user);
             authStatusVar("AUTHENTICATED");
@@ -80,15 +83,25 @@ export const AuthGate: React.FC<AuthGateProps> = ({
               verifyToken ? "Present" : "Missing"
             );
 
-            // Now clear cache - refetched queries will use new auth context
+            // Clear any stale anonymous/previous-user cache data.
+            // TRADEOFF: We await this to ensure cache is clean before showing authenticated UI.
+            // This may delay render by ~50-100ms, but prevents flash of stale data.
+            // Unlike logout (fire-and-forget), login benefits from clean cache before render
+            // since users expect to see their own data immediately.
+            // refetchActive: false because auth state is already set and component mount
+            // will trigger necessary queries with correct credentials.
             try {
               await resetOnAuthChange({
                 reason: "auth0_login",
                 refetchActive: false,
               });
             } catch (cacheError) {
-              console.warn("[AuthGate] Cache reset warning:", cacheError);
-              // Continue even if cache reset fails
+              // Log with context for debugging but don't block - cache clear is best-effort
+              console.warn("[AuthGate] Cache reset failed on login:", {
+                error:
+                  cacheError instanceof Error ? cacheError.message : cacheError,
+                userId: user?.sub,
+              });
             }
 
             setAuthInitialized(true);
