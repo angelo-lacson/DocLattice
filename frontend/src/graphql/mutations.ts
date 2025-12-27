@@ -2209,7 +2209,7 @@ export const CREATE_CORPUS_ACTION = gql`
 
 export interface CreateCorpusActionInput {
   corpusId: string;
-  trigger: "add_document" | "edit_document";
+  trigger: "add_document" | "edit_document" | "new_thread" | "new_message";
   name?: string;
   fieldsetId?: string;
   analyzerId?: string;
