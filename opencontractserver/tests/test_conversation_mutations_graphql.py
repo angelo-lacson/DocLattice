@@ -1139,10 +1139,12 @@ class ConversationMutationsTestCase(TestCase):
         result = self._execute_with_user(mutation, self.user, variables)
 
         # Assert no errors
-        self.assertIsNone(result.errors, f"GraphQL errors: {result.errors}")
+        self.assertIsNone(
+            result.get("errors"), f"GraphQL errors: {result.get('errors')}"
+        )
 
         # Assert mutation was successful
-        data = result.data["updateMessage"]
+        data = result["data"]["updateMessage"]
         self.assertTrue(data["ok"])
         self.assertEqual(data["message"], "Message updated successfully")
 
