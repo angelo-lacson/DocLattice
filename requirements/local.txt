@@ -31,7 +31,7 @@ coverage==7.11.0  # https://github.com/nedbat/coveragepy
 black==25.9.0  # https://github.com/psf/black
 pylint-django==2.6.1  # https://github.com/PyCQA/pylint-django
 pylint-celery==0.3  # https://github.com/PyCQA/pylint-celery
-pre-commit==4.2.0  # https://github.com/pre-commit/pre-commit
+pre-commit==4.5.1  # https://github.com/pre-commit/pre-commit
 
 # Django
 # ------------------------------------------------------------------------------
