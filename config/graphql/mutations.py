@@ -43,6 +43,7 @@ from config.graphql.conversation_mutations import (
     DeleteConversationMutation,
     DeleteMessageMutation,
     ReplyToMessageMutation,
+    UpdateMessageMutation,
 )
 
 # Import corpus folder mutations
@@ -4500,6 +4501,7 @@ class Mutation(graphene.ObjectType):
     create_thread = CreateThreadMutation.Field()
     create_thread_message = CreateThreadMessageMutation.Field()
     reply_to_message = ReplyToMessageMutation.Field()
+    update_message = UpdateMessageMutation.Field()
     delete_conversation = DeleteConversationMutation.Field()
     delete_message = DeleteMessageMutation.Field()
 
