@@ -35,6 +35,9 @@ from config.websocket.consumers.document_conversation import (  # noqa: E402
 from config.websocket.consumers.standalone_document_conversation import (  # noqa: E402
     StandaloneDocumentQueryConsumer,
 )
+from config.websocket.consumers.notification_updates import (  # noqa: E402
+    NotificationUpdatesConsumer,
+)
 from config.websocket.consumers.thread_updates import (  # noqa: E402
     ThreadUpdatesConsumer,
 )
@@ -82,11 +85,21 @@ thread_updates_pattern = re_path(
     ThreadUpdatesConsumer.as_asgi(),
 )
 
+# NEW - notification updates consumer for real-time notifications
+# No query parameters required (uses authenticated user)
+# Issue #637: Migrate badge notifications from polling to WebSocket
+notification_updates_pattern = re_path(
+    r"ws/notification-updates/$",
+    NotificationUpdatesConsumer.as_asgi(),
+)
+
 websocket_urlpatterns = [
     # NEW: Unified agent consumer (preferred for new integrations)
     unified_agent_query_pattern,
     # NEW: Thread updates consumer for agent mention streaming
     thread_updates_pattern,
+    # NEW: Notification updates consumer for real-time notifications (Issue #637)
+    notification_updates_pattern,
     # Legacy routes (kept for backwards compatibility)
     document_query_pattern,
     corpus_query_pattern,
