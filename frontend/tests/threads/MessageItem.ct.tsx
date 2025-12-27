@@ -39,6 +39,7 @@ function createMockAgentConfig(
     scope: "CORPUS",
     isActive: true,
     created: new Date().toISOString(),
+    modified: new Date().toISOString(),
     badgeConfig: { color: "#10B981", icon: "Bot" },
     creator: {
       id: "user-1",
@@ -46,9 +47,6 @@ function createMockAgentConfig(
       email: "system@example.com",
       slug: "system",
       name: "System",
-      firstName: "System",
-      lastName: "",
-      phone: null,
       isUsageCapped: false,
     },
     ...overrides,
