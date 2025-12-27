@@ -15,7 +15,11 @@
  * @see https://github.com/Open-Source-Legal/OpenContracts/issues/694
  */
 
-import { ApolloClient, NormalizedCacheObject } from "@apollo/client";
+import {
+  ApolloClient,
+  NormalizedCacheObject,
+  DocumentNode,
+} from "@apollo/client";
 import { GET_CORPUSES, GET_DOCUMENTS } from "../graphql/queries";
 import { GET_CORPUS_FOLDERS } from "../graphql/queries/folders";
 
@@ -46,7 +50,11 @@ export interface CacheResetOptions {
 /**
  * Entity types that can trigger targeted cache invalidation
  */
-export type InvalidatableEntity = "document" | "corpus" | "annotation" | "thread";
+export type InvalidatableEntity =
+  | "document"
+  | "corpus"
+  | "annotation"
+  | "thread";
 
 /**
  * Options for targeted cache invalidation
@@ -128,9 +136,7 @@ export class CacheManager {
     // Debounce: prevent multiple resets within the threshold
     const now = Date.now();
     if (now - this.lastResetTime < CacheManager.RESET_DEBOUNCE_MS) {
-      console.debug(
-        `[CacheManager] Skipping reset (debounced): ${reason}`
-      );
+      console.debug(`[CacheManager] Skipping reset (debounced): ${reason}`);
       return {
         success: true,
         message: "Reset skipped (debounced)",
@@ -170,7 +176,9 @@ export class CacheManager {
 
       return {
         success: false,
-        message: `Cache reset failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        message: `Cache reset failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
         duration,
       };
     }
@@ -185,7 +193,9 @@ export class CacheManager {
    * @param reason - Reason for the refresh (for logging)
    * @returns Result of the operation
    */
-  async refreshActiveQueries(reason: string = "manual_refresh"): Promise<CacheOperationResult> {
+  async refreshActiveQueries(
+    reason: string = "manual_refresh"
+  ): Promise<CacheOperationResult> {
     const startTime = performance.now();
 
     console.log(`[CacheManager] Refreshing active queries: ${reason}`);
@@ -211,7 +221,9 @@ export class CacheManager {
 
       return {
         success: false,
-        message: `Query refresh failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        message: `Query refresh failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
         duration,
       };
     }
@@ -239,7 +251,12 @@ export class CacheManager {
   async invalidateEntityQueries(
     options: InvalidationOptions
   ): Promise<CacheOperationResult> {
-    const { entityType, corpusId, documentId, reason = "entity_change" } = options;
+    const {
+      entityType,
+      corpusId,
+      documentId,
+      reason = "entity_change",
+    } = options;
     const startTime = performance.now();
     const cacheKey = `${entityType}:${corpusId || ""}:${documentId || ""}`;
 
@@ -258,9 +275,7 @@ export class CacheManager {
     }
     this.lastInvalidationTime.set(cacheKey, now);
 
-    console.log(
-      `[CacheManager] Invalidating ${entityType} queries: ${reason}`
-    );
+    console.log(`[CacheManager] Invalidating ${entityType} queries: ${reason}`);
 
     try {
       const queriesToRefetch = this.getQueriesToRefetch(entityType, {
@@ -269,7 +284,10 @@ export class CacheManager {
       });
 
       if (queriesToRefetch.length === 0) {
-        console.debug("[CacheManager] No queries to refetch for entity type:", entityType);
+        console.debug(
+          "[CacheManager] No queries to refetch for entity type:",
+          entityType
+        );
         return {
           success: true,
           message: "No queries to refetch",
@@ -283,7 +301,9 @@ export class CacheManager {
 
       const duration = performance.now() - startTime;
       console.log(
-        `[CacheManager] Invalidated ${queriesToRefetch.length} queries in ${duration.toFixed(1)}ms`
+        `[CacheManager] Invalidated ${
+          queriesToRefetch.length
+        } queries in ${duration.toFixed(1)}ms`
       );
 
       return {
@@ -297,7 +317,9 @@ export class CacheManager {
 
       return {
         success: false,
-        message: `Invalidation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        message: `Invalidation failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
         duration,
       };
     }
@@ -352,7 +374,7 @@ export class CacheManager {
   private getQueriesToRefetch(
     entityType: InvalidatableEntity,
     context: { corpusId?: string; documentId?: string }
-  ): Array<ReturnType<typeof GET_DOCUMENTS> | ReturnType<typeof GET_CORPUSES>> {
+  ): DocumentNode[] {
     switch (entityType) {
       case "document":
         // Document changes affect document lists and folder contents
@@ -406,9 +428,7 @@ export class CacheManager {
       const sizeKB = (cacheString.length / 1024).toFixed(2);
       const entryCount = Object.keys(cache).length;
 
-      console.log(
-        `[CacheManager] Cache: ${entryCount} entries, ${sizeKB} KB`
-      );
+      console.log(`[CacheManager] Cache: ${entryCount} entries, ${sizeKB} KB`);
     } catch (error) {
       console.error("[CacheManager] Error logging cache size:", error);
     }
@@ -416,15 +436,30 @@ export class CacheManager {
 }
 
 // ============================================================================
-// Singleton Instance and Hook
+// Singleton Instance (for non-React contexts)
 // ============================================================================
 
+/**
+ * Singleton instance for use in non-React contexts (e.g., external scripts,
+ * service workers, or utility functions that don't have access to React hooks).
+ *
+ * NOTE: In React components, prefer using the `useCacheManager` hook from
+ * `hooks/useCacheManager.ts` instead. The hook provides proper memoization
+ * and integrates with React's lifecycle.
+ *
+ * These singleton functions are primarily used for:
+ * 1. Testing - allows tests to manage the singleton lifecycle
+ * 2. Non-React contexts - rare cases where hooks aren't available
+ *
+ * @see useCacheManager for React component usage
+ */
 let cacheManagerInstance: CacheManager | null = null;
 
 /**
  * Initializes the CacheManager singleton with an Apollo Client.
  *
- * This should be called once during app initialization, typically in App.tsx.
+ * NOTE: In React components, use the `useCacheManager` hook instead.
+ * This function is intended for non-React contexts or testing scenarios.
  *
  * @param client - The Apollo Client instance
  */
@@ -432,7 +467,9 @@ export function initializeCacheManager(
   client: ApolloClient<NormalizedCacheObject>
 ): CacheManager {
   if (cacheManagerInstance) {
-    console.warn("[CacheManager] Already initialized, returning existing instance");
+    console.warn(
+      "[CacheManager] Already initialized, returning existing instance"
+    );
     return cacheManagerInstance;
   }
 
@@ -443,6 +480,8 @@ export function initializeCacheManager(
 
 /**
  * Gets the CacheManager singleton instance.
+ *
+ * NOTE: In React components, use the `useCacheManager` hook instead.
  *
  * @throws Error if CacheManager has not been initialized
  */
@@ -463,7 +502,10 @@ export function isCacheManagerInitialized(): boolean {
 }
 
 /**
- * Resets the CacheManager singleton (primarily for testing).
+ * Resets the CacheManager singleton. Used in tests to ensure clean state
+ * between test cases.
+ *
+ * @internal This function is intended for testing only.
  */
 export function resetCacheManagerForTesting(): void {
   cacheManagerInstance = null;

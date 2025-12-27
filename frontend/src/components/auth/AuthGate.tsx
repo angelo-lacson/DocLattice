@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import { useReactiveVar, useApolloClient } from "@apollo/client";
+import { useReactiveVar } from "@apollo/client";
 import { authToken, authStatusVar, userObj } from "../../graphql/cache";
 import { toast } from "react-toastify";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
-import { CacheManager } from "../../services/cacheManager";
+import { useCacheManager } from "../../hooks/useCacheManager";
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -24,7 +24,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
 }) => {
   const [authInitialized, setAuthInitialized] = useState(false);
   const authStatus = useReactiveVar(authStatusVar);
-  const apolloClient = useApolloClient();
+  const { resetOnAuthChange } = useCacheManager();
 
   // Auth0 hooks
   const {
@@ -66,20 +66,9 @@ export const AuthGate: React.FC<AuthGateProps> = ({
           if (token) {
             console.log("[AuthGate] Token obtained successfully");
 
-            // Clear cache before setting new auth state to ensure fresh data
-            // This prevents stale data from anonymous/previous user session
-            try {
-              const cacheManager = new CacheManager(apolloClient as any);
-              await cacheManager.resetOnAuthChange({
-                reason: "auth0_login",
-                refetchActive: false,
-              });
-            } catch (cacheError) {
-              console.warn("[AuthGate] Cache reset warning:", cacheError);
-              // Continue with auth even if cache reset fails
-            }
-
-            // Set token first, then user, then status - all synchronously
+            // Set auth state FIRST - this ensures any subsequent queries use
+            // the new auth context. Cache clear happens AFTER to prevent race
+            // condition where queries fetch with wrong auth state.
             authToken(token);
             userObj(user);
             authStatusVar("AUTHENTICATED");
@@ -90,6 +79,17 @@ export const AuthGate: React.FC<AuthGateProps> = ({
               "[AuthGate] Token verified:",
               verifyToken ? "Present" : "Missing"
             );
+
+            // Now clear cache - refetched queries will use new auth context
+            try {
+              await resetOnAuthChange({
+                reason: "auth0_login",
+                refetchActive: false,
+              });
+            } catch (cacheError) {
+              console.warn("[AuthGate] Cache reset warning:", cacheError);
+              // Continue even if cache reset fails
+            }
 
             setAuthInitialized(true);
           } else {
@@ -156,7 +156,9 @@ export const AuthGate: React.FC<AuthGateProps> = ({
     isAuthenticated,
     user,
     getAccessTokenSilently,
+    loginWithRedirect,
     audience,
+    resetOnAuthChange,
   ]);
 
   // Show loading screen while auth is initializing
