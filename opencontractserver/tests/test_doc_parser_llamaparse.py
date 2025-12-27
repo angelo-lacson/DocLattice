@@ -122,7 +122,7 @@ class TestLlamaParseParser(TestCase):
         ]
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
-    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_success_with_layout(
         self, mock_open, mock_llama_parse_class
@@ -170,7 +170,7 @@ class TestLlamaParseParser(TestCase):
         self.assertIn("annotation_json", first_annotation)
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
-    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_markdown_mode(self, mock_open, mock_llama_parse_class):
         """Test document parsing with markdown output (no layout)."""
@@ -219,7 +219,7 @@ class TestLlamaParseParser(TestCase):
             self.assertIsNone(result)
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
-    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_api_error(self, mock_open, mock_llama_parse_class):
         """Test handling of API errors."""
@@ -241,7 +241,7 @@ class TestLlamaParseParser(TestCase):
         self.assertIsNone(result)
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
-    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_empty_result(self, mock_open, mock_llama_parse_class):
         """Test handling of empty results from API."""
@@ -498,7 +498,7 @@ class TestLlamaParseParserConfiguration(TestCase):
             self.assertEqual(parser.verbose, True)
 
     @override_settings(LLAMAPARSE_API_KEY="test-key")
-    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_kwargs_override_settings(self, mock_open, mock_llama_parse_class):
         """Test that kwargs override settings."""

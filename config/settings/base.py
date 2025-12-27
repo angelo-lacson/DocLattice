@@ -658,8 +658,9 @@ DOCLING_PARSER_TIMEOUT = env.int(
 use_cloud_run_iam_auth = True
 
 # LlamaParse Settings - for LlamaParse document parser
-# Set LLAMAPARSE_API_KEY or LLAMA_CLOUD_API_KEY environment variable to use
-LLAMAPARSE_API_KEY = env.str("LLAMAPARSE_API_KEY", default="")
+# Supports both LLAMAPARSE_API_KEY and LLAMA_CLOUD_API_KEY (LlamaIndex's default env var)
+_llamaparse_key = env.str("LLAMAPARSE_API_KEY", default="")
+LLAMAPARSE_API_KEY = _llamaparse_key or env.str("LLAMA_CLOUD_API_KEY", default="")
 LLAMAPARSE_RESULT_TYPE = env.str("LLAMAPARSE_RESULT_TYPE", default="json")
 LLAMAPARSE_EXTRACT_LAYOUT = env.bool("LLAMAPARSE_EXTRACT_LAYOUT", default=True)
 LLAMAPARSE_NUM_WORKERS = env.int("LLAMAPARSE_NUM_WORKERS", default=4)
@@ -828,6 +829,7 @@ PARSER_KWARGS = {
         "use_ocr": True,
     },
     "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+        "api_key": LLAMAPARSE_API_KEY,
         "result_type": "json",
         "extract_layout": True,
         "num_workers": 4,

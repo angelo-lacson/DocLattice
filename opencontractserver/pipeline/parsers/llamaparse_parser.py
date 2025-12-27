@@ -80,10 +80,9 @@ class LlamaParseParser(BaseParser):
         """Initialize the LlamaParse parser with configuration from settings."""
         super().__init__()
 
-        # Get API key from settings (which reads from env vars)
+        # Get API key from settings (which reads from env vars, supporting both
+        # LLAMAPARSE_API_KEY and LLAMA_CLOUD_API_KEY)
         self.api_key = getattr(settings, "LLAMAPARSE_API_KEY", "")
-        if not self.api_key:
-            self.api_key = os.environ.get("LLAMA_CLOUD_API_KEY", "")
 
         # Get other configuration options
         self.result_type = getattr(settings, "LLAMAPARSE_RESULT_TYPE", "json")
@@ -136,8 +135,8 @@ class LlamaParseParser(BaseParser):
 
         if not api_key:
             logger.error(
-                "LlamaParse API key not configured. Set LLAMAPARSE_API_KEY in settings "
-                "or LLAMA_CLOUD_API_KEY environment variable."
+                "LlamaParse API key not configured. Set LLAMAPARSE_API_KEY or "
+                "LLAMA_CLOUD_API_KEY environment variable."
             )
             return None
 
@@ -408,7 +407,7 @@ class LlamaParseParser(BaseParser):
     def _convert_text_to_opencontracts(
         self,
         document: Document,
-        llama_documents: list,
+        llama_documents: list[Any],
     ) -> OpenContractDocExport:
         """
         Convert simple text/markdown LlamaParse output to OpenContracts format.
@@ -473,6 +472,8 @@ class LlamaParseParser(BaseParser):
 
         # Default margin constant (1 inch = 72 points)
         DEFAULT_MARGIN = 72
+        # Default bottom position for fallback bounding boxes (~1.4 inches from top)
+        # This provides reasonable vertical space for a single-line text element
         DEFAULT_BOTTOM = 100
 
         # Parse bounding box - handle different formats from LlamaParse
@@ -539,9 +540,10 @@ class LlamaParseParser(BaseParser):
             right, bottom = page_width - DEFAULT_MARGIN, DEFAULT_BOTTOM
 
         # Create tokens - split text into words
-        # Note: If text is empty or whitespace-only, we create a single token with the
-        # original text (or empty string). This ensures we always have at least one token
-        # for the bounding box, which is required for PAWLS format consistency.
+        # PAWLS format requires at least one token per bounding box for proper annotation
+        # rendering. If text is empty or whitespace-only, we create a single token with
+        # the original text (or empty string) to maintain this invariant. Without this,
+        # the frontend annotation renderer would fail to display the element's bounds.
         words = text.split()
         if not words:
             words = [text] if text else [""]
