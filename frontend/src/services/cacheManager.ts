@@ -106,9 +106,50 @@ export class CacheManager {
   private static readonly RESET_DEBOUNCE_MS = 1000;
   /** Minimum time (ms) between same-type invalidations */
   private static readonly INVALIDATION_DEBOUNCE_MS = 500;
+  /** Maximum entries in lastInvalidationTime to prevent memory leak */
+  private static readonly MAX_INVALIDATION_ENTRIES = 100;
+  /** Entries older than this (ms) are eligible for cleanup */
+  private static readonly INVALIDATION_ENTRY_TTL_MS = 60000;
 
   constructor(client: ApolloClient<NormalizedCacheObject>) {
     this.client = client;
+  }
+
+  // ==========================================================================
+  // Private Helpers - Debounce Map Cleanup
+  // ==========================================================================
+
+  /**
+   * Cleans up stale entries from the invalidation debounce map to prevent memory leaks.
+   * Called automatically when new entries are added.
+   *
+   * Cleanup strategy:
+   * 1. Remove entries older than TTL (they can't affect debouncing anyway)
+   * 2. If still over max size, remove oldest entries until under limit
+   */
+  private cleanupInvalidationMap(): void {
+    const now = Date.now();
+
+    // First pass: remove entries older than TTL
+    for (const [key, timestamp] of this.lastInvalidationTime) {
+      if (now - timestamp > CacheManager.INVALIDATION_ENTRY_TTL_MS) {
+        this.lastInvalidationTime.delete(key);
+      }
+    }
+
+    // Second pass: if still over limit, remove oldest entries
+    if (
+      this.lastInvalidationTime.size > CacheManager.MAX_INVALIDATION_ENTRIES
+    ) {
+      const entries = Array.from(this.lastInvalidationTime.entries());
+      entries.sort((a, b) => a[1] - b[1]); // Sort by timestamp ascending (oldest first)
+
+      const entriesToRemove =
+        entries.length - CacheManager.MAX_INVALIDATION_ENTRIES;
+      for (let i = 0; i < entriesToRemove; i++) {
+        this.lastInvalidationTime.delete(entries[i][0]);
+      }
+    }
   }
 
   // ==========================================================================
@@ -274,6 +315,7 @@ export class CacheManager {
       };
     }
     this.lastInvalidationTime.set(cacheKey, now);
+    this.cleanupInvalidationMap(); // Prevent unbounded map growth
 
     console.log(`[CacheManager] Invalidating ${entityType} queries: ${reason}`);
 
@@ -377,7 +419,10 @@ export class CacheManager {
   ): DocumentNode[] {
     switch (entityType) {
       case "document":
-        // Document changes affect document lists and folder contents
+        // Document changes affect document lists and folder contents.
+        // NOTE: This refetches ALL documents and corpus folders globally.
+        // Future optimization: use corpusId/documentId from context to scope
+        // refetches with query variables for large corpora.
         return [GET_DOCUMENTS, GET_CORPUS_FOLDERS];
 
       case "corpus":

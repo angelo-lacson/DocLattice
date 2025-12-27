@@ -75,7 +75,12 @@ export const useNavMenu = () => {
     // Fire-and-forget cache clear (don't block logout on this)
     // No refetch needed since we're logging out
     resetOnAuthChange({ reason: "user_logout", refetchActive: false }).catch(
-      (error) => console.warn("[useNavMenu] Cache reset warning:", error)
+      (error) =>
+        console.warn("[useNavMenu] Cache reset failed on logout:", {
+          error: error instanceof Error ? error.message : error,
+          userId: user?.sub || cache_user?.id,
+          timestamp: new Date().toISOString(),
+        })
     );
 
     if (REACT_APP_USE_AUTH0) {

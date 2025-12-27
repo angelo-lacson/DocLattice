@@ -14,6 +14,18 @@ import { authToken, authStatusVar, userObj } from "../../graphql/cache";
 // Mock Auth0
 vi.mock("@auth0/auth0-react");
 
+// Mock useCacheManager - we don't need to test cache behavior here
+vi.mock("../../hooks/useCacheManager", () => ({
+  useCacheManager: () => ({
+    resetOnAuthChange: vi.fn().mockResolvedValue({ success: true }),
+    refreshActiveQueries: vi.fn().mockResolvedValue({ success: true }),
+    invalidateEntityQueries: vi.fn().mockResolvedValue({ success: true }),
+    invalidateDocumentQueries: vi.fn().mockResolvedValue({ success: true }),
+    invalidateCorpusQueries: vi.fn().mockResolvedValue({ success: true }),
+    logCacheSize: vi.fn(),
+  }),
+}));
+
 // Mock toast
 vi.mock("react-toastify", () => ({
   toast: {
