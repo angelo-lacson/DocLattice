@@ -31,7 +31,10 @@ from config.websocket.consumers.notification_updates import (
 )
 from doclatticeserver.badges.models import Badge, UserBadge
 from doclatticeserver.conversations.models import ChatMessage, Conversation
-from doclatticeserver.notifications.models import Notification, NotificationTypeChoices
+from doclatticeserver.notifications.models import (
+    Notification,
+    NotificationTypeChoices,
+)
 from doclatticeserver.tests.base import BaseFixtureTestCase
 
 User = get_user_model()
@@ -275,7 +278,9 @@ class NotificationWebSocketTestCase(BaseFixtureTestCase):
         await communicator1.disconnect()
         await communicator2.disconnect()
 
-    @patch("doclatticeserver.notifications.signals.broadcast_notification_via_websocket")
+    @patch(
+        "doclatticeserver.notifications.signals.broadcast_notification_via_websocket"
+    )
     async def test_badge_award_triggers_broadcast(self, mock_broadcast):
         """Badge award should trigger WebSocket broadcast via signal."""
         # Create badge award (triggers signal)
