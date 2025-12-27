@@ -25,28 +25,58 @@ import {
 import { WebSocketSources } from "../knowledge_base/document/right_tray/ChatTray";
 
 /**
- * Helper to extract agent display data from configuration
+ * Default color for agent messages when no badge color is configured
+ */
+const DEFAULT_AGENT_COLOR = "#4A90E2";
+
+/**
+ * Validates that a value is a string
+ */
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+/**
+ * Validates that a string is a valid hex color (3 or 6 digit format)
+ */
+function isValidHexColor(value: string): boolean {
+  return /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/.test(value);
+}
+
+/**
+ * Helper to extract agent display data from configuration.
+ * Performs runtime validation of badgeConfig fields to ensure type safety
+ * since badgeConfig is a GenericScalar (essentially 'any') from GraphQL.
  */
 interface AgentDisplayData {
   name: string;
   color: string;
-  icon: string;
 }
 
-function getAgentDisplayData(
+export function getAgentDisplayData(
   agentConfig: AgentConfigurationType | null | undefined
 ): AgentDisplayData | null {
   if (!agentConfig) return null;
 
-  const badgeConfig = agentConfig.badgeConfig as {
-    color?: string;
-    icon?: string;
-  } | null;
+  // Runtime validation: badgeConfig could be any shape from the database
+  const badgeConfig = agentConfig.badgeConfig;
+  let color = DEFAULT_AGENT_COLOR;
+
+  // Validate badgeConfig is an object and color is a valid hex string
+  if (
+    badgeConfig &&
+    typeof badgeConfig === "object" &&
+    !Array.isArray(badgeConfig)
+  ) {
+    const configColor = (badgeConfig as Record<string, unknown>).color;
+    if (isString(configColor) && isValidHexColor(configColor)) {
+      color = configColor;
+    }
+  }
 
   return {
     name: agentConfig.name,
-    color: badgeConfig?.color || "#4A90E2", // Default blue for agents
-    icon: badgeConfig?.icon || "Bot",
+    color,
   };
 }
 
@@ -58,24 +88,53 @@ interface MessageItemProps {
 }
 
 /**
- * Helper to create a lighter tint of a hex color
+ * Normalizes a 3-digit hex color to 6-digit format.
+ * e.g., "#abc" -> "#aabbcc"
  */
-function hexToRgba(hex: string, alpha: number): string {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!result) return `rgba(74, 144, 226, ${alpha})`;
+function normalizeHexColor(hex: string): string {
+  const shortHexMatch = /^#?([a-f\d])([a-f\d])([a-f\d])$/i.exec(hex);
+  if (shortHexMatch) {
+    return `#${shortHexMatch[1]}${shortHexMatch[1]}${shortHexMatch[2]}${shortHexMatch[2]}${shortHexMatch[3]}${shortHexMatch[3]}`;
+  }
+  return hex;
+}
+
+/**
+ * Helper to create an rgba color from a hex color with alpha.
+ * Supports both 3-digit (#abc) and 6-digit (#aabbcc) hex formats.
+ */
+export function hexToRgba(hex: string, alpha: number): string {
+  // Normalize 3-digit hex to 6-digit
+  const normalizedHex = normalizeHexColor(hex);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(
+    normalizedHex
+  );
+  if (!result) return `rgba(74, 144, 226, ${alpha})`; // Fallback to default blue
   return `rgba(${parseInt(result[1], 16)}, ${parseInt(
     result[2],
     16
   )}, ${parseInt(result[3], 16)}, ${alpha})`;
 }
 
-const MessageContainer = styled.div<{
-  $depth: number;
-  $isHighlighted?: boolean;
-  $isDeleted?: boolean;
-  $isAgent?: boolean;
+/**
+ * Pre-computed agent color values to avoid recalculation in styled-components
+ */
+interface AgentColorProps {
   $agentColor?: string;
-}>`
+  $agentBgStart?: string;
+  $agentBgEnd?: string;
+  $agentShadow?: string;
+  $agentShadowHover?: string;
+}
+
+const MessageContainer = styled.div<
+  {
+    $depth: number;
+    $isHighlighted?: boolean;
+    $isDeleted?: boolean;
+    $isAgent?: boolean;
+  } & AgentColorProps
+>`
   /* CRITICAL: Block-level display to prevent shrinking */
   display: block;
 
@@ -96,13 +155,9 @@ const MessageContainer = styled.div<{
     if (props.$isDeleted) return "#f3f4f6";
     if (props.$isHighlighted)
       return `linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)`;
-    if (props.$isAgent) {
-      // Subtle gradient using agent color with very low opacity
-      const agentColor = props.$agentColor || "#4A90E2";
-      return `linear-gradient(135deg, ${hexToRgba(
-        agentColor,
-        0.08
-      )} 0%, ${hexToRgba(agentColor, 0.03)} 100%)`;
+    if (props.$isAgent && props.$agentBgStart && props.$agentBgEnd) {
+      // Use pre-computed RGBA values for performance
+      return `linear-gradient(135deg, ${props.$agentBgStart} 0%, ${props.$agentBgEnd} 100%)`;
     }
     return "#ffffff";
   }};
@@ -151,7 +206,7 @@ const MessageContainer = styled.div<{
       background: linear-gradient(180deg, ${
         props.$agentColor || "#4A90E2"
       } 0%, ${props.$agentColor || "#4A90E2"}88 100%);
-      border-radius: 12px 0 0 12px;
+      border-radius: 16px 0 0 16px;
     }
   `}
 
@@ -217,7 +272,7 @@ const MessageHeaderLeft = styled.div`
   min-width: 0;
 `;
 
-const UserAvatar = styled.div<{ $isAgent?: boolean; $agentColor?: string }>`
+const UserAvatar = styled.div<{ $isAgent?: boolean } & AgentColorProps>`
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -235,16 +290,16 @@ const UserAvatar = styled.div<{ $isAgent?: boolean; $agentColor?: string }>`
   font-size: 16px;
   flex-shrink: 0;
   box-shadow: ${(props) =>
-    props.$isAgent
-      ? `0 4px 14px ${hexToRgba(props.$agentColor || "#4A90E2", 0.4)}`
+    props.$isAgent && props.$agentShadow
+      ? `0 4px 14px ${props.$agentShadow}`
       : "0 4px 14px rgba(99, 102, 241, 0.3)"};
   transition: all 0.2s ease;
 
   &:hover {
     transform: scale(1.05);
     box-shadow: ${(props) =>
-      props.$isAgent
-        ? `0 6px 16px ${hexToRgba(props.$agentColor || "#4A90E2", 0.5)}`
+      props.$isAgent && props.$agentShadowHover
+        ? `0 6px 16px ${props.$agentShadowHover}`
         : "0 6px 16px rgba(102, 126, 234, 0.35)"};
   }
 
@@ -476,6 +531,18 @@ export const MessageItem = React.memo(function MessageItem({
   );
   const isAgent = agentData !== null;
 
+  // Memoize RGBA color values to avoid recalculation in styled-components
+  const agentColors = useMemo(() => {
+    if (!agentData) return undefined;
+    return {
+      color: agentData.color,
+      bgStart: hexToRgba(agentData.color, 0.08),
+      bgEnd: hexToRgba(agentData.color, 0.03),
+      shadow: hexToRgba(agentData.color, 0.4),
+      shadowHover: hexToRgba(agentData.color, 0.5),
+    };
+  }, [agentData]);
+
   // State for sources expansion and selection
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
   const [selectedSourceIndex, setSelectedSourceIndex] = useState<
@@ -545,7 +612,9 @@ export const MessageItem = React.memo(function MessageItem({
       $isHighlighted={isHighlighted}
       $isDeleted={isDeleted}
       $isAgent={isAgent}
-      $agentColor={agentData?.color}
+      $agentColor={agentColors?.color}
+      $agentBgStart={agentColors?.bgStart}
+      $agentBgEnd={agentColors?.bgEnd}
       role="article"
       aria-label={`Message from ${
         isAgent ? `${agentData.name} (AI Agent)` : username
@@ -557,7 +626,9 @@ export const MessageItem = React.memo(function MessageItem({
           <UserAvatar
             title={isAgent ? `${agentData.name} (AI Agent)` : username}
             $isAgent={isAgent}
-            $agentColor={agentData?.color}
+            $agentColor={agentColors?.color}
+            $agentShadow={agentColors?.shadow}
+            $agentShadowHover={agentColors?.shadowHover}
           >
             {isAgent ? <Bot size={18} /> : <User size={16} />}
           </UserAvatar>
