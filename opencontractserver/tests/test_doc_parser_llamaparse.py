@@ -541,3 +541,271 @@ class TestLlamaParseParserConfiguration(TestCase):
         call_kwargs = mock_llama_parse_class.call_args.kwargs
         self.assertEqual(call_kwargs["language"], "fr")
         self.assertEqual(call_kwargs["num_workers"], 16)
+
+
+class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
+    """Tests for layout-only processing (when items are empty but layout exists)."""
+
+    def setUp(self):
+        """Set up test environment."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="layouttestuser", password="testpass123"
+            )
+
+        self.doc = Document.objects.create(
+            title="Layout Test Document",
+            description="Test Description",
+            file_type="pdf",
+            creator=self.user,
+        )
+
+        pdf_content = b"%PDF-1.7\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n2 0 obj\n<</Type/Pages/Count 1/Kids[3 0 R]>>\nendobj\n3 0 obj\n<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>\nendobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer\n<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF\n"  # noqa: E501
+        self.doc.pdf_file.save("test_layout.pdf", ContentFile(pdf_content))
+
+        # JSON response with layout elements but no items
+        self.layout_only_response = [
+            {
+                "pages": [
+                    {
+                        "text": "Layout only page content.",
+                        "width": 612,
+                        "height": 792,
+                        "items": [],  # Empty items list
+                        "layout": [
+                            {
+                                "label": "title",
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.05,
+                                    "width": 0.8,
+                                    "height": 0.05,
+                                },
+                                "text": "Document Title from Layout",
+                            },
+                            {
+                                "label": "paragraph",
+                                "bbox": {
+                                    "left": 0.1,
+                                    "top": 0.2,
+                                    "right": 0.9,
+                                    "bottom": 0.3,
+                                },
+                                "text": "Paragraph content from layout element.",
+                            },
+                            {
+                                "label": "figure",
+                                "bbox": {
+                                    "x": 0.2,
+                                    "y": 0.4,
+                                    "width": 0.6,
+                                    "height": 0.3,
+                                },
+                                "text": "",  # Empty text for figure - should use [figure]
+                            },
+                            {
+                                "label": "text",
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.75,
+                                    "width": 0.8,
+                                    "height": 0.05,
+                                },
+                                "text": "",  # Empty text for non-figure - should be skipped
+                            },
+                        ],
+                    }
+                ]
+            }
+        ]
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_layout_only_processing(
+        self, mock_open, mock_llama_parse_class
+    ):
+        """Test document parsing when items are empty but layout exists.
+
+        This tests lines 344-381 in llamaparse_parser.py.
+        """
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = self.layout_only_response
+        mock_llama_parse_class.return_value = mock_parser
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
+
+        # Verify result structure
+        self.assertIsNotNone(result)
+        self.assertEqual(result["title"], "Layout Test Document")
+        self.assertEqual(result["page_count"], 1)
+
+        # Verify PAWLS content was generated from layout
+        self.assertIn("pawls_file_content", result)
+        self.assertEqual(len(result["pawls_file_content"]), 1)
+        first_page = result["pawls_file_content"][0]
+        self.assertGreater(len(first_page["tokens"]), 0)
+
+        # Verify annotations were created from layout elements
+        self.assertIn("labelled_text", result)
+        # Should have 3 annotations: title, paragraph, and figure
+        # The empty text "text" type should be skipped
+        self.assertEqual(len(result["labelled_text"]), 3)
+
+        # Check the annotation labels
+        labels = [anno["annotationLabel"] for anno in result["labelled_text"]]
+        self.assertIn("Title", labels)
+        self.assertIn("Paragraph", labels)
+        self.assertIn("Figure", labels)
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_layout_figure_without_text(
+        self, mock_open, mock_llama_parse_class
+    ):
+        """Test that figures/images with empty text are processed correctly.
+
+        Figures and images should use [element_type] as placeholder text.
+        """
+        layout_with_images = [
+            {
+                "pages": [
+                    {
+                        "text": "Page with figures",
+                        "width": 612,
+                        "height": 792,
+                        "items": [],
+                        "layout": [
+                            {
+                                "label": "image",
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.1,
+                                    "width": 0.8,
+                                    "height": 0.4,
+                                },
+                                "text": "",  # Empty text - should use [image]
+                            },
+                            {
+                                "label": "figure",
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.6,
+                                    "width": 0.8,
+                                    "height": 0.3,
+                                },
+                                "text": "",  # Empty text - should use [figure]
+                            },
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = layout_with_images
+        mock_llama_parse_class.return_value = mock_parser
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
+
+        # Both figure and image should be processed
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["labelled_text"]), 2)
+
+        # Check that placeholder text was used
+        for anno in result["labelled_text"]:
+            self.assertIn(anno["rawText"], ["[image]", "[figure]"])
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_layout_skips_empty_text_non_figures(
+        self, mock_open, mock_llama_parse_class
+    ):
+        """Test that non-figure elements with empty text are skipped."""
+        layout_with_empty_text = [
+            {
+                "pages": [
+                    {
+                        "text": "Page content",
+                        "width": 612,
+                        "height": 792,
+                        "items": [],
+                        "layout": [
+                            {
+                                "label": "title",
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.1,
+                                    "width": 0.8,
+                                    "height": 0.05,
+                                },
+                                "text": "Valid Title",  # Has text - should be included
+                            },
+                            {
+                                "label": "paragraph",
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.2,
+                                    "width": 0.8,
+                                    "height": 0.1,
+                                },
+                                "text": "",  # Empty text - should be skipped
+                            },
+                            {
+                                "label": "heading",
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.4,
+                                    "width": 0.8,
+                                    "height": 0.05,
+                                },
+                                "text": "",  # Empty text - should be skipped
+                            },
+                            {
+                                "label": "section_header",
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.5,
+                                    "width": 0.8,
+                                    "height": 0.05,
+                                },
+                                "text": "Valid Section Header",  # Has text - should be included
+                            },
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = layout_with_empty_text
+        mock_llama_parse_class.return_value = mock_parser
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
+
+        # Only 2 annotations should be created (title and section_header)
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["labelled_text"]), 2)
+
+        labels = [anno["annotationLabel"] for anno in result["labelled_text"]]
+        self.assertIn("Title", labels)
+        self.assertIn("Section Header", labels)
+        self.assertNotIn("Paragraph", labels)
+        self.assertNotIn("Heading", labels)
