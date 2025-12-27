@@ -22,7 +22,11 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { useApolloClient, ApolloClient, NormalizedCacheObject } from "@apollo/client";
+import {
+  useApolloClient,
+  ApolloClient,
+  NormalizedCacheObject,
+} from "@apollo/client";
 import {
   CacheManager,
   CacheResetOptions,
@@ -42,7 +46,9 @@ export interface UseCacheManagerReturn {
    * Resets the entire cache and refetches active queries.
    * Use this on authentication state changes (login/logout).
    */
-  resetOnAuthChange: (options?: CacheResetOptions) => Promise<CacheOperationResult>;
+  resetOnAuthChange: (
+    options?: CacheResetOptions
+  ) => Promise<CacheOperationResult>;
 
   /**
    * Refreshes all active queries without clearing the cache.
@@ -54,12 +60,17 @@ export interface UseCacheManagerReturn {
    * Invalidates queries related to a specific entity type.
    * Use this after entity CRUD operations.
    */
-  invalidateEntityQueries: (options: InvalidationOptions) => Promise<CacheOperationResult>;
+  invalidateEntityQueries: (
+    options: InvalidationOptions
+  ) => Promise<CacheOperationResult>;
 
   /**
    * Convenience method to invalidate document-related queries.
    */
-  invalidateDocumentQueries: (corpusId?: string, reason?: string) => Promise<CacheOperationResult>;
+  invalidateDocumentQueries: (
+    corpusId?: string,
+    reason?: string
+  ) => Promise<CacheOperationResult>;
 
   /**
    * Convenience method to invalidate corpus-related queries.
@@ -104,7 +115,8 @@ export function useCacheManager(): UseCacheManagerReturn {
   );
 
   const invalidateEntityQueries = useCallback(
-    (options: InvalidationOptions) => cacheManager.invalidateEntityQueries(options),
+    (options: InvalidationOptions) =>
+      cacheManager.invalidateEntityQueries(options),
     [cacheManager]
   );
 
