@@ -234,8 +234,8 @@ export function useNotificationWebSocket(
         switch (data.type) {
           case "CONNECTED":
             setSessionId(data.session_id || null);
-            // Reset failure count on successful connection
-            failureCountRef.current = 0;
+            // Note: Failure count is reset in onopen, not here, to handle
+            // cases where CONNECTED message may be delayed or missing
             break;
 
           case "NOTIFICATION_CREATED": {
@@ -315,6 +315,13 @@ export function useNotificationWebSocket(
 
     ws.onopen = () => {
       setConnectionState("connected");
+      // Reset failure count immediately on successful open as a fallback,
+      // in case CONNECTED message is delayed or missing
+      failureCountRef.current = 0;
+      // Clear recent notifications buffer for clean state on new connection.
+      // Note: For persistent notification storage across reconnections, use
+      // Apollo cache (GET_NOTIFICATIONS query) - this buffer is only for
+      // immediate UI updates during the current session.
       recentNotificationsRef.current = [];
       updateRecentNotifications();
 

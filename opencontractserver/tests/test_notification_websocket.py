@@ -71,12 +71,13 @@ class NotificationWebSocketTestCase(WebsocketFixtureBaseTestCase):
     @database_sync_to_async
     def _create_badge_notification(self, user: User) -> tuple[UserBadge, Notification]:
         """Create a badge and badge notification."""
-        # Create badge
+        # Create badge (BaseOCModel requires creator field)
         badge = Badge.objects.create(
             name="Test Badge",
             description="Test Description",
             icon="Award",
             color="#05313d",
+            creator=user,
         )
 
         # Create user badge (this will trigger signal and create notification)
@@ -182,6 +183,48 @@ class NotificationWebSocketTestCase(WebsocketFixtureBaseTestCase):
 
         await communicator.disconnect()
 
+    async def test_invalid_json_handling(self):
+        """Consumer should gracefully handle invalid JSON from client."""
+        ws_path = f"ws/notification-updates/?token={self.token}"
+        communicator = WebsocketCommunicator(application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+
+        # Consume CONNECTED message
+        await communicator.receive_from(timeout=5)
+
+        # Send invalid JSON (should be logged and ignored, not crash)
+        await communicator.send_to("this is not valid json {{{")
+
+        # Connection should still work - send ping and expect pong
+        await communicator.send_to(json.dumps({"type": "ping"}))
+        response = await communicator.receive_from(timeout=5)
+        data = json.loads(response)
+        self.assertEqual(data["type"], "pong")
+
+        await communicator.disconnect()
+
+    async def test_unknown_message_type_handling(self):
+        """Consumer should gracefully handle unknown message types."""
+        ws_path = f"ws/notification-updates/?token={self.token}"
+        communicator = WebsocketCommunicator(application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+
+        # Consume CONNECTED message
+        await communicator.receive_from(timeout=5)
+
+        # Send unknown message type (should be logged and ignored)
+        await communicator.send_to(json.dumps({"type": "UNKNOWN_TYPE", "data": "test"}))
+
+        # Connection should still work - send ping and expect pong
+        await communicator.send_to(json.dumps({"type": "ping"}))
+        response = await communicator.receive_from(timeout=5)
+        data = json.loads(response)
+        self.assertEqual(data["type"], "pong")
+
+        await communicator.disconnect()
+
     async def test_notification_broadcast_via_channel_layer(self):
         """Notifications should be broadcast via channel layer."""
         ws_path = f"ws/notification-updates/?token={self.token}"
@@ -234,14 +277,12 @@ class NotificationWebSocketTestCase(WebsocketFixtureBaseTestCase):
         await communicator1.receive_from(timeout=5)  # Consume CONNECTED
 
         # Create user2's token
-        user2_token = await database_sync_to_async(
+        user2 = await database_sync_to_async(
             lambda: User.objects.get(username="testuser2")
         )()
-        from opencontractserver.utils.auth import create_token_for_user
+        from graphql_jwt.shortcuts import get_token
 
-        user2_token_str = await database_sync_to_async(create_token_for_user)(
-            user2_token
-        )
+        user2_token_str = await database_sync_to_async(get_token)(user2)
 
         # Connect user2
         ws_path2 = f"ws/notification-updates/?token={user2_token_str}"
@@ -252,7 +293,7 @@ class NotificationWebSocketTestCase(WebsocketFixtureBaseTestCase):
 
         # Send notification to user2's channel group ONLY
         channel_layer = get_channel_layer()
-        user2_group = get_notification_channel_group(user2_token.pk)
+        user2_group = get_notification_channel_group(user2.pk)
 
         await channel_layer.group_send(
             user2_group,
@@ -272,10 +313,23 @@ class NotificationWebSocketTestCase(WebsocketFixtureBaseTestCase):
         self.assertEqual(data2["notificationId"], "999")
 
         # User1 should NOT receive anything (timeout expected)
-        with self.assertRaises(TimeoutError):
-            await communicator1.receive_from(timeout=2)
+        # WebsocketCommunicator.receive_from raises either TimeoutError or
+        # asyncio.CancelledError on timeout depending on Python version
+        import asyncio
 
-        await communicator1.disconnect()
+        try:
+            await communicator1.receive_from(timeout=2)
+            # If we get here, we received unexpected data
+            self.fail("User1 should not have received notification destined for User2")
+        except (TimeoutError, asyncio.CancelledError):
+            # Expected: no message received (IDOR prevention working correctly)
+            pass
+
+        # Clean up connections - may also raise CancelledError in some cases
+        try:
+            await communicator1.disconnect()
+        except asyncio.CancelledError:
+            pass  # Connection already terminated due to timeout
         await communicator2.disconnect()
 
     @patch(
