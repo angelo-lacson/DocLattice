@@ -197,22 +197,14 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
       [location, navigate]
     );
 
-    const handleShowStructuralChange = useCallback(() => {
-      const newStructuralValue = !showStructural;
-
-      // If enabling structural view, force "show selected only" to be true
-      // Update BOTH params in a SINGLE navigate() call to avoid race condition
-      if (newStructuralValue) {
+    const handleShowStructuralChange = useCallback(
+      (checked: boolean) => {
         updateAnnotationDisplayParams(location, navigate, {
-          showStructural: true,
-          showSelectedOnly: true,
+          showStructural: checked,
         });
-      } else {
-        updateAnnotationDisplayParams(location, navigate, {
-          showStructural: false,
-        });
-      }
-    }, [showStructural, location, navigate]);
+      },
+      [location, navigate]
+    );
 
     const handleShowBoundingBoxesChange = useCallback(
       (checked: boolean) => {
@@ -299,7 +291,10 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           </ControlLabel>
           <StyledCheckbox
             toggle
-            onChange={handleShowStructuralChange}
+            onChange={(
+              _e: React.FormEvent<HTMLInputElement>,
+              data: CheckboxProps
+            ) => handleShowStructuralChange(data?.checked ?? false)}
             checked={showStructural}
           />
         </ControlItem>
