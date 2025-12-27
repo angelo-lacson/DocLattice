@@ -80,6 +80,12 @@ class NotificationUpdatesConsumer(AsyncWebsocketConsumer):
     Message Types (Client -> Server):
         - ping: Check connection health
         - heartbeat: Keep connection alive
+
+    Rate Limiting:
+        This consumer is read-only with minimal client interaction.
+        Currently no rate limiting is implemented for ping/heartbeat messages.
+        If high-frequency client messages become a concern, consider adding
+        rate limiting via a simple counter or Redis-based throttling.
     """
 
     user_id: int | None = None
