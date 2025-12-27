@@ -657,6 +657,15 @@ DOCLING_PARSER_TIMEOUT = env.int(
 )
 use_cloud_run_iam_auth = True
 
+# LlamaParse Settings - for LlamaParse document parser
+# Set LLAMAPARSE_API_KEY or LLAMA_CLOUD_API_KEY environment variable to use
+LLAMAPARSE_API_KEY = env.str("LLAMAPARSE_API_KEY", default="")
+LLAMAPARSE_RESULT_TYPE = env.str("LLAMAPARSE_RESULT_TYPE", default="json")
+LLAMAPARSE_EXTRACT_LAYOUT = env.bool("LLAMAPARSE_EXTRACT_LAYOUT", default=True)
+LLAMAPARSE_NUM_WORKERS = env.int("LLAMAPARSE_NUM_WORKERS", default=4)
+LLAMAPARSE_LANGUAGE = env.str("LLAMAPARSE_LANGUAGE", default="en")
+LLAMAPARSE_VERBOSE = env.bool("LLAMAPARSE_VERBOSE", default=False)
+
 # LLM SETTING
 OPENAI_API_KEY = env.str("OPENAI_API_KEY", default="")
 OPENAI_MODEL = env.str("OPENAI_MODEL", default="gpt-4o")
@@ -728,13 +737,30 @@ SENTENCE_TRANSFORMER_MODELS_PATH = env.str(
     "SENTENCE_TRANSFORMER_MODELS_PATH", default="/models/sentence-transformers"
 )
 
+# Parser selection via environment variable
+# Options: "docling" (default), "llamaparse", "nlm"
+PDF_PARSER = env.str("PDF_PARSER", default="docling")
+
+# Map parser names to their full paths
+_PDF_PARSER_MAP = {
+    "docling": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",
+    "llamaparse": "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser",
+    "nlm": "opencontractserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser",
+}
+
+# Get the selected PDF parser (with fallback to docling)
+_SELECTED_PDF_PARSER = _PDF_PARSER_MAP.get(
+    PDF_PARSER.lower(),
+    _PDF_PARSER_MAP["docling"]
+)
+
 # Preferred parsers for each MIME type
 PREFERRED_PARSERS = {
-    "application/pdf": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",
+    "application/pdf": _SELECTED_PDF_PARSER,
     "text/plain": "opencontractserver.pipeline.parsers.oc_text_parser.TxtParser",
     "application/txt": "opencontractserver.pipeline.parsers.oc_text_parser.TxtParser",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",  # noqa
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",  # noqa
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": _SELECTED_PDF_PARSER,  # noqa
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": _SELECTED_PDF_PARSER,  # noqa
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",  # noqa
 }
 
@@ -801,6 +827,13 @@ PARSER_KWARGS = {
         "endpoint": "http://nlm-ingestor:5001",
         "api_key": "",
         "use_ocr": True,
+    },
+    "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+        "result_type": "json",
+        "extract_layout": True,
+        "num_workers": 4,
+        "language": "en",
+        "verbose": False,
     },
 }
 

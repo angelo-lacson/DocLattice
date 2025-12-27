@@ -5,7 +5,44 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-26
+## [Unreleased] - 2025-12-27
+
+### Added
+
+#### LlamaParse Document Parser Integration (Issue #692)
+- **New LlamaParseParser** (`opencontractserver/pipeline/parsers/llamaparse_parser.py`): Full integration with LlamaParse API for document parsing with layout extraction
+  - Supports PDF and DOCX file types
+  - Extracts structural annotations (Title, Heading, Paragraph, Table, Figure, List, etc.) with bounding boxes
+  - Generates PAWLS tokens from LlamaParse layout data for PDF annotation display
+  - Supports multiple bounding box formats (fractional 0-1, absolute coordinates, array format)
+  - Configurable via environment variables or Django settings
+- **Environment variable configuration**:
+  - `LLAMAPARSE_API_KEY` / `LLAMA_CLOUD_API_KEY`: API key for LlamaParse authentication
+  - `LLAMAPARSE_RESULT_TYPE`: Output type ("json", "markdown", "text") - default: "json"
+  - `LLAMAPARSE_EXTRACT_LAYOUT`: Enable layout extraction with bounding boxes - default: True
+  - `LLAMAPARSE_NUM_WORKERS`: Parallel processing workers - default: 4
+  - `LLAMAPARSE_LANGUAGE`: Document language - default: "en"
+  - `LLAMAPARSE_VERBOSE`: Enable verbose logging - default: False
+- **Parser selection via environment variable**:
+  - `PDF_PARSER`: Set to "llamaparse", "docling" (default), or "nlm" to select default PDF parser
+  - Location: `config/settings/base.py:740-765`
+- **Comprehensive test suite** (`opencontractserver/tests/test_doc_parser_llamaparse.py`):
+  - Tests for successful parsing with layout extraction
+  - Tests for markdown mode without layout
+  - Tests for bounding box format conversion (fractional, absolute, array)
+  - Tests for annotation creation and token generation
+  - Tests for error handling (missing API key, API errors, empty results)
+  - Tests for configuration via settings and kwargs override
+
+### Technical Details
+
+#### LlamaParse Parser Architecture
+- Uses `llama-parse` library for API communication
+- JSON mode with `extract_layout=True` provides bounding boxes as fractions of page dimensions (0-1)
+- Converts LlamaParse layout elements to OpenContracts structural annotations
+- Generates PAWLS tokens by splitting text into words and distributing across bounding box
+- Element type mapping converts LlamaParse labels (title, paragraph, table, etc.) to OpenContracts annotation labels
+- Falls back to text extraction mode when layout extraction is disabled
 
 ### Fixed
 
