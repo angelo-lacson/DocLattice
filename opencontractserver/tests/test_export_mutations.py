@@ -12,7 +12,8 @@ from config.graphql.schema import schema
 from opencontractserver.annotations.models import AnnotationLabel, LabelSet
 from opencontractserver.documents.models import Document
 from opencontractserver.tests.base import BaseFixtureTestCase
-from opencontractserver.types.enums import ExportType
+from opencontractserver.types.enums import ExportType, PermissionTypes
+from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
 
@@ -37,6 +38,11 @@ class TestExportMutations(BaseFixtureTestCase):
 
     def setUp(self):
         super().setUp()
+
+        # Set up permissions for the corpus (required for export mutation)
+        set_permissions_for_obj_to_user(
+            self.user, self.corpus, [PermissionTypes.ALL]
+        )
 
         # Create a test label set
         self.label_set = LabelSet.objects.create(
