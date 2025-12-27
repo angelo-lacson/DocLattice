@@ -277,7 +277,11 @@ const component = await mount(
 
 ## Branch Strategy
 
-- Use feature branches: `feature/description-issue-number`
+This project follows **trunk-based development**:
+
+- Work directly on `main` branch or use short-lived feature branches
+- Feature branches: `feature/description-issue-number`
+- Merge feature branches quickly (within a day or two)
 - Commit message format: Descriptive with issue references (e.g., "Closes #562")
 
 ## Changelog Maintenance
