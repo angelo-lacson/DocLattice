@@ -21,10 +21,8 @@ from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
-from opencontractserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from opencontractserver.annotations.models import (
     AnnotationLabel,
-    LabelSet,
     Relationship,
 )
 from opencontractserver.badges.models import Badge, BadgeTypeChoices
@@ -68,9 +66,7 @@ class TestRemoveRelationshipsSecurity(TestCase):
         )
 
         # Set permissions for owner
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
         set_permissions_for_obj_to_user(
             self.owner, self.document, [PermissionTypes.CRUD]
         )
@@ -205,9 +201,7 @@ class TestUpdateRelationsSecurity(TestCase):
         )
 
         # Set permissions
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
         set_permissions_for_obj_to_user(
             self.owner, self.document, [PermissionTypes.CRUD]
         )
@@ -262,7 +256,9 @@ class TestUpdateRelationsSecurity(TestCase):
         # Mutation should fail
         self.assertIsNone(result.get("errors"))
         self.assertFalse(result["data"]["updateRelationships"]["ok"])
-        self.assertIn("Permission denied", result["data"]["updateRelationships"]["message"])
+        self.assertIn(
+            "Permission denied", result["data"]["updateRelationships"]["message"]
+        )
 
 
 class TestStartCorpusForkSecurity(TestCase):
@@ -618,7 +614,7 @@ class TestDeleteMultipleLabelMutationSecurity(TransactionTestCase):
         # Same message for non-existent and permission denied (IDOR protection)
         self.assertEqual(
             "Label not found",
-            result["data"]["deleteMultipleAnnotationLabels"]["message"]
+            result["data"]["deleteMultipleAnnotationLabels"]["message"],
         )
 
         # Label should still exist

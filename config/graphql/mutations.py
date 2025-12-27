@@ -1211,9 +1211,7 @@ class StartQueryForCorpus(graphene.Mutation):
             # Verify corpus visibility before creating query
             corpus_pk = from_global_id(corpus_id)[1]
             try:
-                corpus = Corpus.objects.visible_to_user(info.context.user).get(
-                    pk=corpus_pk
-                )
+                Corpus.objects.visible_to_user(info.context.user).get(pk=corpus_pk)
             except Corpus.DoesNotExist:
                 return StartQueryForCorpus(
                     ok=False, message="Corpus not found", obj=None
