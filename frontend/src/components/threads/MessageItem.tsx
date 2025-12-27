@@ -1,7 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import styled from "styled-components";
-import { User, MoreVertical, Pin, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  User,
+  MoreVertical,
+  Pin,
+  ChevronDown,
+  ChevronUp,
+  Edit2,
+  Trash2,
+} from "lucide-react";
 import { useSetAtom } from "jotai";
+import { useMutation } from "@apollo/client";
 import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { MessageNode } from "./utils";
@@ -16,12 +25,30 @@ import {
   chatSourcesAtom,
 } from "../annotator/context/ChatSourceAtom";
 import { WebSocketSources } from "../knowledge_base/document/right_tray/ChatTray";
+import { EditMessageModal } from "./EditMessageModal";
+import {
+  DELETE_MESSAGE,
+  DeleteMessageInput,
+  DeleteMessageOutput,
+} from "../../graphql/mutations";
 
 interface MessageItemProps {
   message: MessageNode;
   isHighlighted?: boolean;
   onReply?: (messageId: string) => void;
   userBadges?: UserBadgeType[];
+  /** Whether the current user can edit this message */
+  canEdit?: boolean;
+  /** Whether the current user can delete this message */
+  canDelete?: boolean;
+  /** Corpus ID for mention context in edit modal */
+  corpusId?: string;
+  /** Conversation ID for cache update after edit/delete */
+  conversationId?: string;
+  /** Callback after successful message update */
+  onMessageUpdated?: () => void;
+  /** Callback after successful message deletion */
+  onMessageDeleted?: () => void;
 }
 
 const MessageContainer = styled.div<{
@@ -191,7 +218,11 @@ const MessageTimestamp = styled.span`
   font-weight: 500;
 `;
 
-const MessageActions = styled.button`
+const MessageActionsContainer = styled.div`
+  position: relative;
+`;
+
+const MessageActionsButton = styled.button`
   background: none;
   border: none;
   color: ${color.N6};
@@ -200,11 +231,211 @@ const MessageActions = styled.button`
   display: flex;
   align-items: center;
   border-radius: 4px;
+  transition: all 0.15s;
+
+  /* Larger touch target on mobile */
+  @media (max-width: 600px) {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+  }
 
   &:hover {
     background: ${color.N3};
     color: ${color.N9};
   }
+
+  &:active {
+    background: ${color.N4};
+  }
+`;
+
+const ActionsDropdown = styled.div<{ $isOpen: boolean }>`
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 160px;
+  background: ${color.N1};
+  border: 1px solid ${color.N4};
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  opacity: ${(props) => (props.$isOpen ? 1 : 0)};
+  visibility: ${(props) => (props.$isOpen ? "visible" : "hidden")};
+  transform: ${(props) =>
+    props.$isOpen ? "translateY(0)" : "translateY(-8px)"};
+  transition: all 0.15s ease;
+
+  /* Mobile: Bottom sheet style */
+  @media (max-width: 600px) {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+    min-width: unset;
+    transform: ${(props) =>
+      props.$isOpen ? "translateY(0)" : "translateY(100%)"};
+    /* Safe area for bottom */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+`;
+
+const DropdownBackdrop = styled.div<{ $isOpen: boolean }>`
+  display: none;
+
+  /* Mobile: Show backdrop for bottom sheet */
+  @media (max-width: 600px) {
+    display: ${(props) => (props.$isOpen ? "block" : "none")};
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 99;
+  }
+`;
+
+const DropdownItem = styled.button<{ $variant?: "danger" }>`
+  display: flex;
+  align-items: center;
+  gap: ${spacing.sm};
+  width: 100%;
+  padding: ${spacing.sm} ${spacing.md};
+  border: none;
+  background: transparent;
+  color: ${(props) => (props.$variant === "danger" ? color.R7 : color.N9)};
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  /* Larger touch targets on mobile */
+  @media (max-width: 600px) {
+    padding: ${spacing.md};
+    min-height: 52px;
+    font-size: 16px;
+  }
+
+  &:first-child {
+    border-radius: 8px 8px 0 0;
+  }
+
+  &:last-child {
+    border-radius: 0 0 8px 8px;
+  }
+
+  &:only-child {
+    border-radius: 8px;
+  }
+
+  &:hover {
+    background: ${(props) =>
+      props.$variant === "danger" ? color.R1 : color.N2};
+  }
+
+  &:active {
+    background: ${(props) =>
+      props.$variant === "danger" ? color.R2 : color.N3};
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+`;
+
+const DropdownDivider = styled.div`
+  height: 1px;
+  background: ${color.N4};
+  margin: ${spacing.xs} 0;
+`;
+
+const MobileDropdownHeader = styled.div`
+  display: none;
+
+  @media (max-width: 600px) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: ${spacing.md};
+    border-bottom: 1px solid ${color.N4};
+
+    &::before {
+      content: "";
+      width: 40px;
+      height: 4px;
+      background: ${color.N4};
+      border-radius: 2px;
+    }
+  }
+`;
+
+const DeleteConfirmation = styled.div`
+  padding: ${spacing.md};
+  text-align: center;
+`;
+
+const DeleteConfirmText = styled.p`
+  margin: 0 0 ${spacing.md} 0;
+  color: ${color.N8};
+  font-size: 14px;
+`;
+
+const DeleteConfirmButtons = styled.div`
+  display: flex;
+  gap: ${spacing.sm};
+  justify-content: center;
+
+  @media (max-width: 600px) {
+    flex-direction: column-reverse;
+  }
+`;
+
+const ConfirmButton = styled.button<{ $variant: "cancel" | "delete" }>`
+  padding: ${spacing.sm} ${spacing.md};
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  @media (max-width: 600px) {
+    padding: ${spacing.md};
+    width: 100%;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  ${(props) =>
+    props.$variant === "cancel" &&
+    `
+    background: ${color.N2};
+    border: 1px solid ${color.N4};
+    color: ${color.N8};
+
+    &:hover:not(:disabled) {
+      background: ${color.N3};
+    }
+  `}
+
+  ${(props) =>
+    props.$variant === "delete" &&
+    `
+    background: ${color.R6};
+    border: none;
+    color: white;
+
+    &:hover:not(:disabled) {
+      background: ${color.R7};
+    }
+  `}
 `;
 
 const MessageContent = styled.div<{ $isDeleted?: boolean }>`
@@ -365,12 +596,20 @@ const SourceItem = styled.div`
 /**
  * Individual message component with support for nested replies.
  * Memoized to prevent unnecessary re-renders when parent thread updates.
+ *
+ * Part of Issue #686 - Mobile UI improvements for message actions and edit modal.
  */
 export const MessageItem = React.memo(function MessageItem({
   message,
   isHighlighted = false,
   onReply,
   userBadges = [],
+  canEdit = false,
+  canDelete = false,
+  corpusId,
+  conversationId,
+  onMessageUpdated,
+  onMessageDeleted,
 }: MessageItemProps) {
   const isDeleted = !!message.deletedAt;
   const username = formatUsername(
@@ -384,6 +623,104 @@ export const MessageItem = React.memo(function MessageItem({
     number | undefined
   >(undefined);
   const setChatState = useSetAtom(chatSourcesAtom);
+
+  // State for message actions dropdown
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Delete mutation
+  const [deleteMessage, { loading: isDeleting }] = useMutation<
+    DeleteMessageOutput,
+    DeleteMessageInput
+  >(DELETE_MESSAGE);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+        setShowDeleteConfirm(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [isDropdownOpen]);
+
+  // Handle escape key to close dropdown
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsDropdownOpen(false);
+        setShowDeleteConfirm(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }
+  }, [isDropdownOpen]);
+
+  const toggleDropdown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDropdownOpen((prev) => !prev);
+    setShowDeleteConfirm(false);
+  }, []);
+
+  const handleEdit = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDropdownOpen(false);
+    setIsEditModalOpen(true);
+  }, []);
+
+  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteConfirm(true);
+  }, []);
+
+  const handleCancelDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteConfirm(false);
+  }, []);
+
+  const handleConfirmDelete = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        const result = await deleteMessage({
+          variables: { messageId: message.id },
+        });
+        if (result.data?.deleteMessage.ok) {
+          setIsDropdownOpen(false);
+          setShowDeleteConfirm(false);
+          onMessageDeleted?.();
+        }
+      } catch (err) {
+        console.error("Error deleting message:", err);
+      }
+    },
+    [deleteMessage, message.id, onMessageDeleted]
+  );
+
+  const closeBackdrop = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDropdownOpen(false);
+    setShowDeleteConfirm(false);
+  }, []);
+
+  const hasActions = canEdit || canDelete;
 
   // Extract and map sources from message.data
   const sources: ChatMessageSource[] = React.useMemo(() => {
@@ -471,13 +808,84 @@ export const MessageItem = React.memo(function MessageItem({
           </UserInfo>
         </MessageHeaderLeft>
 
-        <MessageActions
-          aria-label="Message actions"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MoreVertical size={16} />
-        </MessageActions>
+        {/* Message Actions Dropdown */}
+        {hasActions && !isDeleted && (
+          <>
+            <DropdownBackdrop
+              $isOpen={isDropdownOpen}
+              onClick={closeBackdrop}
+            />
+            <MessageActionsContainer ref={dropdownRef}>
+              <MessageActionsButton
+                aria-label="Message actions"
+                aria-expanded={isDropdownOpen}
+                aria-haspopup="menu"
+                onClick={toggleDropdown}
+              >
+                <MoreVertical size={16} />
+              </MessageActionsButton>
+
+              <ActionsDropdown $isOpen={isDropdownOpen} role="menu">
+                <MobileDropdownHeader />
+                {showDeleteConfirm ? (
+                  <DeleteConfirmation>
+                    <DeleteConfirmText>
+                      Are you sure you want to delete this message?
+                    </DeleteConfirmText>
+                    <DeleteConfirmButtons>
+                      <ConfirmButton
+                        $variant="cancel"
+                        onClick={handleCancelDelete}
+                        disabled={isDeleting}
+                      >
+                        Cancel
+                      </ConfirmButton>
+                      <ConfirmButton
+                        $variant="delete"
+                        onClick={handleConfirmDelete}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? "Deleting..." : "Delete"}
+                      </ConfirmButton>
+                    </DeleteConfirmButtons>
+                  </DeleteConfirmation>
+                ) : (
+                  <>
+                    {canEdit && (
+                      <DropdownItem onClick={handleEdit} role="menuitem">
+                        <Edit2 size={16} />
+                        Edit message
+                      </DropdownItem>
+                    )}
+                    {canEdit && canDelete && <DropdownDivider />}
+                    {canDelete && (
+                      <DropdownItem
+                        onClick={handleDeleteClick}
+                        $variant="danger"
+                        role="menuitem"
+                      >
+                        <Trash2 size={16} />
+                        Delete message
+                      </DropdownItem>
+                    )}
+                  </>
+                )}
+              </ActionsDropdown>
+            </MessageActionsContainer>
+          </>
+        )}
       </MessageHeader>
+
+      {/* Edit Message Modal */}
+      <EditMessageModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        messageId={message.id}
+        initialContent={message.content || ""}
+        corpusId={corpusId}
+        conversationId={conversationId}
+        onSuccess={onMessageUpdated}
+      />
 
       {/* Content */}
       <MessageContent $isDeleted={isDeleted}>
