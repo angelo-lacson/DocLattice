@@ -52,8 +52,8 @@ const ImagePreview = styled.img`
   display: block;
 
   @media (max-width: 768px) {
-    height: 100px;
-    padding: 0.5rem;
+    height: 80px;
+    padding: 0.375rem;
   }
 `;
 
