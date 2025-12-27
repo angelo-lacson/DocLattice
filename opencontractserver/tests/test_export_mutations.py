@@ -40,9 +40,7 @@ class TestExportMutations(BaseFixtureTestCase):
         super().setUp()
 
         # Set up permissions for the corpus (required for export mutation)
-        set_permissions_for_obj_to_user(
-            self.user, self.corpus, [PermissionTypes.ALL]
-        )
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
 
         # Create a test label set
         self.label_set = LabelSet.objects.create(
