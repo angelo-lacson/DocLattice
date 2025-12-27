@@ -154,8 +154,8 @@ export const App = () => {
     }
   }, [isLoading, meData, meLoading, meError, auth_token]);
 
-  // Badge notification system
-  const { newBadges } = useBadgeNotifications(30000); // Poll every 30 seconds
+  // Badge notification system (real-time via WebSocket)
+  const { newBadges } = useBadgeNotifications();
   const { showModal, currentBadge, closeModal } = useBadgeCelebration(
     newBadges,
     {

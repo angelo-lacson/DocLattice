@@ -32,11 +32,11 @@ from config.websocket.consumers.corpus_conversation import (  # noqa: E402
 from config.websocket.consumers.document_conversation import (  # noqa: E402
     DocumentQueryConsumer,
 )
-from config.websocket.consumers.standalone_document_conversation import (  # noqa: E402
-    StandaloneDocumentQueryConsumer,
-)
 from config.websocket.consumers.notification_updates import (  # noqa: E402
     NotificationUpdatesConsumer,
+)
+from config.websocket.consumers.standalone_document_conversation import (  # noqa: E402
+    StandaloneDocumentQueryConsumer,
 )
 from config.websocket.consumers.thread_updates import (  # noqa: E402
     ThreadUpdatesConsumer,
