@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import { useReactiveVar } from "@apollo/client";
+import { useReactiveVar, useApolloClient } from "@apollo/client";
 import { authToken, authStatusVar, userObj } from "../../graphql/cache";
 import { toast } from "react-toastify";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
+import { CacheManager } from "../../services/cacheManager";
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -23,6 +24,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
 }) => {
   const [authInitialized, setAuthInitialized] = useState(false);
   const authStatus = useReactiveVar(authStatusVar);
+  const apolloClient = useApolloClient();
 
   // Auth0 hooks
   const {
@@ -60,9 +62,23 @@ export const AuthGate: React.FC<AuthGateProps> = ({
           scope: "openid profile email",
         },
       })
-        .then((token) => {
+        .then(async (token) => {
           if (token) {
             console.log("[AuthGate] Token obtained successfully");
+
+            // Clear cache before setting new auth state to ensure fresh data
+            // This prevents stale data from anonymous/previous user session
+            try {
+              const cacheManager = new CacheManager(apolloClient as any);
+              await cacheManager.resetOnAuthChange({
+                reason: "auth0_login",
+                refetchActive: false,
+              });
+            } catch (cacheError) {
+              console.warn("[AuthGate] Cache reset warning:", cacheError);
+              // Continue with auth even if cache reset fails
+            }
+
             // Set token first, then user, then status - all synchronously
             authToken(token);
             userObj(user);

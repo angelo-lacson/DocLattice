@@ -11,6 +11,7 @@ import {
 import { toast } from "react-toastify";
 import { User, Lock } from "lucide-react";
 import logo from "../assets/images/os_legal_128_regular.png";
+import { useCacheManager } from "../hooks/useCacheManager";
 
 const PageWrapper = styled.div`
   width: 100vw;
@@ -98,10 +99,15 @@ export const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
+  const { resetOnAuthChange } = useCacheManager();
 
   const [tryLogin, { loading: login_loading, error: login_error }] =
     useMutation<LoginOutputs, LoginInputs>(LOGIN_MUTATION, {
-      onCompleted: (data) => {
+      onCompleted: async (data) => {
+        // Clear cache before setting new auth state to ensure fresh data
+        // This prevents stale data from anonymous/previous user session
+        await resetOnAuthChange({ reason: "user_login", refetchActive: false });
+
         authToken(data.tokenAuth.token);
         userObj(data.tokenAuth.user);
         authStatusVar("AUTHENTICATED");

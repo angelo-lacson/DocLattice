@@ -4,6 +4,7 @@ import { useReactiveVar } from "@apollo/client";
 import { authToken, userObj, showExportModal } from "../../graphql/cache";
 import { header_menu_items } from "../../assets/configurations/menus";
 import { useEnv } from "../hooks/UseEnv";
+import { useCacheManager } from "../../hooks/useCacheManager";
 
 /**
  * Shared navigation menu logic for both desktop and mobile nav components.
@@ -21,6 +22,7 @@ export const useNavMenu = () => {
   const cache_user = useReactiveVar(userObj);
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { resetOnAuthChange } = useCacheManager();
 
   const user = REACT_APP_USE_AUTH0 ? auth0_user : cache_user;
   const show_export_modal = useReactiveVar(showExportModal);
@@ -50,8 +52,16 @@ export const useNavMenu = () => {
    * Logs out the user. Uses Auth0 logout if Auth0 is enabled, otherwise
    * clears local auth state and redirects to home.
    * CentralRouteManager will automatically clear entity state when navigating to "/".
+   *
+   * IMPORTANT: Clears the Apollo cache on logout to ensure:
+   * 1. Security: Previous user's data is not accessible
+   * 2. Data freshness: Next login starts with clean cache
    */
-  const requestLogout = () => {
+  const requestLogout = async () => {
+    // Clear cache before logout to prevent stale data
+    // For Auth0, this happens before redirect; for non-Auth0, before navigation
+    await resetOnAuthChange({ reason: "user_logout", refetchActive: false });
+
     if (REACT_APP_USE_AUTH0) {
       logout({
         logoutParams: {
