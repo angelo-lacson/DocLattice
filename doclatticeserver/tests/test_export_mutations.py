@@ -12,7 +12,8 @@ from config.graphql.schema import schema
 from doclatticeserver.annotations.models import AnnotationLabel, LabelSet
 from doclatticeserver.documents.models import Document
 from doclatticeserver.tests.base import BaseFixtureTestCase
-from doclatticeserver.types.enums import ExportType
+from doclatticeserver.types.enums import ExportType, PermissionTypes
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
 
@@ -37,6 +38,11 @@ class TestExportMutations(BaseFixtureTestCase):
 
     def setUp(self):
         super().setUp()
+
+        # Set up permissions for the corpus (required for export mutation)
+        set_permissions_for_obj_to_user(
+            self.user, self.corpus, [PermissionTypes.ALL]
+        )
 
         # Create a test label set
         self.label_set = LabelSet.objects.create(
