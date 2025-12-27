@@ -117,9 +117,13 @@ class LlamaParseParser(BaseParser):
         Returns:
             OpenContractDocExport with the parsed document data, or None if parsing failed.
         """
+        # Redact sensitive keys before logging
+        safe_kwargs = {
+            k: ("***" if k == "api_key" else v) for k, v in all_kwargs.items()
+        }
         logger.info(
             f"LlamaParseParser - Parsing doc {doc_id} for user {user_id} "
-            f"with effective kwargs: {all_kwargs}"
+            f"with effective kwargs: {safe_kwargs}"
         )
 
         # Override settings with kwargs if provided
@@ -166,17 +170,21 @@ class LlamaParseParser(BaseParser):
 
             # Read the file from storage and write to a temp file
             # (LlamaParse needs a file path)
-            with default_storage.open(doc_path, "rb") as pdf_file:
-                pdf_bytes = pdf_file.read()
+            with default_storage.open(doc_path, "rb") as doc_file:
+                doc_bytes = doc_file.read()
+
+            # Determine file extension from document type
+            file_type = document.file_type.lower() if document.file_type else "pdf"
+            suffix = f".{file_type}" if file_type in ("pdf", "docx") else ".pdf"
 
             # Create a temporary file - use a nested try-finally to ensure cleanup
             # on all exit paths (success, error, or early return)
             temp_file_path = None
             try:
                 with tempfile.NamedTemporaryFile(
-                    suffix=".pdf", delete=False
+                    suffix=suffix, delete=False
                 ) as temp_file:
-                    temp_file.write(pdf_bytes)
+                    temp_file.write(doc_bytes)
                     temp_file_path = temp_file.name
 
                 # Parse the document
@@ -251,8 +259,9 @@ class LlamaParseParser(BaseParser):
         pawls_pages: list[PawlsPagePythonType] = []
         annotations: list[OpenContractsAnnotationPythonType] = []
 
-        # Track token indices for annotations
+        # Track token indices for annotations - these are global across all pages
         annotation_id_counter = 0
+        token_idx = 0  # Global token index across all pages
 
         for page_idx, page in enumerate(pages):
             page_text = page.get("text", "")
@@ -260,14 +269,21 @@ class LlamaParseParser(BaseParser):
 
             # Get page dimensions (default to standard US Letter size in points: 8.5" x 11")
             # Note: A4 size would be 595 x 842 points
+            DEFAULT_WIDTH = 612
+            DEFAULT_HEIGHT = 792
             page_width = page.get("width")
             page_height = page.get("height")
-            if page_width is None or page_height is None:
-                page_width = page_width or 612
-                page_height = page_height or 792
+
+            # Validate dimensions - must be positive numbers
+            if page_width is None or page_width <= 0:
+                page_width = DEFAULT_WIDTH
                 logger.warning(
-                    f"Page {page_idx} missing dimensions, using defaults: "
-                    f"{page_width}x{page_height} (US Letter)"
+                    f"Page {page_idx} has invalid width, using default: {page_width}"
+                )
+            if page_height is None or page_height <= 0:
+                page_height = DEFAULT_HEIGHT
+                logger.warning(
+                    f"Page {page_idx} has invalid height, using default: {page_height}"
                 )
 
             # Create PAWLS page structure
@@ -285,7 +301,6 @@ class LlamaParseParser(BaseParser):
             items = page.get("items", [])
 
             # Process items (elements with text and positions)
-            token_idx = 0
             for item in items:
                 item_text = item.get("text", "") or item.get("value", "")
                 item_type = item.get("type", "text").lower()

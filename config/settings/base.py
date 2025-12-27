@@ -750,8 +750,7 @@ _PDF_PARSER_MAP = {
 
 # Get the selected PDF parser (with fallback to docling)
 _SELECTED_PDF_PARSER = _PDF_PARSER_MAP.get(
-    PDF_PARSER.lower(),
-    _PDF_PARSER_MAP["docling"]
+    PDF_PARSER.lower(), _PDF_PARSER_MAP["docling"]
 )
 
 # Preferred parsers for each MIME type
