@@ -391,6 +391,10 @@ export function useNotificationWebSocket(
   }, []);
 
   // Connect when enabled changes to true
+  // NOTE: connect/disconnect are intentionally excluded from deps to prevent
+  // infinite reconnection loops. These functions have dependencies that change
+  // frequently (e.g., handleMessage changes when callbacks change), but we only
+  // want to connect/disconnect when `enabled` changes.
   useEffect(() => {
     if (enabled) {
       connect();
@@ -403,7 +407,10 @@ export function useNotificationWebSocket(
     };
   }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reconnect when token changes
+  // Reconnect when token changes (authentication change)
+  // NOTE: connect/disconnect/enabled/connectionState are intentionally excluded.
+  // We only want to trigger reconnection when the auth token changes while connected.
+  // Including other deps would cause unnecessary reconnections.
   useEffect(() => {
     if (enabled && connectionState === "connected") {
       disconnect();

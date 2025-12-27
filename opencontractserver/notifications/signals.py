@@ -14,6 +14,7 @@ from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from opencontractserver.badges.models import UserBadge
 from opencontractserver.conversations.models import (
@@ -60,11 +61,14 @@ def broadcast_notification_via_websocket(notification: Notification) -> None:
             return
 
         # Prepare notification data for WebSocket transmission
+        # Use getattr with fallback for created_at in case bulk_create doesn't populate it
+        created_at = getattr(notification, "created_at", None) or timezone.now()
+
         notification_data = {
             "type": "notification_created",
             "notification_id": str(notification.id),
             "notification_type": notification.notification_type,
-            "created_at": notification.created_at.isoformat(),
+            "created_at": created_at.isoformat(),
             "is_read": notification.is_read,
             "data": notification.data or {},
         }
@@ -95,7 +99,8 @@ def broadcast_notification_via_websocket(notification: Notification) -> None:
         # Don't fail the signal handler if WebSocket broadcast fails
         # Notification is still saved to database
         logger.error(
-            f"Failed to broadcast notification {notification.id} via WebSocket: {e}",
+            f"Failed to broadcast notification {notification.id} via WebSocket: "
+            f"{type(e).__name__}: {e}",
             exc_info=True,
         )
 
@@ -148,7 +153,7 @@ def create_reply_notification(sender, instance, created, **kwargs):
                 broadcast_notification_via_websocket(notification)
             except Exception as e:
                 logger.error(
-                    f"Failed to create REPLY notification: {e}",
+                    f"Failed to create REPLY notification: {type(e).__name__}: {e}",
                     exc_info=True,
                 )
 
@@ -204,13 +209,15 @@ def create_reply_notification(sender, instance, created, **kwargs):
                         broadcast_notification_via_websocket(notification)
                 except Exception as e:
                     logger.error(
-                        f"Failed to bulk create THREAD_REPLY notifications: {e}",
+                        f"Failed to bulk create THREAD_REPLY notifications: "
+                        f"{type(e).__name__}: {e}",
                         exc_info=True,
                     )
 
         except Exception as e:
             logger.error(
-                f"Failed to process thread participant notifications: {e}",
+                f"Failed to process thread participant notifications: "
+                f"{type(e).__name__}: {e}",
                 exc_info=True,
             )
 
@@ -269,12 +276,15 @@ def create_mention_notification(sender, instance, created, **kwargs):
                 broadcast_notification_via_websocket(notification)
             except Exception as e:
                 logger.error(
-                    f"Failed to create MENTION notification for {user.username}: {e}",
+                    f"Failed to create MENTION notification for {user.username}: "
+                    f"{type(e).__name__}: {e}",
                     exc_info=True,
                 )
 
     except Exception as e:
-        logger.error(f"Failed to process mentions: {e}", exc_info=True)
+        logger.error(
+            f"Failed to process mentions: {type(e).__name__}: {e}", exc_info=True
+        )
 
 
 @receiver(post_save, sender=UserBadge)
@@ -313,7 +323,7 @@ def create_badge_notification(sender, instance, created, **kwargs):
         broadcast_notification_via_websocket(notification)
     except Exception as e:
         logger.error(
-            f"Failed to create BADGE notification: {e}",
+            f"Failed to create BADGE notification: {type(e).__name__}: {e}",
             exc_info=True,
         )
 
@@ -390,6 +400,6 @@ def create_moderation_notification(sender, instance, created, **kwargs):
         broadcast_notification_via_websocket(notification)
     except Exception as e:
         logger.error(
-            f"Failed to create moderation notification: {e}",
+            f"Failed to create moderation notification: {type(e).__name__}: {e}",
             exc_info=True,
         )
