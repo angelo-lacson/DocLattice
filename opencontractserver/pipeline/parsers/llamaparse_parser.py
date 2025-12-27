@@ -8,7 +8,6 @@ and extract structural annotations with bounding boxes.
 import logging
 import os
 import tempfile
-import uuid
 from typing import Any, Optional
 
 from django.conf import settings
@@ -49,7 +48,9 @@ class LlamaParseParser(BaseParser):
     """
 
     title = "LlamaParse Parser"
-    description = "Parses PDF documents using the LlamaParse API with layout extraction."
+    description = (
+        "Parses PDF documents using the LlamaParse API with layout extraction."
+    )
     author = "OpenContracts Team"
     dependencies = ["llama-parse"]
     supported_file_types = [FileTypeEnum.PDF, FileTypeEnum.DOCX]
@@ -168,16 +169,18 @@ class LlamaParseParser(BaseParser):
             with default_storage.open(doc_path, "rb") as pdf_file:
                 pdf_bytes = pdf_file.read()
 
-            # Create a temporary file
-            with tempfile.NamedTemporaryFile(
-                suffix=".pdf", delete=False
-            ) as temp_file:
-                temp_file.write(pdf_bytes)
-                temp_file_path = temp_file.name
-
+            # Create a temporary file - use a nested try-finally to ensure cleanup
+            # on all exit paths (success, error, or early return)
+            temp_file_path = None
             try:
+                with tempfile.NamedTemporaryFile(
+                    suffix=".pdf", delete=False
+                ) as temp_file:
+                    temp_file.write(pdf_bytes)
+                    temp_file_path = temp_file.name
+
                 # Parse the document
-                logger.info(f"Sending document to LlamaParse API...")
+                logger.info("Sending document to LlamaParse API...")
 
                 # Use get_json_result for JSON with layout data
                 if result_type == "json" and extract_layout:
@@ -205,8 +208,8 @@ class LlamaParseParser(BaseParser):
                     return self._convert_text_to_opencontracts(document, documents)
 
             finally:
-                # Clean up temp file
-                if os.path.exists(temp_file_path):
+                # Clean up temp file - always runs on any exit path
+                if temp_file_path and os.path.exists(temp_file_path):
                     os.unlink(temp_file_path)
 
         except ImportError:
@@ -255,9 +258,17 @@ class LlamaParseParser(BaseParser):
             page_text = page.get("text", "")
             full_text_parts.append(page_text)
 
-            # Get page dimensions (default to standard letter size in points)
-            page_width = page.get("width", 612)
-            page_height = page.get("height", 792)
+            # Get page dimensions (default to standard US Letter size in points: 8.5" x 11")
+            # Note: A4 size would be 595 x 842 points
+            page_width = page.get("width")
+            page_height = page.get("height")
+            if page_width is None or page_height is None:
+                page_width = page_width or 612
+                page_height = page_height or 792
+                logger.warning(
+                    f"Page {page_idx} missing dimensions, using defaults: "
+                    f"{page_width}x{page_height} (US Letter)"
+                )
 
             # Create PAWLS page structure
             pawls_page: PawlsPagePythonType = {
@@ -340,7 +351,9 @@ class LlamaParseParser(BaseParser):
                             token_idx += 1
                         end_token_idx = token_idx
 
-                        label = self.ELEMENT_TYPE_MAPPING.get(element_type, "Text Block")
+                        label = self.ELEMENT_TYPE_MAPPING.get(
+                            element_type, "Text Block"
+                        )
                         annotation = self._create_annotation(
                             annotation_id=str(annotation_id_counter),
                             label=label,
@@ -443,19 +456,32 @@ class LlamaParseParser(BaseParser):
         """
         tokens: list[PawlsTokenPythonType] = []
 
-        # Parse bounding box - handle different formats
+        # Default margin constant (1 inch = 72 points)
+        DEFAULT_MARGIN = 72
+        DEFAULT_BOTTOM = 100
+
+        # Parse bounding box - handle different formats from LlamaParse
+        # LlamaParse may return fractional coordinates (0-1) or absolute coordinates
         if not bbox:
-            # No bbox, create a default one
-            left, top, right, bottom = 72, 72, page_width - 72, 100  # Default margin
+            # No bbox, create a default one with standard margins
+            left, top = DEFAULT_MARGIN, DEFAULT_MARGIN
+            right, bottom = page_width - DEFAULT_MARGIN, DEFAULT_BOTTOM
         elif "x" in bbox and "y" in bbox:
-            # Format: {x, y, width, height} as fractions
+            # Format: {x, y, width, height}
             x = float(bbox.get("x", 0))
             y = float(bbox.get("y", 0))
             w = float(bbox.get("width", 0.1))
             h = float(bbox.get("height", 0.02))
 
             # Check if values are fractions (0-1) or absolute
-            if x <= 1.0 and y <= 1.0:
+            # Heuristic: if both corners (x,y) and (x+w,y+h) are in [0,1], treat as fractional
+            is_fractional = (
+                0 <= x <= 1.0
+                and 0 <= y <= 1.0
+                and 0 <= (x + w) <= 1.0
+                and 0 <= (y + h) <= 1.0
+            )
+            if is_fractional:
                 left = x * page_width
                 top = y * page_height
                 right = (x + w) * page_width
@@ -465,24 +491,27 @@ class LlamaParseParser(BaseParser):
                 right = x + w
                 bottom = y + h
         elif "left" in bbox:
-            # Format: {left, top, right, bottom} as fractions
-            l = float(bbox.get("left", 0))
-            t = float(bbox.get("top", 0))
-            r = float(bbox.get("right", 1))
-            b = float(bbox.get("bottom", 0.05))
+            # Format: {left, top, right, bottom}
+            bbox_l = float(bbox.get("left", 0))
+            bbox_t = float(bbox.get("top", 0))
+            bbox_r = float(bbox.get("right", 1))
+            bbox_b = float(bbox.get("bottom", 0.05))
 
-            # Check if values are fractions (0-1) or absolute
-            if l <= 1.0 and r <= 1.0 and t <= 1.0 and b <= 1.0:
-                left = l * page_width
-                top = t * page_height
-                right = r * page_width
-                bottom = b * page_height
+            # Check if ALL values are in [0,1] range - indicates fractional coordinates
+            is_fractional = all(0 <= v <= 1.0 for v in [bbox_l, bbox_t, bbox_r, bbox_b])
+            if is_fractional:
+                left = bbox_l * page_width
+                top = bbox_t * page_height
+                right = bbox_r * page_width
+                bottom = bbox_b * page_height
             else:
-                left, top, right, bottom = l, t, r, b
+                left, top, right, bottom = bbox_l, bbox_t, bbox_r, bbox_b
         elif isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
             # Format: [x1, y1, x2, y2] or [left, top, right, bottom]
             vals = [float(v) for v in bbox[:4]]
-            if all(v <= 1.0 for v in vals):
+            # Check if ALL values are in [0,1] range - indicates fractional coordinates
+            is_fractional = all(0 <= v <= 1.0 for v in vals)
+            if is_fractional:
                 left = vals[0] * page_width
                 top = vals[1] * page_height
                 right = vals[2] * page_width
@@ -490,24 +519,32 @@ class LlamaParseParser(BaseParser):
             else:
                 left, top, right, bottom = vals
         else:
-            # Unknown format, use defaults
-            left, top, right, bottom = 72, 72, page_width - 72, 100
+            # Unknown format, use defaults with standard margins
+            left, top = DEFAULT_MARGIN, DEFAULT_MARGIN
+            right, bottom = page_width - DEFAULT_MARGIN, DEFAULT_BOTTOM
 
         # Create tokens - split text into words
+        # Note: If text is empty or whitespace-only, we create a single token with the
+        # original text (or empty string). This ensures we always have at least one token
+        # for the bounding box, which is required for PAWLS format consistency.
         words = text.split()
         if not words:
             words = [text] if text else [""]
 
         # Calculate token dimensions
+        # TOKEN_GAP_RATIO: 5% gap between tokens for visual separation
+        TOKEN_GAP_RATIO = 0.95
         total_width = right - left
-        token_width = total_width / max(len(words), 1)
+        token_width = total_width / max(
+            len(words), 1
+        )  # max() prevents division by zero
         token_height = bottom - top
 
         for i, word in enumerate(words):
             token: PawlsTokenPythonType = {
                 "x": left + (i * token_width),
                 "y": top,
-                "width": token_width * 0.95,  # Small gap between tokens
+                "width": token_width * TOKEN_GAP_RATIO,
                 "height": token_height,
                 "text": word,
             }

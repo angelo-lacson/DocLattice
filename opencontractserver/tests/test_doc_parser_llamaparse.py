@@ -9,7 +9,6 @@ Tests cover:
 - Configuration via environment variables
 """
 
-import json
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -36,7 +35,9 @@ class TestLlamaParseParser(TestCase):
     def setUp(self):
         """Set up test environment."""
         with transaction.atomic():
-            self.user = User.objects.create_user(username="testuser", password="testpass123")
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass123"
+            )
 
         # Create a sample Document object with a mock PDF file
         self.doc = Document.objects.create(
@@ -93,7 +94,12 @@ class TestLlamaParseParser(TestCase):
                         "layout": [
                             {
                                 "label": "title",
-                                "bbox": {"x": 0.1, "y": 0.05, "width": 0.8, "height": 0.05},
+                                "bbox": {
+                                    "x": 0.1,
+                                    "y": 0.05,
+                                    "width": 0.8,
+                                    "height": 0.05,
+                                },
                                 "confidence": 0.95,
                                 "isLikelyNoise": False,
                             },
@@ -116,9 +122,11 @@ class TestLlamaParseParser(TestCase):
         ]
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
-    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
+    @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
-    def test_parse_document_success_with_layout(self, mock_open, mock_llama_parse_class):
+    def test_parse_document_success_with_layout(
+        self, mock_open, mock_llama_parse_class
+    ):
         """Test successful document parsing with layout extraction."""
         # Mock file reading
         mock_file = MagicMock()
@@ -162,7 +170,7 @@ class TestLlamaParseParser(TestCase):
         self.assertIn("annotation_json", first_annotation)
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
-    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
+    @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_markdown_mode(self, mock_open, mock_llama_parse_class):
         """Test document parsing with markdown output (no layout)."""
@@ -211,7 +219,7 @@ class TestLlamaParseParser(TestCase):
             self.assertIsNone(result)
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
-    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
+    @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_api_error(self, mock_open, mock_llama_parse_class):
         """Test handling of API errors."""
@@ -233,7 +241,7 @@ class TestLlamaParseParser(TestCase):
         self.assertIsNone(result)
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
-    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
+    @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_empty_result(self, mock_open, mock_llama_parse_class):
         """Test handling of empty results from API."""
@@ -440,7 +448,9 @@ class TestLlamaParseParserAnnotations(TestCase):
         }
 
         for element_type, expected_label in type_mappings.items():
-            label = LlamaParseParser.ELEMENT_TYPE_MAPPING.get(element_type, "Text Block")
+            label = LlamaParseParser.ELEMENT_TYPE_MAPPING.get(
+                element_type, "Text Block"
+            )
             self.assertEqual(
                 label,
                 expected_label,
@@ -488,12 +498,14 @@ class TestLlamaParseParserConfiguration(TestCase):
             self.assertEqual(parser.verbose, True)
 
     @override_settings(LLAMAPARSE_API_KEY="test-key")
-    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParse")
+    @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_kwargs_override_settings(self, mock_open, mock_llama_parse_class):
         """Test that kwargs override settings."""
         with transaction.atomic():
-            user = User.objects.create_user(username="configtestuser", password="pass123")
+            user = User.objects.create_user(
+                username="configtestuser", password="pass123"
+            )
 
         doc = Document.objects.create(
             title="Config Test Doc",
