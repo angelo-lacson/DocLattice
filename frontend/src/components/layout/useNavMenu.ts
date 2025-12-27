@@ -1,7 +1,12 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useReactiveVar } from "@apollo/client";
-import { authToken, userObj, showExportModal } from "../../graphql/cache";
+import {
+  authToken,
+  authStatusVar,
+  userObj,
+  showExportModal,
+} from "../../graphql/cache";
 import { header_menu_items } from "../../assets/configurations/menus";
 import { useEnv } from "../hooks/UseEnv";
 import { useCacheManager } from "../../hooks/useCacheManager";
@@ -56,11 +61,22 @@ export const useNavMenu = () => {
    * IMPORTANT: Clears the Apollo cache on logout to ensure:
    * 1. Security: Previous user's data is not accessible
    * 2. Data freshness: Next login starts with clean cache
+   *
+   * Order of operations: Clear auth state FIRST (prevents new authenticated
+   * queries), then fire-and-forget cache clear (removes cached data).
+   * We don't await cache clear since logout shouldn't block on it.
    */
-  const requestLogout = async () => {
-    // Clear cache before logout to prevent stale data
-    // For Auth0, this happens before redirect; for non-Auth0, before navigation
-    await resetOnAuthChange({ reason: "user_logout", refetchActive: false });
+  const requestLogout = () => {
+    // Clear auth state FIRST - prevents any new queries from using old credentials
+    authToken("");
+    userObj(null);
+    authStatusVar("ANONYMOUS");
+
+    // Fire-and-forget cache clear (don't block logout on this)
+    // No refetch needed since we're logging out
+    resetOnAuthChange({ reason: "user_logout", refetchActive: false }).catch(
+      (error) => console.warn("[useNavMenu] Cache reset warning:", error)
+    );
 
     if (REACT_APP_USE_AUTH0) {
       logout({
@@ -69,8 +85,6 @@ export const useNavMenu = () => {
         },
       });
     } else {
-      authToken("");
-      userObj(null);
       navigate("/");
     }
   };

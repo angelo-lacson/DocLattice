@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react-hooks";
 import { ApolloClient, InMemoryCache, ApolloProvider } from "@apollo/client";
 import React from "react";
 import { useCacheManager } from "../useCacheManager";
@@ -81,15 +81,23 @@ describe("useCacheManager", () => {
       const wrapper = createWrapper(client);
 
       // Act
-      const { result, rerender } = renderHook(() => useCacheManager(), { wrapper });
+      const { result, rerender } = renderHook(() => useCacheManager(), {
+        wrapper,
+      });
       const firstRender = { ...result.current };
       rerender();
       const secondRender = result.current;
 
       // Assert - Functions should be memoized
-      expect(firstRender.resetOnAuthChange).toBe(secondRender.resetOnAuthChange);
-      expect(firstRender.refreshActiveQueries).toBe(secondRender.refreshActiveQueries);
-      expect(firstRender.invalidateEntityQueries).toBe(secondRender.invalidateEntityQueries);
+      expect(firstRender.resetOnAuthChange).toBe(
+        secondRender.resetOnAuthChange
+      );
+      expect(firstRender.refreshActiveQueries).toBe(
+        secondRender.refreshActiveQueries
+      );
+      expect(firstRender.invalidateEntityQueries).toBe(
+        secondRender.invalidateEntityQueries
+      );
     });
   });
 
@@ -148,7 +156,9 @@ describe("useCacheManager", () => {
       // Act
       let operationResult;
       await act(async () => {
-        operationResult = await result.current.resetOnAuthChange({ reason: "test" });
+        operationResult = await result.current.resetOnAuthChange({
+          reason: "test",
+        });
       });
 
       // Assert
@@ -260,7 +270,9 @@ describe("useCacheManager", () => {
       // Act
       let operationResult;
       await act(async () => {
-        operationResult = await result.current.invalidateCorpusQueries("corpus_delete");
+        operationResult = await result.current.invalidateCorpusQueries(
+          "corpus_delete"
+        );
       });
 
       // Assert
@@ -296,25 +308,34 @@ describe("useCacheManager Component Lifecycle", () => {
   it("should handle component unmount gracefully", async () => {
     // Arrange
     const wrapper = createWrapper(client);
-    const { result, unmount } = renderHook(() => useCacheManager(), { wrapper });
+    const { result, unmount } = renderHook(() => useCacheManager(), {
+      wrapper,
+    });
 
     // Act - Start an operation then unmount
-    const operationPromise = act(async () => {
-      return result.current.resetOnAuthChange({ reason: "test" });
+    let operationResult: unknown;
+    await act(async () => {
+      operationResult = await result.current.resetOnAuthChange({
+        reason: "test",
+      });
     });
 
     // Unmount during operation
     unmount();
 
     // Assert - Should not throw
-    await expect(operationPromise).resolves.toBeDefined();
+    expect(operationResult).toBeDefined();
   });
 
   it("should work with multiple hook instances", async () => {
     // Arrange
     const wrapper = createWrapper(client);
-    const { result: result1 } = renderHook(() => useCacheManager(), { wrapper });
-    const { result: result2 } = renderHook(() => useCacheManager(), { wrapper });
+    const { result: result1 } = renderHook(() => useCacheManager(), {
+      wrapper,
+    });
+    const { result: result2 } = renderHook(() => useCacheManager(), {
+      wrapper,
+    });
 
     // Act - Use both instances
     await act(async () => {

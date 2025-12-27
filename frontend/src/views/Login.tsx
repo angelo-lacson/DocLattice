@@ -104,13 +104,15 @@ export const Login = () => {
   const [tryLogin, { loading: login_loading, error: login_error }] =
     useMutation<LoginOutputs, LoginInputs>(LOGIN_MUTATION, {
       onCompleted: async (data) => {
-        // Clear cache before setting new auth state to ensure fresh data
-        // This prevents stale data from anonymous/previous user session
-        await resetOnAuthChange({ reason: "user_login", refetchActive: false });
-
+        // Set auth state FIRST - ensures any subsequent queries use the new
+        // auth context. This prevents race condition where cache clear might
+        // trigger queries with the old (anonymous) auth state.
         authToken(data.tokenAuth.token);
         userObj(data.tokenAuth.user);
         authStatusVar("AUTHENTICATED");
+
+        // Now clear cache - refetched queries will use new auth context
+        await resetOnAuthChange({ reason: "user_login", refetchActive: false });
         navigate("/");
       },
     });

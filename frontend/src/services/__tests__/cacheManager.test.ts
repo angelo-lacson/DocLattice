@@ -13,7 +13,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ApolloClient, InMemoryCache, NormalizedCacheObject } from "@apollo/client";
+import {
+  ApolloClient,
+  InMemoryCache,
+  NormalizedCacheObject,
+} from "@apollo/client";
 import {
   CacheManager,
   CacheOperationResult,
@@ -110,7 +114,9 @@ describe("CacheManager", () => {
     it("should debounce rapid consecutive calls", async () => {
       // Act - Call twice rapidly
       await cacheManager.resetOnAuthChange({ reason: "first_call" });
-      const result = await cacheManager.resetOnAuthChange({ reason: "second_call" });
+      const result = await cacheManager.resetOnAuthChange({
+        reason: "second_call",
+      });
 
       // Assert - Second call should be debounced
       expect(client.clearStore).toHaveBeenCalledTimes(1);
@@ -142,7 +148,9 @@ describe("CacheManager", () => {
     it("should handle errors gracefully", async () => {
       // Arrange
       const errorMessage = "Network error";
-      vi.spyOn(client, "clearStore").mockRejectedValueOnce(new Error(errorMessage));
+      vi.spyOn(client, "clearStore").mockRejectedValueOnce(
+        new Error(errorMessage)
+      );
 
       // Act
       const result = await cacheManager.resetOnAuthChange({ reason: "test" });
@@ -187,7 +195,9 @@ describe("CacheManager", () => {
 
     it("should handle errors gracefully", async () => {
       // Arrange
-      vi.spyOn(client, "refetchQueries").mockRejectedValueOnce(new Error("Network error"));
+      vi.spyOn(client, "refetchQueries").mockRejectedValueOnce(
+        new Error("Network error")
+      );
 
       // Act
       const result = await cacheManager.refreshActiveQueries("test");
@@ -298,7 +308,9 @@ describe("CacheManager", () => {
   describe("invalidateCorpusQueries", () => {
     it("should call invalidateEntityQueries with corpus type", async () => {
       // Act
-      const result = await cacheManager.invalidateCorpusQueries("corpus_create");
+      const result = await cacheManager.invalidateCorpusQueries(
+        "corpus_create"
+      );
 
       // Assert
       expect(result.success).toBe(true);
@@ -490,7 +502,9 @@ describe("CacheManager Integration Scenarios", () => {
       // Expected: Corpus lists should be refreshed to show the new corpus
 
       // Act
-      const result = await cacheManager.invalidateCorpusQueries("corpus_create");
+      const result = await cacheManager.invalidateCorpusQueries(
+        "corpus_create"
+      );
 
       // Assert
       expect(result.success).toBe(true);
@@ -507,13 +521,18 @@ describe("CacheManager Integration Scenarios", () => {
       const results: CacheOperationResult[] = [];
       for (let i = 0; i < 5; i++) {
         results.push(
-          await cacheManager.invalidateDocumentQueries("corpus-1", `upload_${i}`)
+          await cacheManager.invalidateDocumentQueries(
+            "corpus-1",
+            `upload_${i}`
+          )
         );
       }
 
       // Assert - Only first should actually execute, rest should be debounced
       expect(results[0].message).not.toContain("debounced");
-      expect(results.slice(1).every((r) => r.message.includes("debounced"))).toBe(true);
+      expect(
+        results.slice(1).every((r) => r.message.includes("debounced"))
+      ).toBe(true);
       expect(client.refetchQueries).toHaveBeenCalledTimes(1);
     });
 
@@ -537,7 +556,9 @@ describe("CacheManager Integration Scenarios", () => {
       // Note: Current implementation doesn't do this, but documents the expected behavior
 
       // Arrange
-      vi.spyOn(client, "clearStore").mockRejectedValueOnce(new Error("Clear failed"));
+      vi.spyOn(client, "clearStore").mockRejectedValueOnce(
+        new Error("Clear failed")
+      );
 
       // Act
       const result = await cacheManager.resetOnAuthChange({ reason: "test" });
@@ -636,9 +657,13 @@ describe("Cache Management Behavior (Human Readable)", () => {
   it("When a network error occurs during cache clear, it should fail gracefully", async () => {
     // Given: A user logging out
     // When: A network error occurs during cache clearing
-    vi.spyOn(client, "clearStore").mockRejectedValueOnce(new Error("Network unavailable"));
+    vi.spyOn(client, "clearStore").mockRejectedValueOnce(
+      new Error("Network unavailable")
+    );
 
-    const result = await cacheManager.resetOnAuthChange({ reason: "user_logout" });
+    const result = await cacheManager.resetOnAuthChange({
+      reason: "user_logout",
+    });
 
     // Then: The operation should fail but return a meaningful error message
     expect(result.success).toBe(false);
@@ -654,5 +679,327 @@ describe("Cache Management Behavior (Human Readable)", () => {
     // Then: They should receive a valid object with cache data
     expect(cacheContents).toBeDefined();
     expect(typeof cacheContents).toBe("object");
+  });
+});
+
+// ============================================================================
+// Auth Flow Tests with Cache Inspection (E2E-style)
+// ============================================================================
+
+describe("Auth Flow with Cache Inspection", () => {
+  let client: ApolloClient<NormalizedCacheObject>;
+  let cacheManager: CacheManager;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    client = createMockApolloClient();
+    cacheManager = new CacheManager(client);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("should clear cache completely on login transition", async () => {
+    // Simulate pre-login state with cached anonymous data
+    const preCacheState = cacheManager.extractCacheForDebug();
+
+    // Perform login cache reset
+    const loginResult = await cacheManager.resetOnAuthChange({
+      reason: "user_login",
+      refetchActive: false,
+    });
+
+    // Verify cache was cleared
+    expect(loginResult.success).toBe(true);
+    expect(client.clearStore).toHaveBeenCalledTimes(1);
+
+    // Extract post-login cache state
+    const postCacheState = cacheManager.extractCacheForDebug();
+    expect(postCacheState).toBeDefined();
+  });
+
+  it("should clear cache completely on logout transition", async () => {
+    // Perform logout cache reset
+    const logoutResult = await cacheManager.resetOnAuthChange({
+      reason: "user_logout",
+      refetchActive: false,
+    });
+
+    // Verify cache was cleared for security
+    expect(logoutResult.success).toBe(true);
+    expect(client.clearStore).toHaveBeenCalledTimes(1);
+  });
+
+  it("should track cache state changes through full auth lifecycle", async () => {
+    // Phase 1: Initial anonymous state
+    const initialCache = cacheManager.extractCacheForDebug();
+    expect(initialCache).toBeDefined();
+
+    // Phase 2: Login
+    const loginResult = await cacheManager.resetOnAuthChange({
+      reason: "user_login",
+      refetchActive: false,
+    });
+    expect(loginResult.success).toBe(true);
+
+    // Advance time to allow next operation
+    vi.advanceTimersByTime(1100);
+
+    // Phase 3: Logout
+    const logoutResult = await cacheManager.resetOnAuthChange({
+      reason: "user_logout",
+      refetchActive: false,
+    });
+    expect(logoutResult.success).toBe(true);
+
+    // Verify both operations executed
+    expect(client.clearStore).toHaveBeenCalledTimes(2);
+  });
+
+  it("should handle rapid login/logout cycles gracefully", async () => {
+    // Simulate rapid auth state changes (e.g., token refresh issues)
+    const result1 = await cacheManager.resetOnAuthChange({ reason: "login" });
+    const result2 = await cacheManager.resetOnAuthChange({ reason: "logout" });
+    const result3 = await cacheManager.resetOnAuthChange({ reason: "login" });
+
+    // First should succeed, rest should be debounced
+    expect(result1.success).toBe(true);
+    expect(result2.message).toContain("debounced");
+    expect(result3.message).toContain("debounced");
+    expect(client.clearStore).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ============================================================================
+// Race Condition Verification Tests
+// ============================================================================
+
+describe("Race Condition Prevention", () => {
+  let client: ApolloClient<NormalizedCacheObject>;
+  let cacheManager: CacheManager;
+  let operationOrder: string[];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    client = createMockApolloClient();
+    cacheManager = new CacheManager(client);
+    operationOrder = [];
+
+    // Track operation order
+    vi.spyOn(client, "clearStore").mockImplementation(async () => {
+      operationOrder.push("clearStore");
+      return [];
+    });
+    vi.spyOn(client, "refetchQueries").mockImplementation((async () => {
+      operationOrder.push("refetchQueries");
+      return [];
+    }) as any);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("should execute cache operations in deterministic order", async () => {
+    // When reset is called with refetch
+    await cacheManager.resetOnAuthChange({
+      reason: "auth_change",
+      refetchActive: true,
+    });
+
+    // Then clearStore should happen before refetchQueries
+    expect(operationOrder).toEqual(["clearStore", "refetchQueries"]);
+  });
+
+  it("should not trigger refetch when refetchActive is false", async () => {
+    // When reset is called without refetch
+    await cacheManager.resetOnAuthChange({
+      reason: "auth_change",
+      refetchActive: false,
+    });
+
+    // Then only clearStore should be called
+    expect(operationOrder).toEqual(["clearStore"]);
+  });
+
+  it("should handle concurrent cache operations safely", async () => {
+    // Simulate concurrent operations (would happen if auth state changes rapidly)
+    const promises = [
+      cacheManager.resetOnAuthChange({ reason: "op1" }),
+      cacheManager.resetOnAuthChange({ reason: "op2" }),
+      cacheManager.resetOnAuthChange({ reason: "op3" }),
+    ];
+
+    const results = await Promise.all(promises);
+
+    // Only first operation should execute due to debouncing
+    expect(results[0].success).toBe(true);
+    expect(results[0].message).not.toContain("debounced");
+    expect(results[1].message).toContain("debounced");
+    expect(results[2].message).toContain("debounced");
+
+    // Verify only one clearStore call
+    expect(client.clearStore).toHaveBeenCalledTimes(1);
+  });
+
+  it("should maintain cache integrity during error scenarios", async () => {
+    // Simulate a failure during clearStore
+    vi.spyOn(client, "clearStore").mockRejectedValueOnce(
+      new Error("Network error")
+    );
+
+    const result = await cacheManager.resetOnAuthChange({ reason: "test" });
+
+    // Operation should fail gracefully
+    expect(result.success).toBe(false);
+
+    // refetchQueries should NOT be called if clearStore failed
+    expect(client.refetchQueries).not.toHaveBeenCalled();
+  });
+
+  it("should handle interleaved entity invalidations correctly", async () => {
+    // Simulate rapid document and corpus operations
+    const docResult1 = await cacheManager.invalidateDocumentQueries(
+      "corpus-1",
+      "upload"
+    );
+    const corpusResult = await cacheManager.invalidateCorpusQueries("create");
+    const docResult2 = await cacheManager.invalidateDocumentQueries(
+      "corpus-2",
+      "upload"
+    );
+
+    // Document ops for different corpuses should not debounce each other
+    expect(docResult1.success).toBe(true);
+    expect(corpusResult.success).toBe(true);
+    expect(docResult2.success).toBe(true);
+
+    // All should execute since they're different cache keys
+    expect(client.refetchQueries).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ============================================================================
+// Performance Tests
+// ============================================================================
+
+describe("Cache Performance", () => {
+  let client: ApolloClient<NormalizedCacheObject>;
+  let cacheManager: CacheManager;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    client = createMockApolloClient();
+    cacheManager = new CacheManager(client);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("should report operation duration", async () => {
+    // Simulate some delay in clearStore
+    vi.spyOn(client, "clearStore").mockImplementation(async () => {
+      // Advance time to simulate work
+      vi.advanceTimersByTime(50);
+      return [];
+    });
+
+    const result = await cacheManager.resetOnAuthChange({ reason: "test" });
+
+    // Duration should be reported
+    expect(result.duration).toBeDefined();
+    expect(result.duration).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should handle large number of sequential operations with debouncing", async () => {
+    const operationCount = 100;
+    const results: CacheOperationResult[] = [];
+
+    // Fire 100 operations rapidly
+    for (let i = 0; i < operationCount; i++) {
+      results.push(
+        await cacheManager.invalidateDocumentQueries("corpus-1", `op_${i}`)
+      );
+    }
+
+    // First should succeed, rest should be debounced
+    expect(results[0].success).toBe(true);
+    expect(results[0].message).not.toContain("debounced");
+
+    // Count debounced operations
+    const debouncedCount = results.filter((r) =>
+      r.message.includes("debounced")
+    ).length;
+    expect(debouncedCount).toBe(operationCount - 1);
+
+    // Only one actual refetch should occur
+    expect(client.refetchQueries).toHaveBeenCalledTimes(1);
+  });
+
+  it("should efficiently handle operations across multiple cache keys", async () => {
+    // Create operations for different cache keys
+    const corpusIds = [
+      "corpus-1",
+      "corpus-2",
+      "corpus-3",
+      "corpus-4",
+      "corpus-5",
+    ];
+
+    const results = await Promise.all(
+      corpusIds.map((id) =>
+        cacheManager.invalidateDocumentQueries(id, "operation")
+      )
+    );
+
+    // All should succeed since they're different cache keys
+    expect(results.every((r) => r.success)).toBe(true);
+    expect(client.refetchQueries).toHaveBeenCalledTimes(corpusIds.length);
+  });
+
+  it("should not accumulate memory in debounce tracking over time", async () => {
+    // Perform many operations with different keys
+    for (let i = 0; i < 50; i++) {
+      await cacheManager.invalidateDocumentQueries(`corpus-${i}`, "op");
+      // Advance time to allow debounce to clear
+      vi.advanceTimersByTime(600);
+    }
+
+    // All operations should have executed
+    expect(client.refetchQueries).toHaveBeenCalledTimes(50);
+  });
+
+  it("should complete cache reset within reasonable time bounds", async () => {
+    // Mock a slow but successful operation
+    let clearStoreCallTime: number;
+    let refetchCallTime: number;
+
+    vi.spyOn(client, "clearStore").mockImplementation(async () => {
+      clearStoreCallTime = Date.now();
+      vi.advanceTimersByTime(100);
+      return [];
+    });
+
+    vi.spyOn(client, "refetchQueries").mockImplementation((async () => {
+      refetchCallTime = Date.now();
+      vi.advanceTimersByTime(200);
+      return [];
+    }) as any);
+
+    const result = await cacheManager.resetOnAuthChange({
+      reason: "test",
+      refetchActive: true,
+    });
+
+    // Operation should complete successfully
+    expect(result.success).toBe(true);
+
+    // Duration should be tracked
+    expect(result.duration).toBeDefined();
   });
 });

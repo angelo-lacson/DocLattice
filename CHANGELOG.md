@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2025-12-26
 
+### Added
+
+#### Proactive Apollo Cache Management System (PR #725)
+- **New `CacheManager` service** (`frontend/src/services/cacheManager.ts`): Centralized Apollo cache management with debouncing, targeted invalidation, and auth-aware cache operations
+  - `resetOnAuthChange()`: Full cache clear with optional refetch for login/logout transitions
+  - `refreshActiveQueries()`: Soft refresh without clearing cache
+  - `invalidateEntityQueries()`: Targeted invalidation for document/corpus/annotation CRUD operations
+  - Debouncing: 1000ms for full resets, 500ms for entity invalidations
+  - Debug utilities: `logCacheSize()`, `extractCacheForDebug()`
+- **New `useCacheManager` hook** (`frontend/src/hooks/useCacheManager.ts`): React hook with memoized CacheManager instance and stable callback references
+- **Comprehensive test suite** (`frontend/src/services/__tests__/cacheManager.test.ts`, `frontend/src/hooks/__tests__/useCacheManager.test.tsx`): 30+ tests covering debouncing, error handling, lifecycle, singleton management, and auth scenarios
+
+### Fixed
+
+#### Cache Management Race Condition Fix (PR #725)
+- **Auth state now set BEFORE cache clear** (`frontend/src/components/auth/AuthGate.tsx:69-92`, `frontend/src/views/Login.tsx:106-117`, `frontend/src/components/layout/useNavMenu.ts:64-90`):
+  - Previously, cache was cleared before updating auth state, creating a window where queries could fetch with wrong auth context
+  - Fixed by setting auth token/user/status first, then clearing cache
+  - Refetched queries now correctly use the new auth context
+- **AuthGate uses useCacheManager hook** (`frontend/src/components/auth/AuthGate.tsx:7,27`): Replaced direct `new CacheManager()` instantiation with proper hook usage, eliminating `as any` type assertion and ensuring memoization
+- **Fire-and-forget logout cache clear** (`frontend/src/components/layout/useNavMenu.ts:69-79`): Logout no longer blocks on cache clear operation, improving perceived performance
+
+### Technical Details
+
+#### Cache Management Architecture
+- **Race condition prevention**: Auth state updates are synchronous; cache clear is async. By setting auth first, any queries triggered during cache clear use the correct credentials.
+- **Singleton pattern preserved for non-React contexts**: The singleton functions (`initializeCacheManager`, `getCacheManager`, etc.) remain exported for testing and non-React usage, with documentation clarifying when to use hooks vs singleton.
+- **Dependency management**: `useCacheManager` hook returns stable callback references via `useCallback`, safe to include in effect dependencies.
+
 ### Fixed
 
 #### Agent Chat Processing Indicator (PR #687)
