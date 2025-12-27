@@ -274,7 +274,6 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
               data: CheckboxProps
             ) => handleShowSelectedChange(data?.checked ?? false)}
             checked={showSelectedOnly}
-            disabled={showStructural}
           />
         </ControlItem>
 
