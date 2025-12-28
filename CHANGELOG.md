@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Mobile Responsive Styling for Settings and Badge Widgets (Issue #690)
+- **Badge component z-index optimization** (`frontend/src/components/badges/Badge.tsx:47,107`): Lowered z-index values from 9999/10000 to 200/201 to avoid conflicts with other UI elements while maintaining proper layering
+- **Unified mobile behavior detection** (`frontend/src/components/badges/Badge.tsx:148-152`): Combined touch device detection with viewport width check to ensure mobile UX works consistently across real devices and test environments
+- **Test wrapper extraction** (`frontend/tests/UserBadgesTestWrapper.tsx`, `frontend/tests/GlobalSettingsPanelTestWrapper.tsx`): Moved test wrappers to separate files following Playwright component testing best practices
+- **Improved test reliability** (`frontend/tests/mobile-responsive.ct.tsx`): Fixed element disambiguation issues using proper locator strategies
+
 #### Agent Chat Processing Indicator (PR #687)
 - **Added visual feedback for agent processing** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1342-1405`): When an agent starts processing a response, an animated "Agent is thinking..." indicator now displays instead of an empty message bubble
 - **Processing indicator conditions**: Shows when assistant message is incomplete with no content and no timeline entries
@@ -243,6 +249,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings button variable name bug** (`frontend/src/components/corpuses/CorpusHome.tsx:780`): Fixed `canUpdate` → `canEdit` reference error that prevented Settings button from displaying for users with update permissions
 - **FAB z-index layering** (`frontend/src/views/Corpuses.tsx:1320`): Raised FAB z-index from 100 to 150 to ensure visibility above folder sidebar toggle (z-index: 101)
 - **Explicit z-index layering**: Made mobile sidebar z-index layering explicit (backdrop: 98, toggle button: 99) to prevent fragile DOM-order-dependent behavior
+
+#### Mobile Responsive Styling for Settings and Badge Widgets (PR #690)
+- **UserSettingsModal responsive styling** (`frontend/src/components/modals/UserSettingsModal.tsx:14-80`):
+  - Modal takes 95% width on mobile (≤768px) with reduced padding
+  - Form groups stack vertically on small screens (≤480px) for single-column layout
+  - Action buttons display full-width and stack vertically (Save above Close) on mobile
+  - Added `styled-components` import and styled wrapper components
+- **Badge component touch support** (`frontend/src/components/badges/Badge.tsx:23-41, 96-112, 145-199`):
+  - Added tap-to-toggle tooltip on touch devices (detects via `ontouchstart`)
+  - Created `MobileOverlay` backdrop for dismissing badge popups by tapping outside
+  - Popup centers on mobile screens using fixed positioning instead of floating-ui
+  - Increased touch target size (min-height 36px, larger padding)
+  - Disabled hover transforms on touch devices using `@media (hover: none)`
+- **UserBadges container responsive layout** (`frontend/src/components/badges/UserBadges.tsx:18-27, 37-48, 58-61`):
+  - Reduced padding and gap on mobile viewports
+  - Badges center-aligned on mobile for better visual balance
+  - Empty state and header text sizes reduced on mobile
+- **GlobalSettingsPanel responsive grid** (`frontend/src/components/admin/GlobalSettingsPanel.tsx:11-67, 82-104, 119-123, 137-139, 148-150, 163-168`):
+  - Container padding reduced on mobile (2rem → 1rem → 0.75rem)
+  - Settings grid switches to single column on small mobile (≤480px)
+  - Card content padding reduced progressively on smaller screens
+  - Touch-friendly card interactions with active state feedback (scale 0.98)
+  - "Coming Soon" badge displays on its own line on very small screens
 
 ### Changed
 

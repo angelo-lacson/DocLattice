@@ -297,6 +297,8 @@ export function MessageComposer({
     }
   }, [allResults, loading]);
   const editor = useEditor({
+    // Use TipTap's built-in autofocus - handles mount timing correctly
+    autofocus: autoFocus,
     extensions: [
       StarterKit.configure({
         // Disable code blocks and blockquotes for simpler UX
@@ -305,11 +307,12 @@ export function MessageComposer({
       }),
       Markdown.configure({
         html: false, // Disable HTML in markdown
-        linkify: true, // Auto-convert URLs to links
+        linkify: false, // Disable - use Link extension's autolink instead (avoids duplicate 'link' warning)
         breaks: true, // Convert \n to <br>
       }),
       Link.configure({
         openOnClick: false, // Don't open links while editing
+        autolink: true, // Auto-convert URLs to links (replaces Markdown's linkify)
         HTMLAttributes: {
           class: "mention-link", // Style mention links
         },
@@ -603,12 +606,9 @@ export function MessageComposer({
     }
   }, [editor, disabled]);
 
-  // Auto-focus
-  useEffect(() => {
-    if (editor && autoFocus) {
-      editor.commands.focus();
-    }
-  }, [editor, autoFocus]);
+  // Note: autofocus is handled via TipTap's built-in `autofocus` option in useEditor
+  // This ensures proper timing (waits for view to mount) and avoids the
+  // "editor view is not available" error that occurred with manual focus.
 
   const handleSubmit = useCallback(async () => {
     if (!editor || disabled) return;
