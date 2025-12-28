@@ -17,6 +17,9 @@ import {
   CREATE_CORPUS_ACTION,
   CreateCorpusActionInput,
   CreateCorpusActionOutput,
+  UPDATE_CORPUS_ACTION,
+  UpdateCorpusActionInput,
+  UpdateCorpusActionOutput,
 } from "../../graphql/mutations";
 import {
   GET_FIELDSETS,
@@ -30,22 +33,45 @@ import {
   GetAgentConfigurationsOutput,
 } from "../../graphql/queries";
 
+/**
+ * Shape of an existing corpus action for editing
+ */
+export interface CorpusActionData {
+  id: string;
+  name: string;
+  trigger: string;
+  disabled: boolean;
+  runOnAllCorpuses: boolean;
+  fieldset?: { id: string; name: string } | null;
+  analyzer?: { id: string; name: string } | null;
+  agentConfig?: { id: string; name: string; description: string } | null;
+  agentPrompt?: string;
+  preAuthorizedTools?: string[];
+}
+
 interface CreateCorpusActionModalProps {
   corpusId: string;
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  /** Optional action to edit - if provided, modal is in edit mode */
+  actionToEdit?: CorpusActionData | null;
 }
 
 type ActionType = "fieldset" | "analyzer" | "agent";
+type TriggerType =
+  | "add_document"
+  | "edit_document"
+  | "new_thread"
+  | "new_message";
 
 export const CreateCorpusActionModal: React.FC<
   CreateCorpusActionModalProps
-> = ({ corpusId, open, onClose, onSuccess }) => {
+> = ({ corpusId, open, onClose, onSuccess, actionToEdit }) => {
+  const isEditMode = !!actionToEdit;
+
   const [name, setName] = React.useState("");
-  const [trigger, setTrigger] = React.useState<
-    "add_document" | "edit_document" | "new_thread" | "new_message"
-  >("add_document");
+  const [trigger, setTrigger] = React.useState<TriggerType>("add_document");
   const [actionType, setActionType] = React.useState<ActionType>("fieldset");
   const [selectedFieldsetId, setSelectedFieldsetId] = React.useState<
     string | null
@@ -77,6 +103,54 @@ export const CreateCorpusActionModal: React.FC<
     setRunOnAllCorpuses(false);
   };
 
+  // Helper to normalize trigger value to lowercase format
+  // (backend returns ADD_DOCUMENT but expects add_document)
+  const normalizeTrigger = (trigger: string): TriggerType => {
+    const lowered = trigger.toLowerCase();
+    if (
+      lowered === "add_document" ||
+      lowered === "edit_document" ||
+      lowered === "new_thread" ||
+      lowered === "new_message"
+    ) {
+      return lowered as TriggerType;
+    }
+    return "add_document"; // Default fallback
+  };
+
+  // Populate form when editing an existing action
+  React.useEffect(() => {
+    if (actionToEdit && open) {
+      setName(actionToEdit.name);
+      setTrigger(normalizeTrigger(actionToEdit.trigger));
+      setDisabled(actionToEdit.disabled);
+      setRunOnAllCorpuses(actionToEdit.runOnAllCorpuses);
+
+      // Determine action type and set appropriate selection
+      if (actionToEdit.agentConfig) {
+        setActionType("agent");
+        setSelectedAgentConfigId(actionToEdit.agentConfig.id);
+        setAgentPrompt(actionToEdit.agentPrompt || "");
+        setPreAuthorizedTools(actionToEdit.preAuthorizedTools || []);
+        setSelectedFieldsetId(null);
+        setSelectedAnalyzerId(null);
+      } else if (actionToEdit.analyzer) {
+        setActionType("analyzer");
+        setSelectedAnalyzerId(actionToEdit.analyzer.id);
+        setSelectedFieldsetId(null);
+        setSelectedAgentConfigId(null);
+      } else if (actionToEdit.fieldset) {
+        setActionType("fieldset");
+        setSelectedFieldsetId(actionToEdit.fieldset.id);
+        setSelectedAnalyzerId(null);
+        setSelectedAgentConfigId(null);
+      }
+    } else if (!open) {
+      // Reset form when modal closes
+      resetForm();
+    }
+  }, [actionToEdit, open]);
+
   const [createCorpusAction] = useMutation<
     CreateCorpusActionOutput,
     CreateCorpusActionInput
@@ -98,6 +172,31 @@ export const CreateCorpusActionModal: React.FC<
     onError: (error) => {
       toast.error("Failed to create action");
       console.error("Error creating corpus action:", error);
+      setIsSubmitting(false);
+    },
+  });
+
+  const [updateCorpusAction] = useMutation<
+    UpdateCorpusActionOutput,
+    UpdateCorpusActionInput
+  >(UPDATE_CORPUS_ACTION, {
+    onCompleted: (data) => {
+      if (data.updateCorpusAction.ok) {
+        toast.success("Action updated successfully");
+        setIsSubmitting(false);
+        resetForm();
+        onSuccess();
+        onClose();
+      } else {
+        toast.error(
+          data.updateCorpusAction.message || "Failed to update action"
+        );
+        setIsSubmitting(false);
+      }
+    },
+    onError: (error) => {
+      toast.error("Failed to update action");
+      console.error("Error updating corpus action:", error);
       setIsSubmitting(false);
     },
   });
@@ -157,32 +256,63 @@ export const CreateCorpusActionModal: React.FC<
     setIsSubmitting(true);
 
     try {
-      await createCorpusAction({
-        variables: {
-          corpusId,
-          name,
-          trigger,
-          fieldsetId:
-            actionType === "fieldset"
-              ? selectedFieldsetId || undefined
-              : undefined,
-          analyzerId:
-            actionType === "analyzer"
-              ? selectedAnalyzerId || undefined
-              : undefined,
-          agentConfigId:
-            actionType === "agent"
-              ? selectedAgentConfigId || undefined
-              : undefined,
-          agentPrompt: actionType === "agent" ? agentPrompt : undefined,
-          preAuthorizedTools:
-            actionType === "agent" && preAuthorizedTools.length > 0
-              ? preAuthorizedTools
-              : undefined,
-          disabled,
-          runOnAllCorpuses,
-        },
-      });
+      if (isEditMode && actionToEdit) {
+        // Update existing action
+        await updateCorpusAction({
+          variables: {
+            id: actionToEdit.id,
+            name,
+            trigger,
+            fieldsetId:
+              actionType === "fieldset"
+                ? selectedFieldsetId || undefined
+                : undefined,
+            analyzerId:
+              actionType === "analyzer"
+                ? selectedAnalyzerId || undefined
+                : undefined,
+            agentConfigId:
+              actionType === "agent"
+                ? selectedAgentConfigId || undefined
+                : undefined,
+            agentPrompt: actionType === "agent" ? agentPrompt : undefined,
+            preAuthorizedTools:
+              actionType === "agent" && preAuthorizedTools.length > 0
+                ? preAuthorizedTools
+                : undefined,
+            disabled,
+            runOnAllCorpuses,
+          },
+        });
+      } else {
+        // Create new action
+        await createCorpusAction({
+          variables: {
+            corpusId,
+            name,
+            trigger,
+            fieldsetId:
+              actionType === "fieldset"
+                ? selectedFieldsetId || undefined
+                : undefined,
+            analyzerId:
+              actionType === "analyzer"
+                ? selectedAnalyzerId || undefined
+                : undefined,
+            agentConfigId:
+              actionType === "agent"
+                ? selectedAgentConfigId || undefined
+                : undefined,
+            agentPrompt: actionType === "agent" ? agentPrompt : undefined,
+            preAuthorizedTools:
+              actionType === "agent" && preAuthorizedTools.length > 0
+                ? preAuthorizedTools
+                : undefined,
+            disabled,
+            runOnAllCorpuses,
+          },
+        });
+      }
     } catch (error) {
       // Error is handled by the mutation's onError callback
     }
@@ -269,7 +399,8 @@ export const CreateCorpusActionModal: React.FC<
   return (
     <Modal open={open} onClose={onClose} size="small">
       <Modal.Header>
-        <Icon name="lightning" /> Create New Corpus Action
+        <Icon name={isEditMode ? "edit" : "lightning"} />{" "}
+        {isEditMode ? "Edit Corpus Action" : "Create New Corpus Action"}
       </Modal.Header>
       <Modal.Content>
         <Form loading={isSubmitting}>
@@ -526,7 +657,7 @@ export const CreateCorpusActionModal: React.FC<
           Cancel
         </Button>
         <Button primary onClick={handleSubmit} loading={isSubmitting}>
-          Create Action
+          {isEditMode ? "Update Action" : "Create Action"}
         </Button>
       </Modal.Actions>
     </Modal>
