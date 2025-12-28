@@ -2248,6 +2248,80 @@ export interface DeleteCorpusActionOutput {
   };
 }
 
+export const UPDATE_CORPUS_ACTION = gql`
+  mutation UpdateCorpusAction(
+    $id: ID!
+    $name: String
+    $trigger: String
+    $fieldsetId: ID
+    $analyzerId: ID
+    $agentConfigId: ID
+    $agentPrompt: String
+    $preAuthorizedTools: [String]
+    $disabled: Boolean
+    $runOnAllCorpuses: Boolean
+  ) {
+    updateCorpusAction(
+      id: $id
+      name: $name
+      trigger: $trigger
+      fieldsetId: $fieldsetId
+      analyzerId: $analyzerId
+      agentConfigId: $agentConfigId
+      agentPrompt: $agentPrompt
+      preAuthorizedTools: $preAuthorizedTools
+      disabled: $disabled
+      runOnAllCorpuses: $runOnAllCorpuses
+    ) {
+      ok
+      message
+      obj {
+        id
+        name
+        trigger
+        disabled
+        runOnAllCorpuses
+        fieldset {
+          id
+          name
+        }
+        analyzer {
+          id
+          description
+        }
+        agentConfig {
+          id
+          name
+          description
+        }
+        agentPrompt
+        preAuthorizedTools
+      }
+    }
+  }
+`;
+
+export interface UpdateCorpusActionInput {
+  id: string;
+  name?: string;
+  trigger?: string;
+  fieldsetId?: string;
+  analyzerId?: string;
+  agentConfigId?: string;
+  agentPrompt?: string;
+  preAuthorizedTools?: string[];
+  disabled?: boolean;
+  runOnAllCorpuses?: boolean;
+}
+
+export interface UpdateCorpusActionOutput {
+  updateCorpusAction: {
+    ok: boolean;
+    message: string;
+    obj: CorpusActionType | null;
+  };
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// BADGE-RELATED MUTATIONS
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

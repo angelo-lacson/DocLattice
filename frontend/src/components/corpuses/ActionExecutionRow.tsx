@@ -259,9 +259,19 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = getDocumentUrl(execution.document, execution.corpus, undefined);
-    if (url !== "#") navigate(url);
+    if (execution.document) {
+      const url = getDocumentUrl(
+        execution.document,
+        execution.corpus,
+        undefined
+      );
+      if (url !== "#") navigate(url);
+    }
   };
+
+  // Determine what target to display (document or conversation)
+  const targetName = execution.document?.title || execution.conversation?.title;
+  const isThreadAction = !execution.document && execution.conversation;
 
   return (
     <Row $expanded={expanded}>
@@ -276,10 +286,18 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
         <ActionName title={execution.corpusAction.name}>
           {execution.corpusAction.name}
         </ActionName>
-        <DocumentName title={execution.document.title}>
-          <DocumentLink onClick={handleDocumentClick}>
-            {execution.document.title}
-          </DocumentLink>
+        <DocumentName title={targetName || "Unknown"}>
+          {execution.document ? (
+            <DocumentLink onClick={handleDocumentClick}>
+              {execution.document.title}
+            </DocumentLink>
+          ) : isThreadAction ? (
+            <span style={{ color: "#6366f1" }}>
+              🗨️ {execution.conversation?.title || "Thread"}
+            </span>
+          ) : (
+            <span style={{ color: "#94a3b8" }}>N/A</span>
+          )}
         </DocumentName>
         <TypeBadge>{typeLabel}</TypeBadge>
         <TimeInfo>{formatRelativeTime(execution.queuedAt)}</TimeInfo>
