@@ -769,3 +769,417 @@ class TestToolRegistry(TestCase):
                 tool["requiresApproval"],
                 f"Tool {tool_name} should not require approval",
             )
+
+
+class TestProcessThreadCorpusActionTask(TestCase):
+    """Tests for process_thread_corpus_action Celery task."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testthreadtask",
+            email="testthreadtask@example.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Thread Moderator",
+            creator=self.user,
+        )
+        # Skip signals for thread creation
+        self.thread = Conversation(
+            title="Test Discussion",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        self.thread._skip_signals = True
+        self.thread.save()
+
+    @patch("opencontractserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_thread_corpus_action_queues_task(self, mock_delay):
+        """process_thread_corpus_action should queue agent task for matching actions."""
+        from opencontractserver.tasks.corpus_tasks import process_thread_corpus_action
+
+        # Create corpus action with NEW_THREAD trigger
+        action = CorpusAction.objects.create(
+            name="Auto Moderate",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review this thread",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+
+        result = process_thread_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            user_id=self.user.id,
+            trigger="new_thread",
+        )
+
+        # Should have processed one action and queued one execution
+        self.assertEqual(result["actions_processed"], 1)
+        self.assertEqual(result["executions_queued"], 1)
+
+        # Agent task should have been queued
+        mock_delay.assert_called_once()
+        call_kwargs = mock_delay.call_args.kwargs
+        self.assertEqual(call_kwargs["corpus_action_id"], action.id)
+        self.assertEqual(call_kwargs["conversation_id"], self.thread.id)
+        self.assertIsNone(call_kwargs["message_id"])
+
+    @patch("opencontractserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_thread_corpus_action_skips_non_agent_actions(self, mock_delay):
+        """process_thread_corpus_action should skip actions without agent_config."""
+        from opencontractserver.extracts.models import Fieldset
+        from opencontractserver.tasks.corpus_tasks import process_thread_corpus_action
+
+        fieldset = Fieldset.objects.create(name="Test Fieldset", creator=self.user)
+
+        # Create corpus action with fieldset instead of agent (shouldn't run on threads)
+        CorpusAction.objects.create(
+            name="Extract Action",
+            corpus=self.corpus,
+            fieldset=fieldset,
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+
+        result = process_thread_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            user_id=self.user.id,
+            trigger="new_thread",
+        )
+
+        # Should skip the fieldset action
+        self.assertEqual(result["skipped_no_agent"], 1)
+        self.assertEqual(result["executions_queued"], 0)
+        mock_delay.assert_not_called()
+
+    def test_process_thread_corpus_action_invalid_conversation(self):
+        """process_thread_corpus_action should return error for invalid conversation."""
+        from opencontractserver.tasks.corpus_tasks import process_thread_corpus_action
+
+        result = process_thread_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=99999,
+            user_id=self.user.id,
+            trigger="new_thread",
+        )
+
+        self.assertIn("error", result)
+        self.assertEqual(result["error"], "Conversation not found")
+
+    @patch("opencontractserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_thread_corpus_action_creates_execution_record(self, mock_delay):
+        """process_thread_corpus_action should create CorpusActionExecution record."""
+        from opencontractserver.tasks.corpus_tasks import process_thread_corpus_action
+
+        action = CorpusAction.objects.create(
+            name="Auto Moderate",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+
+        process_thread_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            user_id=self.user.id,
+            trigger="new_thread",
+        )
+
+        # Verify execution record was created
+        execution = CorpusActionExecution.objects.get(
+            corpus_action=action, conversation=self.thread
+        )
+        self.assertEqual(execution.status, CorpusActionExecution.Status.QUEUED)
+        self.assertEqual(execution.trigger, "new_thread")
+        self.assertIsNone(execution.document)
+        self.assertEqual(execution.conversation, self.thread)
+
+
+class TestProcessMessageCorpusActionTask(TestCase):
+    """Tests for process_message_corpus_action Celery task."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testmsgtask",
+            email="testmsgtask@example.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Message Moderator",
+            creator=self.user,
+        )
+        # Skip signals for thread creation
+        self.thread = Conversation(
+            title="Test Discussion",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        self.thread._skip_signals = True
+        self.thread.save()
+
+        # Create test message
+        self.message = ChatMessage(
+            conversation=self.thread,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="Test message content",
+            creator=self.user,
+        )
+        self.message._skip_signals = True
+        self.message.save()
+
+    @patch("opencontractserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_message_corpus_action_queues_task(self, mock_delay):
+        """process_message_corpus_action should queue agent task for matching actions."""
+        from opencontractserver.tasks.corpus_tasks import process_message_corpus_action
+
+        # Create corpus action with NEW_MESSAGE trigger
+        action = CorpusAction.objects.create(
+            name="Auto Moderate Messages",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review this message",
+            trigger=CorpusActionTrigger.NEW_MESSAGE,
+            creator=self.user,
+        )
+
+        result = process_message_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            message_id=self.message.id,
+            user_id=self.user.id,
+            trigger="new_message",
+        )
+
+        # Should have processed one action and queued one execution
+        self.assertEqual(result["actions_processed"], 1)
+        self.assertEqual(result["executions_queued"], 1)
+
+        # Agent task should have been queued with message_id
+        mock_delay.assert_called_once()
+        call_kwargs = mock_delay.call_args.kwargs
+        self.assertEqual(call_kwargs["corpus_action_id"], action.id)
+        self.assertEqual(call_kwargs["conversation_id"], self.thread.id)
+        self.assertEqual(call_kwargs["message_id"], self.message.id)
+
+    def test_process_message_corpus_action_invalid_message(self):
+        """process_message_corpus_action should return error for invalid message."""
+        from opencontractserver.tasks.corpus_tasks import process_message_corpus_action
+
+        result = process_message_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            message_id=99999,
+            user_id=self.user.id,
+            trigger="new_message",
+        )
+
+        self.assertIn("error", result)
+
+    @patch("opencontractserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_message_corpus_action_creates_execution_with_message(
+        self, mock_delay
+    ):
+        """process_message_corpus_action should create execution with message FK."""
+        from opencontractserver.tasks.corpus_tasks import process_message_corpus_action
+
+        action = CorpusAction.objects.create(
+            name="Auto Moderate",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review",
+            trigger=CorpusActionTrigger.NEW_MESSAGE,
+            creator=self.user,
+        )
+
+        process_message_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            message_id=self.message.id,
+            user_id=self.user.id,
+            trigger="new_message",
+        )
+
+        # Verify execution record was created with message
+        execution = CorpusActionExecution.objects.get(
+            corpus_action=action, conversation=self.thread
+        )
+        self.assertEqual(execution.message, self.message)
+        self.assertEqual(execution.trigger, "new_message")
+
+
+class TestRunAgentThreadActionTask(TestCase):
+    """Tests for run_agent_thread_action Celery task.
+
+    Following the pattern from test-suite.md, we mock the entire async function
+    to avoid async ORM connection issues.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testagent",
+            email="testagent@example.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Thread Moderator",
+            creator=self.user,
+        )
+        self.corpus_action = CorpusAction.objects.create(
+            name="Auto Moderate",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review this thread",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        self.thread = Conversation(
+            title="Test Discussion",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        self.thread._skip_signals = True
+        self.thread.save()
+
+    @patch("opencontractserver.tasks.agent_tasks._run_agent_thread_action_async")
+    def test_run_agent_thread_action_success(self, mock_async_func):
+        """run_agent_thread_action should execute successfully."""
+        from opencontractserver.tasks.agent_tasks import run_agent_thread_action
+
+        # Create the result that the async function would create
+        result_obj = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            triggering_conversation=self.thread,
+            status=AgentActionResult.Status.COMPLETED,
+            agent_response="Thread looks fine, no action needed.",
+            creator=self.user,
+        )
+
+        mock_async_func.return_value = {
+            "status": "completed",
+            "result_id": result_obj.id,
+            "response_length": 40,
+            "conversation_id": None,
+        }
+
+        result = run_agent_thread_action.apply(
+            args=[self.corpus_action.id, self.thread.id, None, self.user.id]
+        )
+
+        self.assertEqual(result.result["status"], "completed")
+        mock_async_func.assert_called_once_with(
+            corpus_action_id=self.corpus_action.id,
+            conversation_id=self.thread.id,
+            message_id=None,
+            user_id=self.user.id,
+        )
+
+    @patch("opencontractserver.tasks.agent_tasks._run_agent_thread_action_async")
+    def test_run_agent_thread_action_with_message(self, mock_async_func):
+        """run_agent_thread_action should pass message_id when provided."""
+        from opencontractserver.tasks.agent_tasks import run_agent_thread_action
+
+        message = ChatMessage(
+            conversation=self.thread,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="Test message",
+            creator=self.user,
+        )
+        message._skip_signals = True
+        message.save()
+
+        result_obj = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            triggering_conversation=self.thread,
+            triggering_message=message,
+            status=AgentActionResult.Status.COMPLETED,
+            agent_response="Message reviewed.",
+            creator=self.user,
+        )
+
+        mock_async_func.return_value = {
+            "status": "completed",
+            "result_id": result_obj.id,
+            "response_length": 17,
+            "conversation_id": None,
+        }
+
+        result = run_agent_thread_action.apply(
+            args=[self.corpus_action.id, self.thread.id, message.id, self.user.id]
+        )
+
+        self.assertEqual(result.result["status"], "completed")
+        mock_async_func.assert_called_once_with(
+            corpus_action_id=self.corpus_action.id,
+            conversation_id=self.thread.id,
+            message_id=message.id,
+            user_id=self.user.id,
+        )
+
+    @patch("opencontractserver.tasks.agent_tasks._run_agent_thread_action_async")
+    def test_run_agent_thread_action_updates_execution(self, mock_async_func):
+        """run_agent_thread_action should update execution record on completion."""
+        from django.utils import timezone
+
+        from opencontractserver.tasks.agent_tasks import run_agent_thread_action
+
+        # Create execution record
+        execution = CorpusActionExecution.objects.create(
+            corpus_action=self.corpus_action,
+            corpus=self.corpus,
+            conversation=self.thread,
+            action_type=CorpusActionExecution.ActionType.AGENT,
+            trigger="new_thread",
+            queued_at=timezone.now(),
+            status=CorpusActionExecution.Status.QUEUED,
+            creator=self.user,
+        )
+
+        result_obj = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            triggering_conversation=self.thread,
+            status=AgentActionResult.Status.COMPLETED,
+            agent_response="Done",
+            creator=self.user,
+        )
+
+        mock_async_func.return_value = {
+            "status": "completed",
+            "result_id": result_obj.id,
+            "response_length": 4,
+            "conversation_id": None,
+        }
+
+        run_agent_thread_action.apply(
+            args=[
+                self.corpus_action.id,
+                self.thread.id,
+                None,
+                self.user.id,
+                execution.id,
+            ]
+        )
+
+        # Verify execution was updated
+        execution.refresh_from_db()
+        self.assertEqual(execution.status, CorpusActionExecution.Status.COMPLETED)
+        self.assertIsNotNone(execution.completed_at)
