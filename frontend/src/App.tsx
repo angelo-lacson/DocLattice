@@ -132,6 +132,10 @@ export const App = () => {
   // Track if we've applied mobile display settings to prevent infinite loop
   const mobileSettingsAppliedRef = useRef(false);
 
+  // Track if we've shown the user fetch error toast to prevent duplicates
+  // This can happen on mobile where network is slower and query may fail initially
+  const meErrorShownRef = useRef(false);
+
   const {
     data: meData,
     loading: meLoading,
@@ -141,14 +145,28 @@ export const App = () => {
     fetchPolicy: "network-only",
   });
 
+  // Reset error shown flag when auth_token changes (new login session)
+  useEffect(() => {
+    meErrorShownRef.current = false;
+  }, [auth_token]);
+
   useEffect(() => {
     if (isLoading) return; // wait until Auth0 SDK has decided
 
     if (meData?.me) {
       backendUserObj(meData.me);
-    } else if (!meLoading && auth_token && meError) {
+      // Clear error flag if we successfully got user data
+      meErrorShownRef.current = false;
+    } else if (
+      !meLoading &&
+      auth_token &&
+      meError &&
+      !meErrorShownRef.current
+    ) {
+      // Only show error once per session, and only if we don't already have user data
       console.error("Error fetching backend user:", meError);
       toast.error("Could not get user details from server");
+      meErrorShownRef.current = true;
     } else if (!auth_token) {
       backendUserObj(null);
     }

@@ -1,10 +1,21 @@
 # Using Corpus Actions
 
-Corpus Actions automate document processing when documents are added or edited in a corpus. You can configure three types of actions:
+Corpus Actions automate processing when specific events occur in a corpus. You can configure three types of actions:
 
 1. **Fieldset-based Extractions** - Extract structured data using fieldsets
 2. **Analyzer-based Analyses** - Run classification or annotation analyzers
 3. **Agent-based Actions** - Invoke AI agents with pre-authorized tools
+
+## Trigger Types
+
+| Trigger | Event | Supported Actions |
+|---------|-------|-------------------|
+| `add_document` | Document added to corpus | Fieldset, Analyzer, Agent |
+| `edit_document` | Document edited in corpus | Fieldset, Analyzer, Agent |
+| `new_thread` | Discussion thread created | Agent only |
+| `new_message` | Message posted to thread | Agent only |
+
+> **Note**: Thread and message triggers are designed for AI-powered moderation workflows. See the [walkthrough guide](../walkthrough/step-9-corpus-actions.md) for detailed examples.
 
 ## Important: Deferred Execution
 
@@ -158,15 +169,17 @@ mutation CreateAgentAction {
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `corpusId` | Yes | The corpus to attach the action to |
-| `trigger` | Yes | Either `"add_document"` or `"edit_document"` |
+| `trigger` | Yes | One of: `"add_document"`, `"edit_document"`, `"new_thread"`, `"new_message"` |
 | `name` | No | Custom name (defaults to "Corpus Action") |
-| `fieldsetId` | One of three | Fieldset for data extraction |
-| `analyzerId` | One of three | Analyzer for classification/annotation |
+| `fieldsetId` | One of three | Fieldset for data extraction (document triggers only) |
+| `analyzerId` | One of three | Analyzer for classification/annotation (document triggers only) |
 | `agentConfigId` | One of three | Agent configuration for AI processing |
 | `agentPrompt` | No | Task-specific prompt for agent actions |
 | `preAuthorizedTools` | No | Tools pre-approved for automated execution |
 | `disabled` | No | Whether action is initially disabled |
 | `runOnAllCorpuses` | No | Run on all corpuses (admin only) |
+
+> **Note**: Thread/message triggers (`new_thread`, `new_message`) only support agent-based actions.
 
 ### Permissions
 
@@ -286,6 +299,63 @@ mutation {
     trigger: "edit_document"
     name: "Re-extract on Edit"
     fieldsetId: "..."
+  ) { ok }
+}
+```
+
+### Thread Moderation
+
+Automatically moderate new messages in discussion threads:
+
+```graphql
+mutation {
+  create_corpus_action(
+    corpusId: "..."
+    trigger: "new_message"
+    name: "Auto-Moderate Messages"
+    agentConfigId: "..."
+    agentPrompt: """
+      You are a thread moderator. Review the new message for policy compliance.
+
+      1. Use get_thread_context to understand the discussion
+      2. Use get_message_content to read the new message
+      3. If the message violates guidelines, use delete_message
+      4. If the thread is going off-topic, consider using lock_thread
+      5. Optionally respond with add_thread_message if helpful
+    """
+    preAuthorizedTools: [
+      "get_thread_context",
+      "get_thread_messages",
+      "get_message_content",
+      "add_thread_message",
+      "lock_thread",
+      "unlock_thread",
+      "delete_message",
+      "pin_thread",
+      "unpin_thread"
+    ]
+  ) { ok }
+}
+```
+
+### Auto-Respond to New Threads
+
+Automatically greet users when they create discussion threads:
+
+```graphql
+mutation {
+  create_corpus_action(
+    corpusId: "..."
+    trigger: "new_thread"
+    name: "Welcome New Threads"
+    agentConfigId: "..."
+    agentPrompt: """
+      A new discussion thread has been created. Welcome the user and provide
+      any relevant context about the corpus or discussion guidelines.
+
+      Use add_thread_message to post a welcome message.
+    """
+    preAuthorizedTools: ["get_thread_context", "add_thread_message"]
   ) { ok }
 }
 ```
