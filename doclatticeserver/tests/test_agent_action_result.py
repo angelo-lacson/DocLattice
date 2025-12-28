@@ -123,7 +123,7 @@ class AgentActionResultModelTestCase(TestCase):
             status=AgentActionResult.Status.COMPLETED,
             creator=self.user,
         )
-        expected_str = f"AgentActionResult({self.corpus_action.name} on doc {self.document.id}: completed)"
+        expected_str = f"AgentActionResult({self.corpus_action.name} on doc:{self.document.id}: completed)"
         self.assertEqual(str(result), expected_str)
 
     def test_agent_action_result_visible_to_user(self):
