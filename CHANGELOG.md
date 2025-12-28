@@ -47,27 +47,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Modern gradient header** with icon and subtitle for both upload modals
 - **Progress bar integration** showing real-time upload progress with success/error states
 
-### Changed
-
-#### Upload Modal Mobile Responsiveness (Issue #696)
-- **DocumentUploadModal** (`frontend/src/components/widgets/modals/DocumentUploadModal.tsx`): Refactored to use new styled components with responsive grid layout for edit step
-- **BulkUploadModal** (`frontend/src/components/widgets/modals/BulkUploadModal.tsx`): Complete visual overhaul with styled drop zone, file size display, and responsive layout
-- **DocumentUploadList** (`frontend/src/components/documents/DocumentUploadList.tsx`): New drop zone styling with drag-active feedback and pulse animation
-- **DocumentListItem** (`frontend/src/components/documents/DocumentListItem.tsx`): Improved file list items with proper touch targets (56px min-height, 64px on mobile), status icons, and delete button styling
-- **Mobile-first breakpoints**: All upload modal components now have explicit breakpoints at 480px (mobile) and 768px (tablet)
-- **Touch target compliance**: All interactive elements meet 44px minimum touch target size for mobile accessibility
-- **Responsive action buttons**: Modal actions stack vertically on mobile for full-width tappable buttons
-- **Custom scrollbar styling**: File list has styled scrollbars for visual polish
-
-### Technical Details
-
-#### Upload Modal Architecture
-- Styled-components with transient props (`$active`, `$selected`, `$status`) to prevent DOM attribute warnings
-- CSS keyframe animations for drag-active pulse effect and fade-in modal transitions
-- Gradient backgrounds using `linear-gradient(135deg, #667eea 0%, #764ba2 100%)` for visual consistency
-- Semantic UI React components wrapped with styled-components for enhanced styling while preserving functionality
-
-### Added
+#### Mobile UI Improvements for Picker and Edit Message Modal (Issue #686)
+- **Backend UpdateMessage mutation** (`config/graphql/conversation_mutations.py:455-619`):
+  - New `UpdateMessageMutation` for editing existing thread messages
+  - Validates CRUD permission on message or moderator status
+  - Re-parses mentions when content is updated (with race condition protection - parsing happens before DB modifications)
+  - Triggers agent responses for newly mentioned agents
+  - Documented behavior: agents respond to ALL mentions, including re-mentions in edited messages
+- **Frontend UPDATE_MESSAGE mutation** (`frontend/src/graphql/mutations.ts:2726-2760`): GraphQL mutation with TypeScript types
+- **EditMessageModal component** (`frontend/src/components/threads/EditMessageModal.tsx`):
+  - Full-screen modal on mobile for better touch interaction
+  - Uses MessageComposer for consistent editing experience
+  - Safe area insets for notched devices
+  - Loading states and error handling
+  - Custom unsaved changes confirmation modal (replaces browser `window.confirm()`)
+  - Debounced content updates (150ms) for improved performance during typing
+  - XSS protection documented: uses MarkdownMessageRenderer with `rehype-sanitize`
+- **Message actions dropdown in MessageItem** (`frontend/src/components/threads/MessageItem.tsx:219-432`):
+  - Desktop: Standard dropdown menu with Edit/Delete options
+  - Mobile: Bottom sheet style for thumb-friendly interaction
+  - Inline delete confirmation with mobile-optimized buttons
+  - Backdrop overlay on mobile for visual focus
 
 #### Improved Inline Reference Cards for Mentions (Issue #689)
 - **Annotation mentions** now display the first ~24 characters of annotation text instead of cryptic IDs
@@ -88,11 +88,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### Upload Modal Mobile Responsiveness (Issue #696)
+- **DocumentUploadModal** (`frontend/src/components/widgets/modals/DocumentUploadModal.tsx`): Refactored to use new styled components with responsive grid layout for edit step
+- **BulkUploadModal** (`frontend/src/components/widgets/modals/BulkUploadModal.tsx`): Complete visual overhaul with styled drop zone, file size display, and responsive layout
+- **DocumentUploadList** (`frontend/src/components/documents/DocumentUploadList.tsx`): New drop zone styling with drag-active feedback and pulse animation
+- **DocumentListItem** (`frontend/src/components/documents/DocumentListItem.tsx`): Improved file list items with proper touch targets (56px min-height, 64px on mobile), status icons, and delete button styling
+- **Mobile-first breakpoints**: All upload modal components now have explicit breakpoints at 480px (mobile) and 768px (tablet)
+- **Touch target compliance**: All interactive elements meet 44px minimum touch target size for mobile accessibility
+- **Responsive action buttons**: Modal actions stack vertically on mobile for full-width tappable buttons
+- **Custom scrollbar styling**: File list has styled scrollbars for visual polish
+
 #### MentionChip Component Improvements (Issue #689)
 - Extended `MentionChip` to support ANNOTATION type with green gradient styling
 - Added default cases to all switch statements for TypeScript exhaustiveness checking
 - Refactored `handleClick` to `handleActivation` accepting `React.MouseEvent | React.KeyboardEvent` union type (fixes unsafe `as any` assertion)
 - Sanitized user-generated annotation text before display to prevent XSS
+
+### Fixed
+
+#### Mobile Layout for Picker Components (Issue #686)
+- **Picker keyboard handling** (`MentionPicker.tsx:22-54`, `UnifiedMentionPicker.tsx:25-57`):
+  - Added CSS environment variables (`env(safe-area-inset-bottom)`) for keyboard-aware positioning
+  - Smooth slide-up animation for picker appearance
+  - Max-height constraints using `min()` to prevent overflow on small screens
+- **Touch targets** (`MentionPicker.tsx:83-108`, `UnifiedMentionPicker.tsx:96-108`):
+  - Increased touch target size (52-60px min-height) for easier selection
+  - Larger font size (15px) on mobile for readability
+  - Mobile-specific border radius for rounded corners
+- **MessageComposer mobile improvements** (`MessageComposer.tsx:48-93`):
+  - Larger toolbar button touch targets (40x40px) on mobile
+  - Increased gap between buttons for easier tapping
+
+### Technical Details
+
+#### Message Editing Tests (Issue #686)
+- **New test for parent relationship preservation** (`opencontractserver/tests/test_conversation_mutations_graphql.py:1071-1168`):
+  - Verifies that editing a reply message preserves its `parent_message` field
+  - Ensures thread structure integrity when users edit replies
+  - Part of comprehensive UpdateMessage mutation test suite
+
+#### Upload Modal Architecture
+- Styled-components with transient props (`$active`, `$selected`, `$status`) to prevent DOM attribute warnings
+- CSS keyframe animations for drag-active pulse effect and fade-in modal transitions
+- Gradient backgrounds using `linear-gradient(135deg, #667eea 0%, #764ba2 100%)` for visual consistency
+- Semantic UI React components wrapped with styled-components for enhanced styling while preserving functionality
 
 #### Permanent Deletion (Empty Trash) Functionality (PR #707)
 - **Core deletion logic** (`opencontractserver/documents/versioning.py:617-760`):

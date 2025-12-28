@@ -2359,6 +2359,9 @@ export const GET_THREAD_DETAIL = gql`
         # Soft delete
         deletedAt
 
+        # Permissions (for edit/delete UI - Issue #686)
+        myPermissions
+
         # Mentioned resources (Issue #623, #689)
         mentionedResources {
           type
