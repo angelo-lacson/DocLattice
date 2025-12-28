@@ -10,6 +10,22 @@ All moderation actions use existing model methods which handle:
 - Permission checking (can_moderate)
 - Audit logging (ModerationAction creation)
 - Proper state management
+
+## Permission Model for Automated Actions
+
+When tools are called by agents (automated corpus actions), the `moderator_id`
+should be a user with moderation rights on the thread's corpus. The model
+methods enforce permission checks via `can_moderate()` which grants access to:
+- Superusers
+- Thread creator
+- Corpus owner
+- Designated corpus moderators
+
+For automated actions triggered by corpus actions, the corpus owner (who
+configured the action) inherently has moderation rights, so passing their
+user ID as moderator_id will always succeed. If a different user ID is passed,
+the action will fail with PermissionError if they lack moderation rights.
+This is intentional fail-closed security behavior.
 """
 
 from __future__ import annotations
@@ -20,6 +36,10 @@ from typing import Any
 from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
+
+
+# Default limit for thread messages retrieval
+DEFAULT_THREAD_MESSAGE_LIMIT = 20
 
 
 # --------------------------------------------------------------------------- #
@@ -83,7 +103,7 @@ async def aget_thread_context(thread_id: int) -> dict[str, Any]:
 
 def get_thread_messages(
     thread_id: int,
-    limit: int = 20,
+    limit: int = DEFAULT_THREAD_MESSAGE_LIMIT,
     include_deleted: bool = False,
 ) -> list[dict[str, Any]]:
     """
@@ -130,7 +150,7 @@ def get_thread_messages(
 
 async def aget_thread_messages(
     thread_id: int,
-    limit: int = 20,
+    limit: int = DEFAULT_THREAD_MESSAGE_LIMIT,
     include_deleted: bool = False,
 ) -> list[dict[str, Any]]:
     """Async version of get_thread_messages."""

@@ -138,7 +138,9 @@ def trigger_corpus_actions_on_message_creation(sender, instance, created, **kwar
     if hasattr(instance, "_skip_signals"):
         return
 
-    # Get the conversation - use select_related for efficiency
+    # Access the conversation FK - this may trigger a single DB query if not already
+    # loaded on the instance. This is acceptable since signals fire once per message
+    # save, not in a loop (so it's not an N+1 issue).
     conversation = message.conversation
 
     # Only process messages in discussion threads
