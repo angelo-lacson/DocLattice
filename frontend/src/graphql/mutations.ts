@@ -2164,6 +2164,11 @@ export const CREATE_CORPUS_ACTION = gql`
     $agentConfigId: ID
     $agentPrompt: String
     $preAuthorizedTools: [String]
+    $createAgentInline: Boolean
+    $inlineAgentName: String
+    $inlineAgentDescription: String
+    $inlineAgentInstructions: String
+    $inlineAgentTools: [String]
     $disabled: Boolean
     $runOnAllCorpuses: Boolean
   ) {
@@ -2176,6 +2181,11 @@ export const CREATE_CORPUS_ACTION = gql`
       agentConfigId: $agentConfigId
       agentPrompt: $agentPrompt
       preAuthorizedTools: $preAuthorizedTools
+      createAgentInline: $createAgentInline
+      inlineAgentName: $inlineAgentName
+      inlineAgentDescription: $inlineAgentDescription
+      inlineAgentInstructions: $inlineAgentInstructions
+      inlineAgentTools: $inlineAgentTools
       disabled: $disabled
       runOnAllCorpuses: $runOnAllCorpuses
     ) {
@@ -2216,6 +2226,12 @@ export interface CreateCorpusActionInput {
   agentConfigId?: string;
   agentPrompt?: string;
   preAuthorizedTools?: string[];
+  // Inline agent creation parameters
+  createAgentInline?: boolean;
+  inlineAgentName?: string;
+  inlineAgentDescription?: string;
+  inlineAgentInstructions?: string;
+  inlineAgentTools?: string[];
   disabled?: boolean;
   runOnAllCorpuses?: boolean;
 }
