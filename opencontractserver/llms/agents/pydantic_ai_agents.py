@@ -2358,8 +2358,23 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             list_docs_tool_wrapped,
             ask_doc_tool_wrapped,
         ]
+
+        # Default tool names to filter out duplicates
+        default_tool_names = {
+            "get_corpus_description",
+            "update_corpus_description",
+            "list_documents",
+            "ask_document",
+        }
+
         if tools:
-            effective_tools.extend(tools)
+            # Filter out tools that would conflict with default tools
+            for tool in tools:
+                tool_name = getattr(tool, "name", None) or getattr(
+                    tool, "__name__", None
+                )
+                if tool_name not in default_tool_names:
+                    effective_tools.append(tool)
 
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,

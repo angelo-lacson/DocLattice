@@ -397,10 +397,26 @@ class AwardBadgeMutation(graphene.Mutation):
 
         try:
             badge_pk = from_global_id(badge_id)[1]
-            badge = Badge.objects.get(pk=badge_pk)
+            # IDOR FIX: Get badge, but don't reveal existence vs. permission difference
+            try:
+                badge = Badge.objects.get(pk=badge_pk)
+            except Badge.DoesNotExist:
+                return AwardBadgeMutation(
+                    ok=False,
+                    message="Badge not found",
+                    user_badge=None,
+                )
 
             recipient_pk = from_global_id(user_id)[1]
-            recipient = User.objects.get(pk=recipient_pk)
+            # IDOR FIX: Get user, but don't reveal existence vs. permission difference
+            try:
+                recipient = User.objects.get(pk=recipient_pk)
+            except User.DoesNotExist:
+                return AwardBadgeMutation(
+                    ok=False,
+                    message="User not found",
+                    user_badge=None,
+                )
 
             corpus = None
             if corpus_id:
@@ -416,6 +432,7 @@ class AwardBadgeMutation(graphene.Mutation):
                     )
 
             # Permission check: must be moderator/owner of the corpus or superuser
+            # IDOR FIX: Return same "Badge not found" message as above to prevent enumeration
             if badge.badge_type == "CORPUS" and badge.corpus:
                 # For corpus badges, check corpus permissions
                 if not awarder.is_superuser and not user_has_permission_for_obj(
@@ -424,11 +441,17 @@ class AwardBadgeMutation(graphene.Mutation):
                     PermissionTypes.CRUD,
                     include_group_permissions=True,
                 ):
-                    raise GraphQLError(
-                        "You must be a corpus owner/moderator to award this badge."
+                    return AwardBadgeMutation(
+                        ok=False,
+                        message="Badge not found",
+                        user_badge=None,
                     )
             elif not awarder.is_superuser:
-                raise GraphQLError("You must be a superuser to award global badges.")
+                return AwardBadgeMutation(
+                    ok=False,
+                    message="Badge not found",
+                    user_badge=None,
+                )
 
             # Check if badge was already awarded
             existing = UserBadge.objects.filter(
@@ -455,24 +478,6 @@ class AwardBadgeMutation(graphene.Mutation):
                 user_badge=user_badge,
             )
 
-        except Badge.DoesNotExist:
-            return AwardBadgeMutation(
-                ok=False,
-                message="Badge not found",
-                user_badge=None,
-            )
-        except User.DoesNotExist:
-            return AwardBadgeMutation(
-                ok=False,
-                message="User not found",
-                user_badge=None,
-            )
-        except Corpus.DoesNotExist:
-            return AwardBadgeMutation(
-                ok=False,
-                message="Corpus not found",
-                user_badge=None,
-            )
         except Exception as e:
             logger.exception("Error awarding badge")
             return AwardBadgeMutation(
@@ -498,9 +503,19 @@ class RevokeBadgeMutation(graphene.Mutation):
 
         try:
             user_badge_pk = from_global_id(user_badge_id)[1]
-            user_badge = UserBadge.objects.select_related("badge").get(pk=user_badge_pk)
+            # IDOR FIX: Get user badge, but don't reveal existence vs. permission difference
+            try:
+                user_badge = UserBadge.objects.select_related("badge").get(
+                    pk=user_badge_pk
+                )
+            except UserBadge.DoesNotExist:
+                return RevokeBadgeMutation(
+                    ok=False,
+                    message="User badge not found",
+                )
 
             # Permission check
+            # IDOR FIX: Return same "User badge not found" message as above to prevent enumeration
             badge = user_badge.badge
             if badge.badge_type == "CORPUS" and badge.corpus:
                 if not user.is_superuser and not user_has_permission_for_obj(
@@ -509,11 +524,15 @@ class RevokeBadgeMutation(graphene.Mutation):
                     PermissionTypes.CRUD,
                     include_group_permissions=True,
                 ):
-                    raise GraphQLError(
-                        "You must be a corpus owner/moderator to revoke this badge."
+                    return RevokeBadgeMutation(
+                        ok=False,
+                        message="User badge not found",
                     )
             elif not user.is_superuser:
-                raise GraphQLError("You must be a superuser to revoke global badges.")
+                return RevokeBadgeMutation(
+                    ok=False,
+                    message="User badge not found",
+                )
 
             user_badge.delete()
 
@@ -522,11 +541,6 @@ class RevokeBadgeMutation(graphene.Mutation):
                 message="Badge revoked successfully",
             )
 
-        except UserBadge.DoesNotExist:
-            return RevokeBadgeMutation(
-                ok=False,
-                message="User badge not found",
-            )
         except Exception as e:
             logger.exception("Error revoking badge")
             return RevokeBadgeMutation(
