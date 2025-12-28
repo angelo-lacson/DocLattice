@@ -66,27 +66,41 @@ def trigger_corpus_actions_on_thread_creation(sender, instance, created, **kwarg
     Uses transaction.on_commit to ensure the thread is fully persisted
     before queuing the async task.
     """
-    if not created:
-        return
-
     # Import here to avoid circular imports
     from opencontractserver.conversations.models import ConversationTypeChoices
 
     conversation = instance
 
+    # Log entry point for debugging
+    logger.info(
+        f"[ThreadSignal] post_save fired: id={conversation.pk}, "
+        f"created={created}, type={conversation.conversation_type}, "
+        f"corpus_id={conversation.chat_with_corpus_id}"
+    )
+
+    if not created:
+        logger.debug("[ThreadSignal] Skipping - not a new conversation")
+        return
+
     # Only process discussion threads
     if conversation.conversation_type != ConversationTypeChoices.THREAD:
+        logger.debug(
+            f"[ThreadSignal] Skipping - not THREAD type "
+            f"(got {conversation.conversation_type})"
+        )
         return
 
     # Skip if no corpus linkage
     if not conversation.chat_with_corpus_id:
-        logger.debug(
-            f"Thread {conversation.pk} has no corpus linkage, skipping corpus actions"
+        logger.info(
+            f"[ThreadSignal] Thread {conversation.pk} has no corpus linkage, "
+            f"skipping corpus actions"
         )
         return
 
     # Skip signal during tests/fixtures
     if hasattr(instance, "_skip_signals"):
+        logger.debug("[ThreadSignal] Skipping - _skip_signals set")
         return
 
     def queue_thread_action():
@@ -119,9 +133,6 @@ def trigger_corpus_actions_on_message_creation(sender, instance, created, **kwar
 
     Uses transaction.on_commit to ensure the message is fully persisted.
     """
-    if not created:
-        return
-
     # Import here to avoid circular imports
     from opencontractserver.conversations.models import (
         ConversationTypeChoices,
@@ -130,12 +141,27 @@ def trigger_corpus_actions_on_message_creation(sender, instance, created, **kwar
 
     message = instance
 
+    # Log entry point for debugging
+    logger.info(
+        f"[MessageSignal] post_save fired: id={message.pk}, "
+        f"created={created}, type={message.msg_type}, "
+        f"conversation_id={message.conversation_id}"
+    )
+
+    if not created:
+        logger.debug("[MessageSignal] Skipping - not a new message")
+        return
+
     # Only process human messages (avoid infinite loops with agent messages)
     if message.msg_type != MessageTypeChoices.HUMAN:
+        logger.debug(
+            f"[MessageSignal] Skipping - not HUMAN type (got {message.msg_type})"
+        )
         return
 
     # Skip signal during tests/fixtures
     if hasattr(instance, "_skip_signals"):
+        logger.debug("[MessageSignal] Skipping - _skip_signals set")
         return
 
     # Access the conversation FK - this may trigger a single DB query if not already
@@ -145,12 +171,17 @@ def trigger_corpus_actions_on_message_creation(sender, instance, created, **kwar
 
     # Only process messages in discussion threads
     if conversation.conversation_type != ConversationTypeChoices.THREAD:
+        logger.debug(
+            f"[MessageSignal] Skipping - conversation not THREAD type "
+            f"(got {conversation.conversation_type})"
+        )
         return
 
     # Skip if no corpus linkage
     if not conversation.chat_with_corpus_id:
-        logger.debug(
-            f"Thread {conversation.pk} has no corpus linkage, skipping corpus actions"
+        logger.info(
+            f"[MessageSignal] Thread {conversation.pk} has no corpus linkage, "
+            f"skipping corpus actions"
         )
         return
 
