@@ -204,8 +204,8 @@ test.describe("TrashFolderView", () => {
 
     await page.waitForSelector('text="Trash"', { timeout: 10000 });
 
-    // Click back button
-    await page.getByText("Back to Folders").click();
+    // Click back button (has title "Back to Folders" and text "Back")
+    await page.getByRole("button", { name: /Back/ }).click();
 
     expect(backCalled).toBe(true);
   });

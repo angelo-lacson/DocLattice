@@ -125,6 +125,11 @@ const ActionBar = styled.div`
       padding: 0.5em 0.8em;
       font-size: 12px;
     }
+
+    /* Hide button text on mobile, show only icon */
+    .ui.button .hide-mobile-text {
+      display: none;
+    }
   }
 `;
 
@@ -425,6 +430,14 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     const pathsToRestore = selectedDocs.filter((doc) => doc.document?.id);
     const skippedCount = selectedDocs.length - pathsToRestore.length;
 
+    // Log skipped documents in development to help identify data integrity issues
+    if (skippedCount > 0 && process.env.NODE_ENV === "development") {
+      console.warn(
+        "Skipped documents with null/missing data:",
+        selectedDocs.filter((doc) => !doc.document?.id)
+      );
+    }
+
     if (pathsToRestore.length === 0) {
       setRestoreError(
         "Selected documents cannot be restored: document data is missing or corrupted"
@@ -613,6 +626,12 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
           )}
         </Title>
         <ActionBar>
+          {onBack && (
+            <Button basic onClick={onBack} title="Back to Folders">
+              <Icon name="arrow left" />
+              <span className="hide-mobile-text">Back</span>
+            </Button>
+          )}
           {deletedDocuments.length > 0 && (
             <Button
               basic
@@ -623,7 +642,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               title="Permanently delete all items in trash"
             >
               <Icon name="trash" />
-              Empty Trash
+              <span className="hide-mobile-text">Empty Trash</span>
             </Button>
           )}
         </ActionBar>
@@ -719,7 +738,24 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                   onClick={() => handleSelectDocument(docPath.id)}
                 >
                   <CardHeader>
-                    {docPath.document && renderThumbnail(docPath.document)}
+                    {docPath.document ? (
+                      renderThumbnail(docPath.document)
+                    ) : (
+                      <Thumbnail>
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            background: "#f8fafc",
+                          }}
+                        />
+                        <img
+                          src={fallback_doc_icon}
+                          alt="Document"
+                          className="fallback-icon"
+                        />
+                      </Thumbnail>
+                    )}
                     <CardTitle>
                       <h4>{docPath.document?.title || "Untitled Document"}</h4>
                       <span className="file-type">
