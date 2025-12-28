@@ -296,9 +296,15 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     // Should show moderation-specific info message
     await expect(page.locator("text=automated moderation")).toBeVisible();
-    await expect(page.locator("text=Available moderation tools")).toBeVisible();
-    await expect(page.locator("text=delete_message")).toBeVisible();
-    await expect(page.locator("text=lock_thread")).toBeVisible();
+    // Check that the Moderation Tools label with count is visible
+    await expect(
+      page.locator("label:has-text('Moderation Tools')")
+    ).toBeVisible();
+    // Use .first() to avoid strict mode violations for text that appears in multiple places
+    await expect(page.locator("text=delete message").first()).toBeVisible();
+    await expect(
+      page.locator("text=Lock thread to prevent").first()
+    ).toBeVisible();
 
     await component.unmount();
   });
@@ -659,6 +665,10 @@ test.describe("CreateCorpusActionModal - Form Submission", () => {
 
     // Wait for agent section
     await page.waitForTimeout(500);
+
+    // Switch from "Quick Create Moderator" to "Use Existing Agent" mode
+    await page.locator("text=Use Existing Agent").click();
+    await page.waitForTimeout(300);
 
     // Select agent config
     const agentDropdown = page.locator(

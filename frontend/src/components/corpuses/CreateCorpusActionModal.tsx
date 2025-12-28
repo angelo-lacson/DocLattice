@@ -169,6 +169,10 @@ export const CreateCorpusActionModal: React.FC<
       setDisabled(actionToEdit.disabled);
       setRunOnAllCorpuses(actionToEdit.runOnAllCorpuses);
 
+      // In edit mode, always use existing agent mode (not inline creation)
+      // since the action already has an agent configuration
+      setUseInlineAgent(false);
+
       // Determine action type and set appropriate selection
       if (actionToEdit.agentConfig) {
         setActionType("agent");
