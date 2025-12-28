@@ -6,6 +6,10 @@ import { toast } from "react-toastify";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { useCacheManager } from "../../hooks/useCacheManager";
 
+// LocalStorage key to track if user has ever successfully authenticated.
+// Used to distinguish first-time visitors from returning users with expired sessions.
+const HAS_AUTHENTICATED_KEY = "oc_has_authenticated";
+
 interface AuthGateProps {
   children: React.ReactNode;
   useAuth0: boolean;
@@ -65,6 +69,18 @@ export const AuthGate: React.FC<AuthGateProps> = ({
         .then(async (token) => {
           if (token) {
             console.log("[AuthGate] Token obtained successfully");
+
+            // Mark that user has successfully authenticated at least once.
+            // This flag helps distinguish first-time visitors from returning users
+            // when handling "login_required" errors from Auth0.
+            try {
+              localStorage.setItem(HAS_AUTHENTICATED_KEY, "true");
+            } catch (e) {
+              // localStorage may be unavailable in some contexts
+              console.warn(
+                "[AuthGate] Could not set auth flag in localStorage"
+              );
+            }
 
             // RACE CONDITION PREVENTION: Auth state MUST be set synchronously BEFORE
             // cache clear. clearStore() is async and may trigger Apollo query refetches.
@@ -126,25 +142,46 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             error.message?.toLowerCase().includes("login required");
 
           if (needsInteraction) {
-            // User needs to re-authenticate - redirect to Auth0 login
-            console.log(
-              "[AuthGate] User interaction required, redirecting to login..."
-            );
-            toast.info("Please log in to continue.", {
-              autoClose: 2000,
-            });
+            // Check if user has previously authenticated successfully.
+            // This distinguishes first-time visitors from returning users with expired sessions.
+            let hasAuthenticatedBefore = false;
+            try {
+              hasAuthenticatedBefore =
+                localStorage.getItem(HAS_AUTHENTICATED_KEY) === "true";
+            } catch (e) {
+              // localStorage may be unavailable
+            }
 
-            // Redirect to Auth0 login, preserving current path
-            loginWithRedirect({
-              authorizationParams: {
-                audience: audience || undefined,
-                scope: "openid profile email",
-                redirect_uri: window.location.origin,
-              },
-              appState: {
-                returnTo: window.location.pathname + window.location.search,
-              },
-            });
+            if (hasAuthenticatedBefore) {
+              // Returning user with expired session - redirect to Auth0 login
+              console.log(
+                "[AuthGate] Returning user needs to re-authenticate, redirecting to login..."
+              );
+              toast.info("Please log in to continue.", {
+                autoClose: 2000,
+              });
+
+              // Redirect to Auth0 login, preserving current path
+              loginWithRedirect({
+                authorizationParams: {
+                  audience: audience || undefined,
+                  scope: "openid profile email",
+                  redirect_uri: window.location.origin,
+                },
+                appState: {
+                  returnTo: window.location.pathname + window.location.search,
+                },
+              });
+            } else {
+              // First-time visitor - fall back to anonymous mode instead of prompting login
+              console.log(
+                "[AuthGate] First-time visitor, defaulting to anonymous mode"
+              );
+              authToken("");
+              userObj(null);
+              authStatusVar("ANONYMOUS");
+              setAuthInitialized(true);
+            }
           } else {
             // Other error - fall back to anonymous mode
             console.error("[AuthGate] Auth error, falling back to anonymous");

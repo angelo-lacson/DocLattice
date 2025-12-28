@@ -52,6 +52,9 @@ const baseAuth0Props = {
   isReadOnly: false,
 };
 
+// Key used by AuthGate to track if user has authenticated before
+const HAS_AUTHENTICATED_KEY = "oc_has_authenticated";
+
 describe("AuthGate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -59,6 +62,8 @@ describe("AuthGate", () => {
     authToken("");
     authStatusVar("LOADING");
     userObj(null);
+    // Clear localStorage before each test
+    localStorage.removeItem(HAS_AUTHENTICATED_KEY);
   });
 
   describe("Auth0 Mode", () => {
@@ -180,13 +185,16 @@ describe("AuthGate", () => {
       expect(userObj()).toBeNull();
     });
 
-    it("preserves current path when redirecting to login on login_required error", async () => {
+    it("redirects returning user to login on login_required error", async () => {
       const mockUser = { email: "test@example.com", sub: "user123" };
       const mockLoginWithRedirect = vi.fn();
       const mockGetAccessTokenSilently = vi.fn().mockRejectedValue({
         error: "login_required",
         message: "Login required",
       });
+
+      // Set flag indicating user has previously authenticated
+      localStorage.setItem(HAS_AUTHENTICATED_KEY, "true");
 
       // Mock window.location
       const originalLocation = window.location;
@@ -233,6 +241,78 @@ describe("AuthGate", () => {
 
       // Restore window.location
       (window as any).location = originalLocation;
+    });
+
+    it("defaults first-time visitor to anonymous on login_required error", async () => {
+      const mockUser = { email: "test@example.com", sub: "user123" };
+      const mockLoginWithRedirect = vi.fn();
+      const mockGetAccessTokenSilently = vi.fn().mockRejectedValue({
+        error: "login_required",
+        message: "Login required",
+      });
+
+      // Ensure no previous auth flag exists (first-time visitor)
+      localStorage.removeItem(HAS_AUTHENTICATED_KEY);
+
+      const mockUseAuth0 = useAuth0 as MockedFunction<typeof useAuth0>;
+      mockUseAuth0.mockReturnValue({
+        ...baseAuth0Props,
+        isLoading: false,
+        isAuthenticated: true,
+        user: mockUser,
+        getAccessTokenSilently: mockGetAccessTokenSilently,
+        loginWithRedirect: mockLoginWithRedirect,
+      });
+
+      render(
+        <AuthGate useAuth0={true} audience="test-audience">
+          <div>Protected Content</div>
+        </AuthGate>
+      );
+
+      // Wait for auth to complete - should render content as anonymous
+      await waitFor(() => {
+        expect(screen.getByText("Protected Content")).toBeInTheDocument();
+      });
+
+      // Verify loginWithRedirect was NOT called for first-time visitor
+      expect(mockLoginWithRedirect).not.toHaveBeenCalled();
+
+      // Verify anonymous state
+      expect(authToken()).toBe("");
+      expect(authStatusVar()).toBe("ANONYMOUS");
+      expect(userObj()).toBeNull();
+    });
+
+    it("sets auth flag on successful authentication", async () => {
+      const mockToken = "test-token-123";
+      const mockUser = { email: "test@example.com", sub: "user123" };
+      const mockGetAccessTokenSilently = vi.fn().mockResolvedValue(mockToken);
+
+      // Ensure no previous auth flag exists
+      localStorage.removeItem(HAS_AUTHENTICATED_KEY);
+
+      const mockUseAuth0 = useAuth0 as MockedFunction<typeof useAuth0>;
+      mockUseAuth0.mockReturnValue({
+        isLoading: false,
+        isAuthenticated: true,
+        user: mockUser,
+        ...baseAuth0Props,
+        getAccessTokenSilently: mockGetAccessTokenSilently,
+      });
+
+      render(
+        <AuthGate useAuth0={true} audience="test-audience">
+          <div>Protected Content</div>
+        </AuthGate>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Protected Content")).toBeInTheDocument();
+      });
+
+      // Verify auth flag was set
+      expect(localStorage.getItem(HAS_AUTHENTICATED_KEY)).toBe("true");
     });
   });
 
