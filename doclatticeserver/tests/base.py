@@ -389,7 +389,8 @@ class BaseFixtureTestCase(TransactionTestCase):
                 summary_abs_path_in_media.parent.mkdir(parents=True, exist_ok=True)
 
                 excerpt: str = ""
-                txt_rel_path: str | None = getattr(doc, "txt_extract_file", None)
+                txt_field = getattr(doc, "txt_extract_file", None)
+                txt_rel_path: str | None = str(txt_field.name) if txt_field else None
 
                 if txt_rel_path:  # txt_rel_path should be a media-relative path now
                     txt_abs_path_in_media = Path(settings.MEDIA_ROOT) / txt_rel_path

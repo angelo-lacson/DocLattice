@@ -442,7 +442,9 @@ class CreateMetadataColumn(graphene.Mutation):
             corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
 
             # Check permissions
-            if not user_has_permission_for_obj(user, corpus, PermissionTypes.UPDATE):
+            if not user_has_permission_for_obj(
+                user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
+            ):
                 return CreateMetadataColumn(
                     ok=False, message="You don't have permission to update this corpus"
                 )
@@ -540,7 +542,9 @@ class UpdateMetadataColumn(graphene.Mutation):
             column = Column.objects.get(pk=from_global_id(column_id)[1])
 
             # Check permissions
-            if not user_has_permission_for_obj(user, column, PermissionTypes.UPDATE):
+            if not user_has_permission_for_obj(
+                user, column, PermissionTypes.UPDATE, include_group_permissions=True
+            ):
                 return UpdateMetadataColumn(
                     ok=False, message="You don't have permission to update this column"
                 )
@@ -614,7 +618,9 @@ class SetMetadataValue(graphene.Mutation):
             column = Column.objects.get(pk=from_global_id(column_id)[1])
 
             # Check permissions on document
-            if not user_has_permission_for_obj(user, document, PermissionTypes.UPDATE):
+            if not user_has_permission_for_obj(
+                user, document, PermissionTypes.UPDATE, include_group_permissions=True
+            ):
                 return SetMetadataValue(
                     ok=False,
                     message="You don't have permission to update this document",
@@ -690,7 +696,9 @@ class DeleteMetadataValue(graphene.Mutation):
             datacell = Datacell.objects.get(document=document, column=column)
 
             # Check permissions
-            if not user_has_permission_for_obj(user, datacell, PermissionTypes.DELETE):
+            if not user_has_permission_for_obj(
+                user, datacell, PermissionTypes.DELETE, include_group_permissions=True
+            ):
                 return DeleteMetadataValue(
                     ok=False,
                     message="You don't have permission to delete this metadata value",
@@ -1086,15 +1094,34 @@ class StartCorpusFork(graphene.Mutation):
             # copy these is to first filter by annotations for our corpus. Then, later, we'll use a dict to map old ids
             # for labels and docs to new obj ids
             corpus_pk = from_global_id(corpus_id)[1]
+
+            # Get corpus obj with visibility check
+            try:
+                corpus = Corpus.objects.visible_to_user(info.context.user).get(
+                    pk=corpus_pk
+                )
+            except Corpus.DoesNotExist:
+                return StartCorpusFork(
+                    ok=False, message="Corpus not found", new_corpus=None
+                )
+
+            # Verify READ permission
+            if not user_has_permission_for_obj(
+                info.context.user,
+                corpus,
+                PermissionTypes.READ,
+                include_group_permissions=True,
+            ):
+                return StartCorpusFork(
+                    ok=False, message="Corpus not found", new_corpus=None
+                )
+
             annotation_ids = list(
                 Annotation.objects.filter(
                     corpus_id=corpus_pk,
                     analysis__isnull=True,
                 ).values_list("id", flat=True)
             )
-
-            # Get corpus obj
-            corpus = Corpus.objects.get(pk=corpus_pk)
 
             # Get ids to related objects that need copyin'
             # Use new DocumentPath-based method to get active documents
@@ -1230,6 +1257,26 @@ class StartCorpusExport(graphene.Mutation):
             started = timezone.now()
             date_str = started.strftime("%m/%d/%Y, %H:%M:%S")
             corpus_pk = from_global_id(corpus_id)[1]
+
+            # Verify corpus visibility and READ permission before creating export
+            try:
+                corpus = Corpus.objects.visible_to_user(info.context.user).get(
+                    pk=corpus_pk
+                )
+            except Corpus.DoesNotExist:
+                return StartCorpusExport(
+                    ok=False, message="Corpus not found", export=None
+                )
+
+            if not user_has_permission_for_obj(
+                info.context.user,
+                corpus,
+                PermissionTypes.READ,
+                include_group_permissions=True,
+            ):
+                return StartCorpusExport(
+                    ok=False, message="Corpus not found", export=None
+                )
 
             export = UserExport.objects.create(
                 creator=info.context.user,
@@ -2289,14 +2336,26 @@ class RemoveRelationships(graphene.Mutation):
         relationship_ids = graphene.List(graphene.String)
 
     ok = graphene.Boolean()
+    message = graphene.String()
 
     @login_required
     def mutate(root, info, relationship_ids):
-        relation_pks = list(
-            map(lambda graphene_id: from_global_id(graphene_id)[1], relationship_ids)
-        )
-        Relationship.objects.filter(id__in=relation_pks).delete()
-        return RemoveRelationships(ok=True)
+        user = info.context.user
+        for graphene_id in relationship_ids:
+            pk = from_global_id(graphene_id)[1]
+            try:
+                relationship = Relationship.objects.get(pk=pk)
+                if not user_has_permission_for_obj(
+                    user,
+                    relationship,
+                    PermissionTypes.DELETE,
+                    include_group_permissions=True,
+                ):
+                    return RemoveRelationships(ok=False, message="Permission denied")
+                relationship.delete()
+            except Relationship.DoesNotExist:
+                return RemoveRelationships(ok=False, message="Relationship not found")
+        return RemoveRelationships(ok=True, message="Success")
 
 
 class UpdateRelationship(graphene.Mutation):
@@ -2459,9 +2518,11 @@ class UpdateRelations(graphene.Mutation):
         relationships = graphene.List(RelationInputType)
 
     ok = graphene.Boolean()
+    message = graphene.String()
 
     @login_required
     def mutate(root, info, relationships):
+        user = info.context.user
         for relationship in relationships:
             pk = from_global_id(relationship["id"])[1]
             source_pks = list(
@@ -2482,7 +2543,18 @@ class UpdateRelations(graphene.Mutation):
             corpus_pk = from_global_id(relationship["corpus_id"])[1]
             document_pk = from_global_id(relationship["document_id"])[1]
 
-            relationship = Relationship.objects.get(id=pk)
+            try:
+                relationship = Relationship.objects.get(id=pk)
+                if not user_has_permission_for_obj(
+                    user,
+                    relationship,
+                    PermissionTypes.UPDATE,
+                    include_group_permissions=True,
+                ):
+                    return UpdateRelations(ok=False, message="Permission denied")
+            except Relationship.DoesNotExist:
+                return UpdateRelations(ok=False, message="Relationship not found")
+
             relationship.relationship_label_id = relationship_label_pk
             relationship.document_id = document_pk
             relationship.corpus_id = corpus_pk
@@ -2491,7 +2563,7 @@ class UpdateRelations(graphene.Mutation):
             relationship.target_annotations.set(target_pks)
             relationship.source_annotations.set(source_pks)
 
-        return UpdateRelations(ok=True)
+        return UpdateRelations(ok=True, message="Success")
 
 
 class DeleteLabelMutation(DRFDeletion):
@@ -2516,6 +2588,7 @@ class DeleteMultipleLabelMutation(graphene.Mutation):
 
     @login_required
     def mutate(root, info, annotation_label_ids_to_delete):
+        user = info.context.user
         try:
             label_pks = list(
                 map(
@@ -2523,8 +2596,26 @@ class DeleteMultipleLabelMutation(graphene.Mutation):
                     annotation_label_ids_to_delete,
                 )
             )
-            labels = AnnotationLabel.objects.filter(pk__in=label_pks)
-            labels.delete()
+            for label_pk in label_pks:
+                try:
+                    label = AnnotationLabel.objects.get(pk=label_pk)
+                    # AnnotationLabel uses creator-based permissions (no guardian tables)
+                    # Only the creator or superuser can delete labels
+                    # read_only labels cannot be deleted (built-in system labels)
+                    if label.read_only:
+                        return DeleteMultipleLabelMutation(
+                            ok=False, message="Cannot delete read-only labels"
+                        )
+                    if not user.is_superuser and label.creator_id != user.id:
+                        # Use consistent error message for IDOR protection
+                        return DeleteMultipleLabelMutation(
+                            ok=False, message="Label not found"
+                        )
+                    label.delete()
+                except AnnotationLabel.DoesNotExist:
+                    return DeleteMultipleLabelMutation(
+                        ok=False, message="Label not found"
+                    )
             ok = True
             message = "Success"
 
@@ -2959,8 +3050,18 @@ class StartDocumentExtract(graphene.Mutation):
         doc_pk = from_global_id(document_id)[1]
         fieldset_pk = from_global_id(fieldset_id)[1]
 
-        document = Document.objects.get(pk=doc_pk)
-        fieldset = Fieldset.objects.get(pk=fieldset_pk)
+        # Verify visibility for both document and fieldset
+        try:
+            document = Document.objects.visible_to_user(info.context.user).get(
+                pk=doc_pk
+            )
+            fieldset = Fieldset.objects.visible_to_user(info.context.user).get(
+                pk=fieldset_pk
+            )
+        except (Document.DoesNotExist, Fieldset.DoesNotExist):
+            return StartDocumentExtract(
+                ok=False, message="Resource not found", obj=None
+            )
 
         corpus = None
         if corpus_id:
