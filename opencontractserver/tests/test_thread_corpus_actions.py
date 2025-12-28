@@ -8,10 +8,10 @@ These tests cover:
 4. Model field changes (nullable document, triggering FKs)
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import TestCase, TransactionTestCase
 
 from opencontractserver.agents.models import AgentActionResult, AgentConfiguration
 from opencontractserver.conversations.models import (
@@ -355,8 +355,8 @@ class TestThreadCorpusActionSignals(TransactionTestCase):
             creator=self.user,
         )
 
-        # Create a thread
-        thread = Conversation.objects.create(
+        # Create a thread (variable unused - created for signal side effect)
+        Conversation.objects.create(
             title="New Discussion",
             conversation_type=ConversationTypeChoices.THREAD,
             chat_with_corpus=self.corpus,
@@ -389,8 +389,8 @@ class TestThreadCorpusActionSignals(TransactionTestCase):
         thread._skip_signals = True
         thread.save()
 
-        # Create a message
-        msg = ChatMessage.objects.create(
+        # Create a message (variable unused - created for signal side effect)
+        ChatMessage.objects.create(
             conversation=thread,
             msg_type=MessageTypeChoices.HUMAN,
             content="Test message",
@@ -426,8 +426,8 @@ class TestThreadCorpusActionSignals(TransactionTestCase):
         # Reset mock after thread creation
         mock_on_commit.reset_mock()
 
-        # Create an LLM message (agent response)
-        msg = ChatMessage.objects.create(
+        # Create an LLM message (agent response - variable unused, created for side effect)
+        ChatMessage.objects.create(
             conversation=thread,
             msg_type=MessageTypeChoices.LLM,
             content="Agent response",

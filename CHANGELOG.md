@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive test coverage**:
   - Backend tests: `opencontractserver/tests/test_thread_corpus_actions.py`
   - Frontend tests: `frontend/tests/create-corpus-action-modal.ct.tsx`
+- **Database migrations**:
+  - `opencontractserver/agents/migrations/0008_add_thread_message_triggers.py`: Adds nullable `triggering_conversation` and `triggering_message` FKs to AgentActionResult, makes `document` nullable
+  - `opencontractserver/corpuses/migrations/0032_add_thread_message_triggers.py`: Adds nullable `conversation` and `message` FKs to CorpusActionExecution
 
 #### Use Cases Enabled
 - Automated content moderation (e.g., auto-delete messages with prohibited content)
