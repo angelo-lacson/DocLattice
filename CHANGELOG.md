@@ -5,7 +5,19 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-12-26
+## [Unreleased] - 2025-12-28
+
+### Added
+
+#### MCP (Model Context Protocol) Interface Proposal (Issue #387)
+- **Comprehensive MCP interface design** (`docs/mcp/mcp_interface_proposal.md`): Read-only access to public OpenContracts resources for AI assistants
+- **4 resource types**: corpus, document, annotation, thread - with hierarchical URI patterns
+- **7 tools for discovery and retrieval**: `list_public_corpuses`, `list_documents`, `get_document_text`, `list_annotations`, `search_corpus`, `list_threads`, `get_thread_messages`
+- **Anonymous user permission model**: Operates as AnonymousUser with automatic filtering to `is_public=True` resources
+- **Synchronous Django ORM implementation**: Uses `sync_to_async` wrapper pattern for MCP server integration
+- **Performance optimizations**: Uses existing `AnnotationQueryOptimizer`, `prefetch_related` for threaded messages, and proper pagination
+- **Robust URI parsing**: Regex-based URI parsing with slug validation to prevent injection attacks
+- **Helper function implementations**: Complete `format_*` functions for corpus, document, annotation, thread, and message formatting
 
 ### Fixed
 

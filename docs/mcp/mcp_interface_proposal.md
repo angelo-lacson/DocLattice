@@ -127,7 +127,8 @@ def get_document_resource(corpus_slug: str, document_slug: str) -> str:
                 .first())
 
     if not document:
-        raise NotFoundError()
+        from opencontractserver.documents.models import Document
+        raise Document.DoesNotExist(f"Document '{document_slug}' not found in corpus '{corpus_slug}'")
 
     # Read extracted text
     full_text = ""
@@ -242,8 +243,17 @@ def get_annotation_resource(corpus_slug: str, document_slug: str, annotation_id:
 **Implementation**:
 ```python
 def get_thread_resource(corpus_slug: str, thread_id: int, include_messages: bool = True) -> str:
-    anonymous = AnonymousUser()
+    """Get a discussion thread resource."""
+    import json
+    from django.contrib.auth.models import AnonymousUser
+    from opencontractserver.conversations.models import (
+        ChatMessage,
+        Conversation,
+        ConversationTypeChoices,
+    )
+    from opencontractserver.corpuses.models import Corpus
 
+    anonymous = AnonymousUser()
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
     # Get public thread in this corpus
@@ -257,15 +267,15 @@ def get_thread_resource(corpus_slug: str, thread_id: int, include_messages: bool
               .first())
 
     if not thread:
-        raise NotFoundError()
+        raise Conversation.DoesNotExist(f"Thread '{thread_id}' not found in corpus '{corpus_slug}'")
 
     data = {
         "id": str(thread.id),
-        "title": thread.title,
-        "description": thread.description,
+        "title": thread.title or "",
+        "description": thread.description or "",
         "is_locked": thread.is_locked,
         "is_pinned": thread.is_pinned,
-        "created_at": thread.created_at.isoformat(),
+        "created_at": thread.created.isoformat() if thread.created else None,
     }
 
     if include_messages:
@@ -274,12 +284,20 @@ def get_thread_resource(corpus_slug: str, thread_id: int, include_messages: bool
 
     return json.dumps(data)
 
-def build_threaded_messages(thread: Conversation, user) -> list:
-    """Build hierarchical message tree"""
-    messages = (ChatMessage.objects
-                .visible_to_user(user)
-                .filter(conversation=thread, parent_message__isnull=True)
-                .order_by('created_at'))
+
+def build_threaded_messages(thread, user) -> list:
+    """
+    Build hierarchical message tree.
+
+    Uses prefetch_related to avoid N+1 queries when accessing nested replies.
+    """
+    from opencontractserver.conversations.models import ChatMessage
+
+    messages = list(ChatMessage.objects
+                    .visible_to_user(user)
+                    .filter(conversation=thread, parent_message__isnull=True)
+                    .prefetch_related('replies__replies')  # Prefetch 2 levels
+                    .order_by('created_at'))
 
     return [format_message_with_replies(msg, user) for msg in messages]
 ```
@@ -316,23 +334,43 @@ Tools provide **dynamic operations** - they execute queries and return results.
 
 **Implementation**:
 ```python
-async def list_public_corpuses(limit: int = 20, offset: int = 0, search: str = "") -> dict:
-    anonymous = AnonymousUser()
+def list_public_corpuses(limit: int = 20, offset: int = 0, search: str = "") -> dict:
+    """
+    List public corpuses visible to anonymous users.
 
+    Note: This is a synchronous implementation. Django ORM operations are blocking,
+    so we keep this synchronous for simplicity. For async, wrap ORM calls with
+    sync_to_async from asgiref.sync.
+    """
+    from django.contrib.auth.models import AnonymousUser
+    from django.db.models import Q
+    from opencontractserver.corpuses.models import Corpus
+
+    anonymous = AnonymousUser()
     qs = Corpus.objects.visible_to_user(anonymous)
 
     if search:
-        from django.db.models import Q
         qs = qs.filter(
             Q(title__icontains=search) | Q(description__icontains=search)
         )
 
     total_count = qs.count()
-    corpuses = qs[offset:offset+limit]
+    corpuses = list(qs[offset:offset+limit])
 
     return {
         "total_count": total_count,
         "corpuses": [format_corpus_summary(c) for c in corpuses]
+    }
+
+
+def format_corpus_summary(corpus) -> dict:
+    """Format a corpus for list display."""
+    return {
+        "slug": corpus.slug,
+        "title": corpus.title,
+        "description": corpus.description or "",
+        "document_count": corpus.document_count(),
+        "created": corpus.created.isoformat(),
     }
 ```
 
@@ -364,14 +402,21 @@ async def list_public_corpuses(limit: int = 20, offset: int = 0, search: str = "
 
 **Implementation**:
 ```python
-async def list_documents(
+def list_documents(
     corpus_slug: str,
     limit: int = 50,
     offset: int = 0,
     search: str = ""
 ) -> dict:
+    """List documents in a public corpus."""
+    from django.contrib.auth.models import AnonymousUser
+    from django.db.models import Q
+    from opencontractserver.corpuses.models import Corpus
+    from opencontractserver.documents.models import Document
+
     anonymous = AnonymousUser()
 
+    # Get corpus (raises Corpus.DoesNotExist if not found or not public)
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
     # Get public documents in this corpus
@@ -380,17 +425,28 @@ async def list_documents(
           .filter(corpuses=corpus))
 
     if search:
-        from django.db.models import Q
         qs = qs.filter(
             Q(title__icontains=search) | Q(description__icontains=search)
         )
 
     total_count = qs.count()
-    documents = qs[offset:offset+limit]
+    documents = list(qs[offset:offset+limit])
 
     return {
         "total_count": total_count,
         "documents": [format_document_summary(d) for d in documents]
+    }
+
+
+def format_document_summary(document) -> dict:
+    """Format a document for list display."""
+    return {
+        "slug": document.slug,
+        "title": document.title,
+        "description": document.description or "",
+        "page_count": document.page_count,
+        "file_type": document.file_type or "unknown",
+        "created": document.created.isoformat(),
     }
 ```
 
@@ -414,10 +470,18 @@ async def list_documents(
 
 **Implementation**:
 ```python
-async def get_document_text(corpus_slug: str, document_slug: str) -> dict:
+def get_document_text(corpus_slug: str, document_slug: str) -> dict:
+    """Retrieve full extracted text from a document."""
+    from django.contrib.auth.models import AnonymousUser
+    from opencontractserver.corpuses.models import Corpus
+    from opencontractserver.documents.models import Document
+
     anonymous = AnonymousUser()
 
+    # Raises Corpus.DoesNotExist if not found/not public
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
+
+    # Raises Document.DoesNotExist if not found/not public
     document = (Document.objects
                 .visible_to_user(anonymous)
                 .get(corpuses=corpus, slug=document_slug))
@@ -468,7 +532,7 @@ async def get_document_text(corpus_slug: str, document_slug: str) -> dict:
 
 **Implementation**:
 ```python
-async def list_annotations(
+def list_annotations(
     corpus_slug: str,
     document_slug: str,
     page: int | None = None,
@@ -476,7 +540,12 @@ async def list_annotations(
     limit: int = 100,
     offset: int = 0
 ) -> dict:
+    """List annotations on a document with optional filtering."""
+    from django.contrib.auth.models import AnonymousUser
     from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
+    from opencontractserver.corpuses.models import Corpus
+    from opencontractserver.documents.models import Document
+
     anonymous = AnonymousUser()
 
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
@@ -499,11 +568,31 @@ async def list_annotations(
         qs = qs.filter(annotation_label__text=label_text)
 
     total_count = qs.count()
-    annotations = qs.select_related('annotation_label')[offset:offset+limit]
+    annotations = list(qs.select_related('annotation_label')[offset:offset+limit])
 
     return {
         "total_count": total_count,
         "annotations": [format_annotation(a) for a in annotations]
+    }
+
+
+def format_annotation(annotation) -> dict:
+    """Format an annotation for API response."""
+    label_data = None
+    if annotation.annotation_label:
+        label_data = {
+            "text": annotation.annotation_label.text,
+            "color": annotation.annotation_label.color or "#000000",
+            "label_type": annotation.annotation_label.label_type,
+        }
+
+    return {
+        "id": str(annotation.id),
+        "page": annotation.page,
+        "raw_text": annotation.raw_text or "",
+        "annotation_label": label_data,
+        "structural": annotation.structural,
+        "created": annotation.created.isoformat() if annotation.created else None,
     }
 ```
 
@@ -543,31 +632,34 @@ async def list_annotations(
 
 **Implementation**:
 ```python
-async def search_corpus(
+def search_corpus(
     corpus_slug: str,
     query: str,
     limit: int = 10
 ) -> dict:
-    from opencontractserver.utils.embeddings import generate_embeddings_from_text
-    anonymous = AnonymousUser()
+    """Semantic search within a corpus using vector embeddings."""
+    from django.contrib.auth.models import AnonymousUser
+    from django.db.models import Q
+    from opencontractserver.corpuses.models import Corpus
+    from opencontractserver.documents.models import Document
 
+    anonymous = AnonymousUser()
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
     # Generate query embedding using corpus's preferred embedder
+    # embed_text() returns (embedder_path, query_vector) tuple
     embedder_path, query_vector = corpus.embed_text(query)
 
     if not query_vector:
         # Fallback to text search if embeddings unavailable
-        return await text_search_fallback(corpus, query, limit)
+        return text_search_fallback(corpus, query, limit, anonymous)
 
-    # Search documents
-    doc_results = (Document.objects
-                   .visible_to_user(anonymous)
-                   .filter(corpuses=corpus)
-                   .search_by_embedding(query_vector, embedder_path, top_k=limit))
-
-    # Search annotations (requires custom implementation using Annotation embeddings)
-    # ann_results = search_annotations_by_embedding(corpus, document, query_vector, embedder_path, limit)
+    # Search documents using vector similarity
+    # search_by_embedding adds 'similarity_score' annotation
+    doc_results = list(Document.objects
+                       .visible_to_user(anonymous)
+                       .filter(corpuses=corpus)
+                       .search_by_embedding(query_vector, embedder_path, top_k=limit))
 
     # Combine and rank results
     results = []
@@ -582,6 +674,33 @@ async def search_corpus(
     return {
         "query": query,
         "results": results[:limit]
+    }
+
+
+def text_search_fallback(corpus, query: str, limit: int, user) -> dict:
+    """Fallback to text search when embeddings are unavailable."""
+    from django.db.models import Q
+    from opencontractserver.documents.models import Document
+
+    # Simple text search on title and description
+    documents = list(Document.objects
+                     .visible_to_user(user)
+                     .filter(corpuses=corpus)
+                     .filter(Q(title__icontains=query) | Q(description__icontains=query))
+                     [:limit])
+
+    results = []
+    for doc in documents:
+        results.append({
+            "type": "document",
+            "slug": doc.slug,
+            "title": doc.title,
+            "similarity_score": None,  # No similarity score for text search
+        })
+
+    return {
+        "query": query,
+        "results": results
     }
 ```
 
@@ -616,14 +735,20 @@ async def search_corpus(
 
 **Implementation**:
 ```python
-async def list_threads(
+def list_threads(
     corpus_slug: str,
     document_slug: str | None = None,
     limit: int = 20,
     offset: int = 0
 ) -> dict:
-    anonymous = AnonymousUser()
+    """List discussion threads in a corpus or document."""
+    from django.contrib.auth.models import AnonymousUser
+    from django.db.models import Count
+    from opencontractserver.conversations.models import Conversation, ConversationTypeChoices
+    from opencontractserver.corpuses.models import Corpus
+    from opencontractserver.documents.models import Document
 
+    anonymous = AnonymousUser()
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
     qs = (Conversation.objects
@@ -631,7 +756,8 @@ async def list_threads(
           .filter(
               conversation_type=ConversationTypeChoices.THREAD,
               chat_with_corpus=corpus
-          ))
+          )
+          .annotate(message_count=Count('messages')))  # Efficient count
 
     if document_slug:
         document = Document.objects.visible_to_user(anonymous).get(
@@ -643,11 +769,25 @@ async def list_threads(
     qs = qs.order_by('-is_pinned', '-updated_at')
 
     total_count = qs.count()
-    threads = qs[offset:offset+limit]
+    threads = list(qs[offset:offset+limit])
 
     return {
         "total_count": total_count,
         "threads": [format_thread_summary(t) for t in threads]
+    }
+
+
+def format_thread_summary(thread) -> dict:
+    """Format a thread for list display."""
+    return {
+        "id": str(thread.id),
+        "title": thread.title or "",
+        "description": thread.description or "",
+        "message_count": getattr(thread, 'message_count', 0),
+        "is_pinned": thread.is_pinned,
+        "is_locked": thread.is_locked,
+        "created_at": thread.created.isoformat() if thread.created else None,
+        "last_activity": thread.updated.isoformat() if thread.updated else None,
     }
 ```
 
@@ -686,6 +826,104 @@ async def list_threads(
 }
 ```
 
+**Implementation**:
+```python
+def get_thread_messages(
+    corpus_slug: str,
+    thread_id: int,
+    flatten: bool = False
+) -> dict:
+    """Retrieve all messages in a thread with hierarchical structure."""
+    from django.contrib.auth.models import AnonymousUser
+    from opencontractserver.conversations.models import (
+        ChatMessage,
+        Conversation,
+        ConversationTypeChoices,
+    )
+    from opencontractserver.corpuses.models import Corpus
+
+    anonymous = AnonymousUser()
+    corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
+
+    # Get the thread
+    thread = (Conversation.objects
+              .visible_to_user(anonymous)
+              .filter(
+                  conversation_type=ConversationTypeChoices.THREAD,
+                  chat_with_corpus=corpus,
+                  id=thread_id
+              )
+              .first())
+
+    if not thread:
+        from django.core.exceptions import ObjectDoesNotExist
+        raise ObjectDoesNotExist(f"Thread {thread_id} not found")
+
+    if flatten:
+        # Return all messages in flat list, ordered by created_at
+        messages = list(ChatMessage.objects
+                        .visible_to_user(anonymous)
+                        .filter(conversation=thread)
+                        .order_by('created_at'))
+        return {
+            "thread_id": str(thread.id),
+            "title": thread.title or "",
+            "messages": [format_message(m) for m in messages]
+        }
+
+    # Build hierarchical structure with prefetch to avoid N+1 queries
+    # Prefetch 2 levels of replies (adjust depth as needed)
+    root_messages = list(ChatMessage.objects
+                         .visible_to_user(anonymous)
+                         .filter(conversation=thread, parent_message__isnull=True)
+                         .prefetch_related('replies__replies')
+                         .order_by('created_at'))
+
+    return {
+        "thread_id": str(thread.id),
+        "title": thread.title or "",
+        "messages": [format_message_with_replies(m, anonymous) for m in root_messages]
+    }
+
+
+def format_message(message) -> dict:
+    """Format a single message without replies."""
+    return {
+        "id": str(message.id),
+        "content": message.content,
+        "msg_type": message.msg_type,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+        "upvote_count": message.upvote_count,
+        "downvote_count": message.downvote_count,
+    }
+
+
+def format_message_with_replies(message, user, max_depth: int = 3, current_depth: int = 0) -> dict:
+    """
+    Format a message with its replies recursively.
+
+    Uses prefetched replies to avoid N+1 queries.
+    Limits recursion depth to prevent deeply nested structures.
+    """
+    formatted = format_message(message)
+
+    if current_depth >= max_depth:
+        # Stop recursion at max depth
+        formatted["replies"] = []
+        formatted["has_more_replies"] = message.replies.exists() if hasattr(message, 'replies') else False
+        return formatted
+
+    # Access prefetched replies (no additional queries)
+    replies = list(message.replies.all()) if hasattr(message, 'replies') else []
+
+    formatted["replies"] = [
+        format_message_with_replies(reply, user, max_depth, current_depth + 1)
+        for reply in replies
+    ]
+
+    return formatted
+```
+
 ## Implementation Structure
 
 ### Directory Layout
@@ -707,6 +945,11 @@ opencontractserver/
 ```python
 # opencontractserver/mcp/server.py
 import asyncio
+import json
+import re
+from typing import Optional
+
+from asgiref.sync import sync_to_async
 from mcp import Server, Resource, Tool
 from mcp.types import TextContent, EmbeddedResource
 
@@ -729,6 +972,46 @@ from .tools import (
 
 # Initialize MCP server
 mcp_server = Server("opencontracts")
+
+
+# URI parsing utilities with regex for safety
+class URIParser:
+    """Parse MCP resource URIs safely using regex patterns."""
+
+    # Slug pattern: alphanumeric and hyphens only (matches OpenContracts slug format)
+    SLUG_PATTERN = r'[A-Za-z0-9\-]+'
+
+    PATTERNS = {
+        'corpus': re.compile(rf'^corpus://({SLUG_PATTERN})$'),
+        'document': re.compile(rf'^document://({SLUG_PATTERN})/({SLUG_PATTERN})$'),
+        'annotation': re.compile(rf'^annotation://({SLUG_PATTERN})/({SLUG_PATTERN})/(\d+)$'),
+        'thread': re.compile(rf'^thread://({SLUG_PATTERN})/threads/(\d+)$'),
+    }
+
+    @classmethod
+    def parse_corpus(cls, uri: str) -> Optional[str]:
+        """Parse corpus URI, returns corpus_slug or None."""
+        match = cls.PATTERNS['corpus'].match(uri)
+        return match.group(1) if match else None
+
+    @classmethod
+    def parse_document(cls, uri: str) -> Optional[tuple[str, str]]:
+        """Parse document URI, returns (corpus_slug, document_slug) or None."""
+        match = cls.PATTERNS['document'].match(uri)
+        return (match.group(1), match.group(2)) if match else None
+
+    @classmethod
+    def parse_annotation(cls, uri: str) -> Optional[tuple[str, str, int]]:
+        """Parse annotation URI, returns (corpus_slug, document_slug, annotation_id) or None."""
+        match = cls.PATTERNS['annotation'].match(uri)
+        return (match.group(1), match.group(2), int(match.group(3))) if match else None
+
+    @classmethod
+    def parse_thread(cls, uri: str) -> Optional[tuple[str, int]]:
+        """Parse thread URI, returns (corpus_slug, thread_id) or None."""
+        match = cls.PATTERNS['thread'].match(uri)
+        return (match.group(1), int(match.group(2))) if match else None
+
 
 # Register resources
 @mcp_server.list_resources()
@@ -761,31 +1044,35 @@ async def list_resources() -> list[Resource]:
         )
     ]
 
+
 @mcp_server.read_resource()
 async def read_resource(uri: str) -> str:
-    """Resolve resource URI and return content"""
-    if uri.startswith("corpus://"):
-        corpus_slug = uri.replace("corpus://", "")
-        return await get_corpus_resource(corpus_slug)
+    """Resolve resource URI and return content."""
+    # Try corpus URI
+    corpus_slug = URIParser.parse_corpus(uri)
+    if corpus_slug:
+        return await sync_to_async(get_corpus_resource)(corpus_slug)
 
-    elif uri.startswith("document://"):
-        # Parse: document://{corpus_slug}/{document_slug}
-        parts = uri.replace("document://", "").split("/")
-        return await get_document_resource(parts[0], parts[1])
+    # Try document URI
+    doc_parts = URIParser.parse_document(uri)
+    if doc_parts:
+        corpus_slug, document_slug = doc_parts
+        return await sync_to_async(get_document_resource)(corpus_slug, document_slug)
 
-    elif uri.startswith("annotation://"):
-        # Parse: annotation://{corpus_slug}/{document_slug}/{annotation_id}
-        parts = uri.replace("annotation://", "").split("/")
-        return await get_annotation_resource(parts[0], parts[1], int(parts[2]))
+    # Try annotation URI
+    ann_parts = URIParser.parse_annotation(uri)
+    if ann_parts:
+        corpus_slug, document_slug, annotation_id = ann_parts
+        return await sync_to_async(get_annotation_resource)(corpus_slug, document_slug, annotation_id)
 
-    elif uri.startswith("thread://"):
-        # Parse: thread://{corpus_slug}/threads/{thread_id}
-        parts = uri.replace("thread://", "").split("/")
-        corpus_slug = parts[0]
-        thread_id = int(parts[2])  # Skip "threads" part
-        return await get_thread_resource(corpus_slug, thread_id)
+    # Try thread URI
+    thread_parts = URIParser.parse_thread(uri)
+    if thread_parts:
+        corpus_slug, thread_id = thread_parts
+        return await sync_to_async(get_thread_resource)(corpus_slug, thread_id)
 
-    raise ValueError(f"Unknown resource URI: {uri}")
+    raise ValueError(f"Invalid or unrecognized resource URI: {uri}")
+
 
 # Register tools
 @mcp_server.list_tools()
@@ -818,30 +1105,34 @@ async def list_tools() -> list[Tool]:
                 "required": ["corpus_slug"]
             }
         ),
-        # ... (register all other tools)
+        # ... (register all other tools - list_annotations, search_corpus, list_threads, get_thread_messages)
     ]
+
+
+# Map tool names to their implementations
+TOOL_HANDLERS = {
+    "list_public_corpuses": list_public_corpuses,
+    "list_documents": list_documents,
+    "get_document_text": get_document_text,
+    "list_annotations": list_annotations,
+    "search_corpus": search_corpus,
+    "list_threads": list_threads,
+    "get_thread_messages": get_thread_messages,
+}
+
 
 @mcp_server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Execute tool and return results"""
-    if name == "list_public_corpuses":
-        result = await list_public_corpuses(**arguments)
-    elif name == "list_documents":
-        result = await list_documents(**arguments)
-    elif name == "get_document_text":
-        result = await get_document_text(**arguments)
-    elif name == "list_annotations":
-        result = await list_annotations(**arguments)
-    elif name == "search_corpus":
-        result = await search_corpus(**arguments)
-    elif name == "list_threads":
-        result = await list_threads(**arguments)
-    elif name == "get_thread_messages":
-        result = await get_thread_messages(**arguments)
-    else:
+    """Execute tool and return results."""
+    handler = TOOL_HANDLERS.get(name)
+    if not handler:
         raise ValueError(f"Unknown tool: {name}")
 
+    # Run synchronous Django ORM handlers in thread pool
+    result = await sync_to_async(handler)(**arguments)
+
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
 
 # Entry point
 async def main():
