@@ -18,6 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Agent Message Visual Differentiation (Issue #688)
+- **Enhanced MessageItem component** (`frontend/src/components/threads/MessageItem.tsx:27-50, 59-66, 68-191, 211-245, 461-466, 530-550`):
+  - Agent detection logic using `getAgentDisplayData()` helper function
+  - `hexToRgba()` utility for generating color-tinted backgrounds from agent badge colors
+  - Distinct visual styling for agent messages vs user messages:
+    - **Background**: Subtle gradient using agent's badge color with low opacity (8% to 3%)
+    - **Border**: Colored border matching agent's badge color instead of default gray
+    - **Accent strip**: 4px colored left border (like highlighted messages) using agent color
+    - **Avatar**: Bot icon instead of User icon, with agent-colored gradient background
+    - **Box shadow**: Agent-colored shadow on avatar for visual consistency
+- **Accessibility improvements**:
+  - Updated `aria-label` to include "(AI Agent)" suffix for screen readers
+  - Avatar `title` attribute identifies agent name and type
+- Agent color sourced from `AgentConfiguration.badgeConfig.color` field (falls back to default blue #4A90E2)
+
 #### Network Recovery on Screen Unlock (Issue #697)
 - **New `useNetworkStatus` hook** (`frontend/src/hooks/useNetworkStatus.ts`): Monitors page visibility and network status changes to detect when the app resumes from background (e.g., screen unlock on mobile)
 - **New `NetworkStatusHandler` component** (`frontend/src/components/network/NetworkStatusHandler.tsx`): Automatically refetches active Apollo Client queries when:
