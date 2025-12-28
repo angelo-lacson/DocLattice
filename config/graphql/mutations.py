@@ -3740,6 +3740,10 @@ class CreateCorpusAction(graphene.Mutation):
     Create a new CorpusAction that will be triggered when documents are added or edited in a corpus.
     The action can run a fieldset extraction, an analyzer, or an agent - but exactly one must be specified.
     Requires UPDATE permission on the corpus to create actions.
+
+    For thread/message-based triggers (new_thread, new_message), supports inline agent creation
+    via create_agent_inline=True with agent creation parameters. This creates a corpus-scoped
+    moderator agent and links it to the action in one transaction.
     """
 
     class Arguments:
@@ -3757,7 +3761,7 @@ class CreateCorpusAction(graphene.Mutation):
         analyzer_id = graphene.ID(
             required=False, description="ID of the analyzer to run"
         )
-        # Agent-based action arguments
+        # Agent-based action arguments (existing agent)
         agent_config_id = graphene.ID(
             required=False, description="ID of the agent configuration to use"
         )
@@ -3769,6 +3773,28 @@ class CreateCorpusAction(graphene.Mutation):
             graphene.String,
             required=False,
             description="Tools pre-authorized to run without approval",
+        )
+        # Inline agent creation arguments (for thread/message triggers)
+        create_agent_inline = graphene.Boolean(
+            required=False,
+            description="Create a new agent inline instead of using existing agent_config_id",
+        )
+        inline_agent_name = graphene.String(
+            required=False,
+            description="Name for the new inline agent (required if create_agent_inline=True)",
+        )
+        inline_agent_description = graphene.String(
+            required=False,
+            description="Description for the new inline agent",
+        )
+        inline_agent_instructions = graphene.String(
+            required=False,
+            description="System instructions for the new inline agent (required if create_agent_inline=True)",
+        )
+        inline_agent_tools = graphene.List(
+            graphene.String,
+            required=False,
+            description="Tools available to the new inline agent",
         )
         disabled = graphene.Boolean(
             required=False, description="Whether the action is disabled"
@@ -3793,6 +3819,11 @@ class CreateCorpusAction(graphene.Mutation):
         agent_config_id: str = None,
         agent_prompt: str = None,
         pre_authorized_tools: list = None,
+        create_agent_inline: bool = False,
+        inline_agent_name: str = None,
+        inline_agent_description: str = None,
+        inline_agent_instructions: str = None,
+        inline_agent_tools: list = None,
         disabled: bool = False,
         run_on_all_corpuses: bool = False,
     ):
@@ -3813,18 +3844,50 @@ class CreateCorpusAction(graphene.Mutation):
                     obj=None,
                 )
 
-            # Validate that exactly one of fieldset_id, analyzer_id, or agent_config_id is provided
+            # Validate inline agent creation parameters
+            if create_agent_inline:
+                if not inline_agent_name:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message="inline_agent_name is required when create_agent_inline=True",
+                        obj=None,
+                    )
+                if not inline_agent_instructions:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message="inline_agent_instructions is required when create_agent_inline=True",
+                        obj=None,
+                    )
+                if not agent_prompt:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message="agent_prompt is required when creating an agent action",
+                        obj=None,
+                    )
+                # Cannot provide both inline creation and existing agent
+                if agent_config_id:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message="Cannot provide both agent_config_id and create_agent_inline=True",
+                        obj=None,
+                    )
+
+            # Validate that exactly one of fieldset_id, analyzer_id, agent_config_id, or create_agent_inline is provided
             action_types_provided = sum(
                 [
                     bool(fieldset_id),
                     bool(analyzer_id),
                     bool(agent_config_id),
+                    bool(create_agent_inline),
                 ]
             )
             if action_types_provided != 1:
                 return CreateCorpusAction(
                     ok=False,
-                    message="Exactly one of fieldset_id, analyzer_id, or agent_config_id must be provided",
+                    message=(
+                        "Exactly one of fieldset_id, analyzer_id, "
+                        "agent_config_id, or create_agent_inline must be provided"
+                    ),
                     obj=None,
                 )
 
@@ -3860,7 +3923,60 @@ class CreateCorpusAction(graphene.Mutation):
                         obj=None,
                     )
 
-            # Create the corpus action
+            # Create inline agent if requested (wrapped in transaction with action creation)
+            if create_agent_inline:
+                with transaction.atomic():
+                    # Create corpus-scoped agent configuration
+                    agent_config = AgentConfiguration.objects.create(
+                        name=inline_agent_name,
+                        description=inline_agent_description
+                        or f"Moderator agent for {corpus.title}",
+                        system_instructions=inline_agent_instructions,
+                        available_tools=inline_agent_tools or [],
+                        permission_required_tools=[],  # All tools are pre-authorized for corpus actions
+                        badge_config={
+                            "icon": "shield",
+                            "color": "#6366f1",
+                            "label": "Moderator",
+                        },
+                        scope="CORPUS",
+                        corpus=corpus,
+                        creator=user,
+                        is_active=True,
+                        is_public=False,  # Corpus-scoped agents are private to corpus
+                    )
+
+                    # Set permissions for the inline agent
+                    set_permissions_for_obj_to_user(
+                        user, agent_config, [PermissionTypes.CRUD]
+                    )
+
+                    # Create the corpus action
+                    corpus_action = CorpusAction.objects.create(
+                        name=name or "Corpus Action",
+                        corpus=corpus,
+                        fieldset=fieldset,
+                        analyzer=analyzer,
+                        agent_config=agent_config,
+                        agent_prompt=agent_prompt or "",
+                        pre_authorized_tools=pre_authorized_tools or [],
+                        trigger=trigger,
+                        disabled=disabled,
+                        run_on_all_corpuses=run_on_all_corpuses,
+                        creator=user,
+                    )
+
+                    set_permissions_for_obj_to_user(
+                        user, corpus_action, [PermissionTypes.CRUD]
+                    )
+
+                    return CreateCorpusAction(
+                        ok=True,
+                        message="Successfully created corpus action with inline agent",
+                        obj=corpus_action,
+                    )
+
+            # Standard path: Create the corpus action (no inline agent)
             corpus_action = CorpusAction.objects.create(
                 name=name or "Corpus Action",
                 corpus=corpus,
@@ -3891,6 +4007,179 @@ class CreateCorpusAction(graphene.Mutation):
         except Exception as e:
             return CreateCorpusAction(
                 ok=False, message=f"Failed to create corpus action: {str(e)}", obj=None
+            )
+
+
+class UpdateCorpusAction(graphene.Mutation):
+    """
+    Update an existing CorpusAction.
+    Allows updating name, trigger, action type (fieldset/analyzer/agent), disabled state,
+    and agent-specific settings.
+    Requires the user to be the creator of the action.
+    """
+
+    class Arguments:
+        id = graphene.ID(required=True, description="ID of the corpus action to update")
+        name = graphene.String(required=False, description="Updated name of the action")
+        trigger = graphene.String(
+            required=False,
+            description="Updated trigger (add_document, edit_document, new_thread, new_message)",
+        )
+        fieldset_id = graphene.ID(
+            required=False,
+            description="ID of the fieldset to run (clears other action types)",
+        )
+        analyzer_id = graphene.ID(
+            required=False,
+            description="ID of the analyzer to run (clears other action types)",
+        )
+        agent_config_id = graphene.ID(
+            required=False,
+            description="ID of the agent configuration (clears other action types)",
+        )
+        agent_prompt = graphene.String(
+            required=False,
+            description="Task prompt for the agent",
+        )
+        pre_authorized_tools = graphene.List(
+            graphene.String,
+            required=False,
+            description="Tools pre-authorized to run without approval",
+        )
+        disabled = graphene.Boolean(
+            required=False, description="Whether the action is disabled"
+        )
+        run_on_all_corpuses = graphene.Boolean(
+            required=False, description="Whether to run this action on all corpuses"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    obj = graphene.Field(CorpusActionType)
+
+    @login_required
+    def mutate(
+        root,
+        info,
+        id: str,
+        name: str = None,
+        trigger: str = None,
+        fieldset_id: str = None,
+        analyzer_id: str = None,
+        agent_config_id: str = None,
+        agent_prompt: str = None,
+        pre_authorized_tools: list = None,
+        disabled: bool = None,
+        run_on_all_corpuses: bool = None,
+    ):
+        from opencontractserver.agents.models import AgentConfiguration
+
+        try:
+            user = info.context.user
+            action_pk = from_global_id(id)[1]
+
+            # Get the corpus action
+            corpus_action = CorpusAction.objects.get(pk=action_pk)
+
+            # Check if user is the creator
+            if corpus_action.creator.id != user.id:
+                return UpdateCorpusAction(
+                    ok=False,
+                    message="You can only update your own corpus actions",
+                    obj=None,
+                )
+
+            # Update simple fields if provided
+            if name is not None:
+                corpus_action.name = name
+
+            if trigger is not None:
+                corpus_action.trigger = trigger
+
+            if disabled is not None:
+                corpus_action.disabled = disabled
+
+            if run_on_all_corpuses is not None:
+                corpus_action.run_on_all_corpuses = run_on_all_corpuses
+
+            # Handle action type changes (fieldset, analyzer, or agent)
+            # If any of these are provided, clear the others and set the new one
+            if fieldset_id is not None:
+                fieldset_pk = from_global_id(fieldset_id)[1]
+                fieldset = Fieldset.objects.get(pk=fieldset_pk)
+                corpus_action.fieldset = fieldset
+                corpus_action.analyzer = None
+                corpus_action.agent_config = None
+                corpus_action.agent_prompt = ""
+                corpus_action.pre_authorized_tools = []
+
+            elif analyzer_id is not None:
+                analyzer_pk = from_global_id(analyzer_id)[1]
+                analyzer = Analyzer.objects.get(pk=analyzer_pk)
+                corpus_action.analyzer = analyzer
+                corpus_action.fieldset = None
+                corpus_action.agent_config = None
+                corpus_action.agent_prompt = ""
+                corpus_action.pre_authorized_tools = []
+
+            elif agent_config_id is not None:
+                agent_config_pk = from_global_id(agent_config_id)[1]
+                agent_config = AgentConfiguration.objects.get(pk=agent_config_pk)
+                if not agent_config.is_active:
+                    return UpdateCorpusAction(
+                        ok=False,
+                        message="The selected agent configuration is not active",
+                        obj=None,
+                    )
+                corpus_action.agent_config = agent_config
+                corpus_action.fieldset = None
+                corpus_action.analyzer = None
+                # Agent prompt and pre_authorized_tools are updated below
+
+            # Update agent-specific fields if agent is being used
+            if corpus_action.agent_config:
+                if agent_prompt is not None:
+                    corpus_action.agent_prompt = agent_prompt
+                if pre_authorized_tools is not None:
+                    corpus_action.pre_authorized_tools = pre_authorized_tools
+
+            corpus_action.save()
+
+            return UpdateCorpusAction(
+                ok=True, message="Successfully updated corpus action", obj=corpus_action
+            )
+
+        except CorpusAction.DoesNotExist:
+            return UpdateCorpusAction(
+                ok=False,
+                message="Corpus action not found",
+                obj=None,
+            )
+
+        except AgentConfiguration.DoesNotExist:
+            return UpdateCorpusAction(
+                ok=False,
+                message="Agent configuration not found",
+                obj=None,
+            )
+
+        except Fieldset.DoesNotExist:
+            return UpdateCorpusAction(
+                ok=False,
+                message="Fieldset not found",
+                obj=None,
+            )
+
+        except Analyzer.DoesNotExist:
+            return UpdateCorpusAction(
+                ok=False,
+                message="Analyzer not found",
+                obj=None,
+            )
+
+        except Exception as e:
+            return UpdateCorpusAction(
+                ok=False, message=f"Failed to update corpus action: {str(e)}", obj=None
             )
 
 
@@ -4544,6 +4833,7 @@ class Mutation(graphene.ObjectType):
     link_documents_to_corpus = AddDocumentsToCorpus.Field()
     remove_documents_from_corpus = RemoveDocumentsFromCorpus.Field()
     create_corpus_action = CreateCorpusAction.Field()
+    update_corpus_action = UpdateCorpusAction.Field()
     delete_corpus_action = DeleteCorpusAction.Field()
 
     # CORPUS FOLDER MUTATIONS ##################################################

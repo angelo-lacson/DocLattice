@@ -4289,6 +4289,10 @@ export const GET_CORPUS_ACTION_EXECUTIONS = gql`
               slug
             }
           }
+          conversation {
+            id
+            title
+          }
           corpus {
             id
             slug
@@ -4358,7 +4362,11 @@ export interface CorpusActionExecutionNode {
     title: string;
     slug: string;
     creator: { id: string; slug: string };
-  };
+  } | null;
+  conversation: {
+    id: string;
+    title: string;
+  } | null;
   corpus: {
     id: string;
     slug: string;
