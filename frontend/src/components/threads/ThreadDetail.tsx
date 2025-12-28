@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useAtom } from "jotai";
@@ -23,7 +23,7 @@ import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { useMessageBadges } from "../../hooks/useMessageBadges";
-import { openedCorpus } from "../../graphql/cache";
+import { openedCorpus, backendUserObj } from "../../graphql/cache";
 import { ReplyForm } from "./ReplyForm";
 import { formatUsername } from "./userUtils";
 
@@ -224,6 +224,9 @@ export function ThreadDetail({
     replyingToMessageIdAtom
   );
 
+  // Get current user for permission checking
+  const currentUser = useReactiveVar(backendUserObj);
+
   // Fetch thread detail
   const { data, loading, error, refetch } = useQuery<
     GetThreadDetailOutput,
@@ -234,6 +237,35 @@ export function ThreadDetail({
   });
 
   const thread = data?.conversation;
+
+  /**
+   * Determine if current user can moderate this thread.
+   * Moderators can edit/delete any message in the thread.
+   *
+   * A user can moderate if they are:
+   * 1. The thread creator
+   * 2. The corpus owner (if thread is linked to a corpus)
+   * 3. The document owner (if thread is linked to a document)
+   */
+  const canModerate = useMemo(() => {
+    if (!currentUser || !thread) return false;
+
+    // Thread creator can moderate
+    if (thread.creator?.id === currentUser.id) return true;
+
+    // Corpus owner can moderate
+    if (thread.chatWithCorpus?.creator?.id === currentUser.id) return true;
+
+    // Document owner can moderate
+    if (thread.chatWithDocument?.creator?.id === currentUser.id) return true;
+
+    return false;
+  }, [currentUser, thread]);
+
+  // Callback for message updates/deletes - refetch thread data
+  const handleMessageChange = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   // Extract unique user IDs from messages
   const userIds = useMemo(() => {
@@ -430,6 +462,11 @@ export function ThreadDetail({
             conversationId={conversationId}
             replyingToMessageId={replyingToMessageId}
             onCancelReply={() => setReplyingToMessageId(null)}
+            currentUserId={currentUser?.id}
+            canModerate={canModerate}
+            corpusId={corpusId}
+            onMessageUpdated={handleMessageChange}
+            onMessageDeleted={handleMessageChange}
           />
         </MessageListContainer>
       )}

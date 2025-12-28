@@ -2723,6 +2723,42 @@ export interface DeleteMessageOutput {
   };
 }
 
+/**
+ * Update the content of an existing message.
+ * Only the message creator or a moderator can edit messages.
+ * Part of Issue #686 - Mobile UI for Edit Message Modal
+ */
+export const UPDATE_MESSAGE = gql`
+  mutation UpdateMessage($messageId: ID!, $content: String!) {
+    updateMessage(messageId: $messageId, content: $content) {
+      ok
+      message
+      obj {
+        id
+        content
+        modified
+      }
+    }
+  }
+`;
+
+export interface UpdateMessageInput {
+  messageId: string;
+  content: string;
+}
+
+export interface UpdateMessageOutput {
+  updateMessage: {
+    ok: boolean;
+    message: string;
+    obj: {
+      id: string;
+      content: string;
+      modified: string;
+    } | null;
+  };
+}
+
 // ============================================================================
 // Voting Mutations
 // ============================================================================

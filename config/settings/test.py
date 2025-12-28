@@ -113,4 +113,6 @@ STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
 # Telemetry
 # ------------------------------------------------------------------------------
+# Explicitly disable telemetry in tests to prevent polluting PostHog with test data
 MODE = "TEST"
+TELEMETRY_ENABLED = False

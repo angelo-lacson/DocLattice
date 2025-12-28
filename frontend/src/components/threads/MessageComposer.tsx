@@ -46,6 +46,12 @@ const Toolbar = styled.div`
   padding: 8px;
   border-bottom: 1px solid ${({ theme }) => color.N4};
   background: ${({ theme }) => color.N2};
+
+  /* Mobile: Larger touch targets - Part of Issue #686 */
+  @media (max-width: 600px) {
+    padding: 8px 12px;
+    gap: 8px;
+  }
 `;
 
 const ToolbarButton = styled.button<{ $isActive?: boolean }>`
@@ -74,6 +80,18 @@ const ToolbarButton = styled.button<{ $isActive?: boolean }>`
   svg {
     width: 16px;
     height: 16px;
+  }
+
+  /* Mobile: Larger touch targets - Part of Issue #686 */
+  @media (max-width: 600px) {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
   }
 `;
 
