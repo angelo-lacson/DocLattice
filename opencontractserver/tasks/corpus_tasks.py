@@ -531,7 +531,7 @@ def process_thread_corpus_action(
     conversation_id: int | str,
     user_id: int | str,
     trigger: str = "new_thread",
-):
+) -> dict:
     """
     Process corpus actions triggered by thread creation.
 
@@ -613,7 +613,7 @@ def process_message_corpus_action(
     message_id: int | str,
     user_id: int | str,
     trigger: str = "new_message",
-):
+) -> dict:
     """
     Process corpus actions triggered by message creation.
 
