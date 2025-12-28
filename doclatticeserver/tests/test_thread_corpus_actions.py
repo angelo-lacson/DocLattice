@@ -8,10 +8,11 @@ These tests cover:
 4. Model field changes (nullable document, triggering FKs)
 """
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+import pytest
 from django.contrib.auth import get_user_model
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 
 from doclatticeserver.agents.models import AgentActionResult, AgentConfiguration
 from doclatticeserver.conversations.models import (
@@ -769,3 +770,843 @@ class TestToolRegistry(TestCase):
                 tool["requiresApproval"],
                 f"Tool {tool_name} should not require approval",
             )
+
+
+class TestProcessThreadCorpusActionTask(TestCase):
+    """Tests for process_thread_corpus_action Celery task."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testthreadtask",
+            email="testthreadtask@example.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Thread Moderator",
+            creator=self.user,
+        )
+        # Skip signals for thread creation
+        self.thread = Conversation(
+            title="Test Discussion",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        self.thread._skip_signals = True
+        self.thread.save()
+
+    @patch("doclatticeserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_thread_corpus_action_queues_task(self, mock_delay):
+        """process_thread_corpus_action should queue agent task for matching actions."""
+        from doclatticeserver.tasks.corpus_tasks import process_thread_corpus_action
+
+        # Create corpus action with NEW_THREAD trigger
+        action = CorpusAction.objects.create(
+            name="Auto Moderate",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review this thread",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+
+        result = process_thread_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            user_id=self.user.id,
+            trigger="new_thread",
+        )
+
+        # Should have processed one action and queued one execution
+        self.assertEqual(result["actions_processed"], 1)
+        self.assertEqual(result["executions_queued"], 1)
+
+        # Agent task should have been queued
+        mock_delay.assert_called_once()
+        call_kwargs = mock_delay.call_args.kwargs
+        self.assertEqual(call_kwargs["corpus_action_id"], action.id)
+        self.assertEqual(call_kwargs["conversation_id"], self.thread.id)
+        self.assertIsNone(call_kwargs["message_id"])
+
+    @patch("doclatticeserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_thread_corpus_action_skips_non_agent_actions(self, mock_delay):
+        """process_thread_corpus_action should skip actions without agent_config."""
+        from doclatticeserver.extracts.models import Fieldset
+        from doclatticeserver.tasks.corpus_tasks import process_thread_corpus_action
+
+        fieldset = Fieldset.objects.create(name="Test Fieldset", creator=self.user)
+
+        # Create corpus action with fieldset instead of agent (shouldn't run on threads)
+        CorpusAction.objects.create(
+            name="Extract Action",
+            corpus=self.corpus,
+            fieldset=fieldset,
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+
+        result = process_thread_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            user_id=self.user.id,
+            trigger="new_thread",
+        )
+
+        # Should skip the fieldset action
+        self.assertEqual(result["skipped_no_agent"], 1)
+        self.assertEqual(result["executions_queued"], 0)
+        mock_delay.assert_not_called()
+
+    def test_process_thread_corpus_action_invalid_conversation(self):
+        """process_thread_corpus_action should return error for invalid conversation."""
+        from doclatticeserver.tasks.corpus_tasks import process_thread_corpus_action
+
+        result = process_thread_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=99999,
+            user_id=self.user.id,
+            trigger="new_thread",
+        )
+
+        self.assertIn("error", result)
+        self.assertEqual(result["error"], "Conversation not found")
+
+    @patch("doclatticeserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_thread_corpus_action_creates_execution_record(self, mock_delay):
+        """process_thread_corpus_action should create CorpusActionExecution record."""
+        from doclatticeserver.tasks.corpus_tasks import process_thread_corpus_action
+
+        action = CorpusAction.objects.create(
+            name="Auto Moderate",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+
+        process_thread_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            user_id=self.user.id,
+            trigger="new_thread",
+        )
+
+        # Verify execution record was created
+        execution = CorpusActionExecution.objects.get(
+            corpus_action=action, conversation=self.thread
+        )
+        self.assertEqual(execution.status, CorpusActionExecution.Status.QUEUED)
+        self.assertEqual(execution.trigger, "new_thread")
+        self.assertIsNone(execution.document)
+        self.assertEqual(execution.conversation, self.thread)
+
+
+class TestProcessMessageCorpusActionTask(TestCase):
+    """Tests for process_message_corpus_action Celery task."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testmsgtask",
+            email="testmsgtask@example.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Message Moderator",
+            creator=self.user,
+        )
+        # Skip signals for thread creation
+        self.thread = Conversation(
+            title="Test Discussion",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        self.thread._skip_signals = True
+        self.thread.save()
+
+        # Create test message
+        self.message = ChatMessage(
+            conversation=self.thread,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="Test message content",
+            creator=self.user,
+        )
+        self.message._skip_signals = True
+        self.message.save()
+
+    @patch("doclatticeserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_message_corpus_action_queues_task(self, mock_delay):
+        """process_message_corpus_action should queue agent task for matching actions."""
+        from doclatticeserver.tasks.corpus_tasks import process_message_corpus_action
+
+        # Create corpus action with NEW_MESSAGE trigger
+        action = CorpusAction.objects.create(
+            name="Auto Moderate Messages",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review this message",
+            trigger=CorpusActionTrigger.NEW_MESSAGE,
+            creator=self.user,
+        )
+
+        result = process_message_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            message_id=self.message.id,
+            user_id=self.user.id,
+            trigger="new_message",
+        )
+
+        # Should have processed one action and queued one execution
+        self.assertEqual(result["actions_processed"], 1)
+        self.assertEqual(result["executions_queued"], 1)
+
+        # Agent task should have been queued with message_id
+        mock_delay.assert_called_once()
+        call_kwargs = mock_delay.call_args.kwargs
+        self.assertEqual(call_kwargs["corpus_action_id"], action.id)
+        self.assertEqual(call_kwargs["conversation_id"], self.thread.id)
+        self.assertEqual(call_kwargs["message_id"], self.message.id)
+
+    def test_process_message_corpus_action_invalid_message(self):
+        """process_message_corpus_action should return error for invalid message."""
+        from doclatticeserver.tasks.corpus_tasks import process_message_corpus_action
+
+        result = process_message_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            message_id=99999,
+            user_id=self.user.id,
+            trigger="new_message",
+        )
+
+        self.assertIn("error", result)
+
+    @patch("doclatticeserver.tasks.agent_tasks.run_agent_thread_action.delay")
+    def test_process_message_corpus_action_creates_execution_with_message(
+        self, mock_delay
+    ):
+        """process_message_corpus_action should create execution with message FK."""
+        from doclatticeserver.tasks.corpus_tasks import process_message_corpus_action
+
+        action = CorpusAction.objects.create(
+            name="Auto Moderate",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review",
+            trigger=CorpusActionTrigger.NEW_MESSAGE,
+            creator=self.user,
+        )
+
+        process_message_corpus_action(
+            corpus_id=self.corpus.id,
+            conversation_id=self.thread.id,
+            message_id=self.message.id,
+            user_id=self.user.id,
+            trigger="new_message",
+        )
+
+        # Verify execution record was created with message
+        execution = CorpusActionExecution.objects.get(
+            corpus_action=action, conversation=self.thread
+        )
+        self.assertEqual(execution.message, self.message)
+        self.assertEqual(execution.trigger, "new_message")
+
+
+class TestRunAgentThreadActionTask(TestCase):
+    """Tests for run_agent_thread_action Celery task.
+
+    Following the pattern from test-suite.md, we mock the entire async function
+    to avoid async ORM connection issues.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testagent",
+            email="testagent@example.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Thread Moderator",
+            creator=self.user,
+        )
+        self.corpus_action = CorpusAction.objects.create(
+            name="Auto Moderate",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review this thread",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        self.thread = Conversation(
+            title="Test Discussion",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        self.thread._skip_signals = True
+        self.thread.save()
+
+    @patch("doclatticeserver.tasks.agent_tasks._run_agent_thread_action_async")
+    def test_run_agent_thread_action_success(self, mock_async_func):
+        """run_agent_thread_action should execute successfully."""
+        from doclatticeserver.tasks.agent_tasks import run_agent_thread_action
+
+        # Create the result that the async function would create
+        result_obj = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            triggering_conversation=self.thread,
+            status=AgentActionResult.Status.COMPLETED,
+            agent_response="Thread looks fine, no action needed.",
+            creator=self.user,
+        )
+
+        mock_async_func.return_value = {
+            "status": "completed",
+            "result_id": result_obj.id,
+            "response_length": 40,
+            "conversation_id": None,
+        }
+
+        result = run_agent_thread_action.apply(
+            args=[self.corpus_action.id, self.thread.id, None, self.user.id]
+        )
+
+        self.assertEqual(result.result["status"], "completed")
+        mock_async_func.assert_called_once_with(
+            corpus_action_id=self.corpus_action.id,
+            conversation_id=self.thread.id,
+            message_id=None,
+            user_id=self.user.id,
+        )
+
+    @patch("doclatticeserver.tasks.agent_tasks._run_agent_thread_action_async")
+    def test_run_agent_thread_action_with_message(self, mock_async_func):
+        """run_agent_thread_action should pass message_id when provided."""
+        from doclatticeserver.tasks.agent_tasks import run_agent_thread_action
+
+        message = ChatMessage(
+            conversation=self.thread,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="Test message",
+            creator=self.user,
+        )
+        message._skip_signals = True
+        message.save()
+
+        result_obj = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            triggering_conversation=self.thread,
+            triggering_message=message,
+            status=AgentActionResult.Status.COMPLETED,
+            agent_response="Message reviewed.",
+            creator=self.user,
+        )
+
+        mock_async_func.return_value = {
+            "status": "completed",
+            "result_id": result_obj.id,
+            "response_length": 17,
+            "conversation_id": None,
+        }
+
+        result = run_agent_thread_action.apply(
+            args=[self.corpus_action.id, self.thread.id, message.id, self.user.id]
+        )
+
+        self.assertEqual(result.result["status"], "completed")
+        mock_async_func.assert_called_once_with(
+            corpus_action_id=self.corpus_action.id,
+            conversation_id=self.thread.id,
+            message_id=message.id,
+            user_id=self.user.id,
+        )
+
+    @patch("doclatticeserver.tasks.agent_tasks._run_agent_thread_action_async")
+    def test_run_agent_thread_action_updates_execution(self, mock_async_func):
+        """run_agent_thread_action should update execution record on completion."""
+        from django.utils import timezone
+
+        from doclatticeserver.tasks.agent_tasks import run_agent_thread_action
+
+        # Create execution record
+        execution = CorpusActionExecution.objects.create(
+            corpus_action=self.corpus_action,
+            corpus=self.corpus,
+            conversation=self.thread,
+            action_type=CorpusActionExecution.ActionType.AGENT,
+            trigger="new_thread",
+            queued_at=timezone.now(),
+            status=CorpusActionExecution.Status.QUEUED,
+            creator=self.user,
+        )
+
+        result_obj = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            triggering_conversation=self.thread,
+            status=AgentActionResult.Status.COMPLETED,
+            agent_response="Done",
+            creator=self.user,
+        )
+
+        mock_async_func.return_value = {
+            "status": "completed",
+            "result_id": result_obj.id,
+            "response_length": 4,
+            "conversation_id": None,
+        }
+
+        run_agent_thread_action.apply(
+            args=[
+                self.corpus_action.id,
+                self.thread.id,
+                None,
+                self.user.id,
+                execution.id,
+            ]
+        )
+
+        # Verify execution was updated
+        execution.refresh_from_db()
+        self.assertEqual(execution.status, CorpusActionExecution.Status.COMPLETED)
+        self.assertIsNotNone(execution.completed_at)
+
+
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
+class TestRunAgentThreadActionAsync(TransactionTestCase):
+    """Direct tests for _run_agent_thread_action_async.
+
+    Following Pattern 1 from test-suite.md:
+    - TransactionTestCase for async code
+    - @pytest.mark.serial to avoid xdist worker conflicts
+    - @override_settings to prevent connection pooling issues
+    - Mock at agent level to avoid real LLM calls
+
+    Note: Uses sync_to_async for synchronous ORM calls within async tests.
+    """
+
+    def setUp(self):
+        """Set up test fixtures."""
+        from asgiref.sync import sync_to_async
+
+        self.sync_to_async = sync_to_async
+        self.user = User.objects.create_user(
+            username="testasync",
+            email="testasync@example.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Test Thread Agent",
+            system_instructions="You are a test moderator.",
+            creator=self.user,
+        )
+        self.corpus_action = CorpusAction.objects.create(
+            name="Test Thread Action",
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            agent_prompt="Review this thread for compliance.",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        self.thread = Conversation(
+            title="Test Discussion Thread",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        self.thread._skip_signals = True
+        self.thread.save()
+
+    async def test_async_thread_action_creates_result(self):
+        """Test that async function creates AgentActionResult on success."""
+        from doclatticeserver.llms import agents
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        # Mock agent response
+        mock_agent = AsyncMock()
+        mock_agent.chat = AsyncMock(
+            return_value=AsyncMock(
+                content="Thread reviewed. No issues found.",
+                sources=[],
+            )
+        )
+        mock_agent.get_conversation_id = lambda: None
+
+        with patch.object(
+            agents, "for_corpus", new_callable=AsyncMock
+        ) as mock_for_corpus:
+            mock_for_corpus.return_value = mock_agent
+
+            result = await _run_agent_thread_action_async(
+                corpus_action_id=self.corpus_action.id,
+                conversation_id=self.thread.id,
+                message_id=None,
+                user_id=self.user.id,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertIn("result_id", result)
+            self.assertIn("response_length", result)
+
+            # Verify AgentActionResult was created
+            from doclatticeserver.agents.models import AgentActionResult
+
+            action_result = await AgentActionResult.objects.aget(id=result["result_id"])
+            self.assertEqual(action_result.status, AgentActionResult.Status.COMPLETED)
+            self.assertEqual(
+                action_result.agent_response, "Thread reviewed. No issues found."
+            )
+            self.assertEqual(action_result.triggering_conversation_id, self.thread.id)
+            self.assertIsNone(action_result.triggering_message)
+
+    async def test_async_thread_action_with_message(self):
+        """Test async function with triggering message."""
+        from doclatticeserver.llms import agents
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        # Create a message using sync_to_async
+        @self.sync_to_async
+        def create_message():
+            message = ChatMessage(
+                conversation=self.thread,
+                msg_type=MessageTypeChoices.HUMAN,
+                content="Some potentially problematic content",
+                creator=self.user,
+            )
+            message._skip_signals = True
+            message.save()
+            return message
+
+        message = await create_message()
+
+        # Mock agent response
+        mock_agent = AsyncMock()
+        mock_agent.chat = AsyncMock(
+            return_value=AsyncMock(
+                content="Message content is acceptable.",
+                sources=[],
+            )
+        )
+        mock_agent.get_conversation_id = lambda: None
+
+        with patch.object(
+            agents, "for_corpus", new_callable=AsyncMock
+        ) as mock_for_corpus:
+            mock_for_corpus.return_value = mock_agent
+
+            result = await _run_agent_thread_action_async(
+                corpus_action_id=self.corpus_action.id,
+                conversation_id=self.thread.id,
+                message_id=message.id,
+                user_id=self.user.id,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertIsNone(result["conversation_id"])
+
+            # Verify result has message FK
+            from doclatticeserver.agents.models import AgentActionResult
+
+            action_result = await AgentActionResult.objects.aget(id=result["result_id"])
+            self.assertEqual(action_result.triggering_message_id, message.id)
+
+    @patch("doclatticeserver.llms.agents.for_corpus", new_callable=AsyncMock)
+    async def test_async_thread_action_skips_if_already_running(self, mock_for_corpus):
+        """Test that async function skips if result is already RUNNING."""
+        from doclatticeserver.agents.models import AgentActionResult
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        # Create an existing RUNNING result using sync_to_async
+        @self.sync_to_async
+        def create_running_result():
+            return AgentActionResult.objects.create(
+                corpus_action=self.corpus_action,
+                triggering_conversation=self.thread,
+                status=AgentActionResult.Status.RUNNING,
+                creator=self.user,
+            )
+
+        existing_result = await create_running_result()
+
+        result = await _run_agent_thread_action_async(
+            corpus_action_id=self.corpus_action.id,
+            conversation_id=self.thread.id,
+            message_id=None,
+            user_id=self.user.id,
+        )
+
+        # Should skip since already running
+        self.assertEqual(result["status"], "already_running")
+        self.assertEqual(result["result_id"], existing_result.id)
+
+        # Agent should not have been called
+        mock_for_corpus.assert_not_called()
+
+    @patch("doclatticeserver.llms.agents.for_corpus", new_callable=AsyncMock)
+    async def test_async_thread_action_skips_if_completed(self, mock_for_corpus):
+        """Test that async function skips if result is already COMPLETED."""
+        from doclatticeserver.agents.models import AgentActionResult
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        # Create an existing COMPLETED result using sync_to_async
+        @self.sync_to_async
+        def create_completed_result():
+            return AgentActionResult.objects.create(
+                corpus_action=self.corpus_action,
+                triggering_conversation=self.thread,
+                status=AgentActionResult.Status.COMPLETED,
+                agent_response="Previously completed.",
+                creator=self.user,
+            )
+
+        existing_result = await create_completed_result()
+
+        result = await _run_agent_thread_action_async(
+            corpus_action_id=self.corpus_action.id,
+            conversation_id=self.thread.id,
+            message_id=None,
+            user_id=self.user.id,
+        )
+
+        # Should skip since already completed
+        self.assertEqual(result["status"], "already_completed")
+        self.assertEqual(result["result_id"], existing_result.id)
+
+        # Agent should not have been called
+        mock_for_corpus.assert_not_called()
+
+    async def test_async_thread_action_claims_failed_result(self):
+        """Test that async function can claim and retry a FAILED result."""
+        from doclatticeserver.agents.models import AgentActionResult
+        from doclatticeserver.llms import agents
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        # Create an existing FAILED result using sync_to_async
+        @self.sync_to_async
+        def create_failed_result():
+            return AgentActionResult.objects.create(
+                corpus_action=self.corpus_action,
+                triggering_conversation=self.thread,
+                status=AgentActionResult.Status.FAILED,
+                error_message="Previous failure",
+                creator=self.user,
+            )
+
+        existing_result = await create_failed_result()
+
+        # Mock successful agent response
+        mock_agent = AsyncMock()
+        mock_agent.chat = AsyncMock(
+            return_value=AsyncMock(
+                content="Retry successful.",
+                sources=[],
+            )
+        )
+        mock_agent.get_conversation_id = lambda: None
+
+        with patch.object(
+            agents, "for_corpus", new_callable=AsyncMock
+        ) as mock_for_corpus:
+            mock_for_corpus.return_value = mock_agent
+
+            result = await _run_agent_thread_action_async(
+                corpus_action_id=self.corpus_action.id,
+                conversation_id=self.thread.id,
+                message_id=None,
+                user_id=self.user.id,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["result_id"], existing_result.id)
+
+            # Verify the existing result was updated
+            await existing_result.arefresh_from_db()
+            self.assertEqual(existing_result.status, AgentActionResult.Status.COMPLETED)
+            self.assertEqual(existing_result.agent_response, "Retry successful.")
+            self.assertEqual(existing_result.error_message, "")
+
+    async def test_async_thread_action_handles_agent_error(self):
+        """Test that async function handles agent errors correctly."""
+        from doclatticeserver.agents.models import AgentActionResult
+        from doclatticeserver.llms import agents
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        # Mock agent that raises an error
+        mock_agent = AsyncMock()
+        mock_agent.chat = AsyncMock(side_effect=ValueError("Agent execution failed"))
+
+        with patch.object(
+            agents, "for_corpus", new_callable=AsyncMock
+        ) as mock_for_corpus:
+            mock_for_corpus.return_value = mock_agent
+
+            with self.assertRaises(ValueError) as ctx:
+                await _run_agent_thread_action_async(
+                    corpus_action_id=self.corpus_action.id,
+                    conversation_id=self.thread.id,
+                    message_id=None,
+                    user_id=self.user.id,
+                )
+
+            self.assertIn("Agent execution failed", str(ctx.exception))
+
+            # Verify result was marked as FAILED
+            action_result = await AgentActionResult.objects.filter(
+                corpus_action=self.corpus_action,
+                triggering_conversation=self.thread,
+            ).afirst()
+
+            self.assertIsNotNone(action_result)
+            self.assertEqual(action_result.status, AgentActionResult.Status.FAILED)
+            self.assertIn("Agent execution failed", action_result.error_message)
+
+    async def test_async_thread_action_includes_moderation_tools(self):
+        """Test that moderation tools are automatically included."""
+        from doclatticeserver.llms import agents
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        mock_agent = AsyncMock()
+        mock_agent.chat = AsyncMock(return_value=AsyncMock(content="Done", sources=[]))
+        mock_agent.get_conversation_id = lambda: None
+
+        with patch.object(
+            agents, "for_corpus", new_callable=AsyncMock
+        ) as mock_for_corpus:
+            mock_for_corpus.return_value = mock_agent
+
+            await _run_agent_thread_action_async(
+                corpus_action_id=self.corpus_action.id,
+                conversation_id=self.thread.id,
+                message_id=None,
+                user_id=self.user.id,
+            )
+
+            # Verify for_corpus was called with moderation tools
+            mock_for_corpus.assert_called_once()
+            call_kwargs = mock_for_corpus.call_args.kwargs
+            tools = call_kwargs.get("tools", [])
+
+            expected_moderation_tools = [
+                "get_thread_context",
+                "get_thread_messages",
+                "get_message_content",
+                "delete_message",
+                "lock_thread",
+                "unlock_thread",
+                "add_thread_message",
+                "pin_thread",
+                "unpin_thread",
+            ]
+            for tool_name in expected_moderation_tools:
+                self.assertIn(
+                    tool_name, tools, f"Moderation tool {tool_name} should be included"
+                )
+
+    async def test_async_thread_action_builds_context_prompt(self):
+        """Test that the prompt includes thread context information."""
+        from doclatticeserver.llms import agents
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        # Create some messages in the thread using sync_to_async
+        @self.sync_to_async
+        def create_messages():
+            for i in range(3):
+                msg = ChatMessage(
+                    conversation=self.thread,
+                    msg_type=MessageTypeChoices.HUMAN,
+                    content=f"Test message {i}",
+                    creator=self.user,
+                )
+                msg._skip_signals = True
+                msg.save()
+
+        await create_messages()
+
+        mock_agent = AsyncMock()
+        mock_agent.chat = AsyncMock(
+            return_value=AsyncMock(content="Reviewed", sources=[])
+        )
+        mock_agent.get_conversation_id = lambda: None
+
+        with patch.object(
+            agents, "for_corpus", new_callable=AsyncMock
+        ) as mock_for_corpus:
+            mock_for_corpus.return_value = mock_agent
+
+            await _run_agent_thread_action_async(
+                corpus_action_id=self.corpus_action.id,
+                conversation_id=self.thread.id,
+                message_id=None,
+                user_id=self.user.id,
+            )
+
+            # Verify the prompt included thread context
+            mock_agent.chat.assert_called_once()
+            prompt = mock_agent.chat.call_args[0][0]
+
+            self.assertIn("Thread Information", prompt)
+            self.assertIn(str(self.thread.id), prompt)
+            self.assertIn("Test Discussion Thread", prompt)
+            self.assertIn("Recent Thread Messages", prompt)
+            self.assertIn("Review this thread for compliance", prompt)
+
+    async def test_async_thread_action_stores_execution_metadata(self):
+        """Test that execution metadata is stored correctly."""
+        from doclatticeserver.agents.models import AgentActionResult
+        from doclatticeserver.llms import agents
+        from doclatticeserver.tasks.agent_tasks import _run_agent_thread_action_async
+
+        mock_agent = AsyncMock()
+        mock_agent.chat = AsyncMock(
+            return_value=AsyncMock(content="Completed review", sources=[])
+        )
+        mock_agent.get_conversation_id = lambda: None
+
+        with patch.object(
+            agents, "for_corpus", new_callable=AsyncMock
+        ) as mock_for_corpus:
+            mock_for_corpus.return_value = mock_agent
+
+            result = await _run_agent_thread_action_async(
+                corpus_action_id=self.corpus_action.id,
+                conversation_id=self.thread.id,
+                message_id=None,
+                user_id=self.user.id,
+            )
+
+            # Verify execution metadata
+            action_result = await AgentActionResult.objects.aget(id=result["result_id"])
+
+            self.assertIsNotNone(action_result.execution_metadata)
+            self.assertIn("tools_available", action_result.execution_metadata)
+            self.assertEqual(
+                action_result.execution_metadata["agent_config_id"],
+                self.agent_config.id,
+            )
+            self.assertEqual(
+                action_result.execution_metadata["agent_config_name"],
+                "Test Thread Agent",
+            )
+            self.assertEqual(
+                action_result.execution_metadata["thread_id"], self.thread.id
+            )
+            self.assertIsNone(action_result.execution_metadata["message_id"])
