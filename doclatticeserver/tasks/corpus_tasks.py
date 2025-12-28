@@ -564,14 +564,23 @@ def process_thread_corpus_action(
         run_on_all_corpuses=True, disabled=False, trigger=trigger
     )
 
-    actions = CorpusAction.objects.filter(base_query)
+    actions = list(CorpusAction.objects.filter(base_query))
 
-    summary = {"actions_processed": 0, "executions_queued": 0}
+    logger.info(
+        f"[ThreadTask] Found {len(actions)} corpus action(s) for corpus={corpus_id}, "
+        f"trigger={trigger}"
+    )
+
+    summary = {"actions_processed": 0, "executions_queued": 0, "skipped_no_agent": 0}
 
     for action in actions:
         # Only agent-based actions support thread/message triggers
         if not action.agent_config:
-            logger.debug(f"Skipping non-agent action {action.id} for thread trigger")
+            logger.info(
+                f"[ThreadTask] Skipping action '{action.name}' (id={action.id}) - "
+                f"no agent_config set"
+            )
+            summary["skipped_no_agent"] += 1
             continue
 
         # Create execution record
@@ -647,14 +656,23 @@ def process_message_corpus_action(
         run_on_all_corpuses=True, disabled=False, trigger=trigger
     )
 
-    actions = CorpusAction.objects.filter(base_query)
+    actions = list(CorpusAction.objects.filter(base_query))
 
-    summary = {"actions_processed": 0, "executions_queued": 0}
+    logger.info(
+        f"[MessageTask] Found {len(actions)} corpus action(s) for corpus={corpus_id}, "
+        f"trigger={trigger}"
+    )
+
+    summary = {"actions_processed": 0, "executions_queued": 0, "skipped_no_agent": 0}
 
     for action in actions:
         # Only agent-based actions support thread/message triggers
         if not action.agent_config:
-            logger.debug(f"Skipping non-agent action {action.id} for message trigger")
+            logger.info(
+                f"[MessageTask] Skipping action '{action.name}' (id={action.id}) - "
+                f"no agent_config set"
+            )
+            summary["skipped_no_agent"] += 1
             continue
 
         # Create execution record
