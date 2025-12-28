@@ -296,9 +296,7 @@ def lock_thread(
     # Use existing lock method
     thread.lock(moderator=moderator, reason=reason)
 
-    logger.info(
-        f"Thread {thread_id} locked by agent (moderator: {moderator.username})"
-    )
+    logger.info(f"Thread {thread_id} locked by agent (moderator: {moderator.username})")
 
     return {
         "success": True,
