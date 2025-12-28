@@ -68,41 +68,75 @@ const Container = styled.div`
   padding: 20px;
   height: 100%;
   overflow-y: auto;
+
+  @media (max-width: 480px) {
+    padding: 12px;
+  }
 `;
 
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  @media (max-width: 480px) {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
 `;
 
 const Title = styled.h2`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin: 0;
   color: #0f172a;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
 
   svg {
     color: #64748b;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 16px;
+    gap: 6px;
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
   }
 `;
 
 const ActionBar = styled.div`
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+
+  @media (max-width: 480px) {
+    .ui.button {
+      padding: 0.5em 0.8em;
+      font-size: 12px;
+    }
+  }
 `;
 
 const DocumentGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
 `;
 
 const DocumentCard = styled.div<{ $isSelected: boolean }>`
@@ -124,6 +158,10 @@ const DocumentCard = styled.div<{ $isSelected: boolean }>`
     background: #eff6ff;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   `}
+
+  @media (max-width: 480px) {
+    padding: 12px;
+  }
 `;
 
 const CardHeader = styled.div`
@@ -131,6 +169,11 @@ const CardHeader = styled.div`
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+
+  @media (max-width: 480px) {
+    gap: 10px;
+    margin-bottom: 8px;
+  }
 `;
 
 const Thumbnail = styled.div`
@@ -156,6 +199,16 @@ const Thumbnail = styled.div`
     width: 24px;
     height: 24px;
     opacity: 0.2;
+  }
+
+  @media (max-width: 480px) {
+    width: 40px;
+    height: 40px;
+
+    .fallback-icon {
+      width: 20px;
+      height: 20px;
+    }
   }
 `;
 
@@ -201,6 +254,15 @@ const CardMeta = styled.div`
     font-size: 11px;
     opacity: 0.7;
   }
+
+  /* Hide less important metadata on mobile */
+  @media (max-width: 480px) {
+    margin-bottom: 8px;
+
+    .meta-row.hide-mobile {
+      display: none;
+    }
+  }
 `;
 
 const CardActions = styled.div`
@@ -208,6 +270,10 @@ const CardActions = styled.div`
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid #f1f5f9;
+
+  @media (max-width: 480px) {
+    padding-top: 8px;
+  }
 `;
 
 const EmptyState = styled.div`
@@ -547,12 +613,6 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
           )}
         </Title>
         <ActionBar>
-          {onBack && (
-            <Button basic onClick={onBack}>
-              <Icon name="arrow left" />
-              Back to Folders
-            </Button>
-          )}
           {deletedDocuments.length > 0 && (
             <Button
               basic
@@ -678,16 +738,16 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                       <Icon name="trash" className="icon" />
                       Deleted {safeFormatDistanceToNow(docPath.modified)}
                     </div>
-                    <div className="meta-row">
+                    <div className="meta-row hide-mobile">
                       <Icon name="calendar" className="icon" />
                       {safeFormat(docPath.modified, "MMM d, yyyy h:mm a")}
                     </div>
-                    <div className="meta-row">
+                    <div className="meta-row hide-mobile">
                       <Icon name="user" className="icon" />
                       Deleted by {docPath.creator?.username || "Unknown user"}
                     </div>
                     {docPath.folder && (
-                      <div className="meta-row">
+                      <div className="meta-row hide-mobile">
                         <FolderOpen size={12} className="icon" />
                         Was in: {docPath.folder.name}
                       </div>

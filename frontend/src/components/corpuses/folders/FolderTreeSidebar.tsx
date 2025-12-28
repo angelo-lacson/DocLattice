@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
+import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
 import { FolderTreeNode } from "./FolderTreeNode";
 import {
   folderTreeAtom,
@@ -68,6 +69,11 @@ const SidebarHeader = styled.div`
   padding: 16px;
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
+
+  /* On mobile/tablet, add right padding for the close button overlay */
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding-right: 56px;
+  }
 `;
 
 const HeaderRow = styled.div`
