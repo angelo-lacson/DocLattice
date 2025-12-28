@@ -1137,6 +1137,7 @@ const TimelinePreview: React.FC<TimelinePreviewProps> = ({
   return (
     <TimelineContainer
       className="timeline-container"
+      data-testid="timeline-container"
       onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
     >
       <TimelineHeader onClick={handleHeaderClick}>
@@ -1339,6 +1340,87 @@ const Timestamp = styled.div`
   }
 `;
 
+// Processing text - extracted for i18n readiness
+const PROCESSING_TEXT = "Agent is thinking...";
+const PROCESSING_ARIA_LABEL = "Agent is processing your request";
+
+// Processing indicator for when agent is working but hasn't sent content yet
+const ProcessingContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 2px 8px rgba(23, 25, 35, 0.04);
+  margin-bottom: 0.25rem;
+  /* Fade to subtle static state after 30s to reduce visual noise on long processing */
+  animation: processingFadeToSubtle 30s ease-out forwards;
+
+  @keyframes processingFadeToSubtle {
+    0%,
+    90% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0.6;
+    }
+  }
+`;
+
+const ProcessingDots = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+`;
+
+const ProcessingDot = styled.span<{ $delay: number }>`
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2185d0 0%, #1678c2 100%);
+  animation: processingBounce 1.4s ease-in-out infinite;
+  animation-delay: ${(props) => props.$delay}s;
+  will-change: transform, opacity;
+
+  @keyframes processingBounce {
+    0%,
+    80%,
+    100% {
+      transform: scale(0.6);
+      opacity: 0.4;
+    }
+    40% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+`;
+
+const ProcessingText = styled.span`
+  font-size: 0.9rem;
+  color: #5c7c9d;
+  font-weight: 500;
+`;
+
+const ProcessingIndicator: React.FC = () => (
+  <ProcessingContainer
+    role="status"
+    aria-live="polite"
+    aria-label={PROCESSING_ARIA_LABEL}
+    data-testid="processing-indicator"
+  >
+    <ProcessingDots aria-hidden="true">
+      <ProcessingDot $delay={0} />
+      <ProcessingDot $delay={0.2} />
+      <ProcessingDot $delay={0.4} />
+    </ProcessingDots>
+    <ProcessingText>{PROCESSING_TEXT}</ProcessingText>
+  </ProcessingContainer>
+);
+
 const UserName = styled.div`
   font-size: 0.875rem;
   font-weight: 600;
@@ -1427,6 +1509,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     effectiveHasTimeline &&
     (!isComplete || content.trim().length === 0);
 
+  // Show processing indicator when assistant message is incomplete with no content and no timeline
+  const showProcessingIndicator =
+    isAssistant &&
+    !isComplete &&
+    content.trim().length === 0 &&
+    !effectiveHasTimeline;
+
   // Local collapse state for timeline when message is COMPLETE.
   // For short timelines (<=2 steps) we default to expanded even after completion
   const [tlCollapsed, setTlCollapsed] = useState<boolean>(
@@ -1475,8 +1564,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       </Avatar>
       <ContentContainer>
         <UserName>{isAssistant ? "AI Assistant" : user}</UserName>
-        {!showTimelineOnly && (
-          <MessageContent $isAssistant={isAssistant}>
+        {/* Processing indicator - shown when agent is working but no content/timeline yet */}
+        {showProcessingIndicator && <ProcessingIndicator />}
+        {/* Standard message content bubble */}
+        {!showTimelineOnly && !showProcessingIndicator && (
+          <MessageContent
+            $isAssistant={isAssistant}
+            data-testid="message-content"
+          >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
             {approvalStatus && (
               <div style={{ marginTop: "0.5rem" }}>

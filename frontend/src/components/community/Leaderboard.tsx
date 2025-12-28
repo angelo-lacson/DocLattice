@@ -42,6 +42,14 @@ const Container = styled.div`
   padding: 2em;
   max-width: 1400px;
   margin: 0 auto;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+
+  @media (max-width: 768px) {
+    padding: 1em;
+  }
 `;
 
 const StyledSegment = styled(Segment)`
@@ -110,6 +118,18 @@ const FilterBar = styled.div`
   margin-bottom: 1.5em;
   flex-wrap: wrap;
   align-items: center;
+`;
+
+const TableWrapper = styled.div`
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -0.5em;
+  padding: 0 0.5em;
+
+  @media (max-width: 768px) {
+    margin: 0 -1em;
+    padding: 0 1em;
+  }
 `;
 
 interface LeaderboardProps {
@@ -347,82 +367,84 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
               </Message>
             )}
 
-            <Table basic="very" celled selectable>
-              <Table.Header>
-                <Table.Row>
-                  <Table.HeaderCell width={1}>Rank</Table.HeaderCell>
-                  <Table.HeaderCell>User</Table.HeaderCell>
-                  <Table.HeaderCell width={3}>Score</Table.HeaderCell>
-                  <Table.HeaderCell width={2}>Details</Table.HeaderCell>
-                </Table.Row>
-              </Table.Header>
+            <TableWrapper>
+              <Table basic="very" celled selectable>
+                <Table.Header>
+                  <Table.Row>
+                    <Table.HeaderCell width={1}>Rank</Table.HeaderCell>
+                    <Table.HeaderCell>User</Table.HeaderCell>
+                    <Table.HeaderCell width={3}>Score</Table.HeaderCell>
+                    <Table.HeaderCell width={2}>Details</Table.HeaderCell>
+                  </Table.Row>
+                </Table.Header>
 
-              <Table.Body>
-                {leaderboard.entries.map((entry: LeaderboardEntry) => (
-                  <UserRow
-                    key={entry.user.id}
-                    $isCurrentUser={
-                      leaderboard.currentUserRank !== null &&
-                      entry.rank === leaderboard.currentUserRank
-                    }
-                    onClick={() => handleUserClick(entry.user.slug)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <Table.Cell>
-                      <RankBadge $rank={entry.rank}>
-                        {entry.rank <= 3 ? (
-                          <Medal size={20} />
-                        ) : (
-                          <span>{entry.rank}</span>
-                        )}
-                      </RankBadge>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5em",
-                        }}
-                      >
-                        <strong>{entry.user.username}</strong>
-                        {entry.isRisingStar && (
-                          <Label size="tiny" color="orange">
-                            <TrendingUp
-                              size={12}
-                              style={{ marginRight: "4px" }}
-                            />
-                            Rising Star
-                          </Label>
-                        )}
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5em",
-                        }}
-                      >
-                        {getMetricIcon(metric)}
-                        <strong>{getScoreLabel(metric, entry.score)}</strong>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div style={{ fontSize: "0.9em", color: "#64748b" }}>
-                        {entry.badgeCount !== undefined &&
-                          `${entry.badgeCount} badges `}
-                        {entry.messageCount !== undefined &&
-                          `${entry.messageCount} messages `}
-                        {entry.reputation !== undefined &&
-                          `${entry.reputation} rep`}
-                      </div>
-                    </Table.Cell>
-                  </UserRow>
-                ))}
-              </Table.Body>
-            </Table>
+                <Table.Body>
+                  {leaderboard.entries.map((entry: LeaderboardEntry) => (
+                    <UserRow
+                      key={entry.user.id}
+                      $isCurrentUser={
+                        leaderboard.currentUserRank !== null &&
+                        entry.rank === leaderboard.currentUserRank
+                      }
+                      onClick={() => handleUserClick(entry.user.slug)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <Table.Cell>
+                        <RankBadge $rank={entry.rank}>
+                          {entry.rank <= 3 ? (
+                            <Medal size={20} />
+                          ) : (
+                            <span>{entry.rank}</span>
+                          )}
+                        </RankBadge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5em",
+                          }}
+                        >
+                          <strong>{entry.user.username}</strong>
+                          {entry.isRisingStar && (
+                            <Label size="tiny" color="orange">
+                              <TrendingUp
+                                size={12}
+                                style={{ marginRight: "4px" }}
+                              />
+                              Rising Star
+                            </Label>
+                          )}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5em",
+                          }}
+                        >
+                          {getMetricIcon(metric)}
+                          <strong>{getScoreLabel(metric, entry.score)}</strong>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div style={{ fontSize: "0.9em", color: "#64748b" }}>
+                          {entry.badgeCount !== undefined &&
+                            `${entry.badgeCount} badges `}
+                          {entry.messageCount !== undefined &&
+                            `${entry.messageCount} messages `}
+                          {entry.reputation !== undefined &&
+                            `${entry.reputation} rep`}
+                        </div>
+                      </Table.Cell>
+                    </UserRow>
+                  ))}
+                </Table.Body>
+              </Table>
+            </TableWrapper>
           </>
         ) : (
           <Message info>

@@ -10,6 +10,7 @@ import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
 import { color } from "../../theme/colors";
+import { MENTION_PREVIEW_LENGTH } from "../../assets/configurations/constants";
 import {
   UnifiedMentionPicker,
   UnifiedMentionPickerRef,
@@ -18,6 +19,7 @@ import {
   useUnifiedMentionSearch,
   UnifiedMentionResource,
 } from "./hooks/useUnifiedMentionSearch";
+import { sanitizeForMention } from "../../utils/textSanitization";
 import type { MarkdownStorage } from "tiptap-markdown";
 
 const ComposerContainer = styled.div`
@@ -44,6 +46,12 @@ const Toolbar = styled.div`
   padding: 8px;
   border-bottom: 1px solid ${({ theme }) => color.N4};
   background: ${({ theme }) => color.N2};
+
+  /* Mobile: Larger touch targets - Part of Issue #686 */
+  @media (max-width: 600px) {
+    padding: 8px 12px;
+    gap: 8px;
+  }
 `;
 
 const ToolbarButton = styled.button<{ $isActive?: boolean }>`
@@ -72,6 +80,18 @@ const ToolbarButton = styled.button<{ $isActive?: boolean }>`
   svg {
     width: 16px;
     height: 16px;
+  }
+
+  /* Mobile: Larger touch targets - Part of Issue #686 */
+  @media (max-width: 600px) {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
   }
 `;
 
@@ -349,8 +369,9 @@ export function MessageComposer({
                         };
 
                       case "corpus":
+                        // Issue #689: Show corpus name instead of cryptic slug
                         return {
-                          label: `@corpus:${resource.corpus!.slug}`,
+                          label: resource.title,
                           href: `/c/${resource.corpus!.creator.slug}/${
                             resource.corpus!.slug
                           }`,
@@ -360,10 +381,13 @@ export function MessageComposer({
                       case "document":
                         const doc = resource.document!;
                         const corpus = doc.corpus;
+                        // Issue #689: Show document title instead of cryptic slug format
+                        // Include corpus context if available
+                        const docLabel = corpus
+                          ? `${resource.title} (in ${corpus.title})`
+                          : resource.title;
                         return {
-                          label: corpus
-                            ? `@corpus:${corpus.slug}/document:${doc.slug}`
-                            : `@document:${doc.slug}`,
+                          label: docLabel,
                           href: corpus
                             ? `/d/${corpus.creator.slug}/${corpus.slug}/${doc.slug}`
                             : `/d/${doc.creator.slug}/${doc.slug}`,
@@ -379,8 +403,24 @@ export function MessageComposer({
                         const baseUrl = annCorpus
                           ? `/d/${annCorpus.creator.slug}/${annCorpus.slug}/${annDoc.slug}`
                           : `/d/${annDoc.creator.slug}/${annDoc.slug}`;
+                        // Issue #689: Show annotation text preview instead of cryptic ID
+                        // Format: "Text preview..." (Label) in Document
+                        // Sanitize user-generated content to prevent XSS (per CLAUDE.md)
+                        const labelText = ann.label?.text ?? "Annotation";
+                        const sanitizedRawText = ann.rawText
+                          ? sanitizeForMention(ann.rawText)
+                          : null;
+                        const annTextPreview = sanitizedRawText
+                          ? sanitizedRawText.length > MENTION_PREVIEW_LENGTH
+                            ? `"${sanitizedRawText.substring(
+                                0,
+                                MENTION_PREVIEW_LENGTH
+                              )}…"`
+                            : `"${sanitizedRawText}"`
+                          : `[${labelText}]`;
+                        const annLabel = `${annTextPreview} (${labelText})`;
                         return {
-                          label: `@annotation:${resource.id}`,
+                          label: annLabel,
                           href: `${baseUrl}?ann=${resource.id}&structural=true`,
                           type: "annotation",
                         };

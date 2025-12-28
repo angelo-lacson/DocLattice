@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button, Icon } from "semantic-ui-react";
 import styled from "styled-components";
 import { LabelSetSelector } from "../widgets/CRUD/LabelSetSelector";
@@ -325,11 +325,11 @@ const SubmitButton = styled(Button)`
 `;
 
 const IconUploadWrapper = styled.div`
-  max-width: 300px;
+  max-width: 280px;
   margin: 0 auto;
 
   @media (max-width: 768px) {
-    max-width: 200px;
+    max-width: 150px;
   }
 `;
 
@@ -403,8 +403,21 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     preferredEmbedder: string | null;
   } | null>(null);
 
-  // Initialize form from corpus data
+  // Track the previous open state to detect modal open transitions
+  // This prevents re-initializing form when user is typing on mobile
+  // Initialize to false so that if modal starts open, we still initialize the form
+  const prevOpenRef = useRef(false);
+
+  // Initialize form from corpus data only when modal opens (not on every render)
   useEffect(() => {
+    // Only initialize form when modal transitions from closed to open
+    const justOpened = open && !prevOpenRef.current;
+    prevOpenRef.current = open;
+
+    if (!justOpened) {
+      return;
+    }
+
     if (corpus) {
       const corpusTitle = corpus.title || "";
       const corpusSlug = corpus.slug || "";
@@ -441,7 +454,10 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       setPreferredEmbedder(null);
       setOriginalValues(null);
     }
-  }, [corpus, open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // corpus intentionally omitted - we only want to initialize on modal open,
+    // not when corpus prop changes (which would overwrite user edits mid-form)
+  }, [open]);
 
   // Handle form field changes
   const handleTitleChange = useCallback(
