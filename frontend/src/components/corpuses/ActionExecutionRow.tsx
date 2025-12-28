@@ -287,16 +287,18 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
           {execution.corpusAction.name}
         </ActionName>
         <DocumentName title={targetName || "Unknown"}>
-          {execution.document ? (
+          {execution.document?.title ? (
             <DocumentLink onClick={handleDocumentClick}>
               {execution.document.title}
             </DocumentLink>
-          ) : isThreadAction ? (
+          ) : execution.conversation?.title ? (
             <span style={{ color: "#6366f1" }}>
-              🗨️ {execution.conversation?.title || "Thread"}
+              🗨️ {execution.conversation.title}
             </span>
           ) : (
-            <span style={{ color: "#94a3b8" }}>N/A</span>
+            <span style={{ color: "#94a3b8" }}>
+              {execution.conversation ? "🗨️ Thread" : "N/A"}
+            </span>
           )}
         </DocumentName>
         <TypeBadge>{typeLabel}</TypeBadge>
