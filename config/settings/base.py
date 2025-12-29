@@ -988,11 +988,11 @@ MODE = "LOCAL"
 # ------------------------------------------------------------------------------
 # See docs/mcp/mcp_interface_proposal.md for details
 MCP_SERVER = {
-    'enabled': env.bool('MCP_SERVER_ENABLED', default=False),
-    'max_results_per_page': env.int('MCP_MAX_RESULTS_PER_PAGE', default=100),
-    'rate_limit': {
-        'requests': env.int('MCP_RATE_LIMIT_REQUESTS', default=100),
-        'window': env.int('MCP_RATE_LIMIT_WINDOW', default=60),
+    "enabled": env.bool("MCP_SERVER_ENABLED", default=False),
+    "max_results_per_page": env.int("MCP_MAX_RESULTS_PER_PAGE", default=100),
+    "rate_limit": {
+        "requests": env.int("MCP_RATE_LIMIT_REQUESTS", default=100),
+        "window": env.int("MCP_RATE_LIMIT_WINDOW", default=60),
     },
-    'cache_ttl': env.int('MCP_CACHE_TTL', default=300),
+    "cache_ttl": env.int("MCP_CACHE_TTL", default=300),
 }

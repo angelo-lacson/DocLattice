@@ -1,4 +1,5 @@
 """Response formatters for MCP resources and tools."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -10,18 +11,20 @@ if TYPE_CHECKING:
     from opencontractserver.documents.models import Document
 
 
-def format_corpus_summary(corpus: "Corpus") -> dict:
+def format_corpus_summary(corpus: Corpus) -> dict:
     """Format a corpus for list display."""
     return {
         "slug": corpus.slug,
         "title": corpus.title,
         "description": corpus.description or "",
-        "document_count": corpus.document_count() if hasattr(corpus, 'document_count') else 0,
+        "document_count": (
+            corpus.document_count() if hasattr(corpus, "document_count") else 0
+        ),
         "created": corpus.created.isoformat() if corpus.created else None,
     }
 
 
-def format_document_summary(document: "Document") -> dict:
+def format_document_summary(document: Document) -> dict:
     """Format a document for list display."""
     return {
         "slug": document.slug,
@@ -33,7 +36,7 @@ def format_document_summary(document: "Document") -> dict:
     }
 
 
-def format_annotation(annotation: "Annotation") -> dict:
+def format_annotation(annotation: Annotation) -> dict:
     """Format an annotation for API response."""
     label_data = None
     if annotation.annotation_label:
@@ -53,13 +56,13 @@ def format_annotation(annotation: "Annotation") -> dict:
     }
 
 
-def format_thread_summary(thread: "Conversation") -> dict:
+def format_thread_summary(thread: Conversation) -> dict:
     """Format a thread for list display."""
     return {
         "id": str(thread.id),
         "title": thread.title or "",
         "description": thread.description or "",
-        "message_count": getattr(thread, 'message_count', 0),
+        "message_count": getattr(thread, "message_count", 0),
         "is_pinned": thread.is_pinned,
         "is_locked": thread.is_locked,
         "created_at": thread.created.isoformat() if thread.created else None,
@@ -67,7 +70,7 @@ def format_thread_summary(thread: "Conversation") -> dict:
     }
 
 
-def format_message(message: "ChatMessage") -> dict:
+def format_message(message: ChatMessage) -> dict:
     """Format a single message without replies."""
     return {
         "id": str(message.id),
@@ -80,10 +83,7 @@ def format_message(message: "ChatMessage") -> dict:
 
 
 def format_message_with_replies(
-    message: "ChatMessage",
-    user,
-    max_depth: int = 3,
-    current_depth: int = 0
+    message: ChatMessage, user, max_depth: int = 3, current_depth: int = 0
 ) -> dict:
     """
     Format a message with its replies recursively.
@@ -96,12 +96,12 @@ def format_message_with_replies(
     if current_depth >= max_depth:
         formatted["replies"] = []
         formatted["has_more_replies"] = (
-            message.replies.exists() if hasattr(message, 'replies') else False
+            message.replies.exists() if hasattr(message, "replies") else False
         )
         return formatted
 
     # Access prefetched replies (no additional queries if prefetched)
-    replies = list(message.replies.all()) if hasattr(message, 'replies') else []
+    replies = list(message.replies.all()) if hasattr(message, "replies") else []
 
     formatted["replies"] = [
         format_message_with_replies(reply, user, max_depth, current_depth + 1)

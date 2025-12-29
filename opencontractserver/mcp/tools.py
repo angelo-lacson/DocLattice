@@ -2,6 +2,7 @@
 
 Tools provide dynamic operations - they execute queries and return results.
 """
+
 from __future__ import annotations
 
 from django.contrib.auth.models import AnonymousUser
@@ -17,11 +18,7 @@ from .formatters import (
 )
 
 
-def list_public_corpuses(
-    limit: int = 20,
-    offset: int = 0,
-    search: str = ""
-) -> dict:
+def list_public_corpuses(limit: int = 20, offset: int = 0, search: str = "") -> dict:
     """
     List public corpuses visible to anonymous users.
 
@@ -42,24 +39,19 @@ def list_public_corpuses(
     qs = Corpus.objects.visible_to_user(anonymous)
 
     if search:
-        qs = qs.filter(
-            Q(title__icontains=search) | Q(description__icontains=search)
-        )
+        qs = qs.filter(Q(title__icontains=search) | Q(description__icontains=search))
 
     total_count = qs.count()
-    corpuses = list(qs[offset:offset + limit])
+    corpuses = list(qs[offset : offset + limit])
 
     return {
         "total_count": total_count,
-        "corpuses": [format_corpus_summary(c) for c in corpuses]
+        "corpuses": [format_corpus_summary(c) for c in corpuses],
     }
 
 
 def list_documents(
-    corpus_slug: str,
-    limit: int = 50,
-    offset: int = 0,
-    search: str = ""
+    corpus_slug: str, limit: int = 50, offset: int = 0, search: str = ""
 ) -> dict:
     """
     List documents in a public corpus.
@@ -83,23 +75,17 @@ def list_documents(
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
     # Get public documents in this corpus
-    qs = (
-        Document.objects
-        .visible_to_user(anonymous)
-        .filter(corpuses=corpus)
-    )
+    qs = Document.objects.visible_to_user(anonymous).filter(corpuses=corpus)
 
     if search:
-        qs = qs.filter(
-            Q(title__icontains=search) | Q(description__icontains=search)
-        )
+        qs = qs.filter(Q(title__icontains=search) | Q(description__icontains=search))
 
     total_count = qs.count()
-    documents = list(qs[offset:offset + limit])
+    documents = list(qs[offset : offset + limit])
 
     return {
         "total_count": total_count,
-        "documents": [format_document_summary(d) for d in documents]
+        "documents": [format_document_summary(d) for d in documents],
     }
 
 
@@ -120,16 +106,14 @@ def get_document_text(corpus_slug: str, document_slug: str) -> dict:
     anonymous = AnonymousUser()
 
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
-    document = (
-        Document.objects
-        .visible_to_user(anonymous)
-        .get(corpuses=corpus, slug=document_slug)
+    document = Document.objects.visible_to_user(anonymous).get(
+        corpuses=corpus, slug=document_slug
     )
 
     full_text = ""
     if document.txt_extract_file:
         try:
-            with document.txt_extract_file.open('r') as f:
+            with document.txt_extract_file.open("r") as f:
                 full_text = f.read()
         except Exception:
             full_text = ""
@@ -137,7 +121,7 @@ def get_document_text(corpus_slug: str, document_slug: str) -> dict:
     return {
         "document_slug": document.slug,
         "page_count": document.page_count or 0,
-        "text": full_text
+        "text": full_text,
     }
 
 
@@ -147,7 +131,7 @@ def list_annotations(
     page: int | None = None,
     label_text: str | None = None,
     limit: int = 100,
-    offset: int = 0
+    offset: int = 0,
 ) -> dict:
     """
     List annotations on a document with optional filtering.
@@ -177,9 +161,7 @@ def list_annotations(
 
     # Use query optimizer - eliminates N+1 permission queries
     qs = AnnotationQueryOptimizer.get_document_annotations(
-        document_id=document.id,
-        user=anonymous,
-        corpus_id=corpus.id
+        document_id=document.id, user=anonymous, corpus_id=corpus.id
     )
 
     # Apply filters
@@ -190,19 +172,15 @@ def list_annotations(
         qs = qs.filter(annotation_label__text=label_text)
 
     total_count = qs.count()
-    annotations = list(qs.select_related('annotation_label')[offset:offset + limit])
+    annotations = list(qs.select_related("annotation_label")[offset : offset + limit])
 
     return {
         "total_count": total_count,
-        "annotations": [format_annotation(a) for a in annotations]
+        "annotations": [format_annotation(a) for a in annotations],
     }
 
 
-def search_corpus(
-    corpus_slug: str,
-    query: str,
-    limit: int = 10
-) -> dict:
+def search_corpus(corpus_slug: str, query: str, limit: int = 10) -> dict:
     """
     Semantic search within a corpus using vector embeddings.
 
@@ -231,20 +209,21 @@ def search_corpus(
         if query_vector:
             # Search documents using vector similarity
             doc_results = list(
-                Document.objects
-                .visible_to_user(anonymous)
+                Document.objects.visible_to_user(anonymous)
                 .filter(corpuses=corpus)
                 .search_by_embedding(query_vector, embedder_path, top_k=limit)
             )
 
             results = []
             for doc in doc_results:
-                results.append({
-                    "type": "document",
-                    "slug": doc.slug,
-                    "title": doc.title or "",
-                    "similarity_score": float(getattr(doc, 'similarity_score', 0)),
-                })
+                results.append(
+                    {
+                        "type": "document",
+                        "slug": doc.slug,
+                        "title": doc.title or "",
+                        "similarity_score": float(getattr(doc, "similarity_score", 0)),
+                    }
+                )
 
             return {"query": query, "results": results}
     except Exception:
@@ -259,30 +238,27 @@ def _text_search_fallback(corpus, query: str, limit: int, user) -> dict:
     from opencontractserver.documents.models import Document
 
     documents = list(
-        Document.objects
-        .visible_to_user(user)
+        Document.objects.visible_to_user(user)
         .filter(corpuses=corpus)
-        .filter(Q(title__icontains=query) | Q(description__icontains=query))
-        [:limit]
+        .filter(Q(title__icontains=query) | Q(description__icontains=query))[:limit]
     )
 
     results = []
     for doc in documents:
-        results.append({
-            "type": "document",
-            "slug": doc.slug,
-            "title": doc.title or "",
-            "similarity_score": None,
-        })
+        results.append(
+            {
+                "type": "document",
+                "slug": doc.slug,
+                "title": doc.title or "",
+                "similarity_score": None,
+            }
+        )
 
     return {"query": query, "results": results}
 
 
 def list_threads(
-    corpus_slug: str,
-    document_slug: str | None = None,
-    limit: int = 20,
-    offset: int = 0
+    corpus_slug: str, document_slug: str | None = None, limit: int = 20, offset: int = 0
 ) -> dict:
     """
     List discussion threads in a corpus or document.
@@ -308,13 +284,11 @@ def list_threads(
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
     qs = (
-        Conversation.objects
-        .visible_to_user(anonymous)
+        Conversation.objects.visible_to_user(anonymous)
         .filter(
-            conversation_type=ConversationTypeChoices.THREAD,
-            chat_with_corpus=corpus
+            conversation_type=ConversationTypeChoices.THREAD, chat_with_corpus=corpus
         )
-        .annotate(message_count=Count('messages'))
+        .annotate(message_count=Count("messages"))
     )
 
     if document_slug:
@@ -324,21 +298,19 @@ def list_threads(
         qs = qs.filter(chat_with_document=document)
 
     # Order by pinned first, then recent activity
-    qs = qs.order_by('-is_pinned', '-modified')
+    qs = qs.order_by("-is_pinned", "-modified")
 
     total_count = qs.count()
-    threads = list(qs[offset:offset + limit])
+    threads = list(qs[offset : offset + limit])
 
     return {
         "total_count": total_count,
-        "threads": [format_thread_summary(t) for t in threads]
+        "threads": [format_thread_summary(t) for t in threads],
     }
 
 
 def get_thread_messages(
-    corpus_slug: str,
-    thread_id: int,
-    flatten: bool = False
+    corpus_slug: str, thread_id: int, flatten: bool = False
 ) -> dict:
     """
     Retrieve all messages in a thread with hierarchical structure.
@@ -364,12 +336,11 @@ def get_thread_messages(
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
     thread = (
-        Conversation.objects
-        .visible_to_user(anonymous)
+        Conversation.objects.visible_to_user(anonymous)
         .filter(
             conversation_type=ConversationTypeChoices.THREAD,
             chat_with_corpus=corpus,
-            id=thread_id
+            id=thread_id,
         )
         .first()
     )
@@ -379,30 +350,26 @@ def get_thread_messages(
 
     if flatten:
         messages = list(
-            ChatMessage.objects
-            .visible_to_user(anonymous)
+            ChatMessage.objects.visible_to_user(anonymous)
             .filter(conversation=thread)
-            .order_by('created_at')
+            .order_by("created_at")
         )
         return {
             "thread_id": str(thread.id),
             "title": thread.title or "",
-            "messages": [format_message(m) for m in messages]
+            "messages": [format_message(m) for m in messages],
         }
 
     # Build hierarchical structure with prefetch
     root_messages = list(
-        ChatMessage.objects
-        .visible_to_user(anonymous)
+        ChatMessage.objects.visible_to_user(anonymous)
         .filter(conversation=thread, parent_message__isnull=True)
-        .prefetch_related('replies__replies')
-        .order_by('created_at')
+        .prefetch_related("replies__replies")
+        .order_by("created_at")
     )
 
     return {
         "thread_id": str(thread.id),
         "title": thread.title or "",
-        "messages": [
-            format_message_with_replies(m, anonymous) for m in root_messages
-        ]
+        "messages": [format_message_with_replies(m, anonymous) for m in root_messages],
     }

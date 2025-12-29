@@ -16,7 +16,7 @@ RATE_LIMIT_WINDOW = 60  # seconds
 CACHE_TTL = 300  # seconds
 
 # URI Pattern Constants
-SLUG_PATTERN = re.compile(r'^[A-Za-z0-9-]+$')
+SLUG_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
 
 
 def get_mcp_setting(key: str, default: Optional[Any] = None) -> Any:
@@ -39,7 +39,7 @@ def get_mcp_setting(key: str, default: Optional[Any] = None) -> Any:
     """
     from django.conf import settings
 
-    mcp_settings = getattr(settings, 'MCP_SERVER', {})
+    mcp_settings = getattr(settings, "MCP_SERVER", {})
     return mcp_settings.get(key, default)
 
 

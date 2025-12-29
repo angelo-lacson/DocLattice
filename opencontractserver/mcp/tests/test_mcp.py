@@ -1,4 +1,5 @@
 """Tests for MCP server functionality."""
+
 import json
 
 from django.contrib.auth import get_user_model
@@ -6,7 +7,6 @@ from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase
 
 from opencontractserver.corpuses.models import Corpus
-
 
 User = get_user_model()
 
@@ -30,7 +30,9 @@ class URIParserTest(TestCase):
         self.assertIsNone(URIParser.parse_corpus("corpus://"))
         self.assertIsNone(URIParser.parse_corpus("document://my-corpus"))
         self.assertIsNone(URIParser.parse_corpus("corpus://my corpus"))  # space invalid
-        self.assertIsNone(URIParser.parse_corpus("corpus://my_corpus"))  # underscore invalid
+        self.assertIsNone(
+            URIParser.parse_corpus("corpus://my_corpus")
+        )  # underscore invalid
 
     def test_parse_document_uri(self):
         """Test parsing document URIs."""
@@ -128,9 +130,7 @@ class MCPResourcesTest(TestCase):
     def setUpTestData(cls):
         """Create test data."""
         cls.owner = User.objects.create_user(
-            username="testowner",
-            email="owner@test.com",
-            password="testpass123"
+            username="testowner", email="owner@test.com", password="testpass123"
         )
 
         # Create public corpus
@@ -138,7 +138,7 @@ class MCPResourcesTest(TestCase):
             title="Public Test Corpus",
             description="A public test corpus",
             creator=cls.owner,
-            is_public=True
+            is_public=True,
         )
 
         # Create private corpus
@@ -146,7 +146,7 @@ class MCPResourcesTest(TestCase):
             title="Private Test Corpus",
             description="A private test corpus",
             creator=cls.owner,
-            is_public=False
+            is_public=False,
         )
 
     def test_get_public_corpus_resource(self):
@@ -175,9 +175,7 @@ class MCPToolsTest(TestCase):
     def setUpTestData(cls):
         """Create test data."""
         cls.owner = User.objects.create_user(
-            username="toolsowner",
-            email="tools@test.com",
-            password="testpass123"
+            username="toolsowner", email="tools@test.com", password="testpass123"
         )
 
         # Create public corpuses
@@ -185,20 +183,18 @@ class MCPToolsTest(TestCase):
             title="Corpus One",
             description="First corpus",
             creator=cls.owner,
-            is_public=True
+            is_public=True,
         )
         cls.corpus2 = Corpus.objects.create(
             title="Corpus Two",
             description="Second corpus",
             creator=cls.owner,
-            is_public=True
+            is_public=True,
         )
 
         # Create private corpus (should not appear)
         cls.private = Corpus.objects.create(
-            title="Private Corpus",
-            creator=cls.owner,
-            is_public=False
+            title="Private Corpus", creator=cls.owner, is_public=False
         )
 
     def test_list_public_corpuses(self):
@@ -238,8 +234,7 @@ class MCPToolsTest(TestCase):
 
         # Different results
         self.assertNotEqual(
-            result["corpuses"][0]["slug"],
-            result2["corpuses"][0]["slug"]
+            result["corpuses"][0]["slug"], result2["corpuses"][0]["slug"]
         )
 
     def test_list_public_corpuses_max_limit(self):
@@ -258,16 +253,14 @@ class MCPFormattersTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.owner = User.objects.create_user(
-            username="formatowner",
-            email="format@test.com",
-            password="testpass123"
+            username="formatowner", email="format@test.com", password="testpass123"
         )
 
         cls.corpus = Corpus.objects.create(
             title="Format Test Corpus",
             description="Testing formatters",
             creator=cls.owner,
-            is_public=True
+            is_public=True,
         )
 
     def test_format_corpus_summary(self):
