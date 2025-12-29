@@ -3318,7 +3318,7 @@ export interface RestoreDeletedDocumentOutput {
 }
 
 export const PERMANENTLY_DELETE_DOCUMENT = gql`
-  mutation PermanentlyDeleteDocument($documentId: ID!, $corpusId: ID!) {
+  mutation PermanentlyDeleteDocument($documentId: String!, $corpusId: String!) {
     permanentlyDeleteDocument(documentId: $documentId, corpusId: $corpusId) {
       ok
       message
@@ -3339,7 +3339,7 @@ export interface PermanentlyDeleteDocumentOutput {
 }
 
 export const EMPTY_TRASH = gql`
-  mutation EmptyTrash($corpusId: ID!) {
+  mutation EmptyTrash($corpusId: String!) {
     emptyTrash(corpusId: $corpusId) {
       ok
       message

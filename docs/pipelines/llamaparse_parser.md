@@ -22,8 +22,8 @@ sequenceDiagram
     API->>API: ML-based parsing
     API->>API: Layout extraction
     API-->>LP: JSON with layout data
-    LP->>LP: Convert to PAWLS tokens
-    LP->>LP: Create annotations
+    LP->>LP: Parse bounding boxes
+    LP->>LP: Create annotations (bbox only)
     LP->>DB: Store parsed data
     LP-->>U: OpenContractDocExport
 ```
@@ -34,9 +34,9 @@ sequenceDiagram
 - **Layout Extraction**: Returns bounding boxes for all document elements
 - **Multiple Output Formats**: Supports JSON (with layout), markdown, and plain text
 - **Structural Annotations**: Automatically creates annotations for document structure
-- **PAWLS Token Generation**: Converts layout data to PAWLS-compatible tokens
 - **Multi-format Support**: Parses both PDF and DOCX files
 - **Parallel Processing**: Configurable worker count for batch processing
+- **Automatic OCR**: Handles scanned documents automatically
 
 ## Configuration
 
@@ -192,21 +192,17 @@ LlamaParse elements are mapped to OpenContracts annotation labels:
    - Uses `load_data()` for text/markdown mode
 
 3. **Bounding Box Conversion**
-   - LlamaParse returns fractional coordinates (0-1)
+   - LlamaParse returns coordinates in various formats (fractional 0-1 or absolute)
    - Converts to absolute page coordinates
-   - Handles multiple bbox formats (x/y/width/height, left/top/right/bottom, arrays)
+   - Handles multiple bbox formats (`x/y/w/h`, `left/top/right/bottom`, `x1/y1/x2/y2`, arrays)
+   - Applies sanity checks and bounds clamping
 
-4. **PAWLS Token Generation**
-   - Splits text into words
-   - Distributes tokens across bounding box
-   - Creates token references for annotations
+4. **Annotation Creation**
+   - Maps element types to OpenContracts labels
+   - Creates structural annotations with bounding boxes
+   - Annotations use empty `tokensJsons` (see [Limitations](#limitations))
 
-5. **Annotation Creation**
-   - Maps element types to labels
-   - Creates structural annotations with bounds
-   - Links annotations to tokens
-
-6. **Cleanup**
+5. **Cleanup**
    - Removes temporary file
    - Returns OpenContractDocExport
 
@@ -318,10 +314,63 @@ Add to requirements:
 llama-parse>=0.4.0
 ```
 
+## Limitations
+
+LlamaParse has several limitations compared to other parsers like Docling:
+
+### No Token-Level Data
+
+LlamaParse only provides **element-level bounding boxes**, not token-level (word-level) positions. This means:
+
+- Annotations display as bounding box outlines only, without individual word highlighting
+- The `tokensJsons` field in annotations is empty
+- Text selection and word-level interactions are not available for LlamaParse-generated annotations
+- The frontend handles this gracefully by showing just the bounding box boundary
+
+**Workaround**: If you need token-level precision, use the Docling parser instead, which provides full PAWLS token data.
+
+### No Parent-Child Relationships
+
+LlamaParse returns **flat layout blocks** without hierarchical structure:
+
+- No parent/child relationships between elements (e.g., list items under a list)
+- No nesting information for sections/subsections
+- The `relationships` field in the export is always empty
+- Document structure must be inferred from element types and spatial positioning
+
+**Workaround**: Use the Docling parser for relationship detection, which can group related elements.
+
+### Cloud Processing Required
+
+- Documents are sent to LlamaIndex's cloud infrastructure for processing
+- Requires internet connectivity
+- Subject to LlamaIndex's data handling policies
+- Not suitable for highly sensitive documents that cannot leave your network
+
+**Workaround**: Use Docling or NLM-Ingest for fully local processing.
+
+### Per-Page Pricing
+
+- LlamaParse charges per page processed (with layout extraction: 1 extra credit per page)
+- Costs can add up for large document volumes
+- Free tier has limited credits
+
+### Bounding Box Precision
+
+- Bounding boxes may be slightly larger or smaller than the actual content
+- Complex layouts (multi-column, overlapping elements) may have less accurate boxes
+- Tables and figures are detected as single blocks without internal structure
+
+### No Streaming Support
+
+- Entire document must be uploaded and processed before results are returned
+- Large documents may have significant processing time
+- No progress indicators during parsing
+
 ## See Also
 
 - [Pipeline Overview](pipeline_overview.md)
-- [Docling Parser](docling_parser.md) - Local ML-based alternative
+- [Docling Parser](docling_parser.md) - Local ML-based alternative with token-level data and relationships
 - [NLM-Ingest Parser](nlm_ingest_parser.md) - Another local alternative
-- [LlamaParse Documentation](https://docs.cloud.llamaindex.ai/)
+- [LlamaParse Documentation](https://developers.llamaindex.ai/python/cloud/llamaparse/)
 - [LlamaIndex Cloud](https://cloud.llamaindex.ai/)

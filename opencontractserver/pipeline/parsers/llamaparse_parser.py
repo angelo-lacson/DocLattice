@@ -24,7 +24,6 @@ from opencontractserver.types.dicts import (
     OpenContractsSinglePageAnnotationType,
     PawlsPagePythonType,
     PawlsTokenPythonType,
-    TokenIdPythonType,
 )
 
 logger = logging.getLogger(__name__)
@@ -258,20 +257,25 @@ class LlamaParseParser(BaseParser):
         pawls_pages: list[PawlsPagePythonType] = []
         annotations: list[OpenContractsAnnotationPythonType] = []
 
-        # Track token indices for annotations - these are global across all pages
+        # Track annotation IDs
         annotation_id_counter = 0
-        token_idx = 0  # Global token index across all pages
 
         for page_idx, page in enumerate(pages):
             page_text = page.get("text", "")
             full_text_parts.append(page_text)
 
+            # Log full page structure on first page for debugging
+            if page_idx == 0:
+                page_keys = list(page.keys())
+                logger.info(f"DEBUG: Page keys: {page_keys}")
+
             # Get page dimensions (default to standard US Letter size in points: 8.5" x 11")
             # Note: A4 size would be 595 x 842 points
+            # LlamaParse may use different key names for dimensions
             DEFAULT_WIDTH = 612
             DEFAULT_HEIGHT = 792
-            page_width = page.get("width")
-            page_height = page.get("height")
+            page_width = page.get("width", page.get("w", page.get("pageWidth")))
+            page_height = page.get("height", page.get("h", page.get("pageHeight")))
 
             # Validate dimensions - must be positive numbers
             if page_width is None or page_width <= 0:
@@ -300,85 +304,86 @@ class LlamaParseParser(BaseParser):
             items = page.get("items", [])
 
             # Process items (elements with text and positions)
+            # Debug: Log first few items to understand bbox format
+            if page_idx == 0 and items:
+                logger.info(f"DEBUG: Page dimensions: {page_width}x{page_height}")
+                # Log full structure of first item for debugging
+                if items:
+                    logger.info(f"DEBUG: Full first item structure: {items[0]}")
+                for i, debug_item in enumerate(items[:3]):
+                    # Check all possible bbox key names
+                    bbox_val = debug_item.get(
+                        "bBox",
+                        debug_item.get("bbox", debug_item.get("bounding_box", "NONE")),
+                    )
+                    logger.info(
+                        f"DEBUG: Item {i} keys: {debug_item.keys()}, "
+                        f"bBox: {bbox_val}, "
+                        f"text: {debug_item.get('text', debug_item.get('value', ''))[:50]}"
+                    )
+
             for item in items:
                 item_text = item.get("text", "") or item.get("value", "")
                 item_type = item.get("type", "text").lower()
-                bbox = item.get("bbox", item.get("bounding_box", {}))
+                # LlamaParse uses 'bBox' (camelCase), also check 'bbox' and 'bounding_box'
+                bbox = item.get("bBox", item.get("bbox", item.get("bounding_box", {})))
 
                 if not item_text.strip():
                     continue
 
-                # Convert bbox (which may be fractional 0-1) to absolute coordinates
-                pawls_tokens, token_bounds = self._create_pawls_tokens_from_bbox(
+                # Parse bbox to get bounds (no tokens - LlamaParse doesn't provide them)
+                _, bounds = self._create_pawls_tokens_from_bbox(
                     item_text,
                     bbox,
                     page_width,
                     page_height,
-                    token_idx,
+                    annotation_id_counter,  # Just used for debug logging
                 )
 
-                if pawls_tokens:
-                    # Add tokens to page
-                    start_token_idx = token_idx
-                    for token in pawls_tokens:
-                        pawls_page["tokens"].append(token)
-                        token_idx += 1
-                    end_token_idx = token_idx
-
-                    # Create annotation for this element
-                    label = self.ELEMENT_TYPE_MAPPING.get(item_type, "Text Block")
-                    annotation = self._create_annotation(
-                        annotation_id=str(annotation_id_counter),
-                        label=label,
-                        raw_text=item_text,
-                        page_idx=page_idx,
-                        bounds=token_bounds,
-                        start_token_idx=start_token_idx,
-                        end_token_idx=end_token_idx,
-                    )
-                    annotations.append(annotation)
-                    annotation_id_counter += 1
+                # Create annotation for this element
+                label = self.ELEMENT_TYPE_MAPPING.get(item_type, "Text Block")
+                annotation = self._create_annotation(
+                    annotation_id=str(annotation_id_counter),
+                    label=label,
+                    raw_text=item_text,
+                    page_idx=page_idx,
+                    bounds=bounds,
+                )
+                annotations.append(annotation)
+                annotation_id_counter += 1
 
             # If no items but we have layout, process layout elements
             if not items and layout_elements:
                 for element in layout_elements:
                     element_type = element.get("label", "text").lower()
-                    bbox = element.get("bbox", {})
+                    # Check all possible bbox key names (bBox, bbox, bounding_box)
+                    bbox = element.get(
+                        "bBox", element.get("bbox", element.get("bounding_box", {}))
+                    )
                     element_text = element.get("text", "")
 
                     if not element_text and element_type not in ["figure", "image"]:
                         continue
 
-                    # Convert bbox to absolute coordinates
-                    pawls_tokens, token_bounds = self._create_pawls_tokens_from_bbox(
+                    # Parse bbox to get bounds (no tokens - LlamaParse doesn't provide them)
+                    _, bounds = self._create_pawls_tokens_from_bbox(
                         element_text or f"[{element_type}]",
                         bbox,
                         page_width,
                         page_height,
-                        token_idx,
+                        annotation_id_counter,  # Just used for debug logging
                     )
 
-                    if pawls_tokens:
-                        start_token_idx = token_idx
-                        for token in pawls_tokens:
-                            pawls_page["tokens"].append(token)
-                            token_idx += 1
-                        end_token_idx = token_idx
-
-                        label = self.ELEMENT_TYPE_MAPPING.get(
-                            element_type, "Text Block"
-                        )
-                        annotation = self._create_annotation(
-                            annotation_id=str(annotation_id_counter),
-                            label=label,
-                            raw_text=element_text or f"[{element_type}]",
-                            page_idx=page_idx,
-                            bounds=token_bounds,
-                            start_token_idx=start_token_idx,
-                            end_token_idx=end_token_idx,
-                        )
-                        annotations.append(annotation)
-                        annotation_id_counter += 1
+                    label = self.ELEMENT_TYPE_MAPPING.get(element_type, "Text Block")
+                    annotation = self._create_annotation(
+                        annotation_id=str(annotation_id_counter),
+                        label=label,
+                        raw_text=element_text or f"[{element_type}]",
+                        page_idx=page_idx,
+                        bounds=bounds,
+                    )
+                    annotations.append(annotation)
+                    annotation_id_counter += 1
 
             pawls_pages.append(pawls_page)
 
@@ -478,16 +483,39 @@ class LlamaParseParser(BaseParser):
 
         # Parse bounding box - handle different formats from LlamaParse
         # LlamaParse may return fractional coordinates (0-1) or absolute coordinates
+        bbox_format = "none"
+        is_fractional = False
+
         if not bbox:
             # No bbox, create a default one with standard margins
+            bbox_format = "default/empty"
             left, top = DEFAULT_MARGIN, DEFAULT_MARGIN
             right, bottom = page_width - DEFAULT_MARGIN, DEFAULT_BOTTOM
+        elif "x1" in bbox and "y1" in bbox:
+            # Format: {x1, y1, x2, y2} - corner coordinates
+            bbox_format = "x1/y1/x2/y2"
+            x1 = float(bbox.get("x1", 0))
+            y1 = float(bbox.get("y1", 0))
+            x2 = float(bbox.get("x2", 0))
+            y2 = float(bbox.get("y2", 0))
+
+            # Check if fractional
+            is_fractional = all(0 <= v <= 1.0 for v in [x1, y1, x2, y2])
+            if is_fractional:
+                left = x1 * page_width
+                top = y1 * page_height
+                right = x2 * page_width
+                bottom = y2 * page_height
+            else:
+                left, top, right, bottom = x1, y1, x2, y2
         elif "x" in bbox and "y" in bbox:
-            # Format: {x, y, width, height}
+            # Format: {x, y, width/w, height/h}
+            # LlamaParse uses 'w' and 'h' shorthand
+            bbox_format = "x/y/w/h"
             x = float(bbox.get("x", 0))
             y = float(bbox.get("y", 0))
-            w = float(bbox.get("width", 0.1))
-            h = float(bbox.get("height", 0.02))
+            w = float(bbox.get("w", bbox.get("width", 0.1)))
+            h = float(bbox.get("h", bbox.get("height", 0.02)))
 
             # Check if values are fractions (0-1) or absolute
             # Heuristic: if both corners (x,y) and (x+w,y+h) are in [0,1], treat as fractional
@@ -508,6 +536,7 @@ class LlamaParseParser(BaseParser):
                 bottom = y + h
         elif "left" in bbox:
             # Format: {left, top, right, bottom}
+            bbox_format = "left/top/right/bottom"
             bbox_l = float(bbox.get("left", 0))
             bbox_t = float(bbox.get("top", 0))
             bbox_r = float(bbox.get("right", 1))
@@ -524,6 +553,7 @@ class LlamaParseParser(BaseParser):
                 left, top, right, bottom = bbox_l, bbox_t, bbox_r, bbox_b
         elif isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
             # Format: [x1, y1, x2, y2] or [left, top, right, bottom]
+            bbox_format = "array[4]"
             vals = [float(v) for v in bbox[:4]]
             # Check if ALL values are in [0,1] range - indicates fractional coordinates
             is_fractional = all(0 <= v <= 1.0 for v in vals)
@@ -536,36 +566,34 @@ class LlamaParseParser(BaseParser):
                 left, top, right, bottom = vals
         else:
             # Unknown format, use defaults with standard margins
+            bbox_format = f"unknown:{type(bbox).__name__}"
             left, top = DEFAULT_MARGIN, DEFAULT_MARGIN
             right, bottom = page_width - DEFAULT_MARGIN, DEFAULT_BOTTOM
 
-        # Create tokens - split text into words
-        # PAWLS format requires at least one token per bounding box for proper annotation
-        # rendering. If text is empty or whitespace-only, we create a single token with
-        # the original text (or empty string) to maintain this invariant. Without this,
-        # the frontend annotation renderer would fail to display the element's bounds.
-        words = text.split()
-        if not words:
-            words = [text] if text else [""]
+        # Sanity checks and bounds validation
+        # Ensure left < right and top < bottom (swap if needed)
+        if left > right:
+            left, right = right, left
+        if top > bottom:
+            top, bottom = bottom, top
 
-        # Calculate token dimensions
-        # TOKEN_GAP_RATIO: 5% gap between tokens for visual separation
-        TOKEN_GAP_RATIO = 0.95
-        total_width = right - left
-        token_width = total_width / max(
-            len(words), 1
-        )  # max() prevents division by zero
-        token_height = bottom - top
+        # Clamp to page bounds
+        left = max(0, min(left, page_width))
+        right = max(0, min(right, page_width))
+        top = max(0, min(top, page_height))
+        bottom = max(0, min(bottom, page_height))
 
-        for i, word in enumerate(words):
-            token: PawlsTokenPythonType = {
-                "x": left + (i * token_width),
-                "y": top,
-                "width": token_width * TOKEN_GAP_RATIO,
-                "height": token_height,
-                "text": word,
-            }
-            tokens.append(token)
+        # Ensure minimum dimensions (at least 1 point)
+        if right - left < 1:
+            right = left + 1
+        if bottom - top < 1:
+            bottom = top + 1
+
+        # NOTE: We do NOT create fake tokens here. LlamaParse only provides element-level
+        # bounding boxes, not token-level data. Creating fake tokens by evenly distributing
+        # words across the bbox produces incorrect highlights. The frontend handles
+        # annotations with empty tokensJsons gracefully - it just shows the bounding box
+        # without individual token highlights.
 
         # Create overall bounding box
         bounds: BoundingBoxPythonType = {
@@ -575,6 +603,18 @@ class LlamaParseParser(BaseParser):
             "bottom": bottom,
         }
 
+        # Debug logging for first few conversions
+        if start_token_idx < 5:
+            logger.info(
+                f"DEBUG bbox: format={bbox_format}, fractional={is_fractional}, "
+                f"input={bbox}"
+            )
+            logger.info(
+                f"DEBUG output: bounds=({left:.1f}, {top:.1f}, {right:.1f}, {bottom:.1f}), "
+                f"page={page_width:.0f}x{page_height:.0f}"
+            )
+
+        # Return empty tokens list - we don't have real token data from LlamaParse
         return tokens, bounds
 
     def _create_annotation(
@@ -584,8 +624,6 @@ class LlamaParseParser(BaseParser):
         raw_text: str,
         page_idx: int,
         bounds: BoundingBoxPythonType,
-        start_token_idx: int,
-        end_token_idx: int,
     ) -> OpenContractsAnnotationPythonType:
         """
         Create an OpenContracts annotation.
@@ -596,22 +634,18 @@ class LlamaParseParser(BaseParser):
             raw_text: The text content.
             page_idx: Page index (0-based).
             bounds: Bounding box.
-            start_token_idx: Starting token index.
-            end_token_idx: Ending token index (exclusive).
 
         Returns:
             OpenContractsAnnotationPythonType annotation.
         """
-        # Create token references
-        tokens_jsons: list[TokenIdPythonType] = [
-            {"pageIndex": page_idx, "tokenIndex": idx}
-            for idx in range(start_token_idx, end_token_idx)
-        ]
+        # NOTE: We use empty tokensJsons because LlamaParse only provides element-level
+        # bounding boxes, not token-level data. The frontend handles this gracefully
+        # by showing just the bounding box without individual token highlights.
 
-        # Create page annotation
+        # Create page annotation with empty token references
         page_annotation: OpenContractsSinglePageAnnotationType = {
             "bounds": bounds,
-            "tokensJsons": tokens_jsons,
+            "tokensJsons": [],  # Empty - no token data from LlamaParse
             "rawText": raw_text,
         }
 
