@@ -226,6 +226,7 @@ class DeletedDocumentsQueryResolverTest(TestCase):
         self.path1 = DocumentPath.objects.create(
             corpus=self.corpus,
             document=self.doc1,
+            path="/doc1.pdf",
             is_current=True,
             is_deleted=False,
             version_number=1,
@@ -235,6 +236,7 @@ class DeletedDocumentsQueryResolverTest(TestCase):
         self.path2 = DocumentPath.objects.create(
             corpus=self.corpus,
             document=self.doc2,
+            path="/doc2.pdf",
             is_current=True,
             is_deleted=True,  # Soft deleted
             version_number=1,
@@ -546,12 +548,16 @@ class MentionSearchResolverTest(TestCase):
             document=self.doc,
             corpus=self.corpus,
             creator=self.user,
+            path="/mention_test.pdf",
+            version_number=1,
             is_current=True,
         )
         DocumentPath.objects.create(
             document=doc2,
             corpus=corpus2,
             creator=self.user,
+            path="/other_doc.pdf",
+            version_number=1,
             is_current=True,
         )
 

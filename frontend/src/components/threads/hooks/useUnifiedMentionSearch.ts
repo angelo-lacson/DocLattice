@@ -192,19 +192,19 @@ export function useUnifiedMentionSearch(
     searchDocuments({
       variables: {
         textSearch: debouncedQuery,
-        corpusId: corpusId, // Context-aware scoping (Issue #741)
+        corpusId, // Context-aware scoping (Issue #741)
       },
     });
     searchAnnotations({
       variables: {
         textSearch: debouncedQuery,
-        corpusId: corpusId, // Context-aware scoping
+        corpusId, // Context-aware scoping
       },
     });
     searchAgents({
       variables: {
         textSearch: debouncedQuery,
-        corpusId: corpusId, // Context-aware scoping for corpus agents
+        corpusId, // Context-aware scoping for corpus agents
       },
     });
   }, [
