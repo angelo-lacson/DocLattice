@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2025-12-27
 
+### Fixed
+
+#### WebSocket Token Expiration Close Code Handling (PR #746)
+- **Updated all WebSocket consumers** to check `scope['auth_error']` from middleware and use specific close codes:
+  - `config/websocket/consumers/document_conversation.py:77-91`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/corpus_conversation.py:67-79`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/standalone_document_conversation.py:97-106`: Checks auth_error before falling back to anonymous handling
+  - `config/websocket/consumers/unified_agent_conversation.py:119-127`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/thread_updates.py:77-88`: Uses auth_error codes for expired/invalid tokens
+- **Removed unused `Union` import** from `config/websocket/middleware.py:2`
+- **Fixed lazy import issue** in `config/graphql_auth0_auth/utils.py:124`: Moved `sync_remote_user` import inside function to avoid import error when `USE_AUTH0=False`
+- **Added Auth0 test settings** in `config/settings/test.py:120-133`: Default Auth0 settings for test environment to allow importing Auth0 modules during testing
+
+#### Impact
+- Frontend can now distinguish between expired tokens (4001) and invalid tokens (4002) via WebSocket close codes
+- Enables targeted token refresh vs full re-authentication based on close code
+- Fixes issue #744 where token expiration wasn't properly signaled to clients
+
 ### Added
 
 #### Thread/Message Triggered Corpus Actions for Automated Moderation
@@ -57,6 +75,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive test suite** (`frontend/src/services/__tests__/cacheManager.test.ts`, `frontend/src/hooks/__tests__/useCacheManager.test.tsx`): 30+ tests covering debouncing, error handling, lifecycle, singleton management, and auth scenarios
 
 ### Fixed
+
+#### Token Expiration Signal to Frontend (Issue #744)
+- **Fixed `Auth0RemoteUserJSONWebTokenBackend.authenticate()` swallowing `JSONWebTokenExpired` exceptions** (`config/graphql_auth0_auth/backends.py:44-52`):
+  - Previously, when a JWT token expired, the authentication backend caught all exceptions and returned `None`
+  - The GraphQL layer then returned a generic "User is not authenticated" error
+  - Frontend's `errorLink.ts` could not detect token expiration and trigger automatic refresh
+  - Fix: Re-raise `JSONWebTokenExpired` so the GraphQL layer returns "Signature has expired"
+  - Frontend now correctly detects expiration and triggers page reload for silent token refresh
+- **Enhanced WebSocket middleware with auth error signaling** (`config/websocket/middleware.py:44-124`):
+  - Added `scope["auth_error"]` dict with `code` and `message` fields
+  - New close codes: `WS_CLOSE_TOKEN_EXPIRED` (4001), `WS_CLOSE_TOKEN_INVALID` (4002)
+  - Consumers can now close connections with specific codes for frontend handling
+- **Enhanced Auth0 WebSocket middleware** (`config/websocket/middlewares/websocket_auth0_middleware.py:52-130`):
+  - Added consistent `scope["auth_error"]` handling for Auth0 tokens
+  - Matches close code behavior with non-Auth0 middleware
+- **New test coverage** (`doclatticeserver/tests/test_token_expiration.py`):
+  - Tests for `Auth0RemoteUserJSONWebTokenBackend` token expiration re-raising
+  - Tests for WebSocket middleware auth error handling
+  - Tests for WebSocket close code consistency
 
 #### Independent Structural Annotation and Show Selected Controls (Issue #735)
 - **Removed forced coupling between structural and showSelectedOnly controls** (`frontend/src/components/annotator/controls/AnnotationControls.tsx:200-207`):
