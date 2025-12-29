@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import styled from "styled-components";
 import { Folder, FolderOpen, FileText, MoreVertical } from "lucide-react";
@@ -265,6 +265,7 @@ const ContextMenu = styled.div<{ $x: number; $y: number }>`
   border: 1px solid #e2e8f0;
   padding: 4px;
   min-width: 180px;
+  max-width: calc(100vw - 16px);
   z-index: 1000;
 `;
 
@@ -317,6 +318,42 @@ export const FolderCard: React.FC<FolderCardProps> = ({
     x: number;
     y: number;
   } | null>(null);
+
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Adjust context menu position if it would go off screen
+  useEffect(() => {
+    if (contextMenu && contextMenuRef.current) {
+      const rect = contextMenuRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const margin = 8;
+
+      let adjustedX = contextMenu.x;
+      let adjustedY = contextMenu.y;
+
+      // Adjust horizontal position - check both left and right edges
+      if (rect.right > viewportWidth - margin) {
+        adjustedX = viewportWidth - rect.width - margin;
+      }
+      if (adjustedX < margin) {
+        adjustedX = margin;
+      }
+
+      // Adjust vertical position - check both top and bottom edges
+      if (rect.bottom > viewportHeight - margin) {
+        adjustedY = viewportHeight - rect.height - margin;
+      }
+      if (adjustedY < margin) {
+        adjustedY = margin;
+      }
+
+      if (adjustedX !== contextMenu.x || adjustedY !== contextMenu.y) {
+        contextMenuRef.current.style.left = `${adjustedX}px`;
+        contextMenuRef.current.style.top = `${adjustedY}px`;
+      }
+    }
+  }, [contextMenu]);
 
   // Droppable setup (folder can accept documents and folders)
   const { setNodeRef, isOver } = useDroppable({
@@ -432,7 +469,11 @@ export const FolderCard: React.FC<FolderCardProps> = ({
         {contextMenu && (
           <>
             <ContextMenuOverlay onClick={closeContextMenu} />
-            <ContextMenu $x={contextMenu.x} $y={contextMenu.y}>
+            <ContextMenu
+              ref={contextMenuRef}
+              $x={contextMenu.x}
+              $y={contextMenu.y}
+            >
               <ContextMenuItem onClick={handleClick}>
                 Open Folder
               </ContextMenuItem>
@@ -493,7 +534,11 @@ export const FolderCard: React.FC<FolderCardProps> = ({
       {contextMenu && (
         <>
           <ContextMenuOverlay onClick={closeContextMenu} />
-          <ContextMenu $x={contextMenu.x} $y={contextMenu.y}>
+          <ContextMenu
+            ref={contextMenuRef}
+            $x={contextMenu.x}
+            $y={contextMenu.y}
+          >
             <ContextMenuItem onClick={handleClick}>Open Folder</ContextMenuItem>
             <ContextMenuItem onClick={handleCreateSubfolder}>
               Create Subfolder

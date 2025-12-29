@@ -163,7 +163,7 @@ docker compose -f production.yml up
 
 4. **Unified Filtering Architecture**:
    - `useVisibleAnnotations` and `useVisibleRelationships` hooks provide parallel filtering
-   - Both read from same Jotai atoms (`showStructuralAtom`, `showSelectedOnlyAtom`)
+   - Both read from Apollo reactive vars (`showStructuralAnnotations`, `showSelectedAnnotationOnly` in `cache.ts`)
    - Ensures consistency across all components
    - Forced visibility for selected items and their connections
 

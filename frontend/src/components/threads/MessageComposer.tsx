@@ -46,6 +46,12 @@ const Toolbar = styled.div`
   padding: 8px;
   border-bottom: 1px solid ${({ theme }) => color.N4};
   background: ${({ theme }) => color.N2};
+
+  /* Mobile: Larger touch targets - Part of Issue #686 */
+  @media (max-width: 600px) {
+    padding: 8px 12px;
+    gap: 8px;
+  }
 `;
 
 const ToolbarButton = styled.button<{ $isActive?: boolean }>`
@@ -74,6 +80,18 @@ const ToolbarButton = styled.button<{ $isActive?: boolean }>`
   svg {
     width: 16px;
     height: 16px;
+  }
+
+  /* Mobile: Larger touch targets - Part of Issue #686 */
+  @media (max-width: 600px) {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
   }
 `;
 
@@ -279,6 +297,8 @@ export function MessageComposer({
     }
   }, [allResults, loading]);
   const editor = useEditor({
+    // Use TipTap's built-in autofocus - handles mount timing correctly
+    autofocus: autoFocus,
     extensions: [
       StarterKit.configure({
         // Disable code blocks and blockquotes for simpler UX
@@ -287,11 +307,12 @@ export function MessageComposer({
       }),
       Markdown.configure({
         html: false, // Disable HTML in markdown
-        linkify: true, // Auto-convert URLs to links
+        linkify: false, // Disable - use Link extension's autolink instead (avoids duplicate 'link' warning)
         breaks: true, // Convert \n to <br>
       }),
       Link.configure({
         openOnClick: false, // Don't open links while editing
+        autolink: true, // Auto-convert URLs to links (replaces Markdown's linkify)
         HTMLAttributes: {
           class: "mention-link", // Style mention links
         },
@@ -585,12 +606,9 @@ export function MessageComposer({
     }
   }, [editor, disabled]);
 
-  // Auto-focus
-  useEffect(() => {
-    if (editor && autoFocus) {
-      editor.commands.focus();
-    }
-  }, [editor, autoFocus]);
+  // Note: autofocus is handled via TipTap's built-in `autofocus` option in useEditor
+  // This ensures proper timing (waits for view to mount) and avoids the
+  // "editor view is not available" error that occurred with manual focus.
 
   const handleSubmit = useCallback(async () => {
     if (!editor || disabled) return;

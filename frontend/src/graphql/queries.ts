@@ -2359,6 +2359,9 @@ export const GET_THREAD_DETAIL = gql`
         # Soft delete
         deletedAt
 
+        # Permissions (for edit/delete UI - Issue #686)
+        myPermissions
+
         # Mentioned resources (Issue #623, #689)
         mentionedResources {
           type
@@ -4286,6 +4289,10 @@ export const GET_CORPUS_ACTION_EXECUTIONS = gql`
               slug
             }
           }
+          conversation {
+            id
+            title
+          }
           corpus {
             id
             slug
@@ -4355,7 +4362,11 @@ export interface CorpusActionExecutionNode {
     title: string;
     slug: string;
     creator: { id: string; slug: string };
-  };
+  } | null;
+  conversation: {
+    id: string;
+    title: string;
+  } | null;
   corpus: {
     id: string;
     slug: string;

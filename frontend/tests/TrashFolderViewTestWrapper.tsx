@@ -54,10 +54,114 @@ const defaultDeletedDocuments: DeletedDocumentPathType[] = [
   },
 ];
 
+// Mock data with null creator
+const nullCreatorDocuments: DeletedDocumentPathType[] = [
+  {
+    id: "path-null-creator",
+    path: "/documents/null-creator-doc.pdf",
+    versionNumber: 1,
+    modified: "2025-01-15T10:00:00Z",
+    creator: null, // Null creator
+    document: {
+      id: "doc-null-creator",
+      title: "Document with Null Creator",
+      description: "Test document with null creator",
+      icon: "",
+      fileType: "pdf",
+      pageCount: 5,
+      pdfFile: "/files/doc-null-creator.pdf",
+    },
+    folder: null,
+  },
+];
+
+// Mock data with null document
+const nullDocumentData: DeletedDocumentPathType[] = [
+  {
+    id: "path-null-doc",
+    path: "/documents/null-doc.pdf",
+    versionNumber: 1,
+    modified: "2025-01-15T10:00:00Z",
+    creator: {
+      id: "user-1",
+      username: "john_doe",
+    },
+    document: null, // Null document
+    folder: null,
+  },
+];
+
+// Mock data with invalid date
+const invalidDateDocuments: DeletedDocumentPathType[] = [
+  {
+    id: "path-invalid-date",
+    path: "/documents/invalid-date-doc.pdf",
+    versionNumber: 1,
+    modified: "invalid-date-string", // Invalid date
+    creator: {
+      id: "user-1",
+      username: "john_doe",
+    },
+    document: {
+      id: "doc-invalid-date",
+      title: "Document with Invalid Date",
+      description: "Test document with invalid date",
+      icon: "",
+      fileType: "pdf",
+      pageCount: 5,
+      pdfFile: "/files/doc-invalid-date.pdf",
+    },
+    folder: null,
+  },
+];
+
+// Mock data with mixed scenarios (valid doc + null doc)
+const mixedNullDocuments: DeletedDocumentPathType[] = [
+  {
+    id: "path-valid",
+    path: "/documents/valid-doc.pdf",
+    versionNumber: 1,
+    modified: "2025-01-15T10:00:00Z",
+    creator: {
+      id: "user-1",
+      username: "john_doe",
+    },
+    document: {
+      id: "doc-valid",
+      title: "Valid Document",
+      description: "A valid document",
+      icon: "",
+      fileType: "pdf",
+      pageCount: 10,
+      pdfFile: "/files/valid-doc.pdf",
+    },
+    folder: null,
+  },
+  {
+    id: "path-null-doc",
+    path: "/documents/null-doc.pdf",
+    versionNumber: 1,
+    modified: "2025-01-15T10:00:00Z",
+    creator: {
+      id: "user-2",
+      username: "jane_smith",
+    },
+    document: null, // Null document - should be filtered in bulk restore
+    folder: null,
+  },
+];
+
 interface TrashFolderViewTestWrapperProps {
   corpusId?: string;
-  mockType?: "success" | "empty" | "error";
-  restoreMockType?: "success" | "failure" | "error" | "partial";
+  mockType?:
+    | "success"
+    | "empty"
+    | "error"
+    | "nullCreator"
+    | "nullDocument"
+    | "invalidDate"
+    | "mixedNull";
+  restoreMockType?: "success" | "failure" | "error" | "partial" | "mixedNull";
   onBack?: () => void;
 }
 
@@ -72,7 +176,9 @@ export const TrashFolderViewTestWrapper: React.FC<
   const createMocks = (): MockedResponse<any>[] => {
     const mocks: MockedResponse<any>[] = [];
 
-    // Add query mock
+    // Add query mock based on mockType
+    let documentsToUse: DeletedDocumentPathType[] = defaultDeletedDocuments;
+
     if (mockType === "error") {
       mocks.push({
         request: {
@@ -81,21 +187,26 @@ export const TrashFolderViewTestWrapper: React.FC<
         },
         error: new Error("Failed to load trash"),
       });
-    } else if (mockType === "empty") {
-      mocks.push({
-        request: {
-          query: GET_DELETED_DOCUMENTS_IN_CORPUS,
-          variables: { corpusId },
-        },
-        result: { data: { deletedDocumentsInCorpus: [] } },
-      });
     } else {
+      // Select the appropriate mock data based on mockType
+      if (mockType === "empty") {
+        documentsToUse = [];
+      } else if (mockType === "nullCreator") {
+        documentsToUse = nullCreatorDocuments;
+      } else if (mockType === "nullDocument") {
+        documentsToUse = nullDocumentData;
+      } else if (mockType === "invalidDate") {
+        documentsToUse = invalidDateDocuments;
+      } else if (mockType === "mixedNull") {
+        documentsToUse = mixedNullDocuments;
+      }
+
       mocks.push({
         request: {
           query: GET_DELETED_DOCUMENTS_IN_CORPUS,
           variables: { corpusId },
         },
-        result: { data: { deletedDocumentsInCorpus: defaultDeletedDocuments } },
+        result: { data: { deletedDocumentsInCorpus: documentsToUse } },
       });
     }
 
@@ -200,6 +311,38 @@ export const TrashFolderViewTestWrapper: React.FC<
         result: {
           data: {
             deletedDocumentsInCorpus: [defaultDeletedDocuments[1]], // Only second doc remains
+          },
+        },
+      });
+    } else if (restoreMockType === "mixedNull") {
+      // For mixedNull scenario: restoring valid doc succeeds, null doc is filtered out
+      mocks.push({
+        request: {
+          query: RESTORE_DELETED_DOCUMENT,
+          variables: { documentId: "doc-valid", corpusId },
+        },
+        result: {
+          data: {
+            restoreDeletedDocument: {
+              ok: true,
+              message: "Document restored successfully",
+              document: {
+                id: "doc-valid",
+                title: "Valid Document",
+              },
+            },
+          },
+        },
+      });
+      // Add refetch mock after restore
+      mocks.push({
+        request: {
+          query: GET_DELETED_DOCUMENTS_IN_CORPUS,
+          variables: { corpusId },
+        },
+        result: {
+          data: {
+            deletedDocumentsInCorpus: [mixedNullDocuments[1]], // Only null doc remains (wasn't restored)
           },
         },
       });

@@ -19,6 +19,7 @@ const MenuContainer = styled.div<{ x: number; y: number }>`
   top: ${(props) => props.y}px;
   z-index: 10000;
   min-width: 200px;
+  max-width: calc(100vw - 16px);
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -28,6 +29,7 @@ const MenuContainer = styled.div<{ x: number; y: number }>`
 
   @media (max-width: 768px) {
     min-width: 180px;
+    max-width: calc(100vw - 16px);
   }
 `;
 
@@ -95,6 +97,10 @@ const MenuLabel = styled.div`
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 export interface ContextMenuItem {
@@ -129,18 +135,25 @@ export const ModernContextMenu: React.FC<ModernContextMenuProps> = ({
       const rect = menuRef.current.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
+      const margin = 8;
 
       let adjustedX = x;
       let adjustedY = y;
 
-      // Adjust horizontal position
-      if (rect.right > viewportWidth) {
-        adjustedX = viewportWidth - rect.width - 8;
+      // Adjust horizontal position - check both left and right edges
+      if (rect.right > viewportWidth - margin) {
+        adjustedX = viewportWidth - rect.width - margin;
+      }
+      if (adjustedX < margin) {
+        adjustedX = margin;
       }
 
-      // Adjust vertical position
-      if (rect.bottom > viewportHeight) {
-        adjustedY = viewportHeight - rect.height - 8;
+      // Adjust vertical position - check both top and bottom edges
+      if (rect.bottom > viewportHeight - margin) {
+        adjustedY = viewportHeight - rect.height - margin;
+      }
+      if (adjustedY < margin) {
+        adjustedY = margin;
       }
 
       if (adjustedX !== x || adjustedY !== y) {

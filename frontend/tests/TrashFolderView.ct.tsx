@@ -204,8 +204,8 @@ test.describe("TrashFolderView", () => {
 
     await page.waitForSelector('text="Trash"', { timeout: 10000 });
 
-    // Click back button
-    await page.getByText("Back to Folders").click();
+    // Click back button (has title "Back to Folders" and text "Back")
+    await page.getByRole("button", { name: /Back/ }).click();
 
     expect(backCalled).toBe(true);
   });
@@ -297,6 +297,9 @@ test.describe("TrashFolderView", () => {
     mount,
     page,
   }) => {
+    // Use longer timeout for this test since we wait for auto-dismiss
+    test.setTimeout(20000);
+
     // Test with a custom timeout check
     await mount(<TrashFolderViewTestWrapper restoreMockType="success" />);
 
@@ -320,5 +323,139 @@ test.describe("TrashFolderView", () => {
     await expect(
       page.locator(".header").getByText("Success")
     ).not.toBeVisible();
+  });
+
+  // Null data scenario tests
+  test.describe("Null Data Scenarios", () => {
+    test("handles document with null creator gracefully", async ({
+      mount,
+      page,
+    }) => {
+      await mount(<TrashFolderViewTestWrapper mockType="nullCreator" />);
+
+      await page.waitForSelector('text="Document with Null Creator"', {
+        timeout: 10000,
+      });
+
+      // Should display the document title
+      await expect(page.getByText("Document with Null Creator")).toBeVisible();
+
+      // Should show "Unknown user" for null creator
+      await expect(page.getByText("Unknown user")).toBeVisible();
+    });
+
+    test("handles document with null document data gracefully", async ({
+      mount,
+      page,
+    }) => {
+      await mount(<TrashFolderViewTestWrapper mockType="nullDocument" />);
+
+      // Wait for the trash view to load
+      await page.waitForSelector('text="Trash"', { timeout: 10000 });
+
+      // Should show fallback title for null document
+      await expect(page.getByText("Untitled Document")).toBeVisible();
+
+      // Should show fallback file type
+      await expect(page.getByText("Unknown")).toBeVisible();
+
+      // Should show 0 pages for null document
+      await expect(page.getByText("0 pages")).toBeVisible();
+    });
+
+    test("handles invalid date string gracefully", async ({ mount, page }) => {
+      await mount(<TrashFolderViewTestWrapper mockType="invalidDate" />);
+
+      await page.waitForSelector('text="Document with Invalid Date"', {
+        timeout: 10000,
+      });
+
+      // Should display the document
+      await expect(page.getByText("Document with Invalid Date")).toBeVisible();
+
+      // Should show fallback text for invalid date
+      await expect(page.getByText("Unknown time")).toBeVisible();
+      await expect(page.getByText("Unknown date")).toBeVisible();
+    });
+
+    test("shows error when trying to restore document with null data", async ({
+      mount,
+      page,
+    }) => {
+      await mount(<TrashFolderViewTestWrapper mockType="nullDocument" />);
+
+      await page.waitForSelector('text="Untitled Document"', {
+        timeout: 10000,
+      });
+
+      // Click restore on the document with null data
+      await page
+        .getByRole("button", { name: /Restore/ })
+        .first()
+        .click();
+
+      // Should show error message about missing document information
+      await expect(
+        page.getByText("Cannot restore: document information is missing")
+      ).toBeVisible({ timeout: 10000 });
+    });
+
+    test("filters out null documents in bulk restore and shows warning", async ({
+      mount,
+      page,
+    }) => {
+      // Use longer timeout for this async mutation test
+      test.setTimeout(20000);
+
+      await mount(
+        <TrashFolderViewTestWrapper
+          mockType="mixedNull"
+          restoreMockType="mixedNull"
+        />
+      );
+
+      await page.waitForSelector('text="Valid Document"', { timeout: 10000 });
+
+      // Should show both items (one valid, one with null document)
+      await expect(page.getByText("Valid Document")).toBeVisible();
+      await expect(page.getByText("Untitled Document")).toBeVisible();
+
+      // Select all documents
+      await page.getByText("Select all").click();
+      await expect(page.getByText("2 items selected")).toBeVisible();
+
+      // Click restore selected
+      await page.getByText("Restore Selected").click();
+
+      // Should show warning about skipped document with missing data (appears in error message)
+      await expect(
+        page.getByText(/1 document skipped: missing or corrupted data/)
+      ).toBeVisible({ timeout: 15000 });
+    });
+
+    test("shows clear error when all selected documents have null data", async ({
+      mount,
+      page,
+    }) => {
+      await mount(<TrashFolderViewTestWrapper mockType="nullDocument" />);
+
+      await page.waitForSelector('text="Untitled Document"', {
+        timeout: 10000,
+      });
+
+      // Select the document with null data
+      await page.getByText("Untitled Document").click();
+      await expect(page.getByText("1 item selected")).toBeVisible();
+
+      // Click restore selected
+      await page.getByText("Restore Selected").click();
+
+      // Should show clear error message
+      await expect(
+        page.getByText(
+          "Selected documents cannot be restored: document data is missing or corrupted"
+        )
+      ).toBeVisible({ timeout: 10000 });
+    });
   });
 });

@@ -136,8 +136,9 @@ class TestPydanticAIAgents(TransactionTestCase):
 
         db.close_old_connections()
 
+        # Use unique username to avoid conflicts with fixtures
         self.user = User.objects.create_user(
-            username="testuser",
+            username="pydantic_ai_test_user",
             password="testpass",
         )
 
