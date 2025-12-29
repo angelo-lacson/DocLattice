@@ -3,10 +3,14 @@ Tests for the LlamaParseParser class.
 
 Tests cover:
 - Successful document parsing with JSON/layout output
-- PAWLS token generation from bounding boxes
-- Structural annotation creation
+- Bounding box parsing and conversion
+- Structural annotation creation (without token-level data)
 - Error handling (missing API key, API errors, etc.)
 - Configuration via environment variables
+
+Note: LlamaParse only provides element-level bounding boxes, not token-level data.
+Annotations are created with empty tokensJsons - the frontend handles this gracefully
+by showing just the bounding box outline without individual token highlights.
 """
 
 import sys
@@ -58,6 +62,7 @@ class TestLlamaParseParser(TestCase):
         self.doc.pdf_file.save("test_llama.pdf", ContentFile(pdf_content))
 
         # Sample JSON response from LlamaParse with layout data
+        # Note: LlamaParse uses 'bBox' (camelCase) with 'w'/'h' keys
         self.sample_json_response = [
             {
                 "pages": [
@@ -69,42 +74,42 @@ class TestLlamaParseParser(TestCase):
                             {
                                 "type": "title",
                                 "text": "Document Title",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.05,
-                                    "width": 0.8,
-                                    "height": 0.05,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 39.6,
+                                    "w": 489.6,
+                                    "h": 39.6,
                                 },
                             },
                             {
                                 "type": "paragraph",
                                 "text": "This is a paragraph with some content.",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.15,
-                                    "width": 0.8,
-                                    "height": 0.1,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 118.8,
+                                    "w": 489.6,
+                                    "h": 79.2,
                                 },
                             },
                             {
                                 "type": "table",
                                 "text": "Column A | Column B\nValue 1 | Value 2",
-                                "bbox": {
-                                    "left": 0.1,
-                                    "top": 0.3,
-                                    "right": 0.9,
-                                    "bottom": 0.5,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 237.6,
+                                    "w": 489.6,
+                                    "h": 158.4,
                                 },
                             },
                         ],
                         "layout": [
                             {
                                 "label": "title",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.05,
-                                    "width": 0.8,
-                                    "height": 0.05,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 39.6,
+                                    "w": 489.6,
+                                    "h": 39.6,
                                 },
                                 "confidence": 0.95,
                                 "isLikelyNoise": False,
@@ -119,7 +124,12 @@ class TestLlamaParseParser(TestCase):
                             {
                                 "type": "text",
                                 "text": "More content on page 2.",
-                                "bbox": [0.1, 0.1, 0.9, 0.2],  # Array format
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 79.2,
+                                    "w": 489.6,
+                                    "h": 79.2,
+                                },
                             },
                         ],
                     },
@@ -162,7 +172,8 @@ class TestLlamaParseParser(TestCase):
         self.assertEqual(first_page["page"]["index"], 0)
         self.assertEqual(first_page["page"]["width"], 612)
         self.assertEqual(first_page["page"]["height"], 792)
-        self.assertGreater(len(first_page["tokens"]), 0)
+        # LlamaParse doesn't provide token-level data, so tokens list is empty
+        self.assertEqual(len(first_page["tokens"]), 0)
 
         # Verify annotations were created
         self.assertIn("labelled_text", result)
@@ -292,7 +303,11 @@ class TestLlamaParseParser(TestCase):
 
 
 class TestLlamaParseParserBboxConversion(TestCase):
-    """Tests for bounding box conversion methods."""
+    """Tests for bounding box conversion methods.
+
+    Note: LlamaParse only provides element-level bounding boxes, not token-level data.
+    The _create_pawls_tokens_from_bbox method returns empty tokens list and just the bounds.
+    """
 
     def setUp(self):
         """Set up test environment."""
@@ -315,10 +330,29 @@ class TestLlamaParseParserBboxConversion(TestCase):
         self.assertAlmostEqual(bounds["right"], 244.8, places=1)
         self.assertAlmostEqual(bounds["bottom"], 237.6, places=1)
 
-        # Check tokens were created
-        self.assertEqual(len(tokens), 2)  # "test" and "word"
-        self.assertEqual(tokens[0]["text"], "test")
-        self.assertEqual(tokens[1]["text"], "word")
+        # Tokens list is empty - we don't generate fake tokens
+        self.assertEqual(len(tokens), 0)
+
+    def test_bbox_llamaparse_format(self):
+        """Test conversion of LlamaParse's actual format: bBox with x/y/w/h."""
+        # This is the actual format LlamaParse uses (absolute coordinates)
+        bbox = {"x": 72.1, "y": 35.4, "w": 467.35, "h": 151}
+        tokens, bounds = self.parser._create_pawls_tokens_from_bbox(
+            text="LlamaParse format test",
+            bbox=bbox,
+            page_width=612,
+            page_height=792,
+            start_token_idx=0,
+        )
+
+        # Should be treated as absolute coordinates since values > 1
+        self.assertAlmostEqual(bounds["left"], 72.1, places=1)
+        self.assertAlmostEqual(bounds["top"], 35.4, places=1)
+        self.assertAlmostEqual(bounds["right"], 539.45, places=1)  # x + w
+        self.assertAlmostEqual(bounds["bottom"], 186.4, places=1)  # y + h
+
+        # No tokens
+        self.assertEqual(len(tokens), 0)
 
     def test_bbox_fractional_ltrb_format(self):
         """Test conversion of fractional left,top,right,bottom bbox format."""
@@ -336,6 +370,9 @@ class TestLlamaParseParserBboxConversion(TestCase):
         self.assertAlmostEqual(bounds["right"], 550.8, places=1)
         self.assertAlmostEqual(bounds["bottom"], 237.6, places=1)
 
+        # No tokens
+        self.assertEqual(len(tokens), 0)
+
     def test_bbox_array_format(self):
         """Test conversion of array bbox format [x1, y1, x2, y2]."""
         bbox = [0.1, 0.2, 0.9, 0.3]
@@ -351,6 +388,9 @@ class TestLlamaParseParserBboxConversion(TestCase):
         self.assertAlmostEqual(bounds["top"], 158.4, places=1)
         self.assertAlmostEqual(bounds["right"], 550.8, places=1)
         self.assertAlmostEqual(bounds["bottom"], 237.6, places=1)
+
+        # No tokens
+        self.assertEqual(len(tokens), 0)
 
     def test_bbox_absolute_coordinates(self):
         """Test handling of absolute coordinate bbox (values > 1)."""
@@ -369,6 +409,9 @@ class TestLlamaParseParserBboxConversion(TestCase):
         self.assertEqual(bounds["right"], 400)  # x + width
         self.assertEqual(bounds["bottom"], 250)  # y + height
 
+        # No tokens
+        self.assertEqual(len(tokens), 0)
+
     def test_bbox_empty(self):
         """Test handling of empty/missing bbox."""
         tokens, bounds = self.parser._create_pawls_tokens_from_bbox(
@@ -383,29 +426,53 @@ class TestLlamaParseParserBboxConversion(TestCase):
         self.assertEqual(bounds["left"], 72)
         self.assertEqual(bounds["top"], 72)
 
-        # Tokens should still be created
-        self.assertEqual(len(tokens), 2)
+        # No tokens
+        self.assertEqual(len(tokens), 0)
 
-    def test_token_spacing(self):
-        """Test that tokens are properly spaced within the bounding box."""
-        bbox = {"left": 0.0, "top": 0.0, "right": 1.0, "bottom": 0.1}
+    def test_bbox_x1_y1_x2_y2_format(self):
+        """Test conversion of x1/y1/x2/y2 corner coordinate format."""
+        bbox = {"x1": 0.1, "y1": 0.2, "x2": 0.9, "y2": 0.3}
         tokens, bounds = self.parser._create_pawls_tokens_from_bbox(
-            text="one two three four",
+            text="corner format test",
             bbox=bbox,
             page_width=612,
             page_height=792,
             start_token_idx=0,
         )
 
-        self.assertEqual(len(tokens), 4)
+        self.assertAlmostEqual(bounds["left"], 61.2, places=1)
+        self.assertAlmostEqual(bounds["top"], 158.4, places=1)
+        self.assertAlmostEqual(bounds["right"], 550.8, places=1)
+        self.assertAlmostEqual(bounds["bottom"], 237.6, places=1)
 
-        # Check tokens don't overlap (each starts after previous)
-        for i in range(1, len(tokens)):
-            self.assertGreater(tokens[i]["x"], tokens[i - 1]["x"])
+        # No tokens
+        self.assertEqual(len(tokens), 0)
+
+    def test_bbox_sanity_checks(self):
+        """Test that sanity checks are applied to bounding boxes."""
+        # Test bounds are clamped to page
+        bbox = {"x": -10, "y": -10, "w": 1000, "h": 1000}
+        tokens, bounds = self.parser._create_pawls_tokens_from_bbox(
+            text="out of bounds",
+            bbox=bbox,
+            page_width=612,
+            page_height=792,
+            start_token_idx=0,
+        )
+
+        # Should be clamped to page bounds
+        self.assertGreaterEqual(bounds["left"], 0)
+        self.assertGreaterEqual(bounds["top"], 0)
+        self.assertLessEqual(bounds["right"], 612)
+        self.assertLessEqual(bounds["bottom"], 792)
 
 
 class TestLlamaParseParserAnnotations(TestCase):
-    """Tests for annotation creation methods."""
+    """Tests for annotation creation methods.
+
+    Note: LlamaParse annotations use empty tokensJsons since LlamaParse
+    only provides element-level bounding boxes, not token-level data.
+    """
 
     def setUp(self):
         """Set up test environment."""
@@ -421,8 +488,6 @@ class TestLlamaParseParserAnnotations(TestCase):
             raw_text="Sample Title",
             page_idx=0,
             bounds=bounds,
-            start_token_idx=0,
-            end_token_idx=2,
         )
 
         # Check required fields
@@ -439,7 +504,8 @@ class TestLlamaParseParserAnnotations(TestCase):
         page_anno = annotation["annotation_json"]["0"]
         self.assertEqual(page_anno["bounds"], bounds)
         self.assertEqual(page_anno["rawText"], "Sample Title")
-        self.assertEqual(len(page_anno["tokensJsons"]), 2)
+        # tokensJsons is empty - LlamaParse doesn't provide token-level data
+        self.assertEqual(len(page_anno["tokensJsons"]), 0)
 
     def test_element_type_mapping(self):
         """Test that element types are properly mapped to labels."""
@@ -564,6 +630,7 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         self.doc.pdf_file.save("test_layout.pdf", ContentFile(pdf_content))
 
         # JSON response with layout elements but no items
+        # Uses actual LlamaParse format with bBox and w/h
         self.layout_only_response = [
             {
                 "pages": [
@@ -575,41 +642,41 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
                         "layout": [
                             {
                                 "label": "title",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.05,
-                                    "width": 0.8,
-                                    "height": 0.05,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 39.6,
+                                    "w": 489.6,
+                                    "h": 39.6,
                                 },
                                 "text": "Document Title from Layout",
                             },
                             {
                                 "label": "paragraph",
-                                "bbox": {
-                                    "left": 0.1,
-                                    "top": 0.2,
-                                    "right": 0.9,
-                                    "bottom": 0.3,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 158.4,
+                                    "w": 489.6,
+                                    "h": 79.2,
                                 },
                                 "text": "Paragraph content from layout element.",
                             },
                             {
                                 "label": "figure",
-                                "bbox": {
-                                    "x": 0.2,
-                                    "y": 0.4,
-                                    "width": 0.6,
-                                    "height": 0.3,
+                                "bBox": {
+                                    "x": 122.4,
+                                    "y": 316.8,
+                                    "w": 367.2,
+                                    "h": 237.6,
                                 },
                                 "text": "",  # Empty text for figure - should use [figure]
                             },
                             {
                                 "label": "text",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.75,
-                                    "width": 0.8,
-                                    "height": 0.05,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 594.0,
+                                    "w": 489.6,
+                                    "h": 39.6,
                                 },
                                 "text": "",  # Empty text for non-figure - should be skipped
                             },
@@ -645,11 +712,12 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         self.assertEqual(result["title"], "Layout Test Document")
         self.assertEqual(result["page_count"], 1)
 
-        # Verify PAWLS content was generated from layout
+        # Verify PAWLS content structure (tokens are empty - no token-level data)
         self.assertIn("pawls_file_content", result)
         self.assertEqual(len(result["pawls_file_content"]), 1)
         first_page = result["pawls_file_content"][0]
-        self.assertGreater(len(first_page["tokens"]), 0)
+        # LlamaParse doesn't provide token-level data
+        self.assertEqual(len(first_page["tokens"]), 0)
 
         # Verify annotations were created from layout elements
         self.assertIn("labelled_text", result)
@@ -684,21 +752,21 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
                         "layout": [
                             {
                                 "label": "image",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.1,
-                                    "width": 0.8,
-                                    "height": 0.4,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 79.2,
+                                    "w": 489.6,
+                                    "h": 316.8,
                                 },
                                 "text": "",  # Empty text - should use [image]
                             },
                             {
                                 "label": "figure",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.6,
-                                    "width": 0.8,
-                                    "height": 0.3,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 475.2,
+                                    "w": 489.6,
+                                    "h": 237.6,
                                 },
                                 "text": "",  # Empty text - should use [figure]
                             },
@@ -745,41 +813,41 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
                         "layout": [
                             {
                                 "label": "title",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.1,
-                                    "width": 0.8,
-                                    "height": 0.05,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 79.2,
+                                    "w": 489.6,
+                                    "h": 39.6,
                                 },
                                 "text": "Valid Title",  # Has text - should be included
                             },
                             {
                                 "label": "paragraph",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.2,
-                                    "width": 0.8,
-                                    "height": 0.1,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 158.4,
+                                    "w": 489.6,
+                                    "h": 79.2,
                                 },
                                 "text": "",  # Empty text - should be skipped
                             },
                             {
                                 "label": "heading",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.4,
-                                    "width": 0.8,
-                                    "height": 0.05,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 316.8,
+                                    "w": 489.6,
+                                    "h": 39.6,
                                 },
                                 "text": "",  # Empty text - should be skipped
                             },
                             {
                                 "label": "section_header",
-                                "bbox": {
-                                    "x": 0.1,
-                                    "y": 0.5,
-                                    "width": 0.8,
-                                    "height": 0.05,
+                                "bBox": {
+                                    "x": 61.2,
+                                    "y": 396.0,
+                                    "w": 489.6,
+                                    "h": 39.6,
                                 },
                                 "text": "Valid Section Header",  # Has text - should be included
                             },
