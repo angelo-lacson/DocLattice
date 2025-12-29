@@ -2505,7 +2505,11 @@ export interface SearchDocumentsForMentionOutput {
 
 export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
   query SearchDocumentsForMention($textSearch: String!, $corpusId: ID) {
-    searchDocumentsForMention(textSearch: $textSearch, corpusId: $corpusId, first: 10) {
+    searchDocumentsForMention(
+      textSearch: $textSearch
+      corpusId: $corpusId
+      first: 10
+    ) {
       edges {
         node {
           id

@@ -1136,8 +1136,10 @@ class Query(graphene.ObjectType):
         qs = Annotation.objects.visible_to_user(user)
 
         # Scope to specific corpus if provided (major performance boost)
+        # Issue #741: Fix to properly convert GraphQL global ID to database primary key
         if corpus_id:
-            qs = qs.filter(corpus_id=corpus_id)
+            _, corpus_pk = from_global_id(corpus_id)
+            qs = qs.filter(corpus_id=int(corpus_pk))
 
         if text_search:
             # Search priority:
