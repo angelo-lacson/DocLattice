@@ -13,7 +13,6 @@ from django.utils import timezone
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from tree_queries.models import TreeNode
 
-from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.corpuses.managers import CorpusActionExecutionManager
 from doclatticeserver.shared.Models import BaseOCModel
 from doclatticeserver.shared.QuerySets import PermissionedTreeQuerySet
