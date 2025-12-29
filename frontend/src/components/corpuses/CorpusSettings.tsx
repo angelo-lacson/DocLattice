@@ -12,7 +12,7 @@ import { useQuery, useReactiveVar, useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { editingCorpus } from "../../graphql/cache";
+import { editingCorpus, backendUserObj } from "../../graphql/cache";
 import {
   GET_CORPUS_ACTIONS,
   GetCorpusActionsInput,
@@ -52,6 +52,7 @@ interface CorpusSettingsProps {
     preferredEmbedder?: string | null;
     slug?: string | null;
     creator?: {
+      id?: string;
       email: string;
       username?: string;
       slug?: string;
@@ -627,6 +628,7 @@ const SettingsContainer = styled.div`
 
 export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
   const navigate = useNavigate();
+  const currentUser = useReactiveVar(backendUserObj);
 
   // Check if myPermissions is already processed (array of PermissionTypes) or raw
   const permissions =
@@ -639,6 +641,31 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
 
   const canUpdate = permissions.includes(PermissionTypes.CAN_UPDATE);
   const canPermission = permissions.includes(PermissionTypes.CAN_PERMISSION);
+
+  // Owner can always change visibility (matches backend SetCorpusVisibility permission check)
+  // Compare by ID first, fallback to email comparison for reliability
+  const isOwnerByIdentity = Boolean(
+    currentUser &&
+      corpus.creator &&
+      ((currentUser.id &&
+        corpus.creator.id &&
+        currentUser.id === corpus.creator.id) ||
+        (currentUser.email &&
+          corpus.creator.email &&
+          currentUser.email === corpus.creator.email))
+  );
+
+  // Fallback: If user has all core owner permissions, they're effectively the owner
+  // This handles cases where currentUser isn't loaded yet but permissions are
+  const hasFullOwnerPermissions =
+    permissions.includes(PermissionTypes.CAN_CREATE) &&
+    permissions.includes(PermissionTypes.CAN_UPDATE) &&
+    permissions.includes(PermissionTypes.CAN_READ) &&
+    permissions.includes(PermissionTypes.CAN_PUBLISH) &&
+    permissions.includes(PermissionTypes.CAN_REMOVE);
+
+  const isOwner = isOwnerByIdentity || hasFullOwnerPermissions;
+  const canChangeVisibility = isOwner || canPermission;
   const [slugDraft, setSlugDraft] = useState<string>("");
   const [publicDraft, setPublicDraft] = useState<boolean>(
     Boolean(corpus.isPublic)
@@ -893,7 +920,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
             <SectionTitle>Visibility & Slug</SectionTitle>
           </SectionHeader>
           <MetadataContent>
-            {!canUpdate && !canPermission && (
+            {!canUpdate && !canChangeVisibility && (
               <div
                 style={{
                   background:
@@ -931,7 +958,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                     fontSize: "0.875rem",
                     textTransform: "uppercase",
                     letterSpacing: "0.08em",
-                    color: !canPermission ? "#cbd5e1" : "#64748b",
+                    color: !canChangeVisibility ? "#cbd5e1" : "#64748b",
                     marginBottom: "0.75rem",
                     fontWeight: 600,
                     display: "flex",
@@ -940,7 +967,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                   }}
                 >
                   Public visibility
-                  {!canPermission && (
+                  {!canChangeVisibility && (
                     <span
                       style={{
                         fontSize: "0.75rem",
@@ -961,11 +988,11 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                     alignItems: "center",
                     gap: "0.875rem",
                     padding: "0.875rem 1rem",
-                    background: !canPermission
+                    background: !canChangeVisibility
                       ? "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)"
                       : "linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)",
                     border: "2px solid",
-                    borderColor: !canPermission ? "#e2e8f0" : "#cbd5e1",
+                    borderColor: !canChangeVisibility ? "#e2e8f0" : "#cbd5e1",
                     borderRadius: "10px",
                     transition: "all 0.3s ease",
                   }}
@@ -976,7 +1003,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                       display: "flex",
                       alignItems: "center",
                       gap: "0.75rem",
-                      cursor: !canPermission ? "not-allowed" : "pointer",
+                      cursor: !canChangeVisibility ? "not-allowed" : "pointer",
                       width: "100%",
                     }}
                   >
@@ -984,13 +1011,15 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                       id="corpus-is-public-checkbox"
                       type="checkbox"
                       checked={publicDraft}
-                      disabled={!canPermission}
+                      disabled={!canChangeVisibility}
                       onChange={(e) => setPublicDraft(e.target.checked)}
                       style={{
                         width: "20px",
                         height: "20px",
-                        cursor: !canPermission ? "not-allowed" : "pointer",
-                        opacity: !canPermission ? 0.5 : 1,
+                        cursor: !canChangeVisibility
+                          ? "not-allowed"
+                          : "pointer",
+                        opacity: !canChangeVisibility ? 0.5 : 1,
                         accentColor: "#6366f1",
                       }}
                     />
@@ -998,10 +1027,10 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                       style={{
                         fontSize: "0.9375rem",
                         fontWeight: 600,
-                        color: !canPermission ? "#94a3b8" : "#1e293b",
+                        color: !canChangeVisibility ? "#94a3b8" : "#1e293b",
                       }}
                     >
-                      {publicDraft ? "Public" : "Private"}
+                      Make corpus publicly accessible
                     </span>
                   </label>
                 </div>
@@ -1072,7 +1101,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                 <Button
                   primary
                   loading={updatingCorpus || settingVisibility}
-                  disabled={!canUpdate && !canPermission}
+                  disabled={!canUpdate && !canChangeVisibility}
                   onClick={() => {
                     // Use separate mutations for visibility vs other settings
                     // This ensures proper permission checks on each operation
@@ -1080,7 +1109,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                       publicDraft !== Boolean(corpus.isPublic);
                     const slugChanged = slugDraft !== originalSlug;
 
-                    if (canPermission && visibilityChanged) {
+                    if (canChangeVisibility && visibilityChanged) {
                       setCorpusVisibility({
                         variables: {
                           corpusId: corpus.id,
@@ -1105,23 +1134,26 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                   }}
                   style={{
                     background:
-                      !canUpdate && !canPermission
+                      !canUpdate && !canChangeVisibility
                         ? "#e2e8f0"
                         : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-                    color: !canUpdate && !canPermission ? "#94a3b8" : "white",
+                    color:
+                      !canUpdate && !canChangeVisibility ? "#94a3b8" : "white",
                     border: "none",
                     padding: "0.875rem 2rem",
                     borderRadius: "10px",
                     fontWeight: 600,
                     fontSize: "0.9375rem",
                     cursor:
-                      !canUpdate && !canPermission ? "not-allowed" : "pointer",
+                      !canUpdate && !canChangeVisibility
+                        ? "not-allowed"
+                        : "pointer",
                     boxShadow:
-                      !canUpdate && !canPermission
+                      !canUpdate && !canChangeVisibility
                         ? "none"
                         : "0 4px 14px rgba(99, 102, 241, 0.25)",
                     transition: "all 0.3s ease",
-                    ...(canUpdate || canPermission
+                    ...(canUpdate || canChangeVisibility
                       ? {
                           "&:hover": {
                             transform: "translateY(-2px)",
@@ -1338,7 +1370,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
         </InfoSection>
 
         {/* Action Execution History - Permission Gated to owner/admin/editor */}
-        {(canUpdate || canPermission) && (
+        {(isOwner || canUpdate || canPermission) && (
           <InfoSection id="action-execution-history-section">
             <SectionHeader>
               <SectionTitle>Action Execution History</SectionTitle>
