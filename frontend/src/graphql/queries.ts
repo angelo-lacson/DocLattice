@@ -4231,6 +4231,32 @@ export const GET_AGENT_CONFIGURATIONS = gql`
   }
 `;
 
+/**
+ * GET_AVAILABLE_MODERATION_TOOLS - Get available moderation tools from backend
+ * Used in CreateCorpusActionModal for inline agent creation with pre-selected tools
+ */
+export interface AvailableTool {
+  name: string;
+  description: string;
+  category: string;
+  requiresApproval: boolean;
+}
+
+export interface GetAvailableModerationToolsOutput {
+  availableTools: AvailableTool[];
+}
+
+export const GET_AVAILABLE_MODERATION_TOOLS = gql`
+  query GetAvailableModerationTools {
+    availableTools(category: "moderation") {
+      name
+      description
+      category
+      requiresApproval
+    }
+  }
+`;
+
 // ============================================================
 // CORPUS ACTION EXECUTION QUERIES
 // ============================================================
@@ -4449,4 +4475,147 @@ export interface GetCorpusActionTrailStatsInput {
 
 export interface GetCorpusActionTrailStatsOutput {
   corpusActionTrailStats: CorpusActionTrailStats;
+}
+
+// ============================================================================
+// MODERATION QUERIES
+// ============================================================================
+
+export const GET_MODERATION_ACTIONS = gql`
+  query GetModerationActions(
+    $corpusId: ID
+    $threadId: ID
+    $moderatorId: ID
+    $actionTypes: [String]
+    $automatedOnly: Boolean
+    $first: Int
+    $after: String
+  ) {
+    moderationActions(
+      corpusId: $corpusId
+      threadId: $threadId
+      moderatorId: $moderatorId
+      actionTypes: $actionTypes
+      automatedOnly: $automatedOnly
+      first: $first
+      after: $after
+    ) {
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      edges {
+        cursor
+        node {
+          id
+          actionType
+          reason
+          created
+          canRollback
+          isAutomated
+          corpusId
+          conversation {
+            id
+            title
+          }
+          message {
+            id
+            content
+          }
+          moderator {
+            id
+            username
+          }
+        }
+      }
+    }
+  }
+`;
+
+export interface GetModerationActionsInput {
+  corpusId?: string;
+  threadId?: string;
+  moderatorId?: string;
+  actionTypes?: string[];
+  automatedOnly?: boolean;
+  first?: number;
+  after?: string;
+}
+
+export interface ModerationActionNode {
+  id: string;
+  actionType: string;
+  reason: string | null;
+  created: string;
+  canRollback: boolean;
+  isAutomated: boolean;
+  corpusId: string | null;
+  conversation: {
+    id: string;
+    title: string;
+  } | null;
+  message: {
+    id: string;
+    content: string;
+  } | null;
+  moderator: {
+    id: string;
+    username: string;
+  } | null;
+}
+
+export interface GetModerationActionsOutput {
+  moderationActions: {
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string | null;
+      endCursor: string | null;
+    };
+    edges: Array<{
+      cursor: string;
+      node: ModerationActionNode;
+    }>;
+  };
+}
+
+export const GET_MODERATION_METRICS = gql`
+  query GetModerationMetrics($corpusId: ID!, $timeRangeHours: Int) {
+    moderationMetrics(corpusId: $corpusId, timeRangeHours: $timeRangeHours) {
+      totalActions
+      automatedActions
+      manualActions
+      actionsByType
+      hourlyActionRate
+      isAboveThreshold
+      thresholdExceededTypes
+      timeRangeHours
+      startTime
+      endTime
+    }
+  }
+`;
+
+export interface GetModerationMetricsInput {
+  corpusId: string;
+  timeRangeHours?: number;
+}
+
+export interface ModerationMetrics {
+  totalActions: number;
+  automatedActions: number;
+  manualActions: number;
+  actionsByType: Record<string, number>;
+  hourlyActionRate: number;
+  isAboveThreshold: boolean;
+  thresholdExceededTypes: string[];
+  timeRangeHours: number;
+  startTime: string;
+  endTime: string;
+}
+
+export interface GetModerationMetricsOutput {
+  moderationMetrics: ModerationMetrics | null;
 }

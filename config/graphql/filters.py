@@ -16,7 +16,11 @@ from doclatticeserver.annotations.models import (
     Relationship,
 )
 from doclatticeserver.badges.models import Badge, UserBadge
-from doclatticeserver.conversations.models import ChatMessage, Conversation
+from doclatticeserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    ModerationAction,
+)
 from doclatticeserver.corpuses.models import Corpus, CorpusQuery
 from doclatticeserver.documents.models import Document, DocumentRelationship
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
@@ -664,4 +668,15 @@ class AgentConfigurationFilter(django_filters.FilterSet):
             "scope": ["exact"],
             "is_active": ["exact"],
             "name": ["contains", "exact"],
+        }
+
+
+class ModerationActionFilter(django_filters.FilterSet):
+    """Filter set for ModerationAction model."""
+
+    class Meta:
+        model = ModerationAction
+        fields = {
+            "action_type": ["exact", "in"],
+            "created": ["gte", "lte"],
         }
