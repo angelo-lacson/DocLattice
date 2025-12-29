@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
     """
 
     dependencies = [
-        ("corpuses", "0031_corpus_action_execution"),
+        ("corpuses", "0032_add_thread_message_triggers"),
     ]
 
     operations = [
