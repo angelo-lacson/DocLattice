@@ -4,18 +4,19 @@ Tests for the LlamaParseParser class.
 Tests cover:
 - Successful document parsing with JSON/layout output
 - Bounding box parsing and conversion
-- Structural annotation creation (without token-level data)
+- Structural annotation creation with token-level data
 - Error handling (missing API key, API errors, etc.)
 - Configuration via environment variables
 
-Note: LlamaParse only provides element-level bounding boxes, not token-level data.
-Annotations are created with empty tokensJsons - the frontend handles this gracefully
-by showing just the bounding box outline without individual token highlights.
+Note: LlamaParse provides element-level bounding boxes, and the parser uses
+pdfplumber to extract word-level tokens from the PDF. These tokens are then
+mapped to annotations using spatial intersection (shapely STRtree).
 """
 
 import sys
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
@@ -30,6 +31,60 @@ User = get_user_model()
 mock_llama_parse = MagicMock()
 mock_llama_parse.LlamaParse = MagicMock()
 sys.modules["llama_parse"] = mock_llama_parse
+
+
+def create_mock_token_extraction_result(page_count=1, tokens_per_page=5):
+    """
+    Create mock token extraction result for testing.
+
+    Returns a tuple matching the signature of extract_pawls_tokens_from_pdf:
+    (pawls_pages, spatial_indices, tokens_by_page, token_indices_by_page,
+     page_dims, content)
+    """
+    pawls_pages = []
+    spatial_indices = {}
+    tokens_by_page = {}
+    token_indices_by_page = {}
+    page_dims = {}
+
+    for page_idx in range(page_count):
+        # Create mock tokens for this page
+        tokens = []
+        for i in range(tokens_per_page):
+            tokens.append(
+                {
+                    "x": 100 + (i * 60),
+                    "y": 100,
+                    "width": 50,
+                    "height": 20,
+                    "text": f"word{i}",
+                }
+            )
+
+        pawls_pages.append(
+            {
+                "page": {"width": 612, "height": 792, "index": page_idx},
+                "tokens": tokens,
+            }
+        )
+
+        # Create mock spatial index (MagicMock since we don't need real STRtree)
+        spatial_indices[page_idx] = MagicMock()
+        tokens_by_page[page_idx] = tokens
+        token_indices_by_page[page_idx] = np.array(
+            list(range(len(tokens))), dtype=np.intp
+        )
+        page_dims[page_idx] = (612.0, 792.0)
+
+    content = " ".join([f"word{i}" for i in range(tokens_per_page)])
+    return (
+        pawls_pages,
+        spatial_indices,
+        tokens_by_page,
+        token_indices_by_page,
+        page_dims,
+        content,
+    )
 
 
 class MockLlamaDocument:
@@ -138,12 +193,16 @@ class TestLlamaParseParser(TestCase):
         ]
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
     @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_success_with_layout(
-        self, mock_open, mock_llama_parse_class
+        self, mock_open, mock_llama_parse_class, mock_extract_tokens, mock_find_tokens
     ):
-        """Test successful document parsing with layout extraction."""
+        """Test successful document parsing with layout extraction and token mapping."""
         # Mock file reading
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
@@ -154,6 +213,17 @@ class TestLlamaParseParser(TestCase):
         mock_parser.get_json_result.return_value = self.sample_json_response
         mock_llama_parse_class.return_value = mock_parser
 
+        # Mock token extraction
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=2, tokens_per_page=5
+        )
+
+        # Mock find_tokens_in_bbox to return some token references
+        mock_find_tokens.return_value = [
+            {"pageIndex": 0, "tokenIndex": 0},
+            {"pageIndex": 0, "tokenIndex": 1},
+        ]
+
         # Create parser and parse document
         parser = LlamaParseParser()
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
@@ -163,17 +233,17 @@ class TestLlamaParseParser(TestCase):
         self.assertEqual(result["title"], "Test LlamaParse Document")
         self.assertEqual(result["page_count"], 2)
 
-        # Verify PAWLS content was generated
+        # Verify PAWLS content was generated with tokens
         self.assertIn("pawls_file_content", result)
         self.assertEqual(len(result["pawls_file_content"]), 2)
 
-        # Verify first page structure
+        # Verify first page structure - now has tokens from mock
         first_page = result["pawls_file_content"][0]
         self.assertEqual(first_page["page"]["index"], 0)
         self.assertEqual(first_page["page"]["width"], 612)
         self.assertEqual(first_page["page"]["height"], 792)
-        # LlamaParse doesn't provide token-level data, so tokens list is empty
-        self.assertEqual(len(first_page["tokens"]), 0)
+        # Tokens should now be populated from the mock
+        self.assertEqual(len(first_page["tokens"]), 5)
 
         # Verify annotations were created
         self.assertIn("labelled_text", result)
@@ -185,6 +255,11 @@ class TestLlamaParseParser(TestCase):
         self.assertEqual(first_annotation["structural"], True)
         self.assertEqual(first_annotation["annotation_type"], "TOKEN_LABEL")
         self.assertIn("annotation_json", first_annotation)
+
+        # Verify annotation has token references (from mock)
+        page_anno = first_annotation["annotation_json"]["0"]
+        self.assertEqual(len(page_anno["tokensJsons"]), 2)
+        self.assertEqual(page_anno["tokensJsons"][0], {"pageIndex": 0, "tokenIndex": 0})
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("llama_parse.LlamaParse")
@@ -470,16 +545,15 @@ class TestLlamaParseParserBboxConversion(TestCase):
 class TestLlamaParseParserAnnotations(TestCase):
     """Tests for annotation creation methods.
 
-    Note: LlamaParse annotations use empty tokensJsons since LlamaParse
-    only provides element-level bounding boxes, not token-level data.
+    Annotations can now include tokensJsons when token extraction succeeds.
     """
 
     def setUp(self):
         """Set up test environment."""
         self.parser = LlamaParseParser()
 
-    def test_create_annotation_structure(self):
-        """Test annotation creation has correct structure."""
+    def test_create_annotation_structure_without_tokens(self):
+        """Test annotation creation has correct structure without token refs."""
         bounds = {"left": 100, "top": 100, "right": 300, "bottom": 150}
 
         annotation = self.parser._create_annotation(
@@ -504,8 +578,32 @@ class TestLlamaParseParserAnnotations(TestCase):
         page_anno = annotation["annotation_json"]["0"]
         self.assertEqual(page_anno["bounds"], bounds)
         self.assertEqual(page_anno["rawText"], "Sample Title")
-        # tokensJsons is empty - LlamaParse doesn't provide token-level data
+        # tokensJsons is empty when no token_refs provided
         self.assertEqual(len(page_anno["tokensJsons"]), 0)
+
+    def test_create_annotation_structure_with_tokens(self):
+        """Test annotation creation with token references."""
+        bounds = {"left": 100, "top": 100, "right": 300, "bottom": 150}
+        token_refs = [
+            {"pageIndex": 0, "tokenIndex": 0},
+            {"pageIndex": 0, "tokenIndex": 1},
+            {"pageIndex": 0, "tokenIndex": 2},
+        ]
+
+        annotation = self.parser._create_annotation(
+            annotation_id="anno-2",
+            label="Paragraph",
+            raw_text="Sample paragraph text",
+            page_idx=0,
+            bounds=bounds,
+            token_refs=token_refs,
+        )
+
+        # Check annotation_json structure includes tokens
+        page_anno = annotation["annotation_json"]["0"]
+        self.assertEqual(len(page_anno["tokensJsons"]), 3)
+        self.assertEqual(page_anno["tokensJsons"][0], {"pageIndex": 0, "tokenIndex": 0})
+        self.assertEqual(page_anno["tokensJsons"][2], {"pageIndex": 0, "tokenIndex": 2})
 
     def test_element_type_mapping(self):
         """Test that element types are properly mapped to labels."""
@@ -687,14 +785,18 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         ]
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
     @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_layout_only_processing(
-        self, mock_open, mock_llama_parse_class
+        self, mock_open, mock_llama_parse_class, mock_extract_tokens, mock_find_tokens
     ):
         """Test document parsing when items are empty but layout exists.
 
-        This tests lines 344-381 in llamaparse_parser.py.
+        This tests the layout-only processing path in _convert_json_to_opencontracts.
         """
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
@@ -704,6 +806,12 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         mock_parser.get_json_result.return_value = self.layout_only_response
         mock_llama_parse_class.return_value = mock_parser
 
+        # Mock token extraction
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=5
+        )
+        mock_find_tokens.return_value = [{"pageIndex": 0, "tokenIndex": 0}]
+
         parser = LlamaParseParser()
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
@@ -712,12 +820,12 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         self.assertEqual(result["title"], "Layout Test Document")
         self.assertEqual(result["page_count"], 1)
 
-        # Verify PAWLS content structure (tokens are empty - no token-level data)
+        # Verify PAWLS content structure (now has tokens from extraction)
         self.assertIn("pawls_file_content", result)
         self.assertEqual(len(result["pawls_file_content"]), 1)
         first_page = result["pawls_file_content"][0]
-        # LlamaParse doesn't provide token-level data
-        self.assertEqual(len(first_page["tokens"]), 0)
+        # Tokens should now be populated from the mock
+        self.assertEqual(len(first_page["tokens"]), 5)
 
         # Verify annotations were created from layout elements
         self.assertIn("labelled_text", result)
@@ -732,10 +840,14 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         self.assertIn("Figure", labels)
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
     @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_layout_figure_without_text(
-        self, mock_open, mock_llama_parse_class
+        self, mock_open, mock_llama_parse_class, mock_extract_tokens, mock_find_tokens
     ):
         """Test that figures/images with empty text are processed correctly.
 
@@ -784,6 +896,12 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         mock_parser.get_json_result.return_value = layout_with_images
         mock_llama_parse_class.return_value = mock_parser
 
+        # Mock token extraction
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=5
+        )
+        mock_find_tokens.return_value = []
+
         parser = LlamaParseParser()
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
@@ -796,10 +914,14 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
             self.assertIn(anno["rawText"], ["[image]", "[figure]"])
 
     @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
     @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_layout_skips_empty_text_non_figures(
-        self, mock_open, mock_llama_parse_class
+        self, mock_open, mock_llama_parse_class, mock_extract_tokens, mock_find_tokens
     ):
         """Test that non-figure elements with empty text are skipped."""
         layout_with_empty_text = [
@@ -864,6 +986,12 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         mock_parser = MagicMock()
         mock_parser.get_json_result.return_value = layout_with_empty_text
         mock_llama_parse_class.return_value = mock_parser
+
+        # Mock token extraction
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=5
+        )
+        mock_find_tokens.return_value = []
 
         parser = LlamaParseParser()
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
