@@ -260,10 +260,14 @@ test.describe("FloatingDocumentControls", () => {
     await expect(toggle).toBeChecked();
   });
 
-  test("enabling structural view forces show selected only to be true", async ({
+  test("structural and show selected only controls are independent", async ({
     mount,
     page,
   }) => {
+    // Both controls are independent - users can choose to:
+    // - Show all structural annotations (structural: ON, selectedOnly: OFF)
+    // - Show only selected structural annotation (structural: ON, selectedOnly: ON)
+    // - Hide all structural annotations (structural: OFF)
     const component = await mount(
       <FloatingDocumentControlsTestWrapper
         visible={true}
@@ -303,12 +307,67 @@ test.describe("FloatingDocumentControls", () => {
     // Add small delay to allow intercepted navigate to process
     await page.waitForTimeout(100);
 
-    // Both should now be checked
+    // After enabling structural, only structural should be checked
+    // The showSelectedOnly control should remain independent (NOT forced to true)
+    await expect(structuralToggle).toBeChecked();
+    await expect(selectedOnlyToggle).not.toBeChecked();
+
+    // The showSelectedOnly toggle should remain enabled (not disabled) when structural is on
+    await expect(selectedOnlyToggle).toBeEnabled();
+  });
+
+  test("can toggle show selected only independently when structural is enabled", async ({
+    mount,
+    page,
+  }) => {
+    // Start with structural ON but selectedOnly OFF (user wants to see ALL structural annotations)
+    const component = await mount(
+      <FloatingDocumentControlsTestWrapper
+        visible={true}
+        showSelectedOnly={false}
+        showStructural={true}
+      />
+    );
+
+    // Open settings panel
+    const settingsButton = page.getByTestId("settings-button");
+    await settingsButton.click();
+
+    const selectedOnlyToggle = page
+      .locator("text=Show Only Selected")
+      .locator("..")
+      .locator('input[type="checkbox"]');
+    const selectedOnlyToggleWrapper = page
+      .locator("text=Show Only Selected")
+      .locator("..")
+      .locator(".ui.checkbox");
+    const structuralToggle = page
+      .locator("text=Show Structural")
+      .locator("..")
+      .locator('input[type="checkbox"]');
+
+    // Structural should be checked, selectedOnly should not be checked
+    await expect(structuralToggle).toBeChecked();
+    await expect(selectedOnlyToggle).not.toBeChecked();
+
+    // The showSelectedOnly toggle should be enabled (not disabled)
+    await expect(selectedOnlyToggle).toBeEnabled();
+
+    // User can toggle showSelectedOnly ON independently
+    await selectedOnlyToggleWrapper.click();
+    await page.waitForTimeout(100);
+
+    // Now both should be checked
     await expect(structuralToggle).toBeChecked();
     await expect(selectedOnlyToggle).toBeChecked();
 
-    // Selected only should be disabled when structural is on
-    await expect(selectedOnlyToggle).toBeDisabled();
+    // User can toggle showSelectedOnly OFF again independently
+    await selectedOnlyToggleWrapper.click();
+    await page.waitForTimeout(100);
+
+    // Back to structural ON, selectedOnly OFF
+    await expect(structuralToggle).toBeChecked();
+    await expect(selectedOnlyToggle).not.toBeChecked();
   });
 
   test("adjusts position based on panelOffset", async ({ mount }) => {

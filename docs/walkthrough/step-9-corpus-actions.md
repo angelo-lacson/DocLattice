@@ -2,73 +2,208 @@
 
 ## Introduction
 
-If you're familiar with GitHub actions - user-scripted functions that run automatically over a software vcs repository
-when certain actions take place (like a merge, PR, etc.) - then a CorpusAction should be a familair concept. You can
-configure a celery task using our `@doc_analyzer_task` decorator (see more [here](advanced/register-doc-analyzer.md)
-on how to write these) and then configure a `CorpusAction` to run your custom task on all documents added to the target
-corpus.
+Corpus Actions are automated tasks that run when specific events occur in a corpus. If you're familiar with GitHub Actions (user-scripted functions that run automatically when certain events occur in a repository), then Corpus Actions follow a similar concept—but for document and discussion management.
 
-## Setting up a Corpus Action
+You can configure actions that automatically run when:
+- **Documents are added** to a corpus
+- **Documents are edited** in a corpus
+- **New discussion threads** are created in a corpus
+- **New messages** are posted to discussion threads
 
-### Supported Actions
+## Supported Action Types
 
-**NOTE:** Currently, you have to configure all of this via the Django admin dashboard (`http://localhost:8000/admin`
-if you're using our local deployment), We'd like to expose this functionality using our React frontend, but the required
-GUI elements and GraphQL mutations need to be built out. A good starter PR for someone ;-).
+OpenContracts supports three types of automated actions:
 
-Currently, a CorpusAction can be configured to run one of two types of actions automatically:
+| Action Type | Description | Best For |
+|-------------|-------------|----------|
+| **Fieldset** | Automatically extracts structured data from documents | Contract data extraction, form processing |
+| **Analyzer** | Runs classification or annotation analysis | Document categorization, auto-annotation |
+| **Agent** | Invokes an AI agent with tools | Summarization, moderation, custom workflows |
 
-1. A **data extract** fieldset - in which case, a data extract will be created and run on new documents added to the
-   configured corpus (see our guide on setting up a [data extract job](step-8-data-extract.md))
-2. An **Analyzer** configured to run a task decorated using the `@doc_analyzer_task` decorator. See more about configuring these
-   kinds of tasks [here](advanced/register-doc-analyzer.md).
+## Trigger Types
 
-### Creating Corpus Action
+| Trigger | Event | Supported Actions |
+|---------|-------|-------------------|
+| `add_document` | Document added to corpus | Fieldset, Analyzer, Agent |
+| `edit_document` | Document edited in corpus | Fieldset, Analyzer, Agent |
+| `new_thread` | Discussion thread created | Agent only |
+| `new_message` | Message posted to thread | Agent only |
 
-From within the Django admin dashboard, click on CorpusActions or the `+Add` button next to the header:
+> **Note**: Thread and message triggers (`new_thread`, `new_message`) only support agent-based actions, as they're designed for AI-powered moderation and response workflows.
 
-![img.png](../assets/images/screenshots/Add_Corpus_Action.png)
+## Creating Corpus Actions via the Frontend
 
-Once you've opened the create action form, you'll see a number of different options you can configure:
+### Accessing Corpus Settings
 
-![img.png](../assets/images/screenshots/New_Corpus_Action.png)
+1. Navigate to a corpus you own
+2. Click the **Settings** tab
+3. Scroll to the **Corpus Actions** section
 
-See next section for more details on these configuration options. Once you type in the appropriate configurations and
-hit "Save", the specified Analyzer or Fieldset will be run automatically on the specified Corpus! If you want to learn
-more about the underlying architecture, check out our [deep dive on `CorpusActions`](../architecture/opencontract-corpus-actions.md).
+![Corpus Actions Settings](../assets/images/screenshots/Corpus_Action_Settings.png)
 
-### Configuration Options for Corpus Action
+### Creating a New Action
 
-**Corpus** specifies that an action should run only on a single corpus, specified via dropdown.
+1. Click the **Create New Action** button
+2. Fill in the action configuration:
 
-**Analyzer** *or* **Fieldset** properties control whether an analysis or data extract runs when the
-applicable trigger is run (more on this below). If you want to run a data extract when document is added to the corpus,
-select the fieldset defining the data you want to extract. If you want to run an analyzer, select the pre-configured
-analyzer with a task decorated with @doc_analyzer_task.
+   - **Name**: A descriptive name for the action
+   - **Trigger**: When the action should run
+   - **Action Type**: What kind of action to perform
 
-**Trigger** refers to the specific action type that should kick off the desired analysis. Currently, we "provide" add
-and edit actions - i.e., run specified analytics when a document is added or edited, respectively - _but_ we have not
-configured the `edit` action to run.
+3. Configure the action-specific settings (see sections below)
+4. Click **Create Action**
 
-**Disabled** is a toggle that will turn off the specified `CorpusAction` for ALL corpuses.
+### Fieldset Actions
 
-**Run on all corpuses** is a toggle that, if `True`, will run the specified action on EVERY corpus. Be careful with this
-as it runs for all corpuses for ALL users. Depending on your environment, this could incur a substantial compute cost
-and other users may not appreciate this. A nice feature we'd love to add is a more fine-grained set of rules based
-access controls to limit actions to certain groups. This would require a substantial investment into the frontend of
-the application and remains an unlikely addition, though we'd absolutely welcome contributions!
+Fieldset actions automatically extract structured data from documents.
 
-### Quick Reference - Configuring @doc_analyzer_task + Analyzer
+1. Select **Trigger**: "On Document Add" or "On Document Edit"
+2. Select **Action Type**: "Fieldset (Extract data)"
+3. Choose a **Fieldset** from the dropdown
+4. Click **Create Action**
 
-If you write your own `@doc_analyzer_task` and want to run it automatically, let's step through this step-by-step.
+When documents are added/edited, the specified fieldset will automatically extract data and create an Extract record.
 
-1. First, we assume you put a properly written and decorated task in `opencontractserver.tasks.doc_analysis_tasks.py`.
-2. Second, you need to create and configure an Analyzer via the Django admin panel. Click on the `+Add` button next to
-   the Analyzer entry in the admin sidebar and then configure necessary properties:
+### Analyzer Actions
 
-   ![img.png](../assets/images/screenshots/configure_analyzer.png)
+Analyzer actions run classification or annotation tasks on documents.
 
-   Place the name of your task in the `task_name` property -
-   e.g. `opencontractserver.tasks.doc_analysis_tasks.contract_not_contract`,
-   add a brief description, assign the creator to the desired user, and click save.
-3. Now, this `Analyzer` instance can be assigned to a CorpusAction!
+1. Select **Trigger**: "On Document Add" or "On Document Edit"
+2. Select **Action Type**: "Analyzer (Run analysis)"
+3. Choose an **Analyzer** from the dropdown
+4. Click **Create Action**
+
+The analyzer's task (decorated with `@doc_analyzer_task`) will run automatically on matching documents.
+
+### Agent Actions (Document-based)
+
+Agent actions invoke an AI agent with pre-authorized tools to perform intelligent document processing.
+
+1. Select **Trigger**: "On Document Add" or "On Document Edit"
+2. Select **Action Type**: "Agent (AI-powered action)"
+3. Choose an **Agent Configuration** from the dropdown
+4. Enter an **Agent Prompt**: The task-specific instructions for the agent
+5. Optionally select **Pre-authorized Tools**: Tools that can run without approval
+6. Click **Create Action**
+
+**Example Agent Prompt for Auto-Summarization:**
+```
+Analyze this document and create a comprehensive summary.
+
+1. Use load_document_text to read the full content
+2. Identify the document type, key parties, and main topics
+3. Use update_document_summary to save a 3-5 sentence summary
+
+Focus on: document purpose, key terms, important dates, and parties involved.
+```
+
+## Thread & Message Moderation
+
+Thread and message triggers are designed for **AI-powered moderation** of discussion threads within a corpus. When configured, an agent automatically processes new threads or messages.
+
+### Creating a Moderation Action
+
+1. Select **Trigger**: "On New Thread" or "On New Message"
+2. The **Action Type** is automatically set to "Agent" (the only option for these triggers)
+3. Choose an **Agent Configuration** that has moderation tools available
+4. Enter a **Moderation Prompt**: Instructions for how the agent should moderate
+5. Select the **Moderation Tools** the agent can use
+6. Click **Create Action**
+
+### Available Moderation Tools
+
+The following tools are available for thread/message moderation:
+
+| Tool | Description |
+|------|-------------|
+| `get_thread_context` | Get thread metadata, status, and settings |
+| `get_thread_messages` | Retrieve recent messages in a thread |
+| `get_message_content` | Get the full content of a specific message |
+| `add_thread_message` | Post a response message as the agent |
+| `lock_thread` | Lock the thread to prevent new messages |
+| `unlock_thread` | Unlock a previously locked thread |
+| `delete_message` | Soft delete a message (mark as deleted) |
+| `pin_thread` | Pin the thread to the top of the list |
+| `unpin_thread` | Unpin a previously pinned thread |
+
+### Example Moderation Prompt
+
+```
+You are a thread moderator for this corpus. Your role is to:
+
+1. Monitor discussion threads and messages for policy compliance
+2. Take appropriate moderation actions when needed
+3. Respond helpfully to user questions when appropriate
+
+Guidelines:
+- Lock threads that become off-topic or contentious
+- Delete messages that violate community guidelines
+- Pin threads that contain important announcements
+- Respond to questions with helpful, factual information
+
+Use your moderation tools judiciously. Start by reading the thread context
+and recent messages to understand the discussion before taking action.
+```
+
+### Moderation Workflow
+
+When a user posts a new message to a thread in your corpus:
+
+1. The `new_message` trigger fires
+2. Your configured agent action is queued
+3. The agent receives the moderation prompt
+4. The agent uses tools to read the message and thread context
+5. The agent decides what action (if any) to take
+6. Results are logged to the Action Execution Trail
+
+## Viewing Action Executions
+
+The **Action Execution Trail** in Corpus Settings shows the history of all action executions:
+
+- **Status**: Queued, Running, Completed, Failed, or Skipped
+- **Action Name**: Which action was executed
+- **Target**: The document or thread/message that triggered the action
+- **Timing**: When the action was queued and how long it took
+- **Error Details**: For failed executions, the error message
+
+Click on any execution row to expand and see full details.
+
+## Configuration Options
+
+### Disabling Actions
+
+Toggle the **Disabled** checkbox when creating or editing an action to temporarily disable it without deleting the configuration.
+
+### Run on All Corpuses
+
+The **Run on All Corpuses** option (admin only) makes the action run across ALL corpuses in the system. Use with caution as this can incur significant compute costs.
+
+## Deferred Execution
+
+Corpus actions automatically wait for documents to be fully processed before executing. This ensures that:
+
+- **New uploads**: Actions trigger after parsing/thumbnailing completes
+- **Existing documents**: Actions trigger immediately when added to corpus
+
+This prevents agent tools like `load_document_text` from failing due to incomplete document processing.
+
+## Via Django Admin (Advanced)
+
+For advanced configuration or bulk operations, you can also manage Corpus Actions via the Django admin dashboard at `http://localhost:8000/admin`.
+
+1. Navigate to **Corpuses > Corpus Actions**
+2. Click **Add Corpus Action**
+3. Configure the action properties
+4. Save
+
+This is useful for:
+- Configuring actions with `run_on_all_corpuses` enabled
+- Bulk editing multiple actions
+- Accessing actions on corpuses you don't own (superusers only)
+
+## Related Documentation
+
+- [Corpus Actions API](../corpus_actions/intro_to_corpus_actions.md) - GraphQL API reference
+- [Agent-Based Actions Architecture](../architecture/agent_corpus_actions_design.md) - Technical deep-dive
+- [Registering Custom Analyzers](advanced/register-doc-analyzer.md) - Writing `@doc_analyzer_task` decorators
+- [Data Extraction](step-8-data-extract.md) - Setting up fieldsets for extraction

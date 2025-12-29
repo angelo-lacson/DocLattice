@@ -7,16 +7,37 @@ const Container = styled.div`
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+  }
 `;
 
 const PageHeader = styled.div`
   margin-bottom: 2rem;
+
+  @media (max-width: 768px) {
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
 `;
 
 const PageTitle = styled(Header)`
   &.ui.header {
     margin-bottom: 0.5rem;
     color: #1e293b;
+
+    @media (max-width: 768px) {
+      font-size: 1.5rem !important;
+    }
+
+    @media (max-width: 480px) {
+      font-size: 1.3rem !important;
+    }
   }
 `;
 
@@ -24,12 +45,26 @@ const PageDescription = styled.p`
   color: #64748b;
   font-size: 1rem;
   margin: 0;
+
+  @media (max-width: 768px) {
+    font-size: 0.9rem;
+  }
 `;
 
 const SettingsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.5rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
 `;
 
 const SettingsCard = styled(Card)`
@@ -44,8 +79,29 @@ const SettingsCard = styled(Card)`
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
+    /* Disable hover transforms on touch devices */
+    @media (hover: none) {
+      &:hover {
+        transform: none;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      &:active {
+        transform: scale(0.98);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+      }
+    }
+
     .content {
       padding: 1.5rem;
+
+      @media (max-width: 768px) {
+        padding: 1.25rem;
+      }
+
+      @media (max-width: 480px) {
+        padding: 1rem;
+      }
     }
   }
 `;
@@ -60,6 +116,12 @@ const CardIcon = styled.div<{ $color: string }>`
   justify-content: center;
   margin-bottom: 1rem;
 
+  @media (max-width: 768px) {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 0.75rem;
+  }
+
   i.icon {
     color: white;
     margin: 0;
@@ -71,6 +133,10 @@ const CardTitle = styled.h3`
   font-weight: 600;
   color: #1e293b;
   margin: 0 0 0.5rem 0;
+
+  @media (max-width: 768px) {
+    font-size: 1rem;
+  }
 `;
 
 const CardDescription = styled.p`
@@ -78,6 +144,10 @@ const CardDescription = styled.p`
   color: #64748b;
   margin: 0;
   line-height: 1.5;
+
+  @media (max-width: 768px) {
+    font-size: 0.8rem;
+  }
 `;
 
 const ComingSoonBadge = styled.span`
@@ -89,6 +159,13 @@ const ComingSoonBadge = styled.span`
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   margin-left: 0.5rem;
+
+  @media (max-width: 480px) {
+    display: block;
+    margin-left: 0;
+    margin-top: 0.5rem;
+    width: fit-content;
+  }
 `;
 
 interface SettingItem {

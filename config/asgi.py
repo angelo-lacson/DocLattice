@@ -41,6 +41,7 @@ from config.websocket.consumers.thread_updates import (  # noqa: E402
 from config.websocket.consumers.unified_agent_conversation import (  # noqa: E402
     UnifiedAgentConsumer,
 )
+from opencontractserver.mcp.server import mcp_asgi_app  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,28 @@ sys.path.append(str(BASE_DIR / "delphic"))
 
 # This application object is used by any ASGI server configured to use this file.
 django_application = get_asgi_application()
+
+
+def create_http_router(django_app, mcp_app):
+    """
+    Create an HTTP router that dispatches to MCP or Django based on path.
+
+    Routes /mcp and /mcp/* to the MCP ASGI app, everything else to Django.
+    The MCP server uses Streamable HTTP transport in stateless mode.
+    """
+
+    async def router(scope, receive, send):
+        path = scope.get("path", "")
+        # Match /mcp exactly or /mcp/* paths
+        if path == "/mcp" or path.startswith("/mcp/"):
+            await mcp_app(scope, receive, send)
+        else:
+            await django_app(scope, receive, send)
+
+    return router
+
+
+http_application = create_http_router(django_application, mcp_asgi_app)
 
 document_query_pattern = re_path(
     r"ws/document/(?P<document_id>[-a-zA-Z0-9_=]+)/query/(?:corpus/(?P<corpus_id>[-a-zA-Z0-9_=]+)/)?$",
@@ -119,7 +142,7 @@ else:
 # 4. URL routing
 application = ProtocolTypeRouter(
     {
-        "http": django_application,
+        "http": http_application,  # Routes /mcp/* to MCP, rest to Django
         "websocket": websocket_auth_middleware(URLRouter(websocket_urlpatterns)),
     }
 )

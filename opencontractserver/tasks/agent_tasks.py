@@ -679,3 +679,332 @@ async def _run_agent_corpus_action_async(
             exc_info=True,
         )
         raise
+
+
+# --------------------------------------------------------------------------- #
+# Thread/Message Agent-based Corpus Actions
+# --------------------------------------------------------------------------- #
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def run_agent_thread_action(
+    self,
+    corpus_action_id: int,
+    conversation_id: int,
+    message_id: int | None,
+    user_id: int,
+    execution_id: int | None = None,
+) -> dict:
+    """
+    Execute an agent-based corpus action on a thread or message.
+
+    This is the thread/message equivalent of run_agent_corpus_action.
+    The agent receives context about the thread/message and can use
+    moderation tools to take action.
+
+    Args:
+        corpus_action_id: ID of the CorpusAction to execute
+        conversation_id: ID of the Conversation (thread) to process
+        message_id: Optional ID of the specific message (for NEW_MESSAGE trigger)
+        user_id: ID of the User (for audit trail)
+        execution_id: Optional ID of CorpusActionExecution for tracking
+
+    Returns:
+        dict with status information
+    """
+    import traceback
+
+    from opencontractserver.corpuses.models import CorpusActionExecution
+
+    logger.info(
+        f"[AgentThreadAction] Starting: action={corpus_action_id}, "
+        f"conversation={conversation_id}, message={message_id}, user={user_id}"
+    )
+
+    # Mark execution as started
+    execution = None
+    if execution_id:
+        try:
+            execution = CorpusActionExecution.objects.get(id=execution_id)
+            execution.mark_started()
+        except CorpusActionExecution.DoesNotExist:
+            logger.warning(f"[AgentThreadAction] Execution {execution_id} not found")
+
+    try:
+        result = asyncio.run(
+            _run_agent_thread_action_async(
+                corpus_action_id=corpus_action_id,
+                conversation_id=conversation_id,
+                message_id=message_id,
+                user_id=user_id,
+            )
+        )
+
+        if execution:
+            affected_objects = [{"type": "agent_result", "id": result.get("result_id")}]
+            if result.get("conversation_id"):
+                affected_objects.append(
+                    {"type": "conversation", "id": result.get("conversation_id")}
+                )
+            execution.mark_completed(
+                affected_objects=affected_objects,
+                metadata={
+                    "response_length": result.get("response_length"),
+                    "status": result.get("status"),
+                },
+            )
+
+            # Link to agent result
+            if result.get("result_id"):
+                execution.agent_result_id = result.get("result_id")
+                execution.save(update_fields=["agent_result"])
+
+        return result
+
+    except Exception as exc:
+        logger.error(
+            f"[AgentThreadAction] Failed: action={corpus_action_id}, "
+            f"conversation={conversation_id}, error={exc}",
+            exc_info=True,
+        )
+
+        if execution:
+            execution.mark_failed(str(exc), traceback.format_exc())
+
+        raise self.retry(exc=exc)
+
+
+async def _run_agent_thread_action_async(
+    corpus_action_id: int,
+    conversation_id: int,
+    message_id: int | None,
+    user_id: int,
+) -> dict:
+    """Async implementation of agent thread action execution."""
+    from channels.db import database_sync_to_async
+    from django.conf import settings
+    from django.utils import timezone
+
+    from opencontractserver.agents.models import AgentActionResult
+    from opencontractserver.conversations.models import ChatMessage, Conversation
+    from opencontractserver.corpuses.models import CorpusAction
+    from opencontractserver.llms import agents
+    from opencontractserver.llms.tools.moderation_tools import (
+        aget_message_content,
+        aget_thread_context,
+        aget_thread_messages,
+    )
+
+    # Load action and thread
+    action = await CorpusAction.objects.select_related("agent_config", "corpus").aget(
+        id=corpus_action_id
+    )
+    conversation = await Conversation.objects.aget(id=conversation_id)
+
+    message = None
+    if message_id:
+        message = await ChatMessage.objects.aget(id=message_id)
+
+    logger.info(
+        f"[AgentThreadAction] Executing '{action.name}' on thread "
+        f"'{conversation.title}' (id={conversation_id})"
+    )
+
+    # Build context for the agent
+    thread_context = await aget_thread_context(conversation_id)
+    recent_messages = await aget_thread_messages(conversation_id, limit=10)
+
+    # Build the prompt with context
+    context_parts = [
+        "You are reviewing a discussion thread for moderation.",
+        "\n## Thread Information:",
+        f"- Thread ID: {conversation_id}",
+        f"- Title: {thread_context['title']}",
+        f"- Creator: {thread_context['creator_username']}",
+        f"- Message count: {thread_context['message_count']}",
+        f"- Is locked: {thread_context['is_locked']}",
+        f"- Is pinned: {thread_context['is_pinned']}",
+    ]
+
+    if thread_context.get("corpus_title"):
+        context_parts.append(f"- Corpus: {thread_context['corpus_title']}")
+
+    if message_id and message:
+        message_content = await aget_message_content(message_id)
+        context_parts.extend(
+            [
+                f"\n## Triggering Message (ID: {message_id}):",
+                f"- Author: {message_content['creator_username']}",
+                f"- Content:\n{message_content['content']}",
+            ]
+        )
+
+    context_parts.append("\n## Recent Thread Messages (most recent first):")
+
+    for msg in recent_messages[:5]:
+        content_preview = (
+            msg["content"][:200] + "..."
+            if len(msg["content"]) > 200
+            else msg["content"]
+        )
+        context_parts.append(
+            f"- [{msg['creator_username']}] (ID: {msg['id']}): {content_preview}"
+        )
+
+    context_parts.append("\n## Your Task:")
+    context_parts.append(action.agent_prompt)
+
+    full_prompt = "\n".join(context_parts)
+
+    # Create or claim result record
+    @database_sync_to_async
+    def get_or_create_result():
+        # For thread-based actions, use triggering_conversation and triggering_message
+        result, created = AgentActionResult.objects.get_or_create(
+            corpus_action=action,
+            triggering_conversation=conversation,
+            triggering_message=message,
+            defaults={
+                "creator_id": user_id,
+                "status": AgentActionResult.Status.RUNNING,
+                "started_at": timezone.now(),
+            },
+        )
+
+        if created:
+            return result, "created"
+
+        # Try to claim existing record
+        claimed = (
+            AgentActionResult.objects.filter(pk=result.pk)
+            .exclude(
+                status__in=[
+                    AgentActionResult.Status.RUNNING,
+                    AgentActionResult.Status.COMPLETED,
+                ]
+            )
+            .update(
+                status=AgentActionResult.Status.RUNNING,
+                started_at=timezone.now(),
+                error_message="",
+            )
+        )
+
+        if claimed:
+            result.refresh_from_db()
+            return result, "claimed"
+
+        result.refresh_from_db()
+        return result, f"already_{result.status}"
+
+    result, status = await get_or_create_result()
+
+    if status.startswith("already_"):
+        logger.info(
+            f"[AgentThreadAction] {status} for thread {conversation_id}, skipping"
+        )
+        return {"status": status, "result_id": result.id}
+
+    try:
+        # Determine tools - add moderation tools by default for thread actions
+        tools = action.pre_authorized_tools or []
+        if not tools and action.agent_config:
+            tools = action.agent_config.available_tools or []
+
+        # Ensure moderation tools are available for thread actions
+        moderation_tools = [
+            "get_thread_context",
+            "get_thread_messages",
+            "get_message_content",
+            "delete_message",
+            "lock_thread",
+            "unlock_thread",
+            "add_thread_message",
+            "pin_thread",
+            "unpin_thread",
+        ]
+        for tool in moderation_tools:
+            if tool not in tools:
+                tools.append(tool)
+
+        system_prompt = None
+        if action.agent_config and action.agent_config.system_instructions:
+            system_prompt = action.agent_config.system_instructions
+
+        logger.debug(
+            f"[AgentThreadAction] Creating agent with tools={tools}, "
+            f"prompt_length={len(full_prompt)}"
+        )
+
+        # Create agent with corpus context and moderation tools
+        # Note: We use for_corpus since thread actions are corpus-scoped
+        agent = await agents.for_corpus(
+            corpus=action.corpus,
+            user_id=user_id,
+            system_prompt=system_prompt,
+            tools=tools,
+            streaming=False,
+            skip_approval_gate=True,
+        )
+
+        # Execute the task prompt
+        logger.info(
+            f"[AgentThreadAction] Executing prompt for thread {conversation_id}"
+        )
+        response = await agent.chat(full_prompt)
+
+        # Build execution metadata
+        execution_metadata = {
+            "model": getattr(settings, "LLMS_DEFAULT_MODEL", "unknown"),
+            "tools_available": tools,
+            "agent_config_id": action.agent_config_id,
+            "agent_config_name": (
+                action.agent_config.name if action.agent_config else None
+            ),
+            "thread_id": conversation_id,
+            "message_id": message_id,
+        }
+
+        # Update result with success
+        result.status = AgentActionResult.Status.COMPLETED
+        result.agent_response = response.content
+        result.conversation_id = agent.get_conversation_id()
+        result.completed_at = timezone.now()
+        result.execution_metadata = execution_metadata
+
+        @database_sync_to_async
+        def save_result_completed():
+            result.save()
+
+        await save_result_completed()
+
+        logger.info(
+            f"[AgentThreadAction] Completed: action={corpus_action_id}, "
+            f"thread={conversation_id}, result={result.id}, "
+            f"response_length={len(response.content)}"
+        )
+
+        return {
+            "status": "completed",
+            "result_id": result.id,
+            "response_length": len(response.content),
+            "conversation_id": agent.get_conversation_id(),
+        }
+
+    except Exception as e:
+        result.status = AgentActionResult.Status.FAILED
+        result.error_message = str(e)[:1000]
+        result.completed_at = timezone.now()
+
+        @database_sync_to_async
+        def save_result_failed():
+            result.save()
+
+        await save_result_failed()
+
+        logger.error(
+            f"[AgentThreadAction] Failed: action={corpus_action_id}, "
+            f"thread={conversation_id}, error={e}",
+            exc_info=True,
+        )
+        raise
