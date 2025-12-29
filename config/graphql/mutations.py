@@ -61,7 +61,6 @@ from config.graphql.graphene_types import (
     AnnotationType,
     ColumnType,
     CorpusActionType,
-    CorpusQueryType,
     CorpusType,
     DatacellType,
     DocumentType,
@@ -126,7 +125,6 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusFolder,
-    CorpusQuery,
     TemporaryFileHandle,
 )
 from opencontractserver.documents.models import Document, DocumentPath
@@ -1173,64 +1171,6 @@ class StartCorpusFork(graphene.Mutation):
         )
 
         return StartCorpusFork(ok=ok, message=message, new_corpus=new_corpus)
-
-
-class StartQueryForCorpus(graphene.Mutation):
-    class Arguments:
-        corpus_id = graphene.String(
-            required=True,
-            description="Graphene id of the corpus you want to package for export",
-        )
-        query = graphene.String(
-            required=True,
-            description="What is the question the user wants an answer to?",
-        )
-
-    ok = graphene.Boolean()
-    message = graphene.String()
-    obj = graphene.Field(CorpusQueryType)
-
-    @login_required
-    @graphql_ratelimit(rate=RateLimits.AI_QUERY)
-    def mutate(root, info, corpus_id, query):
-
-        obj = None
-        ok = False
-        message = "SUCCESS!"
-        # Enforce sane limits on free / rando users. Can be overriden.
-        try:
-            if (
-                info.context.user.is_usage_capped
-                and CorpusQuery.objects.filter(creator=info.context.user).count() > 10
-            ):
-                raise PermissionError(
-                    "By default, new users are limited to 10 queries. Please contact the admin to "
-                    "upgrade your account."
-                )
-
-            # Verify corpus visibility before creating query
-            corpus_pk = from_global_id(corpus_id)[1]
-            try:
-                Corpus.objects.visible_to_user(info.context.user).get(pk=corpus_pk)
-            except Corpus.DoesNotExist:
-                return StartQueryForCorpus(
-                    ok=False, message="Corpus not found", obj=None
-                )
-
-            obj = CorpusQuery.objects.create(
-                query=query,
-                creator=info.context.user,
-                corpus_id=corpus_pk,
-            )
-            # print(f"Obj created: {obj}")
-            set_permissions_for_obj_to_user(
-                info.context.user, obj, [PermissionTypes.CRUD]
-            )
-            ok = True
-        except Exception as e:
-            message = f"Error asking query: {e}"
-
-        return StartQueryForCorpus(ok=ok, obj=obj, message=message)
 
 
 class StartCorpusExport(graphene.Mutation):
@@ -4859,9 +4799,6 @@ class Mutation(graphene.ObjectType):
     start_analysis_on_doc = StartDocumentAnalysisMutation.Field()
     delete_analysis = DeleteAnalysisMutation.Field()
     make_analysis_public = MakeAnalysisPublic.Field()
-
-    # QUERY MUTATIONS #########################################################
-    ask_query = StartQueryForCorpus.Field()
 
     # EXTRACT MUTATIONS ##########################################################
     create_fieldset = CreateFieldset.Field()

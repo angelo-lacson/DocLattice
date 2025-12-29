@@ -34,7 +34,6 @@ from opencontractserver.corpuses.models import (
     CorpusDescriptionRevision,
     CorpusEngagementMetrics,
     CorpusFolder,
-    CorpusQuery,
 )
 from opencontractserver.documents.models import (
     Document,
@@ -2156,18 +2155,6 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             ):
                 readable_docs.append(doc)
         return readable_docs
-
-
-class CorpusQueryType(AnnotatePermissionsForReadMixin, DjangoObjectType):
-    full_source_list = graphene.List(AnnotationType)
-
-    def resolve_full_source_list(self, info):
-        return self.sources.all()
-
-    class Meta:
-        model = CorpusQuery
-        interfaces = [relay.Node]
-        connection_class = CountableConnection
 
 
 class DocumentAnalysisRowType(AnnotatePermissionsForReadMixin, DjangoObjectType):

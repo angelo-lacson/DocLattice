@@ -1,21 +1,6 @@
 import React, { useState } from "react";
-import { useMutation, useQuery } from "@apollo/client";
-import {
-  Container,
-  Header,
-  Icon,
-  Input,
-  Grid,
-  Statistic,
-  SemanticICONS,
-} from "semantic-ui-react";
-import { toast } from "react-toastify";
-import { openedQueryObj } from "../../graphql/cache";
-import {
-  ASK_QUERY_OF_CORPUS,
-  AskQueryOfCorpusInputType,
-  AskQueryOfCorpusOutputType,
-} from "../../graphql/mutations";
+import { useQuery } from "@apollo/client";
+import { Header, Icon, SemanticICONS } from "semantic-ui-react";
 import {
   CorpusStats,
   GET_CORPUS_STATS,
