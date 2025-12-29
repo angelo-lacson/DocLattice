@@ -189,7 +189,12 @@ export function useUnifiedMentionSearch(
     // Fire all 5 queries simultaneously for maximum performance
     searchUsers({ variables: { textSearch: debouncedQuery } });
     searchCorpuses({ variables: { textSearch: debouncedQuery } });
-    searchDocuments({ variables: { textSearch: debouncedQuery } });
+    searchDocuments({
+      variables: {
+        textSearch: debouncedQuery,
+        corpusId: corpusId, // Context-aware scoping (Issue #741)
+      },
+    });
     searchAnnotations({
       variables: {
         textSearch: debouncedQuery,

@@ -899,6 +899,9 @@ class Query(graphene.ObjectType):
         text_search=graphene.String(
             description="Search query to find documents by title or description"
         ),
+        corpus_id=graphene.ID(
+            description="Optional corpus ID to scope search to documents in specific corpus"
+        ),
     )
     search_annotations_for_mention = DjangoConnectionField(
         AnnotationType,
@@ -969,7 +972,9 @@ class Query(graphene.ObjectType):
         return qs.order_by("-modified")
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
-    def resolve_search_documents_for_mention(self, info, text_search=None, **kwargs):
+    def resolve_search_documents_for_mention(
+        self, info, text_search=None, corpus_id=None, **kwargs
+    ):
         """
         Search documents for @ mention autocomplete.
 
@@ -979,6 +984,10 @@ class Query(graphene.ObjectType):
         - User has write permission on document
         - Document is in a corpus where user has write permission
         - Document is public AND (no corpus OR public corpus OR user has corpus access)
+
+        When corpus_id is provided, results are further filtered to only include
+        documents that belong to that specific corpus. This prevents cross-corpus
+        document references in AI agent contexts (Issue #741).
 
         Rationale: Similar to corpuses, mentioning a document implies collaborative context.
         However, public documents are included to allow discussion/reference in open forums.
@@ -1074,6 +1083,18 @@ class Query(graphene.ObjectType):
             qs = qs.filter(
                 Q(title__icontains=text_search) | Q(description__icontains=text_search)
             )
+
+        # Filter by corpus if provided (Issue #741 - prevent cross-corpus references)
+        if corpus_id:
+            from opencontractserver.documents.models import DocumentPath
+
+            _, corpus_pk = from_global_id(corpus_id)
+            docs_in_target_corpus = DocumentPath.objects.filter(
+                corpus_id=int(corpus_pk),
+                is_current=True,
+                is_deleted=False,
+            ).values_list("document_id", flat=True)
+            qs = qs.filter(id__in=docs_in_target_corpus)
 
         # Note: corpus field exists in model but not in current DB schema for select_related
         # Documents use Many-to-Many relationship via Corpus.documents instead

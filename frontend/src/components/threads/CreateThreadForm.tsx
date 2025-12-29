@@ -307,6 +307,7 @@ export function CreateThreadForm({
               disabled={loading}
               maxLength={10000}
               initialContent={initialMessage}
+              corpusId={corpusId}
             />
             <HelpText>
               Tip: Use <strong>Cmd+Enter</strong> to send your message
