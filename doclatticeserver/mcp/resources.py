@@ -67,10 +67,11 @@ def get_document_resource(corpus_slug: str, document_slug: str) -> str:
     # Get corpus context
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
-    # Get document within corpus (both must be public)
+    # Get document in corpus via DocumentPath (source of truth), filtered by visibility
+    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
     document = (
         Document.objects.visible_to_user(anonymous)
-        .filter(corpuses=corpus, slug=document_slug)
+        .filter(id__in=corpus_doc_ids, slug=document_slug)
         .first()
     )
 
@@ -118,10 +119,11 @@ def get_annotation_resource(
 
     anonymous = AnonymousUser()
 
-    # Get corpus and document
+    # Get corpus and document in corpus via DocumentPath (source of truth)
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
+    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
     document = Document.objects.visible_to_user(anonymous).get(
-        corpuses=corpus, slug=document_slug
+        id__in=corpus_doc_ids, slug=document_slug
     )
 
     # Use query optimizer for efficient permission checking

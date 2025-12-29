@@ -175,8 +175,13 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
       mdDescription
       isPublic
       myPermissions
+      allowComments
+      preferredEmbedder
+      created
+      modified
       creator {
         id
+        email
         username
         slug
       }
@@ -185,6 +190,9 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
         title
       }
       documents {
+        totalCount
+      }
+      annotations {
         totalCount
       }
       analyses {
@@ -3417,6 +3425,7 @@ export const GET_ME = gql`
   query GetMe {
     me {
       id
+      email
       username
       slug
       name
