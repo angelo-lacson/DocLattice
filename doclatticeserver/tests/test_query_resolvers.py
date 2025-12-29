@@ -507,6 +507,111 @@ class MentionSearchResolverTest(TestCase):
         usernames = {user["node"]["username"] for user in users}
         self.assertIn("mention_test_user", usernames)
 
+    def test_search_documents_for_mention_with_corpus_filter(self):
+        """
+        Test search_documents_for_mention with corpus_id filter.
+
+        Issue #741: Ensures document search is scoped to specific corpus
+        to prevent cross-corpus document references in AI agent contexts.
+        """
+        # Create a second corpus with a different document
+        corpus2 = Corpus.objects.create(
+            title="Other Corpus",
+            description="A different corpus",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=corpus2,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        # Create a second document
+        pdf_file2 = ContentFile(b"%PDF-1.4 test pdf 2", name="other_doc.pdf")
+        doc2 = Document.objects.create(
+            creator=self.user,
+            title="Other Neural Paper",
+            description="Another paper about neural networks",
+            pdf_file=pdf_file2,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(
+            user_val=self.user,
+            instance=doc2,
+            permissions=[PermissionTypes.ALL],
+        )
+
+        # Add documents to corpuses via DocumentPath
+        DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            creator=self.user,
+            is_current=True,
+        )
+        DocumentPath.objects.create(
+            document=doc2,
+            corpus=corpus2,
+            creator=self.user,
+            is_current=True,
+        )
+
+        query = """
+            query SearchDocumentsForMention($textSearch: String, $corpusId: ID) {
+                searchDocumentsForMention(textSearch: $textSearch, corpusId: $corpusId) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                }
+            }
+        """
+
+        # Test without corpus filter - should find both documents
+        result = self.client.execute(
+            query,
+            variables={"textSearch": "Neural"},
+        )
+
+        self.assertIsNone(result.get("errors"))
+        documents = result["data"]["searchDocumentsForMention"]["edges"]
+        doc_titles = {doc["node"]["title"] for doc in documents}
+        self.assertIn("Neural Networks Paper", doc_titles)
+        self.assertIn("Other Neural Paper", doc_titles)
+
+        # Test with corpus filter - should only find document in that corpus
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+        result = self.client.execute(
+            query,
+            variables={"textSearch": "Neural", "corpusId": corpus_global_id},
+        )
+
+        self.assertIsNone(result.get("errors"))
+        documents = result["data"]["searchDocumentsForMention"]["edges"]
+        doc_titles = {doc["node"]["title"] for doc in documents}
+
+        # Should find the document in corpus1
+        self.assertIn("Neural Networks Paper", doc_titles)
+        # Should NOT find the document in corpus2
+        self.assertNotIn("Other Neural Paper", doc_titles)
+
+        # Test with corpus2 filter
+        corpus2_global_id = to_global_id("CorpusType", corpus2.id)
+        result = self.client.execute(
+            query,
+            variables={"textSearch": "Neural", "corpusId": corpus2_global_id},
+        )
+
+        self.assertIsNone(result.get("errors"))
+        documents = result["data"]["searchDocumentsForMention"]["edges"]
+        doc_titles = {doc["node"]["title"] for doc in documents}
+
+        # Should NOT find the document in corpus1
+        self.assertNotIn("Neural Networks Paper", doc_titles)
+        # Should find the document in corpus2
+        self.assertIn("Other Neural Paper", doc_titles)
+
 
 class UserMessagesQueryResolverTest(TestCase):
     """Test user_messages query resolver."""
