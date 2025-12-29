@@ -74,8 +74,9 @@ def list_documents(
     # Get corpus (raises Corpus.DoesNotExist if not found or not public)
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
-    # Get public documents in this corpus
-    qs = Document.objects.visible_to_user(anonymous).filter(corpuses=corpus)
+    # Get documents in corpus via DocumentPath (source of truth), filtered by visibility
+    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
+    qs = Document.objects.visible_to_user(anonymous).filter(id__in=corpus_doc_ids)
 
     if search:
         qs = qs.filter(Q(title__icontains=search) | Q(description__icontains=search))
@@ -106,8 +107,10 @@ def get_document_text(corpus_slug: str, document_slug: str) -> dict:
     anonymous = AnonymousUser()
 
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
+    # Get document in corpus via DocumentPath, filtered by visibility and slug
+    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
     document = Document.objects.visible_to_user(anonymous).get(
-        corpuses=corpus, slug=document_slug
+        id__in=corpus_doc_ids, slug=document_slug
     )
 
     full_text = ""
@@ -155,8 +158,10 @@ def list_annotations(
     anonymous = AnonymousUser()
 
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
+    # Get document in corpus via DocumentPath, filtered by visibility and slug
+    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
     document = Document.objects.visible_to_user(anonymous).get(
-        corpuses=corpus, slug=document_slug
+        id__in=corpus_doc_ids, slug=document_slug
     )
 
     # Use query optimizer - eliminates N+1 permission queries
@@ -207,10 +212,12 @@ def search_corpus(corpus_slug: str, query: str, limit: int = 10) -> dict:
         embedder_path, query_vector = corpus.embed_text(query)
 
         if query_vector:
-            # Search documents using vector similarity
+            # Get document IDs in corpus via DocumentPath (source of truth)
+            corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
+            # Search documents using vector similarity, filtered by corpus membership
             doc_results = list(
                 Document.objects.visible_to_user(anonymous)
-                .filter(corpuses=corpus)
+                .filter(id__in=corpus_doc_ids)
                 .search_by_embedding(query_vector, embedder_path, top_k=limit)
             )
 
@@ -237,9 +244,11 @@ def _text_search_fallback(corpus, query: str, limit: int, user) -> dict:
     """Fallback to text search when embeddings are unavailable."""
     from opencontractserver.documents.models import Document
 
+    # Get document IDs in corpus via DocumentPath (source of truth)
+    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
     documents = list(
         Document.objects.visible_to_user(user)
-        .filter(corpuses=corpus)
+        .filter(id__in=corpus_doc_ids)
         .filter(Q(title__icontains=query) | Q(description__icontains=query))[:limit]
     )
 
@@ -288,12 +297,14 @@ def list_threads(
         .filter(
             conversation_type=ConversationTypeChoices.THREAD, chat_with_corpus=corpus
         )
-        .annotate(message_count=Count("messages"))
+        .annotate(message_count=Count("chat_messages"))
     )
 
     if document_slug:
+        # Get document in corpus via DocumentPath, filtered by visibility and slug
+        corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
         document = Document.objects.visible_to_user(anonymous).get(
-            corpuses=corpus, slug=document_slug
+            id__in=corpus_doc_ids, slug=document_slug
         )
         qs = qs.filter(chat_with_document=document)
 

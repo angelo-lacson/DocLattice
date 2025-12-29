@@ -2,7 +2,10 @@
 OpenContracts MCP Server.
 
 Model Context Protocol server providing read-only access to public OpenContracts resources.
-Supports both SSE transport (for HTTP) and stdio transport (for CLI).
+Supports both Streamable HTTP transport (for HTTP) and stdio transport (for CLI).
+
+Uses stateless mode for HTTP - each request is independent, avoiding session
+initialization race conditions that plagued the older SSE transport.
 """
 
 from __future__ import annotations
@@ -14,8 +17,8 @@ import re
 
 from asgiref.sync import sync_to_async
 from mcp.server import Server
-from mcp.server.sse import SseServerTransport
 from mcp.server.stdio import stdio_server
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import Resource, TextContent, Tool
 
 from .resources import (
@@ -306,47 +309,60 @@ def create_mcp_server() -> Server:
 # Create the global MCP server instance
 mcp_server = create_mcp_server()
 
-# Create SSE transport for HTTP access
-# The endpoint is where clients POST messages (relative to the SSE connection)
-sse_transport = SseServerTransport("/mcp/messages/")
+# Session manager for stateless HTTP transport
+# Stateless mode = no session handshake required, each request is independent
+# This avoids the "Received request before initialization was complete" bug
+# that affected the older SSE transport
+session_manager: StreamableHTTPSessionManager | None = None
 
 
-async def handle_sse(scope, receive, send):
+def get_session_manager() -> StreamableHTTPSessionManager:
+    """Get or create the session manager instance."""
+    global session_manager
+    if session_manager is None:
+        session_manager = StreamableHTTPSessionManager(
+            app=mcp_server,
+            event_store=None,  # No resumability needed for stateless
+            json_response=False,  # Use SSE streaming for responses
+            stateless=True,  # Key: each request is independent
+        )
+    return session_manager
+
+
+class MCPLifespanManager:
     """
-    ASGI handler for SSE connections (GET /mcp/sse/).
+    Manages the MCP session manager lifecycle within Django's ASGI context.
 
-    This establishes the SSE stream for server-to-client messages.
+    Since Django doesn't have a native lifespan protocol like Starlette,
+    we manage the session manager's run() context lazily on first request.
     """
-    logger.info("MCP SSE connection initiated")
-    try:
-        async with sse_transport.connect_sse(scope, receive, send) as streams:
-            await mcp_server.run(
-                streams[0],  # read_stream
-                streams[1],  # write_stream
-                mcp_server.create_initialization_options(),
-            )
-    except Exception as e:
-        logger.error(f"MCP SSE error: {e}")
-        raise
+
+    def __init__(self):
+        self._started = False
+        self._run_context = None
+        self._lock = asyncio.Lock()
+
+    async def ensure_started(self):
+        """Ensure the session manager is running."""
+        async with self._lock:
+            if not self._started:
+                manager = get_session_manager()
+                self._run_context = manager.run()
+                await self._run_context.__aenter__()
+                self._started = True
+                logger.info("MCP StreamableHTTP session manager started")
 
 
-async def handle_messages(scope, receive, send):
-    """
-    ASGI handler for client messages (POST /mcp/messages/).
-
-    This receives client requests and routes them to the appropriate session.
-    """
-    logger.debug("MCP message received")
-    await sse_transport.handle_post_message(scope, receive, send)
+# Global lifespan manager
+lifespan_manager = MCPLifespanManager()
 
 
 def create_mcp_asgi_app():
     """
-    Create an ASGI application that routes MCP requests.
+    Create an ASGI application that handles MCP requests.
 
-    Routes:
-        GET  /mcp/sse/      - Establish SSE connection
-        POST /mcp/messages/ - Send messages to server
+    The Streamable HTTP transport handles all routing internally.
+    All requests to /mcp/ are delegated to the session manager.
     """
 
     async def app(scope, receive, send):
@@ -354,14 +370,33 @@ def create_mcp_asgi_app():
             return
 
         path = scope.get("path", "")
-        method = scope.get("method", "GET")
 
-        if path == "/mcp/sse/" and method == "GET":
-            await handle_sse(scope, receive, send)
-        elif path == "/mcp/messages/" and method == "POST":
-            await handle_messages(scope, receive, send)
+        # Handle MCP endpoint
+        if path == "/mcp/" or path == "/mcp":
+            # Ensure session manager is running
+            await lifespan_manager.ensure_started()
+
+            manager = get_session_manager()
+            try:
+                await manager.handle_request(scope, receive, send)
+            except Exception as e:
+                logger.error(f"MCP request error: {e}")
+                # Return error response
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 500,
+                        "headers": [[b"content-type", b"application/json"]],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": json.dumps({"error": str(e)}).encode(),
+                    }
+                )
         else:
-            # Return 404 for unhandled paths
+            # Return 404 for unhandled paths under /mcp/
             await send(
                 {
                     "type": "http.response.start",
@@ -375,10 +410,8 @@ def create_mcp_asgi_app():
                     "body": json.dumps(
                         {
                             "error": "Not found",
-                            "endpoints": {
-                                "sse": "GET /mcp/sse/",
-                                "messages": "POST /mcp/messages/",
-                            },
+                            "endpoint": "POST /mcp/",
+                            "description": "MCP Streamable HTTP endpoint (stateless mode)",
                         }
                     ).encode(),
                 }
