@@ -859,43 +859,43 @@ async def _run_agent_thread_action_async(
     # Create or claim result record
     @database_sync_to_async
     def get_or_create_result():
-        # For thread-based actions, use triggering_conversation and triggering_message
-        result, created = AgentActionResult.objects.get_or_create(
-            corpus_action=action,
-            triggering_conversation=conversation,
-            triggering_message=message,
-            defaults={
-                "creator_id": user_id,
-                "status": AgentActionResult.Status.RUNNING,
-                "started_at": timezone.now(),
-            },
-        )
+        from django.db import transaction
 
-        if created:
-            return result, "created"
+        with transaction.atomic():
+            # Try to get existing or create new, with row lock
+            try:
+                result = AgentActionResult.objects.select_for_update().get(
+                    corpus_action=action,
+                    triggering_conversation=conversation,
+                    triggering_message=message,
+                )
+                created = False
+            except AgentActionResult.DoesNotExist:
+                result = AgentActionResult.objects.create(
+                    corpus_action=action,
+                    triggering_conversation=conversation,
+                    triggering_message=message,
+                    creator_id=user_id,
+                    status=AgentActionResult.Status.RUNNING,
+                    started_at=timezone.now(),
+                )
+                created = True
 
-        # Try to claim existing record
-        claimed = (
-            AgentActionResult.objects.filter(pk=result.pk)
-            .exclude(
-                status__in=[
-                    AgentActionResult.Status.RUNNING,
-                    AgentActionResult.Status.COMPLETED,
-                ]
-            )
-            .update(
-                status=AgentActionResult.Status.RUNNING,
-                started_at=timezone.now(),
-                error_message="",
-            )
-        )
+            if created:
+                return result, "created"
 
-        if claimed:
-            result.refresh_from_db()
-            return result, "claimed"
+            # Try to claim existing record (we hold the lock)
+            if result.status not in [
+                AgentActionResult.Status.RUNNING,
+                AgentActionResult.Status.COMPLETED,
+            ]:
+                result.status = AgentActionResult.Status.RUNNING
+                result.started_at = timezone.now()
+                result.error_message = ""
+                result.save(update_fields=["status", "started_at", "error_message"])
+                return result, "claimed"
 
-        result.refresh_from_db()
-        return result, f"already_{result.status}"
+            return result, f"already_{result.status}"
 
     result, status = await get_or_create_result()
 

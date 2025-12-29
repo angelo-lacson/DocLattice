@@ -16,7 +16,11 @@ from opencontractserver.annotations.models import (
     Relationship,
 )
 from opencontractserver.badges.models import Badge, UserBadge
-from opencontractserver.conversations.models import ChatMessage, Conversation
+from opencontractserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    ModerationAction,
+)
 from opencontractserver.corpuses.models import Corpus, CorpusQuery
 from opencontractserver.documents.models import Document, DocumentRelationship
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
@@ -664,4 +668,15 @@ class AgentConfigurationFilter(django_filters.FilterSet):
             "scope": ["exact"],
             "is_active": ["exact"],
             "name": ["contains", "exact"],
+        }
+
+
+class ModerationActionFilter(django_filters.FilterSet):
+    """Filter set for ModerationAction model."""
+
+    class Meta:
+        model = ModerationAction
+        fields = {
+            "action_type": ["exact", "in"],
+            "created": ["gte", "lte"],
         }

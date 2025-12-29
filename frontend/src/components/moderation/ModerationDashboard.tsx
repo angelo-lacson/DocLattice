@@ -1,0 +1,432 @@
+import React, { useState, useMemo } from "react";
+import { useQuery, useMutation } from "@apollo/client";
+import {
+  Segment,
+  Header,
+  Icon,
+  Table,
+  Pagination,
+  Dropdown,
+  Checkbox,
+  Button,
+  Modal,
+  Form,
+  Message,
+  Label,
+  Loader,
+  Dimmer,
+  Statistic,
+  Grid,
+} from "semantic-ui-react";
+import { toast } from "react-toastify";
+import { formatDistanceToNow, format } from "date-fns";
+
+import {
+  GET_MODERATION_ACTIONS,
+  GET_MODERATION_METRICS,
+  GetModerationActionsInput,
+  GetModerationActionsOutput,
+  GetModerationMetricsInput,
+  GetModerationMetricsOutput,
+  ModerationActionNode,
+} from "../../graphql/queries";
+import {
+  ROLLBACK_MODERATION_ACTION,
+  RollbackModerationActionInput,
+  RollbackModerationActionOutput,
+} from "../../graphql/mutations";
+
+interface ModerationDashboardProps {
+  corpusId: string;
+  corpusTitle?: string;
+}
+
+const ACTION_TYPE_OPTIONS = [
+  { key: "all", value: "", text: "All Actions" },
+  { key: "lock_thread", value: "lock_thread", text: "Lock Thread" },
+  { key: "unlock_thread", value: "unlock_thread", text: "Unlock Thread" },
+  { key: "pin_thread", value: "pin_thread", text: "Pin Thread" },
+  { key: "unpin_thread", value: "unpin_thread", text: "Unpin Thread" },
+  { key: "delete_message", value: "delete_message", text: "Delete Message" },
+  { key: "restore_message", value: "restore_message", text: "Restore Message" },
+  { key: "delete_thread", value: "delete_thread", text: "Delete Thread" },
+  { key: "restore_thread", value: "restore_thread", text: "Restore Thread" },
+];
+
+const TIME_RANGE_OPTIONS = [
+  { key: "1h", value: 1, text: "Last hour" },
+  { key: "24h", value: 24, text: "Last 24 hours" },
+  { key: "7d", value: 168, text: "Last 7 days" },
+  { key: "30d", value: 720, text: "Last 30 days" },
+];
+
+const formatActionType = (actionType: string): string => {
+  return actionType
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+const getActionColor = (
+  actionType: string
+): "red" | "green" | "blue" | "yellow" | "grey" => {
+  if (actionType.includes("delete")) return "red";
+  if (actionType.includes("restore")) return "green";
+  if (actionType.includes("lock")) return "yellow";
+  if (actionType.includes("pin")) return "blue";
+  return "grey";
+};
+
+export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
+  corpusId,
+  corpusTitle,
+}) => {
+  const [selectedActionType, setSelectedActionType] = useState<string>("");
+  const [automatedOnly, setAutomatedOnly] = useState<boolean>(false);
+  const [timeRangeHours, setTimeRangeHours] = useState<number>(24);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [rollbackModalOpen, setRollbackModalOpen] = useState<boolean>(false);
+  const [selectedAction, setSelectedAction] =
+    useState<ModerationActionNode | null>(null);
+  const [rollbackReason, setRollbackReason] = useState<string>("");
+
+  const pageSize = 10;
+
+  // Query moderation actions
+  const {
+    data: actionsData,
+    loading: actionsLoading,
+    error: actionsError,
+    refetch: refetchActions,
+  } = useQuery<GetModerationActionsOutput, GetModerationActionsInput>(
+    GET_MODERATION_ACTIONS,
+    {
+      variables: {
+        corpusId,
+        actionTypes: selectedActionType ? [selectedActionType] : undefined,
+        automatedOnly: automatedOnly || undefined,
+        first: pageSize,
+      },
+      fetchPolicy: "cache-and-network",
+    }
+  );
+
+  // Query moderation metrics
+  const { data: metricsData, loading: metricsLoading } = useQuery<
+    GetModerationMetricsOutput,
+    GetModerationMetricsInput
+  >(GET_MODERATION_METRICS, {
+    variables: {
+      corpusId,
+      timeRangeHours,
+    },
+    fetchPolicy: "cache-and-network",
+  });
+
+  // Rollback mutation
+  const [rollbackAction, { loading: rollbackLoading }] = useMutation<
+    RollbackModerationActionOutput,
+    RollbackModerationActionInput
+  >(ROLLBACK_MODERATION_ACTION, {
+    onCompleted: (data) => {
+      if (data.rollbackModerationAction.ok) {
+        toast.success(data.rollbackModerationAction.message);
+        setRollbackModalOpen(false);
+        setSelectedAction(null);
+        setRollbackReason("");
+        refetchActions();
+      } else {
+        toast.error(data.rollbackModerationAction.message);
+      }
+    },
+    onError: (error) => {
+      toast.error(`Failed to rollback: ${error.message}`);
+    },
+  });
+
+  const handleRollback = () => {
+    if (!selectedAction) return;
+    rollbackAction({
+      variables: {
+        actionId: selectedAction.id,
+        reason: rollbackReason || undefined,
+      },
+    });
+  };
+
+  const openRollbackModal = (action: ModerationActionNode) => {
+    setSelectedAction(action);
+    setRollbackModalOpen(true);
+  };
+
+  const metrics = metricsData?.moderationMetrics;
+  const actions = actionsData?.moderationActions?.edges || [];
+
+  return (
+    <div style={{ padding: "1rem" }}>
+      <Header as="h2" dividing>
+        <Icon name="shield" />
+        <Header.Content>
+          Moderation Dashboard
+          {corpusTitle && <Header.Subheader>{corpusTitle}</Header.Subheader>}
+        </Header.Content>
+      </Header>
+
+      {/* Metrics Section */}
+      <Segment>
+        <Header as="h4">
+          <Icon name="chart bar" />
+          Moderation Metrics
+          <Dropdown
+            inline
+            options={TIME_RANGE_OPTIONS}
+            value={timeRangeHours}
+            onChange={(_, { value }) => setTimeRangeHours(value as number)}
+            style={{ marginLeft: "1rem" }}
+          />
+        </Header>
+        {metricsLoading ? (
+          <Loader active inline="centered" />
+        ) : metrics ? (
+          <>
+            {metrics.isAboveThreshold && (
+              <Message warning>
+                <Icon name="warning sign" />
+                High moderation activity detected! Threshold exceeded for:{" "}
+                {metrics.thresholdExceededTypes.join(", ")}
+              </Message>
+            )}
+            <Grid columns={4} stackable>
+              <Grid.Column>
+                <Statistic size="small">
+                  <Statistic.Value>{metrics.totalActions}</Statistic.Value>
+                  <Statistic.Label>Total Actions</Statistic.Label>
+                </Statistic>
+              </Grid.Column>
+              <Grid.Column>
+                <Statistic size="small" color="blue">
+                  <Statistic.Value>{metrics.automatedActions}</Statistic.Value>
+                  <Statistic.Label>Automated</Statistic.Label>
+                </Statistic>
+              </Grid.Column>
+              <Grid.Column>
+                <Statistic size="small" color="green">
+                  <Statistic.Value>{metrics.manualActions}</Statistic.Value>
+                  <Statistic.Label>Manual</Statistic.Label>
+                </Statistic>
+              </Grid.Column>
+              <Grid.Column>
+                <Statistic size="small">
+                  <Statistic.Value>
+                    {metrics.hourlyActionRate.toFixed(1)}
+                  </Statistic.Value>
+                  <Statistic.Label>Actions/Hour</Statistic.Label>
+                </Statistic>
+              </Grid.Column>
+            </Grid>
+          </>
+        ) : (
+          <Message info>No metrics available</Message>
+        )}
+      </Segment>
+
+      {/* Filters */}
+      <Segment>
+        <Header as="h4">
+          <Icon name="filter" />
+          Filters
+        </Header>
+        <Form>
+          <Form.Group inline>
+            <Form.Field>
+              <label>Action Type</label>
+              <Dropdown
+                selection
+                options={ACTION_TYPE_OPTIONS}
+                value={selectedActionType}
+                onChange={(_, { value }) =>
+                  setSelectedActionType(value as string)
+                }
+              />
+            </Form.Field>
+            <Form.Field>
+              <Checkbox
+                label="Automated actions only"
+                checked={automatedOnly}
+                onChange={(_, { checked }) => setAutomatedOnly(!!checked)}
+              />
+            </Form.Field>
+          </Form.Group>
+        </Form>
+      </Segment>
+
+      {/* Actions Table */}
+      <Segment>
+        <Header as="h4">
+          <Icon name="list" />
+          Moderation Actions
+        </Header>
+        {actionsLoading ? (
+          <Dimmer active inverted>
+            <Loader>Loading actions...</Loader>
+          </Dimmer>
+        ) : actionsError ? (
+          <Message negative>
+            <Message.Header>Error loading actions</Message.Header>
+            <p>{actionsError.message}</p>
+          </Message>
+        ) : actions.length === 0 ? (
+          <Message info>No moderation actions found</Message>
+        ) : (
+          <>
+            <Table celled striped>
+              <Table.Header>
+                <Table.Row>
+                  <Table.HeaderCell>Action</Table.HeaderCell>
+                  <Table.HeaderCell>Target</Table.HeaderCell>
+                  <Table.HeaderCell>Moderator</Table.HeaderCell>
+                  <Table.HeaderCell>Reason</Table.HeaderCell>
+                  <Table.HeaderCell>Time</Table.HeaderCell>
+                  <Table.HeaderCell>Actions</Table.HeaderCell>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {actions.map(({ node }) => (
+                  <Table.Row key={node.id}>
+                    <Table.Cell>
+                      <Label color={getActionColor(node.actionType)}>
+                        {formatActionType(node.actionType)}
+                      </Label>
+                      {node.isAutomated && (
+                        <Label size="tiny" color="purple">
+                          <Icon name="cog" />
+                          Auto
+                        </Label>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {node.conversation && (
+                        <div>
+                          <Icon name="comments" />
+                          {node.conversation.title}
+                        </div>
+                      )}
+                      {node.message && (
+                        <div style={{ fontSize: "0.9em", color: "#666" }}>
+                          <Icon name="comment" />
+                          {node.message.content.substring(0, 50)}...
+                        </div>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {node.moderator ? (
+                        <span>
+                          <Icon name="user" />
+                          {node.moderator.username}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#888" }}>
+                          <Icon name="cog" />
+                          System
+                        </span>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {node.reason || (
+                        <span style={{ color: "#888" }}>
+                          No reason provided
+                        </span>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span title={format(new Date(node.created), "PPpp")}>
+                        {formatDistanceToNow(new Date(node.created), {
+                          addSuffix: true,
+                        })}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {node.canRollback && (
+                        <Button
+                          size="tiny"
+                          color="orange"
+                          onClick={() => openRollbackModal(node)}
+                        >
+                          <Icon name="undo" />
+                          Rollback
+                        </Button>
+                      )}
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table>
+            {actionsData?.moderationActions?.pageInfo?.hasNextPage && (
+              <div style={{ textAlign: "center", marginTop: "1rem" }}>
+                <Button
+                  onClick={() => {
+                    // Implement pagination with cursor
+                  }}
+                >
+                  Load More
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </Segment>
+
+      {/* Rollback Confirmation Modal */}
+      <Modal
+        open={rollbackModalOpen}
+        onClose={() => setRollbackModalOpen(false)}
+        size="small"
+      >
+        <Modal.Header>
+          <Icon name="undo" />
+          Confirm Rollback
+        </Modal.Header>
+        <Modal.Content>
+          {selectedAction && (
+            <>
+              <p>
+                Are you sure you want to rollback this{" "}
+                <strong>{formatActionType(selectedAction.actionType)}</strong>{" "}
+                action?
+              </p>
+              {selectedAction.conversation && (
+                <p>
+                  Thread: <strong>{selectedAction.conversation.title}</strong>
+                </p>
+              )}
+              <Form>
+                <Form.TextArea
+                  label="Reason for rollback (optional)"
+                  placeholder="Enter a reason for this rollback..."
+                  value={rollbackReason}
+                  onChange={(_, { value }) =>
+                    setRollbackReason(value as string)
+                  }
+                />
+              </Form>
+            </>
+          )}
+        </Modal.Content>
+        <Modal.Actions>
+          <Button onClick={() => setRollbackModalOpen(false)}>Cancel</Button>
+          <Button
+            color="orange"
+            onClick={handleRollback}
+            loading={rollbackLoading}
+            disabled={rollbackLoading}
+          >
+            <Icon name="undo" />
+            Rollback
+          </Button>
+        </Modal.Actions>
+      </Modal>
+    </div>
+  );
+};
+
+export default ModerationDashboard;

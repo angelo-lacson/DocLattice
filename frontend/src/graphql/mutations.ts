@@ -3359,3 +3359,46 @@ export interface EmptyTrashOutput {
     deletedCount: number;
   };
 }
+
+// ============================================================================
+// MODERATION MUTATIONS
+// ============================================================================
+
+export const ROLLBACK_MODERATION_ACTION = gql`
+  mutation RollbackModerationAction($actionId: ID!, $reason: String) {
+    rollbackModerationAction(actionId: $actionId, reason: $reason) {
+      ok
+      message
+      rollbackAction {
+        id
+        actionType
+        created
+        moderator {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+
+export interface RollbackModerationActionInput {
+  actionId: string;
+  reason?: string;
+}
+
+export interface RollbackModerationActionOutput {
+  rollbackModerationAction: {
+    ok: boolean;
+    message: string;
+    rollbackAction: {
+      id: string;
+      actionType: string;
+      created: string;
+      moderator: {
+        id: string;
+        username: string;
+      } | null;
+    } | null;
+  };
+}
