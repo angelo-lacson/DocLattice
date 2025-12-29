@@ -26,6 +26,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from graphql_relay import from_global_id
 
+from config.websocket.middleware import WS_CLOSE_UNAUTHENTICATED
+from config.websocket.utils.auth_helpers import check_auth_and_close_if_failed
 from config.websocket.utils.extract_ids import extract_websocket_path_id
 from opencontractserver.conversations.models import MessageType
 from opencontractserver.corpuses.models import Corpus
@@ -64,18 +66,7 @@ class CorpusQueryConsumer(AsyncWebsocketConsumer):
         # ------------------------------------------------------------------ #
         #  Authentication                                                    #
         # ------------------------------------------------------------------ #
-        if not self.scope["user"].is_authenticated:
-            auth_error = self.scope.get("auth_error")
-            if auth_error:
-                logger.warning(
-                    "[Session %s] Auth failed: %s",
-                    self.session_id,
-                    auth_error["message"],
-                )
-                await self.close(code=auth_error["code"])
-            else:
-                logger.warning("[Session %s] Unauthenticated user", self.session_id)
-                await self.close(code=4000)
+        if await check_auth_and_close_if_failed(self, self.session_id):
             return
 
         try:
@@ -89,7 +80,7 @@ class CorpusQueryConsumer(AsyncWebsocketConsumer):
                 msg_type="SYNC_CONTENT",
                 data={"error": "Requested corpus not found."},
             )
-            await self.close(code=4000)
+            await self.close(code=WS_CLOSE_UNAUTHENTICATED)
             return
 
         await self.accept()

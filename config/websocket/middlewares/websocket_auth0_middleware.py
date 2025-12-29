@@ -87,7 +87,7 @@ class WebsocketAuth0TokenMiddleware(BaseMiddleware):
             try:
                 user = await database_sync_to_async(get_user_by_token)(token)
                 if user and isinstance(user, User):
-                    logger.info(f"WebSocket user authenticated: {user.username}")
+                    logger.debug(f"WebSocket user authenticated: {user.username}")
                     scope["user"] = user
                 else:
                     logger.debug("Authentication attempt returned no valid user")

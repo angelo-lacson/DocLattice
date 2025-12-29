@@ -15,6 +15,7 @@ from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from graphql_relay import to_global_id
 
+from config.websocket.middleware import WS_CLOSE_TOKEN_INVALID
 from opencontractserver.tests.base import WebsocketFixtureBaseTestCase
 
 User = get_user_model()
@@ -103,7 +104,7 @@ class GraphQLJWTTokenAuthMiddlewareTestCase(WebsocketFixtureBaseTestCase):
     ) -> None:
         """
         Verifies that providing an invalid token will lead to the connection being closed
-        with code 4000, matching the behavior in the JWT auth middleware.
+        with code 4002 (WS_CLOSE_TOKEN_INVALID), signaling the client should re-authenticate.
         Mocking create_document_agent to ensure no real LLM resources are used.
         """
         # Even though invalid, we'll define a MagicMock to satisfy the async patch
@@ -122,8 +123,8 @@ class GraphQLJWTTokenAuthMiddlewareTestCase(WebsocketFixtureBaseTestCase):
         self.assertFalse(connected, "Connection should fail with invalid token.")
         self.assertEqual(
             close_code,
-            4000,
-            "WebSocket should reject the connection with code 4000 for an invalid token.",
+            WS_CLOSE_TOKEN_INVALID,
+            "WebSocket should reject the connection with 4002 for an invalid token.",
         )
 
     @mock.patch(

@@ -26,6 +26,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from graphql_relay import from_global_id
 
+from config.websocket.middleware import WS_CLOSE_UNAUTHENTICATED
+from config.websocket.utils.auth_helpers import check_auth_and_close_if_failed
 from config.websocket.utils.extract_ids import extract_websocket_path_id
 from opencontractserver.conversations.models import MessageType
 from opencontractserver.documents.models import Document
@@ -79,7 +81,7 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
             if not graphql_doc_id:
                 err_msg = "Missing document_id in WebSocket path."
                 logger.error(f"[Session {self.session_id}] {err_msg}")
-                await self.close(code=4000)
+                await self.close(code=WS_CLOSE_UNAUTHENTICATED)
                 return
 
             self.document_id = int(from_global_id(graphql_doc_id)[1])
@@ -91,19 +93,16 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
             )
 
             # 3. Check permissions
+            # If user tried to authenticate but failed (e.g., expired token),
+            # return the specific error code instead of treating as anonymous.
+            # allow_anonymous=True means we don't reject if no token was provided.
+            if await check_auth_and_close_if_failed(
+                self, self.session_id, allow_anonymous=True
+            ):
+                return
+
             user = self.scope.get("user")
             is_authenticated = user and user.is_authenticated
-
-            # If user tried to authenticate but failed (e.g., expired token),
-            # return the specific error code instead of treating as anonymous
-            if not is_authenticated:
-                auth_error = self.scope.get("auth_error")
-                if auth_error:
-                    logger.warning(
-                        f"[Session {self.session_id}] Auth failed: {auth_error['message']}"
-                    )
-                    await self.close(code=auth_error["code"])
-                    return
 
             if is_authenticated:
                 # Authenticated user - check read permission
@@ -114,7 +113,7 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
                     logger.warning(
                         f"[Session {self.session_id}] User {user.id} lacks read permission on Document {self.document_id}"  # noqa: E501
                     )
-                    await self.close(code=4000)
+                    await self.close(code=WS_CLOSE_UNAUTHENTICATED)
                     return
                 self.user_id = user.id
                 logger.debug(
@@ -126,7 +125,7 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
                     logger.warning(
                         f"[Session {self.session_id}] Anonymous user trying to access non-public Document {self.document_id}"  # noqa: E501
                     )
-                    await self.close(code=4000)
+                    await self.close(code=WS_CLOSE_UNAUTHENTICATED)
                     return
                 logger.debug(
                     f"[Session {self.session_id}] Anonymous user accessing public document"
@@ -139,14 +138,14 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
         except Document.DoesNotExist:
             err_msg = f"Document not found: {self.document_id}"
             logger.error(f"[Session {self.session_id}] {err_msg}")
-            await self.close(code=4000)
+            await self.close(code=WS_CLOSE_UNAUTHENTICATED)
 
         except Exception as e:
             logger.error(
                 f"[Session {self.session_id}] Error during connection: {str(e)}",
                 exc_info=True,
             )
-            await self.close(code=4000)
+            await self.close(code=WS_CLOSE_UNAUTHENTICATED)
 
     async def disconnect(self, close_code: int) -> None:
         """

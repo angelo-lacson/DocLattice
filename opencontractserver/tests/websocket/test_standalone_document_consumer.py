@@ -23,6 +23,7 @@ from graphql_relay import to_global_id
 from config.websocket.consumers.standalone_document_conversation import (
     StandaloneDocumentQueryConsumer,
 )
+from config.websocket.middleware import WS_CLOSE_TOKEN_INVALID
 from opencontractserver.annotations.models import Annotation, Embedding
 from opencontractserver.conversations.models import Conversation
 from opencontractserver.llms.agents.core_agents import (
@@ -401,7 +402,11 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
             await communicator.disconnect()
 
     async def test_invalid_token_private_document_rejected(self) -> None:
-        """Invalid token should be treated as anonymous; private doc must be rejected."""
+        """Invalid token should be rejected with WS_CLOSE_TOKEN_INVALID (4002).
+
+        When a user provides an invalid token, we return a specific error code
+        so the client knows their token is bad and should re-authenticate.
+        """
         self.doc.is_public = False
         await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
         doc_gid = to_global_id("DocumentType", self.doc.id)
@@ -411,16 +416,33 @@ class StandaloneDocumentConsumerTestCase(WebsocketFixtureBaseTestCase):
         communicator = WebsocketCommunicator(self.application, ws_path)
         connected, code = await communicator.connect()
         self.assertFalse(connected)
-        self.assertEqual(code, 4000)
+        self.assertEqual(code, WS_CLOSE_TOKEN_INVALID)
 
-    async def test_invalid_token_public_document_connects_as_anonymous(self) -> None:
-        """Invalid token is anonymous; public doc should connect and stream."""
+    async def test_invalid_token_public_document_rejected(self) -> None:
+        """Invalid token should be rejected with 4002 even for public documents.
+
+        When a user provides an invalid token, we return a specific error code
+        so the client knows their token is bad and should re-authenticate,
+        rather than silently falling back to anonymous access.
+        """
         self.doc.is_public = True
         await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
         doc_gid = to_global_id("DocumentType", self.doc.id)
         ws_path = (
             f"ws/standalone/document/{quote(doc_gid)}/query/?token=not_a_real_token"
         )
+        communicator = WebsocketCommunicator(self.application, ws_path)
+        connected, code = await communicator.connect()
+        self.assertFalse(connected)
+        self.assertEqual(code, WS_CLOSE_TOKEN_INVALID)
+
+    async def test_no_token_public_document_connects_as_anonymous(self) -> None:
+        """No token provided with public doc should connect as anonymous and stream."""
+        self.doc.is_public = True
+        await database_sync_to_async(self.doc.save)(update_fields=["is_public"])
+        doc_gid = to_global_id("DocumentType", self.doc.id)
+        # No token parameter in the URL
+        ws_path = f"ws/standalone/document/{quote(doc_gid)}/query/"
 
         with patch(
             "config.websocket.consumers.standalone_document_conversation.agents.for_document"

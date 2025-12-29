@@ -19,7 +19,11 @@ from graphql_jwt.exceptions import JSONWebTokenError, JSONWebTokenExpired
 from graphql_relay import to_global_id
 
 from config.graphql_auth0_auth.backends import Auth0RemoteUserJSONWebTokenBackend
-from config.websocket.middleware import WS_CLOSE_TOKEN_EXPIRED, WS_CLOSE_TOKEN_INVALID
+from config.websocket.middleware import (
+    WS_CLOSE_TOKEN_EXPIRED,
+    WS_CLOSE_TOKEN_INVALID,
+    WS_CLOSE_UNAUTHENTICATED,
+)
 from config.websocket.middlewares.websocket_auth0_middleware import (
     WS_CLOSE_TOKEN_EXPIRED as AUTH0_WS_CLOSE_TOKEN_EXPIRED,
 )
@@ -208,3 +212,25 @@ class TestWebSocketCloseCodesConsistency(TestCase):
             WS_CLOSE_TOKEN_INVALID,
             "Expired and invalid tokens should have distinct close codes",
         )
+
+    def test_unauthenticated_code_is_distinct(self):
+        """
+        WS_CLOSE_UNAUTHENTICATED should be distinct from token error codes.
+        """
+        self.assertNotEqual(
+            WS_CLOSE_UNAUTHENTICATED,
+            WS_CLOSE_TOKEN_EXPIRED,
+            "Unauthenticated and expired should have distinct codes",
+        )
+        self.assertNotEqual(
+            WS_CLOSE_UNAUTHENTICATED,
+            WS_CLOSE_TOKEN_INVALID,
+            "Unauthenticated and invalid should have distinct codes",
+        )
+
+    def test_unauthenticated_code_in_valid_range(self):
+        """
+        WS_CLOSE_UNAUTHENTICATED should be in the 4000-4999 range.
+        """
+        self.assertGreaterEqual(WS_CLOSE_UNAUTHENTICATED, 4000)
+        self.assertLess(WS_CLOSE_UNAUTHENTICATED, 5000)

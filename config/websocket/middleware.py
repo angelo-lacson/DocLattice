@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # WebSocket close codes for authentication errors
 # Standard codes 1000-1015 are reserved; 4000-4999 are for application use
+WS_CLOSE_UNAUTHENTICATED = 4000  # No token or generic auth failure
 WS_CLOSE_TOKEN_EXPIRED = 4001  # Token has expired, client should refresh
 WS_CLOSE_TOKEN_INVALID = 4002  # Token is invalid, client should re-authenticate
 
@@ -28,7 +29,7 @@ def get_user_from_token(token: str) -> User:
     """
     from graphql_jwt.utils import get_payload, get_user_by_payload
 
-    logger.debug(f"Attempting to validate token: {token[:20] if token else 'None'}...")
+    logger.debug(f"Attempting to validate token: {token[:10] if token else 'None'}...")
     payload = get_payload(token)
     logger.debug(f"Token payload retrieved: {payload}")
 
@@ -37,7 +38,7 @@ def get_user_from_token(token: str) -> User:
         logger.error("User not found from token payload")
         raise JSONWebTokenError("User not found")
 
-    logger.info(f"Successfully authenticated user: {user.username}")
+    logger.debug(f"Successfully authenticated user: {user.username}")
     return user
 
 
@@ -65,7 +66,9 @@ class GraphQLJWTTokenAuthMiddleware(BaseMiddleware):
         :param send: The send callable provided by Channels.
         :return: The result of the next layer in the application.
         """
-        # Initialize with AnonymousUser and no auth error
+        # Initialize with AnonymousUser and no auth error.
+        # Note: Each WebSocket connection gets a fresh scope, so we don't need
+        # to worry about clearing previous state from reconnection attempts.
         scope["user"] = AnonymousUser()
         scope["auth_error"] = None
 
@@ -78,14 +81,14 @@ class GraphQLJWTTokenAuthMiddleware(BaseMiddleware):
             token = query_params.get("token")
 
             if not token:
-                logger.warning("No token provided in WebSocket connection")
+                # No token is normal for anonymous access - use debug level
+                logger.debug("No token provided in WebSocket connection")
             else:
-                logger.info(
+                logger.debug(
                     "Token found in query parameters, attempting authentication"
                 )
                 user = await get_user_from_token(token)
                 scope["user"] = user
-                logger.info(f"Successfully authenticated user: {user.username}")
 
         except JSONWebTokenExpired as e:
             # Token has expired - client should refresh their token
@@ -119,7 +122,8 @@ class GraphQLJWTTokenAuthMiddleware(BaseMiddleware):
         auth_error_info = (
             f", error: {scope['auth_error']}" if scope["auth_error"] else ""
         )
-        logger.info(
+        # Use debug for normal flow; errors are already logged above at warning level
+        logger.debug(
             f"Authentication complete - User: {scope['user']} ({auth_status}){auth_error_info}"
         )
 

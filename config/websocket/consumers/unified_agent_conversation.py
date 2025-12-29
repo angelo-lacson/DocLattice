@@ -35,6 +35,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from graphql_relay import from_global_id
 
+from config.websocket.middleware import WS_CLOSE_UNAUTHENTICATED
+from config.websocket.utils.auth_helpers import check_auth_and_close_if_failed
 from opencontractserver.agents.models import AgentConfiguration
 from opencontractserver.conversations.models import MessageType
 from opencontractserver.corpuses.models import Corpus
@@ -109,22 +111,18 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                     "in query parameters."
                 )
                 logger.error(f"[Session {self.session_id}] {err_msg}")
-                await self.close(code=4000)
+                await self.close(code=WS_CLOSE_UNAUTHENTICATED)
                 return
 
-            # 3. Check authentication and permissions
+            # 3. Check authentication
+            # allow_anonymous=True since we allow access to public documents/corpora
+            if await check_auth_and_close_if_failed(
+                self, self.session_id, allow_anonymous=True
+            ):
+                return
+
             user = self.scope.get("user")
             is_authenticated = user and user.is_authenticated
-
-            # If user is not authenticated, check for auth errors from middleware
-            if not is_authenticated:
-                auth_error = self.scope.get("auth_error")
-                if auth_error:
-                    logger.warning(
-                        f"[Session {self.session_id}] Auth failed: {auth_error['message']}"
-                    )
-                    await self.close(code=auth_error["code"])
-                    return
 
             if is_authenticated:
                 self.user_id = user.id
@@ -210,7 +208,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                 f"[Session {self.session_id}] Error during connection: {e}",
                 exc_info=True,
             )
-            await self.close(code=4000)
+            await self.close(code=WS_CLOSE_UNAUTHENTICATED)
 
     async def disconnect(self, close_code: int) -> None:
         """Clean up on socket close."""

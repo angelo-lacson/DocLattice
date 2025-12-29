@@ -11,6 +11,24 @@ logger = logging.getLogger(__name__)
 
 
 class Auth0RemoteUserJSONWebTokenBackend:
+    """
+    Django authentication backend for Auth0 JWT tokens.
+
+    This backend is designed to work with graphql_jwt and the GraphQL layer.
+    It differs from standard Django authentication backends in that it
+    RE-RAISES JSONWebTokenExpired exceptions instead of returning None.
+
+    Why this design:
+    - graphql_jwt expects backends to raise JWT exceptions for proper error handling
+    - The GraphQL layer catches these and translates them to proper error responses
+    - This allows the frontend to distinguish between "token expired" (refresh needed)
+      vs "token invalid" (re-authentication needed)
+
+    Important: This backend is only called in JWT validation contexts (GraphQL requests
+    with Authorization headers), NOT by Django's standard AuthenticationMiddleware
+    which reads users from sessions.
+    """
+
     def authenticate(self, request=None, **kwargs):
         logger.debug(
             f"Auth0RemoteUserJSONWebTokenBackend.authenticate() - Starting with request: {request}"
