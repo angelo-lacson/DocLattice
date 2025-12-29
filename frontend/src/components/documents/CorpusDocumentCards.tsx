@@ -45,7 +45,7 @@ const ViewToggleContainer = styled.div`
   position: absolute;
   top: 1rem;
   right: 1rem;
-  z-index: 100;
+  z-index: 10; /* Keep below sidebar (z-index: 100) and backdrop (z-index: 98) */
 
   @media (max-width: 768px) {
     top: 0.75rem;

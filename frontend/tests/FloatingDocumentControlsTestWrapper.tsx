@@ -317,8 +317,25 @@ export const FloatingDocumentControlsTestWrapper: React.FC<
   showStructuralAnnotations(showStructural);
   showSelectedAnnotationOnly(showSelectedOnly);
 
+  // Build initial URL with query params matching the initial reactive var state
+  // This ensures the URL watching effect doesn't override the initial state
+  const initialSearchParams = new URLSearchParams();
+  if (showStructural) {
+    initialSearchParams.set("structural", "true");
+  }
+  if (showSelectedOnly) {
+    initialSearchParams.set("selectedOnly", "true");
+  }
+  if (showBoundingBoxes) {
+    initialSearchParams.set("boundingBoxes", "true");
+  }
+  const initialUrl =
+    initialSearchParams.toString().length > 0
+      ? `/test?${initialSearchParams.toString()}`
+      : "/test";
+
   return (
-    <MemoryRouter initialEntries={["/test"]}>
+    <MemoryRouter initialEntries={[initialUrl]}>
       <JotaiProvider>
         <MockedProvider
           link={link}

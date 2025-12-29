@@ -11,6 +11,7 @@ import {
 import { toast } from "react-toastify";
 import { User, Lock } from "lucide-react";
 import logo from "../assets/images/os_legal_128_regular.png";
+import { useCacheManager } from "../hooks/useCacheManager";
 
 const PageWrapper = styled.div`
   width: 100vw;
@@ -98,13 +99,20 @@ export const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
+  const { resetOnAuthChange } = useCacheManager();
 
   const [tryLogin, { loading: login_loading, error: login_error }] =
     useMutation<LoginOutputs, LoginInputs>(LOGIN_MUTATION, {
-      onCompleted: (data) => {
+      onCompleted: async (data) => {
+        // Set auth state FIRST - ensures any subsequent queries use the new
+        // auth context. This prevents race condition where cache clear might
+        // trigger queries with the old (anonymous) auth state.
         authToken(data.tokenAuth.token);
         userObj(data.tokenAuth.user);
         authStatusVar("AUTHENTICATED");
+
+        // Now clear cache - refetched queries will use new auth context
+        await resetOnAuthChange({ reason: "user_login", refetchActive: false });
         navigate("/");
       },
     });
