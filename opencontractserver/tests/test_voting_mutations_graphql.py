@@ -28,14 +28,15 @@ class VotingMutationsTestCase(TestCase):
 
     def setUp(self):
         """Set up test data."""
+        # Use unique usernames to avoid conflicts with fixtures
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
+            username="voting_test_user",
+            email="voting_test@example.com",
             password="testpass123",
         )
         self.other_user = User.objects.create_user(
-            username="otheruser",
-            email="other@example.com",
+            username="voting_other_user",
+            email="voting_other@example.com",
             password="testpass123",
         )
 

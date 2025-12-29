@@ -602,7 +602,7 @@ def _resolve_tools(tools: list[ToolType]) -> list[CoreTool]:
     """Convert tool specifications to CoreTool instances."""
     resolved = []
 
-    # Built-in tool registry
+    # Built-in tool registry - maps aliases to canonical names
     builtin_tools = {
         "load_md_summary": "load_document_md_summary",
         "md_summary_length": "get_md_summary_token_length",
@@ -613,10 +613,111 @@ def _resolve_tools(tools: list[ToolType]) -> list[CoreTool]:
         "notes": "get_notes_for_document_corpus",  # Alias
     }
 
+    # Moderation tools - direct name mapping
+    moderation_tool_names = {
+        "get_thread_context",
+        "get_thread_messages",
+        "get_message_content",
+        "delete_message",
+        "lock_thread",
+        "unlock_thread",
+        "add_thread_message",
+        "pin_thread",
+        "unpin_thread",
+    }
+
+    # Corpus/document tools from core_tools
+    core_tool_names = {
+        "update_corpus_description",
+        "get_corpus_description",
+        "load_document_text",  # Alias for load_document_txt_extract
+        "load_document_txt_extract",
+        "get_document_description",
+        "update_document_description",
+        "get_document_summary",
+        "update_document_summary",
+        "add_document_note",
+        "update_document_note",
+        "search_document_notes",
+        "search_exact_text_as_sources",
+        "add_annotations_from_exact_strings",
+        "get_page_image",
+    }
+
     for tool in tools:
         if isinstance(tool, str):
-            # Look up built-in tool by name
-            if tool in builtin_tools:
+            # Check if it's a moderation tool
+            if tool in moderation_tool_names:
+                # Use async versions (prefixed with 'a') for pydantic-ai compatibility
+                from opencontractserver.llms.tools.moderation_tools import (
+                    aadd_thread_message,
+                    adelete_message,
+                    aget_message_content,
+                    aget_thread_context,
+                    aget_thread_messages,
+                    alock_thread,
+                    apin_thread,
+                    aunlock_thread,
+                    aunpin_thread,
+                )
+
+                moderation_func_map = {
+                    "get_thread_context": aget_thread_context,
+                    "get_thread_messages": aget_thread_messages,
+                    "get_message_content": aget_message_content,
+                    "delete_message": adelete_message,
+                    "lock_thread": alock_thread,
+                    "unlock_thread": aunlock_thread,
+                    "add_thread_message": aadd_thread_message,
+                    "pin_thread": apin_thread,
+                    "unpin_thread": aunpin_thread,
+                }
+
+                if tool in moderation_func_map:
+                    resolved.append(CoreTool.from_function(moderation_func_map[tool]))
+                else:
+                    logger.warning(f"Unknown moderation tool: {tool}")
+            # Check if it's a core tool (corpus/document tools)
+            elif tool in core_tool_names:
+                from opencontractserver.llms.tools.core_tools import (
+                    add_annotations_from_exact_strings,
+                    add_document_note,
+                    get_corpus_description,
+                    get_document_description,
+                    get_document_summary,
+                    get_page_image,
+                    load_document_txt_extract,
+                    search_document_notes,
+                    search_exact_text_as_sources,
+                    update_corpus_description,
+                    update_document_description,
+                    update_document_note,
+                    update_document_summary,
+                )
+
+                core_func_map = {
+                    "update_corpus_description": update_corpus_description,
+                    "get_corpus_description": get_corpus_description,
+                    "load_document_text": load_document_txt_extract,  # Alias
+                    "load_document_txt_extract": load_document_txt_extract,
+                    "get_document_description": get_document_description,
+                    "update_document_description": update_document_description,
+                    "get_document_summary": get_document_summary,
+                    "update_document_summary": update_document_summary,
+                    "add_document_note": add_document_note,
+                    "update_document_note": update_document_note,
+                    "search_document_notes": search_document_notes,
+                    "search_exact_text_as_sources": search_exact_text_as_sources,
+                    "add_annotations_from_exact_strings": add_annotations_from_exact_strings,
+                    "get_page_image": get_page_image,
+                }
+
+                if tool in core_func_map:
+                    resolved.append(CoreTool.from_function(core_func_map[tool]))
+                else:
+                    logger.warning(f"Unknown core tool: {tool}")
+            # Look up built-in tool by name (legacy aliases)
+            elif tool in builtin_tools:
                 # Import the actual function
                 from opencontractserver.llms.tools.core_tools import (
                     get_md_summary_token_length,
