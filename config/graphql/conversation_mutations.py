@@ -452,11 +452,199 @@ class DeleteConversationMutation(graphene.Mutation):
         return DeleteConversationMutation(ok=ok, message=message)
 
 
+class UpdateMessageMutation(graphene.Mutation):
+    """
+    Update the content of an existing message.
+
+    Security Note: Only the message creator or a moderator can edit messages.
+    Mention links are re-parsed when content is updated.
+
+    XSS Prevention Note: The content field contains user-generated markdown text
+    that must be properly escaped when rendered in the frontend to prevent XSS
+    attacks. GraphQL's GenericScalar handles JSON serialization safely, but the
+    frontend must use a markdown renderer that sanitizes HTML output.
+
+    Part of Issue #686 - Mobile UI for Edit Message Modal
+    """
+
+    class Arguments:
+        message_id = graphene.ID(
+            required=True, description="ID of the message to update"
+        )
+        content = graphene.String(
+            required=True, description="New content for the message"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    obj = graphene.Field(MessageType)
+
+    @login_required
+    @graphql_ratelimit(rate="30/m")
+    @transaction.atomic
+    def mutate(root, info, message_id, content):
+        ok = False
+        obj = None
+        message = ""
+
+        try:
+            user = info.context.user
+            message_pk = from_global_id(message_id)[1]
+
+            # Validate content is not empty (matches frontend validation)
+            if not content or not content.strip():
+                return UpdateMessageMutation(
+                    ok=False,
+                    message="Message content cannot be empty",
+                    obj=None,
+                )
+
+            # Use visible_to_user() which now includes moderator access
+            # (moderators can see all messages in conversations they moderate)
+            # This prevents IDOR enumeration while properly handling moderator access.
+            #
+            # NOTE: We do not use select_for_update() here because:
+            # 1. visible_to_user() uses DISTINCT, which is incompatible with FOR UPDATE
+            # 2. select_related() with nullable FKs uses outer joins, also incompatible
+            # The @transaction.atomic decorator provides sufficient transactional integrity
+            # for message editing, which is not a high-concurrency operation.
+            #
+            # Use select_related() to avoid N+1 queries when accessing conversation/corpus
+            # for mention parsing and moderator checks.
+            try:
+                chat_message = (
+                    ChatMessage.objects.visible_to_user(user)
+                    .select_related(
+                        "conversation",
+                        "conversation__chat_with_corpus",
+                        "conversation__chat_with_document",
+                        "creator",
+                    )
+                    .get(pk=message_pk)
+                )
+            except ChatMessage.DoesNotExist:
+                # Check if this is a deleted message that user should be able to see
+                # (to give proper "message is deleted" error instead of generic permission error)
+                candidate = ChatMessage.all_objects.filter(pk=message_pk).first()
+                if candidate and (
+                    candidate.creator == user
+                    or candidate.conversation.can_moderate(user)
+                ):
+                    chat_message = candidate
+                else:
+                    return UpdateMessageMutation(
+                        ok=False,
+                        message="You do not have permission to edit this message",
+                        obj=None,
+                    )
+
+            # Check if user has permission to update (CRUD includes update)
+            # Moderators can always edit messages in conversations they moderate
+            has_update_permission = user_has_permission_for_obj(
+                user, chat_message, PermissionTypes.CRUD
+            )
+            is_moderator = chat_message.conversation.can_moderate(user)
+
+            if not has_update_permission and not is_moderator:
+                return UpdateMessageMutation(
+                    ok=False,
+                    message="You do not have permission to edit this message",
+                    obj=None,
+                )
+
+            # Check if conversation is locked
+            if chat_message.conversation.is_locked:
+                return UpdateMessageMutation(
+                    ok=False,
+                    message="This thread is locked",
+                    obj=None,
+                )
+
+            # Check if message is deleted
+            if chat_message.deleted_at:
+                return UpdateMessageMutation(
+                    ok=False,
+                    message="Cannot edit a deleted message",
+                    obj=None,
+                )
+
+            # Parse mentions FIRST (before modifying database) to avoid race condition
+            # where parsing fails after mentions are cleared, leaving message with no mentions
+            mention_parse_success = True
+            mentioned_ids = {}
+            try:
+                mentioned_ids = parse_mentions_from_content(content)
+            except (AttributeError, KeyError, TypeError, ValueError) as e:
+                # Don't fail the whole mutation if mention parsing fails
+                # These are the expected exceptions from parsing logic
+                mention_parse_success = False
+                logger.warning(
+                    f"Error parsing mentions in updated message {chat_message.pk}: "
+                    f"{type(e).__name__}: {e}"
+                )
+
+            # Now atomically update content and clear all mention-related fields
+            chat_message.content = content
+            chat_message.source_document = None
+            chat_message.save(update_fields=["content", "source_document", "modified"])
+
+            # Clear M2M relationships (these don't require save())
+            chat_message.source_annotations.clear()
+            chat_message.mentioned_agents.clear()
+
+            # Link new mentions (only if parsing succeeded)
+            if mention_parse_success and mentioned_ids:
+                try:
+                    link_result = link_message_to_resources(chat_message, mentioned_ids)
+                    logger.debug(
+                        f"Updated message {chat_message.pk} links: {link_result}"
+                    )
+
+                    # Trigger agent responses if any agents were mentioned
+                    # NOTE: This triggers for ALL mentioned agents, including previously
+                    # mentioned ones. This means editing "@agent hello" to "@agent goodbye"
+                    # will trigger a new agent response. This is intentional to ensure
+                    # agents respond to updated context, but may result in multiple responses
+                    # if users repeatedly edit messages with the same mentions.
+                    if link_result.get("agents_linked", 0) > 0:
+                        trigger_agent_responses_for_message.delay(
+                            message_id=chat_message.pk,
+                            user_id=user.pk,
+                        )
+                        logger.debug(
+                            f"Triggered agent responses for updated message {chat_message.pk}"
+                        )
+                except (AttributeError, KeyError, TypeError, ValueError) as e:
+                    # Don't fail the whole mutation if mention linking fails
+                    # These are the expected exceptions from linking logic
+                    mention_parse_success = False
+                    logger.warning(
+                        f"Error linking mentions in updated message {chat_message.pk}: "
+                        f"{type(e).__name__}: {e}"
+                    )
+
+            ok = True
+            # Provide feedback if mentions failed to parse (UX improvement)
+            if mention_parse_success:
+                message = "Message updated successfully"
+            else:
+                message = (
+                    "Message updated, but some mentions may not have been recognized"
+                )
+            obj = chat_message
+
+        except Exception as e:
+            logger.error(f"Error updating message: {type(e).__name__}: {e}")
+            message = "Failed to update message"
+
+        return UpdateMessageMutation(ok=ok, message=message, obj=obj)
+
+
 class DeleteMessageMutation(graphene.Mutation):
     """Soft delete a message."""
 
     class Arguments:
-        message_id = graphene.String(
+        message_id = graphene.ID(
             required=True, description="ID of the message to delete"
         )
 

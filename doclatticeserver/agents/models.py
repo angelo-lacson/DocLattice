@@ -241,8 +241,10 @@ class AgentActionResult(BaseOCModel):
     document = models.ForeignKey(
         "documents.Document",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="agent_action_results",
-        help_text="The document this action was run on",
+        help_text="The document this action was run on (null for thread-based actions)",
     )
     conversation = models.ForeignKey(
         "conversations.Conversation",
@@ -251,6 +253,24 @@ class AgentActionResult(BaseOCModel):
         blank=True,
         related_name="corpus_action_results",
         help_text="Conversation record containing the full agent interaction",
+    )
+
+    # Thread/message context (for NEW_THREAD and NEW_MESSAGE triggers)
+    triggering_conversation = models.ForeignKey(
+        "conversations.Conversation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="triggered_agent_action_results",
+        help_text="Thread that triggered this agent action (for thread-based triggers)",
+    )
+    triggering_message = models.ForeignKey(
+        "conversations.ChatMessage",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="triggered_agent_action_results",
+        help_text="Message that triggered this agent action (for NEW_MESSAGE trigger)",
     )
 
     # Execution tracking
@@ -294,14 +314,29 @@ class AgentActionResult(BaseOCModel):
             models.Index(fields=["corpus_action", "document"]),
             models.Index(fields=["status"]),
             models.Index(fields=["started_at"]),
+            # Index for thread-based queries
+            models.Index(fields=["corpus_action", "triggering_conversation"]),
         ]
-        # Unique constraint: one result per (corpus_action, document) combination
-        # This prevents duplicate executions for the same action+document
+        # Unique constraints: prevent duplicate executions
+        # Separate constraints for document-based vs thread-based actions
         constraints = [
+            # For document-based actions: one result per (corpus_action, document)
             models.UniqueConstraint(
                 fields=["corpus_action", "document"],
+                condition=models.Q(document__isnull=False),
                 name="unique_corpus_action_document_result",
-            )
+            ),
+            # For thread-based actions: one result per (corpus_action, triggering_conversation, triggering_message)
+            # Note: triggering_message may be null for NEW_THREAD trigger
+            models.UniqueConstraint(
+                fields=[
+                    "corpus_action",
+                    "triggering_conversation",
+                    "triggering_message",
+                ],
+                condition=models.Q(triggering_conversation__isnull=False),
+                name="unique_corpus_action_thread_result",
+            ),
         ]
         permissions = (
             ("permission_agentactionresult", "permission agentactionresult"),
@@ -313,9 +348,14 @@ class AgentActionResult(BaseOCModel):
         )
 
     def __str__(self):
+        if self.document_id:
+            target = f"doc:{self.document_id}"
+        elif self.triggering_conversation_id:
+            target = f"thread:{self.triggering_conversation_id}"
+        else:
+            target = "unknown"
         return (
-            f"AgentActionResult({self.corpus_action.name} on doc {self.document_id}: "
-            f"{self.status})"
+            f"AgentActionResult({self.corpus_action.name} on {target}: {self.status})"
         )
 
     @property

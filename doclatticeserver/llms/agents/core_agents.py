@@ -307,8 +307,13 @@ class CorpusAgentContext:
     config: AgentConfig
     documents: Optional[list[Document]] = None
 
-    async def __post_init__(self):
-        """Initialize documents list if not provided."""
+    async def initialize(self):
+        """Initialize documents list if not provided.
+
+        Note: This is a separate async method instead of __post_init__ because
+        dataclass __post_init__ is called synchronously, and we need async
+        initialization to load documents from the database.
+        """
         if self.documents is None:
             # Use DocumentPath-based method to get active documents
             self.documents = await sync_to_async(list)(self.corpus.get_documents())
@@ -1074,7 +1079,7 @@ class CoreCorpusAgentFactory:
             config.embedder_path = corpus.preferred_embedder
 
         context = CorpusAgentContext(corpus=corpus, config=config, documents=documents)
-        await context.__post_init__()
+        await context.initialize()
         return context
 
 

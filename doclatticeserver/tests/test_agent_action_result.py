@@ -123,7 +123,7 @@ class AgentActionResultModelTestCase(TestCase):
             status=AgentActionResult.Status.COMPLETED,
             creator=self.user,
         )
-        expected_str = f"AgentActionResult({self.corpus_action.name} on doc {self.document.id}: completed)"
+        expected_str = f"AgentActionResult({self.corpus_action.name} on doc:{self.document.id}: completed)"
         self.assertEqual(str(result), expected_str)
 
     def test_agent_action_result_visible_to_user(self):
@@ -163,3 +163,184 @@ class AgentActionResultModelTestCase(TestCase):
         )
         self.assertEqual(result.execution_metadata["model_used"], "gpt-4o-mini")
         self.assertEqual(result.execution_metadata["total_tokens"], 1500)
+
+    def test_agent_action_result_str_for_thread_based_action(self):
+        """Test __str__ for thread-based AgentActionResult (without document)."""
+        thread = Conversation.objects.create(
+            title="Triggering Thread",
+            creator=self.user,
+        )
+        result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=None,  # No document - thread-based action
+            triggering_conversation=thread,
+            status=AgentActionResult.Status.COMPLETED,
+            creator=self.user,
+        )
+        expected_str = f"AgentActionResult({self.corpus_action.name} on thread:{thread.id}: completed)"
+        self.assertEqual(str(result), expected_str)
+
+    def test_agent_action_result_str_for_unknown_target(self):
+        """Test __str__ when neither document nor triggering_conversation is set."""
+        result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=None,
+            triggering_conversation=None,
+            status=AgentActionResult.Status.PENDING,
+            creator=self.user,
+        )
+        expected_str = (
+            f"AgentActionResult({self.corpus_action.name} on unknown: pending)"
+        )
+        self.assertEqual(str(result), expected_str)
+
+    def test_agent_action_result_duration_seconds(self):
+        """Test the duration_seconds property."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        start = timezone.now()
+        end = start + timedelta(seconds=30)
+
+        result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            status=AgentActionResult.Status.COMPLETED,
+            started_at=start,
+            completed_at=end,
+            creator=self.user,
+        )
+        self.assertAlmostEqual(result.duration_seconds, 30.0)
+
+    def test_agent_action_result_duration_seconds_none_when_incomplete(self):
+        """Test duration_seconds is None when timestamps are missing."""
+        result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            status=AgentActionResult.Status.RUNNING,
+            started_at=None,
+            completed_at=None,
+            creator=self.user,
+        )
+        self.assertIsNone(result.duration_seconds)
+
+    def test_visible_to_user_anonymous_user(self):
+        """Test visible_to_user returns empty for anonymous on private corpus."""
+        from django.contrib.auth.models import AnonymousUser
+
+        result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            status=AgentActionResult.Status.COMPLETED,
+            creator=self.user,
+        )
+
+        anon = AnonymousUser()
+        visible = AgentActionResult.objects.visible_to_user(anon)
+        self.assertNotIn(result, visible)
+
+    def test_visible_to_user_anonymous_user_public_corpus(self):
+        """Test visible_to_user returns results for public corpus to anonymous."""
+        from django.contrib.auth.models import AnonymousUser
+
+        # Make corpus public
+        self.corpus.is_public = True
+        self.corpus.save()
+
+        result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            status=AgentActionResult.Status.COMPLETED,
+            creator=self.user,
+        )
+
+        anon = AnonymousUser()
+        visible = AgentActionResult.objects.visible_to_user(anon)
+        self.assertIn(result, visible)
+
+    def test_visible_to_user_superuser_sees_all(self):
+        """Test visible_to_user returns all results for superuser."""
+        superuser = User.objects.create_superuser(
+            username="admin", password="adminpass", email="admin@test.com"
+        )
+
+        result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            status=AgentActionResult.Status.COMPLETED,
+            creator=self.user,
+        )
+
+        visible = AgentActionResult.objects.visible_to_user(superuser)
+        self.assertIn(result, visible)
+
+    def test_visible_to_user_with_none_user(self):
+        """Test visible_to_user handles None user (like anonymous)."""
+        # Make corpus public for this test
+        self.corpus.is_public = True
+        self.corpus.save()
+
+        result = AgentActionResult.objects.create(
+            corpus_action=self.corpus_action,
+            document=self.document,
+            status=AgentActionResult.Status.COMPLETED,
+            creator=self.user,
+        )
+
+        visible = AgentActionResult.objects.visible_to_user(None)
+        # Should return public results
+        self.assertIn(result, visible)
+
+
+class AgentConfigurationSlugTestCase(TestCase):
+    """Test AgentConfiguration slug auto-generation."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+
+    def test_auto_generates_slug_from_name(self):
+        """Test that slug is auto-generated from name if not provided."""
+        agent = AgentConfiguration.objects.create(
+            name="My Research Assistant",
+            system_instructions="You are helpful",
+            creator=self.user,
+        )
+        self.assertEqual(agent.slug, "my-research-assistant")
+
+    def test_preserves_explicit_slug(self):
+        """Test that explicit slug is preserved."""
+        agent = AgentConfiguration.objects.create(
+            name="My Research Assistant",
+            slug="custom-slug",
+            system_instructions="You are helpful",
+            creator=self.user,
+        )
+        self.assertEqual(agent.slug, "custom-slug")
+
+    def test_handles_slug_collision(self):
+        """Test that slug collision is handled by appending number."""
+        # Create first agent with auto-generated slug
+        agent1 = AgentConfiguration.objects.create(
+            name="Test Agent",
+            system_instructions="You are helpful",
+            creator=self.user,
+        )
+        self.assertEqual(agent1.slug, "test-agent")
+
+        # Create second agent with same name - should get different slug
+        agent2 = AgentConfiguration.objects.create(
+            name="Test Agent",
+            system_instructions="You are also helpful",
+            creator=self.user,
+        )
+        self.assertEqual(agent2.slug, "test-agent-1")
+
+        # Create third agent with same name - should increment
+        agent3 = AgentConfiguration.objects.create(
+            name="Test Agent",
+            system_instructions="You are very helpful",
+            creator=self.user,
+        )
+        self.assertEqual(agent3.slug, "test-agent-2")
