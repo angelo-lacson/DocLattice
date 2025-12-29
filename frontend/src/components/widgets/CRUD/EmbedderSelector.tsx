@@ -1,19 +1,42 @@
-import { useEffect } from "react";
 import { useQuery } from "@apollo/client";
-import {
-  Header,
-  Segment,
-  Loader,
-  Dimmer,
-  Dropdown,
-  Message,
-} from "semantic-ui-react";
+import { Header, Segment, Dropdown, Message } from "semantic-ui-react";
+import styled from "styled-components";
 import {
   GetEmbeddersInput,
   GetEmbeddersOutput,
   GET_EMBEDDERS,
 } from "../../../graphql/queries";
 import { PipelineComponentType } from "../../../types/graphql-api";
+
+// Mobile-responsive wrapper for EmbedderSelector
+const MobileFriendlyWrapper = styled.div`
+  width: 100%;
+
+  @media (max-width: 768px) {
+    /* Ensure dropdown has adequate touch target size */
+    .ui.dropdown {
+      min-height: 44px; /* iOS minimum touch target */
+      font-size: 16px; /* Prevents iOS zoom on focus */
+    }
+
+    /* Make header text readable on mobile */
+    h5.ui.header {
+      font-size: 1rem;
+      padding: 0.75rem 1rem;
+    }
+
+    /* Add padding to segment for better mobile spacing */
+    .ui.segment {
+      padding: 1rem;
+    }
+
+    /* Ensure dropdown options are large enough to tap */
+    .ui.dropdown .menu > .item {
+      padding: 0.875rem 1rem !important;
+      min-height: 44px;
+    }
+  }
+`;
 
 interface EmbedderSelectorProps {
   read_only?: boolean;
@@ -76,15 +99,11 @@ export const EmbedderSelector = ({
   }));
 
   return (
-    <div style={{ width: "100%" }}>
+    <MobileFriendlyWrapper>
       <Header as="h5" attached="top">
         Preferred Embedder:
       </Header>
       <Segment attached>
-        <Dimmer active={loading} inverted>
-          <Loader content="Loading embedders..." />
-        </Dimmer>
-
         {error && (
           <Message negative compact size="tiny">
             <Message.Header>Failed to load embedders</Message.Header>
@@ -100,7 +119,7 @@ export const EmbedderSelector = ({
         )}
 
         <Dropdown
-          disabled={read_only || loading || !hasEmbedders}
+          disabled={read_only || (!loading && !hasEmbedders)}
           selection
           clearable
           fluid
@@ -115,6 +134,6 @@ export const EmbedderSelector = ({
           loading={loading}
         />
       </Segment>
-    </div>
+    </MobileFriendlyWrapper>
   );
 };

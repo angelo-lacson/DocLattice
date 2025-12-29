@@ -23,7 +23,10 @@ import {
   DeleteCorpusActionInput,
   DeleteCorpusActionOutput,
 } from "../../graphql/mutations";
-import { CreateCorpusActionModal } from "./CreateCorpusActionModal";
+import {
+  CreateCorpusActionModal,
+  CorpusActionData,
+} from "./CreateCorpusActionModal";
 import { CorpusMetadataSettings } from "./CorpusMetadataSettings";
 import { CorpusAgentSettings } from "./CorpusAgentSettings";
 import { CorpusAgentManagement } from "./CorpusAgentManagement";
@@ -739,6 +742,8 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
   const [actionToDelete, setActionToDelete] = React.useState<string | null>(
     null
   );
+  const [actionToEdit, setActionToEdit] =
+    React.useState<CorpusActionData | null>(null);
 
   const { data: actionsData, refetch: refetchActions } = useQuery<
     GetCorpusActionsOutput,
@@ -1305,9 +1310,22 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
 
                       <Button
                         icon
+                        size="tiny"
+                        onClick={() => {
+                          setActionToEdit(action);
+                          setIsModalOpen(true);
+                        }}
+                        title="Edit action"
+                      >
+                        <Icon name="edit" />
+                      </Button>
+
+                      <Button
+                        icon
                         negative
                         size="tiny"
                         onClick={() => setActionToDelete(action.id)}
+                        title="Delete action"
                       >
                         <Icon name="trash" />
                       </Button>
@@ -1378,11 +1396,16 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
         <CreateCorpusActionModal
           corpusId={corpus.id}
           open={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={() => {
+            setIsModalOpen(false);
+            setActionToEdit(null);
+          }}
           onSuccess={() => {
             setIsModalOpen(false);
+            setActionToEdit(null);
             refetchActions();
           }}
+          actionToEdit={actionToEdit}
         />
 
         <Confirm

@@ -34,6 +34,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tests for error handling (missing API key, API errors, empty results)
   - Tests for configuration via settings and kwargs override
 
+#### Thread/Message Triggered Corpus Actions for Automated Moderation
+- **Extended CorpusActionTrigger enum** with `NEW_THREAD` and `NEW_MESSAGE` triggers (`opencontractserver/corpuses/models.py:849-854`) to enable automated moderation of discussion threads
+- **New moderation tools** (`opencontractserver/llms/tools/moderation_tools.py`): 9 tools for thread moderation including:
+  - `get_thread_context`: Retrieve thread metadata (title, creator, lock/pin status)
+  - `get_thread_messages`: Get recent messages for context
+  - `get_message_content`: Get full content of a specific message
+  - `delete_message`: Soft delete a message with audit logging
+  - `lock_thread`/`unlock_thread`: Control thread access
+  - `add_thread_message`: Post agent messages to threads
+  - `pin_thread`/`unpin_thread`: Feature important threads
+- **New MODERATION tool category** (`opencontractserver/llms/tools/tool_registry.py:42`) with 9 registered tools and proper approval requirements
+- **Signal handlers** for thread/message creation (`opencontractserver/corpuses/signals.py`) using `transaction.on_commit` pattern to trigger corpus actions
+- **New Celery tasks** (`opencontractserver/tasks/corpus_tasks.py`):
+  - `process_thread_corpus_action`: Processes actions when threads are created
+  - `process_message_corpus_action`: Processes actions when messages are posted
+- **Agent thread action task** (`opencontractserver/tasks/agent_tasks.py:run_agent_thread_action`): Runs AI agents with thread context and moderation tools
+- **Updated CorpusActionExecution model** (`opencontractserver/corpuses/models.py`) with optional `conversation` and `message` FKs for audit trail
+- **Updated AgentActionResult model** (`opencontractserver/agents/models.py`) with nullable document FK and new `triggering_conversation`/`triggering_message` FKs
+- **Frontend updates** (`frontend/src/components/corpuses/CreateCorpusActionModal.tsx`):
+  - Added "On New Thread" and "On New Message" trigger options
+  - Thread/message triggers automatically select agent action type
+  - Info message explaining available moderation tools
+- **Comprehensive test coverage**:
+  - Backend tests: `opencontractserver/tests/test_thread_corpus_actions.py`
+  - Frontend tests: `frontend/tests/create-corpus-action-modal.ct.tsx`
+- **Database migrations**:
+  - `opencontractserver/agents/migrations/0008_add_thread_message_triggers.py`: Adds nullable `triggering_conversation` and `triggering_message` FKs to AgentActionResult, makes `document` nullable
+  - `opencontractserver/corpuses/migrations/0032_add_thread_message_triggers.py`: Adds nullable `conversation` and `message` FKs to CorpusActionExecution
+
+#### Use Cases Enabled
+- Automated content moderation (e.g., auto-delete messages with prohibited content)
+- Thread management (e.g., auto-lock threads discussing prohibited topics)
+- Automated responses (e.g., welcome messages for new threads)
+- Content classification (e.g., auto-pin important announcements)
+
+#### Proactive Apollo Cache Management System (PR #725)
+- **New `CacheManager` service** (`frontend/src/services/cacheManager.ts`): Centralized Apollo cache management with debouncing, targeted invalidation, and auth-aware cache operations
+  - `resetOnAuthChange()`: Full cache clear with optional refetch for login/logout transitions
+  - `refreshActiveQueries()`: Soft refresh without clearing cache
+  - `invalidateEntityQueries()`: Targeted invalidation for document/corpus/annotation CRUD operations
+  - Debouncing: 1000ms for full resets, 500ms for entity invalidations
+  - Debug utilities: `logCacheSize()`, `extractCacheForDebug()`
+- **New `useCacheManager` hook** (`frontend/src/hooks/useCacheManager.ts`): React hook with memoized CacheManager instance and stable callback references
+- **Comprehensive test suite** (`frontend/src/services/__tests__/cacheManager.test.ts`, `frontend/src/hooks/__tests__/useCacheManager.test.tsx`): 30+ tests covering debouncing, error handling, lifecycle, singleton management, and auth scenarios
+
 ### Technical Details
 
 #### LlamaParse Parser Architecture
@@ -46,6 +91,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Cache Management Race Condition Fix (PR #725)
+- **Auth state now set BEFORE cache clear** (`frontend/src/components/auth/AuthGate.tsx:69-92`, `frontend/src/views/Login.tsx:106-117`, `frontend/src/components/layout/useNavMenu.ts:64-90`):
+  - Previously, cache was cleared before updating auth state, creating a window where queries could fetch with wrong auth context
+  - Fixed by setting auth token/user/status first, then clearing cache
+  - Refetched queries now correctly use the new auth context
+- **AuthGate uses useCacheManager hook** (`frontend/src/components/auth/AuthGate.tsx:7,27`): Replaced direct `new CacheManager()` instantiation with proper hook usage, eliminating `as any` type assertion and ensuring memoization
+- **Fire-and-forget logout cache clear** (`frontend/src/components/layout/useNavMenu.ts:69-79`): Logout no longer blocks on cache clear operation, improving perceived performance
+
+### Technical Details
+
+#### Cache Management Architecture
+- **Race condition prevention**: Auth state updates are synchronous; cache clear is async. By setting auth first, any queries triggered during cache clear use the correct credentials.
+- **Singleton pattern preserved for non-React contexts**: The singleton functions (`initializeCacheManager`, `getCacheManager`, etc.) remain exported for testing and non-React usage, with documentation clarifying when to use hooks vs singleton.
+- **Dependency management**: `useCacheManager` hook returns stable callback references via `useCallback`, safe to include in effect dependencies.
+
+### Fixed
+
+#### Mobile Responsive Styling for Settings and Badge Widgets (Issue #690)
+- **Badge component z-index optimization** (`frontend/src/components/badges/Badge.tsx:47,107`): Lowered z-index values from 9999/10000 to 200/201 to avoid conflicts with other UI elements while maintaining proper layering
+- **Unified mobile behavior detection** (`frontend/src/components/badges/Badge.tsx:148-152`): Combined touch device detection with viewport width check to ensure mobile UX works consistently across real devices and test environments
+- **Test wrapper extraction** (`frontend/tests/UserBadgesTestWrapper.tsx`, `frontend/tests/GlobalSettingsPanelTestWrapper.tsx`): Moved test wrappers to separate files following Playwright component testing best practices
+- **Improved test reliability** (`frontend/tests/mobile-responsive.ct.tsx`): Fixed element disambiguation issues using proper locator strategies
+
 #### Agent Chat Processing Indicator (PR #687)
 - **Added visual feedback for agent processing** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1342-1405`): When an agent starts processing a response, an animated "Agent is thinking..." indicator now displays instead of an empty message bubble
 - **Processing indicator conditions**: Shows when assistant message is incomplete with no content and no timeline entries
@@ -53,7 +121,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Animation performance**: Added `will-change: transform, opacity` to animated dots for smoother rendering
 - **Component tests**: Added comprehensive Playwright component tests (`frontend/tests/chat-message-processing-indicator.ct.tsx`) covering indicator visibility, accessibility, and state transitions
 
+### Fixed
+
+#### Trash View Error Prevention (Issue #691)
+- **State synchronization fix** (`frontend/src/components/corpuses/folders/FolderTreeSidebar.tsx:363-369`):
+  - Fixed trash folder click handler to use consistent state update pattern matching other folder navigation
+  - Added `handleTrashClick` callback that properly delegates to `onFolderSelect` when provided (URL-driven state)
+  - Removed direct Jotai atom manipulation that caused race conditions with CentralRouteManager
+- **Defensive null handling** (`frontend/src/components/corpuses/folders/TrashFolderView.tsx`):
+  - Added `safeFormatDistanceToNow()` and `safeFormat()` helper functions for robust date formatting
+  - Added optional chaining for `creator`, `document`, and nested properties to prevent runtime errors
+  - Added validation in `handleRestoreSingle()` and `handleRestoreSelected()` to check for valid document data
+- **Type safety improvements** (`frontend/src/graphql/queries/folders.ts:92-104`):
+  - Updated `DeletedDocumentPathType` interface to mark `creator` and `document` as potentially null
+  - Ensures TypeScript catches potential null access issues at compile time
+
 ### Added
+
+#### Agent Message Visual Differentiation (Issue #688)
+- **Enhanced MessageItem component** (`frontend/src/components/threads/MessageItem.tsx:27-50, 59-66, 68-191, 211-245, 461-466, 530-550`):
+  - Agent detection logic using `getAgentDisplayData()` helper function
+  - `hexToRgba()` utility for generating color-tinted backgrounds from agent badge colors
+  - Distinct visual styling for agent messages vs user messages:
+    - **Background**: Subtle gradient using agent's badge color with low opacity (8% to 3%)
+    - **Border**: Colored border matching agent's badge color instead of default gray
+    - **Accent strip**: 4px colored left border (like highlighted messages) using agent color
+    - **Avatar**: Bot icon instead of User icon, with agent-colored gradient background
+    - **Box shadow**: Agent-colored shadow on avatar for visual consistency
+- **Accessibility improvements**:
+  - Updated `aria-label` to include "(AI Agent)" suffix for screen readers
+  - Avatar `title` attribute identifies agent name and type
+- Agent color sourced from `AgentConfiguration.badgeConfig.color` field (falls back to default blue #4A90E2)
 
 #### Network Recovery on Screen Unlock (Issue #697)
 - **New `useNetworkStatus` hook** (`frontend/src/hooks/useNetworkStatus.ts`): Monitors page visibility and network status changes to detect when the app resumes from background (e.g., screen unlock on mobile)
@@ -78,27 +176,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Modern gradient header** with icon and subtitle for both upload modals
 - **Progress bar integration** showing real-time upload progress with success/error states
 
-### Changed
-
-#### Upload Modal Mobile Responsiveness (Issue #696)
-- **DocumentUploadModal** (`frontend/src/components/widgets/modals/DocumentUploadModal.tsx`): Refactored to use new styled components with responsive grid layout for edit step
-- **BulkUploadModal** (`frontend/src/components/widgets/modals/BulkUploadModal.tsx`): Complete visual overhaul with styled drop zone, file size display, and responsive layout
-- **DocumentUploadList** (`frontend/src/components/documents/DocumentUploadList.tsx`): New drop zone styling with drag-active feedback and pulse animation
-- **DocumentListItem** (`frontend/src/components/documents/DocumentListItem.tsx`): Improved file list items with proper touch targets (56px min-height, 64px on mobile), status icons, and delete button styling
-- **Mobile-first breakpoints**: All upload modal components now have explicit breakpoints at 480px (mobile) and 768px (tablet)
-- **Touch target compliance**: All interactive elements meet 44px minimum touch target size for mobile accessibility
-- **Responsive action buttons**: Modal actions stack vertically on mobile for full-width tappable buttons
-- **Custom scrollbar styling**: File list has styled scrollbars for visual polish
-
-### Technical Details
-
-#### Upload Modal Architecture
-- Styled-components with transient props (`$active`, `$selected`, `$status`) to prevent DOM attribute warnings
-- CSS keyframe animations for drag-active pulse effect and fade-in modal transitions
-- Gradient backgrounds using `linear-gradient(135deg, #667eea 0%, #764ba2 100%)` for visual consistency
-- Semantic UI React components wrapped with styled-components for enhanced styling while preserving functionality
-
-### Added
+#### Mobile UI Improvements for Picker and Edit Message Modal (Issue #686)
+- **Backend UpdateMessage mutation** (`config/graphql/conversation_mutations.py:455-619`):
+  - New `UpdateMessageMutation` for editing existing thread messages
+  - Validates CRUD permission on message or moderator status
+  - Re-parses mentions when content is updated (with race condition protection - parsing happens before DB modifications)
+  - Triggers agent responses for newly mentioned agents
+  - Documented behavior: agents respond to ALL mentions, including re-mentions in edited messages
+- **Frontend UPDATE_MESSAGE mutation** (`frontend/src/graphql/mutations.ts:2726-2760`): GraphQL mutation with TypeScript types
+- **EditMessageModal component** (`frontend/src/components/threads/EditMessageModal.tsx`):
+  - Full-screen modal on mobile for better touch interaction
+  - Uses MessageComposer for consistent editing experience
+  - Safe area insets for notched devices
+  - Loading states and error handling
+  - Custom unsaved changes confirmation modal (replaces browser `window.confirm()`)
+  - Debounced content updates (150ms) for improved performance during typing
+  - XSS protection documented: uses MarkdownMessageRenderer with `rehype-sanitize`
+- **Message actions dropdown in MessageItem** (`frontend/src/components/threads/MessageItem.tsx:219-432`):
+  - Desktop: Standard dropdown menu with Edit/Delete options
+  - Mobile: Bottom sheet style for thumb-friendly interaction
+  - Inline delete confirmation with mobile-optimized buttons
+  - Backdrop overlay on mobile for visual focus
 
 #### Improved Inline Reference Cards for Mentions (Issue #689)
 - **Annotation mentions** now display the first ~24 characters of annotation text instead of cryptic IDs
@@ -119,11 +217,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### Upload Modal Mobile Responsiveness (Issue #696)
+- **DocumentUploadModal** (`frontend/src/components/widgets/modals/DocumentUploadModal.tsx`): Refactored to use new styled components with responsive grid layout for edit step
+- **BulkUploadModal** (`frontend/src/components/widgets/modals/BulkUploadModal.tsx`): Complete visual overhaul with styled drop zone, file size display, and responsive layout
+- **DocumentUploadList** (`frontend/src/components/documents/DocumentUploadList.tsx`): New drop zone styling with drag-active feedback and pulse animation
+- **DocumentListItem** (`frontend/src/components/documents/DocumentListItem.tsx`): Improved file list items with proper touch targets (56px min-height, 64px on mobile), status icons, and delete button styling
+- **Mobile-first breakpoints**: All upload modal components now have explicit breakpoints at 480px (mobile) and 768px (tablet)
+- **Touch target compliance**: All interactive elements meet 44px minimum touch target size for mobile accessibility
+- **Responsive action buttons**: Modal actions stack vertically on mobile for full-width tappable buttons
+- **Custom scrollbar styling**: File list has styled scrollbars for visual polish
+
 #### MentionChip Component Improvements (Issue #689)
 - Extended `MentionChip` to support ANNOTATION type with green gradient styling
 - Added default cases to all switch statements for TypeScript exhaustiveness checking
 - Refactored `handleClick` to `handleActivation` accepting `React.MouseEvent | React.KeyboardEvent` union type (fixes unsafe `as any` assertion)
 - Sanitized user-generated annotation text before display to prevent XSS
+
+### Fixed
+
+#### Mobile Layout for Picker Components (Issue #686)
+- **Picker keyboard handling** (`MentionPicker.tsx:22-54`, `UnifiedMentionPicker.tsx:25-57`):
+  - Added CSS environment variables (`env(safe-area-inset-bottom)`) for keyboard-aware positioning
+  - Smooth slide-up animation for picker appearance
+  - Max-height constraints using `min()` to prevent overflow on small screens
+- **Touch targets** (`MentionPicker.tsx:83-108`, `UnifiedMentionPicker.tsx:96-108`):
+  - Increased touch target size (52-60px min-height) for easier selection
+  - Larger font size (15px) on mobile for readability
+  - Mobile-specific border radius for rounded corners
+- **MessageComposer mobile improvements** (`MessageComposer.tsx:48-93`):
+  - Larger toolbar button touch targets (40x40px) on mobile
+  - Increased gap between buttons for easier tapping
+
+### Technical Details
+
+#### Message Editing Tests (Issue #686)
+- **New test for parent relationship preservation** (`opencontractserver/tests/test_conversation_mutations_graphql.py:1071-1168`):
+  - Verifies that editing a reply message preserves its `parent_message` field
+  - Ensures thread structure integrity when users edit replies
+  - Part of comprehensive UpdateMessage mutation test suite
+
+#### Upload Modal Architecture
+- Styled-components with transient props (`$active`, `$selected`, `$status`) to prevent DOM attribute warnings
+- CSS keyframe animations for drag-active pulse effect and fade-in modal transitions
+- Gradient backgrounds using `linear-gradient(135deg, #667eea 0%, #764ba2 100%)` for visual consistency
+- Semantic UI React components wrapped with styled-components for enhanced styling while preserving functionality
 
 #### Permanent Deletion (Empty Trash) Functionality (PR #707)
 - **Core deletion logic** (`opencontractserver/documents/versioning.py:617-760`):
@@ -226,6 +363,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings button variable name bug** (`frontend/src/components/corpuses/CorpusHome.tsx:780`): Fixed `canUpdate` → `canEdit` reference error that prevented Settings button from displaying for users with update permissions
 - **FAB z-index layering** (`frontend/src/views/Corpuses.tsx:1320`): Raised FAB z-index from 100 to 150 to ensure visibility above folder sidebar toggle (z-index: 101)
 - **Explicit z-index layering**: Made mobile sidebar z-index layering explicit (backdrop: 98, toggle button: 99) to prevent fragile DOM-order-dependent behavior
+
+#### Mobile Responsive Styling for Settings and Badge Widgets (PR #690)
+- **UserSettingsModal responsive styling** (`frontend/src/components/modals/UserSettingsModal.tsx:14-80`):
+  - Modal takes 95% width on mobile (≤768px) with reduced padding
+  - Form groups stack vertically on small screens (≤480px) for single-column layout
+  - Action buttons display full-width and stack vertically (Save above Close) on mobile
+  - Added `styled-components` import and styled wrapper components
+- **Badge component touch support** (`frontend/src/components/badges/Badge.tsx:23-41, 96-112, 145-199`):
+  - Added tap-to-toggle tooltip on touch devices (detects via `ontouchstart`)
+  - Created `MobileOverlay` backdrop for dismissing badge popups by tapping outside
+  - Popup centers on mobile screens using fixed positioning instead of floating-ui
+  - Increased touch target size (min-height 36px, larger padding)
+  - Disabled hover transforms on touch devices using `@media (hover: none)`
+- **UserBadges container responsive layout** (`frontend/src/components/badges/UserBadges.tsx:18-27, 37-48, 58-61`):
+  - Reduced padding and gap on mobile viewports
+  - Badges center-aligned on mobile for better visual balance
+  - Empty state and header text sizes reduced on mobile
+- **GlobalSettingsPanel responsive grid** (`frontend/src/components/admin/GlobalSettingsPanel.tsx:11-67, 82-104, 119-123, 137-139, 148-150, 163-168`):
+  - Container padding reduced on mobile (2rem → 1rem → 0.75rem)
+  - Settings grid switches to single column on small mobile (≤480px)
+  - Card content padding reduced progressively on smaller screens
+  - Touch-friendly card interactions with active state feedback (scale 0.98)
+  - "Coming Soon" badge displays on its own line on very small screens
 
 ### Changed
 

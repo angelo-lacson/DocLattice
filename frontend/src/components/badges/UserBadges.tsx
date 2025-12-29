@@ -14,6 +14,17 @@ const BadgesContainer = styled.div`
   flex-wrap: wrap;
   gap: 0.75em;
   padding: 1em;
+
+  @media (max-width: 768px) {
+    padding: 0.75em;
+    gap: 0.5em;
+    justify-content: center;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.5em;
+    gap: 0.5em;
+  }
 `;
 
 const StyledSegment = styled(Segment)`
@@ -22,6 +33,19 @@ const StyledSegment = styled(Segment)`
     background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
     border: 1px solid rgba(226, 232, 240, 0.8);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+    @media (max-width: 768px) {
+      border-radius: 12px;
+      margin: 0.5em 0;
+    }
+
+    /* Responsive header inside segment */
+    h3.ui.header {
+      @media (max-width: 768px) {
+        font-size: 1.1em;
+        text-align: center;
+      }
+    }
   }
 `;
 
@@ -30,6 +54,11 @@ const EmptyState = styled.div`
   padding: 3em 1em;
   color: #64748b;
   font-size: 1.1em;
+
+  @media (max-width: 768px) {
+    padding: 2em 1em;
+    font-size: 1em;
+  }
 `;
 
 interface UserBadgesProps {

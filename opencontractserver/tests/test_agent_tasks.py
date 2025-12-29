@@ -2,12 +2,13 @@
 Tests for agent task functions in opencontractserver/tasks/agent_tasks.py.
 
 These tests cover:
-- Helper functions (get_thread_channel_group, broadcast_to_thread)
+- Helper functions (get_thread_channel_group, broadcast_to_thread, async_broadcast_to_thread)
 - The trigger_agent_responses_for_message Celery task
 - Error handling paths in generate_agent_response
 """
 
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -20,6 +21,7 @@ from opencontractserver.conversations.models import (
 )
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.tasks.agent_tasks import (
+    async_broadcast_to_thread,
     broadcast_to_thread,
     generate_agent_response,
     get_thread_channel_group,
@@ -91,6 +93,38 @@ class TestBroadcastToThread(TestCase):
         self.assertEqual(call_args[0], "thread_789")
         self.assertEqual(call_args[1]["type"], "test_event")
         self.assertEqual(call_args[1]["data"], "test")
+
+
+class TestAsyncBroadcastToThread(TestCase):
+    """Tests for async_broadcast_to_thread helper function."""
+
+    @patch("opencontractserver.tasks.agent_tasks.get_channel_layer")
+    def test_no_channel_layer_returns_early(self, mock_get_channel_layer):
+        """Test that missing channel layer logs warning and returns early."""
+        mock_get_channel_layer.return_value = None
+
+        # Run the async function
+        asyncio.run(async_broadcast_to_thread(123, "agent.stream", {"key": "value"}))
+
+        mock_get_channel_layer.assert_called_once()
+
+    @patch("opencontractserver.tasks.agent_tasks.get_channel_layer")
+    def test_broadcasts_with_converted_message_type(self, mock_get_channel_layer):
+        """Test that message type dots are converted to underscores in async version."""
+        mock_channel_layer = MagicMock()
+        mock_channel_layer.group_send = AsyncMock()
+        mock_get_channel_layer.return_value = mock_channel_layer
+
+        asyncio.run(
+            async_broadcast_to_thread(123, "agent.stream_start", {"message_id": "456"})
+        )
+
+        # Check group_send was called
+        mock_channel_layer.group_send.assert_called_once()
+        call_args = mock_channel_layer.group_send.call_args[0]
+        self.assertEqual(call_args[0], "thread_123")
+        self.assertEqual(call_args[1]["type"], "agent_stream_start")
+        self.assertEqual(call_args[1]["message_id"], "456")
 
 
 class TestTriggerAgentResponsesForMessage(TestCase):

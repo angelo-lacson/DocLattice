@@ -30,7 +30,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout Code Repository
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -56,7 +56,7 @@ jobs:
 
     steps:
       - name: Checkout Code Repository
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6
 
       - name: Store Codecov Env Flags
         run: |
@@ -84,7 +84,7 @@ jobs:
 
       - name: Upload Docker Compose Logs
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: docker-compose-logs
           path: docker-compose-logs.txt

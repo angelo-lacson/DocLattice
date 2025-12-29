@@ -366,7 +366,7 @@ class ConversationMutationsTestCase(TestCase):
         )
 
         mutation = """
-            mutation DeleteMessage($messageId: String!) {
+            mutation DeleteMessage($messageId: ID!) {
                 deleteMessage(messageId: $messageId) {
                     ok
                     message
@@ -663,6 +663,501 @@ class ConversationMutationsTestCase(TestCase):
         # clean() should raise ValidationError for CHAT type
         with self.assertRaises(ValidationError):
             conversation.clean()
+
+    # =========================================================================
+    # Issue #686: UpdateMessageMutation tests
+    # =========================================================================
+
+    def test_update_message_mutation(self):
+        """Test updating a message with proper permissions."""
+        # Create a thread and message
+        conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Original content",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, message, [PermissionTypes.CRUD])
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                    obj {
+                        id
+                        content
+                    }
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        message_id = to_global_id("MessageType", message.id)
+
+        variables = {
+            "messageId": message_id,
+            "content": "Updated content",
+        }
+
+        result = self._execute_with_user(mutation, self.user, variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateMessage"]
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["message"], "Message updated successfully")
+        self.assertEqual(data["obj"]["content"], "Updated content")
+
+        # Verify message was updated in database
+        message.refresh_from_db()
+        self.assertEqual(message.content, "Updated content")
+
+    def test_update_message_without_permission(self):
+        """Test that users without CRUD permission cannot edit messages (IDOR prevention)."""
+        # Create a thread and message owned by user
+        conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Original content",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, message, [PermissionTypes.CRUD])
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        message_id = to_global_id("MessageType", message.id)
+
+        variables = {
+            "messageId": message_id,
+            "content": "Hacked content",
+        }
+
+        # other_user has no permission
+        result = self._execute_with_user(mutation, self.other_user, variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateMessage"]
+        self.assertFalse(data["ok"])
+        # IDOR prevention: same message whether object doesn't exist or no permission
+        self.assertIn("permission", data["message"].lower())
+
+        # Verify message was NOT updated
+        message.refresh_from_db()
+        self.assertEqual(message.content, "Original content")
+
+    def test_update_message_moderator_can_edit(self):
+        """Test that moderators (corpus/document owners) can edit any message in their thread."""
+        # Create a thread owned by user (who is the corpus owner)
+        conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,  # self.user owns this corpus
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.other_user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        # Message created by other_user
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Message by other user",
+            creator=self.other_user,
+        )
+        set_permissions_for_obj_to_user(
+            self.other_user, message, [PermissionTypes.CRUD]
+        )
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                    obj {
+                        content
+                    }
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        message_id = to_global_id("MessageType", message.id)
+
+        variables = {
+            "messageId": message_id,
+            "content": "Moderator edited",
+        }
+
+        # self.user is moderator (corpus owner)
+        result = self._execute_with_user(mutation, self.user, variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateMessage"]
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["obj"]["content"], "Moderator edited")
+
+    def test_update_message_locked_conversation(self):
+        """Test that messages in locked conversations cannot be edited."""
+        conversation = Conversation.objects.create(
+            title="Locked Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_locked=True,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Message in locked thread",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, message, [PermissionTypes.CRUD])
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        message_id = to_global_id("MessageType", message.id)
+
+        variables = {
+            "messageId": message_id,
+            "content": "Should fail",
+        }
+
+        result = self._execute_with_user(mutation, self.user, variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateMessage"]
+        self.assertFalse(data["ok"])
+        self.assertIn("locked", data["message"].lower())
+
+    def test_update_message_deleted_message(self):
+        """Test that deleted messages cannot be edited."""
+        from django.utils import timezone
+
+        conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Deleted message",
+            creator=self.user,
+            deleted_at=timezone.now(),  # Soft deleted
+        )
+        set_permissions_for_obj_to_user(self.user, message, [PermissionTypes.CRUD])
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        message_id = to_global_id("MessageType", message.id)
+
+        variables = {
+            "messageId": message_id,
+            "content": "Should fail",
+        }
+
+        result = self._execute_with_user(mutation, self.user, variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateMessage"]
+        self.assertFalse(data["ok"])
+        self.assertIn("deleted", data["message"].lower())
+
+    def test_update_message_empty_content(self):
+        """Test that empty message content is rejected."""
+        conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Original content",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, message, [PermissionTypes.CRUD])
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        message_id = to_global_id("MessageType", message.id)
+
+        # Test empty string
+        variables = {
+            "messageId": message_id,
+            "content": "",
+        }
+
+        result = self._execute_with_user(mutation, self.user, variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateMessage"]
+        self.assertFalse(data["ok"])
+        self.assertIn("empty", data["message"].lower())
+
+        # Test whitespace-only string
+        variables["content"] = "   "
+        result = self._execute_with_user(mutation, self.user, variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateMessage"]
+        self.assertFalse(data["ok"])
+        self.assertIn("empty", data["message"].lower())
+
+    def test_update_message_reparses_mentions(self):
+        """
+        Test that editing a message re-parses @mentions and links agents.
+
+        When a message is updated with new mention syntax, the mutation should:
+        1. Clear existing mentioned agents
+        2. Parse the new content for mentions
+        3. Link any mentioned agents found
+        4. Trigger agent responses if agents were mentioned
+        """
+        from unittest.mock import patch
+
+        from opencontractserver.agents.models import AgentConfiguration
+
+        # Create a thread
+        conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        # Create a global agent that can be mentioned
+        agent = AgentConfiguration.objects.create(
+            name="Test Agent",
+            slug="test-agent",
+            scope="GLOBAL",
+            description="Test agent for mention parsing",
+            is_active=True,
+            is_public=True,
+            creator=self.user,
+        )
+
+        # Create message without mentions
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Original content without mentions",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, message, [PermissionTypes.CRUD])
+
+        # Verify no agents linked initially
+        self.assertEqual(message.mentioned_agents.count(), 0)
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                    obj {
+                        id
+                        content
+                    }
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        message_id = to_global_id("MessageType", message.id)
+
+        # Update message with @agent mention (using markdown link format)
+        variables = {
+            "messageId": message_id,
+            "content": "Updated content with [@test-agent](/agents/test-agent)",
+        }
+
+        # Mock the Celery task to verify it was called
+        with patch(
+            "config.graphql.conversation_mutations.trigger_agent_responses_for_message"
+        ) as mock_task:
+            result = self._execute_with_user(mutation, self.user, variables)
+
+            self.assertIsNone(result.get("errors"))
+            data = result["data"]["updateMessage"]
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["message"], "Message updated successfully")
+
+            # Verify agent was linked
+            message.refresh_from_db()
+            self.assertEqual(message.mentioned_agents.count(), 1)
+            self.assertEqual(message.mentioned_agents.first(), agent)
+
+            # Verify Celery task was called to trigger agent response
+            # (agent was mentioned, so task should be triggered)
+            mock_task.delay.assert_called_once()
+
+    def test_update_message_preserves_parent_relationship(self):
+        """
+        Test that editing a reply message preserves its parent_message relationship.
+
+        When a message that is a reply (has parent_message set) is edited, the
+        parent_message field should remain unchanged. This ensures that thread
+        structure is preserved when users edit their replies.
+
+        Part of Issue #686 code review feedback.
+        """
+        # Create a thread
+        conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type="thread",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, conversation, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+        # Create parent message
+        parent_message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Parent message content",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, parent_message, [PermissionTypes.CRUD]
+        )
+
+        # Create reply message
+        reply_message = ChatMessage.objects.create(
+            conversation=conversation,
+            msg_type="HUMAN",
+            content="Original reply content",
+            creator=self.user,
+            parent_message=parent_message,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, reply_message, [PermissionTypes.CRUD]
+        )
+
+        # Verify parent relationship is set
+        self.assertEqual(reply_message.parent_message, parent_message)
+
+        from graphql_relay import to_global_id
+
+        mutation = """
+            mutation UpdateMessage($messageId: ID!, $content: String!) {
+                updateMessage(messageId: $messageId, content: $content) {
+                    ok
+                    message
+                    obj {
+                        id
+                        content
+                    }
+                }
+            }
+        """
+
+        variables = {
+            "messageId": to_global_id("MessageType", reply_message.pk),
+            "content": "Updated reply content",
+        }
+
+        # Execute mutation
+        result = self._execute_with_user(mutation, self.user, variables)
+
+        # Assert no errors
+        self.assertIsNone(
+            result.get("errors"), f"GraphQL errors: {result.get('errors')}"
+        )
+
+        # Assert mutation was successful
+        data = result["data"]["updateMessage"]
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["message"], "Message updated successfully")
+
+        # Verify content was updated
+        reply_message.refresh_from_db()
+        self.assertEqual(reply_message.content, "Updated reply content")
+
+        # CRITICAL: Verify parent_message relationship is preserved
+        self.assertEqual(
+            reply_message.parent_message,
+            parent_message,
+            "Parent message relationship should be preserved after editing",
+        )
 
 
 class DualContextThreadAccessControlTestCase(TestCase):

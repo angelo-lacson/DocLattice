@@ -19,19 +19,38 @@ const Container = styled.div`
   z-index: 1000;
   min-width: 200px;
 
-  /* Mobile responsive adjustments */
+  /**
+   * Mobile responsive adjustments - Part of Issue #686
+   * Uses CSS environment variables for keyboard-aware positioning
+   * and safe area insets for notched devices.
+   */
   @media (max-width: 600px) {
     position: fixed;
     left: 8px !important;
     right: 8px !important;
-    bottom: 80px !important;
+    /* Position above keyboard using env() with fallback */
+    bottom: max(80px, calc(env(safe-area-inset-bottom) + 80px)) !important;
     top: auto !important;
     min-width: unset;
     max-width: unset;
     width: calc(100% - 16px);
-    max-height: 40vh;
+    /* Limit height to prevent overflow on small screens */
+    max-height: min(40vh, 300px);
     border-radius: 12px;
     box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.25);
+    /* Smooth appearance animation */
+    animation: slideUp 0.2s ease-out;
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 `;
 
@@ -61,13 +80,30 @@ const MenuItem = styled.button<{ $isSelected: boolean }>`
     border-radius: 0 0 6px 6px;
   }
 
-  /* Mobile touch-friendly adjustments */
+  /**
+   * Mobile touch-friendly adjustments - Part of Issue #686
+   * Larger touch targets for easier selection on touch devices.
+   */
   @media (max-width: 600px) {
-    padding: 12px 16px;
-    min-height: 48px;
+    padding: 14px 16px;
+    min-height: 52px;
+    font-size: 15px;
 
     &:active {
       background: ${color.B1};
+    }
+
+    /* First and last child border radius for mobile rounded corners */
+    &:first-child {
+      border-radius: 12px 12px 0 0;
+    }
+
+    &:last-child {
+      border-radius: 0 0 12px 12px;
+    }
+
+    &:only-child {
+      border-radius: 12px;
     }
   }
 `;

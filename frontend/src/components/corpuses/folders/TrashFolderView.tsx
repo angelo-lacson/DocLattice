@@ -9,7 +9,7 @@ import {
   Checkbox,
   Modal,
 } from "semantic-ui-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow, format, isValid } from "date-fns";
 import { Trash2, RotateCcw, Archive, FolderOpen } from "lucide-react";
 import {
   GET_DELETED_DOCUMENTS_IN_CORPUS,
@@ -29,45 +29,119 @@ import fallback_doc_icon from "../../../assets/images/defaults/default_doc_icon.
 const SUCCESS_MESSAGE_DURATION = 5000;
 const ERROR_MESSAGE_DURATION = 10000;
 
+/**
+ * Safely format a date string to relative time (e.g., "2 hours ago").
+ * Returns fallback text if date is invalid.
+ */
+const safeFormatDistanceToNow = (
+  dateString: string | null | undefined
+): string => {
+  if (!dateString) return "Unknown time";
+  try {
+    const date = new Date(dateString);
+    if (!isValid(date)) return "Unknown time";
+    return formatDistanceToNow(date, { addSuffix: true });
+  } catch {
+    return "Unknown time";
+  }
+};
+
+/**
+ * Safely format a date string to a specific format.
+ * Returns fallback text if date is invalid.
+ */
+const safeFormat = (
+  dateString: string | null | undefined,
+  formatString: string
+): string => {
+  if (!dateString) return "Unknown date";
+  try {
+    const date = new Date(dateString);
+    if (!isValid(date)) return "Unknown date";
+    return format(date, formatString);
+  } catch {
+    return "Unknown date";
+  }
+};
+
 const Container = styled.div`
   padding: 20px;
   height: 100%;
   overflow-y: auto;
+
+  @media (max-width: 480px) {
+    padding: 12px;
+  }
 `;
 
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  @media (max-width: 480px) {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
 `;
 
 const Title = styled.h2`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin: 0;
   color: #0f172a;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
 
   svg {
     color: #64748b;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 16px;
+    gap: 6px;
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
   }
 `;
 
 const ActionBar = styled.div`
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+
+  @media (max-width: 480px) {
+    .ui.button {
+      padding: 0.5em 0.8em;
+      font-size: 12px;
+    }
+
+    /* Hide button text on mobile, show only icon */
+    .ui.button .hide-mobile-text {
+      display: none;
+    }
+  }
 `;
 
 const DocumentGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
 `;
 
 const DocumentCard = styled.div<{ $isSelected: boolean }>`
@@ -89,6 +163,10 @@ const DocumentCard = styled.div<{ $isSelected: boolean }>`
     background: #eff6ff;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   `}
+
+  @media (max-width: 480px) {
+    padding: 12px;
+  }
 `;
 
 const CardHeader = styled.div`
@@ -96,6 +174,11 @@ const CardHeader = styled.div`
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+
+  @media (max-width: 480px) {
+    gap: 10px;
+    margin-bottom: 8px;
+  }
 `;
 
 const Thumbnail = styled.div`
@@ -121,6 +204,16 @@ const Thumbnail = styled.div`
     width: 24px;
     height: 24px;
     opacity: 0.2;
+  }
+
+  @media (max-width: 480px) {
+    width: 40px;
+    height: 40px;
+
+    .fallback-icon {
+      width: 20px;
+      height: 20px;
+    }
   }
 `;
 
@@ -166,6 +259,15 @@ const CardMeta = styled.div`
     font-size: 11px;
     opacity: 0.7;
   }
+
+  /* Hide less important metadata on mobile */
+  @media (max-width: 480px) {
+    margin-bottom: 8px;
+
+    .meta-row.hide-mobile {
+      display: none;
+    }
+  }
 `;
 
 const CardActions = styled.div`
@@ -173,6 +275,10 @@ const CardActions = styled.div`
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid #f1f5f9;
+
+  @media (max-width: 480px) {
+    padding-top: 8px;
+  }
 `;
 
 const EmptyState = styled.div`
@@ -317,15 +423,34 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     setRestoreSuccess(null);
 
     // Restore each selected document using Promise.allSettled for better error handling
-    const pathsToRestore = deletedDocuments.filter((doc) =>
+    // Filter out any documents with missing data
+    const selectedDocs = deletedDocuments.filter((doc) =>
       selectedDocuments.has(doc.id)
     );
+    const pathsToRestore = selectedDocs.filter((doc) => doc.document?.id);
+    const skippedCount = selectedDocs.length - pathsToRestore.length;
+
+    // Log skipped documents in development to help identify data integrity issues
+    if (skippedCount > 0 && process.env.NODE_ENV === "development") {
+      console.warn(
+        "Skipped documents with null/missing data:",
+        selectedDocs.filter((doc) => !doc.document?.id)
+      );
+    }
+
+    if (pathsToRestore.length === 0) {
+      setRestoreError(
+        "Selected documents cannot be restored: document data is missing or corrupted"
+      );
+      return;
+    }
 
     const results = await Promise.allSettled(
       pathsToRestore.map((docPath) =>
         restoreDocument({
           variables: {
-            documentId: docPath.document.id,
+            // Safe to use ! here since we filtered for doc.document?.id above
+            documentId: docPath.document!.id,
             corpusId: corpusId,
           },
         })
@@ -356,6 +481,14 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
       refetch();
     }
 
+    // Build skipped warning message if any documents were filtered
+    const skippedWarning =
+      skippedCount > 0
+        ? `${skippedCount} document${
+            skippedCount === 1 ? "" : "s"
+          } skipped: missing or corrupted data`
+        : null;
+
     // Set appropriate messages
     if (successCount > 0 && failureCount === 0) {
       setRestoreSuccess(
@@ -363,25 +496,39 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
           successCount === 1 ? "" : "s"
         }`
       );
+      // Show skipped warning if any documents were skipped
+      if (skippedWarning) {
+        setRestoreError(skippedWarning);
+      }
     } else if (successCount > 0 && failureCount > 0) {
       setRestoreSuccess(
         `Restored ${successCount} document${successCount === 1 ? "" : "s"}`
       );
+      // Combine failure and skipped messages
+      const failureMsg = `Failed to restore ${failureCount} document${
+        failureCount === 1 ? "" : "s"
+      }. Please try again.`;
       setRestoreError(
-        `Failed to restore ${failureCount} document${
-          failureCount === 1 ? "" : "s"
-        }. Please try again.`
+        skippedWarning ? `${failureMsg} ${skippedWarning}` : failureMsg
       );
     } else if (failureCount > 0) {
+      const failureMsg = `Failed to restore ${failureCount} document${
+        failureCount === 1 ? "" : "s"
+      }. Please check permissions and try again.`;
       setRestoreError(
-        `Failed to restore ${failureCount} document${
-          failureCount === 1 ? "" : "s"
-        }. Please check permissions and try again.`
+        skippedWarning ? `${failureMsg} ${skippedWarning}` : failureMsg
       );
+    } else if (skippedWarning) {
+      // All documents were skipped (shouldn't happen since we check pathsToRestore.length above)
+      setRestoreError(skippedWarning);
     }
   };
 
   const handleRestoreSingle = (docPath: DeletedDocumentPathType) => {
+    if (!docPath.document?.id) {
+      setRestoreError("Cannot restore: document information is missing");
+      return;
+    }
     setRestoreError(null);
     setRestoreSuccess(null);
     restoreDocument({
@@ -393,7 +540,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
   };
 
   const renderThumbnail = useCallback(
-    (doc: DeletedDocumentPathType["document"]) => (
+    (doc: NonNullable<DeletedDocumentPathType["document"]>) => (
       <Thumbnail>
         {doc.icon ? (
           <img src={doc.icon} alt={doc.title} />
@@ -480,9 +627,9 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
         </Title>
         <ActionBar>
           {onBack && (
-            <Button basic onClick={onBack}>
+            <Button basic onClick={onBack} title="Back to Folders">
               <Icon name="arrow left" />
-              Back to Folders
+              <span className="hide-mobile-text">Back</span>
             </Button>
           )}
           {deletedDocuments.length > 0 && (
@@ -495,7 +642,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               title="Permanently delete all items in trash"
             >
               <Icon name="trash" />
-              Empty Trash
+              <span className="hide-mobile-text">Empty Trash</span>
             </Button>
           )}
         </ActionBar>
@@ -591,11 +738,28 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                   onClick={() => handleSelectDocument(docPath.id)}
                 >
                   <CardHeader>
-                    {renderThumbnail(docPath.document)}
+                    {docPath.document ? (
+                      renderThumbnail(docPath.document)
+                    ) : (
+                      <Thumbnail>
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            background: "#f8fafc",
+                          }}
+                        />
+                        <img
+                          src={fallback_doc_icon}
+                          alt="Document"
+                          className="fallback-icon"
+                        />
+                      </Thumbnail>
+                    )}
                     <CardTitle>
-                      <h4>{docPath.document.title || "Untitled Document"}</h4>
+                      <h4>{docPath.document?.title || "Untitled Document"}</h4>
                       <span className="file-type">
-                        {docPath.document.fileType || "Unknown"}
+                        {docPath.document?.fileType || "Unknown"}
                       </span>
                     </CardTitle>
                     <Checkbox
@@ -608,28 +772,25 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                   <CardMeta>
                     <div className="meta-row">
                       <Icon name="trash" className="icon" />
-                      Deleted{" "}
-                      {formatDistanceToNow(new Date(docPath.modified), {
-                        addSuffix: true,
-                      })}
+                      Deleted {safeFormatDistanceToNow(docPath.modified)}
                     </div>
-                    <div className="meta-row">
+                    <div className="meta-row hide-mobile">
                       <Icon name="calendar" className="icon" />
-                      {format(new Date(docPath.modified), "MMM d, yyyy h:mm a")}
+                      {safeFormat(docPath.modified, "MMM d, yyyy h:mm a")}
                     </div>
-                    <div className="meta-row">
+                    <div className="meta-row hide-mobile">
                       <Icon name="user" className="icon" />
-                      Deleted by {docPath.creator.username}
+                      Deleted by {docPath.creator?.username || "Unknown user"}
                     </div>
                     {docPath.folder && (
-                      <div className="meta-row">
+                      <div className="meta-row hide-mobile">
                         <FolderOpen size={12} className="icon" />
                         Was in: {docPath.folder.name}
                       </div>
                     )}
                     <div className="meta-row">
                       <Icon name="file outline" className="icon" />
-                      {docPath.document.pageCount || 0} pages
+                      {docPath.document?.pageCount || 0} pages
                     </div>
                   </CardMeta>
 
