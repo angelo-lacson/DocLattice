@@ -655,7 +655,9 @@ class TestBadgeMutationIDORProtection(TestCase):
     def setUp(self):
         """Create test users, badges, and corpuses."""
         self.admin = User.objects.create_superuser(
-            username="admin", password="test", email="admin@test.com"
+            username="badge_idor_superuser",
+            password="test",
+            email="badge_idor_admin@test.com",
         )
         self.corpus_owner = User.objects.create_user(
             username="corpusowner", password="test", email="owner@test.com"

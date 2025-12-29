@@ -55,9 +55,7 @@ async def check_auth_and_close_if_failed(
 
     if auth_error:
         # User tried to authenticate but failed (expired/invalid token)
-        logger.warning(
-            f"[Session {session_id}] Auth failed: {auth_error['message']}"
-        )
+        logger.warning(f"[Session {session_id}] Auth failed: {auth_error['message']}")
         await consumer.close(code=auth_error["code"])
         return True  # Auth failed
 
