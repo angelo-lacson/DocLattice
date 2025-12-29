@@ -58,6 +58,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Independent Structural Annotation and Show Selected Controls (Issue #735)
+- **Removed forced coupling between structural and showSelectedOnly controls** (`frontend/src/components/annotator/controls/AnnotationControls.tsx:200-207`):
+  - Previously, enabling "Show Structural" would force "Show Only Selected" to be checked and disabled
+  - Users can now toggle "Show Only Selected" independently when structural annotations are visible
+  - All combinations now work:
+    - Show all structural annotations: structural ON, selectedOnly OFF
+    - Show only selected structural annotation: structural ON, selectedOnly ON
+    - Hide all structural annotations: structural OFF
+- **Updated checkbox onChange handler** (`frontend/src/components/annotator/controls/AnnotationControls.tsx:268`): Now correctly extracts `data?.checked ?? false` for consistency with other toggle handlers
+- **Updated component tests** (`frontend/tests/FloatingDocumentControls.ct.tsx:263-371`):
+  - Renamed test to reflect new independent behavior
+  - Added new test verifying controls can be toggled independently
+- **Note**: Users who previously had `showStructural: true` will notice different behavior: the "Show Only Selected" control now respects their actual preference instead of being forced to true
+
 #### Cache Management Race Condition Fix (PR #725)
 - **Auth state now set BEFORE cache clear** (`frontend/src/components/auth/AuthGate.tsx:69-92`, `frontend/src/views/Login.tsx:106-117`, `frontend/src/components/layout/useNavMenu.ts:64-90`):
   - Previously, cache was cleared before updating auth state, creating a window where queries could fetch with wrong auth context
