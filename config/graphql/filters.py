@@ -17,7 +17,7 @@ from doclatticeserver.annotations.models import (
 )
 from doclatticeserver.badges.models import Badge, UserBadge
 from doclatticeserver.conversations.models import ChatMessage, Conversation
-from doclatticeserver.corpuses.models import Corpus, CorpusQuery
+from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentRelationship
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.users.models import Assignment, UserExport
@@ -490,12 +490,6 @@ class ExtractFilter(django_filters.FilterSet):
             "finished": ["lte", "gte"],
             "corpus": ["exact"],
         }
-
-
-class CorpusQueryFilter(django_filters.FilterSet):
-    class Meta:
-        model = CorpusQuery
-        fields = {"corpus_id": ["exact"]}
 
 
 class DatacellFilter(django_filters.FilterSet):

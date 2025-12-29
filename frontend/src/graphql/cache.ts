@@ -18,7 +18,6 @@ import {
   ExtractType,
   FieldsetType,
   ColumnType,
-  CorpusQueryType,
   ConversationType,
   LabelType,
   UserType,
@@ -460,12 +459,6 @@ export const selectedFieldset = makeVar<FieldsetType | null>(null);
 export const editingExtract = makeVar<ExtractType | null>(null);
 export const addingColumnToExtract = makeVar<ExtractType | null>(null);
 export const editingColumnForExtract = makeVar<ColumnType | null>(null);
-
-/**
- * Query-related global variables
- */
-export const selectedQueryIds = makeVar<string[]>([]);
-export const openedQueryObj = makeVar<CorpusQueryType | null>(null);
 
 /**
  * Thread/Discussion-related global variables
