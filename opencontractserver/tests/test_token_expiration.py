@@ -8,7 +8,6 @@ These tests verify that:
 """
 
 import logging
-from typing import Any
 from unittest import mock
 from urllib.parse import quote
 
@@ -20,14 +19,7 @@ from graphql_jwt.exceptions import JSONWebTokenError, JSONWebTokenExpired
 from graphql_relay import to_global_id
 
 from config.graphql_auth0_auth.backends import Auth0RemoteUserJSONWebTokenBackend
-from config.websocket.middleware import (
-    WS_CLOSE_TOKEN_EXPIRED,
-    WS_CLOSE_TOKEN_INVALID,
-    GraphQLJWTTokenAuthMiddleware,
-)
-from config.websocket.middlewares.websocket_auth0_middleware import (
-    WebsocketAuth0TokenMiddleware,
-)
+from config.websocket.middleware import WS_CLOSE_TOKEN_EXPIRED, WS_CLOSE_TOKEN_INVALID
 from config.websocket.middlewares.websocket_auth0_middleware import (
     WS_CLOSE_TOKEN_EXPIRED as AUTH0_WS_CLOSE_TOKEN_EXPIRED,
 )

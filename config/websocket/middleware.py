@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Union
+from typing import Any
 from urllib.parse import parse_qsl
 
 from channels.db import database_sync_to_async
@@ -116,7 +116,9 @@ class GraphQLJWTTokenAuthMiddleware(BaseMiddleware):
 
         # Log final authentication state
         auth_status = "authenticated" if scope["user"].is_authenticated else "anonymous"
-        auth_error_info = f", error: {scope['auth_error']}" if scope["auth_error"] else ""
+        auth_error_info = (
+            f", error: {scope['auth_error']}" if scope["auth_error"] else ""
+        )
         logger.info(
             f"Authentication complete - User: {scope['user']} ({auth_status}){auth_error_info}"
         )

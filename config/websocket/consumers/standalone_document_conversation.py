@@ -94,6 +94,17 @@ class StandaloneDocumentQueryConsumer(AsyncWebsocketConsumer):
             user = self.scope.get("user")
             is_authenticated = user and user.is_authenticated
 
+            # If user tried to authenticate but failed (e.g., expired token),
+            # return the specific error code instead of treating as anonymous
+            if not is_authenticated:
+                auth_error = self.scope.get("auth_error")
+                if auth_error:
+                    logger.warning(
+                        f"[Session {self.session_id}] Auth failed: {auth_error['message']}"
+                    )
+                    await self.close(code=auth_error["code"])
+                    return
+
             if is_authenticated:
                 # Authenticated user - check read permission
                 has_permission = await database_sync_to_async(

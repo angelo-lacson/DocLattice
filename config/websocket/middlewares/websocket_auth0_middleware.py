@@ -122,7 +122,9 @@ class WebsocketAuth0TokenMiddleware(BaseMiddleware):
 
         # Log final authentication state
         auth_status = "authenticated" if scope["user"].is_authenticated else "anonymous"
-        auth_error_info = f", error: {scope['auth_error']}" if scope["auth_error"] else ""
+        auth_error_info = (
+            f", error: {scope['auth_error']}" if scope["auth_error"] else ""
+        )
         logger.debug(
             f"WS authentication complete - User: {scope['user']} ({auth_status}){auth_error_info}"
         )

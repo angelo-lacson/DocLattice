@@ -116,6 +116,16 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             user = self.scope.get("user")
             is_authenticated = user and user.is_authenticated
 
+            # If user is not authenticated, check for auth errors from middleware
+            if not is_authenticated:
+                auth_error = self.scope.get("auth_error")
+                if auth_error:
+                    logger.warning(
+                        f"[Session {self.session_id}] Auth failed: {auth_error['message']}"
+                    )
+                    await self.close(code=auth_error["code"])
+                    return
+
             if is_authenticated:
                 self.user_id = user.id
 

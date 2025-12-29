@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2025-12-27
 
+### Fixed
+
+#### WebSocket Token Expiration Close Code Handling (PR #746)
+- **Updated all WebSocket consumers** to check `scope['auth_error']` from middleware and use specific close codes:
+  - `config/websocket/consumers/document_conversation.py:77-91`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/corpus_conversation.py:67-79`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/standalone_document_conversation.py:97-106`: Checks auth_error before falling back to anonymous handling
+  - `config/websocket/consumers/unified_agent_conversation.py:119-127`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/thread_updates.py:77-88`: Uses auth_error codes for expired/invalid tokens
+- **Removed unused `Union` import** from `config/websocket/middleware.py:2`
+- **Fixed lazy import issue** in `config/graphql_auth0_auth/utils.py:124`: Moved `sync_remote_user` import inside function to avoid import error when `USE_AUTH0=False`
+- **Added Auth0 test settings** in `config/settings/test.py:120-133`: Default Auth0 settings for test environment to allow importing Auth0 modules during testing
+
+#### Impact
+- Frontend can now distinguish between expired tokens (4001) and invalid tokens (4002) via WebSocket close codes
+- Enables targeted token refresh vs full re-authentication based on close code
+- Fixes issue #744 where token expiration wasn't properly signaled to clients
+
 ### Added
 
 #### Thread/Message Triggered Corpus Actions for Automated Moderation

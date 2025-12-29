@@ -65,8 +65,17 @@ class CorpusQueryConsumer(AsyncWebsocketConsumer):
         #  Authentication                                                    #
         # ------------------------------------------------------------------ #
         if not self.scope["user"].is_authenticated:
-            logger.warning("[Session %s] Unauthenticated user", self.session_id)
-            await self.close(code=4000)
+            auth_error = self.scope.get("auth_error")
+            if auth_error:
+                logger.warning(
+                    "[Session %s] Auth failed: %s",
+                    self.session_id,
+                    auth_error["message"],
+                )
+                await self.close(code=auth_error["code"])
+            else:
+                logger.warning("[Session %s] Unauthenticated user", self.session_id)
+                await self.close(code=4000)
             return
 
         try:

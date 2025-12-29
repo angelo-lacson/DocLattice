@@ -74,10 +74,17 @@ class ThreadUpdatesConsumer(AsyncWebsocketConsumer):
         # Extract user from scope (set by auth middleware)
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
-            logger.warning(
-                f"[ThreadUpdates {self.consumer_id}] Unauthenticated connection rejected"
-            )
-            await self.close(code=4001)
+            auth_error = self.scope.get("auth_error")
+            if auth_error:
+                logger.warning(
+                    f"[ThreadUpdates {self.consumer_id}] Auth failed: {auth_error['message']}"
+                )
+                await self.close(code=auth_error["code"])
+            else:
+                logger.warning(
+                    f"[ThreadUpdates {self.consumer_id}] Unauthenticated connection rejected"
+                )
+                await self.close(code=4000)
             return
 
         self.user_id = user.pk

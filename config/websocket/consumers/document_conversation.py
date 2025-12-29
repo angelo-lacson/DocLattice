@@ -77,10 +77,17 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
         try:
             # 1. User must be authenticated
             if not self.scope["user"].is_authenticated:
-                logger.warning(
-                    f"[Session {self.session_id}] User is not authenticated."
-                )
-                await self.close(code=4000)
+                auth_error = self.scope.get("auth_error")
+                if auth_error:
+                    logger.warning(
+                        f"[Session {self.session_id}] Auth failed: {auth_error['message']}"
+                    )
+                    await self.close(code=auth_error["code"])
+                else:
+                    logger.warning(
+                        f"[Session {self.session_id}] User is not authenticated."
+                    )
+                    await self.close(code=4000)
                 return
 
             # 2. The path MUST contain a corpus identifier
