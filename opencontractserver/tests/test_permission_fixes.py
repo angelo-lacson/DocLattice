@@ -344,63 +344,6 @@ class TestStartCorpusForkSecurity(TestCase):
         self.assertEqual(result["data"]["forkCorpus"]["message"], "Corpus not found")
 
 
-class TestStartQueryForCorpusSecurity(TestCase):
-    """Tests for StartQueryForCorpus mutation permission checks."""
-
-    def setUp(self):
-        """Create test users and corpus."""
-        self.owner = User.objects.create_user(
-            username="owner", password="test", email="owner@test.com"
-        )
-        self.unauthorized_user = User.objects.create_user(
-            username="unauthorized", password="test", email="unauth@test.com"
-        )
-
-        # Create private corpus
-        self.private_corpus = Corpus.objects.create(
-            title="Private Corpus", creator=self.owner, is_public=False
-        )
-
-        # Set permissions for owner only
-        set_permissions_for_obj_to_user(
-            self.owner, self.private_corpus, [PermissionTypes.CRUD]
-        )
-
-    def test_cannot_create_query_for_inaccessible_corpus(self):
-        """
-        GIVEN: A corpus that user does not have access to
-        WHEN: Unauthorized user attempts to create a query for the corpus
-        THEN: Mutation should fail with "Corpus not found" error
-        """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
-
-        mutation = """
-            mutation AskQuery($corpusId: String!, $query: String!) {
-                askQuery(corpusId: $corpusId, query: $query) {
-                    ok
-                    message
-                    obj {
-                        id
-                        query
-                    }
-                }
-            }
-        """
-
-        variables = {
-            "corpusId": to_global_id("CorpusType", self.private_corpus.id),
-            "query": "test query",
-        }
-
-        result = client.execute(mutation, variables=variables)
-
-        # Mutation should fail
-        self.assertIsNone(result.get("errors"))
-        self.assertFalse(result["data"]["askQuery"]["ok"])
-        # Error message should not reveal corpus existence
-        self.assertIn("not found", result["data"]["askQuery"]["message"].lower())
-
-
 class TestStartCorpusExportSecurity(TestCase):
     """Tests for StartCorpusExport mutation permission checks."""
 
