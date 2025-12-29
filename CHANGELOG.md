@@ -58,6 +58,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Token Expiration Signal to Frontend (Issue #744)
+- **Fixed `Auth0RemoteUserJSONWebTokenBackend.authenticate()` swallowing `JSONWebTokenExpired` exceptions** (`config/graphql_auth0_auth/backends.py:44-52`):
+  - Previously, when a JWT token expired, the authentication backend caught all exceptions and returned `None`
+  - The GraphQL layer then returned a generic "User is not authenticated" error
+  - Frontend's `errorLink.ts` could not detect token expiration and trigger automatic refresh
+  - Fix: Re-raise `JSONWebTokenExpired` so the GraphQL layer returns "Signature has expired"
+  - Frontend now correctly detects expiration and triggers page reload for silent token refresh
+- **Enhanced WebSocket middleware with auth error signaling** (`config/websocket/middleware.py:44-124`):
+  - Added `scope["auth_error"]` dict with `code` and `message` fields
+  - New close codes: `WS_CLOSE_TOKEN_EXPIRED` (4001), `WS_CLOSE_TOKEN_INVALID` (4002)
+  - Consumers can now close connections with specific codes for frontend handling
+- **Enhanced Auth0 WebSocket middleware** (`config/websocket/middlewares/websocket_auth0_middleware.py:52-130`):
+  - Added consistent `scope["auth_error"]` handling for Auth0 tokens
+  - Matches close code behavior with non-Auth0 middleware
+- **New test coverage** (`opencontractserver/tests/test_token_expiration.py`):
+  - Tests for `Auth0RemoteUserJSONWebTokenBackend` token expiration re-raising
+  - Tests for WebSocket middleware auth error handling
+  - Tests for WebSocket close code consistency
+
 #### Independent Structural Annotation and Show Selected Controls (Issue #735)
 - **Removed forced coupling between structural and showSelectedOnly controls** (`frontend/src/components/annotator/controls/AnnotationControls.tsx:200-207`):
   - Previously, enabling "Show Structural" would force "Show Only Selected" to be checked and disabled
