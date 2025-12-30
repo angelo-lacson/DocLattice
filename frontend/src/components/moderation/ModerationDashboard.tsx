@@ -112,16 +112,20 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
   );
 
   // Query moderation metrics
-  const { data: metricsData, loading: metricsLoading } = useQuery<
-    GetModerationMetricsOutput,
-    GetModerationMetricsInput
-  >(GET_MODERATION_METRICS, {
-    variables: {
-      corpusId,
-      timeRangeHours,
-    },
-    fetchPolicy: "cache-and-network",
-  });
+  const {
+    data: metricsData,
+    loading: metricsLoading,
+    error: metricsError,
+  } = useQuery<GetModerationMetricsOutput, GetModerationMetricsInput>(
+    GET_MODERATION_METRICS,
+    {
+      variables: {
+        corpusId,
+        timeRangeHours,
+      },
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
   // Rollback mutation
   const [rollbackAction, { loading: rollbackLoading }] = useMutation<
@@ -187,6 +191,11 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         </Header>
         {metricsLoading ? (
           <Loader active inline="centered" />
+        ) : metricsError ? (
+          <Message negative>
+            <Message.Header>Error loading metrics</Message.Header>
+            <p>{metricsError.message}</p>
+          </Message>
         ) : metrics ? (
           <>
             {metrics.isAboveThreshold && (

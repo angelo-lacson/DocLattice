@@ -271,7 +271,9 @@ class DeleteThreadMutation(graphene.Mutation):
     """
 
     class Arguments:
-        conversation_id = graphene.ID(required=True, description="ID of thread to delete")
+        conversation_id = graphene.ID(
+            required=True, description="ID of thread to delete"
+        )
         reason = graphene.String(description="Reason for deletion")
 
     ok = graphene.Boolean()
@@ -298,7 +300,7 @@ class DeleteThreadMutation(graphene.Mutation):
                     conversation=None,
                 )
 
-            conversation.soft_delete_thread(user=user, reason=reason)
+            conversation.soft_delete_thread(moderator=user, reason=reason)
             ok = True
             message_text = "Thread deleted successfully"
             conversation_obj = conversation
@@ -310,7 +312,9 @@ class DeleteThreadMutation(graphene.Mutation):
             logger.error(f"Error deleting thread: {e}", exc_info=True)
             message_text = f"Failed to delete thread: {str(e)}"
 
-        return DeleteThreadMutation(ok=ok, message=message_text, conversation=conversation_obj)
+        return DeleteThreadMutation(
+            ok=ok, message=message_text, conversation=conversation_obj
+        )
 
 
 class RestoreThreadMutation(graphene.Mutation):
@@ -320,7 +324,9 @@ class RestoreThreadMutation(graphene.Mutation):
     """
 
     class Arguments:
-        conversation_id = graphene.ID(required=True, description="ID of thread to restore")
+        conversation_id = graphene.ID(
+            required=True, description="ID of thread to restore"
+        )
         reason = graphene.String(description="Reason for restoration")
 
     ok = graphene.Boolean()
@@ -348,7 +354,7 @@ class RestoreThreadMutation(graphene.Mutation):
                     conversation=None,
                 )
 
-            conversation.restore_thread(user=user, reason=reason)
+            conversation.restore_thread(moderator=user, reason=reason)
             ok = True
             message_text = "Thread restored successfully"
             conversation_obj = conversation
@@ -360,7 +366,9 @@ class RestoreThreadMutation(graphene.Mutation):
             logger.error(f"Error restoring thread: {e}", exc_info=True)
             message_text = f"Failed to restore thread: {str(e)}"
 
-        return RestoreThreadMutation(ok=ok, message=message_text, conversation=conversation_obj)
+        return RestoreThreadMutation(
+            ok=ok, message=message_text, conversation=conversation_obj
+        )
 
 
 class AddModeratorMutation(graphene.Mutation):
@@ -609,13 +617,17 @@ class RollbackModerationActionMutation(graphene.Mutation):
 
     ok = graphene.Boolean()
     message = graphene.String()
-    rollback_action = graphene.Field("config.graphql.graphene_types.ModerationActionType")
+    rollback_action = graphene.Field(
+        "config.graphql.graphene_types.ModerationActionType"
+    )
 
     @login_required
     @graphql_ratelimit(rate="10/m")
     def mutate(root, info, action_id, reason=None):
         from opencontractserver.conversations.models import (
             ModerationAction,
+        )
+        from opencontractserver.conversations.models import (
             ModerationActionType as ModerationActionTypeEnum,
         )
 
@@ -664,33 +676,47 @@ class RollbackModerationActionMutation(graphene.Mutation):
                 rollback_action=None,
             )
 
-        rollback_action_type, method_name, target_attr = rollback_map[original_action.action_type]
+        _rollback_action_type, method_name, target_attr = rollback_map[
+            original_action.action_type
+        ]
+
+        # Determine the target for rollback and the conversation for permission check
+        if target_attr == "message":
+            target = original_action.message
+            # For message actions, use message's conversation for permission check
+            permission_conversation = target.conversation if target else None
+        else:
+            target = original_action.conversation
+            permission_conversation = target
+
+        # Check if target exists
+        if target is None:
+            return RollbackModerationActionMutation(
+                ok=False,
+                message=f"Cannot rollback: target {target_attr} no longer exists",
+                rollback_action=None,
+            )
 
         # Check permissions - user must be able to moderate
-        conversation = original_action.conversation
-        if conversation and not conversation.can_moderate(user):
+        if permission_conversation is None:
+            return RollbackModerationActionMutation(
+                ok=False,
+                message="Cannot rollback: conversation not found",
+                rollback_action=None,
+            )
+
+        if not permission_conversation.can_moderate(user):
             return RollbackModerationActionMutation(
                 ok=False,
                 message="You don't have permission to rollback this action",
                 rollback_action=None,
             )
 
-        # Execute the rollback
+        # Execute the rollback - methods now return the created ModerationAction
         try:
-            if target_attr == "message":
-                target = original_action.message
-                if target:
-                    getattr(target, method_name)(user=user, reason=reason or "Rollback")
-            else:
-                target = original_action.conversation
-                if target:
-                    getattr(target, method_name)(user=user, reason=reason or "Rollback")
-
-            # Find the new action that was created by the rollback
-            rollback_action = ModerationAction.objects.filter(
-                action_type=rollback_action_type,
-                moderator=user,
-            ).order_by("-created").first()
+            rollback_action = getattr(target, method_name)(
+                moderator=user, reason=reason or "Rollback"
+            )
 
             return RollbackModerationActionMutation(
                 ok=True,

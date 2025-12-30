@@ -591,10 +591,13 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         # No moderation rights found
         return False
 
-    def lock(self, moderator, reason: str = ""):
+    def lock(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Lock the conversation to prevent new messages.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         from django.utils import timezone
 
@@ -609,7 +612,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["is_locked", "locked_at", "locked_by"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
             action_type=ModerationActionType.LOCK_THREAD,
             moderator=moderator,
@@ -617,10 +620,13 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
             creator=moderator,
         )
 
-    def unlock(self, moderator, reason: str = ""):
+    def unlock(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Unlock the conversation to allow new messages.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         if not self.can_moderate(moderator):
             raise PermissionError(
@@ -633,7 +639,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["is_locked", "locked_at", "locked_by"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
             action_type=ModerationActionType.UNLOCK_THREAD,
             moderator=moderator,
@@ -641,10 +647,13 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
             creator=moderator,
         )
 
-    def pin(self, moderator, reason: str = ""):
+    def pin(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Pin the conversation to appear at top of list.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         from django.utils import timezone
 
@@ -659,7 +668,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["is_pinned", "pinned_at", "pinned_by"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
             action_type=ModerationActionType.PIN_THREAD,
             moderator=moderator,
@@ -667,10 +676,13 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
             creator=moderator,
         )
 
-    def unpin(self, moderator, reason: str = ""):
+    def unpin(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Unpin the conversation.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         if not self.can_moderate(moderator):
             raise PermissionError(
@@ -683,7 +695,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["is_pinned", "pinned_at", "pinned_by"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
             action_type=ModerationActionType.UNPIN_THREAD,
             moderator=moderator,
@@ -691,10 +703,13 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
             creator=moderator,
         )
 
-    def soft_delete_thread(self, moderator, reason: str = ""):
+    def soft_delete_thread(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Soft delete this conversation (for moderation).
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         from django.utils import timezone
 
@@ -707,7 +722,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["deleted_at"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
             action_type=ModerationActionType.DELETE_THREAD,
             moderator=moderator,
@@ -715,10 +730,13 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
             creator=moderator,
         )
 
-    def restore_thread(self, moderator, reason: str = ""):
+    def restore_thread(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Restore a soft-deleted conversation.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         if not self.can_moderate(moderator):
             raise PermissionError(
@@ -729,7 +747,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["deleted_at"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
             action_type=ModerationActionType.RESTORE_THREAD,
             moderator=moderator,
@@ -872,10 +890,13 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
     objects = ChatMessageManager()  # Default manager with vector search support
     all_objects = models.Manager()  # Access all objects including soft-deleted
 
-    def soft_delete_message(self, moderator, reason: str = ""):
+    def soft_delete_message(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Soft delete this message (for moderation).
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         from django.utils import timezone
 
@@ -888,7 +909,7 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["deleted_at"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             message=self,
             conversation=self.conversation,
             action_type=ModerationActionType.DELETE_MESSAGE,
@@ -897,10 +918,13 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
             creator=moderator,
         )
 
-    def restore_message(self, moderator, reason: str = ""):
+    def restore_message(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Restore a soft-deleted message.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         if not self.conversation.can_moderate(moderator):
             raise PermissionError(
@@ -911,7 +935,7 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["deleted_at"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             message=self,
             conversation=self.conversation,
             action_type=ModerationActionType.RESTORE_MESSAGE,
