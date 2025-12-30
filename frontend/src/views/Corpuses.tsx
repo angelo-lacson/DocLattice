@@ -62,7 +62,6 @@ import {
   analysisSearchTerm,
   exportingCorpus,
   showQueryViewState,
-  openedQueryObj,
   showSelectCorpusAnalyzerOrFieldsetModal,
   selectedTab,
 } from "../graphql/cache";
@@ -108,7 +107,6 @@ import { CorpusAnalysesCards } from "../components/analyses/CorpusAnalysesCards"
 import { FilterToAnalysesSelector } from "../components/widgets/model-filters/FilterToAnalysesSelector";
 import useWindowDimensions from "../components/hooks/WindowDimensionHook";
 import { SelectExportTypeModal } from "../components/widgets/modals/SelectExportTypeModal";
-import { ViewQueryResultsModal } from "../components/widgets/modals/ViewQueryResultsModal";
 import { FilterToCorpusActionOutputs } from "../components/widgets/model-filters/FilterToCorpusActionOutputs";
 import { CorpusExtractCards } from "../components/extracts/CorpusExtractCards";
 import { getPermissions } from "../utils/transform";
@@ -1514,7 +1512,6 @@ export const Corpuses = () => {
   const auth_token = useReactiveVar(authToken);
   const annotation_search_term = useReactiveVar(annotationContentSearchTerm);
   const show_query_view_state = useReactiveVar(showQueryViewState);
-  const opened_query_obj = useReactiveVar(openedQueryObj);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -2641,15 +2638,6 @@ export const Corpuses = () => {
           />
           {exporting_corpus ? (
             <SelectExportTypeModal visible={Boolean(exportingCorpus)} />
-          ) : (
-            <></>
-          )}
-          {opened_query_obj ? (
-            <ViewQueryResultsModal
-              query_id={opened_query_obj.id}
-              open={true}
-              onClose={() => openedQueryObj(null)}
-            />
           ) : (
             <></>
           )}

@@ -92,7 +92,7 @@ export interface DeletedDocumentPathType {
   creator: {
     id: string;
     username: string;
-  };
+  } | null;
   document: {
     id: string;
     title: string;
@@ -101,7 +101,7 @@ export interface DeletedDocumentPathType {
     fileType: string;
     pageCount: number;
     pdfFile: string;
-  };
+  } | null;
   folder: {
     id: string;
     name: string;

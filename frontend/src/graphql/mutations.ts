@@ -5,7 +5,6 @@ import {
   AnalysisType,
   AnnotationLabelType,
   ColumnType,
-  CorpusQueryType,
   CorpusType,
   DatacellType,
   DocumentType,
@@ -1891,37 +1890,6 @@ export const REQUEST_EDIT_DATACELL = gql`
   }
 `;
 
-export interface AskQueryOfCorpusInputType {
-  corpusId: string;
-  query: string;
-}
-
-export interface AskQueryOfCorpusOutputType {
-  askQuery: {
-    ok: boolean;
-    message: string;
-    obj: CorpusQueryType;
-  };
-}
-
-export const ASK_QUERY_OF_CORPUS = gql`
-  mutation AskQuery($corpusId: String!, $query: String!) {
-    askQuery(corpusId: $corpusId, query: $query) {
-      ok
-      message
-      obj {
-        id
-        query
-        response
-        started
-        completed
-        failed
-        stacktrace
-      }
-    }
-  }
-`;
-
 export interface StartAnalysisInput {
   documentId?: string;
   analyzerId: string;
@@ -2164,6 +2132,11 @@ export const CREATE_CORPUS_ACTION = gql`
     $agentConfigId: ID
     $agentPrompt: String
     $preAuthorizedTools: [String]
+    $createAgentInline: Boolean
+    $inlineAgentName: String
+    $inlineAgentDescription: String
+    $inlineAgentInstructions: String
+    $inlineAgentTools: [String]
     $disabled: Boolean
     $runOnAllCorpuses: Boolean
   ) {
@@ -2171,6 +2144,111 @@ export const CREATE_CORPUS_ACTION = gql`
       corpusId: $corpusId
       trigger: $trigger
       name: $name
+      fieldsetId: $fieldsetId
+      analyzerId: $analyzerId
+      agentConfigId: $agentConfigId
+      agentPrompt: $agentPrompt
+      preAuthorizedTools: $preAuthorizedTools
+      createAgentInline: $createAgentInline
+      inlineAgentName: $inlineAgentName
+      inlineAgentDescription: $inlineAgentDescription
+      inlineAgentInstructions: $inlineAgentInstructions
+      inlineAgentTools: $inlineAgentTools
+      disabled: $disabled
+      runOnAllCorpuses: $runOnAllCorpuses
+    ) {
+      ok
+      message
+      obj {
+        id
+        name
+        trigger
+        disabled
+        runOnAllCorpuses
+        fieldset {
+          id
+          name
+        }
+        analyzer {
+          id
+          description
+        }
+        agentConfig {
+          id
+          name
+          description
+        }
+        agentPrompt
+        preAuthorizedTools
+      }
+    }
+  }
+`;
+
+export interface CreateCorpusActionInput {
+  corpusId: string;
+  trigger: "add_document" | "edit_document" | "new_thread" | "new_message";
+  name?: string;
+  fieldsetId?: string;
+  analyzerId?: string;
+  agentConfigId?: string;
+  agentPrompt?: string;
+  preAuthorizedTools?: string[];
+  // Inline agent creation parameters
+  createAgentInline?: boolean;
+  inlineAgentName?: string;
+  inlineAgentDescription?: string;
+  inlineAgentInstructions?: string;
+  inlineAgentTools?: string[];
+  disabled?: boolean;
+  runOnAllCorpuses?: boolean;
+}
+
+export interface CreateCorpusActionOutput {
+  createCorpusAction: {
+    ok: boolean;
+    message: string;
+    obj: CorpusActionType | null;
+  };
+}
+
+export const DELETE_CORPUS_ACTION = gql`
+  mutation DeleteCorpusAction($id: String!) {
+    deleteCorpusAction(id: $id) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface DeleteCorpusActionInput {
+  id: string;
+}
+
+export interface DeleteCorpusActionOutput {
+  deleteCorpusAction: {
+    ok: boolean;
+    message: string;
+  };
+}
+
+export const UPDATE_CORPUS_ACTION = gql`
+  mutation UpdateCorpusAction(
+    $id: ID!
+    $name: String
+    $trigger: String
+    $fieldsetId: ID
+    $analyzerId: ID
+    $agentConfigId: ID
+    $agentPrompt: String
+    $preAuthorizedTools: [String]
+    $disabled: Boolean
+    $runOnAllCorpuses: Boolean
+  ) {
+    updateCorpusAction(
+      id: $id
+      name: $name
+      trigger: $trigger
       fieldsetId: $fieldsetId
       analyzerId: $analyzerId
       agentConfigId: $agentConfigId
@@ -2207,10 +2285,10 @@ export const CREATE_CORPUS_ACTION = gql`
   }
 `;
 
-export interface CreateCorpusActionInput {
-  corpusId: string;
-  trigger: "add_document" | "edit_document";
+export interface UpdateCorpusActionInput {
+  id: string;
   name?: string;
+  trigger?: string;
   fieldsetId?: string;
   analyzerId?: string;
   agentConfigId?: string;
@@ -2220,31 +2298,11 @@ export interface CreateCorpusActionInput {
   runOnAllCorpuses?: boolean;
 }
 
-export interface CreateCorpusActionOutput {
-  createCorpusAction: {
+export interface UpdateCorpusActionOutput {
+  updateCorpusAction: {
     ok: boolean;
     message: string;
     obj: CorpusActionType | null;
-  };
-}
-
-export const DELETE_CORPUS_ACTION = gql`
-  mutation DeleteCorpusAction($id: String!) {
-    deleteCorpusAction(id: $id) {
-      ok
-      message
-    }
-  }
-`;
-
-export interface DeleteCorpusActionInput {
-  id: string;
-}
-
-export interface DeleteCorpusActionOutput {
-  deleteCorpusAction: {
-    ok: boolean;
-    message: string;
   };
 }
 
@@ -2723,6 +2781,42 @@ export interface DeleteMessageOutput {
   };
 }
 
+/**
+ * Update the content of an existing message.
+ * Only the message creator or a moderator can edit messages.
+ * Part of Issue #686 - Mobile UI for Edit Message Modal
+ */
+export const UPDATE_MESSAGE = gql`
+  mutation UpdateMessage($messageId: ID!, $content: String!) {
+    updateMessage(messageId: $messageId, content: $content) {
+      ok
+      message
+      obj {
+        id
+        content
+        modified
+      }
+    }
+  }
+`;
+
+export interface UpdateMessageInput {
+  messageId: string;
+  content: string;
+}
+
+export interface UpdateMessageOutput {
+  updateMessage: {
+    ok: boolean;
+    message: string;
+    obj: {
+      id: string;
+      content: string;
+      modified: string;
+    } | null;
+  };
+}
+
 // ============================================================================
 // Voting Mutations
 // ============================================================================
@@ -3192,7 +3286,7 @@ export interface RestoreDeletedDocumentOutput {
 }
 
 export const PERMANENTLY_DELETE_DOCUMENT = gql`
-  mutation PermanentlyDeleteDocument($documentId: ID!, $corpusId: ID!) {
+  mutation PermanentlyDeleteDocument($documentId: String!, $corpusId: String!) {
     permanentlyDeleteDocument(documentId: $documentId, corpusId: $corpusId) {
       ok
       message
@@ -3213,7 +3307,7 @@ export interface PermanentlyDeleteDocumentOutput {
 }
 
 export const EMPTY_TRASH = gql`
-  mutation EmptyTrash($corpusId: ID!) {
+  mutation EmptyTrash($corpusId: String!) {
     emptyTrash(corpusId: $corpusId) {
       ok
       message

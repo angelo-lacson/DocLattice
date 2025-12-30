@@ -13,7 +13,7 @@ from doclatticeserver.annotations.models import (
     AnnotationLabel,
     Relationship,
 )
-from doclatticeserver.corpuses.models import Corpus, CorpusQuery
+from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentAnalysisRow
 from doclatticeserver.extracts.models import Datacell, Extract, Fieldset
 
@@ -161,12 +161,6 @@ def make_corpus_public(corpus_id: int | str) -> MakePublicReturnType:
             is_public=True
         )
         logger.info(f"Made {updated_relationships} relationships public")
-
-        # CorpusQueries
-        updated_queries = CorpusQuery.objects.filter(corpus=corpus).update(
-            is_public=True
-        )
-        logger.info(f"Made {updated_queries} corpus queries public")
 
         # DocumentAnalysisRows
         updated_rows = DocumentAnalysisRow.objects.filter(

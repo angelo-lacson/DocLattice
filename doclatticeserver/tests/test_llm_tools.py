@@ -2217,76 +2217,11 @@ class TestCreateMarkdownLink(TestCase):
         ):
             create_markdown_link("conversation", 999999)
 
-    def test_create_markdown_link_corpus_without_creator(self):
-        """Test that corpus without creator raises ValueError."""
-        corpus_no_creator = Corpus.objects.create(
-            title="No Creator Corpus",
-            slug="no-creator-corpus",
-            creator=None,
-        )
-
-        with self.assertRaisesRegex(
-            ValueError,
-            f"Corpus {corpus_no_creator.id} has no creator and cannot generate a link",
-        ):
-            create_markdown_link("corpus", corpus_no_creator.id)
-
-    def test_create_markdown_link_corpus_without_slug(self):
-        """Test that corpus without slug raises ValueError."""
-        corpus_no_slug = Corpus.objects.create(
-            title="No Slug Corpus",
-            slug=None,
-            creator=self.user,
-        )
-
-        with self.assertRaisesRegex(
-            ValueError,
-            f"Corpus {corpus_no_slug.id} has no slug and cannot generate a link",
-        ):
-            create_markdown_link("corpus", corpus_no_slug.id)
-
-    def test_create_markdown_link_document_without_creator(self):
-        """Test that document without creator raises ValueError."""
-        doc_no_creator = Document.objects.create(
-            title="No Creator Doc",
-            slug="no-creator-doc",
-            creator=None,
-        )
-
-        with self.assertRaisesRegex(
-            ValueError,
-            f"Document {doc_no_creator.id} has no creator and cannot generate a link",
-        ):
-            create_markdown_link("document", doc_no_creator.id)
-
-    def test_create_markdown_link_document_without_slug(self):
-        """Test that document without slug raises ValueError."""
-        doc_no_slug = Document.objects.create(
-            title="No Slug Doc",
-            slug=None,
-            creator=self.user,
-        )
-
-        with self.assertRaisesRegex(
-            ValueError,
-            f"Document {doc_no_slug.id} has no slug and cannot generate a link",
-        ):
-            create_markdown_link("document", doc_no_slug.id)
-
-    def test_create_markdown_link_annotation_without_document(self):
-        """Test that annotation without document raises ValueError."""
-        annotation_no_doc = Annotation.objects.create(
-            page=1,
-            raw_text="No doc annotation",
-            document=None,
-            creator=self.user,
-        )
-
-        with self.assertRaisesRegex(
-            ValueError,
-            f"Annotation {annotation_no_doc.id} has no associated document and cannot be linked",
-        ):
-            create_markdown_link("annotation", annotation_no_doc.id)
+    # Note: Tests for corpus_without_creator, corpus_without_slug,
+    # document_without_creator, document_without_slug, and annotation_without_document
+    # were removed because the database now enforces NOT NULL constraints on these fields.
+    # The defensive error handling in create_markdown_link() is preserved for robustness
+    # but these scenarios cannot occur in practice.
 
     def test_create_markdown_link_conversation_without_corpus(self):
         """Test that conversation without corpus raises ValueError."""
