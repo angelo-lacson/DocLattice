@@ -10,7 +10,7 @@ from guardian.shortcuts import assign_perm
 
 # Models to test
 from opencontractserver.annotations.models import Annotation, AnnotationLabel
-from opencontractserver.corpuses.models import Corpus, CorpusQuery
+from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 
 # Configure logging to see debug messages from the resolver
@@ -99,27 +99,6 @@ class VisibleToUserTests(TestCase):
         # Should only see public corpus
         self.assertEqual(result.count(), 1)
         self.assertEqual(result.first(), self.public_corpus)
-
-    def test_model_with_base_visibility_manager(self):
-        """Models using BaseVisibilityManager should properly filter by creator/public."""
-        # Create a corpus query linked to the user's private corpus
-        corpus_query = CorpusQuery.objects.create(
-            corpus=self.private_corpus,
-            query="Test query",
-            creator=self.user,  # CorpusQuery inherits creator from BaseOCModel
-        )
-
-        # User can see their own corpus query
-        result = CorpusQuery.objects.visible_to_user(self.user)
-        self.assertEqual(result.count(), 1)
-        self.assertEqual(result.first(), corpus_query)
-
-        # Other user can't see it
-        other_user = User.objects.create_user(
-            username="other_test_user", password="test"
-        )
-        result = CorpusQuery.objects.visible_to_user(other_user)
-        self.assertEqual(result.count(), 0)
 
 
 class PermissionBasedVisibilityTest(TestCase):

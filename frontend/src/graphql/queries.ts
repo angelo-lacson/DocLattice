@@ -13,8 +13,6 @@ import {
   AnalysisType,
   FieldsetType,
   ExtractType,
-  CorpusQueryType,
-  CorpusQueryTypeConnection,
   CorpusActionType,
   DocumentType,
   AnalysisRowType,
@@ -175,8 +173,13 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
       mdDescription
       isPublic
       myPermissions
+      allowComments
+      preferredEmbedder
+      created
+      modified
       creator {
         id
+        email
         username
         slug
       }
@@ -185,6 +188,9 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
         title
       }
       documents {
+        totalCount
+      }
+      annotations {
         totalCount
       }
       analyses {
@@ -482,71 +488,6 @@ export interface GetCorpusWithHistoryQuery {
   };
 }
 
-export interface GetCorpusQueryDetailsInputType {
-  corpusId: string;
-}
-
-export interface GetCorpusQueryDetailsOutputType {
-  corpusQuery: CorpusQueryType;
-}
-
-export const GET_CORPUS_QUERY_DETAILS = gql`
-  query CorpusQuery($corpusId: ID!) {
-    corpusQuery(id: $corpusId) {
-      id
-      response
-      query
-      started
-      failed
-      completed
-      stacktrace
-      fullSourceList {
-        id
-        annotationLabel {
-          id
-          icon
-          color
-          description
-          text
-          labelType
-          readOnly
-        }
-        annotationType
-        rawText
-        json
-        sourceNodeInRelationships {
-          edges {
-            node {
-              id
-            }
-          }
-        }
-        targetNodeInRelationships {
-          edges {
-            node {
-              id
-            }
-          }
-        }
-        tokensJsons
-        document {
-          id
-          title
-          is_selected @client
-          is_open @client
-          description
-          backendLock
-          fileType
-          pdfFile
-          txtExtractFile
-          pawlsParseFile
-          icon
-        }
-      }
-    }
-  }
-`;
-
 export interface GetCorpusStatsInputType {
   corpusId: string;
 }
@@ -573,80 +514,6 @@ export const GET_CORPUS_STATS = gql`
       totalExtracts
       totalAnnotations
       totalThreads
-    }
-  }
-`;
-
-export interface GetCorpusQueriesInput {
-  corpusId: string;
-}
-
-export interface GetCorpusQueriesOutput {
-  corpusQueries: CorpusQueryTypeConnection;
-}
-
-export const GET_CORPUS_QUERIES = gql`
-  query CorpusQueries($corpusId: ID!) {
-    corpusQueries(corpusId: $corpusId) {
-      edges {
-        node {
-          id
-          query
-          response
-          started
-          completed
-          failed
-        }
-      }
-      pageInfo {
-        hasNextPage
-        hasPreviousPage
-        endCursor
-        startCursor
-      }
-    }
-  }
-`;
-
-export interface GetCorpusQueryInputType {
-  corpusId: string;
-}
-
-export interface GetCorpusQueryOutputType {
-  corpusQuery: CorpusQueryType;
-}
-
-export const GET_CORPUS_QUERY = gql`
-  query FullCorpusQuery($corpusId: ID!) {
-    corpusQuery(id: $corpusId) {
-      id
-      query
-      response
-      fullSourceList {
-        id
-        isPublic
-        myPermissions
-        annotationLabel {
-          id
-          icon
-          color
-          description
-          text
-          labelType
-          readOnly
-        }
-        boundingBox
-        page
-        rawText
-        tokensJsons
-        json
-        creator {
-          id
-          email
-        }
-        isPublic
-        myPermissions
-      }
     }
   }
 `;
@@ -2359,6 +2226,9 @@ export const GET_THREAD_DETAIL = gql`
         # Soft delete
         deletedAt
 
+        # Permissions (for edit/delete UI - Issue #686)
+        myPermissions
+
         # Mentioned resources (Issue #623, #689)
         mentionedResources {
           type
@@ -2466,9 +2336,11 @@ export const SEARCH_CORPUSES_FOR_MENTION = gql`
  * Search documents for @ mention autocomplete
  * Backend filters results to only documents visible to the user via .visible_to_user()
  * Part of Issue #623 - @ Mentions Feature
+ * Issue #741 - Added corpusId for corpus-scoped document search
  */
 export interface SearchDocumentsForMentionInput {
   textSearch: string;
+  corpusId?: string; // Optional corpus ID to scope search to specific corpus
 }
 
 export interface SearchDocumentsForMentionOutput {
@@ -2499,8 +2371,12 @@ export interface SearchDocumentsForMentionOutput {
 }
 
 export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
-  query SearchDocumentsForMention($textSearch: String!) {
-    searchDocumentsForMention(textSearch: $textSearch, first: 10) {
+  query SearchDocumentsForMention($textSearch: String!, $corpusId: ID) {
+    searchDocumentsForMention(
+      textSearch: $textSearch
+      corpusId: $corpusId
+      first: 10
+    ) {
       edges {
         node {
           id
@@ -3414,6 +3290,7 @@ export const GET_ME = gql`
   query GetMe {
     me {
       id
+      email
       username
       slug
       name
@@ -4286,6 +4163,10 @@ export const GET_CORPUS_ACTION_EXECUTIONS = gql`
               slug
             }
           }
+          conversation {
+            id
+            title
+          }
           corpus {
             id
             slug
@@ -4355,7 +4236,11 @@ export interface CorpusActionExecutionNode {
     title: string;
     slug: string;
     creator: { id: string; slug: string };
-  };
+  } | null;
+  conversation: {
+    id: string;
+    title: string;
+  } | null;
   corpus: {
     id: string;
     slug: string;

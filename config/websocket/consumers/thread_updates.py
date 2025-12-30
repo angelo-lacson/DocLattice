@@ -26,6 +26,7 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from graphql_relay import from_global_id
 
+from config.websocket.utils.auth_helpers import check_auth_and_close_if_failed
 from opencontractserver.conversations.models import Conversation
 
 logger = logging.getLogger(__name__)
@@ -71,15 +72,11 @@ class ThreadUpdatesConsumer(AsyncWebsocketConsumer):
             f"connect() called. Path: {self.scope['path']}"
         )
 
-        # Extract user from scope (set by auth middleware)
-        user = self.scope.get("user")
-        if not user or not user.is_authenticated:
-            logger.warning(
-                f"[ThreadUpdates {self.consumer_id}] Unauthenticated connection rejected"
-            )
-            await self.close(code=4001)
+        # Authenticate user (set by auth middleware)
+        if await check_auth_and_close_if_failed(self, self.session_id):
             return
 
+        user = self.scope.get("user")
         self.user_id = user.pk
 
         # Parse query parameters

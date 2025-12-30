@@ -25,6 +25,34 @@ from opencontractserver.corpuses.models import Corpus
 logger = logging.getLogger(__name__)
 
 
+def get_conversation_with_moderation_check(conversation_id, user):
+    """
+    Get conversation with moderation verification (IDOR-safe).
+
+    Returns the same error message whether the conversation doesn't exist
+    or the user lacks permission, preventing enumeration of valid conversation IDs.
+
+    Args:
+        conversation_id: Global relay ID of the conversation
+        user: User requesting access
+
+    Returns:
+        tuple: (conversation_object, error_message)
+            - On success: (Conversation, None)
+            - On failure: (None, "Conversation not found")
+    """
+    try:
+        pk = from_global_id(conversation_id)[1]
+        conversation = Conversation.objects.get(pk=pk)
+        if not conversation.can_moderate(user):
+            # User doesn't have permission - same message as DoesNotExist
+            return None, "Conversation not found"
+        return conversation, None
+    except Conversation.DoesNotExist:
+        # Conversation doesn't exist - same message as permission denied
+        return None, "Conversation not found"
+
+
 class LockThreadMutation(graphene.Mutation):
     """
     Lock a conversation/thread to prevent new messages.
@@ -53,22 +81,13 @@ class LockThreadMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get conversation
-            try:
-                conversation_pk = from_global_id(conversation_id)[1]
-                conversation = Conversation.objects.get(pk=conversation_pk)
-            except Conversation.DoesNotExist:
-                return LockThreadMutation(
-                    ok=False, message="Conversation not found", obj=None
-                )
-
-            # Check if user can moderate
-            if not conversation.can_moderate(user):
-                return LockThreadMutation(
-                    ok=False,
-                    message="You do not have permission to lock this conversation",
-                    obj=None,
-                )
+            # Get conversation with IDOR-safe permission check
+            conversation, error = get_conversation_with_moderation_check(
+                conversation_id, user
+            )
+            if error:
+                # Either not found or no permission - same message
+                return LockThreadMutation(ok=False, message=error, obj=None)
 
             # Lock the conversation
             conversation.lock(user, reason)
@@ -114,22 +133,13 @@ class UnlockThreadMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get conversation
-            try:
-                conversation_pk = from_global_id(conversation_id)[1]
-                conversation = Conversation.objects.get(pk=conversation_pk)
-            except Conversation.DoesNotExist:
-                return UnlockThreadMutation(
-                    ok=False, message="Conversation not found", obj=None
-                )
-
-            # Check if user can moderate
-            if not conversation.can_moderate(user):
-                return UnlockThreadMutation(
-                    ok=False,
-                    message="You do not have permission to unlock this conversation",
-                    obj=None,
-                )
+            # Get conversation with IDOR-safe permission check
+            conversation, error = get_conversation_with_moderation_check(
+                conversation_id, user
+            )
+            if error:
+                # Either not found or no permission - same message
+                return UnlockThreadMutation(ok=False, message=error, obj=None)
 
             # Unlock the conversation
             conversation.unlock(user, reason)
@@ -175,22 +185,13 @@ class PinThreadMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get conversation
-            try:
-                conversation_pk = from_global_id(conversation_id)[1]
-                conversation = Conversation.objects.get(pk=conversation_pk)
-            except Conversation.DoesNotExist:
-                return PinThreadMutation(
-                    ok=False, message="Conversation not found", obj=None
-                )
-
-            # Check if user can moderate
-            if not conversation.can_moderate(user):
-                return PinThreadMutation(
-                    ok=False,
-                    message="You do not have permission to pin this conversation",
-                    obj=None,
-                )
+            # Get conversation with IDOR-safe permission check
+            conversation, error = get_conversation_with_moderation_check(
+                conversation_id, user
+            )
+            if error:
+                # Either not found or no permission - same message
+                return PinThreadMutation(ok=False, message=error, obj=None)
 
             # Pin the conversation
             conversation.pin(user, reason)
@@ -236,22 +237,13 @@ class UnpinThreadMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get conversation
-            try:
-                conversation_pk = from_global_id(conversation_id)[1]
-                conversation = Conversation.objects.get(pk=conversation_pk)
-            except Conversation.DoesNotExist:
-                return UnpinThreadMutation(
-                    ok=False, message="Conversation not found", obj=None
-                )
-
-            # Check if user can moderate
-            if not conversation.can_moderate(user):
-                return UnpinThreadMutation(
-                    ok=False,
-                    message="You do not have permission to unpin this conversation",
-                    obj=None,
-                )
+            # Get conversation with IDOR-safe permission check
+            conversation, error = get_conversation_with_moderation_check(
+                conversation_id, user
+            )
+            if error:
+                # Either not found or no permission - same message
+                return UnpinThreadMutation(ok=False, message=error, obj=None)
 
             # Unpin the conversation
             conversation.unpin(user, reason)

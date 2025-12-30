@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal, Header, Icon, Button, Form, Divider } from "semantic-ui-react";
 import { useMutation, useReactiveVar } from "@apollo/client";
+import styled from "styled-components";
 
 import { backendUserObj, showUserSettingsModal } from "../../graphql/cache";
 import {
@@ -9,6 +10,74 @@ import {
   UpdateMeOutputs,
 } from "../../graphql/mutations";
 import { UserBadges } from "../badges/UserBadges";
+
+const StyledModal = styled(Modal)`
+  &.ui.modal {
+    @media (max-width: 768px) {
+      width: 95% !important;
+      margin: 0.5rem auto !important;
+    }
+
+    > .header {
+      @media (max-width: 768px) {
+        padding: 1rem !important;
+        font-size: 1.1rem !important;
+
+        .sub.header {
+          font-size: 0.85rem !important;
+          margin-top: 0.25rem !important;
+        }
+      }
+    }
+
+    > .content {
+      @media (max-width: 768px) {
+        padding: 1rem !important;
+      }
+    }
+
+    > .actions {
+      @media (max-width: 768px) {
+        padding: 0.75rem 1rem !important;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 0.5rem;
+
+        .button {
+          margin: 0 !important;
+          width: 100%;
+        }
+      }
+    }
+  }
+`;
+
+const ResponsiveFormGroup = styled(Form.Group)`
+  &.fields {
+    @media (max-width: 480px) {
+      flex-direction: column !important;
+
+      .field {
+        width: 100% !important;
+        margin-bottom: 1em !important;
+
+        &:last-child {
+          margin-bottom: 0 !important;
+        }
+      }
+    }
+  }
+`;
+
+const ProfileVisibilityHint = styled.div`
+  font-size: 12px;
+  color: #666;
+  margin-top: 0.5rem;
+
+  @media (max-width: 768px) {
+    font-size: 11px;
+  }
+`;
 
 interface EditableProfileState {
   name?: string;
@@ -59,7 +128,7 @@ const UserSettingsModal: React.FC = () => {
   const canSave = useMemo(() => dirty && !!user, [dirty, user]);
 
   return (
-    <Modal
+    <StyledModal
       open={isOpen}
       onClose={() => showUserSettingsModal(false)}
       size="small"
@@ -85,7 +154,7 @@ const UserSettingsModal: React.FC = () => {
             value={form.name || ""}
             onChange={(_, data) => onChange("name", String(data.value || ""))}
           />
-          <Form.Group widths="equal">
+          <ResponsiveFormGroup widths="equal">
             <Form.Input
               label="First Name"
               value={form.firstName || ""}
@@ -100,7 +169,7 @@ const UserSettingsModal: React.FC = () => {
                 onChange("lastName", String(data.value || ""))
               }
             />
-          </Form.Group>
+          </ResponsiveFormGroup>
           <Form.Input
             label="Phone"
             value={form.phone || ""}
@@ -117,13 +186,11 @@ const UserSettingsModal: React.FC = () => {
                 setDirty(true);
               }}
             />
-            <div
-              style={{ fontSize: "12px", color: "#666", marginTop: "0.5rem" }}
-            >
+            <ProfileVisibilityHint>
               {form.isProfilePublic
                 ? "Your profile is visible to all users"
                 : "Your profile is only visible to you"}
-            </div>
+            </ProfileVisibilityHint>
           </Form.Field>
         </Form>
 
@@ -157,7 +224,7 @@ const UserSettingsModal: React.FC = () => {
           <Icon name="check" /> Save
         </Button>
       </Modal.Actions>
-    </Modal>
+    </StyledModal>
   );
 };
 

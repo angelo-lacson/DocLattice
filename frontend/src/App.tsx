@@ -21,6 +21,7 @@ import { useQuery, useReactiveVar } from "@apollo/client";
 import {
   authToken,
   authStatusVar,
+  authInitCompleteVar,
   showAnnotationLabels,
   showExportModal,
   userObj,
@@ -109,6 +110,8 @@ export const App = () => {
   const show_upload_new_documents_modal = useReactiveVar(
     showUploadNewDocumentsModal
   );
+  // Track when auth initialization (including cache clear) is complete
+  const auth_init_complete = useReactiveVar(authInitCompleteVar);
 
   // Auth0 hooks for conditional rendering only
   const { isLoading } = useAuth0();
@@ -132,23 +135,43 @@ export const App = () => {
   // Track if we've applied mobile display settings to prevent infinite loop
   const mobileSettingsAppliedRef = useRef(false);
 
+  // Track if we've shown the user fetch error toast to prevent duplicates
+  // This can happen on mobile where network is slower and query may fail initially
+  const meErrorShownRef = useRef(false);
+
   const {
     data: meData,
     loading: meLoading,
     error: meError,
   } = useQuery<GetMeOutputs>(GET_ME, {
-    skip: !auth_token,
+    // Skip until BOTH: we have a token AND auth initialization (including cache clear) is complete.
+    // This prevents the query from being aborted by clearStore() during auth initialization.
+    skip: !auth_token || !auth_init_complete,
     fetchPolicy: "network-only",
   });
+
+  // Reset error shown flag when auth_token changes (new login session)
+  useEffect(() => {
+    meErrorShownRef.current = false;
+  }, [auth_token]);
 
   useEffect(() => {
     if (isLoading) return; // wait until Auth0 SDK has decided
 
     if (meData?.me) {
       backendUserObj(meData.me);
-    } else if (!meLoading && auth_token && meError) {
+      // Clear error flag if we successfully got user data
+      meErrorShownRef.current = false;
+    } else if (
+      !meLoading &&
+      auth_token &&
+      meError &&
+      !meErrorShownRef.current
+    ) {
+      // Only show error once per session, and only if we don't already have user data
       console.error("Error fetching backend user:", meError);
       toast.error("Could not get user details from server");
+      meErrorShownRef.current = true;
     } else if (!auth_token) {
       backendUserObj(null);
     }
