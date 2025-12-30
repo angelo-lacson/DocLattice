@@ -10,9 +10,13 @@ class CorpusesConfig(AppConfig):
 
     def ready(self):
         try:
-            # Import signals to register signal handlers for corpus actions
-            # This enables automatic triggering of corpus actions when documents
-            # are added to a corpus via the M2M relationship
+            # Import signals to register signal handlers for corpus actions.
+            # This enables automatic triggering of corpus actions when:
+            # - NEW_THREAD: A discussion thread is created in a corpus
+            # - NEW_MESSAGE: A human message is posted to a thread in a corpus
+            # Note: Document-based triggers (ADD_DOCUMENT, EDIT_DOCUMENT) are
+            # handled via direct invocation in add_document(), import_document(),
+            # and set_doc_lock_state().
             from opencontractserver.corpuses import signals  # noqa: F401
 
         except ImportError:

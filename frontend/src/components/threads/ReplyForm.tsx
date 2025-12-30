@@ -135,6 +135,8 @@ export interface ReplyFormProps {
   autoFocus?: boolean;
   /** Initial content (for testing) */
   initialContent?: string;
+  /** Corpus ID for context-aware mention search (Issue #741) */
+  corpusId?: string;
 }
 
 export function ReplyForm({
@@ -146,6 +148,7 @@ export function ReplyForm({
   onCancel,
   autoFocus = true,
   initialContent,
+  corpusId,
 }: ReplyFormProps) {
   const [error, setError] = useState("");
   const [showQuote, setShowQuote] = useState(false);
@@ -323,6 +326,7 @@ export function ReplyForm({
         autoFocus={autoFocus}
         maxLength={10000}
         initialContent={initialContent}
+        corpusId={corpusId}
       />
     </Container>
   );

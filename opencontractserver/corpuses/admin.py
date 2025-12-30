@@ -7,7 +7,6 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusActionExecution,
-    CorpusQuery,
 )
 from opencontractserver.tasks.permissioning_tasks import make_corpus_public_task
 
@@ -52,11 +51,6 @@ class CorpusAdmin(GuardedModelAdmin):
 @admin.register(CorpusAction)
 class CorpusActionAdmin(GuardedModelAdmin):
     list_display = ["id", "name", "corpus"]
-
-
-@admin.register(CorpusQuery)
-class CorpusQueryAdmin(GuardedModelAdmin):
-    list_display = ["id", "query", "failed", "completed", "started"]
 
 
 @admin.register(CorpusActionExecution)

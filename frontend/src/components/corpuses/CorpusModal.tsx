@@ -90,9 +90,9 @@ const ModalBody = styled.div`
   overflow-y: auto;
 
   @media (max-width: 768px) {
-    padding: 1.25rem;
+    padding: 1rem;
     /* Add extra bottom padding so content (including dropdowns) can scroll above sticky footer */
-    padding-bottom: 200px;
+    padding-bottom: 160px;
     max-height: calc(100vh - 80px);
     /* Smooth scrolling on iOS */
     -webkit-overflow-scrolling: touch;
@@ -114,8 +114,8 @@ const FormSection = styled.div`
   border: 1px solid #e5e5e5;
 
   @media (max-width: 768px) {
-    padding: 1rem;
-    margin-bottom: 1rem;
+    padding: 0.875rem;
+    margin-bottom: 0.75rem;
     border-radius: 10px;
   }
 
@@ -136,8 +136,9 @@ const SectionTitle = styled.h3`
   gap: 0.5rem;
 
   @media (max-width: 768px) {
-    font-size: 0.8rem;
-    margin-bottom: 0.75rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
+    gap: 0.375rem;
   }
 `;
 
@@ -149,7 +150,7 @@ const FormField = styled.div`
   }
 
   @media (max-width: 768px) {
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 `;
 
@@ -325,11 +326,11 @@ const SubmitButton = styled(Button)`
 `;
 
 const IconUploadWrapper = styled.div`
-  max-width: 280px;
+  max-width: 200px;
   margin: 0 auto;
 
   @media (max-width: 768px) {
-    max-width: 150px;
+    max-width: 120px;
   }
 `;
 

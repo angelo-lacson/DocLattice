@@ -1,0 +1,749 @@
+"""
+LlamaParse Parser for OpenContracts.
+
+This parser uses the LlamaParse API (from LlamaIndex) to parse PDF documents
+and extract structural annotations with bounding boxes.
+
+Token extraction is performed using pdfplumber to enable word-level highlighting
+in the frontend. The token extraction and bbox intersection logic is based on
+the Docsling microservice implementation.
+"""
+
+import logging
+import os
+import tempfile
+from typing import Any, Optional
+
+from django.conf import settings
+from django.core.files.storage import default_storage
+
+from opencontractserver.annotations.models import TOKEN_LABEL
+from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.pipeline.base.parser import BaseParser
+from opencontractserver.types.dicts import (
+    BoundingBoxPythonType,
+    OpenContractDocExport,
+    OpenContractsAnnotationPythonType,
+    OpenContractsSinglePageAnnotationType,
+    PawlsPagePythonType,
+    PawlsTokenPythonType,
+    TokenIdPythonType,
+)
+from opencontractserver.utils.pdf_token_extraction import (
+    extract_pawls_tokens_from_pdf,
+    find_tokens_in_bbox,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class LlamaParseParser(BaseParser):
+    """
+    A parser that uses the LlamaParse API to parse PDF documents.
+
+    LlamaParse provides advanced document parsing with layout extraction,
+    returning bounding boxes for various document elements (titles, text,
+    tables, figures, lists).
+
+    Configuration via environment variables:
+        - LLAMAPARSE_API_KEY: API key for LlamaParse (required)
+        - LLAMAPARSE_RESULT_TYPE: Output type (default: "json")
+        - LLAMAPARSE_EXTRACT_LAYOUT: Whether to extract layout (default: True)
+        - LLAMAPARSE_NUM_WORKERS: Number of parallel workers (default: 4)
+        - LLAMAPARSE_LANGUAGE: Document language (default: "en")
+        - LLAMAPARSE_VERBOSE: Enable verbose logging (default: False)
+    """
+
+    title = "LlamaParse Parser"
+    description = (
+        "Parses PDF documents using the LlamaParse API with layout extraction."
+    )
+    author = "OpenContracts Team"
+    dependencies = ["llama-parse"]
+    supported_file_types = [FileTypeEnum.PDF, FileTypeEnum.DOCX]
+
+    # Mapping from LlamaParse element types to OpenContracts annotation labels
+    ELEMENT_TYPE_MAPPING = {
+        "title": "Title",
+        "section_header": "Section Header",
+        "heading": "Heading",
+        "text": "Text Block",
+        "paragraph": "Paragraph",
+        "table": "Table",
+        "figure": "Figure",
+        "image": "Image",
+        "list": "List",
+        "list_item": "List Item",
+        "caption": "Caption",
+        "footnote": "Footnote",
+        "header": "Page Header",
+        "footer": "Page Footer",
+        "page_number": "Page Number",
+        "equation": "Equation",
+        "code": "Code Block",
+    }
+
+    def __init__(self):
+        """Initialize the LlamaParse parser with configuration from settings."""
+        super().__init__()
+
+        # Get API key from settings (which reads from env vars, supporting both
+        # LLAMAPARSE_API_KEY and LLAMA_CLOUD_API_KEY)
+        self.api_key = getattr(settings, "LLAMAPARSE_API_KEY", "")
+
+        # Get other configuration options
+        self.result_type = getattr(settings, "LLAMAPARSE_RESULT_TYPE", "json")
+        self.extract_layout = getattr(settings, "LLAMAPARSE_EXTRACT_LAYOUT", True)
+        self.num_workers = getattr(settings, "LLAMAPARSE_NUM_WORKERS", 4)
+        self.language = getattr(settings, "LLAMAPARSE_LANGUAGE", "en")
+        self.verbose = getattr(settings, "LLAMAPARSE_VERBOSE", False)
+
+        logger.info(
+            f"LlamaParseParser initialized with extract_layout={self.extract_layout}, "
+            f"language={self.language}"
+        )
+
+    def _parse_document_impl(
+        self, user_id: int, doc_id: int, **all_kwargs
+    ) -> Optional[OpenContractDocExport]:
+        """
+        Parse a document using the LlamaParse API.
+
+        Args:
+            user_id: ID of the user requesting the parse.
+            doc_id: ID of the document to parse.
+            **all_kwargs: Additional configuration options that can override defaults:
+                - api_key: Override the API key
+                - result_type: Output type ("json", "markdown", "text")
+                - extract_layout: Whether to extract layout/bounding boxes
+                - num_workers: Number of parallel workers
+                - language: Document language
+                - verbose: Enable verbose logging
+
+        Returns:
+            OpenContractDocExport with the parsed document data, or None if parsing failed.
+        """
+        # Redact sensitive keys before logging
+        safe_kwargs = {
+            k: ("***" if k == "api_key" else v) for k, v in all_kwargs.items()
+        }
+        logger.info(
+            f"LlamaParseParser - Parsing doc {doc_id} for user {user_id} "
+            f"with effective kwargs: {safe_kwargs}"
+        )
+
+        # Override settings with kwargs if provided
+        api_key = all_kwargs.get("api_key", self.api_key)
+        result_type = all_kwargs.get("result_type", self.result_type)
+        extract_layout = all_kwargs.get("extract_layout", self.extract_layout)
+        num_workers = all_kwargs.get("num_workers", self.num_workers)
+        language = all_kwargs.get("language", self.language)
+        verbose = all_kwargs.get("verbose", self.verbose)
+
+        if not api_key:
+            logger.error(
+                "LlamaParse API key not configured. Set LLAMAPARSE_API_KEY or "
+                "LLAMA_CLOUD_API_KEY environment variable."
+            )
+            return None
+
+        # Get the document
+        try:
+            document = Document.objects.get(pk=doc_id)
+        except Document.DoesNotExist:
+            logger.error(f"Document {doc_id} not found")
+            return None
+
+        # Determine which file to use
+        if document.pdf_file and document.pdf_file.name:
+            doc_path = document.pdf_file.name
+        else:
+            logger.error(f"No PDF file found for document {doc_id}")
+            return None
+
+        try:
+            # Import llama-parse here to avoid import errors if not installed
+            from llama_parse import LlamaParse
+
+            # Initialize the parser
+            parser = LlamaParse(
+                api_key=api_key,
+                result_type=result_type,
+                num_workers=num_workers,
+                verbose=verbose,
+                language=language,
+            )
+
+            # Read the file from storage and write to a temp file
+            # (LlamaParse needs a file path)
+            with default_storage.open(doc_path, "rb") as doc_file:
+                doc_bytes = doc_file.read()
+
+            # Determine file extension from document type
+            file_type = document.file_type.lower() if document.file_type else "pdf"
+            suffix = f".{file_type}" if file_type in ("pdf", "docx") else ".pdf"
+
+            # Create a temporary file - use a nested try-finally to ensure cleanup
+            # on all exit paths (success, error, or early return)
+            temp_file_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    suffix=suffix, delete=False
+                ) as temp_file:
+                    temp_file.write(doc_bytes)
+                    temp_file_path = temp_file.name
+
+                # Parse the document
+                logger.info("Sending document to LlamaParse API...")
+
+                # Use get_json_result for JSON with layout data
+                if result_type == "json" and extract_layout:
+                    # For JSON with layout, we need to use the async API or
+                    # get_json_result method
+                    json_results = parser.get_json_result(temp_file_path)
+
+                    if not json_results:
+                        logger.error("LlamaParse returned empty results")
+                        return None
+
+                    # Convert to OpenContracts format
+                    # Pass doc_bytes for token extraction
+                    return self._convert_json_to_opencontracts(
+                        document, json_results, extract_layout, doc_bytes
+                    )
+                else:
+                    # For markdown/text output, use load_data
+                    documents = parser.load_data(temp_file_path)
+
+                    if not documents:
+                        logger.error("LlamaParse returned empty results")
+                        return None
+
+                    # Convert simple text/markdown output
+                    return self._convert_text_to_opencontracts(document, documents)
+
+            finally:
+                # Clean up temp file - always runs on any exit path
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+
+        except ImportError:
+            logger.error(
+                "llama-parse library not installed. "
+                "Install with: pip install llama-parse"
+            )
+            return None
+        except Exception as e:
+            import traceback
+
+            stacktrace = traceback.format_exc()
+            logger.error(f"LlamaParse parsing failed: {e}\n{stacktrace}")
+            return None
+
+    def _convert_json_to_opencontracts(
+        self,
+        document: Document,
+        json_results: list[dict[str, Any]],
+        extract_layout: bool = True,
+        pdf_bytes: Optional[bytes] = None,
+    ) -> OpenContractDocExport:
+        """
+        Convert LlamaParse JSON results to OpenContracts format.
+
+        Args:
+            document: The Document model instance.
+            json_results: List of JSON results from LlamaParse.
+            extract_layout: Whether layout data with bounding boxes is included.
+            pdf_bytes: Raw PDF bytes for token extraction. If provided, tokens
+                      will be extracted and mapped to annotation bounding boxes.
+
+        Returns:
+            OpenContractDocExport with parsed data.
+        """
+        # The first result contains the parsed document
+        result = json_results[0] if json_results else {}
+        pages = result.get("pages", [])
+
+        # Build the full text content and collect page dimensions
+        full_text_parts = []
+        annotations: list[OpenContractsAnnotationPythonType] = []
+        page_dimensions: dict[int, tuple[float, float]] = {}
+
+        # Default page dimensions
+        DEFAULT_WIDTH = 612
+        DEFAULT_HEIGHT = 792
+
+        # First pass: collect page dimensions from LlamaParse
+        for page_idx, page in enumerate(pages):
+            page_text = page.get("text", "")
+            full_text_parts.append(page_text)
+
+            # Log full page structure on first page for debugging
+            if page_idx == 0:
+                page_keys = list(page.keys())
+                logger.info(f"DEBUG: Page keys: {page_keys}")
+
+            # Get page dimensions
+            page_width = page.get("width", page.get("w", page.get("pageWidth")))
+            page_height = page.get("height", page.get("h", page.get("pageHeight")))
+
+            # Validate dimensions - must be positive numbers
+            if page_width is None or page_width <= 0:
+                page_width = DEFAULT_WIDTH
+                logger.warning(
+                    f"Page {page_idx} has invalid width, using default: {page_width}"
+                )
+            if page_height is None or page_height <= 0:
+                page_height = DEFAULT_HEIGHT
+                logger.warning(
+                    f"Page {page_idx} has invalid height, using default: {page_height}"
+                )
+
+            page_dimensions[page_idx] = (float(page_width), float(page_height))
+
+        # Extract tokens from PDF if bytes are provided
+        pawls_pages: list[PawlsPagePythonType] = []
+        spatial_indices = {}
+        tokens_by_page = {}
+        token_indices_by_page = {}
+        extracted_page_dims = {}
+
+        if pdf_bytes:
+            try:
+                logger.info("Extracting tokens from PDF for annotation mapping...")
+                (
+                    pawls_pages,
+                    spatial_indices,
+                    tokens_by_page,
+                    token_indices_by_page,
+                    extracted_page_dims,
+                    _,  # content - we already have it from LlamaParse
+                ) = extract_pawls_tokens_from_pdf(pdf_bytes, page_dimensions)
+                logger.info(
+                    f"Extracted tokens from {len(pawls_pages)} pages. "
+                    f"Token counts: {[len(p.get('tokens', [])) for p in pawls_pages]}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to extract tokens from PDF: {e}. "
+                    "Annotations will have empty tokensJsons."
+                )
+                # Fall back to empty PAWLS pages
+                pawls_pages = []
+                spatial_indices = {}
+                tokens_by_page = {}
+                token_indices_by_page = {}
+
+        # If token extraction failed or wasn't attempted, create empty PAWLS pages
+        if not pawls_pages:
+            for page_idx in range(len(pages)):
+                width, height = page_dimensions.get(
+                    page_idx, (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                )
+                pawls_page: PawlsPagePythonType = {
+                    "page": {
+                        "width": width,
+                        "height": height,
+                        "index": page_idx,
+                    },
+                    "tokens": [],
+                }
+                pawls_pages.append(pawls_page)
+
+        # Track annotation IDs
+        annotation_id_counter = 0
+
+        # Second pass: process items and create annotations with token references
+        for page_idx, page in enumerate(pages):
+            page_width, page_height = page_dimensions.get(
+                page_idx, (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+            )
+
+            # Extract layout elements if available
+            layout_elements = page.get("layout", []) if extract_layout else []
+            items = page.get("items", [])
+
+            # Debug: Log first few items to understand bbox format
+            if page_idx == 0 and items:
+                logger.info(f"DEBUG: Page dimensions: {page_width}x{page_height}")
+                if items:
+                    logger.info(f"DEBUG: Full first item structure: {items[0]}")
+                for i, debug_item in enumerate(items[:3]):
+                    bbox_val = debug_item.get(
+                        "bBox",
+                        debug_item.get("bbox", debug_item.get("bounding_box", "NONE")),
+                    )
+                    logger.info(
+                        f"DEBUG: Item {i} keys: {debug_item.keys()}, "
+                        f"bBox: {bbox_val}, "
+                        f"text: {debug_item.get('text', debug_item.get('value', ''))[:50]}"
+                    )
+
+            for item in items:
+                item_text = item.get("text", "") or item.get("value", "")
+                item_type = item.get("type", "text").lower()
+                bbox = item.get("bBox", item.get("bbox", item.get("bounding_box", {})))
+
+                if not item_text.strip():
+                    continue
+
+                # Parse bbox to get bounds
+                _, bounds = self._create_pawls_tokens_from_bbox(
+                    item_text,
+                    bbox,
+                    page_width,
+                    page_height,
+                    annotation_id_counter,
+                )
+
+                # Find tokens that intersect with this annotation's bounding box
+                token_refs = find_tokens_in_bbox(
+                    bounds,
+                    page_idx,
+                    spatial_indices.get(page_idx),
+                    token_indices_by_page.get(page_idx),
+                    tokens_by_page.get(page_idx),
+                )
+
+                # Create annotation with token references
+                label = self.ELEMENT_TYPE_MAPPING.get(item_type, "Text Block")
+                annotation = self._create_annotation(
+                    annotation_id=str(annotation_id_counter),
+                    label=label,
+                    raw_text=item_text,
+                    page_idx=page_idx,
+                    bounds=bounds,
+                    token_refs=token_refs,
+                )
+                annotations.append(annotation)
+                annotation_id_counter += 1
+
+            # If no items but we have layout, process layout elements
+            if not items and layout_elements:
+                for element in layout_elements:
+                    element_type = element.get("label", "text").lower()
+                    bbox = element.get(
+                        "bBox", element.get("bbox", element.get("bounding_box", {}))
+                    )
+                    element_text = element.get("text", "")
+
+                    if not element_text and element_type not in ["figure", "image"]:
+                        continue
+
+                    _, bounds = self._create_pawls_tokens_from_bbox(
+                        element_text or f"[{element_type}]",
+                        bbox,
+                        page_width,
+                        page_height,
+                        annotation_id_counter,
+                    )
+
+                    # Find tokens that intersect with this annotation's bounding box
+                    token_refs = find_tokens_in_bbox(
+                        bounds,
+                        page_idx,
+                        spatial_indices.get(page_idx),
+                        token_indices_by_page.get(page_idx),
+                        tokens_by_page.get(page_idx),
+                    )
+
+                    label = self.ELEMENT_TYPE_MAPPING.get(element_type, "Text Block")
+                    annotation = self._create_annotation(
+                        annotation_id=str(annotation_id_counter),
+                        label=label,
+                        raw_text=element_text or f"[{element_type}]",
+                        page_idx=page_idx,
+                        bounds=bounds,
+                        token_refs=token_refs,
+                    )
+                    annotations.append(annotation)
+                    annotation_id_counter += 1
+
+        # Combine all text
+        full_text = "\n\n".join(full_text_parts)
+
+        # Build the export
+        export: OpenContractDocExport = {
+            "title": document.title,
+            "content": full_text,
+            "description": document.description or "",
+            "pawls_file_content": pawls_pages,
+            "page_count": len(pages),
+            "doc_labels": [],
+            "labelled_text": annotations,
+            "relationships": [],
+        }
+
+        # Log summary
+        total_tokens = sum(len(p.get("tokens", [])) for p in pawls_pages)
+        annotations_with_tokens = sum(
+            1
+            for a in annotations
+            if a.get("annotation_json", {})
+            .get(str(a.get("page", 0)), {})
+            .get("tokensJsons")
+        )
+        logger.info(
+            f"Converted LlamaParse output: {len(pages)} pages, "
+            f"{len(annotations)} annotations, {total_tokens} tokens, "
+            f"{annotations_with_tokens} annotations with token references"
+        )
+
+        return export
+
+    def _convert_text_to_opencontracts(
+        self,
+        document: Document,
+        llama_documents: list[Any],
+    ) -> OpenContractDocExport:
+        """
+        Convert simple text/markdown LlamaParse output to OpenContracts format.
+
+        This is used when layout extraction is not enabled.
+
+        Args:
+            document: The Document model instance.
+            llama_documents: List of LlamaIndex Document objects.
+
+        Returns:
+            OpenContractDocExport with parsed data.
+        """
+        # Combine text from all documents
+        full_text = "\n\n".join(doc.text for doc in llama_documents if doc.text)
+
+        # Without layout data, we create a minimal export
+        export: OpenContractDocExport = {
+            "title": document.title,
+            "content": full_text,
+            "description": document.description or "",
+            "pawls_file_content": [],
+            "page_count": len(llama_documents) or 1,
+            "doc_labels": [],
+            "labelled_text": [],
+            "relationships": [],
+        }
+
+        logger.info(
+            f"Converted LlamaParse text output: {len(llama_documents)} documents, "
+            f"{len(full_text)} characters"
+        )
+
+        return export
+
+    def _create_pawls_tokens_from_bbox(
+        self,
+        text: str,
+        bbox: dict[str, Any],
+        page_width: float,
+        page_height: float,
+        start_token_idx: int,
+    ) -> tuple[list[PawlsTokenPythonType], BoundingBoxPythonType]:
+        """
+        Create PAWLS tokens from text and bounding box.
+
+        LlamaParse returns bounding boxes as fractions (0-1) of page dimensions.
+        We need to convert these to absolute coordinates.
+
+        Args:
+            text: The text content.
+            bbox: Bounding box dict with keys like 'x', 'y', 'width', 'height' or
+                  'left', 'top', 'right', 'bottom' (as fractions 0-1).
+            page_width: Page width in points.
+            page_height: Page height in points.
+            start_token_idx: Starting token index.
+
+        Returns:
+            Tuple of (list of PAWLS tokens, overall bounding box).
+        """
+        tokens: list[PawlsTokenPythonType] = []
+
+        # Default margin constant (1 inch = 72 points)
+        DEFAULT_MARGIN = 72
+        # Default bottom position for fallback bounding boxes (~1.4 inches from top)
+        # This provides reasonable vertical space for a single-line text element
+        DEFAULT_BOTTOM = 100
+
+        # Parse bounding box - handle different formats from LlamaParse
+        # LlamaParse may return fractional coordinates (0-1) or absolute coordinates
+        bbox_format = "none"
+        is_fractional = False
+
+        if not bbox:
+            # No bbox, create a default one with standard margins
+            bbox_format = "default/empty"
+            left, top = DEFAULT_MARGIN, DEFAULT_MARGIN
+            right, bottom = page_width - DEFAULT_MARGIN, DEFAULT_BOTTOM
+        elif "x1" in bbox and "y1" in bbox:
+            # Format: {x1, y1, x2, y2} - corner coordinates
+            bbox_format = "x1/y1/x2/y2"
+            x1 = float(bbox.get("x1", 0))
+            y1 = float(bbox.get("y1", 0))
+            x2 = float(bbox.get("x2", 0))
+            y2 = float(bbox.get("y2", 0))
+
+            # Check if fractional
+            is_fractional = all(0 <= v <= 1.0 for v in [x1, y1, x2, y2])
+            if is_fractional:
+                left = x1 * page_width
+                top = y1 * page_height
+                right = x2 * page_width
+                bottom = y2 * page_height
+            else:
+                left, top, right, bottom = x1, y1, x2, y2
+        elif "x" in bbox and "y" in bbox:
+            # Format: {x, y, width/w, height/h}
+            # LlamaParse uses 'w' and 'h' shorthand
+            bbox_format = "x/y/w/h"
+            x = float(bbox.get("x", 0))
+            y = float(bbox.get("y", 0))
+            w = float(bbox.get("w", bbox.get("width", 0.1)))
+            h = float(bbox.get("h", bbox.get("height", 0.02)))
+
+            # Check if values are fractions (0-1) or absolute
+            # Heuristic: if both corners (x,y) and (x+w,y+h) are in [0,1], treat as fractional
+            is_fractional = (
+                0 <= x <= 1.0
+                and 0 <= y <= 1.0
+                and 0 <= (x + w) <= 1.0
+                and 0 <= (y + h) <= 1.0
+            )
+            if is_fractional:
+                left = x * page_width
+                top = y * page_height
+                right = (x + w) * page_width
+                bottom = (y + h) * page_height
+            else:
+                left, top = x, y
+                right = x + w
+                bottom = y + h
+        elif "left" in bbox:
+            # Format: {left, top, right, bottom}
+            bbox_format = "left/top/right/bottom"
+            bbox_l = float(bbox.get("left", 0))
+            bbox_t = float(bbox.get("top", 0))
+            bbox_r = float(bbox.get("right", 1))
+            bbox_b = float(bbox.get("bottom", 0.05))
+
+            # Check if ALL values are in [0,1] range - indicates fractional coordinates
+            is_fractional = all(0 <= v <= 1.0 for v in [bbox_l, bbox_t, bbox_r, bbox_b])
+            if is_fractional:
+                left = bbox_l * page_width
+                top = bbox_t * page_height
+                right = bbox_r * page_width
+                bottom = bbox_b * page_height
+            else:
+                left, top, right, bottom = bbox_l, bbox_t, bbox_r, bbox_b
+        elif isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+            # Format: [x1, y1, x2, y2] or [left, top, right, bottom]
+            bbox_format = "array[4]"
+            vals = [float(v) for v in bbox[:4]]
+            # Check if ALL values are in [0,1] range - indicates fractional coordinates
+            is_fractional = all(0 <= v <= 1.0 for v in vals)
+            if is_fractional:
+                left = vals[0] * page_width
+                top = vals[1] * page_height
+                right = vals[2] * page_width
+                bottom = vals[3] * page_height
+            else:
+                left, top, right, bottom = vals
+        else:
+            # Unknown format, use defaults with standard margins
+            bbox_format = f"unknown:{type(bbox).__name__}"
+            left, top = DEFAULT_MARGIN, DEFAULT_MARGIN
+            right, bottom = page_width - DEFAULT_MARGIN, DEFAULT_BOTTOM
+
+        # Sanity checks and bounds validation
+        # Ensure left < right and top < bottom (swap if needed)
+        if left > right:
+            left, right = right, left
+        if top > bottom:
+            top, bottom = bottom, top
+
+        # Clamp to page bounds
+        left = max(0, min(left, page_width))
+        right = max(0, min(right, page_width))
+        top = max(0, min(top, page_height))
+        bottom = max(0, min(bottom, page_height))
+
+        # Ensure minimum dimensions (at least 1 point)
+        if right - left < 1:
+            right = left + 1
+        if bottom - top < 1:
+            bottom = top + 1
+
+        # NOTE: We do NOT create fake tokens here. LlamaParse only provides element-level
+        # bounding boxes, not token-level data. Creating fake tokens by evenly distributing
+        # words across the bbox produces incorrect highlights. The frontend handles
+        # annotations with empty tokensJsons gracefully - it just shows the bounding box
+        # without individual token highlights.
+
+        # Create overall bounding box
+        bounds: BoundingBoxPythonType = {
+            "left": left,
+            "top": top,
+            "right": right,
+            "bottom": bottom,
+        }
+
+        # Debug logging for first few conversions
+        if start_token_idx < 5:
+            logger.info(
+                f"DEBUG bbox: format={bbox_format}, fractional={is_fractional}, "
+                f"input={bbox}"
+            )
+            logger.info(
+                f"DEBUG output: bounds=({left:.1f}, {top:.1f}, {right:.1f}, {bottom:.1f}), "
+                f"page={page_width:.0f}x{page_height:.0f}"
+            )
+
+        # Return empty tokens list - we don't have real token data from LlamaParse
+        return tokens, bounds
+
+    def _create_annotation(
+        self,
+        annotation_id: str,
+        label: str,
+        raw_text: str,
+        page_idx: int,
+        bounds: BoundingBoxPythonType,
+        token_refs: Optional[list[TokenIdPythonType]] = None,
+    ) -> OpenContractsAnnotationPythonType:
+        """
+        Create an OpenContracts annotation.
+
+        Args:
+            annotation_id: Unique ID for the annotation.
+            label: The annotation label.
+            raw_text: The text content.
+            page_idx: Page index (0-based).
+            bounds: Bounding box.
+            token_refs: Optional list of token references ({pageIndex, tokenIndex})
+                       that fall within the annotation's bounding box. If None or
+                       empty, the annotation will have an empty tokensJsons array.
+
+        Returns:
+            OpenContractsAnnotationPythonType annotation.
+        """
+        # Use provided token references, or empty list if none provided
+        tokens_jsons = token_refs if token_refs else []
+
+        # Create page annotation with token references
+        page_annotation: OpenContractsSinglePageAnnotationType = {
+            "bounds": bounds,
+            "tokensJsons": tokens_jsons,
+            "rawText": raw_text,
+        }
+
+        annotation: OpenContractsAnnotationPythonType = {
+            "id": annotation_id,
+            "annotationLabel": label,
+            "rawText": raw_text,
+            "page": page_idx,
+            "annotation_json": {str(page_idx): page_annotation},
+            "parent_id": None,
+            "annotation_type": TOKEN_LABEL,
+            "structural": True,
+        }
+
+        return annotation

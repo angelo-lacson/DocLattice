@@ -340,6 +340,107 @@ class TestToolResolution(TestCase):
             # Should log warnings for invalid tools
             self.assertEqual(mock_logger.warning.call_count, 2)
 
+    def test_moderation_tool_resolution(self):
+        """Test that moderation tools are resolved correctly."""
+        from opencontractserver.llms.api import _resolve_tools
+
+        moderation_tools = [
+            "get_thread_context",
+            "get_thread_messages",
+            "get_message_content",
+            "delete_message",
+            "lock_thread",
+            "unlock_thread",
+            "add_thread_message",
+            "pin_thread",
+            "unpin_thread",
+        ]
+
+        resolved = _resolve_tools(moderation_tools)
+
+        self.assertEqual(len(resolved), 9)
+        self.assertTrue(all(isinstance(tool, CoreTool) for tool in resolved))
+
+        # Verify tool names match
+        resolved_names = {tool.name for tool in resolved}
+        for tool_name in moderation_tools:
+            # Async versions are prefixed with 'a'
+            self.assertIn(f"a{tool_name}", resolved_names)
+
+    def test_moderation_tool_partial_resolution(self):
+        """Test resolving a subset of moderation tools."""
+        from opencontractserver.llms.api import _resolve_tools
+
+        tools_list = ["get_thread_context", "lock_thread"]
+        resolved = _resolve_tools(tools_list)
+
+        self.assertEqual(len(resolved), 2)
+        self.assertTrue(all(isinstance(tool, CoreTool) for tool in resolved))
+
+    def test_core_tool_resolution(self):
+        """Test that core document/corpus tools are resolved correctly."""
+        from opencontractserver.llms.api import _resolve_tools
+
+        core_tools = [
+            "update_corpus_description",
+            "get_corpus_description",
+            "load_document_txt_extract",
+            "get_document_description",
+            "update_document_description",
+            "get_document_summary",
+            "update_document_summary",
+            "add_document_note",
+            "update_document_note",
+            "search_document_notes",
+            "search_exact_text_as_sources",
+            "add_annotations_from_exact_strings",
+            "get_page_image",
+        ]
+
+        resolved = _resolve_tools(core_tools)
+
+        self.assertEqual(len(resolved), 13)
+        self.assertTrue(all(isinstance(tool, CoreTool) for tool in resolved))
+
+    def test_core_tool_alias_resolution(self):
+        """Test that load_document_text alias works."""
+        from opencontractserver.llms.api import _resolve_tools
+
+        # load_document_text is an alias for load_document_txt_extract
+        tools_list = ["load_document_text"]
+        resolved = _resolve_tools(tools_list)
+
+        self.assertEqual(len(resolved), 1)
+        self.assertIsInstance(resolved[0], CoreTool)
+        self.assertEqual(resolved[0].name, "load_document_txt_extract")
+
+    def test_core_tool_partial_resolution(self):
+        """Test resolving a subset of core tools."""
+        from opencontractserver.llms.api import _resolve_tools
+
+        tools_list = ["get_corpus_description", "get_document_summary"]
+        resolved = _resolve_tools(tools_list)
+
+        self.assertEqual(len(resolved), 2)
+        self.assertTrue(all(isinstance(tool, CoreTool) for tool in resolved))
+
+    def test_mixed_moderation_and_core_tools(self):
+        """Test resolving a mix of moderation and core tools."""
+        from opencontractserver.llms.api import _resolve_tools
+
+        tools_list = [
+            "get_thread_context",  # moderation
+            "get_corpus_description",  # core
+            "lock_thread",  # moderation
+            "get_document_summary",  # core
+            "summarize",  # builtin alias
+        ]
+
+        resolved = _resolve_tools(tools_list)
+
+        self.assertEqual(len(resolved), 5)
+        self.assertTrue(all(isinstance(tool, CoreTool) for tool in resolved))
+
 
 class TestAPIIntegration(TestCase):
     """Integration tests for the complete API."""

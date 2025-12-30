@@ -696,3 +696,507 @@ class MentionIDORProtectionTestCase(TestCase):
         )
 
         # Attacker cannot tell the difference between non-existent and inaccessible
+
+
+class CorpusScopedMentionSearchTestCase(TestCase):
+    """
+    Test corpus-scoped mention searches (Issue #741).
+
+    These tests verify that when a corpus_id is provided to mention search queries,
+    the results are properly filtered to only include resources within that corpus.
+    This prevents cross-corpus references in AI agent contexts.
+    """
+
+    def setUp(self):
+        """Create test users, corpuses, documents, and annotations."""
+        from graphql_relay import to_global_id
+
+        from opencontractserver.annotations.models import Annotation, AnnotationLabel
+
+        self.owner = User.objects.create_user(username="owner", password="test")
+
+        # Create two corpuses
+        self.corpus_a = Corpus.objects.create(
+            title="Corpus A",
+            description="First corpus",
+            creator=self.owner,
+            is_public=True,
+        )
+        self.corpus_b = Corpus.objects.create(
+            title="Corpus B",
+            description="Second corpus",
+            creator=self.owner,
+            is_public=True,
+        )
+
+        # Create documents in each corpus
+        self.doc_in_corpus_a = Document.objects.create(
+            title="Document in A",
+            description="Test document A",
+            creator=self.owner,
+            is_public=True,
+        )
+        self.doc_in_corpus_a, _, _ = self.corpus_a.add_document(
+            document=self.doc_in_corpus_a, user=self.owner
+        )
+
+        self.doc_in_corpus_b = Document.objects.create(
+            title="Document in B",
+            description="Test document B",
+            creator=self.owner,
+            is_public=True,
+        )
+        self.doc_in_corpus_b, _, _ = self.corpus_b.add_document(
+            document=self.doc_in_corpus_b, user=self.owner
+        )
+
+        # Create label for annotations
+        self.label = AnnotationLabel.objects.create(
+            text="TestLabel",
+            creator=self.owner,
+            label_type="TOKEN_LABEL",
+        )
+
+        # Create annotations in each corpus
+        self.annotation_in_corpus_a = Annotation.objects.create(
+            document=self.doc_in_corpus_a,
+            corpus=self.corpus_a,
+            annotation_label=self.label,
+            raw_text="Annotation text in corpus A",
+            page=1,
+            creator=self.owner,
+        )
+
+        self.annotation_in_corpus_b = Annotation.objects.create(
+            document=self.doc_in_corpus_b,
+            corpus=self.corpus_b,
+            annotation_label=self.label,
+            raw_text="Annotation text in corpus B",
+            page=1,
+            creator=self.owner,
+        )
+
+        # Store global IDs for corpus filtering
+        self.corpus_a_global_id = to_global_id("CorpusType", self.corpus_a.pk)
+        self.corpus_b_global_id = to_global_id("CorpusType", self.corpus_b.pk)
+
+    def test_document_search_scoped_to_corpus_a(self):
+        """Document search with corpus_id only returns docs in that corpus."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        # Search documents scoped to corpus A
+        results = query.resolve_search_documents_for_mention(
+            MockInfo(), text_search="Document", corpus_id=self.corpus_a_global_id
+        )
+
+        doc_ids = [d.id for d in results]
+
+        self.assertIn(
+            self.doc_in_corpus_a.id,
+            doc_ids,
+            "Document in corpus A should appear when filtering by corpus A",
+        )
+        self.assertNotIn(
+            self.doc_in_corpus_b.id,
+            doc_ids,
+            "Document in corpus B should NOT appear when filtering by corpus A",
+        )
+
+    def test_document_search_scoped_to_corpus_b(self):
+        """Document search with corpus_id filters correctly to corpus B."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        # Search documents scoped to corpus B
+        results = query.resolve_search_documents_for_mention(
+            MockInfo(), text_search="Document", corpus_id=self.corpus_b_global_id
+        )
+
+        doc_ids = [d.id for d in results]
+
+        self.assertIn(
+            self.doc_in_corpus_b.id,
+            doc_ids,
+            "Document in corpus B should appear when filtering by corpus B",
+        )
+        self.assertNotIn(
+            self.doc_in_corpus_a.id,
+            doc_ids,
+            "Document in corpus A should NOT appear when filtering by corpus B",
+        )
+
+    def test_document_search_without_corpus_returns_all(self):
+        """Document search without corpus_id returns documents from all corpuses."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        # Search documents without corpus filtering
+        results = query.resolve_search_documents_for_mention(
+            MockInfo(), text_search="Document"
+        )
+
+        doc_ids = [d.id for d in results]
+
+        self.assertIn(
+            self.doc_in_corpus_a.id,
+            doc_ids,
+            "Document in corpus A should appear without corpus filter",
+        )
+        self.assertIn(
+            self.doc_in_corpus_b.id,
+            doc_ids,
+            "Document in corpus B should appear without corpus filter",
+        )
+
+    def test_annotation_search_scoped_to_corpus_a(self):
+        """Annotation search with corpus_id only returns annotations in that corpus."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        # Search annotations scoped to corpus A
+        results = query.resolve_search_annotations_for_mention(
+            MockInfo(), text_search="Annotation", corpus_id=self.corpus_a_global_id
+        )
+
+        annotation_ids = [a.id for a in results]
+
+        self.assertIn(
+            self.annotation_in_corpus_a.id,
+            annotation_ids,
+            "Annotation in corpus A should appear when filtering by corpus A",
+        )
+        self.assertNotIn(
+            self.annotation_in_corpus_b.id,
+            annotation_ids,
+            "Annotation in corpus B should NOT appear when filtering by corpus A",
+        )
+
+    def test_annotation_search_scoped_to_corpus_b(self):
+        """Annotation search with corpus_id filters correctly to corpus B."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        # Search annotations scoped to corpus B
+        results = query.resolve_search_annotations_for_mention(
+            MockInfo(), text_search="Annotation", corpus_id=self.corpus_b_global_id
+        )
+
+        annotation_ids = [a.id for a in results]
+
+        self.assertIn(
+            self.annotation_in_corpus_b.id,
+            annotation_ids,
+            "Annotation in corpus B should appear when filtering by corpus B",
+        )
+        self.assertNotIn(
+            self.annotation_in_corpus_a.id,
+            annotation_ids,
+            "Annotation in corpus A should NOT appear when filtering by corpus B",
+        )
+
+    def test_annotation_search_without_corpus_returns_all(self):
+        """Annotation search without corpus_id returns annotations from all corpuses."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        # Search annotations without corpus filtering
+        results = query.resolve_search_annotations_for_mention(
+            MockInfo(), text_search="Annotation"
+        )
+
+        annotation_ids = [a.id for a in results]
+
+        self.assertIn(
+            self.annotation_in_corpus_a.id,
+            annotation_ids,
+            "Annotation in corpus A should appear without corpus filter",
+        )
+        self.assertIn(
+            self.annotation_in_corpus_b.id,
+            annotation_ids,
+            "Annotation in corpus B should appear without corpus filter",
+        )
+
+    def test_document_search_with_invalid_corpus_returns_empty(self):
+        """Document search with invalid corpus_id returns empty results safely."""
+        from graphql_relay import to_global_id
+
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        # Search with a non-existent corpus ID
+        fake_corpus_id = to_global_id("CorpusType", 99999)
+        results = query.resolve_search_documents_for_mention(
+            MockInfo(), text_search="Document", corpus_id=fake_corpus_id
+        )
+
+        doc_ids = list(results)
+        self.assertEqual(
+            len(doc_ids),
+            0,
+            "Search with non-existent corpus should return empty results",
+        )
+
+    def test_annotation_search_with_invalid_corpus_returns_empty(self):
+        """Annotation search with invalid corpus_id returns empty results safely."""
+        from graphql_relay import to_global_id
+
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        # Search with a non-existent corpus ID
+        fake_corpus_id = to_global_id("CorpusType", 99999)
+        results = query.resolve_search_annotations_for_mention(
+            MockInfo(), text_search="Annotation", corpus_id=fake_corpus_id
+        )
+
+        annotation_ids = list(results)
+        self.assertEqual(
+            len(annotation_ids),
+            0,
+            "Search with non-existent corpus should return empty results",
+        )
+
+
+class AgentMentionCorpusScopingTestCase(TestCase):
+    """
+    Test corpus-scoped agent mention searches (Issue #741).
+
+    Agent configurations can be GLOBAL (visible everywhere) or CORPUS-scoped
+    (visible only within a specific corpus). The search should return:
+    - All GLOBAL agents
+    - CORPUS-scoped agents for the specified corpus (if corpus_id provided)
+    """
+
+    def setUp(self):
+        """Create test agents and corpuses."""
+        from graphql_relay import to_global_id
+
+        from opencontractserver.agents.models import AgentConfiguration
+
+        self.owner = User.objects.create_user(username="owner", password="test")
+
+        # Create two corpuses
+        self.corpus_a = Corpus.objects.create(
+            title="Corpus A",
+            description="First corpus",
+            creator=self.owner,
+            is_public=True,
+        )
+        self.corpus_b = Corpus.objects.create(
+            title="Corpus B",
+            description="Second corpus",
+            creator=self.owner,
+            is_public=True,
+        )
+
+        # Create a global agent
+        self.global_agent = AgentConfiguration.objects.create(
+            name="Global Agent",
+            slug="global-agent",
+            description="Available everywhere",
+            scope="GLOBAL",
+            is_active=True,
+            creator=self.owner,
+        )
+
+        # Create corpus-scoped agents
+        self.agent_for_corpus_a = AgentConfiguration.objects.create(
+            name="Agent for Corpus A",
+            slug="agent-corpus-a",
+            description="Only in corpus A",
+            scope="CORPUS",
+            corpus=self.corpus_a,
+            is_active=True,
+            creator=self.owner,
+        )
+
+        self.agent_for_corpus_b = AgentConfiguration.objects.create(
+            name="Agent for Corpus B",
+            slug="agent-corpus-b",
+            description="Only in corpus B",
+            scope="CORPUS",
+            corpus=self.corpus_b,
+            is_active=True,
+            creator=self.owner,
+        )
+
+        # Store global IDs
+        self.corpus_a_global_id = to_global_id("CorpusType", self.corpus_a.pk)
+        self.corpus_b_global_id = to_global_id("CorpusType", self.corpus_b.pk)
+
+    def test_agent_search_scoped_to_corpus_a_returns_global_and_corpus_a(self):
+        """Agent search with corpus_id returns global + that corpus's agents."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        results = query.resolve_search_agents_for_mention(
+            MockInfo(), text_search="Agent", corpus_id=self.corpus_a_global_id
+        )
+
+        agent_names = [a.name for a in results]
+
+        self.assertIn(
+            self.global_agent.name,
+            agent_names,
+            "Global agent should always appear",
+        )
+        self.assertIn(
+            self.agent_for_corpus_a.name,
+            agent_names,
+            "Corpus A agent should appear when filtering by corpus A",
+        )
+        self.assertNotIn(
+            self.agent_for_corpus_b.name,
+            agent_names,
+            "Corpus B agent should NOT appear when filtering by corpus A",
+        )
+
+    def test_agent_search_scoped_to_corpus_b_returns_global_and_corpus_b(self):
+        """Agent search with corpus_id filters correctly to corpus B."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        results = query.resolve_search_agents_for_mention(
+            MockInfo(), text_search="Agent", corpus_id=self.corpus_b_global_id
+        )
+
+        agent_names = [a.name for a in results]
+
+        self.assertIn(
+            self.global_agent.name,
+            agent_names,
+            "Global agent should always appear",
+        )
+        self.assertIn(
+            self.agent_for_corpus_b.name,
+            agent_names,
+            "Corpus B agent should appear when filtering by corpus B",
+        )
+        self.assertNotIn(
+            self.agent_for_corpus_a.name,
+            agent_names,
+            "Corpus A agent should NOT appear when filtering by corpus B",
+        )
+
+    def test_agent_search_without_corpus_returns_all_visible(self):
+        """Agent search without corpus_id returns all visible agents."""
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = self.owner
+
+            context = MockContext()
+
+        results = query.resolve_search_agents_for_mention(
+            MockInfo(), text_search="Agent"
+        )
+
+        agent_names = [a.name for a in results]
+
+        # Without corpus filter, should see global and all corpus-scoped agents
+        # that are visible to the user (via visible_to_user)
+        self.assertIn(
+            self.global_agent.name,
+            agent_names,
+            "Global agent should appear without corpus filter",
+        )
+
+    def test_anonymous_user_cannot_search_agents(self):
+        """Anonymous users cannot search for agents."""
+        from django.contrib.auth.models import AnonymousUser
+
+        from config.graphql.queries import Query
+
+        query = Query()
+
+        class MockInfo:
+            class MockContext:
+                user = AnonymousUser()
+
+            context = MockContext()
+
+        results = query.resolve_search_agents_for_mention(
+            MockInfo(), text_search="Agent"
+        )
+
+        agent_ids = list(results)
+        self.assertEqual(
+            len(agent_ids),
+            0,
+            "Anonymous users should not be able to search agents",
+        )

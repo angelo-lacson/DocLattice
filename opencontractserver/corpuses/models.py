@@ -13,7 +13,6 @@ from django.utils import timezone
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from tree_queries.models import TreeNode
 
-from opencontractserver.annotations.models import Annotation
 from opencontractserver.corpuses.managers import CorpusActionExecutionManager
 from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.QuerySets import PermissionedTreeQuerySet
@@ -784,71 +783,11 @@ class CorpusGroupObjectPermission(GroupObjectPermissionBase):
     # enabled = False
 
 
-class CorpusQuery(BaseOCModel):
-    """
-    Store the response to the query as a structured annotation which can then be
-    displayed and sources rendered via the frontend.
-
-    NOTE - not permissioned separately from the corpus
-    """
-
-    query = django.db.models.TextField(blank=False, null=False)
-    corpus = django.db.models.ForeignKey(
-        "Corpus", on_delete=django.db.models.CASCADE, related_name="queries"
-    )
-    sources = django.db.models.ManyToManyField(
-        Annotation,
-        blank=True,
-        related_name="queries",
-        related_query_name="created_by_query",
-    )
-    response = django.db.models.TextField(blank=True, null=True)
-    started = django.db.models.DateTimeField(null=True, blank=True)
-    completed = django.db.models.DateTimeField(null=True, blank=True)
-    failed = django.db.models.DateTimeField(null=True, blank=True)
-    stacktrace = django.db.models.TextField(null=True, blank=True)
-
-    class Meta:
-        permissions = (
-            ("permission_corpusquery", "permission corpusquery"),
-            ("publish_corpusquery", "publish corpusquery"),
-            ("create_corpusquery", "create corpusquery"),
-            ("read_corpusquery", "read corpusquery"),
-            ("update_corpusquery", "update corpusquery"),
-            ("remove_corpusquery", "delete corpusquery"),
-            ("comment_corpusquery", "comment corpusquery"),
-        )
-        indexes = [
-            django.db.models.Index(fields=["corpus"]),
-            django.db.models.Index(fields=["started"]),
-            django.db.models.Index(fields=["completed"]),
-            django.db.models.Index(fields=["failed"]),
-            django.db.models.Index(fields=["creator"]),
-            django.db.models.Index(fields=["created"]),
-        ]
-        ordering = ("created",)
-        base_manager_name = "objects"
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class CorpusQueryUserObjectPermission(UserObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "CorpusQuery", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
-
-
-# Model for Django Guardian permissions... trying to improve performance...
-class CorpusQueryGroupObjectPermission(GroupObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "CorpusQuery", on_delete=django.db.models.CASCADE
-    )
-    # enabled = False
-
-
 class CorpusActionTrigger(django.db.models.TextChoices):
     ADD_DOCUMENT = "add_document", "Add Document"
     EDIT_DOCUMENT = "edit_document", "Edit Document"
+    NEW_THREAD = "new_thread", "New Thread Created"
+    NEW_MESSAGE = "new_message", "New Message Posted"
 
 
 class CorpusAction(BaseOCModel):
@@ -1305,8 +1244,28 @@ class CorpusActionExecution(BaseOCModel):
     document = django.db.models.ForeignKey(
         "documents.Document",
         on_delete=django.db.models.CASCADE,
+        null=True,
+        blank=True,
         related_name="corpus_action_executions",
-        help_text="The document this action was executed on",
+        help_text="The document this action was executed on (null for thread-based actions)",
+    )
+
+    # Thread/message context (for NEW_THREAD and NEW_MESSAGE triggers)
+    conversation = django.db.models.ForeignKey(
+        "conversations.Conversation",
+        on_delete=django.db.models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="corpus_action_executions",
+        help_text="The thread that triggered this execution (for thread-based actions)",
+    )
+    message = django.db.models.ForeignKey(
+        "conversations.ChatMessage",
+        on_delete=django.db.models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="corpus_action_executions",
+        help_text="The message that triggered this execution (for NEW_MESSAGE trigger)",
     )
 
     # Denormalized for query performance (avoids join through corpus_action)
@@ -1481,10 +1440,22 @@ class CorpusActionExecution(BaseOCModel):
                 fields=["corpus_action", "document", "status"],
                 name="corpusactionexec_dedup",
             ),
+            # Query: "Get executions for a conversation (thread) across all actions"
+            # Used by: thread moderation history
+            django.db.models.Index(
+                fields=["conversation", "-queued_at"],
+                name="corpusactionexec_conv_queue",
+            ),
         ]
 
     def __str__(self):
-        return f"{self.action_type}:{self.corpus_action.name}@{self.document_id} ({self.status})"
+        if self.document_id:
+            target = f"doc:{self.document_id}"
+        elif self.conversation_id:
+            target = f"thread:{self.conversation_id}"
+        else:
+            target = "unknown"
+        return f"{self.action_type}:{self.corpus_action.name}@{target} ({self.status})"
 
     @property
     def duration_seconds(self) -> Optional[float]:

@@ -580,7 +580,7 @@ def update_corpus_description(
     diff_text: str | None = None,
     author_id: int | None = None,
     author=None,
-) -> "CorpusDescriptionRevision | None":
+) -> CorpusDescriptionRevision | None:
     """Patch or replace a corpus markdown description.
 
     Provide either *new_content* or an ``ndiff`` *diff_text* that will be

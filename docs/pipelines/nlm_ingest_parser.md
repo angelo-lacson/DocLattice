@@ -170,16 +170,19 @@ class NLMIngestParser(BaseParser):
 - **File Size**: Can handle large PDF files efficiently
 - **Concurrent Processing**: Thread-safe for parallel processing
 
-## Comparison with Docling Parser
+## Comparison with Other Parsers
 
-| Feature | NLM Ingest | Docling |
-|---------|------------|---------|
-| Speed | Faster | Slower |
-| Accuracy | Good | Excellent |
-| OCR Support | Limited | Full |
-| Table Extraction | Good | Excellent |
-| Memory Usage | Lower | Higher |
-| Dependencies | Simpler | Complex |
+| Feature | NLM Ingest | Docling | LlamaParse |
+|---------|------------|---------|------------|
+| Deployment | Local | Local microservice | Cloud API |
+| Speed | Faster | Slower | Network-dependent |
+| Accuracy | Good | Excellent | Excellent |
+| OCR Support | Limited | Full | Full (automatic) |
+| Table Extraction | Good | Excellent | Good |
+| Memory Usage | Lower | Higher | Minimal (cloud) |
+| Dependencies | Simpler | Complex | Simple (API client) |
+| Cost | Free | Free | Per-page pricing |
+| Privacy | Local | Local | Cloud processing |
 
 ## Best Practices
 
@@ -252,6 +255,7 @@ Required Python packages:
 ## See Also
 
 - [Pipeline Overview](pipeline_overview.md)
-- [Docling Parser](docling_parser.md)
+- [Docling Parser](docling_parser.md) - ML-based local parser with OCR
+- [LlamaParse Parser](llamaparse_parser.md) - Cloud-based alternative
 - [PDF Data Layer Architecture](../architecture/PDF-data-layer.md)
 - [NLM Ingest Library](https://github.com/nlmatics/nlm-ingestor)

@@ -344,7 +344,11 @@ class TestPostProcessor(BasePostProcessor):
         self.assertIn("Test PostProcessor", post_processor_titles)
 
     def test_pipeline_components_query_with_mimetype_no_components(self):
-        """Test querying pipeline components with a mimetype that has no components."""
+        """Test querying pipeline components with a mimetype that has limited components.
+
+        Note: DOCX now has LlamaParseParser support, but no thumbnailer support.
+        This test verifies the filtering behavior for file types with partial support.
+        """
 
         # Use the enum value, not the full MIME type
         query = """
@@ -366,13 +370,19 @@ class TestPostProcessor(BasePostProcessor):
         }
         """
 
-        variables = {"mimetype": "DOCX"}  # Our test components do not support DOCX
+        variables = {"mimetype": "DOCX"}
 
         result = self.client.execute(query, variables=variables)
         self.assertIsNone(result.get("errors"))
 
         data = result["data"]["pipelineComponents"]
-        self.assertEqual(len(data["parsers"]), 0)
+
+        # LlamaParseParser supports DOCX, so we expect at least one parser
+        parsers = data["parsers"]
+        parser_titles = [parser["title"] for parser in parsers]
+        self.assertIn("LlamaParse Parser", parser_titles)
+
+        # No thumbnailers support DOCX
         self.assertEqual(len(data["thumbnailers"]), 0)
 
         # Embedders are included regardless of mimetype in our utils
