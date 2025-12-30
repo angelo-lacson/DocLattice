@@ -1086,8 +1086,6 @@ class Query(graphene.ObjectType):
 
         # Filter by corpus if provided (Issue #741 - prevent cross-corpus references)
         if corpus_id:
-            from opencontractserver.documents.models import DocumentPath
-
             _, corpus_pk = from_global_id(corpus_id)
             docs_in_target_corpus = DocumentPath.objects.filter(
                 corpus_id=int(corpus_pk),
