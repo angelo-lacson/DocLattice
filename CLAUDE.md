@@ -269,11 +269,12 @@ const component = await mount(
 
 - **Permissioning**: `docs/permissioning/consolidated_permissioning_guide.md`
 - **Frontend Routing**: `docs/frontend/routing_system.md`
+- **Frontend Auth Flow**: `docs/frontend/auth_flow.md`
 - **PDF Data Layer**: `docs/architecture/PDF-data-layer.md`
 - **Parser Pipeline**: `docs/pipelines/pipeline_overview.md`
 - **LLM Framework**: `docs/architecture/llms/README.md`
 - **Collaboration System**: `docs/commenting_system/README.md`
-- **Auth Pattern**: `frontend/src/docs/AUTHENTICATION_PATTERN.md`
+- **Auth Pattern (detailed)**: `frontend/src/docs/AUTHENTICATION_PATTERN.md`
 
 ## Branch Strategy
 
