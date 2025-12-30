@@ -490,6 +490,7 @@ export function ThreadDetail({
               // No-op for bottom composer - it's always visible
             }}
             autoFocus={false}
+            corpusId={corpusId}
           />
         </div>
       )}

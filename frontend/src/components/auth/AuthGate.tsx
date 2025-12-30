@@ -1,7 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useReactiveVar } from "@apollo/client";
-import { authToken, authStatusVar, userObj } from "../../graphql/cache";
+import {
+  authToken,
+  authStatusVar,
+  userObj,
+  authInitCompleteVar,
+} from "../../graphql/cache";
 import { toast } from "react-toastify";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { useCacheManager } from "../../hooks/useCacheManager";
@@ -30,13 +35,17 @@ export const AuthGate: React.FC<AuthGateProps> = ({
   const authStatus = useReactiveVar(authStatusVar);
   const { resetOnAuthChange } = useCacheManager();
 
+  // Ref to prevent duplicate auth flows during race conditions
+  // When the else branch starts handling auth (via getAccessTokenSilently),
+  // this prevents the if branch from also handling it if state updates mid-flow
+  const authFlowInProgressRef = useRef(false);
+
   // Auth0 hooks
   const {
     isLoading: auth0Loading,
     isAuthenticated,
     user,
     getAccessTokenSilently,
-    loginWithRedirect,
   } = useAuth0();
 
   // Handle Auth0 authentication
@@ -46,6 +55,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
       if (authStatusVar() === "LOADING") {
         authStatusVar("ANONYMOUS");
       }
+      authInitCompleteVar(true);
       setAuthInitialized(true);
       return;
     }
@@ -58,6 +68,14 @@ export const AuthGate: React.FC<AuthGateProps> = ({
 
     // Auth0 has finished loading
     if (isAuthenticated && user) {
+      // Skip if another auth flow is already in progress (race condition handling)
+      if (authFlowInProgressRef.current) {
+        console.log(
+          "[AuthGate] Auth flow already in progress, skipping duplicate..."
+        );
+        return;
+      }
+
       console.log("[AuthGate] User is authenticated, fetching access token...");
 
       getAccessTokenSilently({
@@ -120,12 +138,17 @@ export const AuthGate: React.FC<AuthGateProps> = ({
               });
             }
 
+            // Signal that auth initialization (including cache clear) is complete.
+            // This MUST be set AFTER cache operations to prevent queries like GET_ME
+            // from being aborted by clearStore().
+            authInitCompleteVar(true);
             setAuthInitialized(true);
           } else {
             console.error("[AuthGate] No token received from Auth0");
             authToken("");
             userObj(null);
             authStatusVar("ANONYMOUS");
+            authInitCompleteVar(true);
             setAuthInitialized(true);
             toast.error("Unable to authenticate: no token received");
           }
@@ -133,72 +156,128 @@ export const AuthGate: React.FC<AuthGateProps> = ({
         .catch((error) => {
           console.error("[AuthGate] Error getting access token:", error);
 
-          // Check if this is a "login required" or "consent required" error
+          // Token fetch failed even though isAuthenticated was true.
+          // This can happen with session issues. Fall back to anonymous
+          // and let user click login if they want to authenticate.
           const errorCode = error.error;
-          const needsInteraction =
+          const isSessionError =
             errorCode === "login_required" ||
             errorCode === "consent_required" ||
             errorCode === "interaction_required" ||
             error.message?.toLowerCase().includes("login required");
 
-          if (needsInteraction) {
-            // Check if user has previously authenticated successfully.
-            // This distinguishes first-time visitors from returning users with expired sessions.
-            let hasAuthenticatedBefore = false;
-            try {
-              hasAuthenticatedBefore =
-                localStorage.getItem(HAS_AUTHENTICATED_KEY) === "true";
-            } catch (e) {
-              // localStorage may be unavailable
-            }
-
-            if (hasAuthenticatedBefore) {
-              // Returning user with expired session - redirect to Auth0 login
-              console.log(
-                "[AuthGate] Returning user needs to re-authenticate, redirecting to login..."
-              );
-              toast.info("Please log in to continue.", {
-                autoClose: 2000,
-              });
-
-              // Redirect to Auth0 login, preserving current path
-              loginWithRedirect({
-                authorizationParams: {
-                  audience: audience || undefined,
-                  scope: "openid profile email",
-                  redirect_uri: window.location.origin,
-                },
-                appState: {
-                  returnTo: window.location.pathname + window.location.search,
-                },
-              });
-            } else {
-              // First-time visitor - fall back to anonymous mode instead of prompting login
-              console.log(
-                "[AuthGate] First-time visitor, defaulting to anonymous mode"
-              );
-              authToken("");
-              userObj(null);
-              authStatusVar("ANONYMOUS");
-              setAuthInitialized(true);
-            }
+          if (isSessionError) {
+            console.log(
+              "[AuthGate] Session error, falling back to anonymous mode"
+            );
           } else {
-            // Other error - fall back to anonymous mode
             console.error("[AuthGate] Auth error, falling back to anonymous");
-            authToken("");
-            userObj(null);
-            authStatusVar("ANONYMOUS");
-            setAuthInitialized(true);
             toast.error("Authentication failed: " + error.message);
           }
+
+          authToken("");
+          userObj(null);
+          authStatusVar("ANONYMOUS");
+          authInitCompleteVar(true);
+          setAuthInitialized(true);
         });
     } else {
-      // Not authenticated
-      console.log("[AuthGate] User is not authenticated");
-      authToken("");
-      userObj(null);
-      authStatusVar("ANONYMOUS");
-      setAuthInitialized(true);
+      // Not authenticated according to isAuthenticated flag.
+      // BUT there's a race condition during Auth0 callback where isAuthenticated
+      // is briefly false while the SDK is still updating state.
+      // To handle this, we verify by attempting to get a token silently.
+      // If tokens exist (from just-completed callback), getAccessTokenSilently succeeds
+      // and we handle auth here instead of waiting for the buggy state update.
+
+      // Skip if another auth flow is already in progress
+      if (authFlowInProgressRef.current) {
+        console.log(
+          "[AuthGate] Auth flow already in progress, skipping duplicate..."
+        );
+        return;
+      }
+
+      console.log(
+        "[AuthGate] isAuthenticated is false, verifying with getAccessTokenSilently..."
+      );
+
+      // Mark that we're starting an auth flow
+      authFlowInProgressRef.current = true;
+
+      getAccessTokenSilently({
+        authorizationParams: {
+          audience: audience || undefined,
+          scope: "openid profile email",
+        },
+      })
+        .then((token) => {
+          // We have a token despite isAuthenticated being false!
+          // This is the race condition. The SDK has tokens but hasn't updated isAuthenticated yet.
+          // Set auth state now rather than waiting for the next effect run.
+          console.log(
+            "[AuthGate] Race condition detected - have token despite isAuthenticated:false"
+          );
+
+          try {
+            localStorage.setItem(HAS_AUTHENTICATED_KEY, "true");
+          } catch (e) {
+            console.warn("[AuthGate] Could not set auth flag in localStorage");
+          }
+
+          // Set auth state with the token we just got
+          // Note: we don't have the user object here, but it will be populated
+          // when the effect runs again with correct isAuthenticated state
+          authToken(token);
+          authStatusVar("AUTHENTICATED");
+
+          // Clear cache and complete initialization
+          resetOnAuthChange({
+            reason: "auth0_login_race_condition",
+            refetchActive: false,
+          })
+            .catch((cacheError) => {
+              console.warn("[AuthGate] Cache reset failed:", cacheError);
+            })
+            .finally(() => {
+              authInitCompleteVar(true);
+              setAuthInitialized(true);
+              // Note: we don't reset authFlowInProgressRef here because
+              // we want to prevent any subsequent effect runs from restarting auth
+            });
+        })
+        .catch((error) => {
+          // getAccessTokenSilently failed - user is not authenticated
+          // This could be:
+          // 1. First-time visitor (no prior session)
+          // 2. Returning user whose session expired
+          // 3. User who just logged out
+          //
+          // We don't auto-redirect to login because:
+          // - Users who logged out explicitly want to be anonymous
+          // - Forcing login creates poor UX
+          // - Users can always click the login button if they want to authenticate
+          const errorCode = error.error;
+          const isExpectedAnonymous =
+            errorCode === "login_required" ||
+            errorCode === "consent_required" ||
+            errorCode === "interaction_required";
+
+          if (!isExpectedAnonymous) {
+            // Unexpected error - log it
+            console.error(
+              "[AuthGate] Unexpected error from getAccessTokenSilently:",
+              error
+            );
+          }
+
+          // Set anonymous state - user can login via the UI if they want
+          console.log("[AuthGate] User is not authenticated (verified)");
+          authToken("");
+          userObj(null);
+          authStatusVar("ANONYMOUS");
+          authInitCompleteVar(true);
+          setAuthInitialized(true);
+        });
     }
   }, [
     useAuth0Flag,
@@ -206,7 +285,6 @@ export const AuthGate: React.FC<AuthGateProps> = ({
     isAuthenticated,
     user,
     getAccessTokenSilently,
-    loginWithRedirect,
     audience,
     resetOnAuthChange,
   ]);
