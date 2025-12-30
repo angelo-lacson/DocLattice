@@ -113,4 +113,21 @@ STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
 # Telemetry
 # ------------------------------------------------------------------------------
+# Explicitly disable telemetry in tests to prevent polluting PostHog with test data
 MODE = "TEST"
+TELEMETRY_ENABLED = False
+
+# Auth0 settings for tests
+# ------------------------------------------------------------------------------
+# These are required for importing Auth0 modules even if USE_AUTH0 is False.
+# They are only used if USE_AUTH0 is True in the test environment.
+AUTH0_CLIENT_ID = env("AUTH0_CLIENT_ID", default="test-client-id")
+AUTH0_API_AUDIENCE = env("AUTH0_API_AUDIENCE", default="test-audience")
+AUTH0_DOMAIN = env("AUTH0_DOMAIN", default="test.auth0.com")
+AUTH0_M2M_MANAGEMENT_API_SECRET = env(
+    "AUTH0_M2M_MANAGEMENT_API_SECRET", default="test-secret"
+)
+AUTH0_M2M_MANAGEMENT_API_ID = env("AUTH0_M2M_MANAGEMENT_API_ID", default="test-api-id")
+AUTH0_M2M_MANAGEMENT_GRANT_TYPE = env(
+    "AUTH0_M2M_MANAGEMENT_GRANT_TYPE", default="client_credentials"
+)

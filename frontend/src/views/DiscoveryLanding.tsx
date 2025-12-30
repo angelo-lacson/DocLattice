@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import styled from "styled-components";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { RefreshCw, X, AlertCircle } from "lucide-react";
@@ -147,6 +147,21 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
       fetchPolicy: "cache-and-network",
     }
   );
+
+  // Track if this is the initial mount to avoid refetching on first render
+  const isInitialMount = useRef(true);
+
+  // Refetch discovery data when auth state changes (user logs in/out)
+  // This ensures the landing page shows updated counts and content
+  // based on the user's permissions after authentication
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    // Auth state changed (login/logout) - refetch to get updated data
+    refetch();
+  }, [auth_token, refetch]);
 
   // Handle retry with loading state
   const handleRetry = useCallback(async () => {
