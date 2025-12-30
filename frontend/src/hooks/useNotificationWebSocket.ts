@@ -415,11 +415,13 @@ export function useNotificationWebSocket(
   }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reconnect when token changes (authentication change)
-  // NOTE: connect/disconnect/enabled/connectionState are intentionally excluded.
-  // We only want to trigger reconnection when the auth token changes while connected.
-  // Including other deps would cause unnecessary reconnections.
+  // NOTE: connect/disconnect/enabled are intentionally excluded to prevent loops.
+  // We reconnect when token changes regardless of current state because:
+  // 1. Initial connection may fail (403) before auth completes
+  // 2. Token refresh requires new connection with updated credentials
   useEffect(() => {
-    if (enabled && connectionState === "connected") {
+    if (enabled && token) {
+      // Token is now available - connect or reconnect
       disconnect();
       connect();
     }
