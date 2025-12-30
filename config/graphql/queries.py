@@ -1939,7 +1939,9 @@ class Query(graphene.ObjectType):
             # Check permission
             if not user.is_superuser:
                 corpus = (
-                    action.conversation.chat_with_corpus if action.conversation else None
+                    action.conversation.chat_with_corpus
+                    if action.conversation
+                    else None
                 )
                 if corpus:
                     is_owner = corpus.creator == user

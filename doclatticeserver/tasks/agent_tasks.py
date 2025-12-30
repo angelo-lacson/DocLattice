@@ -861,28 +861,25 @@ async def _run_agent_thread_action_async(
     def get_or_create_result():
         from django.db import transaction
 
-        with transaction.atomic():
-            # Try to get existing or create new, with row lock
-            try:
-                result = AgentActionResult.objects.select_for_update().get(
-                    corpus_action=action,
-                    triggering_conversation=conversation,
-                    triggering_message=message,
-                )
-                created = False
-            except AgentActionResult.DoesNotExist:
-                result = AgentActionResult.objects.create(
-                    corpus_action=action,
-                    triggering_conversation=conversation,
-                    triggering_message=message,
-                    creator_id=user_id,
-                    status=AgentActionResult.Status.RUNNING,
-                    started_at=timezone.now(),
-                )
-                created = True
+        # First, atomically get_or_create to avoid race condition between get and create
+        result, created = AgentActionResult.objects.get_or_create(
+            corpus_action=action,
+            triggering_conversation=conversation,
+            triggering_message=message,
+            defaults={
+                "creator_id": user_id,
+                "status": AgentActionResult.Status.RUNNING,
+                "started_at": timezone.now(),
+            },
+        )
 
-            if created:
-                return result, "created"
+        if created:
+            return result, "created"
+
+        # Record exists, need to lock and potentially claim it
+        with transaction.atomic():
+            # Re-fetch with lock to prevent concurrent modifications
+            result = AgentActionResult.objects.select_for_update().get(pk=result.pk)
 
             # Try to claim existing record (we hold the lock)
             if result.status not in [

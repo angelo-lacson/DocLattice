@@ -3075,7 +3075,9 @@ class ModerationActionType(DjangoObjectType):
     # Additional computed fields
     corpus_id = graphene.ID(description="Corpus ID if action is on a corpus thread")
     is_automated = graphene.Boolean(description="Whether this was an automated action")
-    can_rollback = graphene.Boolean(description="Whether this action can be rolled back")
+    can_rollback = graphene.Boolean(
+        description="Whether this action can be rolled back"
+    )
 
     def resolve_corpus_id(self, info):
         """Get corpus ID from conversation if linked."""
@@ -3089,7 +3091,12 @@ class ModerationActionType(DjangoObjectType):
 
     def resolve_can_rollback(self, info):
         """Check if this action can be rolled back."""
-        rollback_types = {"delete_message", "delete_thread", "lock_thread", "pin_thread"}
+        rollback_types = {
+            "delete_message",
+            "delete_thread",
+            "lock_thread",
+            "pin_thread",
+        }
         return self.action_type in rollback_types
 
 

@@ -3824,20 +3824,29 @@ class CreateCorpusAction(graphene.Mutation):
 
                 # Get valid moderation tool names
                 valid_moderation_tools = {
-                    tool.name for tool in TOOL_REGISTRY
+                    tool.name
+                    for tool in TOOL_REGISTRY
                     if tool.category == ToolCategory.MODERATION
                 }
 
-                # Validate provided tools
-                if inline_agent_tools:
-                    invalid_tools = set(inline_agent_tools) - valid_moderation_tools
-                    if invalid_tools:
-                        return CreateCorpusAction(
-                            ok=False,
-                            message=f"Invalid tools for moderation agent: {', '.join(sorted(invalid_tools))}. "
-                                    f"Valid moderation tools: {', '.join(sorted(valid_moderation_tools))}",
-                            obj=None,
-                        )
+                # Require at least one tool for moderation agents
+                if not inline_agent_tools:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message="At least one tool is required for moderation agents. "
+                        f"Available moderation tools: {', '.join(sorted(valid_moderation_tools))}",
+                        obj=None,
+                    )
+
+                # Validate provided tools are valid moderation tools
+                invalid_tools = set(inline_agent_tools) - valid_moderation_tools
+                if invalid_tools:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message=f"Invalid tools for moderation agent: {', '.join(sorted(invalid_tools))}. "
+                        f"Valid moderation tools: {', '.join(sorted(valid_moderation_tools))}",
+                        obj=None,
+                    )
 
             # Validate that exactly one of fieldset_id, analyzer_id, agent_config_id, or create_agent_inline is provided
             action_types_provided = sum(
