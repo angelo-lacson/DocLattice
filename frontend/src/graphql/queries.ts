@@ -13,8 +13,6 @@ import {
   AnalysisType,
   FieldsetType,
   ExtractType,
-  CorpusQueryType,
-  CorpusQueryTypeConnection,
   CorpusActionType,
   DocumentType,
   AnalysisRowType,
@@ -490,71 +488,6 @@ export interface GetCorpusWithHistoryQuery {
   };
 }
 
-export interface GetCorpusQueryDetailsInputType {
-  corpusId: string;
-}
-
-export interface GetCorpusQueryDetailsOutputType {
-  corpusQuery: CorpusQueryType;
-}
-
-export const GET_CORPUS_QUERY_DETAILS = gql`
-  query CorpusQuery($corpusId: ID!) {
-    corpusQuery(id: $corpusId) {
-      id
-      response
-      query
-      started
-      failed
-      completed
-      stacktrace
-      fullSourceList {
-        id
-        annotationLabel {
-          id
-          icon
-          color
-          description
-          text
-          labelType
-          readOnly
-        }
-        annotationType
-        rawText
-        json
-        sourceNodeInRelationships {
-          edges {
-            node {
-              id
-            }
-          }
-        }
-        targetNodeInRelationships {
-          edges {
-            node {
-              id
-            }
-          }
-        }
-        tokensJsons
-        document {
-          id
-          title
-          is_selected @client
-          is_open @client
-          description
-          backendLock
-          fileType
-          pdfFile
-          txtExtractFile
-          pawlsParseFile
-          icon
-        }
-      }
-    }
-  }
-`;
-
 export interface GetCorpusStatsInputType {
   corpusId: string;
 }
@@ -581,80 +514,6 @@ export const GET_CORPUS_STATS = gql`
       totalExtracts
       totalAnnotations
       totalThreads
-    }
-  }
-`;
-
-export interface GetCorpusQueriesInput {
-  corpusId: string;
-}
-
-export interface GetCorpusQueriesOutput {
-  corpusQueries: CorpusQueryTypeConnection;
-}
-
-export const GET_CORPUS_QUERIES = gql`
-  query CorpusQueries($corpusId: ID!) {
-    corpusQueries(corpusId: $corpusId) {
-      edges {
-        node {
-          id
-          query
-          response
-          started
-          completed
-          failed
-        }
-      }
-      pageInfo {
-        hasNextPage
-        hasPreviousPage
-        endCursor
-        startCursor
-      }
-    }
-  }
-`;
-
-export interface GetCorpusQueryInputType {
-  corpusId: string;
-}
-
-export interface GetCorpusQueryOutputType {
-  corpusQuery: CorpusQueryType;
-}
-
-export const GET_CORPUS_QUERY = gql`
-  query FullCorpusQuery($corpusId: ID!) {
-    corpusQuery(id: $corpusId) {
-      id
-      query
-      response
-      fullSourceList {
-        id
-        isPublic
-        myPermissions
-        annotationLabel {
-          id
-          icon
-          color
-          description
-          text
-          labelType
-          readOnly
-        }
-        boundingBox
-        page
-        rawText
-        tokensJsons
-        json
-        creator {
-          id
-          email
-        }
-        isPublic
-        myPermissions
-      }
     }
   }
 `;
