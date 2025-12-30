@@ -1311,31 +1311,6 @@ export interface ExtractType extends Node {
   myPermissions?: PermissionTypes[];
 }
 
-export type CorpusQueryTypeConnection = {
-  __typename?: "CorpusQueryTypeConnection";
-  pageInfo: PageInfo;
-  edges: Array<Maybe<CorpusQueryTypeEdge>>;
-  totalCount?: Maybe<Scalars["Int"]>;
-};
-
-export type CorpusQueryTypeEdge = {
-  __typename?: "CorpusQueryTypeEdge";
-  node?: Maybe<CorpusQueryType>;
-  cursor: Scalars["String"];
-};
-
-export interface CorpusQueryType extends Node {
-  query: string;
-  corpus: CorpusType;
-  fullSourceList: ServerAnnotationType[];
-  sources: AnnotationTypeConnection;
-  response: Maybe<string>;
-  started: Maybe<string>;
-  completed: Maybe<string>;
-  failed: Maybe<string>;
-  stacktrace: Maybe<string>;
-}
-
 export interface DatacellType extends Node {
   extract: ExtractType;
   column: ColumnType;

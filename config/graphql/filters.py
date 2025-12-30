@@ -21,7 +21,7 @@ from opencontractserver.conversations.models import (
     Conversation,
     ModerationAction,
 )
-from opencontractserver.corpuses.models import Corpus, CorpusQuery
+from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentRelationship
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.users.models import Assignment, UserExport
@@ -494,12 +494,6 @@ class ExtractFilter(django_filters.FilterSet):
             "finished": ["lte", "gte"],
             "corpus": ["exact"],
         }
-
-
-class CorpusQueryFilter(django_filters.FilterSet):
-    class Meta:
-        model = CorpusQuery
-        fields = {"corpus_id": ["exact"]}
 
 
 class DatacellFilter(django_filters.FilterSet):

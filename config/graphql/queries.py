@@ -25,7 +25,6 @@ from config.graphql.filters import (
     ColumnFilter,
     ConversationFilter,
     CorpusFilter,
-    CorpusQueryFilter,
     DatacellFilter,
     DocumentFilter,
     DocumentRelationshipFilter,
@@ -58,7 +57,6 @@ from config.graphql.graphene_types import (
     CorpusActionTrailStatsType,
     CorpusActionType,
     CorpusFolderType,
-    CorpusQueryType,
     CorpusStatsType,
     CorpusType,
     CriteriaTypeDefinitionType,
@@ -121,7 +119,6 @@ from opencontractserver.conversations.models import (
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
-    CorpusQuery,
 )
 from opencontractserver.documents.models import Document, DocumentRelationship
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
@@ -1453,21 +1450,6 @@ class Query(graphene.ObjectType):
         return ExtractQueryOptimizer.get_visible_extracts(
             info.context.user, corpus_id=corpus_django_pk
         )
-
-    corpus_query = relay.Node.Field(CorpusQueryType)
-
-    @login_required
-    def resolve_corpus_query(self, info, **kwargs):
-        django_pk = from_global_id(kwargs.get("id", None))[1]
-        return CorpusQuery.objects.visible_to_user(info.context.user).get(id=django_pk)
-
-    corpus_queries = DjangoFilterConnectionField(
-        CorpusQueryType, filterset_class=CorpusQueryFilter
-    )
-
-    @login_required
-    def resolve_corpus_queries(self, info, **kwargs):
-        return CorpusQuery.objects.visible_to_user(info.context.user)
 
     datacell = relay.Node.Field(DatacellType)
 

@@ -5,7 +5,6 @@ import {
   AnalysisType,
   AnnotationLabelType,
   ColumnType,
-  CorpusQueryType,
   CorpusType,
   DatacellType,
   DocumentType,
@@ -1891,37 +1890,6 @@ export const REQUEST_EDIT_DATACELL = gql`
   }
 `;
 
-export interface AskQueryOfCorpusInputType {
-  corpusId: string;
-  query: string;
-}
-
-export interface AskQueryOfCorpusOutputType {
-  askQuery: {
-    ok: boolean;
-    message: string;
-    obj: CorpusQueryType;
-  };
-}
-
-export const ASK_QUERY_OF_CORPUS = gql`
-  mutation AskQuery($corpusId: String!, $query: String!) {
-    askQuery(corpusId: $corpusId, query: $query) {
-      ok
-      message
-      obj {
-        id
-        query
-        response
-        started
-        completed
-        failed
-        stacktrace
-      }
-    }
-  }
-`;
-
 export interface StartAnalysisInput {
   documentId?: string;
   analyzerId: string;
@@ -3318,7 +3286,7 @@ export interface RestoreDeletedDocumentOutput {
 }
 
 export const PERMANENTLY_DELETE_DOCUMENT = gql`
-  mutation PermanentlyDeleteDocument($documentId: ID!, $corpusId: ID!) {
+  mutation PermanentlyDeleteDocument($documentId: String!, $corpusId: String!) {
     permanentlyDeleteDocument(documentId: $documentId, corpusId: $corpusId) {
       ok
       message
@@ -3339,7 +3307,7 @@ export interface PermanentlyDeleteDocumentOutput {
 }
 
 export const EMPTY_TRASH = gql`
-  mutation EmptyTrash($corpusId: ID!) {
+  mutation EmptyTrash($corpusId: String!) {
     emptyTrash(corpusId: $corpusId) {
       ok
       message
