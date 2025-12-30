@@ -447,6 +447,11 @@ export const App = () => {
                   {/* User Profile Routes (Issue #611) */}
                   <Route path="/profile" element={<UserProfileRoute />} />
                   <Route path="/users/:slug" element={<UserProfileRoute />} />
+                  {/* Convenience redirect for badge notifications (Issue #637) */}
+                  <Route
+                    path="/badges"
+                    element={<Navigate to="/profile" replace />}
+                  />
 
                   {/* Auth */}
                   {!REACT_APP_USE_AUTH0 ? (
