@@ -1877,7 +1877,25 @@ class Query(graphene.ObjectType):
         automated_only=None,
         **kwargs,
     ):
-        """Resolve moderation actions with optional filters."""
+        """
+        Resolve moderation action audit logs with optional filters.
+
+        Permissions:
+            - Superusers: can see all actions
+            - Corpus owners: can see actions on their corpuses
+            - Moderators: can see actions on corpuses they moderate
+
+        Performance:
+            Uses select_related for conversation, corpus, message, and moderator
+            to avoid N+1 queries. Results are ordered by created descending.
+
+        Args:
+            corpus_id: Filter to specific corpus (global ID)
+            thread_id: Filter to specific thread/conversation (global ID)
+            moderator_id: Filter to specific moderator (global ID)
+            action_types: List of action types to include (e.g., ["lock_thread"])
+            automated_only: If True, only show automated actions (no moderator)
+        """
         user = info.context.user
 
         # Start with base queryset
@@ -1924,7 +1942,17 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_moderation_action(self, info, id):
-        """Resolve a single moderation action by ID."""
+        """
+        Resolve a single moderation action by ID.
+
+        Permissions:
+            - Superusers: can see any action
+            - Corpus owners/moderators: can see actions on their corpuses
+            - Returns None if user lacks permission (prevents ID enumeration)
+
+        Args:
+            id: Global ID of the moderation action
+        """
         user = info.context.user
         pk = from_global_id(id)[1]
 
@@ -1962,7 +1990,27 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_moderation_metrics(self, info, corpus_id, time_range_hours=24):
-        """Resolve moderation metrics for a corpus."""
+        """
+        Resolve aggregated moderation metrics for a corpus.
+
+        Computes summary statistics of moderation activity including total actions,
+        automated vs manual breakdown, per-type counts, and threshold alerts.
+
+        Permissions:
+            - Superusers: can see metrics for any corpus
+            - Corpus owners/moderators: can see metrics for their corpuses
+
+        Performance:
+            Uses database aggregation (Count) to compute metrics efficiently
+            without loading all action records into memory.
+
+        Args:
+            corpus_id: Global ID of the corpus
+            time_range_hours: Number of hours to look back (default: 24)
+
+        Returns:
+            ModerationMetricsType with counts, rates, and threshold warnings
+        """
         from django.db.models import Count
         from django.utils import timezone
 
@@ -2005,12 +2053,15 @@ class Query(graphene.ObjectType):
         # Hourly rate
         hourly_rate = total / time_range_hours if time_range_hours > 0 else 0
 
-        # Threshold check (example: 10 actions per hour)
-        threshold = 10
+        # Threshold check for high activity warning
+        from opencontractserver.constants.moderation import (
+            MODERATION_HOURLY_RATE_THRESHOLD,
+        )
+
         exceeded_types = [
             action_type
             for action_type, count in by_type.items()
-            if count / time_range_hours > threshold
+            if count / time_range_hours > MODERATION_HOURLY_RATE_THRESHOLD
         ]
 
         return {
@@ -2018,7 +2069,7 @@ class Query(graphene.ObjectType):
             "automated_actions": automated,
             "manual_actions": manual,
             "actions_by_type": by_type,
-            "hourly_action_rate": hourly_rate,
+            "hourly_action_rate": round(hourly_rate, 2),
             "is_above_threshold": len(exceeded_types) > 0,
             "threshold_exceeded_types": exceeded_types,
             "time_range_hours": time_range_hours,

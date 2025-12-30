@@ -3815,7 +3815,12 @@ class CreateCorpusAction(graphene.Mutation):
                         obj=None,
                     )
 
-            # For thread/message triggers with inline agent, validate tools are moderation category
+            # For thread/message triggers with inline agent, validate tools are moderation category.
+            # Rationale: Thread/message triggered actions are specifically designed for automated
+            # moderation workflows (spam detection, content filtering, etc.). Restricting tools
+            # to the MODERATION category ensures these agents can only perform moderation-related
+            # operations and cannot access broader corpus/document manipulation tools which could
+            # pose security risks when triggered automatically by user content.
             if create_agent_inline and trigger in ["new_thread", "new_message"]:
                 from opencontractserver.llms.tools.tool_registry import (
                     TOOL_REGISTRY,

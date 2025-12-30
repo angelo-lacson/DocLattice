@@ -646,6 +646,11 @@ class RollbackModerationActionMutation(graphene.Mutation):
             )
 
         # Define rollback mappings: action_type -> (rollback_action_type, method_name, target_attr)
+        # - rollback_action_type: The action type for the new audit log entry
+        # - method_name: The model method to call for the rollback operation
+        # - target_attr: Which object the action operates on ('message' or 'conversation'),
+        #   used for permission checking (message actions need message's conversation)
+        #   and for invoking the correct method on the target object
         rollback_map = {
             ModerationActionTypeEnum.DELETE_MESSAGE: (
                 ModerationActionTypeEnum.RESTORE_MESSAGE,
