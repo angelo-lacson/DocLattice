@@ -52,6 +52,8 @@ openai==1.102.0  # https://github.com/openai/openai-python
 pytesseract
 pydantic-ai==0.2.*
 spacy
+pdfplumber>=0.10.0  # https://github.com/jsvine/pdfplumber - PDF token extraction
+shapely>=2.0.0  # https://github.com/shapely/shapely - spatial operations for bbox intersection
 
 # Data Processing Tools
 # -------------------------------------------------------------------------------
