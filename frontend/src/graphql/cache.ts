@@ -542,3 +542,21 @@ export const backendUserObj = makeVar<UserType | null>(null);
  */
 export type AuthStatus = "LOADING" | "AUTHENTICATED" | "ANONYMOUS";
 export const authStatusVar = makeVar<AuthStatus>("LOADING");
+
+/**
+ * Tracks whether auth initialization is fully complete, including any cache operations.
+ *
+ * This is separate from authStatusVar because:
+ * - authStatusVar is set BEFORE cache clear (to ensure credentials are available for any refetches)
+ * - authInitCompleteVar is set AFTER cache clear (to signal safe to make new queries)
+ *
+ * Components like App.tsx that make queries (e.g., GET_ME) should wait for this to be true
+ * to avoid their queries being aborted by the cache clear operation.
+ *
+ * Flow:
+ * 1. authStatusVar changes to AUTHENTICATED/ANONYMOUS
+ * 2. Cache clear happens (if needed)
+ * 3. authInitCompleteVar set to true
+ * 4. Components can now safely query
+ */
+export const authInitCompleteVar = makeVar<boolean>(false);
