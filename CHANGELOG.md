@@ -18,7 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance optimizations**: Uses existing `AnnotationQueryOptimizer`, `prefetch_related` for threaded messages, and proper pagination
 - **Robust URI parsing**: Regex-based URI parsing with slug validation to prevent injection attacks
 - **Helper function implementations**: Complete `format_*` functions for corpus, document, annotation, thread, and message formatting
-## [Unreleased] - 2025-12-27
+
+#### Real-Time Notification System via WebSocket (Issue #637)
+- **WebSocket notification consumer** (`config/websocket/consumers/notification_updates.py`): New `NotificationUpdatesConsumer` provides real-time notification delivery for all notification types (BADGE, REPLY, MENTION, THREAD_REPLY, moderation actions)
+- **Frontend WebSocket hook** (`frontend/src/hooks/useNotificationWebSocket.ts`): `useNotificationWebSocket` hook manages WebSocket connection lifecycle with auto-reconnection, heartbeat monitoring, and graceful error handling
+- **Signal broadcasting** (`opencontractserver/notifications/signals.py:33-100`): All notification creation signals now broadcast via WebSocket channel layer for instant delivery
+- **ASGI routing** (`config/asgi.py:88-94`): Registered `ws/notification-updates/` WebSocket endpoint with authentication middleware
+- **WebSocket URL helper** (`frontend/src/components/chat/get_websockets.ts:226-259`): `getNotificationUpdatesWebSocket` function constructs WebSocket URLs with proper protocol handling
+
+### Changed
+
+#### Badge Notifications Migrated from Polling to WebSocket (Issue #637)
+- **useBadgeNotifications hook** (`frontend/src/hooks/useBadgeNotifications.ts`): Completely refactored from Apollo Client polling (30s intervals) to WebSocket-based real-time updates
+- **Zero latency**: Badge awards now appear instantly instead of 0-30 second delay
+- **Reduced server load**: Eliminated continuous polling requests from all connected clients
+- **Backward compatible**: Maintains same interface (`newBadges`, `clearNewBadges`) with added `connectionState` for debugging
 
 ### Fixed
 
@@ -226,6 +240,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Toast notifications**: Informs users of connectivity changes ("Reconnecting...", "Connection restored", "You appear to be offline")
 
 ### Technical Details
+
+#### Real-Time Notification System Architecture (Issue #637)
+- **Security**: User-specific channel groups (`notification_user_{user_id}`) prevent IDOR and cross-user data leakage
+- **Performance optimizations**:
+  - User-specific WebSocket channels (not global broadcast)
+  - Efficient `bulk_create()` for thread participant notifications
+  - Exponential backoff on reconnection failures (2s → 4s → 8s → 16s, max 8x)
+  - Heartbeat monitoring every 30s to detect stale connections
+- **Signal integration**: All notification types (BADGE, REPLY, MENTION, THREAD_REPLY, moderation) automatically broadcast via `broadcast_notification_via_websocket()` helper
+- **Error handling**: WebSocket broadcast failures don't break signal handlers - notifications still save to database
+- **Connection lifecycle**: Auto-reconnection on network recovery, page visibility change, and authentication token refresh
+- **Testing**: Comprehensive test suite (`opencontractserver/tests/test_notification_websocket.py`) covering authentication, IDOR prevention, concurrent connections, and signal integration
+- **Network monitoring**: Integrated with `useNetworkStatus` hook for automatic reconnection on mobile screen unlock and network recovery
 
 #### Network Recovery Implementation
 - Uses `visibilitychange` event to detect page visibility changes

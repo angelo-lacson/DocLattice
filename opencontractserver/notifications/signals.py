@@ -3,13 +3,18 @@ Signal handlers for the notifications app.
 
 This file is imported in apps.py ready() method and creates notifications
 in response to various events in the system.
+
+Issue #637: Added WebSocket broadcasting for real-time notifications
 """
 
 import logging
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from opencontractserver.badges.models import UserBadge
 from opencontractserver.conversations.models import (
@@ -24,6 +29,80 @@ from opencontractserver.notifications.models import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def broadcast_notification_via_websocket(notification: Notification) -> None:
+    """
+    Broadcast a notification to the user via WebSocket.
+
+    Sends the notification through the channel layer to the user-specific
+    notification channel group (notification_user_{user_id}).
+
+    Security: User-specific channel groups prevent cross-user data leakage.
+    Performance: Async broadcast doesn't block the request thread.
+
+    Args:
+        notification: The Notification instance to broadcast
+
+    Issue #637: Real-time notification delivery via WebSocket
+    """
+    try:
+        # Import here to avoid issues during Django startup
+        from config.websocket.consumers.notification_updates import (
+            get_notification_channel_group,
+        )
+
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            logger.warning(
+                "Channel layer not configured - notifications will not be "
+                "broadcast via WebSocket"
+            )
+            return
+
+        # Prepare notification data for WebSocket transmission
+        # Use getattr with fallback for created_at in case bulk_create doesn't populate it
+        created_at = getattr(notification, "created_at", None) or timezone.now()
+
+        notification_data = {
+            "type": "notification_created",
+            "notification_id": str(notification.id),
+            "notification_type": notification.notification_type,
+            "created_at": created_at.isoformat(),
+            "is_read": notification.is_read,
+            "data": notification.data or {},
+        }
+
+        # Add optional fields if present
+        if notification.actor:
+            notification_data["actor"] = {
+                "id": str(notification.actor.id),
+                "username": notification.actor.username,
+            }
+
+        if notification.message_id:
+            notification_data["message_id"] = str(notification.message_id)
+
+        if notification.conversation_id:
+            notification_data["conversation_id"] = str(notification.conversation_id)
+
+        # Broadcast to user-specific channel group
+        group_name = get_notification_channel_group(notification.recipient_id)
+        async_to_sync(channel_layer.group_send)(group_name, notification_data)
+
+        logger.debug(
+            f"Broadcast {notification.notification_type} notification "
+            f"to {group_name} (notification_id={notification.id})"
+        )
+
+    except Exception as e:
+        # Don't fail the signal handler if WebSocket broadcast fails
+        # Notification is still saved to database
+        logger.error(
+            f"Failed to broadcast notification {notification.id} via WebSocket: "
+            f"{type(e).__name__}: {e}",
+            exc_info=True,
+        )
 
 
 @receiver(post_save, sender=ChatMessage)
@@ -55,7 +134,7 @@ def create_reply_notification(sender, instance, created, **kwargs):
         # Don't notify self
         if parent_creator != message.creator:
             try:
-                Notification.objects.create(
+                notification = Notification.objects.create(
                     recipient=parent_creator,
                     notification_type=NotificationTypeChoices.REPLY,
                     message=message,
@@ -70,9 +149,11 @@ def create_reply_notification(sender, instance, created, **kwargs):
                     f"Created REPLY notification for {parent_creator.username} "
                     f"from {message.creator.username}"
                 )
+                # Broadcast via WebSocket for real-time delivery (Issue #637)
+                broadcast_notification_via_websocket(notification)
             except Exception as e:
                 logger.error(
-                    f"Failed to create REPLY notification: {e}",
+                    f"Failed to create REPLY notification: {type(e).__name__}: {e}",
                     exc_info=True,
                 )
 
@@ -116,20 +197,27 @@ def create_reply_notification(sender, instance, created, **kwargs):
             # Use bulk_create to avoid N+1 query problem
             if notifications_to_create:
                 try:
-                    Notification.objects.bulk_create(notifications_to_create)
+                    created_notifications = Notification.objects.bulk_create(
+                        notifications_to_create
+                    )
                     logger.debug(
-                        f"Created {len(notifications_to_create)} THREAD_REPLY "
+                        f"Created {len(created_notifications)} THREAD_REPLY "
                         f"notifications for thread {message.conversation.id}"
                     )
+                    # Broadcast each notification via WebSocket (Issue #637)
+                    for notification in created_notifications:
+                        broadcast_notification_via_websocket(notification)
                 except Exception as e:
                     logger.error(
-                        f"Failed to bulk create THREAD_REPLY notifications: {e}",
+                        f"Failed to bulk create THREAD_REPLY notifications: "
+                        f"{type(e).__name__}: {e}",
                         exc_info=True,
                     )
 
         except Exception as e:
             logger.error(
-                f"Failed to process thread participant notifications: {e}",
+                f"Failed to process thread participant notifications: "
+                f"{type(e).__name__}: {e}",
                 exc_info=True,
             )
 
@@ -170,7 +258,7 @@ def create_mention_notification(sender, instance, created, **kwargs):
                 continue
 
             try:
-                Notification.objects.create(
+                notification = Notification.objects.create(
                     recipient=user,
                     notification_type=NotificationTypeChoices.MENTION,
                     message=message,
@@ -184,14 +272,19 @@ def create_mention_notification(sender, instance, created, **kwargs):
                     f"Created MENTION notification for {user.username} "
                     f"in message {message.id}"
                 )
+                # Broadcast via WebSocket for real-time delivery (Issue #637)
+                broadcast_notification_via_websocket(notification)
             except Exception as e:
                 logger.error(
-                    f"Failed to create MENTION notification for {user.username}: {e}",
+                    f"Failed to create MENTION notification for {user.username}: "
+                    f"{type(e).__name__}: {e}",
                     exc_info=True,
                 )
 
     except Exception as e:
-        logger.error(f"Failed to process mentions: {e}", exc_info=True)
+        logger.error(
+            f"Failed to process mentions: {type(e).__name__}: {e}", exc_info=True
+        )
 
 
 @receiver(post_save, sender=UserBadge)
@@ -209,7 +302,7 @@ def create_badge_notification(sender, instance, created, **kwargs):
         return
 
     try:
-        Notification.objects.create(
+        notification = Notification.objects.create(
             recipient=user_badge.user,
             notification_type=NotificationTypeChoices.BADGE,
             actor=user_badge.awarded_by,  # May be None for auto-awards
@@ -226,9 +319,11 @@ def create_badge_notification(sender, instance, created, **kwargs):
             f"Created BADGE notification for {user_badge.user.username}: "
             f"{user_badge.badge.name}"
         )
+        # Broadcast via WebSocket for real-time delivery (Issue #637)
+        broadcast_notification_via_websocket(notification)
     except Exception as e:
         logger.error(
-            f"Failed to create BADGE notification: {e}",
+            f"Failed to create BADGE notification: {type(e).__name__}: {e}",
             exc_info=True,
         )
 
@@ -285,7 +380,7 @@ def create_moderation_notification(sender, instance, created, **kwargs):
         return
 
     try:
-        Notification.objects.create(
+        notification = Notification.objects.create(
             recipient=recipient,
             notification_type=notification_type,
             message=action.message,
@@ -301,8 +396,10 @@ def create_moderation_notification(sender, instance, created, **kwargs):
             f"Created {notification_type} notification for {recipient.username} "
             f"by {action.moderator.username}"
         )
+        # Broadcast via WebSocket for real-time delivery (Issue #637)
+        broadcast_notification_via_websocket(notification)
     except Exception as e:
         logger.error(
-            f"Failed to create moderation notification: {e}",
+            f"Failed to create moderation notification: {type(e).__name__}: {e}",
             exc_info=True,
         )
