@@ -2,6 +2,7 @@ import logging
 
 import graphql_jwt
 from django.contrib.auth import get_user_model
+from graphql_jwt.exceptions import JSONWebTokenExpired
 
 from config.graphql_auth0_auth.utils import get_user_by_token
 
@@ -10,6 +11,24 @@ logger = logging.getLogger(__name__)
 
 
 class Auth0RemoteUserJSONWebTokenBackend:
+    """
+    Django authentication backend for Auth0 JWT tokens.
+
+    This backend is designed to work with graphql_jwt and the GraphQL layer.
+    It differs from standard Django authentication backends in that it
+    RE-RAISES JSONWebTokenExpired exceptions instead of returning None.
+
+    Why this design:
+    - graphql_jwt expects backends to raise JWT exceptions for proper error handling
+    - The GraphQL layer catches these and translates them to proper error responses
+    - This allows the frontend to distinguish between "token expired" (refresh needed)
+      vs "token invalid" (re-authentication needed)
+
+    Important: This backend is only called in JWT validation contexts (GraphQL requests
+    with Authorization headers), NOT by Django's standard AuthenticationMiddleware
+    which reads users from sessions.
+    """
+
     def authenticate(self, request=None, **kwargs):
         logger.debug(
             f"Auth0RemoteUserJSONWebTokenBackend.authenticate() - Starting with request: {request}"
@@ -40,6 +59,15 @@ class Auth0RemoteUserJSONWebTokenBackend:
                     f"Auth0RemoteUserJSONWebTokenBackend.authenticate() - User from token: {user}, id: {user.id if user else 'None'}"  # noqa: E501
                 )
                 return user
+            except JSONWebTokenExpired:
+                # Re-raise expired token exceptions so GraphQL layer can signal
+                # the frontend to refresh the token. This ensures the frontend
+                # receives "Signature has expired" instead of generic auth error.
+                logger.warning(
+                    "Auth0RemoteUserJSONWebTokenBackend.authenticate() - Token has expired, "
+                    "propagating to GraphQL layer for proper client signaling"
+                )
+                raise
             except Exception as e:
                 logger.error(
                     f"Auth0RemoteUserJSONWebTokenBackend.authenticate() - Error getting user by token: {str(e)}"

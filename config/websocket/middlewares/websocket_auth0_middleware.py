@@ -35,6 +35,7 @@ from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from graphql_jwt.exceptions import JSONWebTokenError, JSONWebTokenExpired
 
 from config.graphql_auth0_auth.utils import get_user_by_token
 
@@ -42,29 +43,40 @@ logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
+# WebSocket close codes for authentication errors
+# Standard codes 1000-1015 are reserved; 4000-4999 are for application use
+WS_CLOSE_TOKEN_EXPIRED = 4001  # Token has expired, client should refresh
+WS_CLOSE_TOKEN_INVALID = 4002  # Token is invalid, client should re-authenticate
+
 
 class WebsocketAuth0TokenMiddleware(BaseMiddleware):
     """
-    Middleware that authenticates a user connecting via WebSocket using the same
-    logic as our ApiKeyTokenMiddleware, but applied to the WebSocket scope.
+    Middleware that authenticates a user connecting via WebSocket using Auth0 tokens.
 
     Steps:
         1. Look for a token in the query string or via the 'Authorization' header in scope.
-        2. Build a minimal Django-style HttpRequest object.
-        3. Call `authenticate()` which reuses the ApiKeyBackend.
-        4. Set `scope["user"]` to the authenticated user or AnonymousUser.
+        2. Call `get_user_by_token()` to validate the Auth0 JWT.
+        3. Set `scope["user"]` to the authenticated user or AnonymousUser.
+
+    On authentication failure, sets scope['auth_error'] with details:
+    - 'code': WS_CLOSE_TOKEN_EXPIRED (4001) or WS_CLOSE_TOKEN_INVALID (4002)
+    - 'message': Human-readable error message
+
+    Consumers can check scope['auth_error'] and close the connection with
+    the appropriate code to signal the client to refresh or re-authenticate.
     """
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> Any:
-        scope["user"] = AnonymousUser()  # Default to AnonymousUser
+        # Initialize with AnonymousUser and no auth error
+        scope["user"] = AnonymousUser()
+        scope["auth_error"] = None
 
         # 1. Extract the token from query string or scope headers
         query_string = scope.get("query_string", b"").decode("utf-8")
-        logger.info(f"Query string: {query_string}")
+        logger.debug(f"Query string: {query_string}")
         query_params = dict(parse_qsl(query_string))
         token = query_params.get("token")
-        logger.info(f"Extracted query string parameters: {query_params}")
-        logger.info(f"Found token in query string: {'Yes' if token else 'No'}")
+        logger.debug(f"Found token in query string: {'Yes' if token else 'No'}")
 
         # Also allow a standard 'Authorization' header (for example "Authorization: Bearer abc123")
         # scope["headers"] is a list of tuples of the form [(b'header-name', b'value'), ...]
@@ -72,32 +84,49 @@ class WebsocketAuth0TokenMiddleware(BaseMiddleware):
 
         # 2. If we found a token or relevant header, try to authenticate
         if token or any(h[0].lower() == b"authorization" for h in headers):
-            # logger.debug("Attempting authentication with provided credentials")
             try:
-                # logger.info(
-                #     f"WebsocketAuth0TokenMiddleware - Attempting authentication with token: {token}"
-                # )
                 user = await database_sync_to_async(get_user_by_token)(token)
-                # logger.info(f"WebsocketAuth0TokenMiddleware - user: {user}")
                 if user and isinstance(user, User):
-                    # logger.info(f"Websocket user authenticated: {user.username}")
-                    # logger.info(
-                    #     f"Successfully authenticated user {user.username} with ID {user.id}"
-                    # )
+                    logger.debug(f"WebSocket user authenticated: {user.username}")
                     scope["user"] = user
                 else:
-                    # logger.warning(
-                    #     "Websocket token authentication failed, using AnonymousUser"
-                    # )
                     logger.debug("Authentication attempt returned no valid user")
+                    scope["auth_error"] = {
+                        "code": WS_CLOSE_TOKEN_INVALID,
+                        "message": "User not found for token.",
+                    }
+
+            except JSONWebTokenExpired as e:
+                # Token has expired - client should refresh their token
+                logger.warning(f"WebSocket auth failed - Auth0 token expired: {e}")
+                scope["auth_error"] = {
+                    "code": WS_CLOSE_TOKEN_EXPIRED,
+                    "message": "Token has expired. Please refresh your session.",
+                }
+
+            except JSONWebTokenError as e:
+                # Token is invalid - client should re-authenticate
+                logger.warning(f"WebSocket auth failed - invalid Auth0 token: {e}")
+                scope["auth_error"] = {
+                    "code": WS_CLOSE_TOKEN_INVALID,
+                    "message": f"Invalid token: {e}",
+                }
 
             except Exception as e:
-                logger.error(f"Error during Websocket auth: {e}", exc_info=True)
+                # Unexpected error - treat as invalid token
+                logger.error(f"Error during WebSocket auth: {e}", exc_info=True)
+                scope["auth_error"] = {
+                    "code": WS_CLOSE_TOKEN_INVALID,
+                    "message": "Authentication error occurred.",
+                }
 
         # Log final authentication state
+        auth_status = "authenticated" if scope["user"].is_authenticated else "anonymous"
+        auth_error_info = (
+            f", error: {scope['auth_error']}" if scope["auth_error"] else ""
+        )
         logger.debug(
-            f"WS authentication complete - User: {scope['user']}, "
-            f"Authenticated: {scope['user'].is_authenticated}"
+            f"WS authentication complete - User: {scope['user']} ({auth_status}){auth_error_info}"
         )
 
         return await super().__call__(scope, receive, send)

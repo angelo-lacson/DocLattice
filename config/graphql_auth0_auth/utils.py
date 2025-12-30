@@ -10,7 +10,6 @@ from django.utils.translation import gettext as _
 from graphql_jwt import exceptions
 
 from config.graphql_auth0_auth.settings import auth0_settings
-from opencontractserver.users.tasks import sync_remote_user
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +120,9 @@ def configure_user(user):
 
     # For new users from outside
     logger.debug(f"configure_user() - Triggering async sync for user: {user.username}")
+    # Lazy import to avoid circular dependency when USE_AUTH0 is False
+    from opencontractserver.users.tasks import sync_remote_user
+
     sync_remote_user.delay(
         user.username
     )  # This is run async, but I'm not sure we want this actually...
