@@ -140,6 +140,7 @@ export const MessageTree = React.memo(function MessageTree({
                   }}
                   onCancel={onCancelReply}
                   autoFocus
+                  corpusId={corpusId}
                 />
               </div>
             )}

@@ -21,6 +21,7 @@ import { useQuery, useReactiveVar } from "@apollo/client";
 import {
   authToken,
   authStatusVar,
+  authInitCompleteVar,
   showAnnotationLabels,
   showExportModal,
   userObj,
@@ -109,6 +110,8 @@ export const App = () => {
   const show_upload_new_documents_modal = useReactiveVar(
     showUploadNewDocumentsModal
   );
+  // Track when auth initialization (including cache clear) is complete
+  const auth_init_complete = useReactiveVar(authInitCompleteVar);
 
   // Auth0 hooks for conditional rendering only
   const { isLoading } = useAuth0();
@@ -141,7 +144,9 @@ export const App = () => {
     loading: meLoading,
     error: meError,
   } = useQuery<GetMeOutputs>(GET_ME, {
-    skip: !auth_token,
+    // Skip until BOTH: we have a token AND auth initialization (including cache clear) is complete.
+    // This prevents the query from being aborted by clearStore() during auth initialization.
+    skip: !auth_token || !auth_init_complete,
     fetchPolicy: "network-only",
   });
 
