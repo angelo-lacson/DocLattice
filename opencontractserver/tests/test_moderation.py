@@ -10,6 +10,7 @@ Tests cover:
 """
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 from django.test import TestCase
 
 from opencontractserver.conversations.models import (
@@ -97,7 +98,7 @@ class CorpusModeratorModelTest(TestCase):
         )
 
         # Attempting to create another moderator record for the same user/corpus should fail
-        with self.assertRaises(Exception):  # IntegrityError
+        with self.assertRaises(IntegrityError):
             CorpusModerator.objects.create(
                 corpus=self.corpus,
                 user=self.moderator_user,
