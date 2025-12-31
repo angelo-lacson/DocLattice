@@ -280,7 +280,7 @@ class TestPydanticAIAgents(TransactionTestCase):
         self.assertIs(agent.pydantic_ai_agent, mock_pyd_ai_instance)
 
     @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
-    def test_pydantic_ai_agent_with_test_model(
+    async def test_pydantic_ai_agent_with_test_model(
         self, mock_agent_class: MagicMock
     ) -> None:
         """Test PydanticAI agent using TestModel for testing."""
@@ -293,7 +293,7 @@ class TestPydanticAIAgents(TransactionTestCase):
 
         # Test basic functionality
         with test_agent.override(deps=self.test_deps):
-            result = test_agent.run_sync("Hello, how are you?")
+            result = await test_agent.run("Hello, how are you?")
             self.assertIsInstance(result.data, str)
             self.assertTrue(len(result.data) > 0)
 
@@ -484,7 +484,7 @@ class TestPydanticAIAgents(TransactionTestCase):
             # Should contain search results
             self.assertIn("Found", result.data)
 
-    def test_pydantic_ai_structured_output(self) -> None:
+    async def test_pydantic_ai_structured_output(self) -> None:
         """Test PydanticAI agents with structured outputs."""
         # Create agent that returns structured data
         agent = Agent(
@@ -493,7 +493,7 @@ class TestPydanticAIAgents(TransactionTestCase):
             system_prompt="Extract user profile information.",
         )
 
-        result = agent.run_sync("My name is John and I like reading and coding")
+        result = await agent.run("My name is John and I like reading and coding")
 
         self.assertIsInstance(result.data, UserProfile)
         self.assertIsInstance(result.data.name, str)
@@ -652,7 +652,7 @@ class TestPydanticAIAgents(TransactionTestCase):
         OPENAI_API_KEY="test-key",
         ANTHROPIC_API_KEY="test-key",
     )
-    def test_pydantic_ai_dependencies_injection(self) -> None:
+    async def test_pydantic_ai_dependencies_injection(self) -> None:
         """Test dependency injection with PydanticAI agents."""
         # Create agent with dependencies
         agent = Agent(
@@ -666,11 +666,11 @@ class TestPydanticAIAgents(TransactionTestCase):
         deps2 = TestDependencies(user_id=self.user.id, corpus_id=self.corpus.id)
 
         with agent.override(deps=deps1):
-            result1 = agent.run_sync("What document am I working with?")
+            result1 = await agent.run("What document am I working with?")
             self.assertIsInstance(result1.data, str)
 
         with agent.override(deps=deps2):
-            result2 = agent.run_sync("What corpus am I working with?")
+            result2 = await agent.run("What corpus am I working with?")
             self.assertIsInstance(result2.data, str)
 
     def test_pydantic_ai_vector_search_request_validation(self) -> None:

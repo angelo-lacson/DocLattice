@@ -18,6 +18,7 @@ User = get_user_model()
 class NotificationTypeChoices(models.TextChoices):
     """Types of notifications that can be sent to users."""
 
+    # Message/thread related
     REPLY = "REPLY", "Reply to Message"
     VOTE = "VOTE", "Vote on Message"
     BADGE = "BADGE", "Badge Awarded"
@@ -32,6 +33,13 @@ class NotificationTypeChoices(models.TextChoices):
     MESSAGE_RESTORED = "MESSAGE_RESTORED", "Message Restored"
     THREAD_RESTORED = "THREAD_RESTORED", "Thread Restored"
     THREAD_REPLY = "THREAD_REPLY", "Reply in Thread You're Participating In"
+
+    # Job/processing related (Issue #624)
+    DOCUMENT_PROCESSED = "DOCUMENT_PROCESSED", "Document Processing Complete"
+    EXTRACT_COMPLETE = "EXTRACT_COMPLETE", "Extract Complete"
+    ANALYSIS_COMPLETE = "ANALYSIS_COMPLETE", "Analysis Complete"
+    ANALYSIS_FAILED = "ANALYSIS_FAILED", "Analysis Failed"
+    EXPORT_COMPLETE = "EXPORT_COMPLETE", "Export Complete"
 
 
 class Notification(models.Model):
@@ -56,7 +64,7 @@ class Notification(models.Model):
     )
 
     notification_type = models.CharField(
-        max_length=20,
+        max_length=25,
         choices=NotificationTypeChoices.choices,
         help_text="Type of notification",
     )

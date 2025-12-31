@@ -21,6 +21,7 @@ import { useQuery, useReactiveVar } from "@apollo/client";
 import {
   authToken,
   authStatusVar,
+  authInitCompleteVar,
   showAnnotationLabels,
   showExportModal,
   userObj,
@@ -90,6 +91,7 @@ import {
 import { useBadgeNotifications } from "./hooks/useBadgeNotifications";
 import { useBadgeCelebration } from "./hooks/useBadgeCelebration";
 import { BadgeCelebrationModal } from "./components/badges/BadgeCelebrationModal";
+import { useJobNotifications } from "./hooks/useJobNotifications";
 
 export const App = () => {
   const { REACT_APP_USE_AUTH0, REACT_APP_AUDIENCE } = useEnv();
@@ -109,6 +111,8 @@ export const App = () => {
   const show_upload_new_documents_modal = useReactiveVar(
     showUploadNewDocumentsModal
   );
+  // Track when auth initialization (including cache clear) is complete
+  const auth_init_complete = useReactiveVar(authInitCompleteVar);
 
   // Auth0 hooks for conditional rendering only
   const { isLoading } = useAuth0();
@@ -141,7 +145,9 @@ export const App = () => {
     loading: meLoading,
     error: meError,
   } = useQuery<GetMeOutputs>(GET_ME, {
-    skip: !auth_token,
+    // Skip until BOTH: we have a token AND auth initialization (including cache clear) is complete.
+    // This prevents the query from being aborted by clearStore() during auth initialization.
+    skip: !auth_token || !auth_init_complete,
     fetchPolicy: "network-only",
   });
 
@@ -172,8 +178,8 @@ export const App = () => {
     }
   }, [isLoading, meData, meLoading, meError, auth_token]);
 
-  // Badge notification system
-  const { newBadges } = useBadgeNotifications(30000); // Poll every 30 seconds
+  // Badge notification system (real-time via WebSocket)
+  const { newBadges } = useBadgeNotifications();
   const { showModal, currentBadge, closeModal } = useBadgeCelebration(
     newBadges,
     {
@@ -181,6 +187,10 @@ export const App = () => {
       showModal: true,
     }
   );
+
+  // Job notification system (real-time via WebSocket) - Issue #624
+  // Automatically shows toasts for document processing, extracts, analyses, exports
+  useJobNotifications({ showToast: true });
 
   // Set mobile-friendly display settings once when narrow viewport detected
   // CRITICAL: Don't include location/navigate in deps - causes infinite loop!
@@ -442,6 +452,11 @@ export const App = () => {
                   {/* User Profile Routes (Issue #611) */}
                   <Route path="/profile" element={<UserProfileRoute />} />
                   <Route path="/users/:slug" element={<UserProfileRoute />} />
+                  {/* Convenience redirect for badge notifications (Issue #637) */}
+                  <Route
+                    path="/badges"
+                    element={<Navigate to="/profile" replace />}
+                  />
 
                   {/* Auth */}
                   {!REACT_APP_USE_AUTH0 ? (
