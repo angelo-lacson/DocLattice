@@ -614,7 +614,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         # Create moderation action log
         return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.LOCK_THREAD,
+            action_type=ModerationActionType.LOCK_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -638,10 +638,10 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.locked_by = None
         self.save(update_fields=["is_locked", "locked_at", "locked_by"])
 
-        # Create moderation action log
+        # Create moderation action log - use .value for GraphQL enum compatibility
         return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.UNLOCK_THREAD,
+            action_type=ModerationActionType.UNLOCK_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -670,7 +670,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         # Create moderation action log
         return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.PIN_THREAD,
+            action_type=ModerationActionType.PIN_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -697,7 +697,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         # Create moderation action log
         return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.UNPIN_THREAD,
+            action_type=ModerationActionType.UNPIN_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -724,7 +724,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         # Create moderation action log
         return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.DELETE_THREAD,
+            action_type=ModerationActionType.DELETE_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -749,7 +749,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         # Create moderation action log
         return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.RESTORE_THREAD,
+            action_type=ModerationActionType.RESTORE_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -912,7 +912,7 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         return ModerationAction.objects.create(
             message=self,
             conversation=self.conversation,
-            action_type=ModerationActionType.DELETE_MESSAGE,
+            action_type=ModerationActionType.DELETE_MESSAGE.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -938,7 +938,7 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         return ModerationAction.objects.create(
             message=self,
             conversation=self.conversation,
-            action_type=ModerationActionType.RESTORE_MESSAGE,
+            action_type=ModerationActionType.RESTORE_MESSAGE.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
