@@ -11,6 +11,43 @@ import {
 // ============================================================================
 
 /**
+ * Corpus category for organizing collections
+ */
+export interface CorpusCategoryNode {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  corpusCount: number;
+}
+
+export interface GetCorpusCategoriesOutput {
+  corpusCategories: {
+    edges: Array<{
+      node: CorpusCategoryNode;
+    }>;
+  };
+}
+
+export const GET_CORPUS_CATEGORIES = gql`
+  query GetCorpusCategories {
+    corpusCategories {
+      edges {
+        node {
+          id
+          name
+          description
+          icon
+          color
+          corpusCount
+        }
+      }
+    }
+  }
+`;
+
+/**
  * Get public/trending corpuses for landing page
  * Anonymous users will only see public corpuses
  */
@@ -37,6 +74,14 @@ export interface GetTrendingCorpusesOutput {
         };
         annotations: {
           totalCount: number;
+        };
+        categories?: {
+          edges: Array<{
+            node: {
+              id: string;
+              name: string;
+            };
+          }>;
         };
         engagementMetrics?: {
           totalThreads: number;
@@ -74,6 +119,14 @@ export const GET_TRENDING_CORPUSES = gql`
           }
           annotations {
             totalCount
+          }
+          categories {
+            edges {
+              node {
+                id
+                name
+              }
+            }
           }
           engagementMetrics {
             totalThreads
@@ -348,6 +401,14 @@ export const GET_DISCOVERY_DATA = gql`
           }
           annotations {
             totalCount
+          }
+          categories {
+            edges {
+              node {
+                id
+                name
+              }
+            }
           }
           engagementMetrics {
             totalThreads

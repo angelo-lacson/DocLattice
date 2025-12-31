@@ -14,6 +14,7 @@ import { LooseObject } from "./components/types";
 import { getRuntimeEnv } from "./utils/env";
 import { HelmetProvider } from "react-helmet-async";
 import { NetworkStatusHandler } from "./components/network";
+import { allStyles } from "@doclattice/ui/src";
 
 import "./index.css";
 import reportWebVitals from "./reportWebVitals";
@@ -55,6 +56,12 @@ const client = new ApolloClient({
   link: ApolloLink.from([errorLink, authLink, httpLink]),
   cache,
 });
+
+// Inject DocLattice UI component library styles
+const styleElement = document.createElement("style");
+styleElement.id = "doclattice-ui-styles";
+styleElement.textContent = allStyles;
+document.head.appendChild(styleElement);
 
 const container = document.getElementById("root");
 const root = createRoot(container!);

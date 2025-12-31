@@ -5,10 +5,13 @@ import { RefreshCw, X, AlertCircle } from "lucide-react";
 import { authToken } from "../graphql/cache";
 import { color } from "../theme/colors";
 import {
-  HeroSection,
-  StatsBar,
-  TrendingCorpuses,
-  RecentDiscussions,
+  // New components using OS-Legal-Style library
+  NewHeroSection,
+  StatsSection,
+  CategoryFilter,
+  FeaturedCollections,
+  ActivitySection,
+  // Legacy components still in use
   TopContributors,
   CallToAction,
 } from "../components/landing";
@@ -131,6 +134,9 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
 
+  // State for category filtering
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
   // Fetch all discovery data in a single query
   const { data, loading, error, refetch } = useQuery<GetDiscoveryDataOutput>(
     GET_DISCOVERY_DATA,
@@ -179,8 +185,8 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
 
   return (
     <PageContainer>
-      {/* Hero Section - Always visible */}
-      <HeroSection isAuthenticated={isAuthenticated} />
+      {/* Hero Section - New design using OS-Legal-Style */}
+      <NewHeroSection isAuthenticated={isAuthenticated} />
 
       {/* Error Banner - Only show if there's an error and not dismissed */}
       {showError && (
@@ -210,23 +216,30 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
         </ErrorBanner>
       )}
 
-      {/* Stats Bar - Community metrics */}
-      <StatsBar stats={data?.communityStats || null} loading={loading} />
+      {/* Stats Section - New design using OS-Legal-Style */}
+      <StatsSection stats={data?.communityStats || null} loading={loading} />
 
-      {/* Trending Collections */}
-      <TrendingCorpuses
-        corpuses={data?.corpuses?.edges || null}
-        loading={loading}
+      {/* Category Filter - Filter collections by category */}
+      <CategoryFilter
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
       />
 
-      {/* Recent Discussions */}
-      <RecentDiscussions
+      {/* Featured Collections - New design using OS-Legal-Style */}
+      <FeaturedCollections
+        corpuses={data?.corpuses?.edges || null}
+        loading={loading}
+        selectedCategory={selectedCategory}
+      />
+
+      {/* Recent Activity - New compact activity feed */}
+      <ActivitySection
         discussions={data?.conversations?.edges || null}
         loading={loading}
         totalCount={data?.conversations?.totalCount}
       />
 
-      {/* Top Contributors */}
+      {/* Top Contributors - Keeping legacy component for now */}
       <TopContributors
         contributors={data?.globalLeaderboard || null}
         loading={loading}

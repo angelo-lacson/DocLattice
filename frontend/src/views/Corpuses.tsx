@@ -1950,6 +1950,9 @@ export const Corpuses = () => {
     if (formData.icon !== undefined && formData.icon !== null) {
       variables.icon = formData.icon;
     }
+    if (formData.categories !== undefined) {
+      variables.categories = formData.categories;
+    }
 
     tryMutateCorpus({ variables });
   };
@@ -2005,6 +2008,9 @@ export const Corpuses = () => {
       variables.preferredEmbedder = formData.preferredEmbedder;
     if (formData.icon) {
       variables.icon = formData.icon;
+    }
+    if (formData.categories && formData.categories.length > 0) {
+      variables.categories = formData.categories;
     }
 
     tryCreateCorpus({ variables })
