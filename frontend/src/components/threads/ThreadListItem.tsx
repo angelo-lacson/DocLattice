@@ -1,18 +1,20 @@
 import React, { useMemo } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { Eye, MessageCircle, ChevronUp } from "lucide-react";
+import { useReactiveVar } from "@apollo/client";
+import { Eye, MessageCircle } from "lucide-react";
 import { ConversationType } from "../../types/graphql-api";
 import { color } from "../../theme/colors";
 import { ThreadBadge } from "./ThreadBadge";
 import {
   DiscussionTypeBadge,
   inferDiscussionCategory,
-  DiscussionCategory,
 } from "./DiscussionTypeBadge";
 import { RelativeTime } from "./RelativeTime";
 import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 import { formatUsername } from "./userUtils";
+import { ConversationVoteButtons } from "./ConversationVoteButtons";
+import { backendUserObj } from "../../graphql/cache";
 
 interface ThreadListItemProps {
   thread: ConversationType;
@@ -83,51 +85,6 @@ const VoteSection = styled.div`
 
   @media (max-width: 640px) {
     min-width: 32px;
-  }
-`;
-
-const VoteButton = styled.button<{ $isUpvoted?: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid ${(props) => (props.$isUpvoted ? color.G5 : color.N4)};
-  border-radius: 6px;
-  background: ${(props) => (props.$isUpvoted ? color.G2 : color.N1)};
-  color: ${(props) => (props.$isUpvoted ? color.G7 : color.N6)};
-  cursor: pointer;
-  transition: all 0.15s;
-
-  &:hover {
-    border-color: ${color.G5};
-    background: ${color.G2};
-    color: ${color.G7};
-  }
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  @media (max-width: 640px) {
-    width: 28px;
-    height: 28px;
-
-    svg {
-      width: 14px;
-      height: 14px;
-    }
-  }
-`;
-
-const VoteCount = styled.span<{ $isUpvoted?: boolean }>`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${(props) => (props.$isUpvoted ? color.G7 : color.N7)};
-
-  @media (max-width: 640px) {
-    font-size: 12px;
   }
 `;
 
@@ -385,6 +342,8 @@ export const ThreadListItem = React.memo(function ThreadListItem({
   isSelected = false,
 }: ThreadListItemProps) {
   const navigate = useNavigate();
+  const currentUser = useReactiveVar(backendUserObj);
+  const currentUserId = currentUser?.id;
 
   const handleClick = (e: React.MouseEvent) => {
     // Prevent navigation if clicking the vote button
@@ -415,13 +374,6 @@ export const ThreadListItem = React.memo(function ThreadListItem({
     }
   };
 
-  // Prevent vote button from triggering card navigation
-  const handleVoteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    // TODO: Implement voting when backend supports it
-    console.log("Vote clicked for thread:", thread.id);
-  };
-
   const messageCount = thread.chatMessages?.totalCount || 0;
   const isDeleted = !!thread.deletedAt;
 
@@ -436,9 +388,6 @@ export const ThreadListItem = React.memo(function ThreadListItem({
 
   // Placeholder view count (not tracked yet in backend)
   const viewCount = 0;
-
-  // Placeholder upvote count
-  const upvoteCount = messageCount > 0 ? Math.floor(messageCount * 1.5) : 0;
 
   const authorName = formatUsername(
     thread.creator?.username,
@@ -460,15 +409,16 @@ export const ThreadListItem = React.memo(function ThreadListItem({
     >
       {/* Vote Section */}
       <VoteSection>
-        <VoteButton
-          onClick={handleVoteClick}
-          data-vote-button
-          aria-label="Upvote thread"
-          title="Upvote this discussion"
-        >
-          <ChevronUp />
-        </VoteButton>
-        <VoteCount>{upvoteCount}</VoteCount>
+        <ConversationVoteButtons
+          conversationId={thread.id}
+          upvoteCount={thread.upvoteCount || 0}
+          downvoteCount={thread.downvoteCount || 0}
+          userVote={thread.userVote}
+          creatorId={thread.creator?.id}
+          currentUserId={currentUserId}
+          disabled={isDeleted || thread.isLocked}
+          upvoteOnly
+        />
       </VoteSection>
 
       {/* Content Section */}
