@@ -13,12 +13,12 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document
 from opencontractserver.extracts.models import Extract, Fieldset
-from opencontractserver.notifications.models import Notification, NotificationTypeChoices
-from opencontractserver.users.models import UserExport
+from opencontractserver.notifications.models import (
+    Notification,
+    NotificationTypeChoices,
+)
 
 User = get_user_model()
 
@@ -387,7 +387,9 @@ class ExtractNotificationTests(TestCase):
         "opencontractserver.tasks.extract_orchestrator_tasks.broadcast_notification_via_websocket"
     )
     @patch("opencontractserver.tasks.extract_orchestrator_tasks.Extract")
-    def test_extract_no_creator_no_notification(self, mock_extract_model, mock_broadcast):
+    def test_extract_no_creator_no_notification(
+        self, mock_extract_model, mock_broadcast
+    ):
         """No notification if extract has no creator."""
         # Mock the extract to have no creator
         mock_extract = MagicMock()

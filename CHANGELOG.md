@@ -5,6 +5,43 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-12-29
+
+### Added
+
+#### Moderation Dashboard and Rollback Features (Issue #742)
+- **ModerationActionType GraphQL type** (`config/graphql/graphene_types.py:3071-3121`): Exposes ModerationAction audit records with computed fields:
+  - `corpusId`: Links to parent corpus for filtering
+  - `isAutomated`: Identifies agent vs. human moderation
+  - `canRollback`: Indicates whether action can be undone
+- **ModerationMetricsType** (`config/graphql/graphene_types.py:3109-3121`): Aggregated metrics for monitoring moderation activity:
+  - Total/automated/manual action counts
+  - Hourly action rate with threshold alerting
+  - Actions grouped by type
+- **New GraphQL queries** (`config/graphql/queries.py:1875-2043`):
+  - `moderationActions`: Filterable query for audit logs (corpus, thread, moderator, action type)
+  - `moderationAction`: Single action lookup by ID
+  - `moderationMetrics`: Aggregated stats with threshold violations
+- **RollbackModerationActionMutation** (`config/graphql/moderation_mutations.py:594-707`): Undo automated moderation actions:
+  - Supports rollback of delete_message, delete_thread, lock_thread, pin_thread
+  - Creates new audit record for the rollback
+  - Permission-gated to moderators
+- **DeleteThreadMutation and RestoreThreadMutation** (`config/graphql/moderation_mutations.py:267-363`): Complete thread lifecycle management for frontend
+- **ModerationDashboard component** (`frontend/src/components/moderation/ModerationDashboard.tsx`): Full-featured moderation UI:
+  - Metrics display with threshold alerts
+  - Filterable action table (action type, automated only)
+  - Rollback confirmation modal
+  - Time range selector (1h, 24h, 7d, 30d)
+- **Dynamic tool fetching** (`frontend/src/components/corpuses/CreateCorpusActionModal.tsx`): Replaces hardcoded moderation tools with GraphQL query to `availableTools(category: "moderation")`
+
+### Fixed
+
+#### Race Condition in Agent Thread Actions (Issue #742)
+- **Fixed TOCTOU vulnerability** (`opencontractserver/tasks/agent_tasks.py:859-898`): Added `select_for_update()` with `transaction.atomic()` to prevent duplicate agent execution claims
+
+#### Tool Validation for Inline Agents (Issue #742)
+- **Added tool category validation** (`config/graphql/mutations.py:3875-3897`): CreateCorpusAction now validates that inline agent tools are from the MODERATION category when using thread/message triggers
+
 ## [Unreleased] - 2025-12-28
 
 ### Added

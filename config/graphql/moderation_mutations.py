@@ -6,9 +6,12 @@ This module provides mutations for moderating threads and messages:
 - UnlockThreadMutation: Unlock conversation
 - PinThreadMutation: Pin conversation to top
 - UnpinThreadMutation: Unpin conversation
+- DeleteThreadMutation: Soft delete conversation/thread
+- RestoreThreadMutation: Restore soft-deleted conversation/thread
 - AddModeratorMutation: Add moderator to corpus
 - RemoveModeratorMutation: Remove moderator from corpus
 - UpdateModeratorPermissionsMutation: Update moderator permissions
+- RollbackModerationActionMutation: Rollback a moderation action
 """
 
 import logging
@@ -261,6 +264,113 @@ class UnpinThreadMutation(graphene.Mutation):
         return UnpinThreadMutation(ok=ok, message=message_text, obj=obj)
 
 
+class DeleteThreadMutation(graphene.Mutation):
+    """
+    Soft delete a thread (conversation).
+    Only moderators or thread creators can delete threads.
+    """
+
+    class Arguments:
+        conversation_id = graphene.ID(
+            required=True, description="ID of thread to delete"
+        )
+        reason = graphene.String(description="Reason for deletion")
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    conversation = graphene.Field(ConversationType)
+
+    @login_required
+    @graphql_ratelimit(rate="10/m")
+    def mutate(root, info, conversation_id, reason=None):
+        user = info.context.user
+        ok = False
+        message_text = ""
+        conversation_obj = None
+
+        try:
+            thread_pk = from_global_id(conversation_id)[1]
+            conversation = Conversation.objects.get(pk=thread_pk)
+
+            # IDOR-safe: same error for not found and no permission
+            if not conversation.can_moderate(user):
+                return DeleteThreadMutation(
+                    ok=False,
+                    message="Thread not found or access denied",
+                    conversation=None,
+                )
+
+            conversation.soft_delete_thread(moderator=user, reason=reason)
+            ok = True
+            message_text = "Thread deleted successfully"
+            conversation_obj = conversation
+
+        except Conversation.DoesNotExist:
+            message_text = "Thread not found or access denied"
+
+        except Exception as e:
+            logger.error(f"Error deleting thread: {e}", exc_info=True)
+            message_text = f"Failed to delete thread: {str(e)}"
+
+        return DeleteThreadMutation(
+            ok=ok, message=message_text, conversation=conversation_obj
+        )
+
+
+class RestoreThreadMutation(graphene.Mutation):
+    """
+    Restore a soft-deleted thread.
+    Only moderators or thread creators can restore threads.
+    """
+
+    class Arguments:
+        conversation_id = graphene.ID(
+            required=True, description="ID of thread to restore"
+        )
+        reason = graphene.String(description="Reason for restoration")
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    conversation = graphene.Field(ConversationType)
+
+    @login_required
+    @graphql_ratelimit(rate="10/m")
+    def mutate(root, info, conversation_id, reason=None):
+        user = info.context.user
+        ok = False
+        message_text = ""
+        conversation_obj = None
+
+        try:
+            thread_pk = from_global_id(conversation_id)[1]
+            # Use all_objects to include deleted threads
+            conversation = Conversation.all_objects.get(pk=thread_pk)
+
+            # IDOR-safe: same error for not found and no permission
+            if not conversation.can_moderate(user):
+                return RestoreThreadMutation(
+                    ok=False,
+                    message="Thread not found or access denied",
+                    conversation=None,
+                )
+
+            conversation.restore_thread(moderator=user, reason=reason)
+            ok = True
+            message_text = "Thread restored successfully"
+            conversation_obj = conversation
+
+        except Conversation.DoesNotExist:
+            message_text = "Thread not found or access denied"
+
+        except Exception as e:
+            logger.error(f"Error restoring thread: {e}", exc_info=True)
+            message_text = f"Failed to restore thread: {str(e)}"
+
+        return RestoreThreadMutation(
+            ok=ok, message=message_text, conversation=conversation_obj
+        )
+
+
 class AddModeratorMutation(graphene.Mutation):
     """
     Add a moderator to a corpus with specific permissions.
@@ -487,3 +597,143 @@ class UpdateModeratorPermissionsMutation(graphene.Mutation):
             message_text = f"Failed to update moderator permissions: {str(e)}"
 
         return UpdateModeratorPermissionsMutation(ok=ok, message=message_text)
+
+
+class RollbackModerationActionMutation(graphene.Mutation):
+    """
+    Rollback a moderation action by executing its inverse.
+    - delete_message -> restore_message
+    - delete_thread -> restore_thread
+    - lock_thread -> unlock_thread
+    - pin_thread -> unpin_thread
+
+    Only moderators with appropriate permissions can rollback.
+    Creates a new ModerationAction record for the rollback.
+    """
+
+    class Arguments:
+        action_id = graphene.ID(required=True, description="ID of action to rollback")
+        reason = graphene.String(description="Reason for rollback")
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    rollback_action = graphene.Field(
+        "config.graphql.graphene_types.ModerationActionType"
+    )
+
+    @login_required
+    @graphql_ratelimit(rate="10/m")
+    def mutate(root, info, action_id, reason=None):
+        from opencontractserver.conversations.models import (
+            ModerationAction,
+        )
+        from opencontractserver.conversations.models import (
+            ModerationActionType as ModerationActionTypeEnum,
+        )
+
+        user = info.context.user
+
+        try:
+            action_pk = from_global_id(action_id)[1]
+            original_action = ModerationAction.objects.select_related(
+                "conversation", "conversation__chat_with_corpus", "message"
+            ).get(pk=action_pk)
+        except ModerationAction.DoesNotExist:
+            return RollbackModerationActionMutation(
+                ok=False,
+                message="Moderation action not found",
+                rollback_action=None,
+            )
+
+        # Define rollback mappings: action_type -> (rollback_action_type, method_name, target_attr)
+        # - rollback_action_type: The action type for the new audit log entry
+        # - method_name: The model method to call for the rollback operation
+        # - target_attr: Which object the action operates on ('message' or 'conversation'),
+        #   used for permission checking (message actions need message's conversation)
+        #   and for invoking the correct method on the target object
+        # Use string values for comparison since DB stores strings
+        rollback_map = {
+            ModerationActionTypeEnum.DELETE_MESSAGE.value: (
+                ModerationActionTypeEnum.RESTORE_MESSAGE.value,
+                "restore_message",
+                "message",
+            ),
+            ModerationActionTypeEnum.DELETE_THREAD.value: (
+                ModerationActionTypeEnum.RESTORE_THREAD.value,
+                "restore_thread",
+                "conversation",
+            ),
+            ModerationActionTypeEnum.LOCK_THREAD.value: (
+                ModerationActionTypeEnum.UNLOCK_THREAD.value,
+                "unlock",
+                "conversation",
+            ),
+            ModerationActionTypeEnum.PIN_THREAD.value: (
+                ModerationActionTypeEnum.UNPIN_THREAD.value,
+                "unpin",
+                "conversation",
+            ),
+        }
+
+        if original_action.action_type not in rollback_map:
+            return RollbackModerationActionMutation(
+                ok=False,
+                message=f"Action type '{original_action.action_type}' cannot be rolled back",
+                rollback_action=None,
+            )
+
+        _rollback_action_type, method_name, target_attr = rollback_map[
+            original_action.action_type
+        ]
+
+        # Determine the target for rollback and the conversation for permission check
+        if target_attr == "message":
+            target = original_action.message
+            # For message actions, use message's conversation for permission check
+            permission_conversation = target.conversation if target else None
+        else:
+            target = original_action.conversation
+            permission_conversation = target
+
+        # Check if target exists
+        if target is None:
+            return RollbackModerationActionMutation(
+                ok=False,
+                message=f"Cannot rollback: target {target_attr} no longer exists",
+                rollback_action=None,
+            )
+
+        # Check permissions - user must be able to moderate
+        if permission_conversation is None:
+            return RollbackModerationActionMutation(
+                ok=False,
+                message="Cannot rollback: conversation not found",
+                rollback_action=None,
+            )
+
+        if not permission_conversation.can_moderate(user):
+            return RollbackModerationActionMutation(
+                ok=False,
+                message="You don't have permission to rollback this action",
+                rollback_action=None,
+            )
+
+        # Execute the rollback - methods now return the created ModerationAction
+        try:
+            rollback_action = getattr(target, method_name)(
+                moderator=user, reason=reason or "Rollback"
+            )
+
+            return RollbackModerationActionMutation(
+                ok=True,
+                message=f"Successfully rolled back {original_action.action_type}",
+                rollback_action=rollback_action,
+            )
+
+        except Exception as e:
+            logger.error(f"Error rolling back moderation action: {e}", exc_info=True)
+            return RollbackModerationActionMutation(
+                ok=False,
+                message=f"Failed to rollback: {str(e)}",
+                rollback_action=None,
+            )

@@ -78,9 +78,12 @@ from config.graphql.graphene_types import (
 # Import moderation mutations
 from config.graphql.moderation_mutations import (
     AddModeratorMutation,
+    DeleteThreadMutation,
     LockThreadMutation,
     PinThreadMutation,
     RemoveModeratorMutation,
+    RestoreThreadMutation,
+    RollbackModerationActionMutation,
     UnlockThreadMutation,
     UnpinThreadMutation,
     UpdateModeratorPermissionsMutation,
@@ -3812,6 +3815,44 @@ class CreateCorpusAction(graphene.Mutation):
                         obj=None,
                     )
 
+            # For thread/message triggers with inline agent, validate tools are moderation category.
+            # Rationale: Thread/message triggered actions are specifically designed for automated
+            # moderation workflows (spam detection, content filtering, etc.). Restricting tools
+            # to the MODERATION category ensures these agents can only perform moderation-related
+            # operations and cannot access broader corpus/document manipulation tools which could
+            # pose security risks when triggered automatically by user content.
+            if create_agent_inline and trigger in ["new_thread", "new_message"]:
+                from opencontractserver.llms.tools.tool_registry import (
+                    TOOL_REGISTRY,
+                    ToolCategory,
+                )
+
+                # Get valid moderation tool names
+                valid_moderation_tools = {
+                    tool.name
+                    for tool in TOOL_REGISTRY
+                    if tool.category == ToolCategory.MODERATION
+                }
+
+                # Require at least one tool for moderation agents
+                if not inline_agent_tools:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message="At least one tool is required for moderation agents. "
+                        f"Available moderation tools: {', '.join(sorted(valid_moderation_tools))}",
+                        obj=None,
+                    )
+
+                # Validate provided tools are valid moderation tools
+                invalid_tools = set(inline_agent_tools) - valid_moderation_tools
+                if invalid_tools:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message=f"Invalid tools for moderation agent: {', '.join(sorted(invalid_tools))}. "
+                        f"Valid moderation tools: {', '.join(sorted(valid_moderation_tools))}",
+                        obj=None,
+                    )
+
             # Validate that exactly one of fieldset_id, analyzer_id, agent_config_id, or create_agent_inline is provided
             action_types_provided = sum(
                 [
@@ -4847,9 +4888,12 @@ class Mutation(graphene.ObjectType):
     unlock_thread = UnlockThreadMutation.Field()
     pin_thread = PinThreadMutation.Field()
     unpin_thread = UnpinThreadMutation.Field()
+    delete_thread = DeleteThreadMutation.Field()
+    restore_thread = RestoreThreadMutation.Field()
     add_moderator = AddModeratorMutation.Field()
     remove_moderator = RemoveModeratorMutation.Field()
     update_moderator_permissions = UpdateModeratorPermissionsMutation.Field()
+    rollback_moderation_action = RollbackModerationActionMutation.Field()
 
     # VOTING MUTATIONS ###########################################################
     vote_message = VoteMessageMutation.Field()

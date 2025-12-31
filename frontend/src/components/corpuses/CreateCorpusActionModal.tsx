@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Modal,
   Form,
@@ -12,15 +12,16 @@ import {
   Label,
   Checkbox,
   Menu,
+  Loader,
 } from "semantic-ui-react";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 
 /**
- * All available moderation tools for thread/message-based corpus actions.
+ * Default moderation tools (fallback when backend query fails or returns no data).
  * These are pre-selected by default when creating inline moderator agents.
  */
-const MODERATION_TOOLS = [
+const DEFAULT_MODERATION_TOOLS = [
   { name: "get_thread_context", description: "Get thread metadata and status" },
   { name: "get_thread_messages", description: "Retrieve recent messages" },
   { name: "get_message_content", description: "Get full message content" },
@@ -50,12 +51,14 @@ import {
   GET_FIELDSETS,
   GET_ANALYZERS,
   GET_AGENT_CONFIGURATIONS,
+  GET_AVAILABLE_MODERATION_TOOLS,
   GetFieldsetsInputs,
   GetFieldsetsOutputs,
   GetAnalyzersInputs,
   GetAnalyzersOutputs,
   GetAgentConfigurationsInput,
   GetAgentConfigurationsOutput,
+  GetAvailableModerationToolsOutput,
 } from "../../graphql/queries";
 
 /**
@@ -121,7 +124,7 @@ export const CreateCorpusActionModal: React.FC<
   );
   const [selectedModerationTools, setSelectedModerationTools] = React.useState<
     string[]
-  >(MODERATION_TOOLS.map((t) => t.name));
+  >(DEFAULT_MODERATION_TOOLS.map((t) => t.name));
 
   const [disabled, setDisabled] = React.useState(false);
   const [runOnAllCorpuses, setRunOnAllCorpuses] = React.useState(false);
@@ -141,7 +144,7 @@ export const CreateCorpusActionModal: React.FC<
     setInlineAgentName("");
     setInlineAgentDescription("");
     setInlineAgentInstructions(DEFAULT_MODERATOR_INSTRUCTIONS);
-    setSelectedModerationTools(MODERATION_TOOLS.map((t) => t.name));
+    setSelectedModerationTools(DEFAULT_MODERATION_TOOLS.map((t) => t.name));
     setDisabled(false);
     setRunOnAllCorpuses(false);
   };
@@ -264,6 +267,29 @@ export const CreateCorpusActionModal: React.FC<
   >(GET_AGENT_CONFIGURATIONS, {
     variables: { isActive: true },
   });
+
+  // Fetch moderation tools dynamically from backend
+  // Only fetch when needed (thread/message triggers)
+  const isThreadTrigger = trigger === "new_thread" || trigger === "new_message";
+  const { data: toolsData, loading: toolsLoading } =
+    useQuery<GetAvailableModerationToolsOutput>(
+      GET_AVAILABLE_MODERATION_TOOLS,
+      {
+        skip: !isThreadTrigger,
+        fetchPolicy: "cache-first",
+      }
+    );
+
+  // Create a memoized tools list that uses API data or falls back to defaults
+  const moderationTools = useMemo(() => {
+    if (toolsData?.availableTools && toolsData.availableTools.length > 0) {
+      return toolsData.availableTools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+      }));
+    }
+    return DEFAULT_MODERATION_TOOLS;
+  }, [toolsData]);
 
   // Get available tools from selected agent config
   const selectedAgentConfig = React.useMemo(() => {
@@ -418,7 +444,7 @@ export const CreateCorpusActionModal: React.FC<
   ];
 
   // Thread/message triggers only support agent-based actions
-  const isThreadTrigger = trigger === "new_thread" || trigger === "new_message";
+  // (isThreadTrigger is defined earlier with the useQuery hooks)
 
   const actionTypeOptions = [
     {
@@ -532,7 +558,7 @@ export const CreateCorpusActionModal: React.FC<
                   setInlineAgentName(`${name || "Moderator"} Agent`);
                   setInlineAgentInstructions(DEFAULT_MODERATOR_INSTRUCTIONS);
                   setSelectedModerationTools(
-                    MODERATION_TOOLS.map((t) => t.name)
+                    DEFAULT_MODERATION_TOOLS.map((t) => t.name)
                   );
                 } else {
                   // For document triggers, reset to existing agent mode
@@ -744,6 +770,14 @@ export const CreateCorpusActionModal: React.FC<
                           <Label size="tiny" color="green">
                             {selectedModerationTools.length} selected
                           </Label>
+                          {toolsLoading && (
+                            <Loader
+                              active
+                              inline
+                              size="tiny"
+                              style={{ marginLeft: "0.5rem" }}
+                            />
+                          )}
                         </label>
                         <div
                           style={{
@@ -753,7 +787,7 @@ export const CreateCorpusActionModal: React.FC<
                             border: "1px solid #e9ecef",
                           }}
                         >
-                          {MODERATION_TOOLS.map((tool) => (
+                          {moderationTools.map((tool) => (
                             <div
                               key={tool.name}
                               style={{
@@ -808,7 +842,7 @@ export const CreateCorpusActionModal: React.FC<
                             size="tiny"
                             onClick={() =>
                               setSelectedModerationTools(
-                                MODERATION_TOOLS.map((t) => t.name)
+                                moderationTools.map((t) => t.name)
                               )
                             }
                           >

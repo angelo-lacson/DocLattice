@@ -1,13 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
-import { MessageSquare, Plus, Search } from "lucide-react";
+import { MessageSquare, Plus, Search, Shield } from "lucide-react";
 import { openedCorpus } from "../../graphql/cache";
 import { navigateToCorpusThread } from "../../utils/navigationUtils";
+import { getPermissions } from "../../utils/transform";
+import { PermissionTypes } from "../types";
 import { ThreadList } from "../threads/ThreadList";
 import { CreateThreadForm } from "../threads/CreateThreadForm";
 import { ThreadSearch } from "../search/ThreadSearch";
+import { ModerationDashboard } from "../moderation";
 
 const Container = styled.div`
   display: flex;
@@ -137,6 +140,10 @@ interface CorpusDiscussionsViewProps {
  * - Create new thread button with modal
  * - Navigates to full-page thread view on click
  * - Responsive design
+ * - Moderation dashboard tab (visible to corpus owners and moderators)
+ *   - View moderation action audit logs
+ *   - View moderation metrics and statistics
+ *   - Rollback automated moderation actions
  */
 export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   corpusId,
@@ -145,7 +152,29 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   const location = useLocation();
   const corpus = useReactiveVar(openedCorpus);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"list" | "search">("list");
+  const [activeTab, setActiveTab] = useState<"list" | "search" | "moderation">(
+    "list"
+  );
+
+  // Check if current user can moderate this corpus
+  // Users with update or permission permissions can access the moderation dashboard
+  const canModerate = useMemo(() => {
+    if (!corpus) {
+      return false;
+    }
+
+    // Transform raw permission strings to PermissionTypes enum
+    // myPermissions from GraphQL are raw strings like "update_corpus", "permission_corpus"
+    const rawPermissions = corpus.myPermissions as unknown as string[];
+    const permissions = getPermissions(rawPermissions);
+
+    // Check for moderation-related permissions
+    // If user has CAN_UPDATE or CAN_PERMISSION, they can moderate
+    const hasUpdate = permissions.includes(PermissionTypes.CAN_UPDATE);
+    const hasPermission = permissions.includes(PermissionTypes.CAN_PERMISSION);
+
+    return hasUpdate || hasPermission;
+  }, [corpus]);
 
   const handleThreadClick = (threadId: string) => {
     console.log("[CorpusDiscussionsView] handleThreadClick called", {
@@ -211,17 +240,35 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
           <Search />
           <span>Search</span>
         </Tab>
+        {canModerate && (
+          <Tab
+            $isActive={activeTab === "moderation"}
+            onClick={() => setActiveTab("moderation")}
+            type="button"
+            aria-label="Moderation dashboard"
+            aria-selected={activeTab === "moderation"}
+          >
+            <Shield />
+            <span>Moderation</span>
+          </Tab>
+        )}
       </TabContainer>
 
       <ContentContainer>
-        {activeTab === "list" ? (
+        {activeTab === "list" && (
           <ThreadList
             corpusId={corpusId}
             embedded={false}
             onThreadClick={handleThreadClick}
+            showModeratorFilters={canModerate}
           />
-        ) : (
-          <ThreadSearch corpusId={corpusId} />
+        )}
+        {activeTab === "search" && <ThreadSearch corpusId={corpusId} />}
+        {activeTab === "moderation" && canModerate && (
+          <ModerationDashboard
+            corpusId={corpusId}
+            corpusTitle={corpus?.title}
+          />
         )}
       </ContentContainer>
 

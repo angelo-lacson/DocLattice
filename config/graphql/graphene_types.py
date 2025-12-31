@@ -26,7 +26,11 @@ from opencontractserver.annotations.models import (
     NoteRevision,
     Relationship,
 )
-from opencontractserver.conversations.models import ChatMessage, Conversation
+from opencontractserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    ModerationAction,
+)
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
@@ -3044,3 +3048,68 @@ class CommunityStatsType(graphene.ObjectType):
     active_users_this_month = graphene.Int(
         description="Users who posted in last 30 days"
     )
+
+
+# ==============================================================================
+# MODERATION TYPES
+# ==============================================================================
+
+
+class ModerationActionType(DjangoObjectType):
+    """GraphQL type for ModerationAction audit records."""
+
+    class Meta:
+        model = ModerationAction
+        interfaces = (relay.Node,)
+        fields = [
+            "id",
+            "conversation",
+            "message",
+            "action_type",
+            "moderator",
+            "reason",
+            "created",
+            "modified",
+        ]
+
+    # Additional computed fields
+    corpus_id = graphene.ID(description="Corpus ID if action is on a corpus thread")
+    is_automated = graphene.Boolean(description="Whether this was an automated action")
+    can_rollback = graphene.Boolean(
+        description="Whether this action can be rolled back"
+    )
+
+    def resolve_corpus_id(self, info):
+        """Get corpus ID from conversation if linked."""
+        if self.conversation and self.conversation.chat_with_corpus:
+            return to_global_id("CorpusType", self.conversation.chat_with_corpus.pk)
+        return None
+
+    def resolve_is_automated(self, info):
+        """Check if this was an automated (agent) action - no human moderator."""
+        return self.moderator is None
+
+    def resolve_can_rollback(self, info):
+        """Check if this action can be rolled back."""
+        rollback_types = {
+            "delete_message",
+            "delete_thread",
+            "lock_thread",
+            "pin_thread",
+        }
+        return self.action_type in rollback_types
+
+
+class ModerationMetricsType(graphene.ObjectType):
+    """Aggregated moderation metrics for monitoring."""
+
+    total_actions = graphene.Int()
+    automated_actions = graphene.Int()
+    manual_actions = graphene.Int()
+    actions_by_type = GenericScalar()  # Dict[action_type, count]
+    hourly_action_rate = graphene.Float()
+    is_above_threshold = graphene.Boolean()
+    threshold_exceeded_types = graphene.List(graphene.String)
+    time_range_hours = graphene.Int()
+    start_time = graphene.DateTime()
+    end_time = graphene.DateTime()
