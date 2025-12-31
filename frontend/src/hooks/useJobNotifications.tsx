@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useApolloClient } from "@apollo/client";
 import { toast } from "react-toastify";
 import {
   useNotificationWebSocket,
@@ -6,6 +7,7 @@ import {
   NotificationType,
 } from "./useNotificationWebSocket";
 import { JobNotificationToast } from "../components/notifications/JobNotificationToast";
+import { updateCacheForJobNotification } from "../utils/jobNotificationCacheUpdates";
 
 /**
  * Job-related notification types that trigger real-time toasts.
@@ -46,6 +48,7 @@ export interface UseJobNotificationsOptions {
 export function useJobNotifications(options: UseJobNotificationsOptions = {}) {
   const { showToast = true, toastDuration = 5000, enabled = true } = options;
 
+  const client = useApolloClient();
   const [recentJobs, setRecentJobs] = useState<JobNotification[]>([]);
 
   // Track shown notification IDs to prevent duplicate toasts
@@ -76,6 +79,13 @@ export function useJobNotifications(options: UseJobNotificationsOptions = {}) {
         data: notification.data || {},
       };
 
+      // Update Apollo cache to reflect job completion state
+      updateCacheForJobNotification(
+        client.cache,
+        jobNotification.type,
+        jobNotification.data
+      );
+
       // Add to recent jobs list
       setRecentJobs((prev) => [...prev.slice(-49), jobNotification]);
 
@@ -90,7 +100,7 @@ export function useJobNotifications(options: UseJobNotificationsOptions = {}) {
         });
       }
     },
-    [showToast, toastDuration]
+    [client.cache, showToast, toastDuration]
   );
 
   // Subscribe to WebSocket notifications
