@@ -2346,9 +2346,11 @@ export const SEARCH_CORPUSES_FOR_MENTION = gql`
  * Search documents for @ mention autocomplete
  * Backend filters results to only documents visible to the user via .visible_to_user()
  * Part of Issue #623 - @ Mentions Feature
+ * Issue #741 - Added corpusId for corpus-scoped document search
  */
 export interface SearchDocumentsForMentionInput {
   textSearch: string;
+  corpusId?: string; // Optional corpus ID to scope search to specific corpus
 }
 
 export interface SearchDocumentsForMentionOutput {
@@ -2379,8 +2381,12 @@ export interface SearchDocumentsForMentionOutput {
 }
 
 export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
-  query SearchDocumentsForMention($textSearch: String!) {
-    searchDocumentsForMention(textSearch: $textSearch, first: 10) {
+  query SearchDocumentsForMention($textSearch: String!, $corpusId: ID) {
+    searchDocumentsForMention(
+      textSearch: $textSearch
+      corpusId: $corpusId
+      first: 10
+    ) {
       edges {
         node {
           id

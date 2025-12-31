@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@apollo/client";
-import { GET_NOTIFICATIONS, NotificationNode } from "../graphql/queries";
+import { useState, useCallback } from "react";
+import {
+  useNotificationWebSocket,
+  NotificationUpdate,
+} from "./useNotificationWebSocket";
 
 export interface BadgeNotification {
   id: string;
@@ -18,95 +20,70 @@ export interface BadgeNotification {
 }
 
 /**
- * Hook to detect new badge award notifications.
- * Polls for BADGE notification types and returns newly awarded badges.
+ * Hook to detect new badge award notifications via WebSocket.
+ *
+ * Replaces polling-based implementation with real-time WebSocket updates.
+ * Maintains the same interface for backward compatibility.
+ *
+ * Issue #637: Migrate badge notifications from polling to WebSocket
  */
-export function useBadgeNotifications(pollInterval: number = 30000) {
+export function useBadgeNotifications() {
   const [newBadges, setNewBadges] = useState<BadgeNotification[]>([]);
-  const previousBadgeIds = useRef<Set<string>>(new Set());
-  const isInitialLoad = useRef(true);
 
-  const { data, startPolling, stopPolling } = useQuery(GET_NOTIFICATIONS, {
-    variables: {
-      notificationType: "BADGE",
-      limit: 20,
-    },
-    fetchPolicy: "cache-and-network",
-  });
-
-  useEffect(() => {
-    if (pollInterval > 0) {
-      startPolling(pollInterval);
-      return () => stopPolling();
-    }
-  }, [pollInterval, startPolling, stopPolling]);
-
-  useEffect(() => {
-    if (!data?.notifications?.edges) {
-      return;
-    }
-
-    const badgeNotifications: BadgeNotification[] = [];
-    const currentBadgeIds = new Set<string>();
-
-    data.notifications.edges.forEach((edge: { node: NotificationNode }) => {
-      const notification = edge.node;
-
-      // Skip if not a badge notification
+  // Convert notification update to badge notification
+  const handleNotificationCreated = useCallback(
+    (notification: NotificationUpdate) => {
+      // Only process BADGE notifications
       if (notification.notificationType !== "BADGE") {
         return;
       }
 
       const badgeId = notification.data?.badge_id;
       if (!badgeId) {
+        console.warn(
+          "[useBadgeNotifications] Badge notification missing badge_id:",
+          notification
+        );
         return;
       }
 
-      currentBadgeIds.add(notification.id);
+      const badgeNotification: BadgeNotification = {
+        id: notification.id,
+        badgeId: badgeId,
+        badgeName: notification.data?.badge_name || "Badge",
+        badgeDescription: notification.data?.badge_description || "",
+        badgeIcon: notification.data?.badge_icon || "Award",
+        badgeColor: notification.data?.badge_color || "#05313d",
+        isAutoAwarded: notification.data?.is_auto_awarded || false,
+        awardedAt: notification.createdAt,
+        awardedBy: notification.actor
+          ? {
+              id: notification.actor.id,
+              username: notification.actor.username,
+            }
+          : undefined,
+      };
 
-      // If this is a new badge notification (not seen before)
-      if (!previousBadgeIds.current.has(notification.id)) {
-        badgeNotifications.push({
-          id: notification.id,
-          badgeId: badgeId,
-          badgeName: notification.data?.badge_name || "Badge",
-          badgeDescription: notification.data?.badge_description || "",
-          badgeIcon: notification.data?.badge_icon || "Award",
-          badgeColor: notification.data?.badge_color || "#05313d",
-          isAutoAwarded: notification.data?.is_auto_awarded || false,
-          awardedAt: notification.createdAt,
-          awardedBy: notification.actor
-            ? {
-                id: notification.actor.id,
-                username: notification.actor.username,
-              }
-            : undefined,
-        });
-      }
-    });
+      // Add to newBadges array
+      setNewBadges((prev) => [...prev, badgeNotification]);
+    },
+    []
+  );
 
-    // Skip notifications on initial load to prevent showing old badges
-    if (isInitialLoad.current) {
-      isInitialLoad.current = false;
-      previousBadgeIds.current = currentBadgeIds;
-      return;
-    }
+  // Subscribe to WebSocket notifications
+  const { connectionState } = useNotificationWebSocket({
+    onNotificationCreated: handleNotificationCreated,
+    enabled: true,
+    autoReconnect: true,
+  });
 
-    // Update the set of seen badge notification IDs
-    previousBadgeIds.current = currentBadgeIds;
-
-    // If we found new badges, emit them
-    if (badgeNotifications.length > 0) {
-      setNewBadges(badgeNotifications);
-    }
-  }, [data]);
-
-  const clearNewBadges = () => {
+  const clearNewBadges = useCallback(() => {
     setNewBadges([]);
-  };
+  }, []);
 
   return {
     newBadges,
     clearNewBadges,
+    connectionState, // Export connection state for debugging/UI feedback
   };
 }
