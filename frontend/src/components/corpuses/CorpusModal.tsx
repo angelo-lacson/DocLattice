@@ -4,6 +4,7 @@ import styled from "styled-components";
 import { LabelSetSelector } from "../widgets/CRUD/LabelSetSelector";
 import { EmbedderSelector } from "../widgets/CRUD/EmbedderSelector";
 import { FilePreviewAndUpload } from "../widgets/file-controls/FilePreviewAndUpload";
+import { CategorySelector } from "./CategorySelector";
 import { CorpusType, LabelSetType } from "../../types/graphql-api";
 
 // Types
@@ -17,6 +18,7 @@ export interface CorpusFormData {
   icon?: string | null;
   labelSet?: string | null;
   preferredEmbedder?: string | null;
+  categories?: string[];
 }
 
 export interface CorpusModalProps {
@@ -393,6 +395,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   const [preferredEmbedder, setPreferredEmbedder] = useState<string | null>(
     null
   );
+  const [categories, setCategories] = useState<string[]>([]);
 
   // Track original values for change detection in EDIT mode
   const [originalValues, setOriginalValues] = useState<{
@@ -402,6 +405,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     icon: string | null;
     labelSetId: string | null;
     preferredEmbedder: string | null;
+    categories: string[];
   } | null>(null);
 
   // Track the previous open state to detect modal open transitions
@@ -426,6 +430,9 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       const corpusIcon = corpus.icon || null;
       const corpusLabelSetId = corpus.labelSet?.id || null;
       const corpusPreferredEmbedder = corpus.preferredEmbedder || null;
+      const corpusCategories =
+        (corpus as any).categories?.edges?.map((edge: any) => edge.node.id) ||
+        [];
 
       setTitle(corpusTitle);
       setSlug(corpusSlug);
@@ -434,6 +441,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       setLabelSetId(corpusLabelSetId);
       setLabelSetObj(corpus.labelSet || undefined);
       setPreferredEmbedder(corpusPreferredEmbedder);
+      setCategories(corpusCategories);
 
       // Store original values for change detection
       setOriginalValues({
@@ -443,6 +451,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
         icon: corpusIcon,
         labelSetId: corpusLabelSetId,
         preferredEmbedder: corpusPreferredEmbedder,
+        categories: corpusCategories,
       });
     } else {
       // Reset for create mode
@@ -453,6 +462,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       setLabelSetId(null);
       setLabelSetObj(undefined);
       setPreferredEmbedder(null);
+      setCategories([]);
       setOriginalValues(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -504,6 +514,14 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   // Form validation - both title and description are required
   const isFormValid = title.trim().length > 0 && description.trim().length > 0;
 
+  // Helper to compare arrays
+  const arraysEqual = (a: string[], b: string[]) => {
+    if (a.length !== b.length) return false;
+    const sortedA = [...a].sort();
+    const sortedB = [...b].sort();
+    return sortedA.every((val, idx) => val === sortedB[idx]);
+  };
+
   // Compute isDirty by comparing current values against original values
   // For CREATE mode, form is "dirty" (has submittable content) when valid
   // For EDIT mode, compare each field against original values
@@ -515,7 +533,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
         description !== originalValues.description ||
         icon !== originalValues.icon ||
         labelSetId !== originalValues.labelSetId ||
-        preferredEmbedder !== originalValues.preferredEmbedder);
+        preferredEmbedder !== originalValues.preferredEmbedder ||
+        !arraysEqual(categories, originalValues.categories));
 
   const canSubmit = isFormValid && isDirty && !loading;
 
@@ -547,6 +566,9 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       if (preferredEmbedder !== originalValues.preferredEmbedder) {
         formData.preferredEmbedder = preferredEmbedder;
       }
+      if (!arraysEqual(categories, originalValues.categories)) {
+        formData.categories = categories;
+      }
     } else {
       // Include all for create mode
       formData.title = title.trim();
@@ -555,6 +577,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       formData.icon = icon;
       formData.labelSet = labelSetId;
       formData.preferredEmbedder = preferredEmbedder;
+      formData.categories = categories;
     }
 
     onSubmit(formData);
@@ -570,6 +593,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     icon,
     labelSetId,
     preferredEmbedder,
+    categories,
+    arraysEqual,
   ]);
 
   // Get header text based on mode
@@ -693,6 +718,18 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
             <Icon name="cog" />
             Settings
           </SectionTitle>
+
+          <FormField>
+            <Label htmlFor="corpus-categories">Categories</Label>
+            <CategorySelector
+              selectedIds={categories}
+              onChange={setCategories}
+              disabled={isReadOnly || loading}
+            />
+            <HelpText>
+              Optional: Select one or more categories to organize this corpus.
+            </HelpText>
+          </FormField>
 
           <FormField>
             <LabelSetSelector

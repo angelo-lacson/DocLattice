@@ -2636,7 +2636,7 @@ class DeleteMultipleLabelMutation(graphene.Mutation):
 
 class CreateCorpusMutation(DRFMutation):
     class IOSettings:
-        pk_fields = ["label_set"]
+        pk_fields = ["label_set", "categories"]
         serializer = CorpusSerializer
         model = Corpus
         graphene_model = CorpusType
@@ -2648,6 +2648,9 @@ class CreateCorpusMutation(DRFMutation):
         label_set = graphene.String(required=False)
         preferred_embedder = graphene.String(required=False)
         slug = graphene.String(required=False)
+        categories = graphene.List(
+            graphene.ID, required=False, description="Category IDs to assign"
+        )
 
     @classmethod
     def mutate(cls, root, info, *args, **kwargs):
@@ -2677,7 +2680,7 @@ class CreateCorpusMutation(DRFMutation):
 class UpdateCorpusMutation(DRFMutation):
     class IOSettings:
         lookup_field = "id"
-        pk_fields = ["label_set"]
+        pk_fields = ["label_set", "categories"]
         serializer = CorpusSerializer
         model = Corpus
         graphene_model = CorpusType
@@ -2694,6 +2697,11 @@ class UpdateCorpusMutation(DRFMutation):
         # This prevents bypassing permission checks via UpdateCorpusMutation
         corpus_agent_instructions = graphene.String(required=False)
         document_agent_instructions = graphene.String(required=False)
+        categories = graphene.List(
+            graphene.ID,
+            required=False,
+            description="Category IDs to assign (replaces existing)",
+        )
 
 
 class UpdateMe(graphene.Mutation):

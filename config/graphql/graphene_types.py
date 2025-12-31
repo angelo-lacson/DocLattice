@@ -35,6 +35,7 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusActionExecution,
+    CorpusCategory,
     CorpusDescriptionRevision,
     CorpusEngagementMetrics,
     CorpusFolder,
@@ -1584,6 +1585,35 @@ class DocumentTypeConnection(CountableConnection):
         node = DocumentType
 
 
+# ---------------- Corpus Category Types ----------------
+class CorpusCategoryType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for corpus categories."""
+
+    corpus_count = graphene.Int(description="Number of corpuses in this category")
+
+    class Meta:
+        model = CorpusCategory
+        interfaces = (relay.Node,)
+        connection_class = CountableConnection
+        fields = (
+            "id",
+            "name",
+            "description",
+            "icon",
+            "color",
+            "sort_order",
+            "creator",
+            "is_public",
+            "created",
+            "modified",
+        )
+
+    def resolve_corpus_count(self, info):
+        """Return count of corpuses visible to user in this category."""
+        user = info.context.user
+        return self.corpuses.visible_to_user(user).count()
+
+
 # ---------------- Engagement Metrics Types (Epic #565) ----------------
 class CorpusEngagementMetricsType(graphene.ObjectType):
     """
@@ -1820,6 +1850,13 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return self.engagement_metrics
         except CorpusEngagementMetrics.DoesNotExist:
             return None
+
+    # Categories
+    categories = graphene.List(lambda: CorpusCategoryType)
+
+    def resolve_categories(self, info):
+        """Get all categories assigned to this corpus."""
+        return self.categories.all()
 
     class Meta:
         model = Corpus

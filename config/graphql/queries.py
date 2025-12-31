@@ -24,6 +24,7 @@ from config.graphql.filters import (
     BadgeFilter,
     ColumnFilter,
     ConversationFilter,
+    CorpusCategoryFilter,
     CorpusFilter,
     DatacellFilter,
     DocumentFilter,
@@ -56,6 +57,7 @@ from config.graphql.graphene_types import (
     CorpusActionExecutionType,
     CorpusActionTrailStatsType,
     CorpusActionType,
+    CorpusCategoryType,
     CorpusFolderType,
     CorpusStatsType,
     CorpusType,
@@ -821,6 +823,20 @@ class Query(graphene.ObjectType):
         )
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
+
+    # CORPUS CATEGORY RESOLVERS #####################################
+    corpus_categories = DjangoFilterConnectionField(
+        CorpusCategoryType,
+        filterset_class=CorpusCategoryFilter,
+        description="List all corpus categories",
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_corpus_categories(self, info, **kwargs):
+        """Get all corpus categories, ordered by sort_order and name."""
+        from opencontractserver.corpuses.models import CorpusCategory
+
+        return CorpusCategory.objects.all().order_by("sort_order", "name")
 
     # CORPUS FOLDER RESOLVERS #####################################
 
