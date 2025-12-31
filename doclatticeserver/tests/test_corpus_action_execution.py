@@ -623,7 +623,7 @@ class CorpusActionExecutionPermissionsTestCase(TestCase):
             username="other", password="testpass"
         )
         self.superuser = User.objects.create_superuser(
-            username="admin", password="testpass"
+            username="corpus_exec_superuser", password="testpass"
         )
 
         # Owner's private corpus and execution
