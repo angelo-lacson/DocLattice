@@ -1,0 +1,166 @@
+import { ApolloCache } from "@apollo/client";
+import type { NotificationType } from "../hooks/useNotificationWebSocket";
+
+/**
+ * Cache update utilities for job completion notifications.
+ *
+ * When WebSocket notifications arrive indicating job completion, these functions
+ * update the Apollo cache to reflect the new state without requiring a refetch.
+ *
+ * Issue #624: Real-time cache updates for job completion notifications.
+ */
+
+interface JobNotificationData {
+  // Document processed
+  document_id?: number;
+  // Extract complete
+  extract_id?: number;
+  // Analysis complete/failed
+  analysis_id?: number;
+  // Export complete
+  export_id?: number;
+}
+
+/**
+ * Update cache when a document finishes processing.
+ * Sets backendLock to false.
+ */
+function updateDocumentProcessed(
+  cache: ApolloCache<unknown>,
+  data: JobNotificationData
+): void {
+  if (!data.document_id) return;
+
+  const documentId = `DocumentType:${data.document_id}`;
+
+  cache.modify({
+    id: documentId,
+    fields: {
+      backendLock: () => false,
+    },
+    broadcast: true,
+  });
+}
+
+/**
+ * Update cache when an extract completes.
+ * Sets finished timestamp.
+ */
+function updateExtractComplete(
+  cache: ApolloCache<unknown>,
+  data: JobNotificationData
+): void {
+  if (!data.extract_id) return;
+
+  const extractId = `ExtractType:${data.extract_id}`;
+
+  cache.modify({
+    id: extractId,
+    fields: {
+      finished: () => new Date().toISOString(),
+    },
+    broadcast: true,
+  });
+}
+
+/**
+ * Update cache when an analysis completes successfully.
+ * Sets status to COMPLETED and analysisCompleted timestamp.
+ */
+function updateAnalysisComplete(
+  cache: ApolloCache<unknown>,
+  data: JobNotificationData
+): void {
+  if (!data.analysis_id) return;
+
+  const analysisId = `AnalysisType:${data.analysis_id}`;
+
+  cache.modify({
+    id: analysisId,
+    fields: {
+      status: () => "COMPLETED",
+      analysisCompleted: () => new Date().toISOString(),
+    },
+    broadcast: true,
+  });
+}
+
+/**
+ * Update cache when an analysis fails.
+ * Sets status to FAILED.
+ */
+function updateAnalysisFailed(
+  cache: ApolloCache<unknown>,
+  data: JobNotificationData
+): void {
+  if (!data.analysis_id) return;
+
+  const analysisId = `AnalysisType:${data.analysis_id}`;
+
+  cache.modify({
+    id: analysisId,
+    fields: {
+      status: () => "FAILED",
+    },
+    broadcast: true,
+  });
+}
+
+/**
+ * Update cache when an export completes.
+ * Sets backendLock to false and finished timestamp.
+ */
+function updateExportComplete(
+  cache: ApolloCache<unknown>,
+  data: JobNotificationData
+): void {
+  if (!data.export_id) return;
+
+  const exportId = `UserExportType:${data.export_id}`;
+
+  cache.modify({
+    id: exportId,
+    fields: {
+      backendLock: () => false,
+      finished: () => new Date().toISOString(),
+    },
+    broadcast: true,
+  });
+}
+
+/**
+ * Main function to update cache based on notification type.
+ * Returns true if cache was updated, false otherwise.
+ */
+export function updateCacheForJobNotification(
+  cache: ApolloCache<unknown>,
+  notificationType: NotificationType,
+  data: Record<string, unknown>
+): boolean {
+  const jobData = data as JobNotificationData;
+
+  switch (notificationType) {
+    case "DOCUMENT_PROCESSED":
+      updateDocumentProcessed(cache, jobData);
+      return !!jobData.document_id;
+
+    case "EXTRACT_COMPLETE":
+      updateExtractComplete(cache, jobData);
+      return !!jobData.extract_id;
+
+    case "ANALYSIS_COMPLETE":
+      updateAnalysisComplete(cache, jobData);
+      return !!jobData.analysis_id;
+
+    case "ANALYSIS_FAILED":
+      updateAnalysisFailed(cache, jobData);
+      return !!jobData.analysis_id;
+
+    case "EXPORT_COMPLETE":
+      updateExportComplete(cache, jobData);
+      return !!jobData.export_id;
+
+    default:
+      return false;
+  }
+}
