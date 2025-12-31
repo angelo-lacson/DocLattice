@@ -651,24 +651,25 @@ class RollbackModerationActionMutation(graphene.Mutation):
         # - target_attr: Which object the action operates on ('message' or 'conversation'),
         #   used for permission checking (message actions need message's conversation)
         #   and for invoking the correct method on the target object
+        # Use string values for comparison since DB stores strings
         rollback_map = {
-            ModerationActionTypeEnum.DELETE_MESSAGE: (
-                ModerationActionTypeEnum.RESTORE_MESSAGE,
+            ModerationActionTypeEnum.DELETE_MESSAGE.value: (
+                ModerationActionTypeEnum.RESTORE_MESSAGE.value,
                 "restore_message",
                 "message",
             ),
-            ModerationActionTypeEnum.DELETE_THREAD: (
-                ModerationActionTypeEnum.RESTORE_THREAD,
+            ModerationActionTypeEnum.DELETE_THREAD.value: (
+                ModerationActionTypeEnum.RESTORE_THREAD.value,
                 "restore_thread",
                 "conversation",
             ),
-            ModerationActionTypeEnum.LOCK_THREAD: (
-                ModerationActionTypeEnum.UNLOCK_THREAD,
+            ModerationActionTypeEnum.LOCK_THREAD.value: (
+                ModerationActionTypeEnum.UNLOCK_THREAD.value,
                 "unlock",
                 "conversation",
             ),
-            ModerationActionTypeEnum.PIN_THREAD: (
-                ModerationActionTypeEnum.UNPIN_THREAD,
+            ModerationActionTypeEnum.PIN_THREAD.value: (
+                ModerationActionTypeEnum.UNPIN_THREAD.value,
                 "unpin",
                 "conversation",
             ),

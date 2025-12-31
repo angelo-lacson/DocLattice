@@ -188,7 +188,7 @@ class ConversationModerationTest(TestCase):
         actions = ModerationAction.objects.filter(conversation=self.conversation)
         self.assertEqual(actions.count(), 1)
         action = actions.first()
-        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD.value)
         self.assertEqual(action.moderator, self.moderator_user)
         self.assertEqual(action.reason, "Violates community guidelines")
 
@@ -211,8 +211,10 @@ class ConversationModerationTest(TestCase):
             conversation=self.conversation
         ).order_by("created_at")
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.LOCK_THREAD)
-        self.assertEqual(actions[1].action_type, ModerationActionType.UNLOCK_THREAD)
+        self.assertEqual(actions[0].action_type, ModerationActionType.LOCK_THREAD.value)
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.UNLOCK_THREAD.value
+        )
         self.assertEqual(actions[1].reason, "Issue resolved")
 
     def test_lock_permission_denied(self):
@@ -238,7 +240,7 @@ class ConversationModerationTest(TestCase):
 
         # Check audit trail
         action = ModerationAction.objects.get(conversation=self.conversation)
-        self.assertEqual(action.action_type, ModerationActionType.PIN_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.PIN_THREAD.value)
         self.assertEqual(action.moderator, self.moderator_user)
         self.assertEqual(action.reason, "Important announcement")
 
@@ -261,8 +263,10 @@ class ConversationModerationTest(TestCase):
             conversation=self.conversation
         ).order_by("created_at")
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.PIN_THREAD)
-        self.assertEqual(actions[1].action_type, ModerationActionType.UNPIN_THREAD)
+        self.assertEqual(actions[0].action_type, ModerationActionType.PIN_THREAD.value)
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.UNPIN_THREAD.value
+        )
 
     def test_pin_permission_denied(self):
         """Test that non-moderators cannot pin conversations."""
@@ -283,7 +287,7 @@ class ConversationModerationTest(TestCase):
 
         # Check audit trail
         action = ModerationAction.objects.get(conversation=self.conversation)
-        self.assertEqual(action.action_type, ModerationActionType.DELETE_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.DELETE_THREAD.value)
         self.assertEqual(action.moderator, self.moderator_user)
         self.assertEqual(action.reason, "Spam content")
 
@@ -311,8 +315,12 @@ class ConversationModerationTest(TestCase):
             conversation=self.conversation
         ).order_by("created_at")
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.DELETE_THREAD)
-        self.assertEqual(actions[1].action_type, ModerationActionType.RESTORE_THREAD)
+        self.assertEqual(
+            actions[0].action_type, ModerationActionType.DELETE_THREAD.value
+        )
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.RESTORE_THREAD.value
+        )
         self.assertEqual(actions[1].reason, "False positive")
 
         # Conversation should appear in default queryset again
@@ -398,7 +406,7 @@ class ChatMessageModerationTest(TestCase):
 
         # Check audit trail
         action = ModerationAction.objects.get(message=self.message)
-        self.assertEqual(action.action_type, ModerationActionType.DELETE_MESSAGE)
+        self.assertEqual(action.action_type, ModerationActionType.DELETE_MESSAGE.value)
         self.assertEqual(action.moderator, self.moderator_user)
         self.assertEqual(action.conversation, self.conversation)
         self.assertEqual(action.reason, "Inappropriate content")
@@ -425,8 +433,12 @@ class ChatMessageModerationTest(TestCase):
             "created_at"
         )
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.DELETE_MESSAGE)
-        self.assertEqual(actions[1].action_type, ModerationActionType.RESTORE_MESSAGE)
+        self.assertEqual(
+            actions[0].action_type, ModerationActionType.DELETE_MESSAGE.value
+        )
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.RESTORE_MESSAGE.value
+        )
         self.assertEqual(actions[1].reason, "Reinstated")
 
         # Message should appear in default queryset again
@@ -482,7 +494,7 @@ class ModerationActionModelTest(TestCase):
         """Test the string representation of ModerationAction."""
         action = ModerationAction.objects.create(
             conversation=self.conversation,
-            action_type=ModerationActionType.LOCK_THREAD,
+            action_type=ModerationActionType.LOCK_THREAD.value,
             moderator=self.owner,
             reason="Test reason",
             creator=self.owner,
@@ -496,14 +508,14 @@ class ModerationActionModelTest(TestCase):
         # Create multiple actions
         action1 = ModerationAction.objects.create(
             conversation=self.conversation,
-            action_type=ModerationActionType.LOCK_THREAD,
+            action_type=ModerationActionType.LOCK_THREAD.value,
             moderator=self.owner,
             creator=self.owner,
         )
 
         action2 = ModerationAction.objects.create(
             conversation=self.conversation,
-            action_type=ModerationActionType.PIN_THREAD,
+            action_type=ModerationActionType.PIN_THREAD.value,
             moderator=self.owner,
             creator=self.owner,
         )
@@ -517,7 +529,7 @@ class ModerationActionModelTest(TestCase):
         """Test that moderation actions serve as immutable audit trail."""
         ModerationAction.objects.create(
             conversation=self.conversation,
-            action_type=ModerationActionType.LOCK_THREAD,
+            action_type=ModerationActionType.LOCK_THREAD.value,
             moderator=self.owner,
             reason="Original reason",
             creator=self.owner,
@@ -531,8 +543,10 @@ class ModerationActionModelTest(TestCase):
             conversation=self.conversation
         ).order_by("created_at")
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.LOCK_THREAD)
-        self.assertEqual(actions[1].action_type, ModerationActionType.UNLOCK_THREAD)
+        self.assertEqual(actions[0].action_type, ModerationActionType.LOCK_THREAD.value)
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.UNLOCK_THREAD.value
+        )
 
 
 class NonCorpusConversationModerationTest(TestCase):
@@ -571,7 +585,7 @@ class NonCorpusConversationModerationTest(TestCase):
 
         # Check audit trail
         action = ModerationAction.objects.get(conversation=self.conversation)
-        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD.value)
         self.assertEqual(action.moderator, self.creator)
 
 
@@ -849,7 +863,7 @@ class DeleteRestoreThreadMutationTest(TestCase):
         # Verify moderation action was created
         action = ModerationAction.objects.filter(
             conversation=self.conversation,
-            action_type=ModerationActionType.DELETE_THREAD,
+            action_type=ModerationActionType.DELETE_THREAD.value,
         ).first()
         self.assertIsNotNone(action)
         self.assertEqual(action.reason, "Test deletion")
@@ -1315,7 +1329,7 @@ class ModerationMethodReturnValueTest(TestCase):
         action = self.conversation.lock(self.owner, reason="Test lock")
 
         self.assertIsInstance(action, ModerationAction)
-        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD.value)
         self.assertEqual(action.moderator, self.owner)
         self.assertEqual(action.reason, "Test lock")
 
@@ -1325,14 +1339,14 @@ class ModerationMethodReturnValueTest(TestCase):
         action = self.conversation.unlock(self.owner, reason="Test unlock")
 
         self.assertIsInstance(action, ModerationAction)
-        self.assertEqual(action.action_type, ModerationActionType.UNLOCK_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.UNLOCK_THREAD.value)
 
     def test_pin_returns_moderation_action(self):
         """Test that pin() returns the created ModerationAction."""
         action = self.conversation.pin(self.owner, reason="Test pin")
 
         self.assertIsInstance(action, ModerationAction)
-        self.assertEqual(action.action_type, ModerationActionType.PIN_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.PIN_THREAD.value)
 
     def test_unpin_returns_moderation_action(self):
         """Test that unpin() returns the created ModerationAction."""
@@ -1340,14 +1354,14 @@ class ModerationMethodReturnValueTest(TestCase):
         action = self.conversation.unpin(self.owner, reason="Test unpin")
 
         self.assertIsInstance(action, ModerationAction)
-        self.assertEqual(action.action_type, ModerationActionType.UNPIN_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.UNPIN_THREAD.value)
 
     def test_soft_delete_thread_returns_moderation_action(self):
         """Test that soft_delete_thread() returns the created ModerationAction."""
         action = self.conversation.soft_delete_thread(self.owner, reason="Test delete")
 
         self.assertIsInstance(action, ModerationAction)
-        self.assertEqual(action.action_type, ModerationActionType.DELETE_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.DELETE_THREAD.value)
 
     def test_restore_thread_returns_moderation_action(self):
         """Test that restore_thread() returns the created ModerationAction."""
@@ -1355,7 +1369,7 @@ class ModerationMethodReturnValueTest(TestCase):
         action = self.conversation.restore_thread(self.owner, reason="Test restore")
 
         self.assertIsInstance(action, ModerationAction)
-        self.assertEqual(action.action_type, ModerationActionType.RESTORE_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.RESTORE_THREAD.value)
 
     def test_soft_delete_message_returns_moderation_action(self):
         """Test that soft_delete_message() returns the created ModerationAction."""
@@ -1371,7 +1385,7 @@ class ModerationMethodReturnValueTest(TestCase):
         action = message.soft_delete_message(self.owner, reason="Test delete message")
 
         self.assertIsInstance(action, ModerationAction)
-        self.assertEqual(action.action_type, ModerationActionType.DELETE_MESSAGE)
+        self.assertEqual(action.action_type, ModerationActionType.DELETE_MESSAGE.value)
 
     def test_restore_message_returns_moderation_action(self):
         """Test that restore_message() returns the created ModerationAction."""
@@ -1387,4 +1401,4 @@ class ModerationMethodReturnValueTest(TestCase):
         action = message.restore_message(self.owner, reason="Test restore message")
 
         self.assertIsInstance(action, ModerationAction)
-        self.assertEqual(action.action_type, ModerationActionType.RESTORE_MESSAGE)
+        self.assertEqual(action.action_type, ModerationActionType.RESTORE_MESSAGE.value)
