@@ -2915,6 +2915,103 @@ export interface RemoveVoteOutput {
 }
 
 // ============================================================================
+// Conversation/Thread Voting Mutations
+// ============================================================================
+
+/** Response shape for conversation vote mutations */
+export interface VoteConversationResponse {
+  ok: boolean;
+  message: string;
+  obj: {
+    id: string;
+    upvoteCount: number;
+    downvoteCount: number;
+    userVote: string | null;
+  } | null;
+}
+
+/**
+ * Upvote a conversation/thread. Uses the backend vote_conversation mutation with vote_type="upvote".
+ * Returns the updated conversation with vote counts and current user's vote status.
+ */
+export const UPVOTE_CONVERSATION = gql`
+  mutation UpvoteConversation($conversationId: ID!) {
+    voteConversation(conversationId: $conversationId, voteType: "upvote") {
+      ok
+      message
+      obj {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface UpvoteConversationInput {
+  conversationId: string;
+}
+
+export interface UpvoteConversationOutput {
+  voteConversation: VoteConversationResponse;
+}
+
+/**
+ * Downvote a conversation/thread. Uses the backend vote_conversation mutation with vote_type="downvote".
+ * Returns the updated conversation with vote counts and current user's vote status.
+ */
+export const DOWNVOTE_CONVERSATION = gql`
+  mutation DownvoteConversation($conversationId: ID!) {
+    voteConversation(conversationId: $conversationId, voteType: "downvote") {
+      ok
+      message
+      obj {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface DownvoteConversationInput {
+  conversationId: string;
+}
+
+export interface DownvoteConversationOutput {
+  voteConversation: VoteConversationResponse;
+}
+
+/**
+ * Remove a vote from a conversation/thread.
+ * Returns the updated conversation with vote counts and current user's vote status (null after removal).
+ */
+export const REMOVE_CONVERSATION_VOTE = gql`
+  mutation RemoveConversationVote($conversationId: ID!) {
+    removeConversationVote(conversationId: $conversationId) {
+      ok
+      message
+      obj {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface RemoveConversationVoteInput {
+  conversationId: string;
+}
+
+export interface RemoveConversationVoteOutput {
+  removeConversationVote: VoteConversationResponse;
+}
+
+// ============================================================================
 // Moderation Mutations
 // ============================================================================
 
