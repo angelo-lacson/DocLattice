@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Edit2,
   Trash2,
+  CornerDownRight,
 } from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
@@ -25,6 +26,7 @@ import { RelativeTime } from "./RelativeTime";
 import { MessageBadges } from "../badges/MessageBadges";
 import { MarkdownMessageRenderer } from "./MarkdownMessageRenderer";
 import { formatUsername } from "./userUtils";
+import { VoteButtons } from "./VoteButtons";
 import { UserBadgeType, AgentConfigurationType } from "../../types/graphql-api";
 import {
   mapWebSocketSourcesToChatMessageSources,
@@ -112,6 +114,10 @@ interface MessageItemProps {
   onMessageUpdated?: () => void;
   /** Callback after successful message deletion */
   onMessageDeleted?: () => void;
+  /** Current user ID for voting */
+  currentUserId?: string;
+  /** Parent message author for "Replying to" display */
+  parentAuthor?: string;
 }
 
 /**
@@ -162,88 +168,54 @@ const MessageContainer = styled.div<
     $isAgent?: boolean;
   } & AgentColorProps
 >`
-  /* CRITICAL: Block-level display to prevent shrinking */
-  display: block;
-
-  /* Simple indentation for nested messages */
-  margin-left: ${(props) => `${props.$depth * 40}px`};
-  margin-right: 0;
-
-  /* FORCE full width usage - no shrinking to content! */
-  width: calc(100% - ${(props) => props.$depth * 40}px) !important;
-  min-width: min(800px, calc(100% - ${(props) => props.$depth * 40}px));
-  max-width: none;
-  box-sizing: border-box;
-
-  /* Generous padding for readability */
-  padding: 1.5rem;
-
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
   background: ${(props) => {
-    if (props.$isDeleted) return "#f3f4f6";
-    if (props.$isHighlighted)
-      return `linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)`;
+    if (props.$isDeleted) return color.N2;
+    if (props.$isHighlighted) return color.B1;
     if (props.$isAgent && props.$agentBgStart && props.$agentBgEnd) {
-      // Use pre-computed RGBA values for performance
       return `linear-gradient(135deg, ${props.$agentBgStart} 0%, ${props.$agentBgEnd} 100%)`;
     }
-    return "#ffffff";
+    return color.N1;
   }};
-
   border: 1px solid
     ${(props) => {
-      if (props.$isHighlighted) return "#3b82f6";
+      if (props.$isHighlighted) return color.B5;
       if (props.$isAgent) return props.$agentColor || "#4A90E2";
-      return "#d1d5db";
+      return color.N4;
     }};
-
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  margin-bottom: 1.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  transition: all 0.15s;
   position: relative;
+
+  /* Subtle left border for nested replies */
+  ${(props) =>
+    props.$depth > 0 &&
+    `
+    border-left: 3px solid ${color.N4};
+  `}
 
   /* Accent strip for highlighted messages */
   ${(props) =>
     props.$isHighlighted &&
     `
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 4px;
-      background: linear-gradient(180deg, ${color.B6} 0%, ${color.B5} 100%);
-      border-radius: 16px 0 0 16px;
-    }
+    border-left: 3px solid ${color.B6};
   `}
 
-  /* Accent strip for agent messages (Issue #688) */
+  /* Accent strip for agent messages */
   ${(props) =>
     props.$isAgent &&
     !props.$isHighlighted &&
     `
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 4px;
-      background: linear-gradient(180deg, ${
-        props.$agentColor || "#4A90E2"
-      } 0%, ${props.$agentColor || "#4A90E2"}88 100%);
-      border-radius: 16px 0 0 16px;
-    }
+    border-left: 3px solid ${props.$agentColor || "#4A90E2"};
   `}
 
   &:hover {
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.05);
-    transform: translateY(-1px);
     border-color: ${(props) => {
-      if (props.$isHighlighted) return "#2563eb";
+      if (props.$isHighlighted) return color.B6;
       if (props.$isAgent) return props.$agentColor || "#4A90E2";
-      return "#9ca3af";
+      return color.N5;
     }};
   }
 
@@ -251,117 +223,115 @@ const MessageContainer = styled.div<
     props.$isDeleted &&
     `
     opacity: 0.7;
-    background: #f3f4f6;
   `}
 
-  /* Tablet adjustments */
-  @media (max-width: 1024px) {
-    margin-left: ${(props) => `${props.$depth * 30}px`};
-    width: calc(100% - ${(props) => props.$depth * 30}px) !important;
-    min-width: min(650px, calc(100% - ${(props) => props.$depth * 30}px));
-    padding: 1.25rem;
-  }
-
-  /* Mobile adjustments */
-  @media (max-width: 768px) {
-    margin-left: ${(props) => `${props.$depth * 20}px`};
-    width: calc(100% - ${(props) => props.$depth * 20}px) !important;
-    min-width: min(450px, calc(100% - ${(props) => props.$depth * 20}px));
-    padding: 1rem;
-  }
-
   @media (max-width: 480px) {
-    margin-left: ${(props) => `${Math.min(props.$depth * 16, 32)}px`};
-    width: calc(
-      100% - ${(props) => Math.min(props.$depth * 16, 32)}px
-    ) !important;
-    min-width: 280px;
-    padding: 0.875rem;
-    border-radius: 12px;
+    padding: 0.75rem;
+    gap: 0.5rem;
   }
+`;
+
+const VoteColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+`;
+
+const ContentColumn = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 `;
 
 const MessageHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.875rem;
-  padding-bottom: 0.875rem;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 0.5rem;
 `;
 
 const MessageHeaderLeft = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex: 1;
   min-width: 0;
 `;
 
 const UserAvatar = styled.div<{ $isAgent?: boolean } & AgentColorProps>`
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: ${(props) =>
     props.$isAgent
       ? `linear-gradient(135deg, ${props.$agentColor || "#4A90E2"} 0%, ${
           props.$agentColor || "#4A90E2"
         }dd 100%)`
-      : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)"};
+      : `linear-gradient(135deg, ${color.G6} 0%, ${color.G7} 100%)`};
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 700;
-  font-size: 16px;
   flex-shrink: 0;
-  box-shadow: ${(props) =>
-    props.$isAgent && props.$agentShadow
-      ? `0 4px 14px ${props.$agentShadow}`
-      : "0 4px 14px rgba(99, 102, 241, 0.3)"};
-  transition: all 0.2s ease;
 
-  &:hover {
-    transform: scale(1.05);
-    box-shadow: ${(props) =>
-      props.$isAgent && props.$agentShadowHover
-        ? `0 6px 16px ${props.$agentShadowHover}`
-        : "0 6px 16px rgba(102, 126, 234, 0.35)"};
+  svg {
+    width: 14px;
+    height: 14px;
   }
 
   @media (max-width: 480px) {
-    width: 36px;
-    height: 36px;
-    font-size: 14px;
+    width: 24px;
+    height: 24px;
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+`;
+
+const ReplyIndicator = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 11px;
+  color: ${color.N6};
+  padding: 0.25rem 0.5rem;
+  background: ${color.N2};
+  border-radius: 4px;
+  margin-bottom: 0.25rem;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  strong {
+    color: ${color.N8};
+    font-weight: 600;
   }
 `;
 
 const UserInfo = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`;
-
-const UsernameRow = styled.div`
-  display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
   flex-wrap: wrap;
 `;
 
 const Username = styled.span`
-  font-weight: 700;
-  color: #111827;
-  font-size: 15px;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  color: ${color.N9};
+  font-size: 13px;
 `;
 
 const MessageTimestamp = styled.span`
-  font-size: 13px;
-  color: #6b7280;
-  font-weight: 500;
+  font-size: 12px;
+  color: ${color.N6};
 `;
 
 const MessageActionsContainer = styled.div`
@@ -585,105 +555,88 @@ const ConfirmButton = styled.button<{ $variant: "cancel" | "delete" }>`
 `;
 
 const MessageContent = styled.div<{ $isDeleted?: boolean }>`
-  color: #1f2937;
-  line-height: 1.65;
-  margin-bottom: 1rem;
-  font-size: 14px;
+  color: ${color.N9};
+  line-height: 1.5;
+  font-size: 13px;
   word-wrap: break-word;
 
   ${(props) =>
     props.$isDeleted &&
     `
     font-style: italic;
-    color: #6b7280;
+    color: ${color.N6};
   `}
 
   p {
-    margin: 0 0 0.75rem 0;
+    margin: 0 0 0.5rem 0;
     line-height: inherit;
-    color: #1f2937;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   code {
-    background: #f3f4f6;
-    border: 1px solid #e5e7eb;
-    padding: 2px 6px;
+    background: ${color.N2};
+    border: 1px solid ${color.N4};
+    padding: 1px 4px;
     border-radius: 3px;
     font-size: 0.9em;
     font-family: monospace;
-    color: #dc2626;
+    color: ${color.R7};
   }
 
   pre {
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    padding: 0.75rem;
+    background: ${color.N2};
+    border: 1px solid ${color.N4};
+    padding: 0.5rem;
     border-radius: 4px;
     overflow-x: auto;
-    margin: 0.75rem 0;
+    margin: 0.5rem 0;
   }
 
   blockquote {
-    border-left: 3px solid #3b82f6;
-    padding-left: 1rem;
-    margin: 0.75rem 0;
-    color: #4b5563;
-  }
-
-  @media (max-width: 768px) {
-    font-size: 14px;
-    line-height: 1.55;
-  }
-
-  @media (max-width: 480px) {
-    font-size: 13px;
-    line-height: 1.5;
+    border-left: 3px solid ${color.G5};
+    padding-left: 0.75rem;
+    margin: 0.5rem 0;
+    color: ${color.N7};
   }
 `;
 
 const MessageFooter = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.md};
-
-  @media (max-width: 640px) {
-    flex-wrap: wrap;
-    gap: ${spacing.xs};
-  }
+  gap: 0.5rem;
 `;
 
 const FooterButton = styled.button`
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1px solid #93c5fd;
-  color: #1e40af;
+  background: transparent;
+  border: 1px solid ${color.N4};
+  color: ${color.N7};
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
+  gap: 0.25rem;
+  transition: all 0.15s;
 
   &:hover {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    border-color: #2563eb;
-    color: white;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    background: ${color.G1};
+    border-color: ${color.G5};
+    color: ${color.G7};
   }
 
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  svg {
+    width: 12px;
+    height: 12px;
   }
 `;
 
 const ReplyCount = styled.span`
-  font-size: 12px;
+  font-size: 11px;
   color: ${color.N6};
   margin-left: auto;
 `;
@@ -756,6 +709,8 @@ export const MessageItem = React.memo(function MessageItem({
   conversationId,
   onMessageUpdated,
   onMessageDeleted,
+  currentUserId,
+  parentAuthor,
 }: MessageItemProps) {
   const isDeleted = !!message.deletedAt;
   const username = formatUsername(
@@ -957,179 +912,196 @@ export const MessageItem = React.memo(function MessageItem({
         isAgent ? `${agentData.name} (AI Agent)` : username
       }`}
     >
-      {/* Header */}
-      <MessageHeader>
-        <MessageHeaderLeft>
-          <UserAvatar
-            title={isAgent ? `${agentData.name} (AI Agent)` : username}
-            $isAgent={isAgent}
-            $agentColor={agentColors?.color}
-            $agentShadow={agentColors?.shadow}
-            $agentShadowHover={agentColors?.shadowHover}
-          >
-            {isAgent ? <Bot size={18} /> : <User size={16} />}
-          </UserAvatar>
-          <UserInfo>
-            <UsernameRow>
+      {/* Vote Column */}
+      <VoteColumn>
+        <VoteButtons
+          messageId={message.id}
+          upvoteCount={message.upvoteCount ?? 0}
+          downvoteCount={message.downvoteCount ?? 0}
+          userVote={message.userVote}
+          senderId={message.creator?.id || ""}
+          currentUserId={currentUserId}
+          disabled={isDeleted}
+        />
+      </VoteColumn>
+
+      {/* Content Column */}
+      <ContentColumn>
+        {/* Header */}
+        <MessageHeader>
+          <MessageHeaderLeft>
+            <UserAvatar
+              title={isAgent ? `${agentData.name} (AI Agent)` : username}
+              $isAgent={isAgent}
+              $agentColor={agentColors?.color}
+              $agentShadow={agentColors?.shadow}
+              $agentShadowHover={agentColors?.shadowHover}
+            >
+              {isAgent ? <Bot /> : <User />}
+            </UserAvatar>
+            <UserInfo>
               <Username>{username}</Username>
               <MessageBadges
                 message={message}
                 userBadges={userBadges}
-                maxBadges={3}
+                maxBadges={2}
                 showTooltip={true}
               />
-            </UsernameRow>
-            <MessageTimestamp>
-              <RelativeTime date={message.created} />
-            </MessageTimestamp>
-          </UserInfo>
-        </MessageHeaderLeft>
+              <MessageTimestamp>
+                <RelativeTime date={message.created} />
+              </MessageTimestamp>
+            </UserInfo>
+          </MessageHeaderLeft>
 
-        {/* Message Actions Dropdown */}
-        {hasActions && !isDeleted && (
-          <>
-            <DropdownBackdrop
-              $isOpen={isDropdownOpen}
-              onClick={closeBackdrop}
-            />
-            <MessageActionsContainer ref={dropdownRef}>
-              <MessageActionsButton
-                aria-label="Message actions"
-                aria-expanded={isDropdownOpen}
-                aria-haspopup="menu"
-                onClick={toggleDropdown}
-              >
-                <MoreVertical size={16} />
-              </MessageActionsButton>
-
-              <ActionsDropdown $isOpen={isDropdownOpen} role="menu">
-                <MobileDropdownHeader />
-                {showDeleteConfirm ? (
-                  <DeleteConfirmation>
-                    <DeleteConfirmText>
-                      Are you sure you want to delete this message?
-                    </DeleteConfirmText>
-                    <DeleteConfirmButtons>
-                      <ConfirmButton
-                        $variant="cancel"
-                        onClick={handleCancelDelete}
-                        disabled={isDeleting}
-                      >
-                        Cancel
-                      </ConfirmButton>
-                      <ConfirmButton
-                        $variant="delete"
-                        onClick={handleConfirmDelete}
-                        disabled={isDeleting}
-                      >
-                        {isDeleting ? "Deleting..." : "Delete"}
-                      </ConfirmButton>
-                    </DeleteConfirmButtons>
-                  </DeleteConfirmation>
-                ) : (
-                  <>
-                    {canEdit && (
-                      <DropdownItem onClick={handleEdit} role="menuitem">
-                        <Edit2 size={16} />
-                        Edit message
-                      </DropdownItem>
-                    )}
-                    {canEdit && canDelete && <DropdownDivider />}
-                    {canDelete && (
-                      <DropdownItem
-                        onClick={handleDeleteClick}
-                        $variant="danger"
-                        role="menuitem"
-                      >
-                        <Trash2 size={16} />
-                        Delete message
-                      </DropdownItem>
-                    )}
-                  </>
-                )}
-              </ActionsDropdown>
-            </MessageActionsContainer>
-          </>
-        )}
-      </MessageHeader>
-
-      {/* Edit Message Modal */}
-      <EditMessageModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        messageId={message.id}
-        initialContent={message.content || ""}
-        corpusId={corpusId}
-        conversationId={conversationId}
-        onSuccess={onMessageUpdated}
-      />
-
-      {/* Content */}
-      <MessageContent $isDeleted={isDeleted}>
-        {isDeleted ? (
-          <p>[This message has been deleted]</p>
-        ) : (
-          // Render markdown content with styled mentions (Issue #623, #689)
-          <MarkdownMessageRenderer
-            content={message.content || ""}
-            mentionedResources={message.mentionedResources ?? undefined}
-          />
-        )}
-      </MessageContent>
-
-      {/* PDF Annotation Sources */}
-      {!isDeleted && hasSources && (
-        <SourcesContainer className="source-preview-container">
-          <SourcesHeader onClick={toggleSources}>
-            <SourcesTitle>
-              <Pin size={14} />
-              {sources.length} {sources.length === 1 ? "Source" : "Sources"}
-            </SourcesTitle>
-            {sourcesExpanded ? (
-              <ChevronUp size={14} />
-            ) : (
-              <ChevronDown size={14} />
-            )}
-          </SourcesHeader>
-          {sourcesExpanded && (
-            <SourcesList>
-              {sources.map((source, index) => (
-                <SourceItem
-                  key={source.id}
-                  className="source-chip"
-                  onClick={handleSourceClick(index)}
+          {/* Message Actions Dropdown */}
+          {hasActions && !isDeleted && (
+            <>
+              <DropdownBackdrop
+                $isOpen={isDropdownOpen}
+                onClick={closeBackdrop}
+              />
+              <MessageActionsContainer ref={dropdownRef}>
+                <MessageActionsButton
+                  aria-label="Message actions"
+                  aria-expanded={isDropdownOpen}
+                  aria-haspopup="menu"
+                  onClick={toggleDropdown}
                 >
-                  {source.rawText || `Source ${index + 1}`}
-                </SourceItem>
-              ))}
-            </SourcesList>
+                  <MoreVertical size={16} />
+                </MessageActionsButton>
+
+                <ActionsDropdown $isOpen={isDropdownOpen} role="menu">
+                  <MobileDropdownHeader />
+                  {showDeleteConfirm ? (
+                    <DeleteConfirmation>
+                      <DeleteConfirmText>
+                        Are you sure you want to delete this message?
+                      </DeleteConfirmText>
+                      <DeleteConfirmButtons>
+                        <ConfirmButton
+                          $variant="cancel"
+                          onClick={handleCancelDelete}
+                          disabled={isDeleting}
+                        >
+                          Cancel
+                        </ConfirmButton>
+                        <ConfirmButton
+                          $variant="delete"
+                          onClick={handleConfirmDelete}
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? "Deleting..." : "Delete"}
+                        </ConfirmButton>
+                      </DeleteConfirmButtons>
+                    </DeleteConfirmation>
+                  ) : (
+                    <>
+                      {canEdit && (
+                        <DropdownItem onClick={handleEdit} role="menuitem">
+                          <Edit2 size={16} />
+                          Edit message
+                        </DropdownItem>
+                      )}
+                      {canEdit && canDelete && <DropdownDivider />}
+                      {canDelete && (
+                        <DropdownItem
+                          onClick={handleDeleteClick}
+                          $variant="danger"
+                          role="menuitem"
+                        >
+                          <Trash2 size={16} />
+                          Delete message
+                        </DropdownItem>
+                      )}
+                    </>
+                  )}
+                </ActionsDropdown>
+              </MessageActionsContainer>
+            </>
           )}
-        </SourcesContainer>
-      )}
+        </MessageHeader>
 
-      {/* Footer */}
-      {!isDeleted && (
-        <MessageFooter>
-          {/* Vote buttons placeholder - will be added in #575 */}
-          {/* <VoteButtons message={message} /> */}
+        {/* Edit Message Modal */}
+        <EditMessageModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          messageId={message.id}
+          initialContent={message.content || ""}
+          corpusId={corpusId}
+          conversationId={conversationId}
+          onSuccess={onMessageUpdated}
+        />
 
-          {/* Reply button */}
-          <FooterButton
-            onClick={handleReply}
-            aria-label="Reply to this message"
-          >
-            Reply
-          </FooterButton>
+        {/* Reply indicator */}
+        {message.depth > 0 && parentAuthor && (
+          <ReplyIndicator>
+            <CornerDownRight />
+            Replying to <strong>@{parentAuthor}</strong>
+          </ReplyIndicator>
+        )}
 
-          {/* Reply count */}
-          {message.children && message.children.length > 0 && (
-            <ReplyCount>
-              {message.children.length}{" "}
-              {message.children.length === 1 ? "reply" : "replies"}
-            </ReplyCount>
+        {/* Content */}
+        <MessageContent $isDeleted={isDeleted}>
+          {isDeleted ? (
+            <p>[This message has been deleted]</p>
+          ) : (
+            <MarkdownMessageRenderer
+              content={message.content || ""}
+              mentionedResources={message.mentionedResources ?? undefined}
+            />
           )}
-        </MessageFooter>
-      )}
+        </MessageContent>
+
+        {/* PDF Annotation Sources */}
+        {!isDeleted && hasSources && (
+          <SourcesContainer className="source-preview-container">
+            <SourcesHeader onClick={toggleSources}>
+              <SourcesTitle>
+                <Pin size={14} />
+                {sources.length} {sources.length === 1 ? "Source" : "Sources"}
+              </SourcesTitle>
+              {sourcesExpanded ? (
+                <ChevronUp size={14} />
+              ) : (
+                <ChevronDown size={14} />
+              )}
+            </SourcesHeader>
+            {sourcesExpanded && (
+              <SourcesList>
+                {sources.map((source, index) => (
+                  <SourceItem
+                    key={source.id}
+                    className="source-chip"
+                    onClick={handleSourceClick(index)}
+                  >
+                    {source.rawText || `Source ${index + 1}`}
+                  </SourceItem>
+                ))}
+              </SourcesList>
+            )}
+          </SourcesContainer>
+        )}
+
+        {/* Footer */}
+        {!isDeleted && (
+          <MessageFooter>
+            <FooterButton
+              onClick={handleReply}
+              aria-label="Reply to this message"
+            >
+              <CornerDownRight />
+              Reply
+            </FooterButton>
+
+            {message.children && message.children.length > 0 && (
+              <ReplyCount>
+                {message.children.length}{" "}
+                {message.children.length === 1 ? "reply" : "replies"}
+              </ReplyCount>
+            )}
+          </MessageFooter>
+        )}
+      </ContentColumn>
     </MessageContainer>
   );
 });
