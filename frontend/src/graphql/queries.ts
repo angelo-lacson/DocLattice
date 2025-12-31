@@ -2103,6 +2103,11 @@ export const GET_CONVERSATIONS = gql`
           isPublic
           myPermissions
 
+          # Voting fields
+          upvoteCount
+          downvoteCount
+          userVote
+
           # Moderation fields
           isLocked
           lockedBy {
@@ -2173,6 +2178,11 @@ export const GET_THREAD_DETAIL = gql`
       }
       isPublic
       myPermissions
+
+      # Voting fields
+      upvoteCount
+      downvoteCount
+      userVote
 
       # Moderation fields
       isLocked

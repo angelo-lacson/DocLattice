@@ -477,6 +477,16 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         help_text="Moderator who pinned the thread",
     )
 
+    # Voting denormalized counts for performance
+    upvote_count = models.IntegerField(
+        default=0,
+        help_text="Cached count of upvotes for this conversation/thread",
+    )
+    downvote_count = models.IntegerField(
+        default=0,
+        help_text="Cached count of downvotes for this conversation/thread",
+    )
+
     chat_with_corpus = models.ForeignKey(
         Corpus,
         on_delete=models.SET_NULL,
@@ -1057,6 +1067,77 @@ class MessageVoteGroupObjectPermission(GroupObjectPermissionBase):
 
     content_object = django.db.models.ForeignKey(
         "MessageVote", on_delete=django.db.models.CASCADE
+    )
+
+
+class ConversationVote(BaseOCModel):
+    """
+    Tracks individual votes on conversations/threads.
+    Users can upvote or downvote threads in discussion forums.
+    One vote per user per conversation (can be changed from upvote to downvote).
+
+    Permission: Users can vote on any conversation they can see (visibility-based).
+    """
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conversation", "creator"],
+                name="one_vote_per_user_per_conversation",
+            )
+        ]
+        permissions = (
+            ("permission_conversationvote", "permission conversationvote"),
+            ("create_conversationvote", "create conversationvote"),
+            ("read_conversationvote", "read conversationvote"),
+            ("update_conversationvote", "update conversationvote"),
+            ("remove_conversationvote", "delete conversationvote"),
+        )
+        indexes = [
+            models.Index(fields=["conversation", "vote_type"]),
+            models.Index(fields=["creator"]),
+        ]
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="votes",
+        help_text="The conversation/thread being voted on",
+    )
+    vote_type = models.CharField(
+        max_length=16,
+        choices=VoteType.choices,
+        help_text="Type of vote (upvote or downvote)",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the vote was cast",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when the vote was last changed",
+    )
+
+    def __str__(self) -> str:
+        return (
+            f"{self.vote_type} by {self.creator.username} "
+            f"on conversation {self.conversation.pk}"
+        )
+
+
+class ConversationVoteUserObjectPermission(UserObjectPermissionBase):
+    """Permissions for ConversationVote objects at the user level."""
+
+    content_object = django.db.models.ForeignKey(
+        "ConversationVote", on_delete=django.db.models.CASCADE
+    )
+
+
+class ConversationVoteGroupObjectPermission(GroupObjectPermissionBase):
+    """Permissions for ConversationVote objects at the group level."""
+
+    content_object = django.db.models.ForeignKey(
+        "ConversationVote", on_delete=django.db.models.CASCADE
     )
 
 

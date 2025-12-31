@@ -287,6 +287,36 @@ The GraphQL layer translates between backend Django Guardian format and frontend
 | **CAN_PERMISSION** | Manage corpus access | Manage document access | Permission management |
 | **CAN_COMMENT** | Add comments | Add comments | Comment functionality |
 
+### Voting Permissions
+
+Voting on messages and conversations/threads uses a **visibility-based permission model**:
+
+**Rule: If you can see it, you can vote on it.**
+
+This simple convention means:
+- Users can upvote/downvote any message or thread they have READ access to
+- Users CANNOT vote on their own messages or threads (enforced server-side)
+- No explicit "VOTE" permission type exists - voting is implicitly allowed with READ access
+- Vote counts are denormalized on ChatMessage and Conversation models for performance
+
+**Implementation Details:**
+- `MessageVote` model: Tracks votes on ChatMessage objects
+- `ConversationVote` model: Tracks votes on Conversation/Thread objects
+- One vote per user per object (enforced via database constraint)
+- Users can change their vote type (upvote ↔ downvote)
+- Vote mutations check visibility via `Conversation.objects.visible_to_user(user)`
+
+**Mutations:**
+- `voteMessage(messageId, voteType)` - Vote on a message
+- `removeVote(messageId)` - Remove vote from a message
+- `voteConversation(conversationId, voteType)` - Vote on a thread
+- `removeConversationVote(conversationId)` - Remove vote from a thread
+
+**GraphQL Fields:**
+- `MessageType.userVote` - Current user's vote ("UPVOTE", "DOWNVOTE", or null)
+- `ConversationType.userVote` - Current user's vote on the thread
+- `upvoteCount` / `downvoteCount` - Denormalized vote counts on both types
+
 ## Permission Model Summary by Object Type
 
 This section provides a comprehensive reference for how permissions work across different object types in the system.
