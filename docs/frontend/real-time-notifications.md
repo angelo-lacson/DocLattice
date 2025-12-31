@@ -58,6 +58,8 @@ The notification system delivers instant updates to users via WebSocket, replaci
 
 ## Notification Types
 
+### Message & Thread Notifications
+
 | Type | Trigger | Description |
 |------|---------|-------------|
 | `BADGE` | `UserBadge` created | User awarded a badge |
@@ -72,6 +74,16 @@ The notification system delivers instant updates to users via WebSocket, replaci
 | `THREAD_DELETED` | `ModerationAction` | User's thread was deleted |
 | `MESSAGE_RESTORED` | `ModerationAction` | User's message was restored |
 | `THREAD_RESTORED` | `ModerationAction` | User's thread was restored |
+
+### Job/Processing Notifications (Issue #624)
+
+| Type | Trigger | Recipients | Description |
+|------|---------|------------|-------------|
+| `DOCUMENT_PROCESSED` | `set_doc_lock_state()` task | Document creator + corpus owners | Document ingestion completed |
+| `EXTRACT_COMPLETE` | `mark_extract_complete()` task | Extract creator | Data extraction job finished |
+| `ANALYSIS_COMPLETE` | Analysis callback (success) | Analysis creator | Analysis completed successfully |
+| `ANALYSIS_FAILED` | Analysis callback (failure) | Analysis creator | Analysis failed |
+| `EXPORT_COMPLETE` | Export tasks complete | Export creator | Corpus export ready for download |
 
 ## Backend Components
 
