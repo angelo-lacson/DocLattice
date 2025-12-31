@@ -9,17 +9,19 @@ import {
 } from "../../graphql/queries";
 import { ConversationType } from "../../types/graphql-api";
 import { color } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
 import { threadSortAtom, threadFiltersAtom } from "../../atoms/threadAtoms";
 import { ThreadListItem } from "./ThreadListItem";
 import { ThreadSortDropdown } from "./ThreadSortDropdown";
 import { ThreadFilterToggles } from "./ThreadFilterToggles";
 import { CreateThreadButton } from "./CreateThreadButton";
-import { calculateThreadUpvotes, getLastActivityTime } from "./utils";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
+import {
+  inferDiscussionCategory,
+  DiscussionCategory,
+} from "./DiscussionTypeBadge";
 
 interface ThreadListProps {
   corpusId?: string;
@@ -37,6 +39,8 @@ interface ThreadListProps {
   hasCorpus?: boolean;
   /** Filter for threads with/without document */
   hasDocument?: boolean;
+  /** Filter by discussion category */
+  categoryFilter?: DiscussionCategory | "all";
 }
 
 const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
@@ -125,6 +129,7 @@ export function ThreadList({
   searchQuery,
   hasCorpus,
   hasDocument,
+  categoryFilter = "all",
 }: ThreadListProps) {
   const [sortBy] = useAtom(threadSortAtom);
   const [filters] = useAtom(threadFiltersAtom);
@@ -173,6 +178,17 @@ export function ThreadList({
       threads = threads.filter((t) => !t?.deletedAt);
     }
 
+    // Apply category filter
+    if (categoryFilter !== "all") {
+      threads = threads.filter((t) => {
+        const category = inferDiscussionCategory(
+          t?.title || "",
+          t?.description
+        );
+        return category === categoryFilter;
+      });
+    }
+
     // Apply sort
     threads = [...threads].sort((a, b) => {
       // Pinned threads always first (if not sorting by pinned)
@@ -217,7 +233,7 @@ export function ThreadList({
     });
 
     return threads;
-  }, [data, sortBy, filters, hasCorpus, hasDocument]);
+  }, [data, sortBy, filters, hasCorpus, hasDocument, categoryFilter]);
 
   // Handle load more for pagination
   const handleLoadMore = () => {
