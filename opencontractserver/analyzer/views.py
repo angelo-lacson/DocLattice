@@ -9,12 +9,60 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from opencontractserver.analyzer.models import Analysis
+from opencontractserver.notifications.models import (
+    Notification,
+    NotificationTypeChoices,
+)
+from opencontractserver.notifications.signals import (
+    broadcast_notification_via_websocket,
+)
 from opencontractserver.tasks.analyzer_tasks import import_analysis
 from opencontractserver.types.dicts import OpenContractsGeneratedCorpusPythonType
 from opencontractserver.types.enums import JobStatus
 from opencontractserver.utils.etl import is_dict_instance_of_typed_dict
 
 logger = logging.getLogger(__name__)
+
+
+def _create_analysis_notification(analysis: Analysis, success: bool) -> None:
+    """
+    Create a notification for analysis completion or failure.
+
+    Issue #624: Real-time notifications for analysis completion.
+
+    Args:
+        analysis: The Analysis instance
+        success: True if analysis completed successfully, False if failed
+    """
+    try:
+        if analysis.creator:
+            notification = Notification.objects.create(
+                recipient=analysis.creator,
+                notification_type=(
+                    NotificationTypeChoices.ANALYSIS_COMPLETE
+                    if success
+                    else NotificationTypeChoices.ANALYSIS_FAILED
+                ),
+                data={
+                    "analysis_id": analysis.id,
+                    "analyzer_name": (
+                        analysis.analyzer.analyzer_id if analysis.analyzer else None
+                    ),
+                    "corpus_name": (
+                        analysis.analyzed_corpus.title
+                        if analysis.analyzed_corpus
+                        else None
+                    ),
+                    "status": "completed" if success else "failed",
+                },
+            )
+            broadcast_notification_via_websocket(notification)
+            logger.debug(
+                f"Created {'ANALYSIS_COMPLETE' if success else 'ANALYSIS_FAILED'} "
+                f"notification for {analysis.creator.username}"
+            )
+    except Exception as e:
+        logger.warning(f"Failed to create analysis notification: {e}")
 
 
 class AnalysisCallbackView(APIView):
@@ -57,6 +105,9 @@ class AnalysisCallbackView(APIView):
                     analysis.status = JobStatus.FAILED
                     analysis.save()
 
+                # Send failure notification (Issue #624)
+                _create_analysis_notification(analysis, success=False)
+
                 return Response(
                     {
                         "message": f"CALLBACK_TOKEN provided but it does not match the token issued for analysis "
@@ -84,6 +135,9 @@ class AnalysisCallbackView(APIView):
                         analysis.status = JobStatus.COMPLETED
                         analysis.save()
 
+                    # Send success notification (Issue #624)
+                    _create_analysis_notification(analysis, success=True)
+
                     # logger.info("Launch async import task!")
                     import_analysis.si(
                         creator_id=analysis.creator.id,
@@ -97,6 +151,9 @@ class AnalysisCallbackView(APIView):
                         analysis.analysis_completed = timezone.now()
                         analysis.status = JobStatus.FAILED
                         analysis.save()
+
+                    # Send failure notification (Issue #624)
+                    _create_analysis_notification(analysis, success=False)
 
                     return Response(
                         {

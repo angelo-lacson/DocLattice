@@ -483,3 +483,207 @@ class NotificationWebSocketTestCase(WebsocketFixtureBaseTestCase):
 
         # No error should occur (consumer is no longer in group)
         # This test verifies cleanup happened without errors
+
+    async def test_document_processed_notification_broadcast(self):
+        """DOCUMENT_PROCESSED notifications should be broadcast correctly (Issue #624)."""
+        ws_path = f"ws/notification-updates/?token={self.token}"
+        communicator = WebsocketCommunicator(application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        await communicator.receive_from(timeout=5)  # Consume CONNECTED
+
+        # Send DOCUMENT_PROCESSED notification via channel layer
+        channel_layer = get_channel_layer()
+        group_name = get_notification_channel_group(self.user.pk)
+
+        await channel_layer.group_send(
+            group_name,
+            {
+                "type": "notification_created",
+                "notification_id": "doc-123",
+                "notification_type": "DOCUMENT_PROCESSED",
+                "created_at": "2025-01-01T00:00:00Z",
+                "is_read": False,
+                "data": {
+                    "document_id": 42,
+                    "document_title": "Test Document",
+                    "page_count": 10,
+                    "file_type": "application/pdf",
+                },
+            },
+        )
+
+        # Should receive notification
+        response = await communicator.receive_from(timeout=5)
+        data = json.loads(response)
+
+        self.assertEqual(data["type"], "NOTIFICATION_CREATED")
+        self.assertEqual(data["notificationId"], "doc-123")
+        self.assertEqual(data["notificationType"], "DOCUMENT_PROCESSED")
+        self.assertEqual(data["data"]["document_title"], "Test Document")
+        self.assertEqual(data["data"]["page_count"], 10)
+
+        await communicator.disconnect()
+
+    async def test_extract_complete_notification_broadcast(self):
+        """EXTRACT_COMPLETE notifications should be broadcast correctly (Issue #624)."""
+        ws_path = f"ws/notification-updates/?token={self.token}"
+        communicator = WebsocketCommunicator(application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        await communicator.receive_from(timeout=5)  # Consume CONNECTED
+
+        # Send EXTRACT_COMPLETE notification via channel layer
+        channel_layer = get_channel_layer()
+        group_name = get_notification_channel_group(self.user.pk)
+
+        await channel_layer.group_send(
+            group_name,
+            {
+                "type": "notification_created",
+                "notification_id": "extract-456",
+                "notification_type": "EXTRACT_COMPLETE",
+                "created_at": "2025-01-01T00:00:00Z",
+                "is_read": False,
+                "data": {
+                    "extract_id": 99,
+                    "extract_name": "Test Extract",
+                    "document_count": 5,
+                    "fieldset_name": "Test Fieldset",
+                },
+            },
+        )
+
+        # Should receive notification
+        response = await communicator.receive_from(timeout=5)
+        data = json.loads(response)
+
+        self.assertEqual(data["type"], "NOTIFICATION_CREATED")
+        self.assertEqual(data["notificationId"], "extract-456")
+        self.assertEqual(data["notificationType"], "EXTRACT_COMPLETE")
+        self.assertEqual(data["data"]["extract_name"], "Test Extract")
+        self.assertEqual(data["data"]["document_count"], 5)
+
+        await communicator.disconnect()
+
+    async def test_analysis_complete_notification_broadcast(self):
+        """ANALYSIS_COMPLETE notifications should be broadcast correctly (Issue #624)."""
+        ws_path = f"ws/notification-updates/?token={self.token}"
+        communicator = WebsocketCommunicator(application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        await communicator.receive_from(timeout=5)  # Consume CONNECTED
+
+        # Send ANALYSIS_COMPLETE notification via channel layer
+        channel_layer = get_channel_layer()
+        group_name = get_notification_channel_group(self.user.pk)
+
+        await channel_layer.group_send(
+            group_name,
+            {
+                "type": "notification_created",
+                "notification_id": "analysis-789",
+                "notification_type": "ANALYSIS_COMPLETE",
+                "created_at": "2025-01-01T00:00:00Z",
+                "is_read": False,
+                "data": {
+                    "analysis_id": 55,
+                    "analyzer_name": "Test Analyzer",
+                    "corpus_name": "Test Corpus",
+                    "status": "completed",
+                },
+            },
+        )
+
+        # Should receive notification
+        response = await communicator.receive_from(timeout=5)
+        data = json.loads(response)
+
+        self.assertEqual(data["type"], "NOTIFICATION_CREATED")
+        self.assertEqual(data["notificationId"], "analysis-789")
+        self.assertEqual(data["notificationType"], "ANALYSIS_COMPLETE")
+        self.assertEqual(data["data"]["analyzer_name"], "Test Analyzer")
+        self.assertEqual(data["data"]["status"], "completed")
+
+        await communicator.disconnect()
+
+    async def test_analysis_failed_notification_broadcast(self):
+        """ANALYSIS_FAILED notifications should be broadcast correctly (Issue #624)."""
+        ws_path = f"ws/notification-updates/?token={self.token}"
+        communicator = WebsocketCommunicator(application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        await communicator.receive_from(timeout=5)  # Consume CONNECTED
+
+        # Send ANALYSIS_FAILED notification via channel layer
+        channel_layer = get_channel_layer()
+        group_name = get_notification_channel_group(self.user.pk)
+
+        await channel_layer.group_send(
+            group_name,
+            {
+                "type": "notification_created",
+                "notification_id": "analysis-fail-321",
+                "notification_type": "ANALYSIS_FAILED",
+                "created_at": "2025-01-01T00:00:00Z",
+                "is_read": False,
+                "data": {
+                    "analysis_id": 66,
+                    "analyzer_name": "Failing Analyzer",
+                    "corpus_name": "Test Corpus",
+                    "status": "failed",
+                },
+            },
+        )
+
+        # Should receive notification
+        response = await communicator.receive_from(timeout=5)
+        data = json.loads(response)
+
+        self.assertEqual(data["type"], "NOTIFICATION_CREATED")
+        self.assertEqual(data["notificationId"], "analysis-fail-321")
+        self.assertEqual(data["notificationType"], "ANALYSIS_FAILED")
+        self.assertEqual(data["data"]["status"], "failed")
+
+        await communicator.disconnect()
+
+    async def test_export_complete_notification_broadcast(self):
+        """EXPORT_COMPLETE notifications should be broadcast correctly (Issue #624)."""
+        ws_path = f"ws/notification-updates/?token={self.token}"
+        communicator = WebsocketCommunicator(application, ws_path)
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        await communicator.receive_from(timeout=5)  # Consume CONNECTED
+
+        # Send EXPORT_COMPLETE notification via channel layer
+        channel_layer = get_channel_layer()
+        group_name = get_notification_channel_group(self.user.pk)
+
+        await channel_layer.group_send(
+            group_name,
+            {
+                "type": "notification_created",
+                "notification_id": "export-999",
+                "notification_type": "EXPORT_COMPLETE",
+                "created_at": "2025-01-01T00:00:00Z",
+                "is_read": False,
+                "data": {
+                    "export_id": 77,
+                    "export_name": "My Export",
+                    "corpus_name": "Test Corpus",
+                    "format": "OPEN_CONTRACTS",
+                },
+            },
+        )
+
+        # Should receive notification
+        response = await communicator.receive_from(timeout=5)
+        data = json.loads(response)
+
+        self.assertEqual(data["type"], "NOTIFICATION_CREATED")
+        self.assertEqual(data["notificationId"], "export-999")
+        self.assertEqual(data["notificationType"], "EXPORT_COMPLETE")
+        self.assertEqual(data["data"]["corpus_name"], "Test Corpus")
+        self.assertEqual(data["data"]["format"], "OPEN_CONTRACTS")
+
+        await communicator.disconnect()

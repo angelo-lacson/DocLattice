@@ -17,6 +17,13 @@ from pydantic import validate_arguments
 from config import celery_app
 from opencontractserver.annotations.models import TOKEN_LABEL, Annotation
 from opencontractserver.documents.models import Document
+from opencontractserver.notifications.models import (
+    Notification,
+    NotificationTypeChoices,
+)
+from opencontractserver.notifications.signals import (
+    broadcast_notification_via_websocket,
+)
 from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
 from opencontractserver.pipeline.utils import (
     get_component_by_name,
@@ -77,7 +84,7 @@ def set_doc_lock_state(*args, locked: bool, doc_id: int):
     # Query DocumentPath as the source of truth for corpus membership
     if not locked:
         # Find all corpuses this document belongs to via DocumentPath
-        corpus_data = (
+        corpus_data = list(
             DocumentPath.objects.filter(
                 document=document,
                 is_current=True,
@@ -87,6 +94,10 @@ def set_doc_lock_state(*args, locked: bool, doc_id: int):
             .values("corpus_id", "corpus__creator_id")
             .distinct()
         )
+
+        # Create document processing notifications (Issue #624)
+        # Notify both document creator and corpus owners
+        _create_document_processed_notifications(document, corpus_data)
 
         if not corpus_data:
             logger.debug(
@@ -105,6 +116,62 @@ def set_doc_lock_state(*args, locked: bool, doc_id: int):
                     user_id=data["corpus__creator_id"],
                     trigger=CorpusActionTrigger.ADD_DOCUMENT,
                 )
+
+
+def _create_document_processed_notifications(
+    document: Document, corpus_data: list[dict]
+) -> None:
+    """
+    Create notifications for document processing completion.
+
+    Notifies both the document creator and all corpus owners.
+    Issue #624: Real-time notifications for document processing.
+    """
+    # Build set of recipients (document creator + corpus owners)
+    recipients = set()
+    if document.creator:
+        recipients.add(document.creator)
+
+    # Add corpus owners from DocumentPath data
+    for data in corpus_data:
+        corpus_creator_id = data.get("corpus__creator_id")
+        if corpus_creator_id:
+            try:
+                corpus_creator = User.objects.get(pk=corpus_creator_id)
+                recipients.add(corpus_creator)
+            except User.DoesNotExist:
+                pass
+
+    # Get document title for notification
+    doc_title = document.title
+    if not doc_title and document.description:
+        doc_title = document.description[:50]
+    if not doc_title:
+        doc_title = "Untitled"
+
+    # Create notification for each recipient
+    for recipient in recipients:
+        try:
+            notification = Notification.objects.create(
+                recipient=recipient,
+                notification_type=NotificationTypeChoices.DOCUMENT_PROCESSED,
+                data={
+                    "document_id": document.id,
+                    "document_title": doc_title,
+                    "page_count": document.page_count,
+                    "file_type": document.file_type,
+                },
+            )
+            broadcast_notification_via_websocket(notification)
+            logger.debug(
+                f"[set_doc_lock_state] Created DOCUMENT_PROCESSED notification "
+                f"for {recipient.username}"
+            )
+        except Exception as e:
+            logger.warning(
+                f"[set_doc_lock_state] Failed to create document processing "
+                f"notification for {recipient}: {e}"
+            )
 
 
 @shared_task(
