@@ -34,6 +34,7 @@ import { useNetworkStatus } from "./useNetworkStatus";
  * Notification types that can be received from the server.
  */
 export type NotificationType =
+  // Message/thread related
   | "REPLY"
   | "VOTE"
   | "BADGE"
@@ -47,7 +48,13 @@ export type NotificationType =
   | "THREAD_DELETED"
   | "MESSAGE_RESTORED"
   | "THREAD_RESTORED"
-  | "THREAD_REPLY";
+  | "THREAD_REPLY"
+  // Job/processing related (Issue #624)
+  | "DOCUMENT_PROCESSED"
+  | "EXTRACT_COMPLETE"
+  | "ANALYSIS_COMPLETE"
+  | "ANALYSIS_FAILED"
+  | "EXPORT_COMPLETE";
 
 /**
  * Message types from the notification updates WebSocket consumer.

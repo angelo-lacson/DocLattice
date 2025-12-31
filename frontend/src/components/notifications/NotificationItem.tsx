@@ -13,6 +13,11 @@ import {
   Trash2,
   RotateCcw,
   MessageSquare,
+  FileText,
+  Table2,
+  BarChart3,
+  Download,
+  XCircle,
 } from "lucide-react";
 import { useMutation } from "@apollo/client";
 import {
@@ -245,6 +250,41 @@ const NOTIFICATION_CONFIG = {
       `${n.actor?.username || "Someone"} replied in thread "${
         n.conversation?.title || "a thread"
       }"`,
+  },
+  // Job/processing related (Issue #624)
+  DOCUMENT_PROCESSED: {
+    icon: FileText,
+    color: "#4CAF50",
+    getMessage: (n: NotificationNode) =>
+      `Document "${n.data?.documentTitle || "document"}" finished processing`,
+  },
+  EXTRACT_COMPLETE: {
+    icon: Table2,
+    color: "#2196F3",
+    getMessage: (n: NotificationNode) =>
+      `Extract "${n.data?.extractName || "extract"}" completed with ${
+        n.data?.documentCount || 0
+      } documents`,
+  },
+  ANALYSIS_COMPLETE: {
+    icon: BarChart3,
+    color: "#4CAF50",
+    getMessage: (n: NotificationNode) =>
+      `Analysis "${n.data?.analyzerName || "analysis"}" completed successfully`,
+  },
+  ANALYSIS_FAILED: {
+    icon: XCircle,
+    color: "#F44336",
+    getMessage: (n: NotificationNode) =>
+      `Analysis "${n.data?.analyzerName || "analysis"}" failed`,
+  },
+  EXPORT_COMPLETE: {
+    icon: Download,
+    color: "#4CAF50",
+    getMessage: (n: NotificationNode) =>
+      `Export "${
+        n.data?.exportName || n.data?.corpusName || "export"
+      }" is ready for download`,
   },
 };
 
