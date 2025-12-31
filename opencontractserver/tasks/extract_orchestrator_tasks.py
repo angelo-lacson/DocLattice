@@ -7,6 +7,13 @@ from django.utils import timezone
 
 from opencontractserver.documents.models import DocumentAnalysisRow
 from opencontractserver.extracts.models import Datacell, Extract
+from opencontractserver.notifications.models import (
+    Notification,
+    NotificationTypeChoices,
+)
+from opencontractserver.notifications.signals import (
+    broadcast_notification_via_websocket,
+)
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.celery_tasks import get_task_by_name
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -36,6 +43,28 @@ def mark_extract_complete(extract_id):
         )
     else:
         logger.info(f"Extract {extract_id} marked complete")
+
+    # Create extract completion notification (Issue #624)
+    try:
+        if extract.creator:
+            notification = Notification.objects.create(
+                recipient=extract.creator,
+                notification_type=NotificationTypeChoices.EXTRACT_COMPLETE,
+                data={
+                    "extract_id": extract.id,
+                    "extract_name": extract.name,
+                    "document_count": extract.documents.count(),
+                    "fieldset_name": (
+                        extract.fieldset.name if extract.fieldset else None
+                    ),
+                },
+            )
+            broadcast_notification_via_websocket(notification)
+            logger.debug(
+                f"Created EXTRACT_COMPLETE notification for {extract.creator.username}"
+            )
+    except Exception as e:
+        logger.warning(f"Failed to create extract completion notification: {e}")
 
 
 @shared_task

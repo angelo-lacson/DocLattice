@@ -327,22 +327,23 @@ class ExtractOrchestrationTestCase(TransactionTestCase):
         """Test that the extract completion callback is properly called."""
         from unittest.mock import patch
 
-        from opencontractserver.tasks.extract_orchestrator_tasks import (
-            mark_extract_complete,
-            run_extract,
-        )
+        from opencontractserver.tasks.extract_orchestrator_tasks import run_extract
 
         extract = Extract.objects.create(
             name="Callback Test Extract", fieldset=self.fieldset, creator=self.user
         )
         extract.documents.add(self.doc1)
 
-        # Mock the completion callback
-        with patch.object(mark_extract_complete, "si"):  # as mock_callback:
+        # In eager mode (test environment), mark_extract_complete is called directly.
+        # We patch it to verify it gets called with the correct extract_id.
+        with patch(
+            "opencontractserver.tasks.extract_orchestrator_tasks.mark_extract_complete"
+        ) as mock_callback:
             run_extract.si(extract.id, self.user.id).apply()
 
-            # The callback should have been queued
-            # (In real celery it would be called after all datacells complete)
-            # For now just verify the extract was started
+            # Verify the completion callback was called with correct extract_id
+            mock_callback.assert_called_once_with(extract.id)
+
+            # Verify the extract was started
             extract.refresh_from_db()
             assert extract.started is not None

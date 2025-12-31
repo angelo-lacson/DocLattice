@@ -18,6 +18,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from graphql_relay import from_global_id
 
+from config.websocket.middleware import WS_CLOSE_UNAUTHENTICATED
+from config.websocket.utils.auth_helpers import check_auth_and_close_if_failed
 from config.websocket.utils.extract_ids import extract_websocket_path_id
 from opencontractserver.conversations.models import MessageType
 from opencontractserver.corpuses.models import Corpus
@@ -76,11 +78,7 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
 
         try:
             # 1. User must be authenticated
-            if not self.scope["user"].is_authenticated:
-                logger.warning(
-                    f"[Session {self.session_id}] User is not authenticated."
-                )
-                await self.close(code=4000)
+            if await check_auth_and_close_if_failed(self, self.session_id):
                 return
 
             # 2. The path MUST contain a corpus identifier
@@ -96,7 +94,7 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
                     content="",
                     data={"error": err_msg},
                 )
-                await self.close(code=4000)
+                await self.close(code=WS_CLOSE_UNAUTHENTICATED)
                 return
 
             # ------------------------------------------------------------------
@@ -132,7 +130,7 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
                 content="",
                 data={"error": err_msg},
             )
-            await self.close(code=4000)
+            await self.close(code=WS_CLOSE_UNAUTHENTICATED)
 
         except Document.DoesNotExist:
             err_msg = "Requested Document not found."
@@ -145,7 +143,7 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
                 content="",
                 data={"error": err_msg},
             )
-            await self.close(code=4000)
+            await self.close(code=WS_CLOSE_UNAUTHENTICATED)
 
         except Exception as e:
             logger.error(
@@ -158,7 +156,7 @@ class DocumentQueryConsumer(AsyncWebsocketConsumer):
                 content="",
                 data={"error": f"Error during connection: {e}"},
             )
-            await self.close(code=4000)
+            await self.close(code=WS_CLOSE_UNAUTHENTICATED)
 
     async def disconnect(self, close_code: int) -> None:
         """
