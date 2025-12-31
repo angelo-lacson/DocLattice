@@ -1,11 +1,10 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import {
   Segment,
   Header,
   Icon,
   Table,
-  Pagination,
   Dropdown,
   Checkbox,
   Button,
@@ -36,6 +35,21 @@ import {
   RollbackModerationActionOutput,
 } from "../../graphql/mutations";
 
+/** Page size for moderation actions list */
+const MODERATION_PAGE_SIZE = 10;
+
+/** Moderation action type enum for type safety */
+export enum ModerationActionTypeEnum {
+  LOCK_THREAD = "lock_thread",
+  UNLOCK_THREAD = "unlock_thread",
+  PIN_THREAD = "pin_thread",
+  UNPIN_THREAD = "unpin_thread",
+  DELETE_MESSAGE = "delete_message",
+  RESTORE_MESSAGE = "restore_message",
+  DELETE_THREAD = "delete_thread",
+  RESTORE_THREAD = "restore_thread",
+}
+
 interface ModerationDashboardProps {
   corpusId: string;
   corpusTitle?: string;
@@ -43,14 +57,46 @@ interface ModerationDashboardProps {
 
 const ACTION_TYPE_OPTIONS = [
   { key: "all", value: "", text: "All Actions" },
-  { key: "lock_thread", value: "lock_thread", text: "Lock Thread" },
-  { key: "unlock_thread", value: "unlock_thread", text: "Unlock Thread" },
-  { key: "pin_thread", value: "pin_thread", text: "Pin Thread" },
-  { key: "unpin_thread", value: "unpin_thread", text: "Unpin Thread" },
-  { key: "delete_message", value: "delete_message", text: "Delete Message" },
-  { key: "restore_message", value: "restore_message", text: "Restore Message" },
-  { key: "delete_thread", value: "delete_thread", text: "Delete Thread" },
-  { key: "restore_thread", value: "restore_thread", text: "Restore Thread" },
+  {
+    key: ModerationActionTypeEnum.LOCK_THREAD,
+    value: ModerationActionTypeEnum.LOCK_THREAD,
+    text: "Lock Thread",
+  },
+  {
+    key: ModerationActionTypeEnum.UNLOCK_THREAD,
+    value: ModerationActionTypeEnum.UNLOCK_THREAD,
+    text: "Unlock Thread",
+  },
+  {
+    key: ModerationActionTypeEnum.PIN_THREAD,
+    value: ModerationActionTypeEnum.PIN_THREAD,
+    text: "Pin Thread",
+  },
+  {
+    key: ModerationActionTypeEnum.UNPIN_THREAD,
+    value: ModerationActionTypeEnum.UNPIN_THREAD,
+    text: "Unpin Thread",
+  },
+  {
+    key: ModerationActionTypeEnum.DELETE_MESSAGE,
+    value: ModerationActionTypeEnum.DELETE_MESSAGE,
+    text: "Delete Message",
+  },
+  {
+    key: ModerationActionTypeEnum.RESTORE_MESSAGE,
+    value: ModerationActionTypeEnum.RESTORE_MESSAGE,
+    text: "Restore Message",
+  },
+  {
+    key: ModerationActionTypeEnum.DELETE_THREAD,
+    value: ModerationActionTypeEnum.DELETE_THREAD,
+    text: "Delete Thread",
+  },
+  {
+    key: ModerationActionTypeEnum.RESTORE_THREAD,
+    value: ModerationActionTypeEnum.RESTORE_THREAD,
+    text: "Restore Thread",
+  },
 ];
 
 const TIME_RANGE_OPTIONS = [
@@ -84,13 +130,11 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
   const [selectedActionType, setSelectedActionType] = useState<string>("");
   const [automatedOnly, setAutomatedOnly] = useState<boolean>(false);
   const [timeRangeHours, setTimeRangeHours] = useState<number>(24);
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const [rollbackModalOpen, setRollbackModalOpen] = useState<boolean>(false);
   const [selectedAction, setSelectedAction] =
     useState<ModerationActionNode | null>(null);
   const [rollbackReason, setRollbackReason] = useState<string>("");
-
-  const pageSize = 10;
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
 
   // Query moderation actions
   const {
@@ -98,6 +142,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
     loading: actionsLoading,
     error: actionsError,
     refetch: refetchActions,
+    fetchMore,
   } = useQuery<GetModerationActionsOutput, GetModerationActionsInput>(
     GET_MODERATION_ACTIONS,
     {
@@ -105,11 +150,45 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         corpusId,
         actionTypes: selectedActionType ? [selectedActionType] : undefined,
         automatedOnly: automatedOnly || undefined,
-        first: pageSize,
+        first: MODERATION_PAGE_SIZE,
       },
       fetchPolicy: "cache-and-network",
     }
   );
+
+  // Handle loading more actions with cursor-based pagination
+  const handleLoadMore = useCallback(async () => {
+    const endCursor = actionsData?.moderationActions?.pageInfo?.endCursor;
+    if (!endCursor || isLoadingMore) return;
+
+    setIsLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          after: endCursor,
+          first: MODERATION_PAGE_SIZE,
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult) return prev;
+
+          return {
+            ...fetchMoreResult,
+            moderationActions: {
+              ...fetchMoreResult.moderationActions,
+              edges: [
+                ...(prev.moderationActions?.edges || []),
+                ...(fetchMoreResult.moderationActions?.edges || []),
+              ],
+            },
+          };
+        },
+      });
+    } catch (error) {
+      toast.error("Failed to load more actions");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [actionsData, fetchMore, isLoadingMore]);
 
   // Query moderation metrics
   const {
@@ -373,10 +452,11 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             {actionsData?.moderationActions?.pageInfo?.hasNextPage && (
               <div style={{ textAlign: "center", marginTop: "1rem" }}>
                 <Button
-                  onClick={() => {
-                    // Implement pagination with cursor
-                  }}
+                  onClick={handleLoadMore}
+                  loading={isLoadingMore}
+                  disabled={isLoadingMore}
                 >
+                  <Icon name="plus" />
                   Load More
                 </Button>
               </div>
