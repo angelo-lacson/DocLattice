@@ -2935,7 +2935,7 @@ export interface VoteConversationResponse {
  * Returns the updated conversation with vote counts and current user's vote status.
  */
 export const UPVOTE_CONVERSATION = gql`
-  mutation UpvoteConversation($conversationId: ID!) {
+  mutation UpvoteConversation($conversationId: String!) {
     voteConversation(conversationId: $conversationId, voteType: "upvote") {
       ok
       message
@@ -2962,7 +2962,7 @@ export interface UpvoteConversationOutput {
  * Returns the updated conversation with vote counts and current user's vote status.
  */
 export const DOWNVOTE_CONVERSATION = gql`
-  mutation DownvoteConversation($conversationId: ID!) {
+  mutation DownvoteConversation($conversationId: String!) {
     voteConversation(conversationId: $conversationId, voteType: "downvote") {
       ok
       message
@@ -2989,7 +2989,7 @@ export interface DownvoteConversationOutput {
  * Returns the updated conversation with vote counts and current user's vote status (null after removal).
  */
 export const REMOVE_CONVERSATION_VOTE = gql`
-  mutation RemoveConversationVote($conversationId: ID!) {
+  mutation RemoveConversationVote($conversationId: String!) {
     removeConversationVote(conversationId: $conversationId) {
       ok
       message
