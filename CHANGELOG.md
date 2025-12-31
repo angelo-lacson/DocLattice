@@ -19,6 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Robust URI parsing**: Regex-based URI parsing with slug validation to prevent injection attacks
 - **Helper function implementations**: Complete `format_*` functions for corpus, document, annotation, thread, and message formatting
 
+#### Markdown Link Generation Tool for Agent Responses (Issue #530)
+- **New `create_markdown_link` agent tool** (`opencontractserver/llms/tools/core_tools.py:1990-2174`): Agents can now generate properly formatted markdown links for annotations, corpus, documents, and conversations
+- **Supported entity types**:
+  - **Annotations**: `[Annotation text](/d/user/corpus/doc?ann=123)` - Links to annotation with document context
+  - **Corpus**: `[Corpus Title](/c/user/corpus-slug)` - Direct links to corpus
+  - **Documents**: `[Document Title](/d/user/corpus/doc-slug)` - Smart routing (standalone or corpus-based)
+  - **Conversations/Threads**: `[Discussion Title](/c/user/corpus/discussions/123)` - Links to discussion threads
+- **Intelligent link generation**:
+  - Automatically detects if documents belong to a corpus for proper URL structure
+  - Truncates long annotation text (>100 chars) for readability
+  - Uses entity titles when available, falls back to generic labels (e.g., "Annotation 123")
+  - Validates entity existence, creator, and slug availability before generating links
+- **Async support**: Both sync (`create_markdown_link`) and async (`acreate_markdown_link`) versions available
+- **Tool registry entry** (`opencontractserver/llms/tools/tool_registry.py:364-380`): Registered as COORDINATION category tool with full parameter documentation
+- **Comprehensive test coverage** (`opencontractserver/tests/test_llm_tools.py:2031-2417`):
+  - 35+ test cases covering all entity types, edge cases, and error conditions
+  - Tests for both sync and async implementations
+  - Validation of error messages for missing entities, creators, slugs, and invalid types
+
 #### Real-Time Notification System via WebSocket (Issue #637)
 - **WebSocket notification consumer** (`config/websocket/consumers/notification_updates.py`): New `NotificationUpdatesConsumer` provides real-time notification delivery for all notification types (BADGE, REPLY, MENTION, THREAD_REPLY, moderation actions)
 - **Frontend WebSocket hook** (`frontend/src/hooks/useNotificationWebSocket.ts`): `useNotificationWebSocket` hook manages WebSocket connection lifecycle with auto-reconnection, heartbeat monitoring, and graceful error handling
@@ -133,6 +152,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generates PAWLS tokens by splitting text into words and distributing across bounding box
 - Element type mapping converts LlamaParse labels (title, paragraph, table, etc.) to OpenContracts annotation labels
 - Falls back to text extraction mode when layout extraction is disabled
+
+#### Markdown Link Tool Implementation
+- Follows OpenContracts routing patterns from `docs/frontend/routing_system.md`
+- Uses `select_related()` to minimize database queries (single query per entity)
+- Handles both standalone documents and corpus-based document contexts
+- Entity validation with clear error messages for IDOR prevention
+- URL patterns match frontend `navigationUtils.ts` for consistency
 
 ### Fixed
 

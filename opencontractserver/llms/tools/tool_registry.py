@@ -459,6 +459,26 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
             ("reason", "Reason for unpinning (for audit log)", True),
         ),
     ),
+    # -------------------------------------------------------------------------
+    # UTILITY TOOLS
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="create_markdown_link",
+        description=(
+            "Create a markdown-formatted link for an annotation, corpus, document, or conversation. "
+            "Returns [Title](URL) format following OpenContracts routing patterns. "
+            "Useful for creating references in notes, summaries, or responses."
+        ),
+        category=ToolCategory.COORDINATION,
+        parameters=(
+            (
+                "entity_type",
+                "Type of entity: 'annotation', 'corpus', 'document', or 'conversation'",
+                True,
+            ),
+            ("entity_id", "The primary key (ID) of the entity", True),
+        ),
+    ),
 )
 
 
