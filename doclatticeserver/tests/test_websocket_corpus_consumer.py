@@ -137,7 +137,7 @@ class CorpusConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
     # Negative-path helpers
     # ------------------------------------------------------------------
     async def _assert_invalid_token(self) -> None:
-        """Connection should be rejected (code 4000) when the JWT is invalid."""
+        """Connection should be rejected (code 4002) when the JWT is invalid."""
         corpus_gid = to_global_id("CorpusType", self.corpus.id)
         encoded_corpus_gid = quote(corpus_gid)
 
@@ -147,7 +147,7 @@ class CorpusConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
         )
         connected, close_code = await communicator.connect()
         self.assertFalse(connected)
-        self.assertEqual(close_code, 4000)
+        self.assertEqual(close_code, 4002)
 
     async def _assert_missing_token(self) -> None:
         """Omitting the token entirely must also yield close 4000."""
