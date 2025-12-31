@@ -13,6 +13,13 @@ from django.core.files.storage import default_storage
 from django.utils import timezone
 
 from opencontractserver.corpuses.models import Corpus
+from opencontractserver.notifications.models import (
+    Notification,
+    NotificationTypeChoices,
+)
+from opencontractserver.notifications.signals import (
+    broadcast_notification_via_websocket,
+)
 from opencontractserver.pipeline.utils import run_post_processors
 from opencontractserver.types.dicts import (
     AnnotationLabelPythonType,
@@ -29,6 +36,37 @@ from opencontractserver.utils.text import only_alphanumeric_chars
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+def _create_export_notification(export: UserExport, corpus_title: str) -> None:
+    """
+    Create a notification for export completion.
+
+    Issue #624: Real-time notifications for export completion.
+
+    Args:
+        export: The UserExport instance
+        corpus_title: The title of the corpus being exported
+    """
+    try:
+        if export.creator:
+            notification = Notification.objects.create(
+                recipient=export.creator,
+                notification_type=NotificationTypeChoices.EXPORT_COMPLETE,
+                data={
+                    "export_id": export.id,
+                    "export_name": export.name,
+                    "corpus_name": corpus_title,
+                    "format": export.format,
+                },
+            )
+            broadcast_notification_via_websocket(notification)
+            logger.debug(
+                f"Created EXPORT_COMPLETE notification for {export.creator.username}"
+            )
+    except Exception as e:
+        logger.warning(f"Failed to create export notification: {e}")
+
 
 User = get_user_model()
 
@@ -73,6 +111,9 @@ def on_demand_post_processors(
             export.finished = timezone.now()
             export.backend_lock = False
             export.save()
+
+            # Send export completion notification (Issue #624)
+            _create_export_notification(export, corpus.title)
 
     except Exception as e:
         logger.error(f"Error running post-processors for export {export_id}: {str(e)}")
@@ -179,9 +220,14 @@ def package_annotated_docs(
 
     export = UserExport.objects.get(pk=export_id)
     export.file.save(f"{corpus.title} EXPORT.zip", output_bytes)
+    export.finished = timezone.now()
+    export.backend_lock = False
     export.save()
 
-    logger.info(f"Export {export_id} is completed. Signal should now notify creator.")
+    # Send export completion notification (Issue #624)
+    _create_export_notification(export, corpus.title)
+
+    logger.info(f"Export {export_id} is completed.")
 
 
 @shared_task
@@ -272,3 +318,6 @@ def package_funsd_exports(
     export.finished = timezone.now()
     export.backend_lock = False
     export.save()
+
+    # Send export completion notification (Issue #624)
+    _create_export_notification(export, corpus.title)
