@@ -2,7 +2,10 @@
 OpenContracts MCP Server.
 
 Model Context Protocol server providing read-only access to public OpenContracts resources.
-Supports both Streamable HTTP transport (for HTTP) and stdio transport (for CLI).
+Supports multiple transports:
+- Streamable HTTP transport at /mcp (recommended, stateless mode)
+- SSE transport at /sse (deprecated, for backward compatibility)
+- stdio transport (for CLI usage)
 
 Uses stateless mode for HTTP - each request is independent, avoiding session
 initialization race conditions that plagued the older SSE transport.
@@ -17,9 +20,13 @@ import re
 
 from asgiref.sync import sync_to_async
 from mcp.server import Server
+from mcp.server.sse import SseServerTransport
 from mcp.server.stdio import stdio_server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import Resource, TextContent, Tool
+from starlette.applications import Starlette
+from starlette.responses import Response
+from starlette.routing import Mount, Route
 
 from .resources import (
     get_annotation_resource,
@@ -353,16 +360,51 @@ class MCPLifespanManager:
                 logger.info("MCP StreamableHTTP session manager started")
 
 
-# Global lifespan manager
+# Global lifespan manager for Streamable HTTP
 lifespan_manager = MCPLifespanManager()
+
+# SSE transport for backward compatibility with older clients
+# The SSE transport is deprecated but some clients still use it
+sse_transport = SseServerTransport("/sse/messages/")
+
+
+async def handle_sse_connection(request):
+    """
+    Handle SSE connection for deprecated SSE transport.
+
+    This endpoint establishes an SSE stream and runs the MCP server
+    to handle client requests sent via POST to /sse/messages/.
+    """
+    async with sse_transport.connect_sse(
+        request.scope, request.receive, request._send
+    ) as (read_stream, write_stream):
+        await mcp_server.run(
+            read_stream,
+            write_stream,
+            mcp_server.create_initialization_options(),
+        )
+    # Return empty response after SSE stream closes
+    return Response()
+
+
+# Create Starlette app for SSE transport routes
+sse_starlette_app = Starlette(
+    routes=[
+        Route("/sse", endpoint=handle_sse_connection, methods=["GET"]),
+        Mount("/sse/messages/", app=sse_transport.handle_post_message),
+    ]
+)
 
 
 def create_mcp_asgi_app():
     """
     Create an ASGI application that handles MCP requests.
 
-    The Streamable HTTP transport handles all routing internally.
-    All requests to /mcp/ are delegated to the session manager.
+    Supports two transports:
+    - Streamable HTTP at /mcp (recommended, stateless mode)
+    - SSE at /sse (deprecated, for backward compatibility)
+
+    All requests are delegated to the appropriate transport handler.
     """
 
     async def app(scope, receive, send):
@@ -371,7 +413,7 @@ def create_mcp_asgi_app():
 
         path = scope.get("path", "")
 
-        # Handle MCP endpoint
+        # Handle Streamable HTTP endpoint (recommended)
         if path == "/mcp/" or path == "/mcp":
             # Ensure session manager is running
             await lifespan_manager.ensure_started()
@@ -380,7 +422,7 @@ def create_mcp_asgi_app():
             try:
                 await manager.handle_request(scope, receive, send)
             except Exception as e:
-                logger.error(f"MCP request error: {e}")
+                logger.error(f"MCP Streamable HTTP request error: {e}")
                 # Return error response
                 await send(
                     {
@@ -395,8 +437,30 @@ def create_mcp_asgi_app():
                         "body": json.dumps({"error": str(e)}).encode(),
                     }
                 )
+
+        # Handle deprecated SSE transport for backward compatibility
+        elif path == "/sse" or path.startswith("/sse/"):
+            try:
+                await sse_starlette_app(scope, receive, send)
+            except Exception as e:
+                logger.error(f"MCP SSE request error: {e}")
+                # Return error response
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 500,
+                        "headers": [[b"content-type", b"application/json"]],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": json.dumps({"error": str(e)}).encode(),
+                    }
+                )
+
         else:
-            # Return 404 for unhandled paths under /mcp/
+            # Return 404 with helpful information about available endpoints
             await send(
                 {
                     "type": "http.response.start",
@@ -410,8 +474,18 @@ def create_mcp_asgi_app():
                     "body": json.dumps(
                         {
                             "error": "Not found",
-                            "endpoint": "POST /mcp/",
-                            "description": "MCP Streamable HTTP endpoint (stateless mode)",
+                            "endpoints": {
+                                "streamable_http": {
+                                    "path": "/mcp",
+                                    "methods": ["POST", "GET"],
+                                    "description": "MCP Streamable HTTP endpoint (recommended)",
+                                },
+                                "sse": {
+                                    "path": "/sse",
+                                    "methods": ["GET"],
+                                    "description": "MCP SSE endpoint (deprecated, for backward compatibility)",
+                                },
+                            },
                         }
                     ).encode(),
                 }

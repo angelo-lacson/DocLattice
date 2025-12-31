@@ -31,7 +31,7 @@ http:
       priority: 1
 
     web-router:
-      rule: "Host(`localhost`) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
+      rule: "Host(`localhost`) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`) || PathPrefix(`/mcp`) || PathPrefix(`/sse`))"
       entryPoints:
         - "web"
       middlewares:
