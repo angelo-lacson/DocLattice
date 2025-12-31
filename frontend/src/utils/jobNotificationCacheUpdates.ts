@@ -22,6 +22,14 @@ interface JobNotificationData {
 }
 
 /**
+ * Convert a raw database ID to a GraphQL global ID.
+ * Graphene-Django with Relay uses base64-encoded "{TypeName}:{id}" format.
+ */
+function toGlobalId(typeName: string, id: number | string): string {
+  return btoa(`${typeName}:${id}`);
+}
+
+/**
  * Update cache when a document finishes processing.
  * Sets backendLock to false.
  */
@@ -31,15 +39,18 @@ function updateDocumentProcessed(
 ): void {
   if (!data.document_id) return;
 
-  const documentId = `DocumentType:${data.document_id}`;
+  const globalId = toGlobalId("DocumentType", data.document_id);
+  const cacheId = cache.identify({ __typename: "DocumentType", id: globalId });
 
-  cache.modify({
-    id: documentId,
-    fields: {
-      backendLock: () => false,
-    },
-    broadcast: true,
-  });
+  if (cacheId) {
+    cache.modify({
+      id: cacheId,
+      fields: {
+        backendLock: () => false,
+      },
+      broadcast: true,
+    });
+  }
 }
 
 /**
@@ -52,15 +63,18 @@ function updateExtractComplete(
 ): void {
   if (!data.extract_id) return;
 
-  const extractId = `ExtractType:${data.extract_id}`;
+  const globalId = toGlobalId("ExtractType", data.extract_id);
+  const cacheId = cache.identify({ __typename: "ExtractType", id: globalId });
 
-  cache.modify({
-    id: extractId,
-    fields: {
-      finished: () => new Date().toISOString(),
-    },
-    broadcast: true,
-  });
+  if (cacheId) {
+    cache.modify({
+      id: cacheId,
+      fields: {
+        finished: () => new Date().toISOString(),
+      },
+      broadcast: true,
+    });
+  }
 }
 
 /**
@@ -73,16 +87,19 @@ function updateAnalysisComplete(
 ): void {
   if (!data.analysis_id) return;
 
-  const analysisId = `AnalysisType:${data.analysis_id}`;
+  const globalId = toGlobalId("AnalysisType", data.analysis_id);
+  const cacheId = cache.identify({ __typename: "AnalysisType", id: globalId });
 
-  cache.modify({
-    id: analysisId,
-    fields: {
-      status: () => "COMPLETED",
-      analysisCompleted: () => new Date().toISOString(),
-    },
-    broadcast: true,
-  });
+  if (cacheId) {
+    cache.modify({
+      id: cacheId,
+      fields: {
+        status: () => "COMPLETED",
+        analysisCompleted: () => new Date().toISOString(),
+      },
+      broadcast: true,
+    });
+  }
 }
 
 /**
@@ -95,15 +112,18 @@ function updateAnalysisFailed(
 ): void {
   if (!data.analysis_id) return;
 
-  const analysisId = `AnalysisType:${data.analysis_id}`;
+  const globalId = toGlobalId("AnalysisType", data.analysis_id);
+  const cacheId = cache.identify({ __typename: "AnalysisType", id: globalId });
 
-  cache.modify({
-    id: analysisId,
-    fields: {
-      status: () => "FAILED",
-    },
-    broadcast: true,
-  });
+  if (cacheId) {
+    cache.modify({
+      id: cacheId,
+      fields: {
+        status: () => "FAILED",
+      },
+      broadcast: true,
+    });
+  }
 }
 
 /**
@@ -116,16 +136,22 @@ function updateExportComplete(
 ): void {
   if (!data.export_id) return;
 
-  const exportId = `UserExportType:${data.export_id}`;
-
-  cache.modify({
-    id: exportId,
-    fields: {
-      backendLock: () => false,
-      finished: () => new Date().toISOString(),
-    },
-    broadcast: true,
+  const globalId = toGlobalId("UserExportType", data.export_id);
+  const cacheId = cache.identify({
+    __typename: "UserExportType",
+    id: globalId,
   });
+
+  if (cacheId) {
+    cache.modify({
+      id: cacheId,
+      fields: {
+        backendLock: () => false,
+        finished: () => new Date().toISOString(),
+      },
+      broadcast: true,
+    });
+  }
 }
 
 /**
