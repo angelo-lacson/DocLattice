@@ -222,3 +222,38 @@ export function getThreadUpdatesWebSocket(
 
   return url;
 }
+
+/**
+ * Get WebSocket URL for notification updates (real-time notifications).
+ *
+ * This endpoint is used for receiving real-time notifications about:
+ * - Badge awards
+ * - Message replies
+ * - Mentions
+ * - Thread updates
+ * - Moderation actions
+ *
+ * The consumer automatically subscribes to notifications for the authenticated user.
+ * No query parameters are required beyond the auth token.
+ *
+ * @param token - Authentication token from the user session.
+ * @returns WebSocket URL with query parameters.
+ *
+ * Issue #637: Migrate badge notifications from polling to WebSocket
+ */
+export function getNotificationUpdatesWebSocket(token?: string): string {
+  const wsBaseUrl = resolveWsBaseUrl();
+
+  const normalizedBaseUrl = wsBaseUrl
+    .replace(/\/+$/, "")
+    .replace(/^http/, "ws")
+    .replace(/^https/, "wss");
+
+  let url = `${normalizedBaseUrl}/ws/notification-updates/`;
+
+  if (token) {
+    url += `?token=${encodeURIComponent(token)}`;
+  }
+
+  return url;
+}

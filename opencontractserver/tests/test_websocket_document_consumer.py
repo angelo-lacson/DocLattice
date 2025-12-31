@@ -280,7 +280,7 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
 
     # --- Negative-path helpers and tests remain unchanged from your previous version ---
     async def _assert_invalid_token(self) -> None:
-        """Connection should be rejected (code 4000) when the JWT is invalid."""
+        """Connection should be rejected (code 4002) when the JWT is invalid."""
         graphql_id = to_global_id("DocumentType", self.doc.id)
         encoded_graphql_id = quote(graphql_id)
         encoded_corpus_id = quote(to_global_id("CorpusType", self.corpus.id))
@@ -292,7 +292,7 @@ class DocumentConversationWebsocketTestCase(WebsocketFixtureBaseTestCase):
         )
         connected, close_code = await communicator.connect()
         self.assertFalse(connected)
-        self.assertEqual(close_code, 4000)
+        self.assertEqual(close_code, 4002)
 
     async def _assert_missing_token(self) -> None:
         """Omitting the token entirely must also yield close 4000."""

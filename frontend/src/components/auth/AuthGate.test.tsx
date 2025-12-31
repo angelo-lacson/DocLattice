@@ -347,6 +347,9 @@ describe("AuthGate", () => {
 
   describe("Race Condition Prevention", () => {
     it("blocks rendering until auth is fully initialized", async () => {
+      // Use fake timers to prevent timer pollution between tests
+      vi.useFakeTimers();
+
       const mockToken = "test-token-123";
       const mockUser = { email: "test@example.com", sub: "user123" };
       const mockGetAccessTokenSilently = vi.fn().mockImplementation(
@@ -378,6 +381,9 @@ describe("AuthGate", () => {
       ).toBeInTheDocument();
       expect(screen.queryByText("Protected Content")).not.toBeInTheDocument();
 
+      // Advance timers to trigger the token fetch
+      await vi.advanceTimersByTimeAsync(100);
+
       // Wait for token fetch to complete
       await waitFor(() => {
         expect(
@@ -389,6 +395,9 @@ describe("AuthGate", () => {
       // Verify auth state is correct
       expect(authToken()).toBe(mockToken);
       expect(authStatusVar()).toBe("AUTHENTICATED");
+
+      // Restore real timers to prevent pollution of subsequent tests
+      vi.useRealTimers();
     });
 
     it("ensures token is set before marking as authenticated", async () => {

@@ -38,16 +38,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tests for both sync and async implementations
   - Validation of error messages for missing entities, creators, slugs, and invalid types
 
-### Technical Details
+#### Real-Time Notification System via WebSocket (Issue #637)
+- **WebSocket notification consumer** (`config/websocket/consumers/notification_updates.py`): New `NotificationUpdatesConsumer` provides real-time notification delivery for all notification types (BADGE, REPLY, MENTION, THREAD_REPLY, moderation actions)
+- **Frontend WebSocket hook** (`frontend/src/hooks/useNotificationWebSocket.ts`): `useNotificationWebSocket` hook manages WebSocket connection lifecycle with auto-reconnection, heartbeat monitoring, and graceful error handling
+- **Signal broadcasting** (`opencontractserver/notifications/signals.py:33-100`): All notification creation signals now broadcast via WebSocket channel layer for instant delivery
+- **ASGI routing** (`config/asgi.py:88-94`): Registered `ws/notification-updates/` WebSocket endpoint with authentication middleware
+- **WebSocket URL helper** (`frontend/src/components/chat/get_websockets.ts:226-259`): `getNotificationUpdatesWebSocket` function constructs WebSocket URLs with proper protocol handling
 
-#### Markdown Link Tool Implementation
-- Follows OpenContracts routing patterns from `docs/frontend/routing_system.md`
-- Uses `select_related()` to minimize database queries (single query per entity)
-- Handles both standalone documents and corpus-based document contexts
-- Entity validation with clear error messages for IDOR prevention
-- URL patterns match frontend `navigationUtils.ts` for consistency
+### Changed
 
-## [Unreleased] - 2025-12-27
+#### Badge Notifications Migrated from Polling to WebSocket (Issue #637)
+- **useBadgeNotifications hook** (`frontend/src/hooks/useBadgeNotifications.ts`): Completely refactored from Apollo Client polling (30s intervals) to WebSocket-based real-time updates
+- **Zero latency**: Badge awards now appear instantly instead of 0-30 second delay
+- **Reduced server load**: Eliminated continuous polling requests from all connected clients
+- **Backward compatible**: Maintains same interface (`newBadges`, `clearNewBadges`) with added `connectionState` for debugging
+
+### Fixed
+
+#### WebSocket Token Expiration Close Code Handling (PR #746)
+- **Updated all WebSocket consumers** to check `scope['auth_error']` from middleware and use specific close codes:
+  - `config/websocket/consumers/document_conversation.py:77-91`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/corpus_conversation.py:67-79`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/standalone_document_conversation.py:97-106`: Checks auth_error before falling back to anonymous handling
+  - `config/websocket/consumers/unified_agent_conversation.py:119-127`: Uses auth_error codes for expired/invalid tokens
+  - `config/websocket/consumers/thread_updates.py:77-88`: Uses auth_error codes for expired/invalid tokens
+- **Removed unused `Union` import** from `config/websocket/middleware.py:2`
+- **Fixed lazy import issue** in `config/graphql_auth0_auth/utils.py:124`: Moved `sync_remote_user` import inside function to avoid import error when `USE_AUTH0=False`
+- **Added Auth0 test settings** in `config/settings/test.py:120-133`: Default Auth0 settings for test environment to allow importing Auth0 modules during testing
+
+#### Impact
+- Frontend can now distinguish between expired tokens (4001) and invalid tokens (4002) via WebSocket close codes
+- Enables targeted token refresh vs full re-authentication based on close code
+- Fixes issue #744 where token expiration wasn't properly signaled to clients
 
 ### Added
 
@@ -130,9 +152,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generates PAWLS tokens by splitting text into words and distributing across bounding box
 - Element type mapping converts LlamaParse labels (title, paragraph, table, etc.) to OpenContracts annotation labels
 - Falls back to text extraction mode when layout extraction is disabled
->>>>>>> origin/main
+
+#### Markdown Link Tool Implementation
+- Follows OpenContracts routing patterns from `docs/frontend/routing_system.md`
+- Uses `select_related()` to minimize database queries (single query per entity)
+- Handles both standalone documents and corpus-based document contexts
+- Entity validation with clear error messages for IDOR prevention
+- URL patterns match frontend `navigationUtils.ts` for consistency
 
 ### Fixed
+
+#### Token Expiration Signal to Frontend (Issue #744)
+- **Fixed `Auth0RemoteUserJSONWebTokenBackend.authenticate()` swallowing `JSONWebTokenExpired` exceptions** (`config/graphql_auth0_auth/backends.py:44-52`):
+  - Previously, when a JWT token expired, the authentication backend caught all exceptions and returned `None`
+  - The GraphQL layer then returned a generic "User is not authenticated" error
+  - Frontend's `errorLink.ts` could not detect token expiration and trigger automatic refresh
+  - Fix: Re-raise `JSONWebTokenExpired` so the GraphQL layer returns "Signature has expired"
+  - Frontend now correctly detects expiration and triggers page reload for silent token refresh
+- **Enhanced WebSocket middleware with auth error signaling** (`config/websocket/middleware.py:44-124`):
+  - Added `scope["auth_error"]` dict with `code` and `message` fields
+  - New close codes: `WS_CLOSE_TOKEN_EXPIRED` (4001), `WS_CLOSE_TOKEN_INVALID` (4002)
+  - Consumers can now close connections with specific codes for frontend handling
+- **Enhanced Auth0 WebSocket middleware** (`config/websocket/middlewares/websocket_auth0_middleware.py:52-130`):
+  - Added consistent `scope["auth_error"]` handling for Auth0 tokens
+  - Matches close code behavior with non-Auth0 middleware
+- **New test coverage** (`opencontractserver/tests/test_token_expiration.py`):
+  - Tests for `Auth0RemoteUserJSONWebTokenBackend` token expiration re-raising
+  - Tests for WebSocket middleware auth error handling
+  - Tests for WebSocket close code consistency
 
 #### Independent Structural Annotation and Show Selected Controls (Issue #735)
 - **Removed forced coupling between structural and showSelectedOnly controls** (`frontend/src/components/annotator/controls/AnnotationControls.tsx:200-207`):
@@ -219,6 +266,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Toast notifications**: Informs users of connectivity changes ("Reconnecting...", "Connection restored", "You appear to be offline")
 
 ### Technical Details
+
+#### Real-Time Notification System Architecture (Issue #637)
+- **Security**: User-specific channel groups (`notification_user_{user_id}`) prevent IDOR and cross-user data leakage
+- **Performance optimizations**:
+  - User-specific WebSocket channels (not global broadcast)
+  - Efficient `bulk_create()` for thread participant notifications
+  - Exponential backoff on reconnection failures (2s → 4s → 8s → 16s, max 8x)
+  - Heartbeat monitoring every 30s to detect stale connections
+- **Signal integration**: All notification types (BADGE, REPLY, MENTION, THREAD_REPLY, moderation) automatically broadcast via `broadcast_notification_via_websocket()` helper
+- **Error handling**: WebSocket broadcast failures don't break signal handlers - notifications still save to database
+- **Connection lifecycle**: Auto-reconnection on network recovery, page visibility change, and authentication token refresh
+- **Testing**: Comprehensive test suite (`opencontractserver/tests/test_notification_websocket.py`) covering authentication, IDOR prevention, concurrent connections, and signal integration
+- **Network monitoring**: Integrated with `useNetworkStatus` hook for automatic reconnection on mobile screen unlock and network recovery
 
 #### Network Recovery Implementation
 - Uses `visibilitychange` event to detect page visibility changes

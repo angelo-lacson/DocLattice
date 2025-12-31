@@ -262,7 +262,9 @@ class AgentActionResultModelTestCase(TestCase):
     def test_visible_to_user_superuser_sees_all(self):
         """Test visible_to_user returns all results for superuser."""
         superuser = User.objects.create_superuser(
-            username="admin", password="adminpass", email="admin@test.com"
+            username="agent_result_superuser",
+            password="adminpass",
+            email="agent_result_admin@test.com",
         )
 
         result = AgentActionResult.objects.create(
