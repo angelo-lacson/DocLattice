@@ -1,14 +1,13 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useReactiveVar, useQuery } from "@apollo/client";
+import { useAtom } from "jotai";
 import styled from "styled-components";
 import {
   MessageSquare,
   Plus,
   Search,
   Shield,
-  Users,
-  CheckCircle,
   HelpCircle,
   Lightbulb,
   AlertCircle,
@@ -21,7 +20,9 @@ import { ThreadList } from "../threads/ThreadList";
 import { CreateThreadForm } from "../threads/CreateThreadForm";
 import { ThreadSearch } from "../search/ThreadSearch";
 import { ModerationDashboard } from "../moderation";
+import { ThreadFilterToggles } from "../threads/ThreadFilterToggles";
 import { color } from "../../theme/colors";
+import { threadSortAtom, ThreadSortOption } from "../../atoms/threadAtoms";
 import {
   GET_CONVERSATIONS,
   GetConversationsInputs,
@@ -37,36 +38,34 @@ const Container = styled.div`
   flex-direction: column;
   height: 100%;
   background: ${color.N2};
-
-  @media (max-width: 768px) {
-    padding: 0;
-  }
 `;
 
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 1.5rem 2rem;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
   background: ${color.N1};
   border-bottom: 1px solid ${color.N4};
+  gap: 1rem;
 
   @media (max-width: 768px) {
-    padding: 1rem;
-    flex-direction: column;
-    gap: 1rem;
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
   }
 `;
 
 const TitleSection = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
 `;
 
 const Breadcrumb = styled.div`
   font-size: 13px;
   color: ${color.N6};
+  white-space: nowrap;
 
   a {
     color: ${color.N6};
@@ -84,117 +83,78 @@ const Breadcrumb = styled.div`
 `;
 
 const Title = styled.h1`
-  font-size: 1.75rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: ${color.N10};
   margin: 0;
   letter-spacing: -0.025em;
 `;
 
-const Subtitle = styled.p`
-  font-size: 0.9375rem;
-  color: ${color.N6};
-  margin: 0.25rem 0 0 0;
-`;
-
 const CreateButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: ${color.G6};
   color: white;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
+  flex-shrink: 0;
 
   &:hover {
     background: ${color.G7};
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(30, 194, 142, 0.3);
-  }
-
-  &:active {
-    transform: translateY(0);
   }
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 
-  @media (max-width: 768px) {
-    width: 100%;
-    justify-content: center;
-  }
-`;
-
-const StatsBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 1rem 2rem;
-  background: ${color.N1};
-  border-bottom: 1px solid ${color.N4};
-  flex-wrap: wrap;
-
-  @media (max-width: 768px) {
-    padding: 0.75rem 1rem;
-    gap: 1rem;
-  }
-`;
-
-const StatItem = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 0.375rem;
-  font-size: 14px;
-  color: ${color.N7};
-
-  strong {
-    font-size: 18px;
-    font-weight: 700;
-    color: ${color.N10};
-  }
-
-  @media (max-width: 640px) {
-    font-size: 13px;
-
-    strong {
-      font-size: 16px;
+  @media (max-width: 480px) {
+    padding: 0.5rem;
+    span {
+      display: none;
     }
   }
 `;
 
-const FilterBar = styled.div`
+const Toolbar = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 2rem;
+  gap: 0.75rem;
+  padding: 0.5rem 1.5rem;
   background: ${color.N1};
   border-bottom: 1px solid ${color.N4};
   flex-wrap: wrap;
 
   @media (max-width: 768px) {
-    padding: 0.75rem 1rem;
-    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    gap: 0.5rem;
   }
+`;
+
+const FilterPills = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
 `;
 
 const FilterPill = styled.button<{ $isActive: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem;
   border: 1px solid ${(props) => (props.$isActive ? color.G5 : color.N4)};
-  border-radius: 20px;
+  border-radius: 16px;
   background: ${(props) => (props.$isActive ? color.G6 : color.N1)};
   color: ${(props) => (props.$isActive ? "white" : color.N7)};
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
@@ -206,13 +166,8 @@ const FilterPill = styled.button<{ $isActive: boolean }>`
   }
 
   svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  @media (max-width: 640px) {
-    padding: 0.375rem 0.75rem;
-    font-size: 12px;
+    width: 12px;
+    height: 12px;
   }
 `;
 
@@ -220,66 +175,57 @@ const FilterCount = styled.span<{ $isActive: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
   background: ${(props) =>
     props.$isActive ? "rgba(255,255,255,0.25)" : color.N3};
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-
-  @media (max-width: 640px) {
-    min-width: 18px;
-    height: 18px;
-    font-size: 10px;
-  }
 `;
 
-const SearchAndSortBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 2rem;
-  background: ${color.N1};
-  border-bottom: 1px solid ${color.N4};
+const ToolbarDivider = styled.div`
+  width: 1px;
+  height: 24px;
+  background: ${color.N4};
+  margin: 0 0.25rem;
 
-  @media (max-width: 768px) {
-    padding: 0.75rem 1rem;
-    flex-direction: column;
-    gap: 0.75rem;
+  @media (max-width: 640px) {
+    display: none;
   }
 `;
 
 const SearchInput = styled.div`
-  flex: 1;
   position: relative;
-  max-width: 500px;
+  flex: 1;
+  min-width: 150px;
+  max-width: 280px;
 
   svg {
     position: absolute;
-    left: 12px;
+    left: 10px;
     top: 50%;
     transform: translateY(-50%);
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
     color: ${color.N6};
   }
 
   input {
     width: 100%;
-    padding: 0.625rem 1rem 0.625rem 2.5rem;
+    padding: 0.375rem 0.75rem 0.375rem 2rem;
     border: 1px solid ${color.N4};
-    border-radius: 8px;
+    border-radius: 6px;
     background: ${color.N1};
-    font-size: 14px;
+    font-size: 13px;
     color: ${color.N10};
     transition: all 0.15s;
 
     &:focus {
       outline: none;
       border-color: ${color.G5};
-      box-shadow: 0 0 0 3px ${color.G1};
+      box-shadow: 0 0 0 2px ${color.G1};
     }
 
     &::placeholder {
@@ -287,20 +233,21 @@ const SearchInput = styled.div`
     }
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 640px) {
     max-width: none;
-    width: 100%;
+    flex-basis: 100%;
+    order: 10;
   }
 `;
 
 const SortDropdown = styled.select`
-  padding: 0.625rem 2rem 0.625rem 1rem;
+  padding: 0.375rem 1.75rem 0.375rem 0.625rem;
   border: 1px solid ${color.N4};
-  border-radius: 8px;
+  border-radius: 6px;
   background: ${color.N1}
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238C96A3' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
-    no-repeat right 10px center;
-  font-size: 14px;
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238C96A3' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  font-size: 13px;
   color: ${color.N9};
   cursor: pointer;
   appearance: none;
@@ -314,57 +261,41 @@ const SortDropdown = styled.select`
   &:hover {
     border-color: ${color.N5};
   }
-
-  @media (max-width: 768px) {
-    width: 100%;
-  }
 `;
 
-const TabContainer = styled.div`
-  display: flex;
-  gap: 0;
-  background: ${color.N1};
-  border-bottom: 1px solid ${color.N4};
-  padding: 0 2rem;
-
-  @media (max-width: 768px) {
-    padding: 0 1rem;
-  }
-`;
-
-const Tab = styled.button<{ $isActive: boolean }>`
+const TabGroup = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.25rem;
-  border: none;
-  background: transparent;
+  gap: 0.25rem;
+  margin-left: auto;
+
+  @media (max-width: 640px) {
+    margin-left: 0;
+  }
+`;
+
+const TabButton = styled.button<{ $isActive: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid ${(props) => (props.$isActive ? color.G5 : color.N4)};
+  border-radius: 6px;
+  background: ${(props) => (props.$isActive ? color.G1 : color.N1)};
   color: ${(props) => (props.$isActive ? color.G7 : color.N6)};
-  font-size: 0.9375rem;
-  font-weight: ${(props) => (props.$isActive ? "600" : "500")};
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  border-bottom: 2px solid
-    ${(props) => (props.$isActive ? color.G6 : "transparent")};
-  margin-bottom: -1px;
   transition: all 0.15s;
 
   &:hover {
-    color: ${(props) => (props.$isActive ? color.G7 : color.N9)};
+    border-color: ${color.G5};
+    color: ${color.G7};
   }
 
   svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  @media (max-width: 640px) {
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-
-    svg {
-      width: 16px;
-      height: 16px;
-    }
+    width: 14px;
+    height: 14px;
   }
 `;
 
@@ -402,6 +333,7 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   );
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useAtom(threadSortAtom);
 
   // Fetch all threads for stats calculation
   const { data: threadsData } = useQuery<
@@ -416,12 +348,13 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
     fetchPolicy: "cache-and-network",
   });
 
-  // Calculate stats from threads
+  // Calculate category counts for filter pills
   const stats = useMemo(() => {
     const threads =
       threadsData?.conversations?.edges
         ?.map((e) => e?.node)
-        .filter((n): n is NonNullable<typeof n> => n != null) || [];
+        .filter((n): n is NonNullable<typeof n> => n != null && !n.deletedAt) ||
+      [];
 
     const categoryCounts: Record<DiscussionCategory, number> = {
       question: 0,
@@ -430,62 +363,19 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
       answered: 0,
     };
 
-    // Collect unique participants
-    const participants = new Set<string>();
-
     threads.forEach((thread) => {
-      if (thread.deletedAt) return; // Don't count deleted threads
-
       const category = inferDiscussionCategory(
         thread.title || "",
         thread.description
       );
       categoryCounts[category]++;
-
-      if (thread.creator?.id) {
-        participants.add(thread.creator.id);
-      }
     });
 
-    // Count open vs answered (threads with replies are considered "answered")
-    const openCount = threads.filter(
-      (t) =>
-        !t.deletedAt &&
-        (!t.chatMessages?.totalCount || t.chatMessages.totalCount === 0)
-    ).length;
-    const answeredCount = threads.filter(
-      (t) =>
-        !t.deletedAt &&
-        t.chatMessages?.totalCount &&
-        t.chatMessages.totalCount > 0
-    ).length;
-
     return {
-      total: threads.filter((t) => !t.deletedAt).length,
-      open: openCount,
-      answered: answeredCount,
-      participants: participants.size,
+      total: threads.length,
       categories: categoryCounts,
     };
   }, [threadsData]);
-
-  // Filter threads by category
-  const filteredThreads = useMemo(() => {
-    if (categoryFilter === "all") return undefined; // Let ThreadList handle filtering
-
-    const threads =
-      threadsData?.conversations?.edges
-        ?.map((e) => e?.node)
-        .filter((n): n is NonNullable<typeof n> => n != null) || [];
-
-    return threads.filter((thread) => {
-      const category = inferDiscussionCategory(
-        thread.title || "",
-        thread.description
-      );
-      return category === categoryFilter;
-    });
-  }, [threadsData, categoryFilter]);
 
   // Check if current user can moderate this corpus
   const canModerate = useMemo(() => {
@@ -520,6 +410,13 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
     setCategoryFilter(category);
   }, []);
 
+  const handleSortChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setSortBy(e.target.value as ThreadSortOption);
+    },
+    [setSortBy]
+  );
+
   if (!corpus) {
     return (
       <Container>
@@ -530,7 +427,7 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
 
   return (
     <Container>
-      {/* Header */}
+      {/* Compact Header: Breadcrumb + Title + Create button */}
       <Header>
         <TitleSection>
           <Breadcrumb>
@@ -541,141 +438,134 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
             </a>
           </Breadcrumb>
           <Title>Discussions</Title>
-          <Subtitle>Community conversations about this corpus</Subtitle>
         </TitleSection>
         <CreateButton
           onClick={() => setShowCreateModal(true)}
           aria-label="Create new discussion"
         >
           <Plus />
-          New Discussion
+          <span>New Discussion</span>
         </CreateButton>
       </Header>
 
-      {/* Stats Bar */}
-      <StatsBar>
-        <StatItem>
-          <strong>{stats.total}</strong> discussions
-        </StatItem>
-        <StatItem>
-          <strong>{stats.open}</strong> open
-        </StatItem>
-        <StatItem>
-          <strong>{stats.answered}</strong> answered
-        </StatItem>
-        <StatItem>
-          <Users size={16} style={{ marginRight: 4 }} />
-          <strong>{stats.participants}</strong> participants
-        </StatItem>
-      </StatsBar>
+      {/* Single Toolbar: Category filters + Search + Sort + Tabs */}
+      <Toolbar>
+        {/* Category filter pills */}
+        <FilterPills>
+          <FilterPill
+            $isActive={categoryFilter === "all"}
+            onClick={() => handleCategoryChange("all")}
+          >
+            All
+            <FilterCount $isActive={categoryFilter === "all"}>
+              {stats.total}
+            </FilterCount>
+          </FilterPill>
+          <FilterPill
+            $isActive={categoryFilter === "question"}
+            onClick={() => handleCategoryChange("question")}
+          >
+            <HelpCircle />
+            <FilterCount $isActive={categoryFilter === "question"}>
+              {stats.categories.question}
+            </FilterCount>
+          </FilterPill>
+          <FilterPill
+            $isActive={categoryFilter === "idea"}
+            onClick={() => handleCategoryChange("idea")}
+          >
+            <Lightbulb />
+            <FilterCount $isActive={categoryFilter === "idea"}>
+              {stats.categories.idea}
+            </FilterCount>
+          </FilterPill>
+          <FilterPill
+            $isActive={categoryFilter === "help"}
+            onClick={() => handleCategoryChange("help")}
+          >
+            <AlertCircle />
+            <FilterCount $isActive={categoryFilter === "help"}>
+              {stats.categories.help}
+            </FilterCount>
+          </FilterPill>
+        </FilterPills>
 
-      {/* Category Filter Pills */}
-      <FilterBar>
-        <FilterPill
-          $isActive={categoryFilter === "all"}
-          onClick={() => handleCategoryChange("all")}
-        >
-          All
-          <FilterCount $isActive={categoryFilter === "all"}>
-            {stats.total}
-          </FilterCount>
-        </FilterPill>
-        <FilterPill
-          $isActive={categoryFilter === "question"}
-          onClick={() => handleCategoryChange("question")}
-        >
-          <HelpCircle />
-          Questions
-          <FilterCount $isActive={categoryFilter === "question"}>
-            {stats.categories.question}
-          </FilterCount>
-        </FilterPill>
-        <FilterPill
-          $isActive={categoryFilter === "idea"}
-          onClick={() => handleCategoryChange("idea")}
-        >
-          <Lightbulb />
-          Ideas
-          <FilterCount $isActive={categoryFilter === "idea"}>
-            {stats.categories.idea}
-          </FilterCount>
-        </FilterPill>
-        <FilterPill
-          $isActive={categoryFilter === "help"}
-          onClick={() => handleCategoryChange("help")}
-        >
-          <AlertCircle />
-          Help
-          <FilterCount $isActive={categoryFilter === "help"}>
-            {stats.categories.help}
-          </FilterCount>
-        </FilterPill>
-      </FilterBar>
+        <ToolbarDivider />
 
-      {/* Search and Sort Bar */}
-      <SearchAndSortBar>
+        {/* Search */}
         <SearchInput>
           <Search />
           <input
             type="text"
-            placeholder="Search discussions..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={handleSearchChange}
             aria-label="Search discussions"
           />
         </SearchInput>
-        <SortDropdown aria-label="Sort discussions">
-          <option value="recent">Recent Activity</option>
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="most-replied">Most Replied</option>
-        </SortDropdown>
-      </SearchAndSortBar>
 
-      {/* Tabs (only show moderation for moderators) */}
-      {canModerate && (
-        <TabContainer>
-          <Tab
-            $isActive={activeTab === "list"}
-            onClick={() => setActiveTab("list")}
-            type="button"
-            aria-label="View all threads"
-            aria-selected={activeTab === "list"}
-          >
-            <MessageSquare />
-            <span>All Threads</span>
-          </Tab>
-          <Tab
-            $isActive={activeTab === "search"}
-            onClick={() => setActiveTab("search")}
-            type="button"
-            aria-label="Search threads"
-            aria-selected={activeTab === "search"}
-          >
-            <Search />
-            <span>Advanced Search</span>
-          </Tab>
-          <Tab
-            $isActive={activeTab === "moderation"}
-            onClick={() => setActiveTab("moderation")}
-            type="button"
-            aria-label="Moderation dashboard"
-            aria-selected={activeTab === "moderation"}
-          >
-            <Shield />
-            <span>Moderation</span>
-          </Tab>
-        </TabContainer>
-      )}
+        {/* Sort */}
+        <SortDropdown
+          aria-label="Sort discussions"
+          value={sortBy}
+          onChange={handleSortChange}
+        >
+          <option value="pinned">Pinned First</option>
+          <option value="active">Recent Activity</option>
+          <option value="newest">Newest</option>
+          <option value="upvoted">Most Upvoted</option>
+        </SortDropdown>
+
+        {/* Moderator filter toggles */}
+        {canModerate && activeTab === "list" && (
+          <>
+            <ToolbarDivider />
+            <ThreadFilterToggles showModeratorFilters />
+          </>
+        )}
+
+        {/* Tab buttons (moderators see all three, others see none - just list) */}
+        {canModerate && (
+          <TabGroup>
+            <TabButton
+              $isActive={activeTab === "list"}
+              onClick={() => setActiveTab("list")}
+              type="button"
+              aria-label="View all threads"
+            >
+              <MessageSquare />
+              Threads
+            </TabButton>
+            <TabButton
+              $isActive={activeTab === "search"}
+              onClick={() => setActiveTab("search")}
+              type="button"
+              aria-label="Advanced search"
+            >
+              <Search />
+              Search
+            </TabButton>
+            <TabButton
+              $isActive={activeTab === "moderation"}
+              onClick={() => setActiveTab("moderation")}
+              type="button"
+              aria-label="Moderation dashboard"
+            >
+              <Shield />
+              Moderate
+            </TabButton>
+          </TabGroup>
+        )}
+      </Toolbar>
 
       {/* Content */}
       <ContentContainer>
         {activeTab === "list" && (
           <ThreadList
             corpusId={corpusId}
-            embedded={false}
+            embedded
             onThreadClick={handleThreadClick}
-            showModeratorFilters={canModerate}
+            showModeratorFilters={false}
             searchQuery={searchQuery}
             showCreateButton={false}
             categoryFilter={categoryFilter}
