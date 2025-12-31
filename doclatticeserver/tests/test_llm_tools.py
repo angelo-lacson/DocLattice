@@ -2173,6 +2173,28 @@ class TestCreateMarkdownLink(TestCase):
         result = create_markdown_link("corpus", corpus_no_title.id)
         self.assertIn(f"Corpus {corpus_no_title.id}", result)
 
+    def test_create_markdown_link_for_document_without_title(self):
+        """Test that documents without titles get generic labels."""
+        doc_no_title = Document.objects.create(
+            creator=self.user,
+            title="",
+            slug="doc-no-title",
+        )
+
+        result = create_markdown_link("document", doc_no_title.id)
+        self.assertIn(f"Document {doc_no_title.id}", result)
+
+    def test_create_markdown_link_for_conversation_without_title(self):
+        """Test that conversations without titles get generic labels."""
+        conversation_no_title = Conversation.objects.create(
+            title="",
+            chat_with_corpus=self.corpus,
+            creator=self.user,
+        )
+
+        result = create_markdown_link("conversation", conversation_no_title.id)
+        self.assertIn(f"Discussion {conversation_no_title.id}", result)
+
     # -------------------------------------------------------------------------
     # Failure Cases
     # -------------------------------------------------------------------------
@@ -2243,18 +2265,24 @@ class AsyncTestCreateMarkdownLink(TransactionTestCase):
 
     def setUp(self):
         """Set up test data."""
-        self.user = User.objects.create_user(username="asynclinkuser", password="12345")
+        import uuid
+
+        # Use unique username per test to avoid conflicts
+        unique_suffix = uuid.uuid4().hex[:8]
+        self.user = User.objects.create_user(
+            username=f"asynclinkuser_{unique_suffix}", password="12345"
+        )
 
         self.corpus = Corpus.objects.create(
             title="Async Test Corpus",
-            slug="async-test-corpus",
+            slug=f"async-test-corpus-{unique_suffix}",
             creator=self.user,
         )
 
         self.doc = Document.objects.create(
             creator=self.user,
             title="Async Test Document",
-            slug="async-test-document",
+            slug=f"async-test-document-{unique_suffix}",
         )
 
         self.annotation = Annotation.objects.create(
@@ -2278,13 +2306,13 @@ class AsyncTestCreateMarkdownLink(TransactionTestCase):
     async def test_acreate_markdown_link_for_corpus(self):
         """Test async creation of corpus markdown link."""
         result = await acreate_markdown_link("corpus", self.corpus.id)
-        expected = "[Async Test Corpus](/c/asynclinkuser/async-test-corpus)"
+        expected = f"[Async Test Corpus](/c/{self.user.username}/{self.corpus.slug})"
         self.assertEqual(result, expected)
 
     async def test_acreate_markdown_link_for_document(self):
         """Test async creation of document markdown link."""
         result = await acreate_markdown_link("document", self.doc.id)
-        expected = "[Async Test Document](/d/asynclinkuser/async-test-corpus/async-test-document)"
+        expected = f"[Async Test Document](/d/{self.user.username}/{self.corpus.slug}/{self.doc.slug})"
         self.assertEqual(result, expected)
 
     async def test_acreate_markdown_link_for_annotation(self):
@@ -2292,7 +2320,7 @@ class AsyncTestCreateMarkdownLink(TransactionTestCase):
         result = await acreate_markdown_link("annotation", self.annotation.id)
         expected = (
             f"[Async test annotation]"
-            f"(/d/asynclinkuser/async-test-corpus/async-test-document?ann={self.annotation.id})"
+            f"(/d/{self.user.username}/{self.corpus.slug}/{self.doc.slug}?ann={self.annotation.id})"
         )
         self.assertEqual(result, expected)
 
@@ -2301,9 +2329,149 @@ class AsyncTestCreateMarkdownLink(TransactionTestCase):
         result = await acreate_markdown_link("conversation", self.conversation.id)
         expected = (
             f"[Async Test Discussion]"
-            f"(/c/asynclinkuser/async-test-corpus/discussions/{self.conversation.id})"
+            f"(/c/{self.user.username}/{self.corpus.slug}/discussions/{self.conversation.id})"
         )
         self.assertEqual(result, expected)
+
+    async def test_acreate_markdown_link_for_annotation_with_long_text(self):
+        """Test that async annotation titles are truncated if too long."""
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def create_long_annotation():
+            return Annotation.objects.create(
+                page=1,
+                raw_text="y" * 150,  # 150 characters
+                document=self.doc,
+                corpus=self.corpus,
+                creator=self.user,
+            )
+
+        long_annotation = await create_long_annotation()
+
+        result = await acreate_markdown_link("annotation", long_annotation.id)
+        # Title should be truncated to 100 chars (97 + "...")
+        self.assertIn("yyy...", result)
+        self.assertLess(
+            len(result.split("]")[0]), 110
+        )  # Title part should be < 110 chars
+
+    async def test_acreate_markdown_link_for_annotation_without_raw_text(self):
+        """Test that async annotations without raw_text get a generic label."""
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def create_annotation():
+            return Annotation.objects.create(
+                page=1,
+                raw_text=None,
+                document=self.doc,
+                corpus=self.corpus,
+                creator=self.user,
+            )
+
+        annotation_no_text = await create_annotation()
+
+        result = await acreate_markdown_link("annotation", annotation_no_text.id)
+        self.assertIn(f"Annotation {annotation_no_text.id}", result)
+
+    async def test_acreate_markdown_link_for_annotation_standalone_doc(self):
+        """Test async annotation link for a standalone document (no corpus)."""
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def create_standalone_objects():
+            standalone_doc = Document.objects.create(
+                creator=self.user,
+                title="Async Standalone Doc",
+                slug="async-standalone-doc",
+            )
+            standalone_annotation = Annotation.objects.create(
+                page=1,
+                raw_text="Async Standalone annotation",
+                document=standalone_doc,
+                corpus=None,  # No corpus
+                creator=self.user,
+            )
+            return standalone_doc, standalone_annotation
+
+        standalone_doc, standalone_annotation = await create_standalone_objects()
+
+        result = await acreate_markdown_link("annotation", standalone_annotation.id)
+        expected = (
+            f"[Async Standalone annotation]"
+            f"(/d/{self.user.username}/async-standalone-doc?ann={standalone_annotation.id})"
+        )
+        self.assertEqual(result, expected)
+
+    async def test_acreate_markdown_link_for_document_standalone(self):
+        """Test async creation of standalone document markdown link (no corpus)."""
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def create_standalone_doc():
+            return Document.objects.create(
+                creator=self.user,
+                title="Async Standalone Document",
+                slug="async-standalone-document",
+            )
+
+        standalone_doc = await create_standalone_doc()
+
+        result = await acreate_markdown_link("document", standalone_doc.id)
+        expected = f"[Async Standalone Document](/d/{self.user.username}/async-standalone-document)"
+        self.assertEqual(result, expected)
+
+    async def test_acreate_markdown_link_for_corpus_without_title(self):
+        """Test that async entities without titles get generic labels."""
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def create_corpus():
+            return Corpus.objects.create(
+                title="",
+                slug="async-corpus-no-title",
+                creator=self.user,
+            )
+
+        corpus_no_title = await create_corpus()
+
+        result = await acreate_markdown_link("corpus", corpus_no_title.id)
+        self.assertIn(f"Corpus {corpus_no_title.id}", result)
+
+    async def test_acreate_markdown_link_for_document_without_title(self):
+        """Test that async documents without titles get generic labels."""
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def create_doc():
+            return Document.objects.create(
+                creator=self.user,
+                title="",
+                slug="async-doc-no-title",
+            )
+
+        doc_no_title = await create_doc()
+
+        result = await acreate_markdown_link("document", doc_no_title.id)
+        self.assertIn(f"Document {doc_no_title.id}", result)
+
+    async def test_acreate_markdown_link_for_conversation_without_title(self):
+        """Test that async conversations without titles get generic labels."""
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def create_conversation():
+            return Conversation.objects.create(
+                title="",
+                chat_with_corpus=self.corpus,
+                creator=self.user,
+            )
+
+        conversation_no_title = await create_conversation()
+
+        result = await acreate_markdown_link("conversation", conversation_no_title.id)
+        self.assertIn(f"Discussion {conversation_no_title.id}", result)
 
     # -------------------------------------------------------------------------
     # Failure Cases
@@ -2348,3 +2516,23 @@ class AsyncTestCreateMarkdownLink(TransactionTestCase):
             "Conversation with id=888888 does not exist",
         ):
             await acreate_markdown_link("conversation", 888888)
+
+    async def test_acreate_markdown_link_conversation_without_corpus(self):
+        """Test that async conversation without corpus raises ValueError."""
+        from channels.db import database_sync_to_async
+
+        @database_sync_to_async
+        def create_conversation():
+            return Conversation.objects.create(
+                title="Async No Corpus Conversation",
+                chat_with_corpus=None,
+                creator=self.user,
+            )
+
+        conversation_no_corpus = await create_conversation()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            f"Conversation {conversation_no_corpus.id} has no associated corpus",
+        ):
+            await acreate_markdown_link("conversation", conversation_no_corpus.id)
