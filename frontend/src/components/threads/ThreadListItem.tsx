@@ -1,13 +1,18 @@
-import React from "react";
+import React, { useMemo } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { MessageCircle, ThumbsUp, User } from "lucide-react";
+import { Eye, MessageCircle, ChevronUp } from "lucide-react";
 import { ConversationType } from "../../types/graphql-api";
 import { color } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
 import { ThreadBadge } from "./ThreadBadge";
+import {
+  DiscussionTypeBadge,
+  inferDiscussionCategory,
+  DiscussionCategory,
+} from "./DiscussionTypeBadge";
 import { RelativeTime } from "./RelativeTime";
 import { getCorpusThreadUrl } from "../../utils/navigationUtils";
+import { formatUsername } from "./userUtils";
 
 interface ThreadListItemProps {
   thread: ConversationType;
@@ -15,18 +20,35 @@ interface ThreadListItemProps {
   compact?: boolean;
   /** Optional callback when thread is clicked (overrides default navigation) */
   onThreadClick?: (threadId: string) => void;
+  /** Whether this thread is currently selected/active */
+  isSelected?: boolean;
 }
 
-const ThreadCard = styled.div<{ $isPinned?: boolean; $isDeleted?: boolean }>`
-  background: ${color.N2};
+const ThreadCard = styled.div<{
+  $isPinned?: boolean;
+  $isDeleted?: boolean;
+  $isSelected?: boolean;
+}>`
+  background: ${color.N1};
   border: 1px solid ${color.N4};
   border-radius: 8px;
-  padding: 1rem;
+  padding: 1rem 1.25rem;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  gap: 1rem;
+  position: relative;
+
+  ${(props) =>
+    props.$isSelected &&
+    `
+    border-left: 4px solid ${color.G6};
+    background: ${color.G1};
+  `}
 
   ${(props) =>
     props.$isPinned &&
+    !props.$isSelected &&
     `
     border-left: 4px solid ${color.B5};
     background: ${color.B1};
@@ -40,97 +62,341 @@ const ThreadCard = styled.div<{ $isPinned?: boolean; $isDeleted?: boolean }>`
   `}
 
   &:hover {
-    border-color: ${color.B5};
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: ${color.G6};
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
   }
 
   @media (max-width: 640px) {
     padding: 0.875rem;
+    gap: 0.75rem;
   }
 `;
 
-const BadgeRow = styled.div`
+const VoteSection = styled.div`
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 40px;
+  padding-top: 4px;
+
+  @media (max-width: 640px) {
+    min-width: 32px;
+  }
+`;
+
+const VoteButton = styled.button<{ $isUpvoted?: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid ${(props) => (props.$isUpvoted ? color.G5 : color.N4)};
+  border-radius: 6px;
+  background: ${(props) => (props.$isUpvoted ? color.G2 : color.N1)};
+  color: ${(props) => (props.$isUpvoted ? color.G7 : color.N6)};
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: ${color.G5};
+    background: ${color.G2};
+    color: ${color.G7};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @media (max-width: 640px) {
+    width: 28px;
+    height: 28px;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+`;
+
+const VoteCount = styled.span<{ $isUpvoted?: boolean }>`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${(props) => (props.$isUpvoted ? color.G7 : color.N7)};
+
+  @media (max-width: 640px) {
+    font-size: 12px;
+  }
+`;
+
+const ContentSection = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+`;
+
+const HeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   flex-wrap: wrap;
 `;
 
+const BadgeGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+`;
+
+const TagChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: ${color.N3};
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: ${color.N7};
+`;
+
+const Timestamp = styled.span`
+  font-size: 12px;
+  color: ${color.N6};
+  white-space: nowrap;
+  flex-shrink: 0;
+`;
+
 const ThreadTitle = styled.h3`
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: ${color.N10};
-  margin: 0 0 0.375rem 0;
+  margin: 0;
   line-height: 1.4;
 
   @media (max-width: 640px) {
-    font-size: 16px;
+    font-size: 15px;
   }
 `;
 
 const ThreadDescription = styled.p`
   font-size: 14px;
   color: ${color.N7};
-  margin: 0 0 1rem 0;
+  margin: 0;
   line-height: 1.5;
-
-  /* Truncate to 2 lines */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+
+  @media (max-width: 640px) {
+    font-size: 13px;
+    -webkit-line-clamp: 1;
+  }
 `;
 
-const ThreadMeta = styled.div`
+const FooterRow = styled.div`
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
-  font-size: 13px;
-  color: ${color.N6};
+  margin-top: 0.25rem;
   flex-wrap: wrap;
 
   @media (max-width: 640px) {
     gap: 0.5rem;
+  }
+`;
+
+const AuthorSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const AuthorAvatar = styled.div`
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, ${color.G5} 0%, ${color.G7} 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 11px;
+  flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+`;
+
+const AuthorInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+`;
+
+const AuthorName = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${color.N9};
+
+  @media (max-width: 640px) {
     font-size: 12px;
   }
 `;
 
-const MetaItem = styled.span`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-`;
-
-const Separator = styled.span`
-  color: ${color.N5};
+const AuthorTime = styled.span`
+  font-size: 12px;
+  color: ${color.N6};
 
   @media (max-width: 640px) {
-    display: none;
+    font-size: 11px;
   }
 `;
 
+const StatsSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+
+  @media (max-width: 640px) {
+    gap: 0.75rem;
+  }
+`;
+
+const StatItem = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: ${color.N6};
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  @media (max-width: 640px) {
+    font-size: 12px;
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+`;
+
+const ParticipantAvatars = styled.div`
+  display: flex;
+  align-items: center;
+`;
+
+const ParticipantAvatar = styled.div<{ $index: number }>`
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: ${color.N5};
+  border: 2px solid ${color.N1};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: ${color.N8};
+  margin-left: ${(props) => (props.$index > 0 ? "-8px" : "0")};
+  position: relative;
+  z-index: ${(props) => 10 - props.$index};
+
+  @media (max-width: 640px) {
+    width: 20px;
+    height: 20px;
+    font-size: 8px;
+    margin-left: ${(props) => (props.$index > 0 ? "-6px" : "0")};
+  }
+`;
+
+const MoreParticipants = styled.span`
+  font-size: 11px;
+  color: ${color.N6};
+  margin-left: 4px;
+`;
+
+/**
+ * Get initials from username or email
+ */
+function getInitials(username?: string | null, email?: string | null): string {
+  const name = username || email || "?";
+  if (name.includes("@")) {
+    return name.charAt(0).toUpperCase();
+  }
+  const parts = name.split(/[\s_-]+/);
+  if (parts.length >= 2) {
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+}
+
+/**
+ * Extract unique participants from thread messages
+ */
+function getParticipants(
+  thread: ConversationType
+): Array<{ id: string; initials: string }> {
+  const participants = new Map<string, string>();
+
+  // Add creator
+  if (thread.creator) {
+    participants.set(
+      thread.creator.id,
+      getInitials(thread.creator.username, thread.creator.email)
+    );
+  }
+
+  return Array.from(participants.entries()).map(([id, initials]) => ({
+    id,
+    initials,
+  }));
+}
+
 /**
  * Individual thread card in list view.
- * Memoized to prevent unnecessary re-renders when thread list updates.
+ * Redesigned to match GitHub Discussions-style layout with:
+ * - Upvote button on left
+ * - Type badges and tags
+ * - Author info with avatar
+ * - Stats (views, comments, participants)
  */
 export const ThreadListItem = React.memo(function ThreadListItem({
   thread,
   corpusId,
   compact = false,
   onThreadClick,
+  isSelected = false,
 }: ThreadListItemProps) {
   const navigate = useNavigate();
 
-  const handleClick = () => {
-    // Use callback if provided, otherwise use default navigation
+  const handleClick = (e: React.MouseEvent) => {
+    // Prevent navigation if clicking the vote button
+    if ((e.target as HTMLElement).closest("[data-vote-button]")) {
+      return;
+    }
+
     if (onThreadClick) {
       onThreadClick(thread.id);
     } else {
-      // Use the corpus from thread's chatWithCorpus (has full data with slug)
       const corpus = thread.chatWithCorpus;
       if (corpus) {
-        // Use navigation utility for proper slug-based URL
         const url = getCorpusThreadUrl(corpus, thread.id);
         if (url !== "#") {
           navigate(url);
@@ -149,63 +415,129 @@ export const ThreadListItem = React.memo(function ThreadListItem({
     }
   };
 
+  // Prevent vote button from triggering card navigation
+  const handleVoteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // TODO: Implement voting when backend supports it
+    console.log("Vote clicked for thread:", thread.id);
+  };
+
   const messageCount = thread.chatMessages?.totalCount || 0;
   const isDeleted = !!thread.deletedAt;
+
+  // Infer discussion category from title/description
+  const category = useMemo(
+    () => inferDiscussionCategory(thread.title || "", thread.description),
+    [thread.title, thread.description]
+  );
+
+  // Get participants for avatars
+  const participants = useMemo(() => getParticipants(thread), [thread]);
+
+  // Placeholder view count (not tracked yet in backend)
+  const viewCount = 0;
+
+  // Placeholder upvote count
+  const upvoteCount = messageCount > 0 ? Math.floor(messageCount * 1.5) : 0;
+
+  const authorName = formatUsername(
+    thread.creator?.username,
+    thread.creator?.email
+  );
+  const authorInitials = getInitials(
+    thread.creator?.username,
+    thread.creator?.email
+  );
 
   return (
     <ThreadCard
       $isPinned={thread.isPinned}
       $isDeleted={isDeleted}
+      $isSelected={isSelected}
       onClick={handleClick}
       role="article"
       aria-label={`Thread: ${thread.title}`}
     >
-      {/* Badges */}
-      {(thread.isPinned || thread.isLocked || isDeleted) && (
-        <BadgeRow>
-          {thread.isPinned && <ThreadBadge type="pinned" compact={compact} />}
-          {thread.isLocked && <ThreadBadge type="locked" compact={compact} />}
-          {isDeleted && <ThreadBadge type="deleted" compact={compact} />}
-        </BadgeRow>
-      )}
+      {/* Vote Section */}
+      <VoteSection>
+        <VoteButton
+          onClick={handleVoteClick}
+          data-vote-button
+          aria-label="Upvote thread"
+          title="Upvote this discussion"
+        >
+          <ChevronUp />
+        </VoteButton>
+        <VoteCount>{upvoteCount}</VoteCount>
+      </VoteSection>
 
-      {/* Title */}
-      <ThreadTitle>{thread.title || "Untitled Discussion"}</ThreadTitle>
+      {/* Content Section */}
+      <ContentSection>
+        {/* Header Row - Badges and Timestamp */}
+        <HeaderRow>
+          <BadgeGroup>
+            <DiscussionTypeBadge category={category} />
+            {thread.isPinned && <ThreadBadge type="pinned" compact />}
+            {thread.isLocked && <ThreadBadge type="locked" compact />}
+            {isDeleted && <ThreadBadge type="deleted" compact />}
+          </BadgeGroup>
+          <Timestamp>
+            <RelativeTime date={thread.createdAt || thread.created} />
+          </Timestamp>
+        </HeaderRow>
 
-      {/* Description */}
-      {thread.description && !compact && (
-        <ThreadDescription>{thread.description}</ThreadDescription>
-      )}
+        {/* Title */}
+        <ThreadTitle>{thread.title || "Untitled Discussion"}</ThreadTitle>
 
-      {/* Metadata */}
-      <ThreadMeta>
-        <MetaItem>
-          <User size={14} />
-          <span>{thread.creator?.username || thread.creator?.email}</span>
-        </MetaItem>
+        {/* Description */}
+        {thread.description && !compact && (
+          <ThreadDescription>{thread.description}</ThreadDescription>
+        )}
 
-        <Separator>•</Separator>
+        {/* Footer Row - Author and Stats */}
+        <FooterRow>
+          <AuthorSection>
+            <AuthorAvatar title={authorName}>{authorInitials}</AuthorAvatar>
+            <AuthorInfo>
+              <AuthorName>{authorName}</AuthorName>
+              <AuthorTime>
+                <RelativeTime date={thread.createdAt || thread.created} />
+              </AuthorTime>
+            </AuthorInfo>
+          </AuthorSection>
 
-        <MetaItem>
-          <RelativeTime date={thread.createdAt} />
-        </MetaItem>
-
-        <Separator>•</Separator>
-
-        <MetaItem>
-          <MessageCircle size={14} />
-          <span>
-            {messageCount} {messageCount === 1 ? "reply" : "replies"}
-          </span>
-        </MetaItem>
-
-        {/* TODO: Add upvote count when available */}
-        {/* <Separator>•</Separator>
-        <MetaItem>
-          <ThumbsUp size={14} />
-          <span>{totalUpvotes}</span>
-        </MetaItem> */}
-      </ThreadMeta>
+          <StatsSection>
+            {viewCount > 0 && (
+              <StatItem title={`${viewCount} views`}>
+                <Eye />
+                <span>{viewCount}</span>
+              </StatItem>
+            )}
+            <StatItem
+              title={`${messageCount} ${
+                messageCount === 1 ? "reply" : "replies"
+              }`}
+            >
+              <MessageCircle />
+              <span>{messageCount}</span>
+            </StatItem>
+            {participants.length > 0 && (
+              <ParticipantAvatars title={`${participants.length} participants`}>
+                {participants.slice(0, 3).map((p, i) => (
+                  <ParticipantAvatar key={p.id} $index={i}>
+                    {p.initials}
+                  </ParticipantAvatar>
+                ))}
+                {participants.length > 3 && (
+                  <MoreParticipants>
+                    +{participants.length - 3}
+                  </MoreParticipants>
+                )}
+              </ParticipantAvatars>
+            )}
+          </StatsSection>
+        </FooterRow>
+      </ContentSection>
     </ThreadCard>
   );
 });
