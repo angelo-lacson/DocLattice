@@ -4,6 +4,7 @@ import { MessageItem } from "./MessageItem";
 import { ReplyForm } from "./ReplyForm";
 import { UserBadgeType } from "../../types/graphql-api";
 import { PermissionTypes } from "../types";
+import { formatUsername } from "./userUtils";
 
 /**
  * Props for the MessageTree component.
@@ -26,6 +27,8 @@ interface MessageTreeProps {
   onMessageUpdated?: () => void;
   /** Callback after successful message deletion */
   onMessageDeleted?: () => void;
+  /** Parent message author for "Replying to" display (for nested messages) */
+  parentAuthor?: string;
 }
 
 /**
@@ -46,6 +49,7 @@ export const MessageTree = React.memo(function MessageTree({
   corpusId,
   onMessageUpdated,
   onMessageDeleted,
+  parentAuthor,
 }: MessageTreeProps) {
   /**
    * Determines if a user can edit/delete a message.
@@ -118,6 +122,8 @@ export const MessageTree = React.memo(function MessageTree({
               conversationId={conversationId}
               onMessageUpdated={onMessageUpdated}
               onMessageDeleted={onMessageDeleted}
+              currentUserId={currentUserId}
+              parentAuthor={parentAuthor}
             />
 
             {/* Render reply form if replying to this message */}
@@ -160,6 +166,10 @@ export const MessageTree = React.memo(function MessageTree({
                 corpusId={corpusId}
                 onMessageUpdated={onMessageUpdated}
                 onMessageDeleted={onMessageDeleted}
+                parentAuthor={formatUsername(
+                  message.creator?.username,
+                  message.creator?.email
+                )}
               />
             )}
           </React.Fragment>

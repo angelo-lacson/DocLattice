@@ -1507,6 +1507,11 @@ export type ConversationType = Node & {
   isPublic?: Scalars["Boolean"];
   myPermissions?: PermissionTypes[];
 
+  // Voting fields
+  upvoteCount?: Scalars["Int"];
+  downvoteCount?: Scalars["Int"];
+  userVote?: Maybe<Scalars["String"]>; // "UPVOTE", "DOWNVOTE", or null
+
   // Moderation fields
   isLocked?: Scalars["Boolean"];
   lockedBy?: Maybe<UserType>;

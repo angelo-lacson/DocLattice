@@ -2479,6 +2479,9 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     conversation_type = graphene.Field(
         ConversationTypeEnum, description="Type of conversation (chat or thread)"
     )
+    user_vote = graphene.String(
+        description="Current user's vote on this conversation: 'UPVOTE', 'DOWNVOTE', or null"
+    )
 
     def resolve_all_messages(self, info):
         return self.chat_messages.all()
@@ -2487,6 +2490,26 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """Convert string conversation_type from model to enum."""
         if self.conversation_type:
             return ConversationTypeEnum.get(self.conversation_type)
+        return None
+
+    def resolve_user_vote(self, info):
+        """
+        Returns the current user's vote on this conversation/thread.
+
+        Returns:
+            'UPVOTE' if the user has upvoted the conversation
+            'DOWNVOTE' if the user has downvoted the conversation
+            None if the user has not voted or is not authenticated
+        """
+        user = info.context.user
+        if not user or not user.is_authenticated:
+            return None
+
+        from opencontractserver.conversations.models import ConversationVote
+
+        vote = ConversationVote.objects.filter(conversation=self, creator=user).first()
+        if vote:
+            return vote.vote_type.upper()  # Return 'UPVOTE' or 'DOWNVOTE'
         return None
 
     @classmethod

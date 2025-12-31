@@ -114,7 +114,12 @@ from config.graphql.smart_label_mutations import (
 )
 
 # Import voting mutations
-from config.graphql.voting_mutations import RemoveVoteMutation, VoteMessageMutation
+from config.graphql.voting_mutations import (
+    RemoveConversationVoteMutation,
+    RemoveVoteMutation,
+    VoteConversationMutation,
+    VoteMessageMutation,
+)
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import (
@@ -4898,6 +4903,8 @@ class Mutation(graphene.ObjectType):
     # VOTING MUTATIONS ###########################################################
     vote_message = VoteMessageMutation.Field()
     remove_vote = RemoveVoteMutation.Field()
+    vote_conversation = VoteConversationMutation.Field()
+    remove_conversation_vote = RemoveConversationVoteMutation.Field()
 
     # NOTIFICATION MUTATIONS #####################################################
     mark_notification_read = MarkNotificationReadMutation.Field()
