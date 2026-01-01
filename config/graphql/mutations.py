@@ -829,6 +829,35 @@ class AcceptCookieConsent(graphene.Mutation):
             )
 
 
+class DismissGettingStarted(graphene.Mutation):
+    """
+    Mutation to record when a user dismisses the Getting Started guide.
+    This preference is stored on the user model and persists across sessions.
+    """
+
+    class Arguments:
+        pass
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(root, info):
+        try:
+            user = info.context.user
+            user.dismissed_getting_started = True
+            user.save(update_fields=["dismissed_getting_started"])
+
+            return DismissGettingStarted(
+                ok=True, message="Getting Started guide dismissed successfully"
+            )
+        except Exception as e:
+            logger.error(f"Error dismissing Getting Started guide: {e}")
+            return DismissGettingStarted(
+                ok=False, message=f"Failed to dismiss Getting Started guide: {str(e)}"
+            )
+
+
 class AddDocumentsToCorpus(graphene.Mutation):
     """Add existing documents to a corpus.
 
@@ -4848,6 +4877,7 @@ class Mutation(graphene.ObjectType):
 
     # USER PREFERENCE MUTATIONS #################################################
     accept_cookie_consent = AcceptCookieConsent.Field()
+    dismiss_getting_started = DismissGettingStarted.Field()
 
     # ANALYSIS MUTATIONS #########################################################
     start_analysis_on_doc = StartDocumentAnalysisMutation.Field()
