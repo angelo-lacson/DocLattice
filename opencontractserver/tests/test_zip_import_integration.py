@@ -9,16 +9,14 @@ These tests verify:
 - Error handling and partial success scenarios
 """
 
-import base64
 import io
 import logging
 import zipfile
-from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from opencontractserver.corpuses.folder_service import DocumentFolderService
 from opencontractserver.corpuses.models import Corpus, CorpusFolder, TemporaryFileHandle
@@ -37,7 +35,9 @@ class TestCreateFolderStructureFromPaths(TestCase):
     def setUp(self):
         """Set up test user and corpus."""
         with transaction.atomic():
-            self.user = User.objects.create_user(username="testuser", password="testpass")
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass"
+            )
             self.other_user = User.objects.create_user(
                 username="other", password="testpass"
             )
@@ -48,7 +48,9 @@ class TestCreateFolderStructureFromPaths(TestCase):
                 description="Corpus for testing",
                 creator=self.user,
             )
-            set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
 
     def test_create_simple_folder_structure(self):
         """Create a simple folder structure from paths."""
@@ -165,7 +167,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
     def setUp(self):
         """Set up test user, corpus, and sample data."""
         with transaction.atomic():
-            self.user = User.objects.create_user(username="testuser", password="testpass")
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass"
+            )
 
         with transaction.atomic():
             self.corpus = Corpus.objects.create(
@@ -173,7 +177,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
                 description="Corpus for testing",
                 creator=self.user,
             )
-            set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
 
         # Sample PDF bytes
         self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
@@ -197,7 +203,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
 
     def test_import_simple_zip(self):
         """Import a simple zip with a few PDF files."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         files = {
             "file1.pdf": self.pdf_bytes,
@@ -228,7 +236,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
 
     def test_import_zip_with_folder_structure(self):
         """Import a zip with folder structure preserved."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         files = {
             "docs/contracts/file1.pdf": self.pdf_bytes,
@@ -250,7 +260,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
         self.assertTrue(result["completed"])
         self.assertTrue(result["success"])
         self.assertEqual(result["files_processed"], 3)
-        self.assertEqual(result["folders_created"], 4)  # docs, docs/contracts, docs/legal, other
+        self.assertEqual(
+            result["folders_created"], 4
+        )  # docs, docs/contracts, docs/legal, other
 
         # Verify folders exist
         folders = CorpusFolder.objects.filter(corpus=self.corpus)
@@ -270,7 +282,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
 
     def test_import_with_hidden_files_skipped(self):
         """Hidden files and __MACOSX entries are skipped."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         files = {
             "file1.pdf": self.pdf_bytes,
@@ -297,7 +311,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
 
     def test_import_with_unsupported_file_types(self):
         """Unsupported file types are skipped."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         # Use actual binary content that won't be detected as text/plain
         # EXE magic bytes (MZ header)
@@ -328,7 +344,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
 
     def test_import_with_text_files(self):
         """Plain text files are processed correctly."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         files = {
             "readme.txt": b"This is a plain text file for testing.",
@@ -354,7 +372,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
 
     def test_import_with_title_prefix(self):
         """Documents get title prefix when specified."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         files = {
             "file1.pdf": self.pdf_bytes,
@@ -378,7 +398,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
 
     def test_import_corpus_not_found(self):
         """Non-existent corpus ID returns error."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         files = {"file1.pdf": self.pdf_bytes}
         zip_buffer = self._create_test_zip(files)
@@ -399,7 +421,9 @@ class TestImportZipWithFolderStructureTask(TestCase):
 
     def test_import_with_target_folder(self):
         """Import into a specific target folder."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         # Create target folder
         target_folder = CorpusFolder.objects.create(
@@ -444,7 +468,9 @@ class TestZipValidationFailures(TestCase):
     def setUp(self):
         """Set up test user and corpus."""
         with transaction.atomic():
-            self.user = User.objects.create_user(username="testuser", password="testpass")
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass"
+            )
 
         with transaction.atomic():
             self.corpus = Corpus.objects.create(
@@ -474,7 +500,9 @@ class TestZipValidationFailures(TestCase):
 
     def test_path_traversal_files_skipped(self):
         """Files with path traversal attempts are skipped."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         # Create a zip with path traversal attempts
         # Note: zipfile module prevents literal ".." in filenames during creation
@@ -500,7 +528,9 @@ class TestZipValidationFailures(TestCase):
 
     def test_too_many_files_rejected(self):
         """Zip with too many files is rejected at validation."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
         from opencontractserver.utils import zip_security
 
         # Temporarily override the constant
@@ -523,13 +553,17 @@ class TestZipValidationFailures(TestCase):
 
             self.assertTrue(result["completed"])
             self.assertFalse(result["validation_passed"])
-            self.assertTrue(any("files" in e.lower() for e in result["validation_errors"]))
+            self.assertTrue(
+                any("files" in e.lower() for e in result["validation_errors"])
+            )
         finally:
             zip_security.ZIP_MAX_FILE_COUNT = original
 
     def test_oversized_files_skipped_not_rejected(self):
         """Individual oversized files are skipped, not rejected entirely."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
         from opencontractserver.utils import zip_security
 
         # Temporarily set a very small file size limit
@@ -561,13 +595,15 @@ class TestZipValidationFailures(TestCase):
             zip_security.ZIP_MAX_SINGLE_FILE_SIZE_BYTES = original
 
 
-class TestFolderReuseAcrossImports(TestCase):
-    """Tests for folder reuse behavior across multiple imports."""
+class TestDocumentUpversioning(TestCase):
+    """Tests for document upversioning on path collisions."""
 
     def setUp(self):
         """Set up test user and corpus."""
         with transaction.atomic():
-            self.user = User.objects.create_user(username="testuser", password="testpass")
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass"
+            )
 
         with transaction.atomic():
             self.corpus = Corpus.objects.create(
@@ -575,7 +611,167 @@ class TestFolderReuseAcrossImports(TestCase):
                 description="Corpus for testing",
                 creator=self.user,
             )
-            set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
+
+        self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
+
+    def _create_test_zip(self, files: dict[str, bytes]) -> io.BytesIO:
+        """Create an in-memory zip file for testing."""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        buffer.seek(0)
+        return buffer
+
+    def _create_temp_file_handle(self, zip_buffer: io.BytesIO) -> TemporaryFileHandle:
+        """Create a TemporaryFileHandle from a zip buffer."""
+        zip_content = ContentFile(zip_buffer.read(), name="test_import.zip")
+        handle = TemporaryFileHandle.objects.create(
+            file=zip_content,
+        )
+        return handle
+
+    def test_second_import_upversions_existing_document(self):
+        """Second import to same path creates new version, not duplicate."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # First import
+        files_1 = {"filing_data/test.pdf": self.pdf_bytes}
+        zip_1 = self._create_test_zip(files_1)
+        handle_1 = self._create_temp_file_handle(zip_1)
+
+        result_1 = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle_1.id,
+                "user_id": self.user.id,
+                "job_id": "test-upversion-1",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result_1["success"])
+        self.assertEqual(result_1["files_processed"], 1)
+        self.assertEqual(
+            result_1["files_upversioned"], 0
+        )  # First import, no upversioning
+
+        # Get the first document path
+        first_doc_path = DocumentPath.objects.get(
+            corpus=self.corpus,
+            path="/filing_data/test.pdf",
+            is_current=True,
+        )
+        self.assertEqual(first_doc_path.version_number, 1)
+
+        # Second import to same path
+        files_2 = {"filing_data/test.pdf": self.pdf_bytes}
+        zip_2 = self._create_test_zip(files_2)
+        handle_2 = self._create_temp_file_handle(zip_2)
+
+        result_2 = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle_2.id,
+                "user_id": self.user.id,
+                "job_id": "test-upversion-2",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result_2["success"])
+        self.assertEqual(result_2["files_processed"], 1)
+        self.assertEqual(result_2["files_upversioned"], 1)  # This should be upversioned
+        self.assertIn("/filing_data/test.pdf", result_2["upversioned_paths"])
+
+        # Verify version numbers
+        old_path = DocumentPath.objects.get(
+            corpus=self.corpus,
+            path="/filing_data/test.pdf",
+            version_number=1,
+        )
+        self.assertFalse(old_path.is_current)
+
+        new_path = DocumentPath.objects.get(
+            corpus=self.corpus,
+            path="/filing_data/test.pdf",
+            version_number=2,
+        )
+        self.assertTrue(new_path.is_current)
+        self.assertEqual(new_path.parent, old_path)
+
+    def test_upversioning_preserves_folder_structure(self):
+        """Upversioning works correctly with nested folder structures."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # First import with nested structure
+        files_1 = {
+            "contracts/legal/agreement.pdf": self.pdf_bytes,
+            "contracts/financial/report.pdf": self.pdf_bytes,
+        }
+        zip_1 = self._create_test_zip(files_1)
+        handle_1 = self._create_temp_file_handle(zip_1)
+
+        result_1 = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle_1.id,
+                "user_id": self.user.id,
+                "job_id": "test-upversion-nested-1",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result_1["success"])
+        self.assertEqual(result_1["files_processed"], 2)
+
+        # Second import replaces one file
+        files_2 = {
+            "contracts/legal/agreement.pdf": self.pdf_bytes,  # Upversion this
+        }
+        zip_2 = self._create_test_zip(files_2)
+        handle_2 = self._create_temp_file_handle(zip_2)
+
+        result_2 = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle_2.id,
+                "user_id": self.user.id,
+                "job_id": "test-upversion-nested-2",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result_2["success"])
+        self.assertEqual(result_2["files_processed"], 1)
+        self.assertEqual(result_2["files_upversioned"], 1)
+        self.assertEqual(
+            result_2["folders_reused"], 2
+        )  # contracts and contracts/legal reused
+
+
+class TestFolderReuseAcrossImports(TestCase):
+    """Tests for folder reuse behavior across multiple imports."""
+
+    def setUp(self):
+        """Set up test user and corpus."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass"
+            )
+
+        with transaction.atomic():
+            self.corpus = Corpus.objects.create(
+                title="Test Corpus",
+                description="Corpus for testing",
+                creator=self.user,
+            )
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
 
         self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
 
@@ -598,7 +794,9 @@ class TestFolderReuseAcrossImports(TestCase):
 
     def test_second_import_reuses_folders(self):
         """Second import to same paths reuses existing folders."""
-        from opencontractserver.tasks.import_tasks import import_zip_with_folder_structure
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
 
         # First import
         files_1 = {
@@ -644,7 +842,9 @@ class TestFolderReuseAcrossImports(TestCase):
 
         # Only docs/legal is new
         self.assertEqual(result_2["folders_created"], 1)
-        self.assertEqual(result_2["folders_reused"], 2)  # docs and docs/contracts reused
+        self.assertEqual(
+            result_2["folders_reused"], 2
+        )  # docs and docs/contracts reused
 
         # Verify same folder objects are used
         docs_folder_after = CorpusFolder.objects.get(corpus=self.corpus, name="docs")

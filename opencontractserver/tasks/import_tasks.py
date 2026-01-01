@@ -635,6 +635,7 @@ def import_zip_with_folder_structure(
         "files_skipped_hidden": 0,
         "files_skipped_path": 0,
         "files_errored": 0,
+        "files_upversioned": 0,  # Count of documents that replaced existing versions
         # Folder statistics
         "folders_created": 0,
         "folders_reused": 0,
@@ -642,6 +643,7 @@ def import_zip_with_folder_structure(
         "document_ids": [],
         "errors": [],
         "skipped_oversized": [],
+        "upversioned_paths": [],  # Paths where new versions replaced old ones
     }
 
     try:
@@ -806,6 +808,16 @@ def import_zip_with_folder_structure(
                         # File at zip root goes to target folder
                         doc_folder = target_folder
 
+                    # Build the document path for versioning
+                    # This enables collision detection and upversioning
+                    if target_folder:
+                        # Prepend target folder's path to the zip path
+                        target_path = target_folder.get_path()
+                        doc_path_str = f"{target_path}/{entry.sanitized_path}"
+                    else:
+                        # Use the sanitized path directly from the zip
+                        doc_path_str = f"/{entry.sanitized_path}"
+
                     # Create document based on file type
                     document = None
 
@@ -847,15 +859,22 @@ def import_zip_with_folder_structure(
                             user_obj, document, [PermissionTypes.CRUD]
                         )
 
-                        # Add to corpus with folder assignment
+                        # Add to corpus with folder assignment and path for versioning
+                        # If a document already exists at this path, it will be upversioned
                         added_doc, status, doc_path = corpus_obj.add_document(
                             document=document,
                             user=user_obj,
                             folder=doc_folder,
+                            path=doc_path_str,
                         )
 
                         results["files_processed"] += 1
                         results["document_ids"].append(str(added_doc.id))
+
+                        # Track upversioned documents
+                        if doc_path.version_number > 1:
+                            results["files_upversioned"] += 1
+                            results["upversioned_paths"].append(doc_path_str)
 
                         batch_count += 1
                         if batch_count % ZIP_DOCUMENT_BATCH_SIZE == 0:
@@ -887,6 +906,7 @@ def import_zip_with_folder_structure(
         logger.info(
             f"import_zip_with_folder_structure() - Completed job: {job_id}, "
             f"processed: {results['files_processed']}, "
+            f"upversioned: {results['files_upversioned']}, "
             f"folders created: {results['folders_created']}"
         )
 

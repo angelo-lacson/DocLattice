@@ -9,12 +9,10 @@ These tests verify the security measures that protect against:
 """
 
 import io
-import os
 import stat
 import zipfile
-from unittest import mock
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from opencontractserver.utils.zip_security import (
     ZipFileEntry,
@@ -311,7 +309,6 @@ class TestValidateZipForImport(TestCase):
         self.assertEqual(len(manifest.skipped_files), 1)
         self.assertIn("traversal", manifest.skipped_files[0].skip_reason.lower())
 
-    @override_settings(ZIP_MAX_FILE_COUNT=5)
     def test_too_many_files_rejected(self):
         """Zip with too many files is rejected."""
         # Need to reimport to pick up new settings

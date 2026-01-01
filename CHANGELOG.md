@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Optional target folder placement
   - Returns job_id for async tracking
   - Requires corpus EDIT permission
+- **Document upversioning on collision**: When importing a document to a path that already has a document, the new document becomes version 2 (or higher), with the previous version preserved in history
 - **Comprehensive test suites**:
   - Security tests (`opencontractserver/tests/test_zip_security.py`): 49 tests for path sanitization, validation, edge cases
   - Integration tests (`opencontractserver/tests/test_zip_import_integration.py`): 17 tests for task and folder service
