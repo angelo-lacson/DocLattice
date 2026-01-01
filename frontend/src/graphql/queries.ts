@@ -3741,6 +3741,14 @@ export const GET_NOTIFICATIONS = gql`
             id
             title
             conversationType
+            chatWithCorpus {
+              id
+              slug
+              creator {
+                id
+                slug
+              }
+            }
           }
         }
       }

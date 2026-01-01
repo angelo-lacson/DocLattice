@@ -614,74 +614,35 @@ export function CentralRouteManager() {
             routingLogger.debug("[RouteManager] Resolving thread");
 
             // First, resolve the corpus (needed for context and navigation)
+            // Use network-only to bypass any stale cache from before authentication
             const { data: corpusData, error: corpusError } =
               await resolveCorpus({
                 variables: {
                   userSlug: route.userIdent || "",
                   corpusSlug: route.corpusIdent,
                 },
+                fetchPolicy: "network-only", // Force network fetch for thread resolution
               });
 
             if (corpusError) {
-              console.error(
-                "[RouteManager] ❌ GraphQL error resolving corpus for thread:",
-                corpusError
+              routingLogger.warn(
+                "[RouteManager] Corpus query error for thread resolution:",
+                corpusError.message
               );
             }
 
-            // Then resolve the thread
-            console.log(
-              "[RouteManager] 🔍 Attempting to resolve thread:",
-              route.threadIdent
-            );
-
-            // Evict conversation from cache to force fresh fetch
-            try {
-              apolloClient.cache.evict({
-                id: apolloClient.cache.identify({
-                  __typename: "ConversationType",
-                  id: route.threadIdent,
-                }),
-              });
-              apolloClient.cache.gc();
-              console.log("[RouteManager] 🗑️  Evicted conversation from cache");
-            } catch (e) {
-              console.warn("[RouteManager] ⚠️  Cache eviction failed:", e);
-            }
-
+            // Then resolve the thread (network-only is configured in useLazyQuery)
             const { data, error } = await resolveThread({
               variables: {
                 conversationId: route.threadIdent,
               },
             });
 
-            console.log("[RouteManager] 📦 Thread query response:", {
-              hasData: !!data,
-              hasConversation: !!data?.conversation,
-              hasError: !!error,
-              data: data,
-              error: error,
-            });
-
             if (error) {
-              console.error(
-                "[RouteManager] ❌ GraphQL error resolving thread:",
-                error
+              routingLogger.warn(
+                "[RouteManager] Thread query error:",
+                error.message
               );
-              console.error("[RouteManager] Variables:", {
-                conversationId: route.threadIdent,
-              });
-              console.error(
-                "[RouteManager] Full error details:",
-                JSON.stringify(error, null, 2)
-              );
-            }
-
-            if (!data?.conversation) {
-              console.warn(
-                "[RouteManager] ⚠️  conversation is null or undefined"
-              );
-              console.warn("[RouteManager] Full data received:", data);
             }
 
             if (!error && data?.conversation && corpusData?.corpusBySlugs) {

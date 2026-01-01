@@ -6,7 +6,7 @@ import { PlaceholderCard } from "../placeholders/PlaceholderCard";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExtractType, CorpusType, PageInfo } from "../../types/graphql-api";
 import { useReactiveVar } from "@apollo/client";
-import { openedExtract, selectedExtractIds } from "../../graphql/cache";
+import { selectedExtractIds } from "../../graphql/cache";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { determineCardColCount } from "../../utils/layout";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
@@ -41,7 +41,6 @@ export const ExtractCards = ({
 
   // Use selectedExtractIds (URL-driven state) for multi-select
   const selected_extract_ids = useReactiveVar(selectedExtractIds);
-  const opened_extract = useReactiveVar(openedExtract);
 
   const toggleExtract = (selected_extract: ExtractType) => {
     if (selected_extract_ids.includes(selected_extract.id)) {
@@ -60,9 +59,8 @@ export const ExtractCards = ({
         extractIds: [...selected_extract_ids, selected_extract.id],
       });
     }
-
-    // Also update openedExtract for backward compatibility
-    openedExtract(selected_extract);
+    // NOTE: Do NOT set openedExtract() here - CentralRouteManager owns entity state.
+    // Selection is handled via selectedExtractIds (URL-driven).
   };
 
   const extract_items =
