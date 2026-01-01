@@ -89,7 +89,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("corpuses", "0034_add_corpus_category"),
-        ("users", "0001_initial"),  # Need User model for creator
+        ("users", "0023_add_dismissed_getting_started"),  # Depend on recent migration
     ]
 
     operations = [

@@ -839,25 +839,29 @@ class Query(graphene.ObjectType):
         Annotates corpus_count to avoid N+1 queries when rendering category lists.
         For anonymous users, counts only public corpuses. For authenticated users,
         counts all corpuses the user can see (public + those with permissions).
+
+        Uses Corpus.objects.visible_to_user() to ensure guardian permissions are
+        respected - users with explicit READ permissions on private corpuses will
+        see them in counts.
         """
-        from opencontractserver.corpuses.models import CorpusCategory
+        from django.db.models import OuterRef, Subquery
+
+        from opencontractserver.corpuses.models import Corpus, CorpusCategory
 
         user = info.context.user
 
-        # Build the filter for visible corpuses
-        if user.is_anonymous:
-            # Anonymous users only see public corpuses
-            corpus_filter = Q(corpuses__is_public=True)
-        elif user.is_superuser:
-            # Superusers see all corpuses
-            corpus_filter = Q(corpuses__isnull=False)
-        else:
-            # Authenticated users see public + corpuses they have permissions on
-            corpus_filter = Q(corpuses__is_public=True) | Q(corpuses__creator=user)
+        # Use Subquery with visible_to_user to properly respect guardian permissions
+        # This ensures users with explicit READ permissions on private corpuses
+        # see them in the category counts
+        visible_corpus_ids = (
+            Corpus.objects.visible_to_user(user)
+            .filter(categories=OuterRef("pk"))
+            .values("id")
+        )
 
-        # Annotate with filtered corpus count to avoid N+1 queries
+        # Count visible corpuses per category using Subquery
         categories = CorpusCategory.objects.annotate(
-            _corpus_count=Count("corpuses", filter=corpus_filter, distinct=True)
+            _corpus_count=Count(Subquery(visible_corpus_ids), distinct=True)
         ).order_by("sort_order", "name")
 
         return categories
