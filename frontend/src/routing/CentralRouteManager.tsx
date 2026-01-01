@@ -613,6 +613,22 @@ export function CentralRouteManager() {
           ) {
             routingLogger.debug("[RouteManager] Resolving thread");
 
+            // Evict any cached corpus data to ensure fresh fetch with current auth
+            // This prevents stale null responses from anonymous queries
+            try {
+              // Use cache.modify to evict the corpusBySlugs field
+              apolloClient.cache.evict({ fieldName: "corpusBySlugs" });
+              apolloClient.cache.gc();
+              routingLogger.debug(
+                "[RouteManager] 🗑️  Evicted corpusBySlugs from cache"
+              );
+            } catch (e) {
+              console.warn(
+                "[RouteManager] ⚠️  Cache eviction for corpus failed:",
+                e
+              );
+            }
+
             // First, resolve the corpus (needed for context and navigation)
             const { data: corpusData, error: corpusError } =
               await resolveCorpus({
@@ -620,12 +636,34 @@ export function CentralRouteManager() {
                   userSlug: route.userIdent || "",
                   corpusSlug: route.corpusIdent,
                 },
+                fetchPolicy: "network-only", // Force network fetch for thread resolution
               });
+
+            // Log corpus resolution result
+            console.log("[RouteManager] 📦 Corpus query response:", {
+              hasCorpusData: !!corpusData,
+              hasCocorpusBySlugs: !!corpusData?.corpusBySlugs,
+              hasError: !!corpusError,
+              variables: {
+                userSlug: route.userIdent,
+                corpusSlug: route.corpusIdent,
+              },
+            });
 
             if (corpusError) {
               console.error(
                 "[RouteManager] ❌ GraphQL error resolving corpus for thread:",
                 corpusError
+              );
+            }
+
+            if (!corpusData?.corpusBySlugs) {
+              console.warn(
+                "[RouteManager] ⚠️  Corpus not found for thread resolution:",
+                {
+                  userSlug: route.userIdent,
+                  corpusSlug: route.corpusIdent,
+                }
               );
             }
 

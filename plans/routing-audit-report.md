@@ -182,3 +182,35 @@ The following were identified but not changed in this remediation:
 - ✅ TypeScript compilation passes
 - ✅ Prettier formatting applied
 - ✅ All 10 critical/high/medium fixes applied
+
+---
+
+## ✅ ADDITIONAL FIX (2026-01-01) - Thread 404 Bug
+
+### Issue
+Clicking discussion links from the Discover page was resulting in 404 errors even for valid URLs.
+
+### Root Cause
+The `resolveCorpus` query in CentralRouteManager was using `cache-first` fetch policy. If a stale null result was cached (e.g., from before the user authenticated), it would be returned instead of making a fresh network request with the current auth token.
+
+### Fix Applied
+- **File**: `frontend/src/routing/CentralRouteManager.tsx`
+- **Changes**:
+  1. Added cache eviction for `corpusBySlugs` before thread resolution
+  2. Added `fetchPolicy: "network-only"` override for the corpus query in thread resolution
+  3. Added detailed logging to diagnose future issues
+
+### Technical Details
+```typescript
+// Evict any cached corpus data to ensure fresh fetch with current auth
+apolloClient.cache.evict({ fieldName: "corpusBySlugs" });
+apolloClient.cache.gc();
+
+// Force network fetch for thread resolution
+await resolveCorpus({
+  variables: { userSlug, corpusSlug },
+  fetchPolicy: "network-only",
+});
+```
+
+This mirrors the approach already used for thread resolution, which was working correctly because it used `network-only` policy.
