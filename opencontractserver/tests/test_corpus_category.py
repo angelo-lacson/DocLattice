@@ -29,12 +29,17 @@ User = get_user_model()
 class TestCorpusCategoryModel:
     """Test CorpusCategory model functionality."""
 
+    @pytest.fixture(autouse=True)
+    def clear_categories(self):
+        """Clear seeded categories before each test."""
+        CorpusCategory.objects.all().delete()
+
     def test_create_category(self):
         """Test basic category creation with all fields."""
         user = User.objects.create_user(username="testuser", password="test")
 
         category = CorpusCategory.objects.create(
-            name="Legislation",
+            name="Model Legislation",
             description="Legislative documents and bills",
             icon="scroll",
             color="#3B82F6",
@@ -42,7 +47,7 @@ class TestCorpusCategoryModel:
             creator=user,
         )
 
-        assert category.name == "Legislation"
+        assert category.name == "Model Legislation"
         assert category.description == "Legislative documents and bills"
         assert category.icon == "scroll"
         assert category.color == "#3B82F6"
@@ -54,11 +59,11 @@ class TestCorpusCategoryModel:
         user = User.objects.create_user(username="testuser", password="test")
 
         category = CorpusCategory.objects.create(
-            name="Contracts",
+            name="Model Contracts",
             creator=user,
         )
 
-        assert category.name == "Contracts"
+        assert category.name == "Model Contracts"
         assert category.description == ""
         assert category.icon == "folder"
         assert category.color == "#3B82F6"
@@ -69,25 +74,25 @@ class TestCorpusCategoryModel:
         user = User.objects.create_user(username="testuser", password="test")
 
         category = CorpusCategory.objects.create(
-            name="Legal Documents",
+            name="Model Legal Documents",
             creator=user,
         )
 
-        assert str(category) == "Legal Documents"
+        assert str(category) == "Model Legal Documents"
 
     def test_category_unique_name(self):
         """Test that category names must be unique."""
         user = User.objects.create_user(username="testuser", password="test")
 
         CorpusCategory.objects.create(
-            name="Contracts",
+            name="Model Unique Test",
             creator=user,
         )
 
         # Try to create another category with the same name - should fail
         with pytest.raises(Exception):  # IntegrityError or ValidationError
             CorpusCategory.objects.create(
-                name="Contracts",
+                name="Model Unique Test",
                 creator=user,
             )
 
@@ -97,16 +102,16 @@ class TestCorpusCategoryModel:
 
         # Create categories in random order
         cat_c = CorpusCategory.objects.create(
-            name="C Category", sort_order=2, creator=user
+            name="Model C Category", sort_order=2, creator=user
         )
         cat_a = CorpusCategory.objects.create(
-            name="A Category", sort_order=1, creator=user
+            name="Model A Category", sort_order=1, creator=user
         )
         cat_b = CorpusCategory.objects.create(
-            name="B Category", sort_order=1, creator=user
+            name="Model B Category", sort_order=1, creator=user
         )
         cat_d = CorpusCategory.objects.create(
-            name="D Category", sort_order=0, creator=user
+            name="Model D Category", sort_order=0, creator=user
         )
 
         # Query all categories
@@ -124,9 +129,9 @@ class TestCorpusCategoryModel:
 
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
 
-        cat1 = CorpusCategory.objects.create(name="Legal", creator=user)
-        cat2 = CorpusCategory.objects.create(name="Contracts", creator=user)
-        cat3 = CorpusCategory.objects.create(name="Legislation", creator=user)
+        cat1 = CorpusCategory.objects.create(name="Model Legal", creator=user)
+        cat2 = CorpusCategory.objects.create(name="Model Contracts", creator=user)
+        cat3 = CorpusCategory.objects.create(name="Model Legislation", creator=user)
 
         # Assign categories to corpus
         corpus.categories.add(cat1, cat2)
@@ -149,7 +154,7 @@ class TestCorpusCategoryModel:
         corpus = Corpus.objects.create(title="Multi-Category Corpus", creator=user)
 
         categories = [
-            CorpusCategory.objects.create(name=f"Category {i}", creator=user)
+            CorpusCategory.objects.create(name=f"Model Category {i}", creator=user)
             for i in range(5)
         ]
 
@@ -161,7 +166,7 @@ class TestCorpusCategoryModel:
         """Test a category can be assigned to multiple corpuses."""
         user = User.objects.create_user(username="testuser", password="test")
 
-        category = CorpusCategory.objects.create(name="Legal", creator=user)
+        category = CorpusCategory.objects.create(name="Model Legal Multi", creator=user)
 
         corpuses = [
             Corpus.objects.create(title=f"Corpus {i}", creator=user) for i in range(3)
@@ -177,8 +182,10 @@ class TestCorpusCategoryModel:
         user = User.objects.create_user(username="testuser", password="test")
 
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
-        cat1 = CorpusCategory.objects.create(name="Legal", creator=user)
-        cat2 = CorpusCategory.objects.create(name="Contracts", creator=user)
+        cat1 = CorpusCategory.objects.create(name="Model Legal Remove", creator=user)
+        cat2 = CorpusCategory.objects.create(
+            name="Model Contracts Remove", creator=user
+        )
 
         corpus.categories.add(cat1, cat2)
         assert corpus.categories.count() == 2
@@ -196,8 +203,8 @@ class TestCorpusCategoryModel:
 
         corpus = Corpus.objects.create(title="Test Corpus", creator=user)
 
-        cat1 = CorpusCategory.objects.create(name="Legal", creator=user)
-        cat2 = CorpusCategory.objects.create(name="Contracts", creator=user)
+        cat1 = CorpusCategory.objects.create(name="Model Legal Clear", creator=user)
+        cat2 = CorpusCategory.objects.create(name="Model Contracts Clear", creator=user)
 
         corpus.categories.add(cat1, cat2)
         assert corpus.categories.count() == 2
@@ -214,15 +221,18 @@ class TestCorpusCategoryGraphQLQueries(TestCase):
     @classmethod
     def setUpTestData(cls):
         """Create test data."""
+        # Clear any seeded categories to ensure test isolation
+        CorpusCategory.objects.all().delete()
+
         cls.user = User.objects.create_user(
             username="gql_user",
             password="testpass123",
             email="gql@test.com",
         )
 
-        # Create categories
+        # Create categories with unique names (prefixed to avoid conflicts)
         cls.cat1 = CorpusCategory.objects.create(
-            name="Legislation",
+            name="Test Legislation",
             description="Legislative documents",
             icon="scroll",
             color="#FF0000",
@@ -230,7 +240,7 @@ class TestCorpusCategoryGraphQLQueries(TestCase):
             creator=cls.user,
         )
         cls.cat2 = CorpusCategory.objects.create(
-            name="Contracts",
+            name="Test Contracts",
             description="Contract documents",
             icon="file-text",
             color="#00FF00",
@@ -238,7 +248,7 @@ class TestCorpusCategoryGraphQLQueries(TestCase):
             creator=cls.user,
         )
         cls.cat3 = CorpusCategory.objects.create(
-            name="Research",
+            name="Test Research",
             description="Research materials",
             icon="book",
             color="#0000FF",
@@ -306,14 +316,14 @@ class TestCorpusCategoryGraphQLQueries(TestCase):
         self.assertEqual(len(edges), 3)
 
         # Verify ordering (sort_order, then name)
-        # Research (0), Legislation (1), Contracts (2)
-        self.assertEqual(edges[0]["node"]["name"], "Research")
-        self.assertEqual(edges[1]["node"]["name"], "Legislation")
-        self.assertEqual(edges[2]["node"]["name"], "Contracts")
+        # Test Research (0), Test Legislation (1), Test Contracts (2)
+        self.assertEqual(edges[0]["node"]["name"], "Test Research")
+        self.assertEqual(edges[1]["node"]["name"], "Test Legislation")
+        self.assertEqual(edges[2]["node"]["name"], "Test Contracts")
 
         # Verify first category details
         first_category = edges[0]["node"]
-        self.assertEqual(first_category["name"], "Research")
+        self.assertEqual(first_category["name"], "Test Research")
         self.assertEqual(first_category["description"], "Research materials")
         self.assertEqual(first_category["icon"], "book")
         self.assertEqual(first_category["color"], "#0000FF")
@@ -347,14 +357,14 @@ class TestCorpusCategoryGraphQLQueries(TestCase):
         # Find categories by name and check counts
         categories_by_name = {edge["node"]["name"]: edge["node"] for edge in edges}
 
-        # Research: corpus2, corpus3 = 2 corpuses
-        self.assertEqual(categories_by_name["Research"]["corpusCount"], 2)
+        # Test Research: corpus2, corpus3 = 2 corpuses
+        self.assertEqual(categories_by_name["Test Research"]["corpusCount"], 2)
 
-        # Legislation: corpus1, corpus3 = 2 corpuses
-        self.assertEqual(categories_by_name["Legislation"]["corpusCount"], 2)
+        # Test Legislation: corpus1, corpus3 = 2 corpuses
+        self.assertEqual(categories_by_name["Test Legislation"]["corpusCount"], 2)
 
-        # Contracts: corpus1 = 1 corpus
-        self.assertEqual(categories_by_name["Contracts"]["corpusCount"], 1)
+        # Test Contracts: corpus1 = 1 corpus
+        self.assertEqual(categories_by_name["Test Contracts"]["corpusCount"], 1)
 
     def test_corpus_categories_field(self):
         """Test querying categories on a corpus."""
@@ -390,7 +400,7 @@ class TestCorpusCategoryGraphQLQueries(TestCase):
         self.assertEqual(len(categories), 2)
 
         category_names = {cat["name"] for cat in categories}
-        self.assertEqual(category_names, {"Legislation", "Contracts"})
+        self.assertEqual(category_names, {"Test Legislation", "Test Contracts"})
 
     def test_category_corpus_count_with_permissions(self):
         """Test corpusCount only includes visible corpuses."""
@@ -427,8 +437,8 @@ class TestCorpusCategoryGraphQLQueries(TestCase):
         edges = result["data"]["corpusCategories"]["edges"]
         categories_by_name = {edge["node"]["name"]: edge["node"] for edge in edges}
 
-        # Legislation should still show 2 (not 3) because private_corpus is not visible
-        self.assertEqual(categories_by_name["Legislation"]["corpusCount"], 2)
+        # Test Legislation should still show 2 (not 3) because private_corpus is not visible
+        self.assertEqual(categories_by_name["Test Legislation"]["corpusCount"], 2)
 
 
 class TestCorpusCategoryGraphQLMutations(TestCase):
@@ -437,23 +447,26 @@ class TestCorpusCategoryGraphQLMutations(TestCase):
     @classmethod
     def setUpTestData(cls):
         """Create test data."""
+        # Clear any seeded categories to ensure test isolation
+        CorpusCategory.objects.all().delete()
+
         cls.user = User.objects.create_user(
             username="gql_user",
             password="testpass123",
             email="gql@test.com",
         )
 
-        # Create categories
+        # Create categories with unique names
         cls.cat1 = CorpusCategory.objects.create(
-            name="Legislation",
+            name="Mut Legislation",
             creator=cls.user,
         )
         cls.cat2 = CorpusCategory.objects.create(
-            name="Contracts",
+            name="Mut Contracts",
             creator=cls.user,
         )
         cls.cat3 = CorpusCategory.objects.create(
-            name="Research",
+            name="Mut Research",
             creator=cls.user,
         )
 
@@ -772,6 +785,9 @@ class TestCorpusCategoryPermissions(TestCase):
     @classmethod
     def setUpTestData(cls):
         """Create test data."""
+        # Clear any seeded categories to ensure test isolation
+        CorpusCategory.objects.all().delete()
+
         cls.owner = User.objects.create_user(
             username="owner",
             password="testpass123",
@@ -782,7 +798,7 @@ class TestCorpusCategoryPermissions(TestCase):
         )
 
         cls.category = CorpusCategory.objects.create(
-            name="Legal",
+            name="Perm Legal",
             creator=cls.owner,
         )
 

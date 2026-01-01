@@ -844,24 +844,21 @@ class Query(graphene.ObjectType):
         respected - users with explicit READ permissions on private corpuses will
         see them in counts.
         """
-        from django.db.models import OuterRef, Subquery
-
         from opencontractserver.corpuses.models import Corpus, CorpusCategory
 
         user = info.context.user
 
-        # Use Subquery with visible_to_user to properly respect guardian permissions
-        # This ensures users with explicit READ permissions on private corpuses
-        # see them in the category counts
-        visible_corpus_ids = (
-            Corpus.objects.visible_to_user(user)
-            .filter(categories=OuterRef("pk"))
-            .values("id")
+        # Get IDs of all corpuses visible to this user
+        # This properly respects guardian permissions for shared private corpuses
+        visible_corpus_ids = list(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
         )
 
-        # Count visible corpuses per category using Subquery
+        # Count corpuses per category, filtering to only visible ones
         categories = CorpusCategory.objects.annotate(
-            _corpus_count=Count(Subquery(visible_corpus_ids), distinct=True)
+            _corpus_count=Count(
+                "corpuses", filter=Q(corpuses__id__in=visible_corpus_ids), distinct=True
+            )
         ).order_by("sort_order", "name")
 
         return categories
