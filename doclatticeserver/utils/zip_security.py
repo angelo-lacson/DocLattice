@@ -447,15 +447,17 @@ def validate_zip_for_import(
             )
 
         # Check compression ratio (potential zip bomb indicator)
+        # We log but don't reject because:
+        # 1. High ratios can be legitimate (e.g., highly compressible text)
+        # 2. Total uncompressed size is already bounded by ZIP_MAX_TOTAL_SIZE_BYTES
+        # 3. Individual file size is bounded by ZIP_MAX_SINGLE_FILE_SIZE_BYTES
         if info.compress_size > 0:
             ratio = info.file_size / info.compress_size
             if ratio > ZIP_MAX_COMPRESSION_RATIO:
                 logger.warning(
                     f"High compression ratio ({ratio:.1f}:1) for file: "
-                    f"{sanitized_path}"
+                    f"{sanitized_path} - monitoring for potential zip bomb"
                 )
-                # We don't reject here, but log for monitoring
-                # The file will be validated during streaming extraction
 
         entry = ZipFileEntry(
             original_path=info.filename,
