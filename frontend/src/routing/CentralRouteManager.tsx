@@ -31,6 +31,7 @@ import {
   routeLoading,
   routeError,
   authStatusVar,
+  authInitCompleteVar,
   showStructuralAnnotations,
   showSelectedAnnotationOnly,
   showAnnotationBoundingBoxes,
@@ -191,6 +192,7 @@ export function CentralRouteManager() {
   // PHASE 1: URL Path → Entity Resolution
   // ═══════════════════════════════════════════════════════════════
   const authStatus = useReactiveVar(authStatusVar);
+  const authInitComplete = useReactiveVar(authInitCompleteVar);
 
   useEffect(() => {
     const currentPath = location.pathname;
@@ -215,11 +217,14 @@ export function CentralRouteManager() {
       return;
     }
 
-    // CRITICAL: Wait for auth to initialize before fetching protected entities
-    // This prevents 401/403 errors on deep links and page refreshes
-    if (authStatus === "LOADING") {
+    // CRITICAL: Wait for auth initialization to complete before fetching entities.
+    // authInitCompleteVar is set AFTER cache operations complete in AuthGate.
+    // This prevents "Store reset while query was in flight" errors caused by
+    // queries starting while clearStore() is still running.
+    if (authStatus === "LOADING" || !authInitComplete) {
       routingLogger.debug(
-        "[RouteManager] ⏳ Waiting for auth to initialize before resolving entity..."
+        "[RouteManager] ⏳ Waiting for auth initialization to complete...",
+        { authStatus, authInitComplete }
       );
       routeLoading(true);
       // Don't update lastProcessedPath - we need to re-process when auth is ready
@@ -686,7 +691,7 @@ export function CentralRouteManager() {
     };
 
     resolveEntity();
-  }, [location.pathname, authStatus]); // Re-run when path OR auth status changes
+  }, [location.pathname, authStatus, authInitComplete]); // Re-run when path, auth status, or init complete changes
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 2: URL Query Params → Reactive Vars
