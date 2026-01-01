@@ -191,26 +191,39 @@ The following were identified but not changed in this remediation:
 Clicking discussion links from the Discover page was resulting in 404 errors even for valid URLs.
 
 ### Root Cause
-The `resolveCorpus` query in CentralRouteManager was using `cache-first` fetch policy. If a stale null result was cached (e.g., from before the user authenticated), it would be returned instead of making a fresh network request with the current auth token.
+Route resolution was starting immediately when `authStatusVar` changed to "AUTHENTICATED", but the cache reset in AuthGate was still in progress. This caused race conditions:
+1. AuthGate sets `authStatusVar("AUTHENTICATED")`
+2. CentralRouteManager's useEffect triggers, starts GraphQL queries
+3. AuthGate calls `clearStore()` (cache reset still in progress)
+4. Apollo throws "Store reset while query was in flight" error
 
 ### Fix Applied
 - **File**: `frontend/src/routing/CentralRouteManager.tsx`
 - **Changes**:
-  1. Added cache eviction for `corpusBySlugs` before thread resolution
-  2. Added `fetchPolicy: "network-only"` override for the corpus query in thread resolution
-  3. Added detailed logging to diagnose future issues
+  1. Added `authInitCompleteVar` dependency to route resolution
+  2. Route resolution now waits for `authInitComplete === true` before making queries
+  3. Added `fetchPolicy: "network-only"` for corpus query in thread resolution
 
 ### Technical Details
-```typescript
-// Evict any cached corpus data to ensure fresh fetch with current auth
-apolloClient.cache.evict({ fieldName: "corpusBySlugs" });
-apolloClient.cache.gc();
 
-// Force network fetch for thread resolution
-await resolveCorpus({
-  variables: { userSlug, corpusSlug },
-  fetchPolicy: "network-only",
-});
+**Initial Attempt (cache eviction) - FAILED:**
+The initial fix tried to evict cached data before the query, but this caused "Store reset while query was in flight" errors because cache eviction can disrupt active Apollo operations.
+
+**Final Fix (wait for authInitComplete):**
+```typescript
+// In CentralRouteManager.tsx:
+const authStatus = useReactiveVar(authStatusVar);
+const authInitComplete = useReactiveVar(authInitCompleteVar);
+
+// Wait for BOTH auth status AND auth init complete before queries
+if (authStatus === "LOADING" || !authInitComplete) {
+  routingLogger.debug(
+    "[RouteManager] ⏳ Waiting for auth initialization to complete...",
+    { authStatus, authInitComplete }
+  );
+  routeLoading(true);
+  return;
+}
 ```
 
-This mirrors the approach already used for thread resolution, which was working correctly because it used `network-only` policy.
+The key insight: `authStatusVar("AUTHENTICATED")` is set BEFORE the cache reset in AuthGate, but `authInitCompleteVar(true)` is set AFTER. By waiting for `authInitComplete`, route resolution only starts after all auth operations (including cache reset) are complete.
