@@ -63,6 +63,7 @@ import useWindowDimensions from "./components/hooks/WindowDimensionHook";
 import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { LabelDisplayBehavior } from "./types/graphql-api";
 import { CookieConsentDialog } from "./components/cookies/CookieConsent";
+import { initializeAnalyticsOnLoad } from "./utils/analytics";
 import { Extracts } from "./views/Extracts";
 import { BadgeManagement } from "./components/badges/BadgeManagement";
 import { GlobalSettingsPanel, GlobalAgentManagement } from "./components/admin";
@@ -240,7 +241,7 @@ export const App = () => {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Cookie consent initialization                                          */
+  /* Cookie consent and analytics initialization                            */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     // Run once on mount in browser to determine whether to display the
@@ -254,6 +255,9 @@ export const App = () => {
     if (showCookieAcceptModal() === false && !accepted) {
       showCookieAcceptModal(true);
     }
+
+    // Initialize PostHog analytics if consent was previously given
+    initializeAnalyticsOnLoad();
   }, []);
 
   return (
