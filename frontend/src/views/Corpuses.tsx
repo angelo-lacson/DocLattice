@@ -1596,6 +1596,18 @@ export const Corpuses = () => {
     debouncedAnalysisSearch.current(value);
   };
 
+  // Check for ?create=true query param to open the create corpus modal
+  // This allows linking directly to corpus creation from other pages (e.g., Discover page)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get("create") === "true") {
+      setShowNewCorpusModal(true);
+      // Remove the query param from URL to prevent reopening on refresh
+      const newUrl = location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [location.search]);
+
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Setup document resolvers and mutations
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1950,6 +1962,9 @@ export const Corpuses = () => {
     if (formData.icon !== undefined && formData.icon !== null) {
       variables.icon = formData.icon;
     }
+    if (formData.categories !== undefined) {
+      variables.categories = formData.categories;
+    }
 
     tryMutateCorpus({ variables });
   };
@@ -2005,6 +2020,9 @@ export const Corpuses = () => {
       variables.preferredEmbedder = formData.preferredEmbedder;
     if (formData.icon) {
       variables.icon = formData.icon;
+    }
+    if (formData.categories && formData.categories.length > 0) {
+      variables.categories = formData.categories;
     }
 
     tryCreateCorpus({ variables })

@@ -31,6 +31,7 @@ import { CorpusMetadataSettings } from "./CorpusMetadataSettings";
 import { CorpusAgentSettings } from "./CorpusAgentSettings";
 import { CorpusAgentManagement } from "./CorpusAgentManagement";
 import { ActionExecutionTrail } from "./ActionExecutionTrail";
+import { CategorySelector } from "./CategorySelector";
 import {
   UPDATE_CORPUS,
   UpdateCorpusInputs,
@@ -66,6 +67,14 @@ interface CorpusSettingsProps {
     };
     annotations?: {
       totalCount: number;
+    };
+    categories?: {
+      edges: Array<{
+        node: {
+          id: string;
+          name: string;
+        } | null;
+      } | null>;
     };
   };
 }
@@ -671,11 +680,19 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
     Boolean(corpus.isPublic)
   );
   const [originalSlug, setOriginalSlug] = useState<string>("");
+  const [categoriesDraft, setCategoriesDraft] = useState<string[]>([]);
+  const [originalCategories, setOriginalCategories] = useState<string[]>([]);
 
   useEffect(() => {
     setSlugDraft(corpus.slug || "");
     setOriginalSlug(corpus.slug || "");
     setPublicDraft(Boolean(corpus.isPublic));
+    const categories =
+      (corpus.categories?.edges
+        ?.map((edge) => edge?.node?.id)
+        .filter(Boolean) as string[]) || [];
+    setCategoriesDraft(categories);
+    setOriginalCategories(categories);
   }, [corpus]);
 
   const [updateCorpusMutation, { loading: updatingCorpus }] = useMutation<
@@ -688,6 +705,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
 
         // Update local state to reflect the saved value
         setOriginalSlug(slugDraft);
+        setOriginalCategories(categoriesDraft);
 
         // If slug was updated, navigate to the new URL
         if (slugDraft && slugDraft !== originalSlug && corpus.creator?.slug) {
@@ -697,12 +715,14 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
       } else {
         // Revert local state on failure
         setSlugDraft(originalSlug);
+        setCategoriesDraft(originalCategories);
         toast.error(data.updateCorpus?.message || "Failed to update corpus");
       }
     },
     onError: (err) => {
       // Revert local state on error
       setSlugDraft(originalSlug);
+      setCategoriesDraft(originalCategories);
       toast.error(err.message);
     },
     update: (cache, { data }) => {
@@ -1166,6 +1186,120 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
                   <Icon name="save" /> Save Changes
                 </Button>
               </div>
+            </div>
+          </MetadataContent>
+        </InfoSection>
+
+        <InfoSection>
+          <SectionHeader>
+            <SectionTitle>Categories</SectionTitle>
+          </SectionHeader>
+          <MetadataContent>
+            {!canUpdate && (
+              <div
+                style={{
+                  background:
+                    "linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)",
+                  border: "1px solid #fbbf24",
+                  borderRadius: "10px",
+                  padding: "1rem 1.25rem",
+                  marginBottom: "1.5rem",
+                  fontSize: "0.9375rem",
+                  color: "#92400e",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  boxShadow: "0 2px 8px rgba(251, 191, 36, 0.15)",
+                }}
+              >
+                <span style={{ fontSize: "1.25rem" }}>⚠️</span>
+                <span>
+                  You don't have permission to update categories. Contact the
+                  corpus owner for access.
+                </span>
+              </div>
+            )}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <div
+                style={{
+                  fontSize: "0.875rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: !canUpdate ? "#cbd5e1" : "#64748b",
+                  marginBottom: "0.75rem",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                Corpus Categories
+                {!canUpdate && (
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      background: "#f1f5f9",
+                      padding: "0.125rem 0.375rem",
+                      borderRadius: "4px",
+                      fontWeight: 500,
+                      textTransform: "none",
+                    }}
+                  >
+                    No permission
+                  </span>
+                )}
+              </div>
+              <CategorySelector
+                selectedIds={categoriesDraft}
+                onChange={setCategoriesDraft}
+                disabled={!canUpdate}
+              />
+              <div
+                style={{
+                  fontSize: "0.875rem",
+                  color: "#64748b",
+                  marginTop: "0.5rem",
+                }}
+              >
+                Select one or more categories to organize this corpus.
+              </div>
+            </div>
+            <div>
+              <Button
+                primary
+                loading={updatingCorpus}
+                disabled={
+                  !canUpdate ||
+                  JSON.stringify([...categoriesDraft].sort()) ===
+                    JSON.stringify([...originalCategories].sort())
+                }
+                onClick={() => {
+                  updateCorpusMutation({
+                    variables: {
+                      id: corpus.id,
+                      categories: categoriesDraft,
+                    },
+                  });
+                }}
+                style={{
+                  background: !canUpdate
+                    ? "#e2e8f0"
+                    : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                  color: !canUpdate ? "#94a3b8" : "white",
+                  border: "none",
+                  padding: "0.875rem 2rem",
+                  borderRadius: "10px",
+                  fontWeight: 600,
+                  fontSize: "0.9375rem",
+                  cursor: !canUpdate ? "not-allowed" : "pointer",
+                  boxShadow: !canUpdate
+                    ? "none"
+                    : "0 4px 14px rgba(99, 102, 241, 0.25)",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <Icon name="save" /> Save Categories
+              </Button>
             </div>
           </MetadataContent>
         </InfoSection>

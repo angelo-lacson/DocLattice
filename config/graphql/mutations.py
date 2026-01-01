@@ -829,6 +829,35 @@ class AcceptCookieConsent(graphene.Mutation):
             )
 
 
+class DismissGettingStarted(graphene.Mutation):
+    """
+    Mutation to record when a user dismisses the Getting Started guide.
+    This preference is stored on the user model and persists across sessions.
+    """
+
+    class Arguments:
+        pass
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(root, info):
+        try:
+            user = info.context.user
+            user.dismissed_getting_started = True
+            user.save(update_fields=["dismissed_getting_started"])
+
+            return DismissGettingStarted(
+                ok=True, message="Getting Started guide dismissed successfully"
+            )
+        except Exception as e:
+            logger.error(f"Error dismissing Getting Started guide: {e}")
+            return DismissGettingStarted(
+                ok=False, message=f"Failed to dismiss Getting Started guide: {str(e)}"
+            )
+
+
 class AddDocumentsToCorpus(graphene.Mutation):
     """Add existing documents to a corpus.
 
@@ -2636,7 +2665,7 @@ class DeleteMultipleLabelMutation(graphene.Mutation):
 
 class CreateCorpusMutation(DRFMutation):
     class IOSettings:
-        pk_fields = ["label_set"]
+        pk_fields = ["label_set", "categories"]
         serializer = CorpusSerializer
         model = Corpus
         graphene_model = CorpusType
@@ -2648,6 +2677,9 @@ class CreateCorpusMutation(DRFMutation):
         label_set = graphene.String(required=False)
         preferred_embedder = graphene.String(required=False)
         slug = graphene.String(required=False)
+        categories = graphene.List(
+            graphene.ID, required=False, description="Category IDs to assign"
+        )
 
     @classmethod
     def mutate(cls, root, info, *args, **kwargs):
@@ -2677,7 +2709,7 @@ class CreateCorpusMutation(DRFMutation):
 class UpdateCorpusMutation(DRFMutation):
     class IOSettings:
         lookup_field = "id"
-        pk_fields = ["label_set"]
+        pk_fields = ["label_set", "categories"]
         serializer = CorpusSerializer
         model = Corpus
         graphene_model = CorpusType
@@ -2694,6 +2726,11 @@ class UpdateCorpusMutation(DRFMutation):
         # This prevents bypassing permission checks via UpdateCorpusMutation
         corpus_agent_instructions = graphene.String(required=False)
         document_agent_instructions = graphene.String(required=False)
+        categories = graphene.List(
+            graphene.ID,
+            required=False,
+            description="Category IDs to assign (replaces existing)",
+        )
 
 
 class UpdateMe(graphene.Mutation):
@@ -4840,6 +4877,7 @@ class Mutation(graphene.ObjectType):
 
     # USER PREFERENCE MUTATIONS #################################################
     accept_cookie_consent = AcceptCookieConsent.Field()
+    dismiss_getting_started = DismissGettingStarted.Field()
 
     # ANALYSIS MUTATIONS #########################################################
     start_analysis_on_doc = StartDocumentAnalysisMutation.Field()
