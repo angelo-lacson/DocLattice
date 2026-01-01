@@ -6,3 +6,4 @@ and hardcoded values scattered throughout the codebase.
 """
 
 from doclatticeserver.constants.moderation import *  # noqa: F401, F403
+from doclatticeserver.constants.zip_import import *  # noqa: F401, F403
