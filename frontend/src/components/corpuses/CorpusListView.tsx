@@ -25,6 +25,7 @@ import {
   exportingCorpus,
   showAnalyzerSelectionForCorpus,
   authToken,
+  userObj,
 } from "../../graphql/cache";
 import {
   StartForkCorpusInput,
@@ -238,8 +239,7 @@ const FolderIcon = () => (
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function mapCategoryToType(corpus: CorpusType): CollectionType {
-  const categoryName =
-    (corpus as any).categories?.[0]?.name?.toLowerCase() || "";
+  const categoryName = corpus.categories?.[0]?.name?.toLowerCase() || "";
   if (categoryName.includes("legislation")) return "legislation";
   if (categoryName.includes("contract")) return "contracts";
   if (categoryName.includes("case") || categoryName.includes("law"))
@@ -262,10 +262,8 @@ function getVisibilityStatus(
 function formatStats(corpus: CorpusType): string[] {
   const stats: string[] = [];
   const docCount =
-    (corpus.documents as any)?.totalCount ||
-    corpus.documents?.edges?.length ||
-    0;
-  const annCount = (corpus.annotations as any)?.totalCount || 0;
+    corpus.documents?.totalCount || corpus.documents?.edges?.length || 0;
+  const annCount = corpus.annotations?.totalCount || 0;
 
   if (docCount > 0)
     stats.push(`${docCount} ${docCount === 1 ? "doc" : "docs"}`);
@@ -278,12 +276,11 @@ function formatStats(corpus: CorpusType): string[] {
 
   // Add labelset name + label count together
   if (corpus.labelSet) {
-    const labelSet = corpus.labelSet as any;
     const totalLabels =
-      (labelSet.docLabelCount || 0) +
-      (labelSet.spanLabelCount || 0) +
-      (labelSet.tokenLabelCount || 0);
-    const labelsetName = labelSet.title || "Labeled";
+      (corpus.labelSet.docLabelCount || 0) +
+      (corpus.labelSet.spanLabelCount || 0) +
+      (corpus.labelSet.tokenLabelCount || 0);
+    const labelsetName = corpus.labelSet.title || "Labeled";
     if (totalLabels > 0) {
       stats.push(
         `${labelsetName} (${totalLabels} ${
@@ -301,9 +298,8 @@ function formatStats(corpus: CorpusType): string[] {
 }
 
 function getCategoryBadge(corpus: CorpusType): string | undefined {
-  const categories = (corpus as any).categories;
-  if (categories && categories.length > 0) {
-    return categories[0].name;
+  if (corpus.categories && corpus.categories.length > 0) {
+    return corpus.categories[0].name;
   }
   return undefined;
 }
@@ -343,7 +339,9 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
 }) => {
   const navigate = useNavigate();
   const auth_token = useReactiveVar(authToken);
+  const currentUser = useReactiveVar(userObj);
   const isAuthenticated = Boolean(auth_token);
+  const currentUserEmail = currentUser?.email;
 
   // Filter state
   const [activeFilter, setActiveFilter] = useState("all");
@@ -369,16 +367,6 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
       toast.error("ERROR! Could not start corpus fork.");
     },
   });
-
-  // Get current user email for filtering
-  // We'll need to get this from somewhere - for now use a simple check
-  const currentUserEmail = useMemo(() => {
-    // Try to get from first owned corpus, or return undefined
-    return corpuses?.find((c) => {
-      const perms = getPermissions(c.myPermissions || []);
-      return perms.includes(PermissionTypes.CAN_REMOVE);
-    })?.creator?.email;
-  }, [corpuses]);
 
   // Filter corpuses based on active filter
   const filteredCorpuses = useMemo(() => {
@@ -432,12 +420,11 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
       totalCorpuses: list.length,
       totalDocuments: list.reduce(
         (sum, c) =>
-          sum +
-          ((c.documents as any)?.totalCount || c.documents?.edges?.length || 0),
+          sum + (c.documents?.totalCount || c.documents?.edges?.length || 0),
         0
       ),
       totalAnnotations: list.reduce(
-        (sum, c) => sum + ((c.annotations as any)?.totalCount || 0),
+        (sum, c) => sum + (c.annotations?.totalCount || 0),
         0
       ),
       sharedCount: list.filter(
@@ -463,7 +450,7 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
     (corpus: CorpusType) => {
       // Don't navigate if menu is open
       if (openMenuId) return;
-      navigateToCorpus(corpus as any, navigate, window.location.pathname);
+      navigateToCorpus(corpus, navigate, window.location.pathname);
     },
     [navigate, openMenuId]
   );
