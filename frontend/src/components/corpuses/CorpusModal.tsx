@@ -432,9 +432,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       const corpusLabelSetId = corpus.labelSet?.id || null;
       const corpusPreferredEmbedder = corpus.preferredEmbedder || null;
       const corpusCategories =
-        (corpus.categories?.edges
-          ?.map((edge) => edge?.node?.id)
-          .filter(Boolean) as string[]) || [];
+        corpus.categories?.map((category) => category.id).filter(Boolean) || [];
 
       setTitle(corpusTitle);
       setSlug(corpusSlug);

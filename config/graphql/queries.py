@@ -818,8 +818,10 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpuses(self, info, **kwargs):
-        return Corpus.objects.visible_to_user(info.context.user).select_related(
-            "creator", "engagement_metrics"
+        return (
+            Corpus.objects.visible_to_user(info.context.user)
+            .select_related("creator", "engagement_metrics")
+            .prefetch_related("categories")
         )
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)

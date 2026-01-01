@@ -303,7 +303,8 @@ export type RawCorpusType = Node & {
   isPublic?: Scalars["Boolean"];
   myPermissions?: string[];
   conversations?: ConversationTypeConnection;
-  categories?: CorpusCategoryTypeConnection;
+  // Note: categories is returned as a List (array), not a Connection, from the backend
+  categories?: CorpusCategoryType[];
 };
 
 export type CorpusType = Omit<RawCorpusType, "myPermissions"> & {

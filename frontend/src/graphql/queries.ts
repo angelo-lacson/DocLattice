@@ -642,6 +642,10 @@ export const GET_CORPUSES = gql`
             spanLabelCount
             tokenLabelCount
           }
+          categories {
+            id
+            name
+          }
         }
       }
     }
