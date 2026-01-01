@@ -10,8 +10,8 @@ import {
   FeaturedCollections,
   ActivitySection,
   GetStarted,
+  CompactLeaderboard,
   // Legacy components still in use
-  TopContributors,
   CallToAction,
 } from "../components/landing";
 import {
@@ -386,12 +386,12 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
           />
         </Section>
 
-        {/* Top Contributors - Keeping legacy component for now */}
+        {/* Top Contributors - Compact leaderboard using OS-Legal-Style */}
         <Section $marginBottom={56}>
           <SectionHeader>
             <SectionTitle>Top Contributors</SectionTitle>
           </SectionHeader>
-          <TopContributors
+          <CompactLeaderboard
             contributors={data?.globalLeaderboard || null}
             loading={loading}
           />

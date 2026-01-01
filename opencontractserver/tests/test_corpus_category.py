@@ -164,8 +164,7 @@ class TestCorpusCategoryModel:
         category = CorpusCategory.objects.create(name="Legal", creator=user)
 
         corpuses = [
-            Corpus.objects.create(title=f"Corpus {i}", creator=user)
-            for i in range(3)
+            Corpus.objects.create(title=f"Corpus {i}", creator=user) for i in range(3)
         ]
 
         for corpus in corpuses:
@@ -500,6 +499,7 @@ class TestCorpusCategoryGraphQLMutations(TestCase):
 
         # Get the created corpus and verify categories
         from graphql_relay import from_global_id
+
         corpus_pk = from_global_id(mutation_result["objId"])[1]
         corpus = Corpus.objects.get(pk=corpus_pk)
 
@@ -535,6 +535,7 @@ class TestCorpusCategoryGraphQLMutations(TestCase):
 
         # Get the created corpus and verify no categories
         from graphql_relay import from_global_id
+
         corpus_pk = from_global_id(mutation_result["objId"])[1]
         corpus = Corpus.objects.get(pk=corpus_pk)
 
@@ -545,9 +546,7 @@ class TestCorpusCategoryGraphQLMutations(TestCase):
         # Create corpus with initial categories
         corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
         corpus.categories.add(self.cat1)
-        set_permissions_for_obj_to_user(
-            self.user, corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Update to different categories
         corpus_gid = to_global_id("CorpusType", corpus.id)
@@ -594,9 +593,7 @@ class TestCorpusCategoryGraphQLMutations(TestCase):
         # Create corpus with categories
         corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
         corpus.categories.add(self.cat1, self.cat2)
-        set_permissions_for_obj_to_user(
-            self.user, corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         corpus_gid = to_global_id("CorpusType", corpus.id)
 
@@ -630,9 +627,7 @@ class TestCorpusCategoryGraphQLMutations(TestCase):
         """Test adding categories to corpus that had none."""
         # Create corpus without categories
         corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
-        set_permissions_for_obj_to_user(
-            self.user, corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         corpus_gid = to_global_id("CorpusType", corpus.id)
         cat1_gid = to_global_id("CorpusCategoryType", self.cat1.id)
@@ -692,9 +687,7 @@ class TestCorpusCategoryPermissions(TestCase):
         cls.corpus.categories.add(cls.category)
 
         # Grant owner CRUD permissions
-        set_permissions_for_obj_to_user(
-            cls.owner, cls.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(cls.owner, cls.corpus, [PermissionTypes.CRUD])
 
     def setUp(self):
         """Set up test client."""
@@ -708,7 +701,6 @@ class TestCorpusCategoryPermissions(TestCase):
         client = Client(schema, context_value=request)
 
         corpus_gid = to_global_id("CorpusType", self.corpus.id)
-        cat_gid = to_global_id("CorpusCategoryType", self.category.id)
 
         mutation = """
             mutation UpdateCorpus($id: String!, $categories: [ID]) {
