@@ -2006,8 +2006,8 @@ class ImportZipToCorpus(graphene.Mutation):
                     )
 
             # Decode and store the zip file
-            base64_img_bytes = base64_file_string.encode("utf-8")
-            decoded_file_data = base64.decodebytes(base64_img_bytes)
+            base64_zip_bytes = base64_file_string.encode("utf-8")
+            decoded_file_data = base64.decodebytes(base64_zip_bytes)
 
             job_id = str(uuid.uuid4())
 

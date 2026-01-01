@@ -861,12 +861,22 @@ def import_zip_with_folder_structure(
 
                         # Add to corpus with folder assignment and path for versioning
                         # If a document already exists at this path, it will be upversioned
-                        added_doc, status, doc_path = corpus_obj.add_document(
-                            document=document,
-                            user=user_obj,
-                            folder=doc_folder,
-                            path=doc_path_str,
-                        )
+                        try:
+                            added_doc, status, doc_path = corpus_obj.add_document(
+                                document=document,
+                                user=user_obj,
+                                folder=doc_folder,
+                                path=doc_path_str,
+                            )
+                        except PermissionError as e:
+                            logger.warning(
+                                f"Permission error adding document at {doc_path_str}: {e}"
+                            )
+                            results["files_errored"] += 1
+                            results["errors"].append(
+                                f"Permission error for {entry.sanitized_path}: {str(e)}"
+                            )
+                            continue
 
                         results["files_processed"] += 1
                         results["document_ids"].append(str(added_doc.id))

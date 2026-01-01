@@ -1383,30 +1383,24 @@ class DocumentFolderService:
                     logger.debug(f"Reusing existing folder: {path}")
                     continue
 
-                # Check if folder with same name exists under this parent
-                existing = CorpusFolder.objects.filter(
+                # Atomically get or create folder to avoid race conditions
+                # between concurrent imports
+                folder, was_created = CorpusFolder.objects.get_or_create(
                     corpus=corpus,
                     parent=parent,
                     name=folder_name,
-                ).first()
+                    defaults={"creator": user},
+                )
 
-                if existing:
-                    folder_map[path] = existing
-                    existing_by_path[path] = existing  # Add to cache
-                    reused_count += 1
-                    logger.debug(f"Reusing existing folder by name: {path}")
-                else:
-                    # Create new folder
-                    folder = CorpusFolder.objects.create(
-                        corpus=corpus,
-                        parent=parent,
-                        name=folder_name,
-                        creator=user,
-                    )
-                    folder_map[path] = folder
-                    existing_by_path[path] = folder  # Add to cache
+                folder_map[path] = folder
+                existing_by_path[path] = folder  # Add to cache
+
+                if was_created:
                     created_count += 1
                     logger.debug(f"Created new folder: {path} (id={folder.id})")
+                else:
+                    reused_count += 1
+                    logger.debug(f"Reusing existing folder: {path}")
 
         logger.info(
             f"Folder structure created for corpus {corpus.id}: "
