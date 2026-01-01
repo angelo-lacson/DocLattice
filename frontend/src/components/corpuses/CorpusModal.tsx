@@ -6,6 +6,7 @@ import { EmbedderSelector } from "../widgets/CRUD/EmbedderSelector";
 import { FilePreviewAndUpload } from "../widgets/file-controls/FilePreviewAndUpload";
 import { CategorySelector } from "./CategorySelector";
 import { CorpusType, LabelSetType } from "../../types/graphql-api";
+import { arraysEqualUnordered } from "../../utils/arrayUtils";
 
 // Types
 export type CorpusModalMode = "CREATE" | "EDIT" | "VIEW";
@@ -431,8 +432,9 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       const corpusLabelSetId = corpus.labelSet?.id || null;
       const corpusPreferredEmbedder = corpus.preferredEmbedder || null;
       const corpusCategories =
-        (corpus as any).categories?.edges?.map((edge: any) => edge.node.id) ||
-        [];
+        (corpus.categories?.edges
+          ?.map((edge) => edge?.node?.id)
+          .filter(Boolean) as string[]) || [];
 
       setTitle(corpusTitle);
       setSlug(corpusSlug);
@@ -514,14 +516,6 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   // Form validation - both title and description are required
   const isFormValid = title.trim().length > 0 && description.trim().length > 0;
 
-  // Helper to compare arrays
-  const arraysEqual = (a: string[], b: string[]) => {
-    if (a.length !== b.length) return false;
-    const sortedA = [...a].sort();
-    const sortedB = [...b].sort();
-    return sortedA.every((val, idx) => val === sortedB[idx]);
-  };
-
   // Compute isDirty by comparing current values against original values
   // For CREATE mode, form is "dirty" (has submittable content) when valid
   // For EDIT mode, compare each field against original values
@@ -534,7 +528,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
         icon !== originalValues.icon ||
         labelSetId !== originalValues.labelSetId ||
         preferredEmbedder !== originalValues.preferredEmbedder ||
-        !arraysEqual(categories, originalValues.categories));
+        !arraysEqualUnordered(categories, originalValues.categories));
 
   const canSubmit = isFormValid && isDirty && !loading;
 
@@ -566,7 +560,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       if (preferredEmbedder !== originalValues.preferredEmbedder) {
         formData.preferredEmbedder = preferredEmbedder;
       }
-      if (!arraysEqual(categories, originalValues.categories)) {
+      if (!arraysEqualUnordered(categories, originalValues.categories)) {
         formData.categories = categories;
       }
     } else {
@@ -594,7 +588,6 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     labelSetId,
     preferredEmbedder,
     categories,
-    arraysEqual,
   ]);
 
   // Get header text based on mode

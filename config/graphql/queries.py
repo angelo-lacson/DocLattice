@@ -5,7 +5,7 @@ from typing import Optional
 
 import graphene
 from django.conf import settings
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
@@ -833,10 +833,38 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpus_categories(self, info, **kwargs):
-        """Get all corpus categories, ordered by sort_order and name."""
-        from doclatticeserver.corpuses.models import CorpusCategory
+        """
+        Get all corpus categories, ordered by sort_order and name.
 
-        return CorpusCategory.objects.all().order_by("sort_order", "name")
+        Annotates corpus_count to avoid N+1 queries when rendering category lists.
+        For anonymous users, counts only public corpuses. For authenticated users,
+        counts all corpuses the user can see (public + those with permissions).
+
+        Uses Corpus.objects.visible_to_user() to ensure guardian permissions are
+        respected - users with explicit READ permissions on private corpuses will
+        see them in counts.
+        """
+        from django.db.models import OuterRef, Subquery
+
+        from doclatticeserver.corpuses.models import Corpus, CorpusCategory
+
+        user = info.context.user
+
+        # Use Subquery with visible_to_user to properly respect guardian permissions
+        # This ensures users with explicit READ permissions on private corpuses
+        # see them in the category counts
+        visible_corpus_ids = (
+            Corpus.objects.visible_to_user(user)
+            .filter(categories=OuterRef("pk"))
+            .values("id")
+        )
+
+        # Count visible corpuses per category using Subquery
+        categories = CorpusCategory.objects.annotate(
+            _corpus_count=Count(Subquery(visible_corpus_ids), distinct=True)
+        ).order_by("sort_order", "name")
+
+        return categories
 
     # CORPUS FOLDER RESOLVERS #####################################
 

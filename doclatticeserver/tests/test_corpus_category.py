@@ -659,6 +659,112 @@ class TestCorpusCategoryGraphQLMutations(TestCase):
         self.assertEqual(corpus.categories.count(), 1)
         self.assertIn(self.cat1, corpus.categories.all())
 
+    def test_create_corpus_with_invalid_category_id(self):
+        """Test creating a corpus with non-existent category ID fails gracefully."""
+        # Use a valid global ID format but with non-existent database ID
+        invalid_cat_gid = to_global_id("CorpusCategoryType", 99999)
+
+        mutation = """
+            mutation CreateCorpus($title: String!, $categories: [ID]) {
+                createCorpus(title: $title, categories: $categories) {
+                    ok
+                    message
+                    objId
+                }
+            }
+        """
+
+        result = self.client.execute(
+            mutation,
+            variables={
+                "title": "Test Invalid Category",
+                "categories": [invalid_cat_gid],
+            },
+        )
+
+        # Should fail with appropriate error
+        mutation_result = result.get("data", {}).get("createCorpus", {})
+        if mutation_result:
+            # If mutation returns a result, ok should be False
+            self.assertFalse(mutation_result["ok"])
+        else:
+            # Or we should have errors
+            self.assertIsNotNone(result.get("errors"))
+
+    def test_create_corpus_with_duplicate_category_ids(self):
+        """Test that duplicate category IDs are handled correctly (deduplicated)."""
+        cat1_gid = to_global_id("CorpusCategoryType", self.cat1.id)
+
+        mutation = """
+            mutation CreateCorpus($title: String!, $categories: [ID]) {
+                createCorpus(title: $title, categories: $categories) {
+                    ok
+                    message
+                    objId
+                }
+            }
+        """
+
+        result = self.client.execute(
+            mutation,
+            variables={
+                "title": "Test Duplicate Categories",
+                # Same category ID passed multiple times
+                "categories": [cat1_gid, cat1_gid, cat1_gid],
+            },
+        )
+
+        # Should succeed - duplicates should be handled
+        self.assertIsNone(
+            result.get("errors"), f"GraphQL errors: {result.get('errors')}"
+        )
+
+        mutation_result = result["data"]["createCorpus"]
+        self.assertTrue(mutation_result["ok"])
+
+        # Get the created corpus and verify only one category (deduplicated)
+        from graphql_relay import from_global_id
+
+        corpus_pk = from_global_id(mutation_result["objId"])[1]
+        corpus = Corpus.objects.get(pk=corpus_pk)
+
+        # ManyToMany relationship naturally deduplicates
+        self.assertEqual(corpus.categories.count(), 1)
+        self.assertIn(self.cat1, corpus.categories.all())
+
+    def test_update_corpus_with_invalid_category_id(self):
+        """Test updating a corpus with non-existent category ID fails gracefully."""
+        # Create corpus
+        corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        corpus_gid = to_global_id("CorpusType", corpus.id)
+        invalid_cat_gid = to_global_id("CorpusCategoryType", 99999)
+
+        mutation = """
+            mutation UpdateCorpus($id: String!, $categories: [ID]) {
+                updateCorpus(id: $id, categories: $categories) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        result = self.client.execute(
+            mutation,
+            variables={
+                "id": corpus_gid,
+                "categories": [invalid_cat_gid],
+            },
+        )
+
+        # Should fail with appropriate error
+        mutation_result = result.get("data", {}).get("updateCorpus", {})
+        if mutation_result:
+            self.assertFalse(mutation_result["ok"])
+        else:
+            self.assertIsNotNone(result.get("errors"))
+
 
 class TestCorpusCategoryPermissions(TestCase):
     """Test permission checks for corpus category operations."""
