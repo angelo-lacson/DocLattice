@@ -1,7 +1,6 @@
 import React from "react";
 import styled from "styled-components";
-import { StatBlock, StatGrid, Skeleton } from "@opencontracts/ui/src";
-import { Users, MessageSquare, Tag, TrendingUp, FileText } from "lucide-react";
+import { StatBlock, StatGrid } from "@os-legal/ui";
 
 interface CommunityStats {
   totalUsers: number;
@@ -17,25 +16,15 @@ interface StatsSectionProps {
   loading?: boolean;
 }
 
-const StatsContainer = styled.section`
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 3rem 2rem;
-
-  @media (max-width: 768px) {
-    padding: 2rem 1rem;
-  }
-`;
-
-const StatsWrapper = styled.div`
-  max-width: 1400px;
-  margin: 0 auto;
-`;
-
-const IconWrapper = styled.span`
-  color: #e85a4f;
-`;
+/**
+ * Stats Section - matches Storybook design
+ *
+ * Features:
+ * - 2-column grid layout
+ * - Large teal numbers (no icons)
+ * - Label and sublabel text
+ * - Clean, minimal styling
+ */
 
 function formatNumber(num: number): string {
   if (num >= 1000000) {
@@ -47,83 +36,49 @@ function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
+// Stat configurations matching Storybook design
+const statConfigs = [
+  {
+    key: "totalUsers" as keyof CommunityStats,
+    label: "Contributors",
+    sublabel: "from the community",
+  },
+  {
+    key: "totalAnnotations" as keyof CommunityStats,
+    label: "Annotations",
+    sublabel: "community contributed",
+  },
+  {
+    key: "totalThreads" as keyof CommunityStats,
+    label: "Discussions",
+    sublabel: "active threads",
+  },
+  {
+    key: "activeUsersThisWeek" as keyof CommunityStats,
+    label: "Active This Week",
+    sublabel: "contributors",
+  },
+];
+
 export const StatsSection: React.FC<StatsSectionProps> = ({
   stats,
   loading,
 }) => {
-  const statConfigs = [
-    {
-      key: "totalUsers" as keyof CommunityStats,
-      label: "Contributors",
-      icon: <Users size={24} />,
-    },
-    {
-      key: "totalThreads" as keyof CommunityStats,
-      label: "Threads",
-      icon: <MessageSquare size={24} />,
-    },
-    {
-      key: "totalAnnotations" as keyof CommunityStats,
-      label: "Annotations",
-      icon: <Tag size={24} />,
-    },
-    {
-      key: "activeUsersThisWeek" as keyof CommunityStats,
-      label: "Active This Week",
-      icon: <TrendingUp size={24} />,
-    },
-    // Note: We don't have totalDocuments in CommunityStats, so we'll use a placeholder
-    // or skip this for now. Adding it with null check:
-    {
-      key: null,
-      label: "Documents",
-      icon: <FileText size={24} />,
-      placeholder: "—",
-    },
-  ];
-
   return (
-    <StatsContainer>
-      <StatsWrapper>
-        <StatGrid columns={3} gap="lg">
-          {statConfigs.map((config, index) => {
-            const key = config.key
-              ? `stat-${config.key}`
-              : `stat-placeholder-${index}`;
+    <StatGrid columns={2}>
+      {statConfigs.map((config) => {
+        const value =
+          loading || !stats ? "—" : formatNumber(stats[config.key] as number);
 
-            if (loading) {
-              return (
-                <StatBlock
-                  key={key}
-                  value="—"
-                  label={config.label}
-                  icon={<IconWrapper>{config.icon}</IconWrapper>}
-                  variant="accent"
-                  size="md"
-                  align="left"
-                />
-              );
-            }
-
-            const value =
-              config.key && stats
-                ? formatNumber(stats[config.key] as number)
-                : config.placeholder || "—";
-
-            return (
-              <StatBlock
-                key={key}
-                value={value}
-                label={config.label}
-                icon={<IconWrapper>{config.icon}</IconWrapper>}
-                variant="accent"
-                size="md"
-                align="left"
-              />
-            );
-          })}
-        </StatGrid>
-      </StatsWrapper>
-    </StatsContainer>
+        return (
+          <StatBlock
+            key={config.key}
+            value={value}
+            label={config.label}
+            sublabel={config.sublabel}
+          />
+        );
+      })}
+    </StatGrid>
   );
 };

@@ -1,48 +1,79 @@
 import React, { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@apollo/client";
 import styled from "styled-components";
+import { SearchBox, FilterTabs } from "@os-legal/ui";
+import type { FilterTabItem } from "@os-legal/ui";
 import {
-  Hero,
-  HeroTitle,
-  HeroSubtitle,
-  SearchBox,
-} from "@opencontracts/ui/src";
+  GET_CORPUS_CATEGORIES,
+  GetCorpusCategoriesOutput,
+} from "../../graphql/landing-queries";
 
 interface NewHeroSectionProps {
   isAuthenticated?: boolean;
+  selectedCategory: string | null;
+  onCategoryChange: (categoryId: string | null) => void;
 }
 
-const HeroContainer = styled.div`
-  background: linear-gradient(135deg, #f8f9fa 0%, #e8eef2 50%, #f0f4f8 100%);
-  padding: 4rem 2rem;
-  min-height: 60vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/**
+ * Minimal Hero Section - matches Storybook design
+ *
+ * Features:
+ * - Clean white background (no gradient)
+ * - Serif font (Georgia) for title
+ * - "legal knowledge" on second line in teal
+ * - Full-width search box
+ * - FilterTabs directly below search
+ */
+
+const HeroSection = styled.section`
+  margin-bottom: 48px;
+`;
+
+const HeroTitle = styled.h1`
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 42px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #1e293b;
+  margin: 0 0 16px;
 
   @media (max-width: 768px) {
-    padding: 3rem 1.5rem;
-    min-height: 50vh;
+    font-size: 32px;
   }
 `;
 
-const ContentWrapper = styled.div`
-  max-width: 800px;
-  width: 100%;
+const TealText = styled.span`
+  color: #0f766e;
 `;
 
-const SearchWrapper = styled.div`
-  margin-top: 2rem;
+const HeroSubtitle = styled.p`
+  font-size: 17px;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0 0 32px;
   max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
+`;
+
+const SearchContainer = styled.div`
+  margin-bottom: 16px;
+`;
+
+const FilterContainer = styled.div`
+  margin-bottom: 48px;
 `;
 
 export const NewHeroSection: React.FC<NewHeroSectionProps> = ({
   isAuthenticated,
+  selectedCategory,
+  onCategoryChange,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
+
+  // Fetch categories for FilterTabs
+  const { data: categoryData, loading: categoryLoading } =
+    useQuery<GetCorpusCategoriesOutput>(GET_CORPUS_CATEGORIES);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,28 +91,61 @@ export const NewHeroSection: React.FC<NewHeroSectionProps> = ({
     [navigate]
   );
 
+  // Build FilterTabs items
+  const filterItems: FilterTabItem[] = React.useMemo(() => {
+    const allItem: FilterTabItem = {
+      id: "all",
+      label: "All",
+    };
+
+    if (!categoryData?.corpusCategories?.edges) {
+      return [allItem];
+    }
+
+    const categoryItems: FilterTabItem[] =
+      categoryData.corpusCategories.edges.map(({ node }) => ({
+        id: node.id,
+        label: node.name,
+        count: node.corpusCount > 0 ? String(node.corpusCount) : undefined,
+      }));
+
+    return [allItem, ...categoryItems];
+  }, [categoryData]);
+
+  const handleCategoryChange = (id: string) => {
+    onCategoryChange(id === "all" ? null : id);
+  };
+
   return (
-    <HeroContainer>
-      <ContentWrapper>
-        <Hero variant="centered" size="lg" showDecorations={true}>
-          <HeroTitle>The open platform for legal knowledge</HeroTitle>
-          <HeroSubtitle>
-            {isAuthenticated
-              ? "Welcome back! Explore trending collections, join discussions, and discover insights from the community."
-              : "Join a community of researchers, legal professionals, and analysts. Explore public document collections and start meaningful conversations."}
-          </HeroSubtitle>
-          <SearchWrapper>
-            <SearchBox
-              placeholder="Search discussions, documents, collections..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onSubmit={handleSearchSubmit}
-              size="lg"
-              buttonText="Search"
-            />
-          </SearchWrapper>
-        </Hero>
-      </ContentWrapper>
-    </HeroContainer>
+    <HeroSection>
+      <HeroTitle>
+        The open platform for
+        <br />
+        <TealText>legal knowledge</TealText>
+      </HeroTitle>
+      <HeroSubtitle>
+        Collaboratively annotate legislation, contracts, case law, and legal
+        knowledge. Built by the community, for the community.
+      </HeroSubtitle>
+
+      {/* Search */}
+      <SearchContainer>
+        <SearchBox
+          placeholder="Search across all legal knowledge..."
+          value={searchQuery}
+          onChange={handleSearchChange}
+          onSubmit={handleSearchSubmit}
+        />
+      </SearchContainer>
+
+      {/* Category Tabs */}
+      <FilterContainer>
+        <FilterTabs
+          items={filterItems}
+          value={selectedCategory || "all"}
+          onChange={handleCategoryChange}
+        />
+      </FilterContainer>
+    </HeroSection>
   );
 };

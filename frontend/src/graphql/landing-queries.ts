@@ -75,14 +75,10 @@ export interface GetTrendingCorpusesOutput {
         annotations: {
           totalCount: number;
         };
-        categories?: {
-          edges: Array<{
-            node: {
-              id: string;
-              name: string;
-            };
-          }>;
-        };
+        categories?: Array<{
+          id: string;
+          name: string;
+        }>;
         engagementMetrics?: {
           totalThreads: number;
           totalMessages: number;
@@ -121,12 +117,8 @@ export const GET_TRENDING_CORPUSES = gql`
             totalCount
           }
           categories {
-            edges {
-              node {
-                id
-                name
-              }
-            }
+            id
+            name
           }
           engagementMetrics {
             totalThreads
@@ -403,12 +395,8 @@ export const GET_DISCOVERY_DATA = gql`
             totalCount
           }
           categories {
-            edges {
-              node {
-                id
-                name
-              }
-            }
+            id
+            name
           }
           engagementMetrics {
             totalThreads

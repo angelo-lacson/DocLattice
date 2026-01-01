@@ -1297,9 +1297,10 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
-"@opencontracts/ui@github:Open-Source-Legal/OS-Legal-Style":
-  version "0.1.0"
-  resolved "https://codeload.github.com/Open-Source-Legal/OS-Legal-Style/tar.gz/d45c3b39cc18c53a2f32946dfc15dded875c8696"
+"@os-legal/ui@^0.1.1":
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/@os-legal/ui/-/ui-0.1.1.tgz#29a6dc97d79b6362ace89da03e05eec34817ccc0"
+  integrity sha512-lxpE1Jmzm9jbO+60sdqAnXLCU6+t603HI8qJrk9FydXSti6+issRw22OawyiiAPR0I3J/s/Ettn5bBU4cLNSmg==
 
 "@pkgjs/parseargs@^0.11.0":
   version "0.11.0"

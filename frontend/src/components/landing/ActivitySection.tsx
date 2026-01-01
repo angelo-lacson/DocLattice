@@ -1,32 +1,17 @@
 /**
  * ActivitySection Component
  *
- * Displays recent discussions in a compact activity feed format for the landing/discover page.
- * Uses the ActivityFeed component from @opencontracts/ui to show user activity.
+ * Displays recent discussions in a compact activity feed format.
+ * Uses the ActivityFeed component from @os-legal/ui.
  *
- * Features:
- * - Transforms recent discussions into activity items
- * - Shows user avatars with initials and consistent colors
- * - Displays relative timestamps (e.g., "2h ago")
- * - Clickable discussion titles that navigate to the appropriate view
- * - Loading skeleton state
- * - Empty state with CTA to start a discussion
- * - "View all discussions" link
- *
- * @example
- * <ActivitySection
- *   discussions={data?.conversations?.edges || null}
- *   loading={loading}
- *   totalCount={data?.conversations?.totalCount}
- * />
+ * Note: Section header is now provided by parent (DiscoveryLanding)
+ * to match the Storybook design pattern.
  */
 import React from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { ActivityFeed } from "@opencontracts/ui/src";
-import type { ActivityItemData } from "@opencontracts/ui/src";
-import { MessageSquare, Plus } from "lucide-react";
-import { color } from "../../theme/colors";
+import { ActivityFeed } from "@os-legal/ui";
+import type { ActivityItemData } from "@os-legal/ui";
 import { GetRecentDiscussionsOutput } from "../../graphql/landing-queries";
 import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 
@@ -36,69 +21,10 @@ interface ActivitySectionProps {
   totalCount?: number;
 }
 
-const Section = styled.section`
-  padding: 4rem 2rem;
-  background: linear-gradient(180deg, ${color.N1} 0%, ${color.N2} 100%);
-
-  @media (max-width: 768px) {
-    padding: 3rem 1.5rem;
-  }
-`;
-
-const Container = styled.div`
-  max-width: 1400px;
-  margin: 0 auto;
-`;
-
-const SectionHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
-  gap: 1rem;
-`;
-
-const HeaderLeft = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-`;
-
-const IconBadge = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, ${color.G2} 0%, ${color.G3} 100%);
-  border-radius: 14px;
-  color: ${color.G7};
-`;
-
-const TitleGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-const SectionTitle = styled.h2`
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: ${color.N10};
-  margin: 0;
-  letter-spacing: -0.02em;
-`;
-
-const SectionSubtitle = styled.p`
-  font-size: 0.9375rem;
-  color: ${color.N6};
-  margin: 0.25rem 0 0 0;
-`;
-
 const FeedWrapper = styled.div`
   background: white;
   border-radius: 16px;
-  border: 1px solid ${color.N3};
+  border: 1px solid #e2e8f0;
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 `;
@@ -114,7 +40,7 @@ const SkeletonItem = styled.div`
   align-items: flex-start;
   gap: 1rem;
   padding: 0.75rem 0;
-  border-bottom: 1px solid ${color.N3};
+  border-bottom: 1px solid #e2e8f0;
 
   &:last-child {
     border-bottom: none;
@@ -124,12 +50,7 @@ const SkeletonItem = styled.div`
 const SkeletonAvatar = styled.div`
   width: 40px;
   height: 40px;
-  background: linear-gradient(
-    90deg,
-    ${color.N3} 25%,
-    ${color.N4} 50%,
-    ${color.N3} 75%
-  );
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 50%;
@@ -152,81 +73,17 @@ const SkeletonContent = styled.div`
 const SkeletonLine = styled.div<{ $width?: string; $height?: string }>`
   width: ${(props) => props.$width || "100%"};
   height: ${(props) => props.$height || "12px"};
-  background: linear-gradient(
-    90deg,
-    ${color.N3} 25%,
-    ${color.N4} 50%,
-    ${color.N3} 75%
-  );
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 4px;
   margin-bottom: 0.5rem;
 `;
 
-const EmptyStateContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 2rem;
+const EmptyState = styled.div`
   text-align: center;
-  background: linear-gradient(
-    135deg,
-    ${color.G1} 0%,
-    ${color.T1} 50%,
-    ${color.B1} 100%
-  );
-  border-radius: 20px;
-  border: 2px dashed ${color.N4};
-`;
-
-const EmptyStateIcon = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 80px;
-  height: 80px;
-  background: white;
-  border-radius: 20px;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  color: ${color.G6};
-`;
-
-const EmptyStateTitle = styled.h3`
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: ${color.N10};
-  margin: 0 0 0.5rem 0;
-`;
-
-const EmptyStateDescription = styled.p`
-  font-size: 1rem;
-  color: ${color.N7};
-  margin: 0 0 1.5rem 0;
-  max-width: 400px;
-  line-height: 1.6;
-`;
-
-const EmptyStateCTA = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, ${color.G5} 0%, ${color.G6} 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(30, 194, 142, 0.4);
-  }
+  padding: 3rem 2rem;
+  color: #64748b;
 `;
 
 /**
@@ -345,36 +202,19 @@ export const ActivitySection: React.FC<ActivitySectionProps> = ({
 
   if (loading) {
     return (
-      <Section>
-        <Container>
-          <SectionHeader>
-            <HeaderLeft>
-              <IconBadge>
-                <MessageSquare size={24} />
-              </IconBadge>
-              <TitleGroup>
-                <SectionTitle>Recent Activity</SectionTitle>
-                <SectionSubtitle>
-                  What's happening in the community
-                </SectionSubtitle>
-              </TitleGroup>
-            </HeaderLeft>
-          </SectionHeader>
-          <FeedWrapper>
-            <SkeletonFeed>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <SkeletonItem key={i}>
-                  <SkeletonAvatar />
-                  <SkeletonContent>
-                    <SkeletonLine $width="70%" $height="14px" />
-                    <SkeletonLine $width="40%" $height="10px" />
-                  </SkeletonContent>
-                </SkeletonItem>
-              ))}
-            </SkeletonFeed>
-          </FeedWrapper>
-        </Container>
-      </Section>
+      <FeedWrapper>
+        <SkeletonFeed>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <SkeletonItem key={i}>
+              <SkeletonAvatar />
+              <SkeletonContent>
+                <SkeletonLine $width="70%" $height="14px" />
+                <SkeletonLine $width="40%" $height="10px" />
+              </SkeletonContent>
+            </SkeletonItem>
+          ))}
+        </SkeletonFeed>
+      </FeedWrapper>
     );
   }
 
@@ -383,69 +223,22 @@ export const ActivitySection: React.FC<ActivitySectionProps> = ({
 
   if (validDiscussions.length === 0) {
     return (
-      <Section>
-        <Container>
-          <SectionHeader>
-            <HeaderLeft>
-              <IconBadge>
-                <MessageSquare size={24} />
-              </IconBadge>
-              <TitleGroup>
-                <SectionTitle>Recent Activity</SectionTitle>
-                <SectionSubtitle>
-                  What's happening in the community
-                </SectionSubtitle>
-              </TitleGroup>
-            </HeaderLeft>
-          </SectionHeader>
-          <FeedWrapper>
-            <EmptyStateContainer>
-              <EmptyStateIcon>
-                <MessageSquare size={36} />
-              </EmptyStateIcon>
-              <EmptyStateTitle>No recent activity</EmptyStateTitle>
-              <EmptyStateDescription>
-                Be the first to start a discussion! Share your thoughts, ask
-                questions, and collaborate with the community.
-              </EmptyStateDescription>
-              <EmptyStateCTA onClick={() => navigate("/discussions")}>
-                <Plus size={20} />
-                Start Discussion
-              </EmptyStateCTA>
-            </EmptyStateContainer>
-          </FeedWrapper>
-        </Container>
-      </Section>
+      <FeedWrapper>
+        <EmptyState>
+          <p>No recent activity yet. Be the first to start a discussion!</p>
+        </EmptyState>
+      </FeedWrapper>
     );
   }
 
   return (
-    <Section>
-      <Container>
-        <SectionHeader>
-          <HeaderLeft>
-            <IconBadge>
-              <MessageSquare size={24} />
-            </IconBadge>
-            <TitleGroup>
-              <SectionTitle>Recent Activity</SectionTitle>
-              <SectionSubtitle>
-                {totalCount
-                  ? `${totalCount.toLocaleString()} discussions happening now`
-                  : "What's happening in the community"}
-              </SectionSubtitle>
-            </TitleGroup>
-          </HeaderLeft>
-        </SectionHeader>
-        <FeedWrapper>
-          <ActivityFeed
-            items={activityItems}
-            dividers={true}
-            viewAllText="View all discussions"
-            onViewAll={handleViewAll}
-          />
-        </FeedWrapper>
-      </Container>
-    </Section>
+    <FeedWrapper>
+      <ActivityFeed
+        items={activityItems}
+        dividers={true}
+        viewAllText="View all discussions"
+        onViewAll={handleViewAll}
+      />
+    </FeedWrapper>
   );
 };

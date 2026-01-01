@@ -14,7 +14,7 @@ import { LooseObject } from "./components/types";
 import { getRuntimeEnv } from "./utils/env";
 import { HelmetProvider } from "react-helmet-async";
 import { NetworkStatusHandler } from "./components/network";
-import { allStyles } from "@opencontracts/ui/src";
+import { allStyles } from "@os-legal/ui";
 
 import "./index.css";
 import reportWebVitals from "./reportWebVitals";

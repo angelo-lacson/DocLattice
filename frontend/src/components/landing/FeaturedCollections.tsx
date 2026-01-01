@@ -1,8 +1,8 @@
 import React from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { CollectionCard, CollectionList } from "@opencontracts/ui/src";
-import type { CollectionType } from "@opencontracts/ui/src";
+import { CollectionCard, CollectionList } from "@os-legal/ui";
+import type { CollectionType } from "@os-legal/ui";
 import { GetTrendingCorpusesOutput } from "../../graphql/landing-queries";
 import { color } from "../../theme/colors";
 
@@ -122,7 +122,7 @@ export const FeaturedCollections: React.FC<FeaturedCollectionsProps> = ({
     if (!selectedCategory || selectedCategory === "all") return corpuses;
 
     return corpuses.filter(({ node }) =>
-      node.categories?.edges?.some((cat) => cat.node.id === selectedCategory)
+      node.categories?.some((cat) => cat.id === selectedCategory)
     );
   }, [corpuses, selectedCategory]);
 
@@ -177,7 +177,7 @@ export const FeaturedCollections: React.FC<FeaturedCollectionsProps> = ({
       <CollectionList gap="md">
         {filteredCorpuses.map(({ node: corpus }) => {
           // Get first category for badge and type
-          const firstCategory = corpus.categories?.edges?.[0]?.node;
+          const firstCategory = corpus.categories?.[0];
           const collectionType = mapCategoryToType(firstCategory?.name);
 
           // Build stats array

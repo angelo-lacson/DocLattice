@@ -1,7 +1,7 @@
 import React from "react";
 import { useQuery } from "@apollo/client";
-import { FilterTabs } from "@opencontracts/ui/src";
-import type { FilterTabItem } from "@opencontracts/ui/src";
+import { FilterTabs } from "@os-legal/ui";
+import type { FilterTabItem } from "@os-legal/ui";
 import {
   GET_CORPUS_CATEGORIES,
   GetCorpusCategoriesOutput,
