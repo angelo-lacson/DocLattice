@@ -5,6 +5,37 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-01
+
+### Added
+
+#### Corpuses Page Redesign
+- **CorpusListView component** (`frontend/src/components/corpuses/CorpusListView.tsx`): Modern corpus listing page using @os-legal/ui components
+  - Hero section with search and filter tabs (All, My Corpuses, Shared, Public)
+  - Stats grid showing corpus, document, annotation, and shared counts
+  - CollectionCard components with category badges, visibility status, and labelset information
+  - Context menu for edit, view, export, fork, and delete actions
+  - Infinite scroll support for large corpus lists
+- **PostHog Analytics Integration** (`frontend/src/utils/analytics.ts`): Consent-based analytics tracking
+  - Cookie consent banner integration
+  - Automatic test/CI environment detection to prevent analytics in non-production
+  - User identification and event tracking functions
+  - Page view tracking for SPA navigation
+- **Component tests** (`frontend/tests/CorpusListView.ct.tsx`): 12 Playwright component tests for CorpusListView
+- **Unit tests** (`frontend/src/utils/__tests__/analytics.test.ts`): 20 Vitest tests for analytics utility functions
+
+### Fixed
+
+#### Type Safety and Bug Fixes
+- **User email detection** (`frontend/src/components/corpuses/CorpusListView.tsx:345-349`): Fixed currentUserEmail logic to use `userObj` reactive variable from Apollo cache instead of inferring from corpus permissions - prevents filter failures when no corpus has CAN_REMOVE permission
+- **TypeScript type casts** (`frontend/src/components/corpuses/CorpusListView.tsx`, `CorpusModal.tsx`): Removed 7 `as any` type casts by correcting `CorpusType.categories` type from `CorpusCategoryTypeConnection` to `CorpusCategoryType[]` to match backend GraphQL schema
+- **N+1 query prevention** (`config/graphql/queries.py:820-825`): Added `prefetch_related("categories")` to `resolve_corpuses` to avoid N+1 queries when fetching corpus categories
+
+### Changed
+- **Deleted CorpusCards component** (`frontend/src/components/corpuses/CorpusCards.tsx`): Replaced by CorpusListView with @os-legal/ui components
+
+---
+
 ## [Unreleased] - 2025-12-31
 
 ### Added
