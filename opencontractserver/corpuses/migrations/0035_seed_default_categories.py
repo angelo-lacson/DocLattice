@@ -7,6 +7,12 @@ Discover page design: Legislation, Contracts, Case Law, Knowledge.
 
 from django.db import migrations
 
+# Constants for system user - used for admin-provisioned data
+SYSTEM_USERNAME = "system"
+SYSTEM_EMAIL = "system@opencontracts.local"
+# Django's unusable password prefix - prevents login even if is_active=True
+UNUSABLE_PASSWORD_PREFIX = "!"
+
 
 def seed_default_categories(apps, schema_editor):
     """Create default corpus categories for the Discover page."""
@@ -14,13 +20,19 @@ def seed_default_categories(apps, schema_editor):
     User = apps.get_model("users", "User")
 
     # Get or create a system user for ownership of default categories
-    system_user, _ = User.objects.get_or_create(
-        username="system",
+    # Defense-in-depth: is_active=False AND unusable password
+    system_user, created = User.objects.get_or_create(
+        username=SYSTEM_USERNAME,
         defaults={
-            "email": "system@opencontracts.local",
+            "email": SYSTEM_EMAIL,
             "is_active": False,  # System user cannot log in
+            "password": UNUSABLE_PASSWORD_PREFIX,  # Unusable password for defense-in-depth
         },
     )
+    # If user already existed, ensure password is unusable
+    if not created and not system_user.password.startswith(UNUSABLE_PASSWORD_PREFIX):
+        system_user.password = UNUSABLE_PASSWORD_PREFIX
+        system_user.save(update_fields=["password"])
 
     default_categories = [
         {

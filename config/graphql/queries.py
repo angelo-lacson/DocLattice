@@ -5,7 +5,7 @@ from typing import Optional
 
 import graphene
 from django.conf import settings
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
@@ -833,10 +833,34 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpus_categories(self, info, **kwargs):
-        """Get all corpus categories, ordered by sort_order and name."""
+        """
+        Get all corpus categories, ordered by sort_order and name.
+
+        Annotates corpus_count to avoid N+1 queries when rendering category lists.
+        For anonymous users, counts only public corpuses. For authenticated users,
+        counts all corpuses the user can see (public + those with permissions).
+        """
         from opencontractserver.corpuses.models import CorpusCategory
 
-        return CorpusCategory.objects.all().order_by("sort_order", "name")
+        user = info.context.user
+
+        # Build the filter for visible corpuses
+        if user.is_anonymous:
+            # Anonymous users only see public corpuses
+            corpus_filter = Q(corpuses__is_public=True)
+        elif user.is_superuser:
+            # Superusers see all corpuses
+            corpus_filter = Q(corpuses__isnull=False)
+        else:
+            # Authenticated users see public + corpuses they have permissions on
+            corpus_filter = Q(corpuses__is_public=True) | Q(corpuses__creator=user)
+
+        # Annotate with filtered corpus count to avoid N+1 queries
+        categories = CorpusCategory.objects.annotate(
+            _corpus_count=Count("corpuses", filter=corpus_filter, distinct=True)
+        ).order_by("sort_order", "name")
+
+        return categories
 
     # CORPUS FOLDER RESOLVERS #####################################
 

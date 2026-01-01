@@ -98,6 +98,18 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
      - Annotations/datacells within are filtered to only show those on documents user can read
    - This allows controlled sharing of analyses while maintaining document security boundaries
 
+5. **CorpusCategory - GLOBALLY VISIBLE, ADMIN-PROVISIONED**
+   - **NO individual permissions** - Categories are visible to ALL users (including anonymous)
+   - Categories are admin-provisioned structural data managed via Django Admin only
+   - Users cannot create, modify, or delete categories - only superusers can
+   - **GraphQL Type**: Does NOT use `AnnotatePermissionsForReadMixin` (categories have no permissions)
+   - **corpusCount field**: Dynamically computed based on user's visible corpuses
+     - Anonymous users see count of public corpuses in each category
+     - Authenticated users see count of corpuses they have access to
+   - Categories are seeded via migration with a `system` user (inactive, unusable password)
+   - Implementation: `config/graphql/graphene_types.py:1589` (CorpusCategoryType)
+   - Query resolver: `config/graphql/queries.py:resolve_corpus_categories`
+
 ### Key Principles
 
 1. **Document Security First**: For annotations, document permissions are the primary security boundary

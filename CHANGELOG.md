@@ -5,6 +5,43 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-12-31
+
+### Added
+
+#### Corpus Categories and Landing Page Redesign
+- **CorpusCategory model** (`opencontractserver/corpuses/models.py`): New model for organizing corpuses by type (Legislation, Contracts, Case Law, Knowledge)
+  - Admin-provisioned structural data - managed via Django Admin only
+  - ManyToMany relationship with Corpus for flexible categorization
+  - Default categories seeded via migration (`0035_seed_default_categories.py`)
+- **CorpusCategoryType GraphQL type** (`config/graphql/graphene_types.py:1589-1633`):
+  - Globally visible to all users (no individual permissions)
+  - `corpusCount` field with N+1 query optimization via annotation
+- **Landing page redesign** using @os-legal/ui component library:
+  - `CompactLeaderboard` component - clean list-based leaderboard replacing grid cards
+  - `CategorySelector` component for corpus categorization
+  - Skeleton loading states and error handling throughout
+- **TypeScript types** (`frontend/src/types/graphql-api.ts`): Added `CorpusCategoryType`, `CorpusCategoryTypeConnection`, `CorpusCategoryTypeEdge`
+- **Array utilities** (`frontend/src/utils/arrayUtils.ts`): `arraysEqualUnordered` and `arraysEqualOrdered` for DRY comparison logic
+
+### Fixed
+
+#### Security and Performance
+- **System user security** (`opencontractserver/corpuses/migrations/0035_seed_default_categories.py`): Defense-in-depth with unusable password for system user
+- **N+1 query in corpusCount** (`config/graphql/queries.py:835-866`): Pre-annotated counts in `resolve_corpus_categories` resolver
+- **Type safety** (`frontend/src/components/corpuses/CorpusModal.tsx`, `CorpusSettings.tsx`): Removed `as any` casts for categories field
+
+### Changed
+- **Permission model** (`config/graphql/graphene_types.py`): `CorpusCategoryType` no longer uses `AnnotatePermissionsForReadMixin` - categories are globally visible structural data
+- **Documentation** (`docs/permissioning/consolidated_permissioning_guide.md`): Added section on CorpusCategory permissions
+
+### Technical Details
+- Categories are created by a `system` user with `is_active=False` and unusable password
+- `corpusCount` respects user visibility: anonymous sees public corpuses only, authenticated users see corpuses they have access to
+- Removed 632-line `TopContributors.tsx` component, replaced with ~280-line `CompactLeaderboard.tsx`
+
+---
+
 ## [Unreleased] - 2025-12-29
 
 ### Added

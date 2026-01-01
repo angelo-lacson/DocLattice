@@ -68,6 +68,14 @@ interface CorpusSettingsProps {
     annotations?: {
       totalCount: number;
     };
+    categories?: {
+      edges: Array<{
+        node: {
+          id: string;
+          name: string;
+        } | null;
+      } | null>;
+    };
   };
 }
 
@@ -680,7 +688,9 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
     setOriginalSlug(corpus.slug || "");
     setPublicDraft(Boolean(corpus.isPublic));
     const categories =
-      (corpus as any).categories?.edges?.map((edge: any) => edge.node.id) || [];
+      (corpus.categories?.edges
+        ?.map((edge) => edge?.node?.id)
+        .filter(Boolean) as string[]) || [];
     setCategoriesDraft(categories);
     setOriginalCategories(categories);
   }, [corpus]);

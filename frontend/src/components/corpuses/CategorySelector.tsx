@@ -104,12 +104,18 @@ const EmptyText = styled.div`
   font-style: italic;
 `;
 
+const ErrorText = styled.div`
+  color: #dc2626;
+  font-size: 0.875rem;
+  padding: 0.5rem;
+`;
+
 export const CategorySelector: React.FC<CategorySelectorProps> = ({
   selectedIds,
   onChange,
   disabled = false,
 }) => {
-  const { data, loading } = useQuery<GetCorpusCategoriesOutput>(
+  const { data, loading, error } = useQuery<GetCorpusCategoriesOutput>(
     GET_CORPUS_CATEGORIES
   );
 
@@ -125,6 +131,16 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
       onChange([...selectedIds, categoryId]);
     }
   };
+
+  if (error) {
+    return (
+      <Container>
+        <ChipsContainer>
+          <ErrorText>Failed to load categories</ErrorText>
+        </ChipsContainer>
+      </Container>
+    );
+  }
 
   if (loading) {
     return (

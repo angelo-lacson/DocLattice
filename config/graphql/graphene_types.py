@@ -1586,8 +1586,17 @@ class DocumentTypeConnection(CountableConnection):
 
 
 # ---------------- Corpus Category Types ----------------
-class CorpusCategoryType(AnnotatePermissionsForReadMixin, DjangoObjectType):
-    """GraphQL type for corpus categories."""
+class CorpusCategoryType(DjangoObjectType):
+    """
+    GraphQL type for corpus categories.
+
+    NOTE: This type does NOT use AnnotatePermissionsForReadMixin because
+    corpus categories are admin-provisioned structural data that is globally
+    visible to all users. Categories are managed via Django Admin only and
+    do not have per-user permissions.
+
+    See docs/permissioning/consolidated_permissioning_guide.md for details.
+    """
 
     corpus_count = graphene.Int(description="Number of corpuses in this category")
 
@@ -1609,7 +1618,17 @@ class CorpusCategoryType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
 
     def resolve_corpus_count(self, info):
-        """Return count of corpuses visible to user in this category."""
+        """
+        Return count of corpuses visible to user in this category.
+
+        NOTE: This resolver could cause N+1 queries if many categories are fetched.
+        The resolve_corpus_categories query uses annotation to pre-compute counts
+        to avoid this issue.
+        """
+        # If the count was pre-annotated by the query resolver, use it
+        if hasattr(self, "_corpus_count"):
+            return self._corpus_count
+        # Fallback to dynamic count (used when accessed individually)
         user = info.context.user
         return self.corpuses.visible_to_user(user).count()
 
