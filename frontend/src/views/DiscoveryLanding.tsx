@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import styled from "styled-components";
-import { useQuery, useReactiveVar } from "@apollo/client";
+import { gql, useQuery, useReactiveVar } from "@apollo/client";
 import { RefreshCw, X, AlertCircle } from "lucide-react";
 import { authToken } from "../graphql/cache";
 import {
@@ -9,6 +9,7 @@ import {
   StatsSection,
   FeaturedCollections,
   ActivitySection,
+  GetStarted,
   // Legacy components still in use
   TopContributors,
   CallToAction,
@@ -17,6 +18,26 @@ import {
   GET_DISCOVERY_DATA,
   GetDiscoveryDataOutput,
 } from "../graphql/landing-queries";
+
+// Local storage key for anonymous user dismissal
+const GETTING_STARTED_DISMISSED_KEY = "oc_getting_started_dismissed";
+
+// Query to get current user preferences
+const GET_USER_PREFERENCES = gql`
+  query GetUserPreferences {
+    me {
+      id
+      dismissedGettingStarted
+    }
+  }
+`;
+
+interface UserPreferencesData {
+  me: {
+    id: string;
+    dismissedGettingStarted: boolean;
+  } | null;
+}
 
 /**
  * Discover Page - Clean, minimal design following Storybook reference
@@ -204,6 +225,38 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
   // State for category filtering
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  // State for Getting Started dismissal (local state for anonymous users)
+  const [localDismissed, setLocalDismissed] = useState(() => {
+    // Check localStorage for anonymous users
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(GETTING_STARTED_DISMISSED_KEY) === "true";
+    }
+    return false;
+  });
+
+  // Query user preferences if authenticated
+  const { data: userPrefsData } = useQuery<UserPreferencesData>(
+    GET_USER_PREFERENCES,
+    {
+      skip: !isAuthenticated,
+      fetchPolicy: "cache-and-network",
+    }
+  );
+
+  // Determine if Getting Started is dismissed
+  const isGettingStartedDismissed = isAuthenticated
+    ? userPrefsData?.me?.dismissedGettingStarted || localDismissed
+    : localDismissed;
+
+  // Handle Getting Started dismiss
+  const handleDismissGettingStarted = useCallback(() => {
+    setLocalDismissed(true);
+    // For anonymous users, store in localStorage
+    if (!isAuthenticated && typeof window !== "undefined") {
+      localStorage.setItem(GETTING_STARTED_DISMISSED_KEY, "true");
+    }
+  }, [isAuthenticated]);
+
   // Fetch all discovery data in a single query
   const { data, loading, error, refetch } = useQuery<GetDiscoveryDataOutput>(
     GET_DISCOVERY_DATA,
@@ -293,6 +346,15 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
           <StatsSection
             stats={data?.communityStats || null}
             loading={loading}
+          />
+        </Section>
+
+        {/* Get Started - Prominent placement for new users */}
+        <Section $marginBottom={56}>
+          <GetStarted
+            isAuthenticated={isAuthenticated}
+            isDismissed={isGettingStartedDismissed}
+            onDismiss={handleDismissGettingStarted}
           />
         </Section>
 
