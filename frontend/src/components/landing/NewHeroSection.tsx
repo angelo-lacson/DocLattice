@@ -32,14 +32,14 @@ const HeroSection = styled.section`
 
 const HeroTitle = styled.h1`
   font-family: "Georgia", "Times New Roman", serif;
-  font-size: 42px;
+  font-size: 48px;
   font-weight: 400;
   line-height: 1.2;
   color: #1e293b;
-  margin: 0 0 16px;
+  margin: 0 0 20px;
 
   @media (max-width: 768px) {
-    font-size: 32px;
+    font-size: 36px;
   }
 `;
 
@@ -48,11 +48,11 @@ const TealText = styled.span`
 `;
 
 const HeroSubtitle = styled.p`
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.6;
   color: #64748b;
-  margin: 0 0 32px;
-  max-width: 600px;
+  margin: 0 0 36px;
+  max-width: 620px;
 `;
 
 const SearchContainer = styled.div`

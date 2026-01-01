@@ -2,6 +2,15 @@ import React from "react";
 import styled from "styled-components";
 import { StatBlock, StatGrid } from "@os-legal/ui";
 
+// Wrapper to increase stat sizes to match design reference
+const StatsWrapper = styled.div`
+  /* Override StatBlock value size for larger display */
+  [class*="StatBlock"] > *:first-child,
+  [data-testid="stat-value"] {
+    font-size: 42px !important;
+  }
+`;
+
 interface CommunityStats {
   totalUsers: number;
   totalThreads: number;
@@ -65,20 +74,22 @@ export const StatsSection: React.FC<StatsSectionProps> = ({
   loading,
 }) => {
   return (
-    <StatGrid columns={2}>
-      {statConfigs.map((config) => {
-        const value =
-          loading || !stats ? "—" : formatNumber(stats[config.key] as number);
+    <StatsWrapper>
+      <StatGrid columns={2}>
+        {statConfigs.map((config) => {
+          const value =
+            loading || !stats ? "—" : formatNumber(stats[config.key] as number);
 
-        return (
-          <StatBlock
-            key={config.key}
-            value={value}
-            label={config.label}
-            sublabel={config.sublabel}
-          />
-        );
-      })}
-    </StatGrid>
+          return (
+            <StatBlock
+              key={config.key}
+              value={value}
+              label={config.label}
+              sublabel={config.sublabel}
+            />
+          );
+        })}
+      </StatGrid>
+    </StatsWrapper>
   );
 };
