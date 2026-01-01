@@ -1264,6 +1264,157 @@ class DocumentFolderService:
 
         return folders.filter(name__icontains=query.strip())
 
+    @classmethod
+    def create_folder_structure_from_paths(
+        cls,
+        user: User,
+        corpus: Corpus,
+        folder_paths: list[str],
+        target_folder: CorpusFolder | None = None,
+    ) -> tuple[dict[str, CorpusFolder], int, int, str]:
+        """
+        Create all folders needed for a bulk import operation.
+
+        This method efficiently creates a folder hierarchy from a list of paths,
+        reusing existing folders and creating new ones as needed. Paths must be
+        sorted by depth (parents before children) for correct operation.
+
+        Used by zip import to create the folder structure before adding documents.
+
+        Args:
+            user: User performing the import (must have write permission on corpus)
+            corpus: Target corpus
+            folder_paths: List of folder paths to create (e.g., ["docs", "docs/contracts"])
+                          Must be sorted by depth (parents first)
+            target_folder: Optional parent folder for all imports (zip root goes here)
+
+        Returns:
+            (folder_map, created_count, reused_count, error_message)
+            - folder_map: Dict mapping path -> CorpusFolder for document assignment
+            - created_count: Number of new folders created
+            - reused_count: Number of existing folders reused
+            - error_message: Error description if operation failed
+
+        Example:
+            folder_map, created, reused, error = DocumentFolderService.create_folder_structure_from_paths(
+                user=user,
+                corpus=corpus,
+                folder_paths=["docs", "docs/contracts", "docs/legal"],
+                target_folder=None,  # Create at corpus root
+            )
+            if error:
+                raise ValueError(error)
+            # folder_map = {"docs": <Folder>, "docs/contracts": <Folder>, ...}
+
+        Permissions:
+            Requires corpus UPDATE permission
+        """
+        from opencontractserver.corpuses.models import CorpusFolder
+
+        # Permission check
+        if not cls.check_corpus_write_permission(user, corpus):
+            return (
+                {},
+                0,
+                0,
+                "Permission denied: You do not have write access to this corpus",
+            )
+
+        if not folder_paths:
+            return {}, 0, 0, ""
+
+        folder_map: dict[str, CorpusFolder] = {}
+        created_count = 0
+        reused_count = 0
+
+        # Pre-fetch existing folders in corpus to minimize queries
+        existing_folders = CorpusFolder.objects.filter(corpus=corpus).select_related(
+            "parent"
+        )
+
+        # Build lookup for existing folders by their full path
+        # We need to compute full paths for existing folders
+        existing_by_path: dict[str, CorpusFolder] = {}
+        for folder in existing_folders:
+            path = folder.get_path()
+            # Adjust for target_folder prefix if needed
+            if target_folder:
+                # Existing folders under target_folder need to be matched
+                # relative to target_folder's path
+                target_path = target_folder.get_path()
+                if path.startswith(target_path + "/"):
+                    relative_path = path[len(target_path) + 1 :]
+                    existing_by_path[relative_path] = folder
+                elif folder.id == target_folder.id:
+                    # The target folder itself
+                    pass
+            else:
+                # No target folder - match at corpus root
+                existing_by_path[path] = folder
+
+        with transaction.atomic():
+            for path in folder_paths:
+                # Determine parent folder
+                if "/" in path:
+                    # Has a parent - look it up in our map
+                    parent_path = "/".join(path.split("/")[:-1])
+                    parent = folder_map.get(parent_path)
+                    if parent is None:
+                        # Parent should have been created already (paths are sorted)
+                        # Check if it exists in corpus
+                        parent = existing_by_path.get(parent_path)
+                    if parent is None:
+                        return (
+                            {},
+                            created_count,
+                            reused_count,
+                            f"Parent folder not found for path: {path}",
+                        )
+                else:
+                    # Root-level folder - parent is target_folder (or None)
+                    parent = target_folder
+
+                folder_name = path.split("/")[-1]
+
+                # Check if folder already exists at this path
+                if path in existing_by_path:
+                    folder_map[path] = existing_by_path[path]
+                    reused_count += 1
+                    logger.debug(f"Reusing existing folder: {path}")
+                    continue
+
+                # Check if folder with same name exists under this parent
+                existing = CorpusFolder.objects.filter(
+                    corpus=corpus,
+                    parent=parent,
+                    name=folder_name,
+                ).first()
+
+                if existing:
+                    folder_map[path] = existing
+                    existing_by_path[path] = existing  # Add to cache
+                    reused_count += 1
+                    logger.debug(f"Reusing existing folder by name: {path}")
+                else:
+                    # Create new folder
+                    folder = CorpusFolder.objects.create(
+                        corpus=corpus,
+                        parent=parent,
+                        name=folder_name,
+                        creator=user,
+                    )
+                    folder_map[path] = folder
+                    existing_by_path[path] = folder  # Add to cache
+                    created_count += 1
+                    logger.debug(f"Created new folder: {path} (id={folder.id})")
+
+        logger.info(
+            f"Folder structure created for corpus {corpus.id}: "
+            f"{created_count} new, {reused_count} reused"
+        )
+
+        return folder_map, created_count, reused_count, ""
+
     # =========================================================================
     # DOCUMENT LIFECYCLE OPERATIONS
     # =========================================================================

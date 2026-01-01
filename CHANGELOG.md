@@ -5,6 +5,33 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2025-12-31
+
+### Added
+
+#### Secure Zip Import with Folder Structure Preservation
+- **Zip security utilities** (`opencontractserver/utils/zip_security.py`): Comprehensive security validation for zip file imports
+  - Path traversal protection: Sanitizes all paths, rejects `..` sequences, drive letters, absolute paths
+  - Zip bomb detection: Monitors compression ratios, enforces size limits (500MB total, 100MB per file)
+  - Symlink rejection: Detects and skips symbolic links in zip entries
+  - Resource limits: Max 1000 files, 500 folders, 20 levels deep (all configurable)
+  - Hidden file filtering: Skips `.DS_Store`, `__MACOSX`, `Thumbs.db`, etc.
+- **Security constants** (`opencontractserver/constants/zip_import.py`): Configurable limits via Django settings
+- **Folder structure creation** (`opencontractserver/corpuses/folder_service.py:1268-1411`): `create_folder_structure_from_paths()` efficiently creates folder hierarchies, reusing existing folders
+- **Import Celery task** (`opencontractserver/tasks/import_tasks.py:580-912`): `import_zip_with_folder_structure` task with three-phase processing:
+  - Phase 1: Security validation without extraction
+  - Phase 2: Atomic folder structure creation
+  - Phase 3: Batched document processing with per-file error handling
+- **GraphQL mutation** (`config/graphql/mutations.py:1890-2040`): `importZipToCorpus` mutation with rate limiting
+  - Accepts base64-encoded zip file
+  - Optional target folder placement
+  - Returns job_id for async tracking
+  - Requires corpus EDIT permission
+- **Comprehensive test suites**:
+  - Security tests (`opencontractserver/tests/test_zip_security.py`): 49 tests for path sanitization, validation, edge cases
+  - Integration tests (`opencontractserver/tests/test_zip_import_integration.py`): 17 tests for task and folder service
+- **Design documentation** (`docs/features/zip_import_with_folders_design.md`): Complete specification including security model, API, error handling
+
 ## [Unreleased] - 2025-12-29
 
 ### Added

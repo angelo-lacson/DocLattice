@@ -575,3 +575,338 @@ def process_documents_zip(
         results["errors"].append(f"Job failed: {str(e)}")
 
     return results
+
+
+@celery_app.task()
+def import_zip_with_folder_structure(
+    temporary_file_handle_id: str | int,
+    user_id: int,
+    job_id: str,
+    corpus_id: int,
+    target_folder_id: Optional[int] = None,
+    title_prefix: Optional[str] = None,
+    description: Optional[str] = None,
+    custom_meta: Optional[dict] = None,
+    make_public: bool = False,
+) -> dict:
+    """
+    Process a zip file and import documents preserving folder structure.
+
+    This task:
+    1. Validates the zip file for security (path traversal, zip bombs, etc.)
+    2. Creates the folder structure from the zip in the corpus
+    3. Extracts and creates documents with proper folder assignments
+
+    Args:
+        temporary_file_handle_id: ID of the temporary file containing the zip
+        user_id: ID of the user who uploaded the zip
+        job_id: Unique ID for the job
+        corpus_id: ID of the corpus to import into
+        target_folder_id: Optional folder ID to place zip contents under
+        title_prefix: Optional prefix for document titles
+        description: Optional description to apply to all documents
+        custom_meta: Optional metadata to apply to all documents
+        make_public: Whether the documents should be public
+
+    Returns:
+        Dictionary with comprehensive results including:
+        - job_id, success, completed flags
+        - File statistics (processed, skipped by type/size/path, errored)
+        - Folder statistics (created, reused)
+        - Document IDs and error messages
+    """
+    from opencontractserver.constants.zip_import import ZIP_DOCUMENT_BATCH_SIZE
+    from opencontractserver.corpuses.folder_service import DocumentFolderService
+    from opencontractserver.corpuses.models import Corpus, CorpusFolder
+    from opencontractserver.utils.zip_security import validate_zip_for_import
+
+    results = {
+        "job_id": job_id,
+        "success": False,
+        "completed": False,
+        # Validation
+        "validation_passed": False,
+        "validation_errors": [],
+        # File statistics
+        "total_files_in_zip": 0,
+        "files_processed": 0,
+        "files_skipped_type": 0,
+        "files_skipped_size": 0,
+        "files_skipped_hidden": 0,
+        "files_skipped_path": 0,
+        "files_errored": 0,
+        # Folder statistics
+        "folders_created": 0,
+        "folders_reused": 0,
+        # Output
+        "document_ids": [],
+        "errors": [],
+        "skipped_oversized": [],
+    }
+
+    try:
+        logger.info(
+            f"import_zip_with_folder_structure() - Processing started for job: {job_id}"
+        )
+
+        # Get required objects
+        temporary_file_handle = TemporaryFileHandle.objects.get(
+            id=temporary_file_handle_id
+        )
+        user_obj = User.objects.get(id=user_id)
+        corpus_obj = Corpus.objects.get(id=corpus_id)
+
+        # Get target folder if specified
+        target_folder = None
+        if target_folder_id:
+            target_folder = CorpusFolder.objects.get(
+                id=target_folder_id, corpus=corpus_obj
+            )
+
+        # Check user quota
+        if user_obj.is_usage_capped:
+            current_doc_count = user_obj.document_set.count()
+            remaining_quota = (
+                settings.USAGE_CAPPED_USER_DOC_CAP_COUNT - current_doc_count
+            )
+            if remaining_quota <= 0:
+                results["completed"] = True
+                results["errors"].append(
+                    f"User has reached maximum document limit of "
+                    f"{settings.USAGE_CAPPED_USER_DOC_CAP_COUNT}"
+                )
+                return results
+
+        # Open and validate the zip file
+        with temporary_file_handle.file.open("rb") as import_file, zipfile.ZipFile(
+            import_file, mode="r"
+        ) as import_zip:
+            logger.info(
+                f"import_zip_with_folder_structure() - Opened zip file for job: {job_id}"
+            )
+
+            # Phase 1: Validate the zip file
+            manifest = validate_zip_for_import(import_zip)
+            results["total_files_in_zip"] = manifest.total_files_in_zip
+
+            if not manifest.is_valid:
+                results["completed"] = True
+                results["validation_errors"].append(manifest.error_message)
+                results["errors"].append(f"Validation failed: {manifest.error_message}")
+                logger.warning(
+                    f"import_zip_with_folder_structure() - Validation failed: "
+                    f"{manifest.error_message}"
+                )
+                return results
+
+            results["validation_passed"] = True
+
+            # Count skipped files by reason
+            for skipped in manifest.skipped_files:
+                if skipped.is_oversized:
+                    results["files_skipped_size"] += 1
+                    results["skipped_oversized"].append(skipped.original_path)
+                elif "hidden" in skipped.skip_reason.lower():
+                    results["files_skipped_hidden"] += 1
+                elif "path" in skipped.skip_reason.lower():
+                    results["files_skipped_path"] += 1
+                else:
+                    # Generic skip
+                    results["files_skipped_path"] += 1
+
+            logger.info(
+                f"import_zip_with_folder_structure() - Validation passed: "
+                f"{len(manifest.valid_files)} valid files, "
+                f"{len(manifest.skipped_files)} skipped, "
+                f"{len(manifest.folder_paths)} folders to create"
+            )
+
+            # Phase 2: Create folder structure
+            if manifest.folder_paths:
+                folder_map, created, reused, folder_error = (
+                    DocumentFolderService.create_folder_structure_from_paths(
+                        user=user_obj,
+                        corpus=corpus_obj,
+                        folder_paths=manifest.folder_paths,
+                        target_folder=target_folder,
+                    )
+                )
+
+                if folder_error:
+                    results["completed"] = True
+                    results["errors"].append(f"Folder creation failed: {folder_error}")
+                    logger.error(
+                        f"import_zip_with_folder_structure() - Folder creation failed: "
+                        f"{folder_error}"
+                    )
+                    return results
+
+                results["folders_created"] = created
+                results["folders_reused"] = reused
+            else:
+                folder_map = {}
+
+            logger.info(
+                f"import_zip_with_folder_structure() - Folder structure ready: "
+                f"{results['folders_created']} created, {results['folders_reused']} reused"
+            )
+
+            # Phase 3: Process documents in batches
+            batch_count = 0
+            for entry in manifest.valid_files:
+                try:
+                    # Check user quota during processing
+                    if user_obj.is_usage_capped:
+                        current_doc_count = user_obj.document_set.count()
+                        if (
+                            current_doc_count
+                            >= settings.USAGE_CAPPED_USER_DOC_CAP_COUNT
+                        ):
+                            results["errors"].append(
+                                "User document limit reached during processing"
+                            )
+                            break
+
+                    # Extract file from zip
+                    with import_zip.open(entry.original_path) as file_handle:
+                        file_bytes = file_handle.read()
+
+                    # Validate MIME type
+                    kind = filetype.guess(file_bytes)
+                    if kind is None:
+                        if is_plaintext_content(file_bytes):
+                            mime_type = "text/plain"
+                        else:
+                            results["files_skipped_type"] += 1
+                            continue
+                    else:
+                        mime_type = kind.mime
+
+                    if mime_type not in settings.ALLOWED_DOCUMENT_MIMETYPES:
+                        results["files_skipped_type"] += 1
+                        continue
+
+                    # Prepare document attributes
+                    doc_title = entry.filename
+                    if title_prefix:
+                        doc_title = f"{title_prefix} - {entry.filename}"
+
+                    doc_description = (
+                        description or f"Imported from zip (job: {job_id})"
+                    )
+
+                    # Determine target folder for this document
+                    doc_folder = None
+                    if entry.folder_path:
+                        doc_folder = folder_map.get(entry.folder_path)
+                        if doc_folder is None and target_folder:
+                            # Fallback to target folder if path mapping failed
+                            doc_folder = target_folder
+                    elif target_folder:
+                        # File at zip root goes to target folder
+                        doc_folder = target_folder
+
+                    # Create document based on file type
+                    document = None
+
+                    if mime_type in [
+                        "application/pdf",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    ]:
+                        pdf_file = ContentFile(file_bytes, name=entry.filename)
+                        document = Document(
+                            creator=user_obj,
+                            title=doc_title,
+                            description=doc_description,
+                            custom_meta=custom_meta,
+                            pdf_file=pdf_file,
+                            backend_lock=True,
+                            is_public=make_public,
+                            file_type=mime_type,
+                        )
+                        document.save()
+                    elif mime_type in ["text/plain", "application/txt"]:
+                        txt_extract_file = ContentFile(file_bytes, name=entry.filename)
+                        document = Document(
+                            creator=user_obj,
+                            title=doc_title,
+                            description=doc_description,
+                            custom_meta=custom_meta,
+                            txt_extract_file=txt_extract_file,
+                            backend_lock=True,
+                            is_public=make_public,
+                            file_type=mime_type,
+                        )
+                        document.save()
+
+                    if document:
+                        # Set permissions for the document
+                        set_permissions_for_obj_to_user(
+                            user_obj, document, [PermissionTypes.CRUD]
+                        )
+
+                        # Add to corpus with folder assignment
+                        added_doc, status, doc_path = corpus_obj.add_document(
+                            document=document,
+                            user=user_obj,
+                            folder=doc_folder,
+                        )
+
+                        results["files_processed"] += 1
+                        results["document_ids"].append(str(added_doc.id))
+
+                        batch_count += 1
+                        if batch_count % ZIP_DOCUMENT_BATCH_SIZE == 0:
+                            logger.info(
+                                f"import_zip_with_folder_structure() - "
+                                f"Processed {batch_count} documents..."
+                            )
+
+                except Exception as e:
+                    logger.error(
+                        f"import_zip_with_folder_structure() - Error processing file "
+                        f"{entry.sanitized_path}: {str(e)}"
+                    )
+                    results["files_errored"] += 1
+                    results["errors"].append(
+                        f"Error processing {entry.sanitized_path}: {str(e)}"
+                    )
+
+        # Cleanup temporary file
+        temporary_file_handle.delete()
+
+        # Determine success
+        user_cap_reached = any(
+            "User document limit reached" in error for error in results["errors"]
+        )
+        results["success"] = not user_cap_reached and results["files_errored"] == 0
+        results["completed"] = True
+
+        logger.info(
+            f"import_zip_with_folder_structure() - Completed job: {job_id}, "
+            f"processed: {results['files_processed']}, "
+            f"folders created: {results['folders_created']}"
+        )
+
+    except Corpus.DoesNotExist:
+        logger.error(
+            f"import_zip_with_folder_structure() - Corpus {corpus_id} not found"
+        )
+        results["completed"] = True
+        results["errors"].append(f"Corpus not found: {corpus_id}")
+    except CorpusFolder.DoesNotExist:
+        logger.error(
+            f"import_zip_with_folder_structure() - Target folder {target_folder_id} not found"
+        )
+        results["completed"] = True
+        results["errors"].append(f"Target folder not found: {target_folder_id}")
+    except Exception as e:
+        logger.error(
+            f"import_zip_with_folder_structure() - Job failed with error: {str(e)}"
+        )
+        results["completed"] = True
+        results["errors"].append(f"Job failed: {str(e)}")
+
+    return results
