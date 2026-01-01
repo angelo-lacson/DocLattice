@@ -48,6 +48,37 @@ def calculate_description_filepath(instance, filename):
     )
 
 
+# -------------------- CorpusCategory -------------------- #
+
+
+class CorpusCategory(BaseOCModel):
+    """Admin-defined categories for organizing corpuses (e.g., Legislation, Contracts)."""
+
+    name = django.db.models.CharField(max_length=255, unique=True)
+    description = django.db.models.TextField(blank=True, default="")
+    icon = django.db.models.CharField(
+        max_length=100,
+        default="folder",
+        help_text="Lucide icon name (e.g., 'scroll', 'file-text', 'building-2')",
+    )
+    color = django.db.models.CharField(
+        max_length=7,
+        default="#3B82F6",
+        help_text="Hex color code for the category badge",
+    )
+    sort_order = django.db.models.IntegerField(
+        default=0, help_text="Order in which categories appear in UI"
+    )
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        verbose_name = "Corpus Category"
+        verbose_name_plural = "Corpus Categories"
+
+    def __str__(self):
+        return self.name
+
+
 class TemporaryFileHandle(django.db.models.Model):
     """
     This may seem useless, but lets us leverage django's infrastructure to support multiple
@@ -91,6 +122,12 @@ class Corpus(TreeNode):
 
     # Documents and Labels in the Corpus
     documents = django.db.models.ManyToManyField("documents.Document", blank=True)
+    categories = django.db.models.ManyToManyField(
+        "CorpusCategory",
+        blank=True,
+        related_name="corpuses",
+        help_text="Categories assigned to this corpus for discovery filtering",
+    )
     label_set = django.db.models.ForeignKey(
         "annotations.LabelSet",
         null=True,

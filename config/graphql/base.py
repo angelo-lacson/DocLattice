@@ -169,9 +169,8 @@ class DRFMutation(graphene.Mutation):
                         if isinstance(kwargs[pk_field], list):
                             pk_value = []
                             for global_id in kwargs[pk_field]:
-                                pk_value.append(
-                                    from_global_id(kwargs.get(global_id, None))[1]
-                                )
+                                # global_id is already the ID string, not a key
+                                pk_value.append(from_global_id(global_id)[1])
                         else:
                             logger.info(f"pk field is: {kwargs.get(pk_field, None)}")
                             pk_value = from_global_id(kwargs.get(pk_field, None))[1]

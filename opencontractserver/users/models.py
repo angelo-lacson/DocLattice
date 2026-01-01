@@ -134,6 +134,13 @@ class User(AbstractUser):
         help_text="Whether this user's profile is visible to other users",
     )
 
+    # UI Preferences
+    dismissed_getting_started = django.db.models.BooleanField(
+        "Dismissed Getting Started",
+        default=False,
+        help_text="Whether the user has dismissed the Getting Started guide on the Discover page",
+    )
+
     # Custom manager for profile visibility
     objects = UserProfileManager()
 

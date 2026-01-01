@@ -96,6 +96,7 @@ export interface UpdateCorpusInputs {
   // NOTE: isPublic removed - use SET_CORPUS_VISIBILITY mutation instead
   corpusAgentInstructions?: string;
   documentAgentInstructions?: string;
+  categories?: string[];
 }
 
 export interface UpdateCorpusOutputs {
@@ -123,6 +124,7 @@ export const UPDATE_CORPUS = gql`
     $slug: String
     $corpusAgentInstructions: String
     $documentAgentInstructions: String
+    $categories: [ID]
   ) {
     updateCorpus(
       id: $id
@@ -134,6 +136,7 @@ export const UPDATE_CORPUS = gql`
       slug: $slug
       corpusAgentInstructions: $corpusAgentInstructions
       documentAgentInstructions: $documentAgentInstructions
+      categories: $categories
     ) {
       ok
       message
@@ -228,6 +231,7 @@ export interface CreateCorpusInputs {
   filename?: string;
   labelSet?: string;
   preferredEmbedder?: string;
+  categories?: string[];
 }
 
 export interface CreateCorpusOutputs {
@@ -245,6 +249,7 @@ export const CREATE_CORPUS = gql`
     $title: String
     $preferredEmbedder: String
     $slug: String
+    $categories: [ID]
   ) {
     createCorpus(
       description: $description
@@ -253,6 +258,7 @@ export const CREATE_CORPUS = gql`
       title: $title
       preferredEmbedder: $preferredEmbedder
       slug: $slug
+      categories: $categories
     ) {
       ok
       message

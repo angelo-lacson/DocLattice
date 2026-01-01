@@ -5,7 +5,7 @@ from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
 from opencontractserver.annotations.models import Annotation, AnnotationLabel, LabelSet
-from opencontractserver.corpuses.models import Corpus
+from opencontractserver.corpuses.models import Corpus, CorpusCategory
 from opencontractserver.documents.models import Document
 from opencontractserver.extracts.models import Column, Extract
 from opencontractserver.shared.fields import PDFBase64File
@@ -31,6 +31,9 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 class CorpusSerializer(serializers.ModelSerializer):
     icon = Base64ImageField(required=False)
+    categories = serializers.PrimaryKeyRelatedField(
+        many=True, required=False, queryset=CorpusCategory.objects.all()
+    )
 
     class Meta:
         model = Corpus
@@ -47,6 +50,7 @@ class CorpusSerializer(serializers.ModelSerializer):
             "preferred_embedder",
             "corpus_agent_instructions",
             "document_agent_instructions",
+            "categories",
         ]
         # NOTE: is_public is read-only - use SetCorpusVisibility mutation to change it
         # This prevents bypassing permission checks via serializer updates

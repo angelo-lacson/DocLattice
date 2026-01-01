@@ -15,6 +15,7 @@ import { unstable_batchedUpdates } from "react-dom";
 import { useLazyQuery, useApolloClient } from "@apollo/client";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
+import { arraysEqualOrdered } from "../utils/arrayUtils";
 import {
   openedCorpus,
   openedDocument,
@@ -779,10 +780,6 @@ export function CentralRouteManager() {
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
     const currentLabels = showAnnotationLabels();
 
-    // Helper to compare arrays
-    const arraysEqual = (a: string[], b: string[]) =>
-      a.length === b.length && a.every((val, idx) => val === b[idx]);
-
     // Parse label display behavior (default to ON_HOVER if not specified)
     const newLabels =
       labelsParam === "ALWAYS"
@@ -795,13 +792,13 @@ export function CentralRouteManager() {
     // This prevents cascading re-renders - all updates happen in one React tick
     const updates: Array<() => void> = [];
 
-    if (!arraysEqual(currentAnnIds, annIds)) {
+    if (!arraysEqualOrdered(currentAnnIds, annIds)) {
       updates.push(() => selectedAnnotationIds(annIds));
     }
-    if (!arraysEqual(currentAnalysisIds, analysisIds)) {
+    if (!arraysEqualOrdered(currentAnalysisIds, analysisIds)) {
       updates.push(() => selectedAnalysesIds(analysisIds));
     }
-    if (!arraysEqual(currentExtractIds, extractIds)) {
+    if (!arraysEqualOrdered(currentExtractIds, extractIds)) {
       updates.push(() => selectedExtractIds(extractIds));
     }
     if (currentThreadId !== threadId) {

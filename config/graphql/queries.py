@@ -5,7 +5,7 @@ from typing import Optional
 
 import graphene
 from django.conf import settings
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
@@ -24,6 +24,7 @@ from config.graphql.filters import (
     BadgeFilter,
     ColumnFilter,
     ConversationFilter,
+    CorpusCategoryFilter,
     CorpusFilter,
     DatacellFilter,
     DocumentFilter,
@@ -56,6 +57,7 @@ from config.graphql.graphene_types import (
     CorpusActionExecutionType,
     CorpusActionTrailStatsType,
     CorpusActionType,
+    CorpusCategoryType,
     CorpusFolderType,
     CorpusStatsType,
     CorpusType,
@@ -821,6 +823,45 @@ class Query(graphene.ObjectType):
         )
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
+
+    # CORPUS CATEGORY RESOLVERS #####################################
+    corpus_categories = DjangoFilterConnectionField(
+        CorpusCategoryType,
+        filterset_class=CorpusCategoryFilter,
+        description="List all corpus categories",
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_corpus_categories(self, info, **kwargs):
+        """
+        Get all corpus categories, ordered by sort_order and name.
+
+        Annotates corpus_count to avoid N+1 queries when rendering category lists.
+        For anonymous users, counts only public corpuses. For authenticated users,
+        counts all corpuses the user can see (public + those with permissions).
+
+        Uses Corpus.objects.visible_to_user() to ensure guardian permissions are
+        respected - users with explicit READ permissions on private corpuses will
+        see them in counts.
+        """
+        from opencontractserver.corpuses.models import Corpus, CorpusCategory
+
+        user = info.context.user
+
+        # Get IDs of all corpuses visible to this user
+        # This properly respects guardian permissions for shared private corpuses
+        visible_corpus_ids = list(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+
+        # Count corpuses per category, filtering to only visible ones
+        categories = CorpusCategory.objects.annotate(
+            _corpus_count=Count(
+                "corpuses", filter=Q(corpuses__id__in=visible_corpus_ids), distinct=True
+            )
+        ).order_by("sort_order", "name")
+
+        return categories
 
     # CORPUS FOLDER RESOLVERS #####################################
 
