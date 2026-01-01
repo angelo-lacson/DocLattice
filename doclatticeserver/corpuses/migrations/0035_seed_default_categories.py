@@ -86,10 +86,11 @@ def remove_default_categories(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # NOTE: No explicit users app dependency needed - Django automatically
+    # resolves it via CorpusCategory.creator ForeignKey to User model.
 
     dependencies = [
         ("corpuses", "0034_add_corpus_category"),
-        ("users", "0023_add_dismissed_getting_started"),  # Depend on recent migration
     ]
 
     operations = [
