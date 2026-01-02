@@ -204,7 +204,8 @@ class CreatorBasedPermissionsPublicObjectTestCase(TestCase):
     def test_public_labelset_readable_by_all(self):
         """
         LabelSet with is_public=True should be readable by all users.
-        Note: LabelSet uses guardian permissions, but this tests the public fallback.
+        Note: LabelSet uses guardian permissions, but this tests the is_public check
+        in the guardian permission path (line 265-266 in permissioning.py)
         """
         # Create a public labelset
         with transaction.atomic():
@@ -227,6 +228,72 @@ class CreatorBasedPermissionsPublicObjectTestCase(TestCase):
             "read_labelset",
             permissions,
             "Public labelset should be readable by any user",
+        )
+
+    def test_public_object_without_guardian_permissions_readable_by_all(self):
+        """
+        Test the is_public branch in creator-based permissions code path.
+
+        This tests the case where a model without guardian permission tables
+        has is_public=True, which should grant read permission to any user.
+        We use a simple class to simulate this since AnnotationLabel doesn't
+        have an is_public field.
+        """
+
+        # Create a simple class that simulates a model without guardian permissions
+        # but with is_public=True
+        class MockModelMeta:
+            model_name = "mockmodel"
+            app_label = "mockapp"
+
+        class MockPublicModel:
+            _meta = MockModelMeta()
+            creator_id = -999  # Different from any real user
+            is_public = True
+
+        mock_instance = MockPublicModel()
+
+        permissions = get_users_permissions_for_obj(
+            user=self.user2,
+            instance=mock_instance,
+        )
+
+        # Should have read permission due to is_public=True
+        self.assertIn(
+            "read_mockmodel",
+            permissions,
+            "Public object without guardian permissions should be readable by any user",
+        )
+
+    def test_non_public_non_creator_object_without_guardian_permissions(self):
+        """
+        Test that non-public objects without guardian permissions are not readable
+        by non-creator, non-superuser users.
+        """
+
+        # Create a simple class that simulates a model without guardian permissions
+        # and is_public=False
+        class MockModelMeta:
+            model_name = "mockmodel"
+            app_label = "mockapp"
+
+        class MockPrivateModel:
+            _meta = MockModelMeta()
+            creator_id = -999  # Different from any real user
+            is_public = False
+
+        mock_instance = MockPrivateModel()
+
+        permissions = get_users_permissions_for_obj(
+            user=self.user2,
+            instance=mock_instance,
+        )
+
+        # Should have no permissions
+        self.assertEqual(
+            permissions,
+            set(),
+            "Non-public object without guardian permissions should not be readable by other users",
         )
 
 
