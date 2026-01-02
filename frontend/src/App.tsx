@@ -74,6 +74,7 @@ import { DocumentUploadModal } from "./components/widgets/modals/DocumentUploadM
 import { FileUploadPackageProps } from "./components/widgets/modals/DocumentUploadModal";
 import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
 import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
+import { LabelSetLandingRoute } from "./components/routes/LabelSetLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
 import { CorpusThreadRoute } from "./components/routes/CorpusThreadRoute";
@@ -351,7 +352,6 @@ export const App = () => {
                 <EditExtractModal
                   ext={opened_extract}
                   open={opened_extract !== null}
-                  toggleModal={() => openedExtract(null)}
                 />
               )}
               <DocumentUploadModal
@@ -468,6 +468,11 @@ export const App = () => {
                   ) : (
                     <></>
                   )}
+                  {/* LabelSet routes */}
+                  <Route
+                    path="/label_sets/:labelsetId"
+                    element={<LabelSetLandingRoute />}
+                  />
                   <Route path="/label_sets" element={<Labelsets />} />
                   <Route path="/annotations" element={<Annotations />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />

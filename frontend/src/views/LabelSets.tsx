@@ -1,12 +1,41 @@
-import { useEffect, useRef, useState } from "react";
-
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
+import styled from "styled-components";
+import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
+import {
+  SearchBox,
+  FilterTabs,
+  CollectionList,
+  StatBlock,
+  StatGrid,
+  Button,
+  EmptyState,
+} from "@os-legal/ui";
+import { Plus, Tags } from "lucide-react";
+import type { FilterTabItem } from "@os-legal/ui";
+import { toast } from "react-toastify";
 import _ from "lodash";
 
-import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
-
-import { LabelSetEditModal } from "../components/labelsets/LabelSetEditModal";
-import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
-import { LabelsetCards } from "../components/labelsets/LabelSetCards";
+import { LabelSetType } from "../types/graphql-api";
+import {
+  authToken,
+  labelsetSearchTerm,
+  openedLabelset,
+  showNewLabelsetModal,
+  userObj,
+  deletingLabelset,
+  editingLabelset,
+} from "../graphql/cache";
+import {
+  GetLabelsetsWithLabelsInputs,
+  GetLabelsetsWithLabelsOutputs,
+  REQUEST_LABELSETS_WITH_ALL_LABELS,
+} from "../graphql/queries";
 import {
   CreateLabelsetInputs,
   CreateLabelsetOutputs,
@@ -16,35 +45,163 @@ import {
   newLabelSetForm_Schema,
   newLabelSetForm_Ui_Schema,
 } from "../components/forms/schemas";
-import {
-  authToken,
-  labelsetSearchTerm,
-  openedLabelset,
-  selectedLabelsetIds,
-  showNewLabelsetModal,
-} from "../graphql/cache";
-import { ActionDropdownItem } from "../components/types";
-import { CardLayout } from "../components/layout/CardLayout";
-import { CreateAndSearchBar } from "../components/layout/CreateAndSearchBar";
-import { useLocation } from "react-router-dom";
-import {
-  GetLabelsetsWithLabelsInputs,
-  GetLabelsetsWithLabelsOutputs,
-  REQUEST_LABELSETS_WITH_ALL_LABELS,
-} from "../graphql/queries";
-import { LabelSetType } from "../types/graphql-api";
-import { toast } from "react-toastify";
+import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
+import { LabelSetListCard } from "../components/labelsets/LabelSetListCard";
+import { LabelSetEditModal } from "../components/labelsets/LabelSetEditModal";
+import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
+import { LoadingOverlay } from "../components/common/LoadingOverlay";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STYLED COMPONENTS - Following DiscoveryLanding patterns
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PageContainer = styled.div`
+  height: 100%;
+  background: #fafafa;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-y: auto;
+  overflow-x: hidden;
+`;
+
+const ContentContainer = styled.main`
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+
+  @media (max-width: 768px) {
+    padding: 32px 16px 60px;
+  }
+`;
+
+const HeroSection = styled.section`
+  margin-bottom: 48px;
+`;
+
+const HeroTitle = styled.h1`
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 42px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #1e293b;
+  margin: 0 0 16px;
+
+  span {
+    color: #0f766e;
+  }
+
+  @media (max-width: 768px) {
+    font-size: 32px;
+  }
+`;
+
+const HeroSubtitle = styled.p`
+  font-size: 17px;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0 0 32px;
+  max-width: 600px;
+`;
+
+const SearchContainer = styled.div`
+  margin-bottom: 16px;
+`;
+
+const StatsContainer = styled.div`
+  margin-bottom: 48px;
+  padding: 32px 0;
+
+  /* Override stat value size like StatsSection does */
+  [class*="StatBlock"] > *:first-child,
+  [data-testid="stat-value"] {
+    font-size: 36px !important;
+  }
+
+  @media (max-width: 768px) {
+    padding: 24px 0;
+
+    [class*="StatBlock"] > *:first-child,
+    [data-testid="stat-value"] {
+      font-size: 28px !important;
+    }
+  }
+`;
+
+const SectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+`;
+
+const SectionTitle = styled.h2`
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 24px;
+  font-weight: 400;
+  color: #0f766e;
+  margin: 0;
+`;
+
+const ActionButtons = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const ListContainer = styled.section`
+  position: relative;
+  min-height: 200px;
+`;
+
+const EmptyStateWrapper = styled.div`
+  padding: 48px 24px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ICONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TagsIcon = () => (
+  <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+    <path
+      d="M8 10a2 2 0 012-2h10.586a2 2 0 011.414.586l10 10a2 2 0 010 2.828l-8.586 8.586a2 2 0 01-2.828 0l-10-10A2 2 0 018 18.586V10z"
+      fill="currentColor"
+    />
+    <circle cx="14" cy="14" r="2" fill="white" />
+  </svg>
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export const Labelsets = () => {
-  const [createLabelset, { loading: create_labelset_loading }] = useMutation<
-    CreateLabelsetOutputs,
-    CreateLabelsetInputs
-  >(CREATE_LABELSET);
+  const auth_token = useReactiveVar(authToken);
+  const currentUser = useReactiveVar(userObj);
+  const labelset_search_term = useReactiveVar(labelsetSearchTerm);
+  const opened_labelset = useReactiveVar(openedLabelset);
+  const show_new_label_modal = useReactiveVar(showNewLabelsetModal);
+  const isAuthenticated = Boolean(auth_token);
+  const currentUserEmail = currentUser?.email;
 
+  // Local state
+  const [searchCache, setSearchCache] = useState<string>(labelset_search_term);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  // Debounced search
   const debouncedSearch = useRef(
-    _.debounce((searchTerm) => {
+    _.debounce((searchTerm: string) => {
       labelsetSearchTerm(searchTerm);
-    }, 1000)
+    }, 500)
   );
 
   const handleSearchChange = (value: string) => {
@@ -52,124 +209,332 @@ export const Labelsets = () => {
     debouncedSearch.current(value);
   };
 
-  const show_new_label_modal = useReactiveVar(showNewLabelsetModal);
-  const selected_labelset_ids = useReactiveVar(selectedLabelsetIds);
-  const labelset_search_term = useReactiveVar(labelsetSearchTerm);
-  const opened_labelset = useReactiveVar(openedLabelset);
-  const auth_token = useReactiveVar(authToken);
-
-  const [searchCache, setSearchCache] = useState<string>(labelset_search_term);
-
-  const { refetch, loading, error, data, fetchMore } = useQuery<
+  // GraphQL Query
+  const { refetch, loading, data, fetchMore } = useQuery<
     GetLabelsetsWithLabelsOutputs,
     GetLabelsetsWithLabelsInputs
   >(REQUEST_LABELSETS_WITH_ALL_LABELS, {
     variables: {
       textSearch: labelset_search_term,
     },
-    notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
+    notifyOnNetworkStatusChange: true,
   });
 
-  const items: LabelSetType[] = data?.labelsets?.edges
-    ? data.labelsets.edges.map((edge) => edge.node)
-    : [];
+  // Create mutation
+  const [createLabelset, { loading: create_labelset_loading }] = useMutation<
+    CreateLabelsetOutputs,
+    CreateLabelsetInputs
+  >(CREATE_LABELSET);
 
-  /**
-   * Load the labelsets
-   */
+  // Extract labelsets from query data
+  const labelsets: LabelSetType[] = useMemo(() => {
+    if (!data?.labelsets?.edges) return [];
+    return data.labelsets.edges
+      .map((edge) => edge.node)
+      .filter((node): node is LabelSetType => node !== null);
+  }, [data]);
 
-  /**
-   * Setup mutaton to create new labelset
-   */
+  // Filter labelsets based on active filter
+  const filteredLabelsets = useMemo(() => {
+    switch (activeFilter) {
+      case "my":
+        return labelsets.filter((ls) => ls.creator?.email === currentUserEmail);
+      case "shared":
+        return labelsets.filter(
+          (ls) =>
+            !ls.isPublic &&
+            ls.creator?.email !== currentUserEmail &&
+            (ls.myPermissions?.length || 0) > 0
+        );
+      case "public":
+        return labelsets.filter((ls) => ls.isPublic);
+      default:
+        return labelsets;
+    }
+  }, [labelsets, activeFilter, currentUserEmail]);
+
+  // Calculate counts for filter tabs
+  const filterCounts = useMemo(() => {
+    return {
+      my: labelsets.filter((ls) => ls.creator?.email === currentUserEmail)
+        .length,
+      shared: labelsets.filter(
+        (ls) =>
+          !ls.isPublic &&
+          ls.creator?.email !== currentUserEmail &&
+          (ls.myPermissions?.length || 0) > 0
+      ).length,
+      public: labelsets.filter((ls) => ls.isPublic).length,
+    };
+  }, [labelsets, currentUserEmail]);
+
+  // Filter tabs configuration
+  const filterItems: FilterTabItem[] = [
+    { id: "all", label: "All" },
+    { id: "my", label: "My Label Sets", count: String(filterCounts.my) },
+    { id: "shared", label: "Shared", count: String(filterCounts.shared) },
+    { id: "public", label: "Public", count: String(filterCounts.public) },
+  ];
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    let totalLabels = 0;
+    let totalCorpusUses = 0;
+
+    labelsets.forEach((ls) => {
+      totalLabels +=
+        (ls.docLabelCount || 0) +
+        (ls.spanLabelCount || 0) +
+        (ls.tokenLabelCount || 0);
+      totalCorpusUses += ls.corpusCount || 0;
+    });
+
+    return {
+      totalLabelsets: labelsets.length,
+      totalLabels,
+      totalCorpusUses,
+      sharedCount: filterCounts.shared,
+    };
+  }, [labelsets, filterCounts.shared]);
+
+  // Handlers
   const handleCreateLabelset = (values: CreateLabelsetInputs) => {
     createLabelset({ variables: { ...values } })
-      .then((data) => {
+      .then(() => {
         refetch();
         showNewLabelsetModal(false);
-        toast.success("SUCCESS!\nSuccessfully created new labelset.");
+        toast.success("Successfully created new label set.");
       })
-      .catch((err) => {
-        toast.error("ERROR!\nFailed to created new labelset.");
+      .catch(() => {
+        toast.error("Failed to create new label set.");
         showNewLabelsetModal(false);
       });
   };
 
-  /**
-   * Build array of available actions
-   */
-
-  let button_actions: ActionDropdownItem[] = [];
-
-  if (auth_token) {
-    button_actions.push({
-      key: "Labelset_action_0",
-      title: "Create Label Set",
-      icon: "plus",
-      color: "blue",
-      action_function: () => showNewLabelsetModal(true),
-    });
-    if (selected_labelset_ids.length > 0) {
-      button_actions.push({
-        key: `Labelset_action_${button_actions.length}`,
-        title: "Delete Label Set(s)",
-        icon: "remove circle",
-        color: "blue",
-        action_function: () => console.log("Delete label sets"),
+  const handleFetchMore = useCallback(() => {
+    if (!loading && data?.labelsets?.pageInfo?.hasNextPage) {
+      fetchMore({
+        variables: {
+          cursor: data.labelsets.pageInfo.endCursor,
+        },
       });
     }
-  }
+  }, [loading, data, fetchMore]);
+
+  const handleOpenContextMenu = useCallback(
+    (e: React.MouseEvent, labelsetId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setMenuPosition({ x: e.clientX, y: e.clientY });
+      setOpenMenuId(labelsetId);
+    },
+    []
+  );
+
+  const handleCloseMenu = useCallback(() => {
+    setOpenMenuId(null);
+    setMenuPosition(null);
+  }, []);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (openMenuId) {
+        handleCloseMenu();
+      }
+    };
+
+    if (openMenuId) {
+      const timer = setTimeout(() => {
+        document.addEventListener("click", handleClickOutside);
+      }, 100);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener("click", handleClickOutside);
+      };
+    }
+  }, [openMenuId, handleCloseMenu]);
+
+  // Determine section title based on filter
+  const getSectionTitle = () => {
+    switch (activeFilter) {
+      case "my":
+        return "My Label Sets";
+      case "shared":
+        return "Shared with Me";
+      case "public":
+        return "Public Label Sets";
+      default:
+        return "Your Label Sets";
+    }
+  };
 
   return (
-    <CardLayout
-      Modals={
-        <>
-          {opened_labelset ? (
-            <LabelSetEditModal
-              open={opened_labelset !== null}
-              toggleModal={() => openedLabelset(null)}
-            />
-          ) : (
-            <></>
-          )}
+    <PageContainer>
+      <ContentContainer>
+        {/* Modals */}
+        {opened_labelset && (
+          <LabelSetEditModal
+            open={opened_labelset !== null}
+            toggleModal={() => openedLabelset(null)}
+          />
+        )}
 
-          {show_new_label_modal ? (
-            <CRUDModal
-              open={show_new_label_modal}
-              mode="CREATE"
-              oldInstance={{}}
-              modelName="labelset"
-              uiSchema={newLabelSetForm_Ui_Schema}
-              dataSchema={newLabelSetForm_Schema}
-              onSubmit={handleCreateLabelset}
-              onClose={() => showNewLabelsetModal(false)}
-              hasFile={true}
-              fileField="icon"
-              fileLabel="Labelset Icon"
-              fileIsImage={true}
-              acceptedFileTypes="image/*"
-              loading={create_labelset_loading}
+        {show_new_label_modal && (
+          <CRUDModal
+            open={show_new_label_modal}
+            mode="CREATE"
+            oldInstance={{}}
+            modelName="labelset"
+            uiSchema={newLabelSetForm_Ui_Schema}
+            dataSchema={newLabelSetForm_Schema}
+            onSubmit={handleCreateLabelset}
+            onClose={() => showNewLabelsetModal(false)}
+            hasFile={true}
+            fileField="icon"
+            fileLabel="Labelset Icon"
+            fileIsImage={true}
+            acceptedFileTypes="image/*"
+            loading={create_labelset_loading}
+          />
+        )}
+
+        {/* Hero Section */}
+        <HeroSection>
+          <HeroTitle>
+            Organize your <span>labels</span>
+          </HeroTitle>
+          <HeroSubtitle>
+            Create and manage label sets for consistent document annotation
+            across your corpuses.
+          </HeroSubtitle>
+
+          {/* Search */}
+          <SearchContainer>
+            <SearchBox
+              placeholder="Search label sets..."
+              value={searchCache}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onSubmit={(value) => handleSearchChange(value)}
             />
-          ) : (
-            <></>
-          )}
-        </>
-      }
-      SearchBar={
-        <CreateAndSearchBar
-          onChange={(value: string) => handleSearchChange(value)}
-          actions={button_actions}
-          placeholder="Search for corpus..."
-          value={searchCache}
-        />
-      }
-    >
-      <LabelsetCards
-        pageInfo={data?.labelsets?.pageInfo ? data.labelsets.pageInfo : null}
-        items={items}
-        loading={loading}
-        loading_message="Loading Labelsets..."
-        fetchMore={fetchMore}
-      />
-    </CardLayout>
+          </SearchContainer>
+
+          {/* Filter Tabs */}
+          <FilterTabs
+            items={filterItems}
+            value={activeFilter}
+            onChange={setActiveFilter}
+          />
+        </HeroSection>
+
+        {/* Stats Grid */}
+        <StatsContainer>
+          <StatGrid columns={2}>
+            <StatBlock
+              value={stats.totalLabelsets.toString()}
+              label="Label Sets"
+              sublabel="in your library"
+            />
+            <StatBlock
+              value={stats.totalLabels.toLocaleString()}
+              label="Total Labels"
+              sublabel="across all sets"
+            />
+            <StatBlock
+              value={stats.totalCorpusUses.toString()}
+              label="Corpus Uses"
+              sublabel="total deployments"
+            />
+            <StatBlock
+              value={stats.sharedCount.toString()}
+              label="Shared"
+              sublabel="with collaborators"
+            />
+          </StatGrid>
+        </StatsContainer>
+
+        {/* Label Sets List Section */}
+        <ListContainer>
+          <LoadingOverlay
+            active={loading}
+            inverted
+            size="large"
+            content="Loading label sets..."
+          />
+
+          <SectionHeader>
+            <SectionTitle>{getSectionTitle()}</SectionTitle>
+            {isAuthenticated && (
+              <ActionButtons>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Plus size={16} />}
+                  onClick={() => showNewLabelsetModal(true)}
+                >
+                  New Label Set
+                </Button>
+              </ActionButtons>
+            )}
+          </SectionHeader>
+
+          {filteredLabelsets.length > 0 ? (
+            <>
+              <CollectionList gap="md">
+                {filteredLabelsets.map((labelset) => (
+                  <LabelSetListCard
+                    key={labelset.id}
+                    labelset={labelset}
+                    currentUserEmail={currentUserEmail}
+                    onEdit={(ls) => editingLabelset(ls)}
+                    onView={(ls) => openedLabelset(ls)}
+                    onDelete={(ls) => deletingLabelset(ls)}
+                    isMenuOpen={openMenuId === labelset.id}
+                    menuPosition={
+                      openMenuId === labelset.id ? menuPosition : null
+                    }
+                    onOpenMenu={handleOpenContextMenu}
+                    onCloseMenu={handleCloseMenu}
+                  />
+                ))}
+              </CollectionList>
+
+              {/* Infinite scroll trigger */}
+              <FetchMoreOnVisible fetchNextPage={handleFetchMore} />
+            </>
+          ) : !loading ? (
+            <EmptyStateWrapper>
+              <EmptyState
+                icon={<TagsIcon />}
+                title={
+                  activeFilter !== "all"
+                    ? `No ${getSectionTitle().toLowerCase()}`
+                    : "No label sets yet"
+                }
+                description={
+                  activeFilter !== "all"
+                    ? "Try selecting a different filter to see more label sets."
+                    : "Create your first label set to start organizing annotations across your documents."
+                }
+                size="lg"
+                action={
+                  activeFilter === "all" && isAuthenticated ? (
+                    <Button
+                      variant="primary"
+                      leftIcon={<Plus size={16} />}
+                      onClick={() => showNewLabelsetModal(true)}
+                    >
+                      Create Your First Label Set
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </EmptyStateWrapper>
+          ) : null}
+        </ListContainer>
+      </ContentContainer>
+    </PageContainer>
   );
 };
+
+export default Labelsets;

@@ -21,6 +21,7 @@ import {
   routeLoading,
   routeError,
   authStatusVar,
+  authInitCompleteVar,
 } from "../../graphql/cache";
 import {
   RESOLVE_CORPUS_BY_SLUGS_FULL,
@@ -52,6 +53,7 @@ describe("CentralRouteManager", () => {
 
     // Set auth status so CentralRouteManager proceeds with entity fetching
     authStatusVar("AUTHENTICATED");
+    authInitCompleteVar(true);
 
     // CRITICAL: Reset navigation circuit breaker to prevent test isolation issues
     // The circuit breaker is a singleton that accumulates navigation events across tests
