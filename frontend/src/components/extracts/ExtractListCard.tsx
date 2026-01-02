@@ -6,8 +6,7 @@ import { Menu } from "semantic-ui-react";
 import { ExtractType } from "../../types/graphql-api";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
-import { formatShortDate } from "../../utils/formatters";
-import { getExtractStatus } from "../../utils/extractUtils";
+import { getExtractStatus, formatExtractDate } from "../../utils/extractUtils";
 
 // Styled Components
 
@@ -156,14 +155,14 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
     }
   };
 
-  const statusLabel = getExtractStatus(extract);
+  const statusLabel = getExtractStatus(extract).label;
   const stats = formatStats(extract);
   const permissions = getPermissions(extract.myPermissions || []);
   const canRemove = permissions.includes(PermissionTypes.CAN_REMOVE);
 
   // Add creation date to description
   const description = extract.created
-    ? `Created ${formatShortDate(extract.created)}`
+    ? `Created ${formatExtractDate(extract.created)}`
     : "No description";
 
   return (

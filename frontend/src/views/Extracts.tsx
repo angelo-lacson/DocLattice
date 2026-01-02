@@ -22,7 +22,6 @@ import { toast } from "react-toastify";
 import _ from "lodash";
 
 import { ExtractType } from "../types/graphql-api";
-import { DEBOUNCE } from "../assets/configurations/constants";
 import {
   authToken,
   extractSearchTerm,
@@ -46,6 +45,7 @@ import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import { CreateExtractModal } from "../components/widgets/modals/CreateExtractModal";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../components/common/LoadingOverlay";
+import { EXTRACT_SEARCH_DEBOUNCE_MS } from "../constants/extract";
 
 // Styled Components - Following LabelSets patterns
 
@@ -194,7 +194,7 @@ export const Extracts = () => {
   const debouncedSearch = useRef(
     _.debounce((searchTerm: string) => {
       extractSearchTerm(searchTerm);
-    }, DEBOUNCE.SEARCH_MS)
+    }, EXTRACT_SEARCH_DEBOUNCE_MS)
   );
 
   const handleSearchChange = (value: string) => {

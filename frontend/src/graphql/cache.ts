@@ -366,29 +366,29 @@ export const editingDocument = makeVar<DocumentType | null>(null);
  *
  * ENTITY STATE:
  *   openedExtract - Extract resolved from /extracts/:extractId route
- *   Set by: ExtractDetailRoute component when navigating to extract detail
- *   Read by: ExtractDetail component for displaying extract data
+ *   Set by: CentralRouteManager OR route components (ExtractDetailRoute)
  *
  * URL-DRIVEN STATE:
  *   selectedExtractIds - Controlled by URL query parameter ?extract=
  *   Set by: CentralRouteManager Phase 2
  *
- * WRITE RESTRICTIONS:
- *   - openedExtract: ONLY set by ExtractDetailRoute or when clearing on navigation away
- *   - selectedExtractIds: ONLY set by CentralRouteManager
+ * Write access is restricted to:
+ *   - CentralRouteManager (for legacy /e/:user/:extractId routes)
+ *   - Route components like ExtractDetailRoute (for new /extracts/:extractId routes)
  *
  * All other components must:
- *   - READ via useReactiveVar()
- *   - NAVIGATE via react-router to trigger route component updates
+ *   - ONLY READ via useReactiveVar()
+ *   - UPDATE STATE via navigate() to change the URL (which triggers route resolution)
  *
  * Examples:
- *   /extracts/123                      → openedExtract(extractObj) via ExtractDetailRoute
- *   /c/user/corpus?extract=456         → selectedExtractIds(["456"])
- *   /d/user/doc?extract=456,789        → selectedExtractIds(["456", "789"])
+ *   /extracts/extract-123             → openedExtract(extractObj) via ExtractDetailRoute
+ *   /e/user/extract-123               → openedExtract(extractObj) via CentralRouteManager
+ *   /c/user/corpus?extract=456        → selectedExtractIds(["456"])
+ *   /d/user/doc?extract=456,789       → selectedExtractIds(["456", "789"])
  */
-export const openedExtract = makeVar<ExtractType | null>(null); // ENTITY STATE - set by ExtractDetailRoute
+export const openedExtract = makeVar<ExtractType | null>(null); // ENTITY STATE - set by route components
 export const selectedExtractIds = makeVar<string[]>([]); // URL-DRIVEN - set by CentralRouteManager Phase 2
-export const selectedExtract = makeVar<ExtractType | null>(null); // Selection state for extract in various contexts
+export const selectedExtract = makeVar<ExtractType | null>(null); // Legacy - kept for backward compatibility
 export const extractSearchTerm = makeVar<string>("");
 
 /**

@@ -37,15 +37,6 @@ import {
   ExtractType,
 } from "../types/graphql-api";
 import { openedExtract, addingColumnToExtract } from "../graphql/cache";
-import { formatShortDate } from "../utils/formatters";
-import {
-  getExtractStatusChipProps,
-  isExtractRunning,
-  isExtractComplete,
-  isExtractFailed,
-  canEditExtract,
-} from "../utils/extractUtils";
-import { POLLING } from "../assets/configurations/constants";
 import {
   RequestGetExtractOutput,
   REQUEST_GET_EXTRACT,
@@ -80,6 +71,11 @@ import {
 } from "../components/extracts/datagrid/DataGrid";
 import { CreateColumnModal } from "../components/widgets/modals/CreateColumnModal";
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
+import { getExtractStatus, formatExtractDate } from "../utils/extractUtils";
+import {
+  EXTRACT_POLLING_INTERVAL_MS,
+  EXTRACT_POLLING_TIMEOUT_MS,
+} from "../constants/extract";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS
@@ -483,17 +479,17 @@ export const ExtractDetail: React.FC = () => {
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
 
-    if (extract && isExtractRunning(extract)) {
+    if (extract && extract.started && !extract.finished && !extract.error) {
       pollInterval = setInterval(() => {
         refetch({ id: extract.id });
-      }, POLLING.EXTRACT_POLLING_INTERVAL_MS);
+      }, EXTRACT_POLLING_INTERVAL_MS);
 
       const timeoutId = setTimeout(() => {
         clearInterval(pollInterval);
         toast.info(
           "Job is taking too long... polling paused after 10 minutes."
         );
-      }, POLLING.EXTRACT_POLLING_TIMEOUT_MS);
+      }, EXTRACT_POLLING_TIMEOUT_MS);
 
       return () => {
         clearInterval(pollInterval);
@@ -709,12 +705,12 @@ export const ExtractDetail: React.FC = () => {
   }, []);
 
   // Computed values
-  const isRunning = extract ? isExtractRunning(extract) : false;
-  const isComplete = extract ? isExtractComplete(extract) : false;
-  const isFailed = extract ? isExtractFailed(extract) : false;
-  const canEdit = extract ? canEditExtract(extract) : false;
+  const isRunning = extract?.started && !extract?.finished && !extract?.error;
+  const isComplete = extract?.started && extract?.finished && !extract?.error;
+  const isFailed = Boolean(extract?.error);
+  const canEdit = !extract?.started;
 
-  const statusProps = extract ? getExtractStatusChipProps(extract) : null;
+  const statusProps = extract ? getExtractStatus(extract) : null;
 
   const stats = useMemo(() => {
     const completedCells = cells.filter((c) => c.completed).length;
@@ -780,11 +776,11 @@ export const ExtractDetail: React.FC = () => {
             <Meta>
               {extract.corpus && <span>from {extract.corpus.title}</span>}
               {extract.corpus && <MetaSeparator />}
-              <span>Created {formatShortDate(extract.created)}</span>
+              <span>Created {formatExtractDate(extract.created)}</span>
               {extract.finished && (
                 <>
                   <MetaSeparator />
-                  <span>Completed {formatShortDate(extract.finished)}</span>
+                  <span>Completed {formatExtractDate(extract.finished)}</span>
                 </>
               )}
             </Meta>
