@@ -3,10 +3,10 @@ import { FILE_SIZE, TIME_UNITS } from "../assets/configurations/constants";
 /**
  * Formats a byte count into a human-readable file size string.
  * @param bytes - The number of bytes to format
- * @returns Formatted string like "1.5 KB" or "2.3 MB", or empty string if no bytes
+ * @returns Formatted string like "1.5 KB" or "2.3 MB", or empty string if null/undefined
  */
 export function formatFileSize(bytes?: number | null): string {
-  if (!bytes) return "";
+  if (bytes == null) return "";
   if (bytes < FILE_SIZE.BYTES_PER_KB) return `${bytes} B`;
   if (bytes < FILE_SIZE.BYTES_PER_MB) {
     return `${(bytes / FILE_SIZE.BYTES_PER_KB).toFixed(1)} KB`;
@@ -17,11 +17,12 @@ export function formatFileSize(bytes?: number | null): string {
 /**
  * Formats a date string into a relative time description.
  * @param dateString - ISO date string to format
- * @returns Relative time string like "Just now", "5 hours ago", "3 days ago"
+ * @returns Relative time string like "Just now", "5 hours ago", "3 days ago", or empty string if invalid
  */
 export function formatRelativeTime(dateString?: string | null): string {
   if (!dateString) return "";
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffHours = diffMs / TIME_UNITS.MS_PER_HOUR;
@@ -41,11 +42,12 @@ export function formatRelativeTime(dateString?: string | null): string {
  * Formats a date string into a compact relative time description.
  * Used in activity feeds and compact displays.
  * @param dateString - ISO date string to format
- * @returns Compact time string like "5h ago", "3d ago", or empty string if no dateString
+ * @returns Compact time string like "5h ago", "3d ago", or empty string if invalid
  */
 export function formatCompactRelativeTime(dateString?: string | null): string {
   if (!dateString) return "";
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSecs = Math.floor(diffMs / TIME_UNITS.MS_PER_SECOND);
