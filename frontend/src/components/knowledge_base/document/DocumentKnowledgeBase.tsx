@@ -665,19 +665,21 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   // This component should NOT read openedCorpus() to decide navigation - that causes race conditions
   const handleClose = useCallback(() => {
     // Helper to navigate back or fallback to /documents
+    // Uses React Router's history index to determine if there's history to go back to
     const navigateBackOrFallback = () => {
-      const referrer = window.document.referrer;
-      const sameOrigin =
-        referrer && new URL(referrer).origin === window.location.origin;
+      // React Router v6 stores history index in window.history.state.idx
+      // idx = 0 means this is the first page in the session (no back history)
+      // idx > 0 means there's at least one page to go back to
+      const historyIdx = (window.history.state as { idx?: number })?.idx ?? 0;
 
-      if (sameOrigin) {
+      if (historyIdx > 0) {
         routingLogger.debug(
-          "[DocumentKnowledgeBase] Navigating back (same origin referrer)"
+          `[DocumentKnowledgeBase] Navigating back (historyIdx=${historyIdx})`
         );
         navigate(-1);
       } else {
         routingLogger.debug(
-          "[DocumentKnowledgeBase] Navigating to /documents (no same-origin referrer)"
+          "[DocumentKnowledgeBase] Navigating to /documents (no history)"
         );
         navigate("/documents");
       }
@@ -694,7 +696,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         documentId,
         corpusId,
         currentUrl: window.location.pathname + window.location.search,
-        referrer: window.document.referrer,
+        historyIdx: (window.history.state as { idx?: number })?.idx ?? 0,
       });
 
       if (onClose) {
