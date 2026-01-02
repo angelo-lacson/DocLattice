@@ -45,6 +45,7 @@ import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import { CreateExtractModal } from "../components/widgets/modals/CreateExtractModal";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../components/common/LoadingOverlay";
+import { EXTRACT_SEARCH_DEBOUNCE_MS } from "../constants/extract";
 
 // Styled Components - Following LabelSets patterns
 
@@ -193,7 +194,7 @@ export const Extracts = () => {
   const debouncedSearch = useRef(
     _.debounce((searchTerm: string) => {
       extractSearchTerm(searchTerm);
-    }, 500)
+    }, EXTRACT_SEARCH_DEBOUNCE_MS)
   );
 
   const handleSearchChange = (value: string) => {

@@ -71,6 +71,11 @@ import {
 } from "../components/extracts/datagrid/DataGrid";
 import { CreateColumnModal } from "../components/widgets/modals/CreateColumnModal";
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
+import { getExtractStatus, formatExtractDate } from "../utils/extractUtils";
+import {
+  EXTRACT_POLLING_INTERVAL_MS,
+  EXTRACT_POLLING_TIMEOUT_MS,
+} from "../constants/extract";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS
@@ -428,37 +433,6 @@ const TableSvgIcon = () => (
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HELPER FUNCTIONS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const getStatusChipProps = (
-  extract: ExtractType
-): {
-  color: "success" | "info" | "error" | "warning" | "default";
-  label: string;
-} => {
-  if (extract.started && !extract.finished && !extract.error) {
-    return { color: "info", label: "Running" };
-  }
-  if (extract.finished) {
-    return { color: "success", label: "Completed" };
-  }
-  if (extract.error) {
-    return { color: "error", label: "Failed" };
-  }
-  return { color: "default", label: "Not Started" };
-};
-
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -508,14 +482,14 @@ export const ExtractDetail: React.FC = () => {
     if (extract && extract.started && !extract.finished && !extract.error) {
       pollInterval = setInterval(() => {
         refetch({ id: extract.id });
-      }, 5000);
+      }, EXTRACT_POLLING_INTERVAL_MS);
 
       const timeoutId = setTimeout(() => {
         clearInterval(pollInterval);
         toast.info(
           "Job is taking too long... polling paused after 10 minutes."
         );
-      }, 600000);
+      }, EXTRACT_POLLING_TIMEOUT_MS);
 
       return () => {
         clearInterval(pollInterval);
@@ -736,7 +710,7 @@ export const ExtractDetail: React.FC = () => {
   const isFailed = Boolean(extract?.error);
   const canEdit = !extract?.started;
 
-  const statusProps = extract ? getStatusChipProps(extract) : null;
+  const statusProps = extract ? getExtractStatus(extract) : null;
 
   const stats = useMemo(() => {
     const completedCells = cells.filter((c) => c.completed).length;
@@ -802,11 +776,11 @@ export const ExtractDetail: React.FC = () => {
             <Meta>
               {extract.corpus && <span>from {extract.corpus.title}</span>}
               {extract.corpus && <MetaSeparator />}
-              <span>Created {formatDate(extract.created)}</span>
+              <span>Created {formatExtractDate(extract.created)}</span>
               {extract.finished && (
                 <>
                   <MetaSeparator />
-                  <span>Completed {formatDate(extract.finished)}</span>
+                  <span>Completed {formatExtractDate(extract.finished)}</span>
                 </>
               )}
             </Meta>

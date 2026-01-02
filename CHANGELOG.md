@@ -5,6 +5,36 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-02
+
+### Added
+
+#### Extract View Refactoring (PR #772)
+- **Route-based extract detail view** (`frontend/src/views/ExtractDetail.tsx`, `frontend/src/components/routes/ExtractDetailRoute.tsx`): Complete refactor from modal-based to route-based architecture
+  - Modern full-page layout with tabbed interface (Data, Documents, Schema)
+  - Stats grid showing document count, column count, rows, and success rate
+  - Running state indicator with polling for active extracts
+  - Responsive design following existing patterns
+- **Extracts list page** (`frontend/src/views/Extracts.tsx`): New landing page for extract management
+  - Filter tabs (All, My Extracts, Running, Completed)
+  - Search with debounced input
+  - CollectionCard components with status indicators
+- **Extract list card** (`frontend/src/components/extracts/ExtractListCard.tsx`): Card component for extract listing
+  - Status-aware styling (Running, Completed, Failed, Not Started)
+  - Context menu with view, duplicate, delete actions
+- **Shared utilities** (`frontend/src/utils/extractUtils.ts`): DRY utility functions for extract status and date formatting
+- **Extract constants** (`frontend/src/constants/extract.ts`): Magic number elimination - polling intervals, debounce delays
+- **Extract landing route** (`frontend/src/components/routes/ExtractLandingRoute.tsx`): Route component for /extracts
+
+### Removed
+- **EditExtractModal component**: Replaced by route-based ExtractDetail view - modal approach deprecated
+- **Obsolete test files** (`frontend/tests/EditExtractModal.ct.tsx`, `frontend/tests/EditExtractModalTestWrapper.tsx`): Removed tests for deleted modal component
+
+### Changed
+- **openedExtract reactive var documentation** (`frontend/src/graphql/cache.ts:364-388`): Clarified that route components (like ExtractDetailRoute) can set this var, not just CentralRouteManager
+
+---
+
 ## [Unreleased] - 2026-01-01
 
 ### Added
