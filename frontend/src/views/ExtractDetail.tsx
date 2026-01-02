@@ -453,11 +453,9 @@ export const ExtractDetail: React.FC = () => {
   const [editingColumn, setEditingColumn] = useState<ColumnType | null>(null);
   const [deleteColumnId, setDeleteColumnId] = useState<string | null>(null);
 
-  // Sync with reactive var
+  // Sync with reactive var - always update local state to match reactive var
   useEffect(() => {
-    if (extractFromVar) {
-      setExtract(extractFromVar);
-    }
+    setExtract(extractFromVar);
   }, [extractFromVar]);
 
   // Query for full extract data
@@ -679,7 +677,9 @@ export const ExtractDetail: React.FC = () => {
     setIsColumnModalOpen(true);
   };
 
-  const handleColumnSubmit = async (data: any) => {
+  const handleColumnSubmit = async (
+    data: Omit<RequestCreateColumnInputType, "fieldsetId">
+  ) => {
     if (editingColumn) {
       // Update existing column - handled by CreateColumnModal
     } else {
