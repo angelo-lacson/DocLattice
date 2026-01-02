@@ -835,7 +835,7 @@ const DocumentIcon = () => (
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function getDocumentType(doc: DocumentType): string {
-  // Use fileType field directly if available
+  // Use fileType field directly if available (preferred)
   if (doc.fileType) {
     const ft = doc.fileType.toLowerCase();
     if (ft === "pdf") return "PDF";
@@ -843,13 +843,19 @@ function getDocumentType(doc: DocumentType): string {
     if (ft === "txt") return "TXT";
     return ft.toUpperCase();
   }
-  // Fallback: parse from title (not pdfFile which is a URL)
+  // Fallback: parse from title if it has a valid extension
   const fileName = doc.title || "";
-  const ext = fileName.split(".").pop()?.toLowerCase() || "pdf";
-  if (ext === "pdf") return "PDF";
-  if (ext === "docx" || ext === "doc") return "DOCX";
-  if (ext === "txt") return "TXT";
-  return ext.toUpperCase();
+  const parts = fileName.split(".");
+  // Only use extension if there are multiple parts (filename.ext)
+  if (parts.length > 1) {
+    const ext = parts.pop()?.toLowerCase();
+    if (ext === "pdf") return "PDF";
+    if (ext === "docx" || ext === "doc") return "DOCX";
+    if (ext === "txt") return "TXT";
+    if (ext) return ext.toUpperCase();
+  }
+  // Default to PDF if no extension found
+  return "PDF";
 }
 
 function formatFileSize(bytes?: number | null): string {
@@ -966,28 +972,26 @@ export const Documents = () => {
     return document_items;
   }, [document_items, activeStatusFilter]);
 
-  // Calculate stats
+  // Calculate stats with single pass through array
   const stats = useMemo(() => {
-    const totalDocs = document_items.length;
-    const totalPages = document_items.reduce(
-      (sum, doc) => sum + (doc.pageCount || 0),
-      0
+    const result = document_items.reduce(
+      (acc, doc) => {
+        acc.totalPages += doc.pageCount || 0;
+        if (doc.backendLock) {
+          acc.processingCount += 1;
+        } else {
+          acc.processedCount += 1;
+        }
+        return acc;
+      },
+      { totalPages: 0, processedCount: 0, processingCount: 0 }
     );
-    const processedCount = document_items.filter(
-      (doc) => !doc.backendLock
-    ).length;
-    const processingCount = document_items.filter(
-      (doc) => doc.backendLock
-    ).length;
-    // Get unique corpus IDs
-    const corpusIds = new Set<string>();
-    // Documents might not have corpus info in list view, so this might be 0
+
     return {
-      totalDocs,
-      totalPages,
-      processedCount,
-      processingCount,
-      corpusCount: corpusIds.size || 0,
+      totalDocs: document_items.length,
+      totalPages: result.totalPages,
+      processedCount: result.processedCount,
+      processingCount: result.processingCount,
     };
   }, [document_items]);
 
