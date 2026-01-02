@@ -131,12 +131,32 @@ const SearchContainer = styled.div`
 const FiltersSection = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 32px;
-  padding: 16px;
+  padding: 20px;
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
+
+  /* Override the harsh gradient labels from filter components */
+  .ui.label {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    box-shadow: none !important;
+    font-size: 0.6875rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  /* Style the dropdowns */
+  > div {
+    flex: 1;
+    min-width: 200px;
+
+    @media (max-width: 640px) {
+      min-width: 100%;
+    }
+  }
 `;
 
 const StatsContainer = styled.div`
@@ -673,7 +693,16 @@ const DocumentIcon = () => (
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function getDocumentType(doc: DocumentType): string {
-  const fileName = doc.pdfFile || doc.title || "";
+  // Use fileType field directly if available
+  if (doc.fileType) {
+    const ft = doc.fileType.toLowerCase();
+    if (ft === "pdf") return "PDF";
+    if (ft === "docx" || ft === "doc") return "DOCX";
+    if (ft === "txt") return "TXT";
+    return ft.toUpperCase();
+  }
+  // Fallback: parse from title (not pdfFile which is a URL)
+  const fileName = doc.title || "";
   const ext = fileName.split(".").pop()?.toLowerCase() || "pdf";
   if (ext === "pdf") return "PDF";
   if (ext === "docx" || ext === "doc") return "DOCX";
@@ -703,7 +732,11 @@ function formatDate(dateString?: string | null): string {
 }
 
 function getInitials(name?: string | null): string {
-  if (!name) return "?";
+  if (!name) return "U";
+  // Handle email addresses - take first letter before @
+  if (name.includes("@")) {
+    return name.split("@")[0].charAt(0).toUpperCase();
+  }
   return name
     .split(" ")
     .map((n) => n[0])
@@ -1319,14 +1352,10 @@ export const Documents = () => {
                           {doc.title || "Untitled"}
                         </CardTitle>
                         <CardMeta>
-                          {doc.fileType && (
-                            <span>{formatFileSize(doc.fileType as any)}</span>
-                          )}
-                          {doc.pageCount && (
-                            <>
-                              <MetaSeparator />
-                              <span>{doc.pageCount} pages</span>
-                            </>
+                          {doc.pageCount ? (
+                            <span>{doc.pageCount} pages</span>
+                          ) : (
+                            <span>Document</span>
                           )}
                         </CardMeta>
                       </CardBody>
@@ -1366,7 +1395,7 @@ export const Documents = () => {
                     />
                     <span>Name</span>
                     <span>Type</span>
-                    <span>Size</span>
+                    <span>Pages</span>
                     <span>Status</span>
                     <span>Uploaded</span>
                     <span></span>
