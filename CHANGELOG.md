@@ -5,6 +5,41 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-02
+
+### Added
+
+#### Documents Page Redesign
+- **Documents view redesign** (`frontend/src/views/Documents.tsx`): Modern document listing page using @os-legal/ui components
+  - Hero section with search and filter tabs (All, Processed, Processing)
+  - Stats grid showing document, page, and annotation counts
+  - Three view modes: Grid, List, and Compact views
+  - Advanced filters popup for corpus, label, and labelset filtering
+  - Context menu for document actions (view, edit, add to corpus, delete)
+  - Bulk selection and operations support
+  - Status badges for processing documents
+- **Utility functions** (`frontend/src/utils/formatters.ts`): Shared formatting utilities
+  - `formatFileSize`: Human-readable file size (0 B, KB, MB)
+  - `formatRelativeTime`: Relative time descriptions ("Just now", "5 hours ago")
+  - `formatCompactRelativeTime`: Compact time format ("5h ago", "3d ago")
+  - `getInitials`: Avatar initials from name/email
+- **Component tests** (`frontend/tests/Documents.ct.tsx`): 8 Playwright component tests covering view modes, filtering, search, and selection
+
+### Fixed
+
+#### Formatter Robustness
+- **Zero byte handling** (`frontend/src/utils/formatters.ts:9`): `formatFileSize` now correctly returns "0 B" for 0 bytes instead of empty string
+- **Invalid date handling** (`frontend/src/utils/formatters.ts:25,50`): Both `formatRelativeTime` and `formatCompactRelativeTime` now return empty string for invalid/unparseable date strings instead of NaN-based output
+
+#### Documents View Cleanup
+- **Removed long-polling** (`frontend/src/views/Documents.tsx`): Removed document processing polling in favor of WebSocket-based notifications, eliminating potential memory leak from interval timers
+- **Type safety** (`frontend/src/views/Documents.tsx:1192`): Removed unnecessary `as any` type assertion in `navigateToDocument` call
+
+### Changed
+- **View modes enum** (`frontend/src/assets/configurations/constants.ts`): Added `VIEW_MODES` and `STATUS_FILTERS` constants for Documents page
+
+---
+
 ## [Unreleased] - 2026-01-01
 
 ### Added
