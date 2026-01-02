@@ -24,3 +24,33 @@ export const TIME_UNITS = {
   DAYS_PER_WEEK: 7,
   DAYS_PER_MONTH: 30,
 } as const;
+
+// Document view mode constants
+export const VIEW_MODES = {
+  GRID: "grid",
+  LIST: "list",
+  COMPACT: "compact",
+} as const;
+
+export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES];
+
+// Document status filter constants
+export const STATUS_FILTERS = {
+  ALL: "all",
+  PROCESSED: "processed",
+  PROCESSING: "processing",
+} as const;
+
+export type StatusFilter = (typeof STATUS_FILTERS)[keyof typeof STATUS_FILTERS];
+
+// Debounce timing constants
+export const DEBOUNCE = {
+  SEARCH_MS: 1000,
+  CLICK_OUTSIDE_DELAY_MS: 100,
+} as const;
+
+// Polling constants
+export const POLLING = {
+  DOCUMENT_PROCESSING_INTERVAL_MS: 15000,
+  DOCUMENT_PROCESSING_TIMEOUT_MS: 600000,
+} as const;
