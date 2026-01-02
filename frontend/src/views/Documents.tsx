@@ -25,6 +25,7 @@ import {
   Loader2,
   SlidersHorizontal,
   X,
+  AlertCircle,
 } from "lucide-react";
 import { Menu, Checkbox } from "semantic-ui-react";
 
@@ -59,7 +60,6 @@ import {
 } from "../graphql/cache";
 
 import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
-import { LooseObject } from "../components/types";
 import { FilterToLabelSelector } from "../components/widgets/model-filters/FilterToLabelSelector";
 import { DocumentType, LabelType } from "../types/graphql-api";
 import { AddToCorpusModal } from "../components/modals/AddToCorpusModal";
@@ -74,6 +74,18 @@ import { BulkUploadModal } from "../components/widgets/modals/BulkUploadModal";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../components/common/LoadingOverlay";
 import { navigateToDocument } from "../utils/navigationUtils";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface DocumentQueryVariables {
+  includeMetadata: boolean;
+  annotateDocLabels: boolean;
+  textSearch?: string;
+  hasLabelWithId?: string;
+  inCorpusWithId?: string;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS - Following CorpusListView/DiscoveryLanding patterns
@@ -908,27 +920,19 @@ export const Documents = () => {
   } | null>(null);
   const [showFilterPopup, setShowFilterPopup] = useState(false);
 
+  const filterPopupRef = useRef<HTMLDivElement>(null);
+
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Build query variables
-  let document_variables: LooseObject = {
+  // Build query variables with proper typing
+  const documentVariables: DocumentQueryVariables = {
     includeMetadata: true,
+    annotateDocLabels: Boolean(filtered_to_corpus || filtered_to_labelset_id),
+    ...(document_search_term && { textSearch: document_search_term }),
+    ...(filtered_to_label_id && { hasLabelWithId: filtered_to_label_id }),
+    ...(filtered_to_corpus && { inCorpusWithId: filtered_to_corpus.id }),
   };
-  if (document_search_term) {
-    document_variables["textSearch"] = document_search_term;
-  }
-  if (filtered_to_label_id) {
-    document_variables["hasLabelWithId"] = filtered_to_label_id;
-  }
-  if (filtered_to_corpus) {
-    document_variables["inCorpusWithId"] = filtered_to_corpus.id;
-  }
-  if (filtered_to_corpus || filtered_to_labelset_id) {
-    document_variables["annotateDocLabels"] = true;
-  } else {
-    document_variables["annotateDocLabels"] = false;
-  }
 
   const {
     refetch: refetchDocuments,
@@ -937,7 +941,7 @@ export const Documents = () => {
     data: documents_data,
     fetchMore: fetchMoreDocuments,
   } = useQuery<RequestDocumentsOutputs, RequestDocumentsInputs>(GET_DOCUMENTS, {
-    variables: document_variables,
+    variables: documentVariables,
     nextFetchPolicy: "network-only",
     notifyOnNetworkStatusChange: true,
   });
@@ -1064,10 +1068,18 @@ export const Documents = () => {
 
   // Debounced search
   const debouncedSearch = useRef(
-    _.debounce((searchTerm) => {
+    _.debounce((searchTerm: string) => {
       documentSearchTerm(searchTerm);
     }, 1000)
   );
+
+  // Cleanup debounce on unmount to prevent memory leaks
+  useEffect(() => {
+    const currentDebounce = debouncedSearch.current;
+    return () => {
+      currentDebounce.cancel();
+    };
+  }, []);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchCache(e.target.value);
@@ -1107,9 +1119,17 @@ export const Documents = () => {
     UpdateDocumentInputs
   >(UPDATE_DOCUMENT);
 
-  const handleUpdateDocument = (document_obj: any) => {
-    let variables = { variables: document_obj };
-    tryUpdateDocument(variables);
+  const handleUpdateDocument = (document_obj: Record<string, unknown>) => {
+    tryUpdateDocument({
+      variables: document_obj as unknown as UpdateDocumentInputs,
+    })
+      .then(() => {
+        toast.success("Document updated successfully");
+        refetchDocuments();
+      })
+      .catch((error) => {
+        toast.error(`Failed to update document: ${error.message}`);
+      });
   };
 
   // Infinite scroll
@@ -1176,6 +1196,30 @@ export const Documents = () => {
       };
     }
   }, [contextMenu, handleCloseContextMenu]);
+
+  // Close filter popup on click outside
+  useEffect(() => {
+    if (!showFilterPopup) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        filterPopupRef.current &&
+        !filterPopupRef.current.contains(event.target as Node)
+      ) {
+        setShowFilterPopup(false);
+      }
+    };
+
+    // Delay to prevent immediate close from the button click
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showFilterPopup]);
 
   // Document click handler
   const handleDocumentClick = (doc: DocumentType) => {
@@ -1295,11 +1339,13 @@ export const Documents = () => {
               value={activeStatusFilter}
               onChange={setActiveStatusFilter}
             />
-            <FilterPopupContainer>
+            <FilterPopupContainer ref={filterPopupRef}>
               <FilterButton
                 $active={showFilterPopup}
                 $hasFilters={hasAdvancedFilters}
                 onClick={() => setShowFilterPopup(!showFilterPopup)}
+                aria-expanded={showFilterPopup}
+                aria-haspopup="dialog"
               >
                 <SlidersHorizontal />
                 Filters
@@ -1308,7 +1354,7 @@ export const Documents = () => {
                 )}
               </FilterButton>
               {showFilterPopup && (
-                <FilterPopup>
+                <FilterPopup role="dialog" aria-label="Advanced filters">
                   <FilterPopupHeader>
                     <FilterPopupTitle>Advanced Filters</FilterPopupTitle>
                     <FilterPopupClose onClick={() => setShowFilterPopup(false)}>
@@ -1389,11 +1435,13 @@ export const Documents = () => {
           <SectionHeader>
             <SectionTitle>{getSectionTitle()}</SectionTitle>
             <ActionButtons>
-              <ViewToggle>
+              <ViewToggle role="group" aria-label="Document view options">
                 <ViewToggleButton
                   $active={viewMode === "grid"}
                   onClick={() => setViewMode("grid")}
                   title="Grid view"
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === "grid"}
                 >
                   <Grid size={16} />
                 </ViewToggleButton>
@@ -1401,6 +1449,8 @@ export const Documents = () => {
                   $active={viewMode === "list"}
                   onClick={() => setViewMode("list")}
                   title="List view"
+                  aria-label="List view"
+                  aria-pressed={viewMode === "list"}
                 >
                   <List size={16} />
                 </ViewToggleButton>
@@ -1408,6 +1458,8 @@ export const Documents = () => {
                   $active={viewMode === "compact"}
                   onClick={() => setViewMode("compact")}
                   title="Compact view"
+                  aria-label="Compact view"
+                  aria-pressed={viewMode === "compact"}
                 >
                   <AlignJustify size={16} />
                 </ViewToggleButton>
@@ -1471,15 +1523,25 @@ export const Documents = () => {
                   {filteredDocuments.map((doc) => (
                     <DocumentCardWrapper
                       key={doc.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open document ${doc.title || "Untitled"}`}
                       $selected={selected_document_ids.includes(doc.id)}
                       onClick={() => handleDocumentClick(doc)}
                       onContextMenu={(e) => handleContextMenu(e, doc)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleDocumentClick(doc);
+                        }
+                      }}
                     >
                       <CardCheckbox
                         $visible={selected_document_ids.includes(doc.id)}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Checkbox
+                          aria-label={`Select ${doc.title || "Untitled"}`}
                           checked={selected_document_ids.includes(doc.id)}
                           onChange={() => handleSelect(doc.id)}
                         />
@@ -1557,9 +1619,10 @@ export const Documents = () => {
               )}
 
               {viewMode === "list" && (
-                <DocumentsListView>
-                  <ListHeader>
+                <DocumentsListView role="table" aria-label="Documents list">
+                  <ListHeader role="rowgroup">
                     <Checkbox
+                      aria-label="Select all documents"
                       checked={
                         selected_document_ids.length ===
                           filteredDocuments.length &&
@@ -1577,12 +1640,22 @@ export const Documents = () => {
                   {filteredDocuments.map((doc) => (
                     <ListItem
                       key={doc.id}
+                      role="row"
+                      tabIndex={0}
+                      aria-label={`Open document ${doc.title || "Untitled"}`}
                       $selected={selected_document_ids.includes(doc.id)}
                       onClick={() => handleDocumentClick(doc)}
                       onContextMenu={(e) => handleContextMenu(e, doc)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleDocumentClick(doc);
+                        }
+                      }}
                     >
                       <div onClick={(e) => e.stopPropagation()}>
                         <Checkbox
+                          aria-label={`Select ${doc.title || "Untitled"}`}
                           checked={selected_document_ids.includes(doc.id)}
                           onChange={() => handleSelect(doc.id)}
                         />
@@ -1630,12 +1703,22 @@ export const Documents = () => {
                   {filteredDocuments.map((doc) => (
                     <CompactItem
                       key={doc.id}
+                      role="listitem"
+                      tabIndex={0}
+                      aria-label={`Open document ${doc.title || "Untitled"}`}
                       $selected={selected_document_ids.includes(doc.id)}
                       onClick={() => handleDocumentClick(doc)}
                       onContextMenu={(e) => handleContextMenu(e, doc)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleDocumentClick(doc);
+                        }
+                      }}
                     >
                       <div onClick={(e) => e.stopPropagation()}>
                         <Checkbox
+                          aria-label={`Select ${doc.title || "Untitled"}`}
                           checked={selected_document_ids.includes(doc.id)}
                           onChange={() => handleSelect(doc.id)}
                         />
@@ -1671,6 +1754,23 @@ export const Documents = () => {
 
               <FetchMoreOnVisible fetchNextPage={handleFetchMore} />
             </>
+          ) : documents_error ? (
+            <EmptyStateWrapper>
+              <EmptyState
+                icon={<AlertCircle size={48} />}
+                title="Failed to load documents"
+                description={
+                  documents_error.message ||
+                  "An error occurred while loading documents. Please try again."
+                }
+                size="lg"
+                action={
+                  <Button variant="primary" onClick={() => refetchDocuments()}>
+                    Try Again
+                  </Button>
+                }
+              />
+            </EmptyStateWrapper>
           ) : !documents_loading ? (
             <EmptyStateWrapper>
               <EmptyState
