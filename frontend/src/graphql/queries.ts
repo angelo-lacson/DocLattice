@@ -783,6 +783,7 @@ export interface GetAnnotationsInputs {
 export interface GetAnnotationsOutputs {
   annotations: {
     pageInfo: PageInfo;
+    totalCount?: number;
     edges: {
       node: ServerAnnotationType;
     }[];
@@ -820,12 +821,21 @@ export const GET_ANNOTATIONS = gql`
       first: $limit
       after: $cursor
     ) {
+      totalCount
       edges {
         node {
           id
           tokensJsons
           json
           page
+          created
+          creator {
+            id
+            email
+            username
+            slug
+            __typename
+          }
           corpus {
             id
             slug
