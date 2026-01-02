@@ -205,10 +205,11 @@ export function NotificationCenter() {
         if (threadUrl !== "#") {
           navigate(`${threadUrl}${messageParam}`);
         } else {
-          // Fallback if corpus is missing slug data
+          // Fallback if corpus is missing slug data - navigate to global discussions
           console.warn(
-            "[NotificationCenter] Cannot navigate - corpus missing slug data"
+            "[NotificationCenter] Cannot navigate - corpus missing slug data, falling back to /discussions"
           );
+          navigate(`/discussions${messageParam}`);
         }
       } else {
         // General discussion: navigate to global discussions page
