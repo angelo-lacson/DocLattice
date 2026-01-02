@@ -39,6 +39,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Deleted CorpusCards component** (`frontend/src/components/corpuses/CorpusCards.tsx`): Replaced by CorpusListView with @os-legal/ui components
 
+#### LabelSet Detail Page Refactoring
+- **LabelSetDetailPage component split** (`frontend/src/components/labelsets/LabelSetDetailPage.tsx`): Reduced from 2,064 lines to ~1,100 lines
+  - Extracted 16 SVG icons to `detail/LabelSetIcons.tsx`
+  - Extracted 40+ styled-components to `detail/LabelSetDetailStyles.ts`
+  - Added barrel exports in `detail/index.ts`
+- **Color constants centralized** (`frontend/src/assets/configurations/constants.ts`): Added `DEFAULT_LABEL_COLOR` and `PRIMARY_LABEL_COLOR`
+
+### Security
+- **Frontend permission checks** (`frontend/src/components/labelsets/LabelSetDetailPage.tsx:1189-1344`): Added defensive permission checks to all mutation handlers
+  - `handleDeleteLabel` now verifies `canRemove` before deletion
+  - `handleSaveEdit` now verifies `canUpdate` before updating
+  - `handleSaveCreate` now verifies `canUpdate` before creation
+  - `handleDelete` (labelset) now verifies `canRemove` before deletion
+- **Color input sanitization** (`frontend/src/components/labelsets/LabelSetDetailPage.tsx:125-143`): Added `isValidHexColor` and `sanitizeColor` utilities
+  - Validates hex color format (3 or 6 character, with or without #)
+  - Prevents potential XSS via CSS color injection
+
+### Technical Details
+- New test file: `frontend/tests/LabelSetDetailPage.ct.tsx` with comprehensive component tests
+  - Rendering tests for all tabs (Overview, Text/Doc/Span/Relationship Labels)
+  - Permission-based UI visibility tests
+  - Search functionality tests
+  - Mobile navigation tests
+
 ---
 
 ## [Unreleased] - 2025-12-31

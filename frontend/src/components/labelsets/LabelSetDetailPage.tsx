@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { Dimmer, Loader, Message } from "semantic-ui-react";
 import Fuse from "fuse.js";
@@ -34,1063 +33,99 @@ import { toast } from "react-toastify";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 
+// Import extracted components from detail folder
+import {
+  // Icons
+  ChevronLeftIcon,
+  OverviewIcon,
+  DocLabelIcon,
+  SpanLabelIcon,
+  TextLabelIcon,
+  RelationshipIcon,
+  ShareIcon,
+  EditIcon,
+  TrashIcon,
+  DownloadIcon,
+  SaveIcon,
+  CloseIcon,
+  GripIcon,
+  SearchIcon,
+  PlusIcon,
+  LabelSetIcon,
+  // Styled Components
+  PageContainer,
+  PageLayout,
+  Sidebar,
+  SidebarHeader,
+  BackLink,
+  SidebarNav,
+  NavItem,
+  SidebarFooter,
+  MobileNav,
+  MobileNavTabs,
+  MobileNavTab,
+  EditDetailsButton,
+  MainContainer,
+  MainHeader,
+  MobileBackLink,
+  HeaderRow,
+  HeaderContent,
+  TitleRow,
+  Title,
+  Badge,
+  Meta,
+  MetaSep,
+  HeaderActions,
+  ShareButton,
+  MainContent,
+  ContentInner,
+  OverviewSection,
+  OverviewHero,
+  OverviewIconBox,
+  OverviewDetails,
+  OverviewDescription,
+  OverviewStats,
+  StatCard,
+  StatValue,
+  StatLabel,
+  OverviewActions,
+  ActionButton,
+  LabelsSection,
+  SearchContainer,
+  SearchInput,
+  SearchIconWrapper,
+  LabelsList,
+  LabelItem,
+  LabelGrip,
+  LabelColor,
+  LabelContent,
+  LabelName,
+  LabelDescription,
+  LabelActions,
+  LabelActionButton,
+  LabelEditForm,
+  LabelEditRow,
+  LabelEditInput,
+  LabelEditTextarea,
+  LabelEditLabel,
+  ColorInput,
+  LabelEditActions,
+  AddLabelButton,
+  EmptyState,
+  EmptyStateIcon,
+  EmptyStateTitle,
+  EmptyStateDescription,
+  LoadingContainer,
+  // Color constants
+  DEFAULT_LABEL_COLOR,
+  PRIMARY_LABEL_COLOR,
+} from "./detail";
+
 const fuse_options = {
   includeScore: false,
   findAllMatches: true,
   keys: ["text", "description"],
 };
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ICONS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const ChevronLeftIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M11.25 13.5L6.75 9l4.5-4.5" />
-  </svg>
-);
-
-const OverviewIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="3" width="5" height="5" rx="1" />
-    <rect x="10" y="3" width="5" height="5" rx="1" />
-    <rect x="3" y="10" width="5" height="5" rx="1" />
-    <rect x="10" y="10" width="5" height="5" rx="1" />
-  </svg>
-);
-
-const DocLabelIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M10.5 1.5H4.5a1.5 1.5 0 00-1.5 1.5v12a1.5 1.5 0 001.5 1.5h9a1.5 1.5 0 001.5-1.5V6L10.5 1.5z" />
-    <path d="M10.5 1.5V6H15" />
-    <path d="M6 9h6M6 12h4" />
-  </svg>
-);
-
-const SpanLabelIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M3 5.25h12M3 9h8M3 12.75h10" />
-    <rect
-      x="11"
-      y="7.5"
-      width="4"
-      height="3"
-      rx="0.5"
-      fill="currentColor"
-      opacity="0.2"
-      stroke="currentColor"
-    />
-  </svg>
-);
-
-const TextLabelIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M3 4.5h12M6 9h6M4.5 13.5h9" />
-    <path d="M9 3v12" strokeOpacity="0.3" />
-  </svg>
-);
-
-const RelationshipIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="4.5" cy="9" r="2.5" />
-    <circle cx="13.5" cy="9" r="2.5" />
-    <path d="M7 9h4" />
-    <path d="M10 7l2 2-2 2" />
-  </svg>
-);
-
-const ShareIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="13.5" cy="3.75" r="2.25" />
-    <circle cx="4.5" cy="9" r="2.25" />
-    <circle cx="13.5" cy="14.25" r="2.25" />
-    <path d="M6.54 10.11l4.92 3.03M11.46 4.86L6.54 7.89" />
-  </svg>
-);
-
-const EditIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M11.5 2.5a1.77 1.77 0 012.5 2.5L5.25 13.75 1.5 14.5l.75-3.75L11.5 2.5z" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M2 4h12M5.33 4V2.67a.67.67 0 01.67-.67h4a.67.67 0 01.67.67V4M12.67 4v9.33a.67.67 0 01-.67.67H4a.67.67 0 01-.67-.67V4" />
-  </svg>
-);
-
-const DownloadIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M8 2v9M4.5 7.5L8 11l3.5-3.5M2 14h12" />
-  </svg>
-);
-
-const SaveIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M13.33 5.33L6.67 12 2.67 8" />
-  </svg>
-);
-
-const CloseIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 4L4 12M4 4l8 8" />
-  </svg>
-);
-
-const GripIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="currentColor"
-    opacity="0.4"
-  >
-    <circle cx="5" cy="4" r="1.5" />
-    <circle cx="11" cy="4" r="1.5" />
-    <circle cx="5" cy="8" r="1.5" />
-    <circle cx="11" cy="8" r="1.5" />
-    <circle cx="5" cy="12" r="1.5" />
-    <circle cx="11" cy="12" r="1.5" />
-  </svg>
-);
-
-const SearchIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="7" cy="7" r="5" />
-    <path d="M14 14l-3.5-3.5" />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 18 18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-  >
-    <path d="M9 3.75v10.5M3.75 9h10.5" />
-  </svg>
-);
-
-const LabelSetIcon = () => (
-  <svg
-    width="48"
-    height="48"
-    viewBox="0 0 48 48"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M20 8H10a4 4 0 00-4 4v24a4 4 0 004 4h28a4 4 0 004-4V20" />
-    <path d="M32 6l8 8-16 16H16v-8L32 6z" />
-  </svg>
-);
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// STYLED COMPONENTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const PageContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 60px);
-  background: #fafafa;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-`;
-
-const PageLayout = styled.div`
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-`;
-
-const Sidebar = styled.aside`
-  width: 260px;
-  min-width: 260px;
-  background: #fff;
-  border-right: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-
-  @media (max-width: 900px) {
-    display: none;
-  }
-`;
-
-const SidebarHeader = styled.div`
-  padding: 24px 20px;
-  border-bottom: 1px solid #e2e8f0;
-`;
-
-const BackLink = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #475569;
-  text-decoration: none;
-  padding: 6px 10px 6px 6px;
-  margin: -6px -10px -6px -6px;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-  cursor: pointer;
-  background: none;
-  border: none;
-
-  &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
-  }
-`;
-
-const SidebarNav = styled.nav`
-  flex: 1;
-  padding: 12px 0;
-  overflow-y: auto;
-`;
-
-interface NavItemProps {
-  $active?: boolean;
-}
-
-const NavItem = styled.button<NavItemProps>`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  color: ${(props) => (props.$active ? "#0f766e" : "#475569")};
-  cursor: pointer;
-  transition: all 0.15s ease;
-  border: none;
-  background: ${(props) =>
-    props.$active
-      ? "linear-gradient(90deg, rgba(15, 118, 110, 0.08) 0%, transparent 100%)"
-      : "none"};
-  width: 100%;
-  text-align: left;
-  border-left: 2px solid
-    ${(props) => (props.$active ? "#0f766e" : "transparent")};
-  padding-left: ${(props) => (props.$active ? "18px" : "20px")};
-
-  &:hover {
-    background: ${(props) => (props.$active ? undefined : "#f8fafc")};
-    color: ${(props) => (props.$active ? "#0f766e" : "#1e293b")};
-  }
-
-  .nav-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-  }
-
-  .nav-badge {
-    margin-left: auto;
-    font-size: 12px;
-    font-weight: 600;
-    color: ${(props) => (props.$active ? "#fff" : "#94a3b8")};
-    background: ${(props) => (props.$active ? "#0f766e" : "#f1f5f9")};
-    padding: 2px 8px;
-    border-radius: 10px;
-  }
-`;
-
-const SidebarFooter = styled.div`
-  padding: 16px 20px;
-  border-top: 1px solid #e2e8f0;
-`;
-
-// Mobile Navigation
-const MobileNav = styled.nav`
-  display: none;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 0 24px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-
-  @media (max-width: 900px) {
-    display: block;
-  }
-`;
-
-const MobileNavTabs = styled.div`
-  display: flex;
-  gap: 4px;
-  min-width: max-content;
-`;
-
-interface MobileNavTabProps {
-  $active?: boolean;
-}
-
-const MobileNavTab = styled.button<MobileNavTabProps>`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  color: ${(props) => (props.$active ? "#0f766e" : "#475569")};
-  background: none;
-  border: none;
-  border-bottom: 2px solid
-    ${(props) => (props.$active ? "#0f766e" : "transparent")};
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-
-  &:first-child {
-    padding-left: 0;
-  }
-
-  &:hover {
-    color: ${(props) => (props.$active ? "#0f766e" : "#1e293b")};
-  }
-
-  .nav-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-  }
-
-  .nav-badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 10px;
-    background: ${(props) => (props.$active ? "#0f766e" : "#f1f5f9")};
-    color: ${(props) => (props.$active ? "#fff" : "#94a3b8")};
-  }
-`;
-
-const EditDetailsButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 16px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-  }
-`;
-
-const MainContainer = styled.main`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-`;
-
-const MainHeader = styled.header`
-  padding: 24px 40px;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
-
-  @media (max-width: 900px) {
-    padding: 16px 24px;
-  }
-`;
-
-const MobileBackLink = styled.button`
-  display: none;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #475569;
-  text-decoration: none;
-  padding: 6px 10px 6px 6px;
-  margin: -6px -10px 12px -6px;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-  cursor: pointer;
-  background: none;
-  border: none;
-
-  &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
-  }
-
-  @media (max-width: 900px) {
-    display: inline-flex;
-  }
-`;
-
-const HeaderRow = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-`;
-
-const HeaderContent = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const TitleRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 4px;
-`;
-
-const Title = styled.h1`
-  font-size: 24px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0;
-
-  @media (max-width: 900px) {
-    font-size: 20px;
-  }
-`;
-
-const Badge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #475569;
-`;
-
-const Meta = styled.div`
-  font-size: 14px;
-  color: #475569;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const MetaSep = styled.span`
-  color: #e2e8f0;
-`;
-
-const HeaderActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-`;
-
-const ShareButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: #0f766e;
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: #0d9488;
-  }
-`;
-
-const MainContent = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  padding: 32px 40px;
-
-  @media (max-width: 900px) {
-    padding: 24px;
-  }
-`;
-
-const ContentInner = styled.div`
-  max-width: 900px;
-`;
-
-// Overview styles
-const OverviewSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-`;
-
-const OverviewHero = styled.div`
-  display: flex;
-  gap: 32px;
-  align-items: flex-start;
-
-  @media (max-width: 900px) {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-`;
-
-const OverviewIconBox = styled.div`
-  width: 120px;
-  height: 120px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  flex-shrink: 0;
-  overflow: hidden;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 16px;
-  }
-
-  @media (max-width: 900px) {
-    width: 80px;
-    height: 80px;
-  }
-`;
-
-const OverviewDetails = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const OverviewDescription = styled.p`
-  font-size: 15px;
-  line-height: 1.6;
-  color: #475569;
-  margin: 0 0 24px 0;
-  max-width: 600px;
-
-  @media (max-width: 900px) {
-    max-width: none;
-  }
-`;
-
-const OverviewStats = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  max-width: 500px;
-  margin-bottom: 24px;
-
-  @media (max-width: 900px) {
-    max-width: none;
-    width: 100%;
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-`;
-
-const StatCard = styled.div`
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px 20px;
-
-  @media (max-width: 900px) {
-    padding: 12px 16px;
-  }
-`;
-
-const StatValue = styled.div`
-  font-size: 28px;
-  font-weight: 600;
-  color: #0f766e;
-  line-height: 1;
-  margin-bottom: 4px;
-
-  @media (max-width: 900px) {
-    font-size: 24px;
-  }
-`;
-
-const StatLabel = styled.div`
-  font-size: 13px;
-  color: #475569;
-`;
-
-const OverviewActions = styled.div`
-  display: flex;
-  gap: 12px;
-
-  @media (max-width: 900px) {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-`;
-
-const ActionButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-  }
-
-  &.danger {
-    color: #dc2626;
-
-    &:hover {
-      background: #fef2f2;
-      border-color: #fecaca;
-    }
-  }
-`;
-
-// Labels section styles
-const LabelsSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-`;
-
-const SearchContainer = styled.div`
-  position: relative;
-  max-width: 400px;
-`;
-
-const SearchInput = styled.input`
-  width: 100%;
-  padding: 10px 12px 10px 40px;
-  font-size: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
-  color: #1e293b;
-  outline: none;
-  transition: all 0.15s ease;
-
-  &:focus {
-    border-color: #0f766e;
-    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
-  }
-
-  &::placeholder {
-    color: #94a3b8;
-  }
-`;
-
-const SearchIconWrapper = styled.span`
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #94a3b8;
-  pointer-events: none;
-`;
-
-const LabelsList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const LabelItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  transition: all 0.15s ease;
-
-  &:hover {
-    border-color: #cbd5e1;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  }
-
-  &:hover .label-actions {
-    opacity: 1;
-  }
-
-  @media (max-width: 900px) {
-    padding: 12px 16px;
-
-    .label-actions {
-      opacity: 1;
-    }
-  }
-`;
-
-const LabelGrip = styled.div`
-  cursor: grab;
-  color: #94a3b8;
-  flex-shrink: 0;
-
-  &:active {
-    cursor: grabbing;
-  }
-`;
-
-const LabelColor = styled.div<{ $color: string }>`
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  background-color: ${(props) => props.$color || "#94a3b8"};
-  flex-shrink: 0;
-`;
-
-const LabelContent = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const LabelName = styled.p`
-  font-size: 15px;
-  font-weight: 500;
-  color: #1e293b;
-  margin: 0 0 2px 0;
-`;
-
-const LabelDescription = styled.p`
-  font-size: 13px;
-  color: #475569;
-  margin: 0;
-`;
-
-const LabelActions = styled.div`
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-`;
-
-const LabelActionButton = styled.button`
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
-  }
-
-  &.danger {
-    background: #fef2f2;
-    color: #f87171;
-    border: 1px solid #fecaca;
-
-    &:hover {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-  }
-
-  &.success {
-    background: #f0fdf4;
-    color: #4ade80;
-    border: 1px solid #bbf7d0;
-
-    &:hover {
-      background: #dcfce7;
-      color: #16a34a;
-    }
-  }
-`;
-
-const LabelEditForm = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 20px;
-  background: #fff;
-  border: 2px solid #0f766e;
-  border-radius: 10px;
-`;
-
-const LabelEditRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-`;
-
-const LabelEditInput = styled.input`
-  flex: 1;
-  padding: 8px 12px;
-  font-size: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  color: #1e293b;
-  outline: none;
-  transition: all 0.15s ease;
-
-  &:focus {
-    border-color: #0f766e;
-    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
-  }
-`;
-
-const LabelEditTextarea = styled.textarea`
-  flex: 1;
-  padding: 8px 12px;
-  font-size: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  color: #1e293b;
-  outline: none;
-  resize: vertical;
-  min-height: 60px;
-  transition: all 0.15s ease;
-
-  &:focus {
-    border-color: #0f766e;
-    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
-  }
-`;
-
-const LabelEditLabel = styled.label`
-  font-size: 13px;
-  font-weight: 500;
-  color: #475569;
-  min-width: 80px;
-`;
-
-const ColorInput = styled.input`
-  width: 40px;
-  height: 32px;
-  padding: 2px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  cursor: pointer;
-`;
-
-const LabelEditActions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-`;
-
-const AddLabelButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  align-self: flex-start;
-
-  &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-  }
-`;
-
-const EmptyState = styled.div`
-  text-align: center;
-  padding: 48px 24px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-`;
-
-const EmptyStateIcon = styled.div`
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 16px;
-  color: #94a3b8;
-`;
-
-const EmptyStateTitle = styled.h3`
-  font-size: 16px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 8px;
-`;
-
-const EmptyStateDescription = styled.p`
-  font-size: 14px;
-  color: #475569;
-  margin: 0 0 20px;
-`;
-
-const LoadingContainer = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-`;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -1107,6 +142,30 @@ type TabType =
 interface LabelSetDetailPageProps {
   onClose?: () => void;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COLOR UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Validates if a string is a valid hex color (3 or 6 character format)
+ * Accepts with or without leading #
+ */
+const isValidHexColor = (color: string): boolean => {
+  return /^#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(color);
+};
+
+/**
+ * Sanitizes a color value, returning the fallback if invalid
+ * Strips leading # and validates format
+ */
+const sanitizeColor = (
+  color: string,
+  fallback: string = DEFAULT_LABEL_COLOR
+): string => {
+  const cleaned = color.replace("#", "");
+  return isValidHexColor(cleaned) ? cleaned : fallback;
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -1187,6 +246,11 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   };
 
   const handleDeleteLabel = (labels: AnnotationLabelType[]) => {
+    if (!canRemove) {
+      toast.error("You don't have permission to delete labels");
+      return;
+    }
+
     deleteMultipleLabels({
       variables: {
         annotationLabelIdsToDelete: labels.map((label) => label.id),
@@ -1214,7 +278,7 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
     setEditForm({
       text: label.text || "",
       description: label.description || "",
-      color: label.color || "94a3b8",
+      color: label.color || DEFAULT_LABEL_COLOR,
     });
   };
 
@@ -1225,6 +289,11 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   };
 
   const handleSaveEdit = () => {
+    if (!canUpdate) {
+      toast.error("You don't have permission to edit labels");
+      return;
+    }
+
     if (!editingLabelId) return;
 
     updateAnnotationLabel({
@@ -1232,7 +301,7 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
         id: editingLabelId,
         text: editForm.text,
         description: editForm.description,
-        color: editForm.color.replace("#", ""),
+        color: sanitizeColor(editForm.color),
       },
     })
       .then((result) => {
@@ -1261,11 +330,16 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
     setEditForm({
       text: "",
       description: "",
-      color: "0F766E", // Default teal color
+      color: PRIMARY_LABEL_COLOR,
     });
   };
 
   const handleSaveCreate = () => {
+    if (!canUpdate) {
+      toast.error("You don't have permission to create labels");
+      return;
+    }
+
     if (!creatingLabelType || !editForm.text.trim()) {
       toast.error("Please enter a label name");
       return;
@@ -1273,7 +347,7 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
 
     createAnnotationLabelForLabelset({
       variables: {
-        color: editForm.color.replace("#", ""),
+        color: sanitizeColor(editForm.color, PRIMARY_LABEL_COLOR),
         description: editForm.description,
         icon: "tag",
         text: editForm.text,
@@ -1320,6 +394,11 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   };
 
   const handleDelete = () => {
+    if (!canRemove) {
+      toast.error("You don't have permission to delete this labelset");
+      return;
+    }
+
     if (!opened_labelset?.id) return;
 
     deleteLabelset({
@@ -1655,7 +734,7 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
                 <LabelGrip>
                   <GripIcon />
                 </LabelGrip>
-                <LabelColor $color={`#${label.color || "94a3b8"}`} />
+                <LabelColor $color={`#${label.color || DEFAULT_LABEL_COLOR}`} />
                 <LabelContent>
                   <LabelName>{label.text}</LabelName>
                   <LabelDescription>{label.description}</LabelDescription>
