@@ -913,12 +913,6 @@ const LabelDescription = styled.p`
   margin: 0;
 `;
 
-const LabelUsage = styled.span`
-  font-size: 12px;
-  color: #94a3b8;
-  flex-shrink: 0;
-`;
-
 const LabelActions = styled.div`
   display: flex;
   gap: 4px;
@@ -1666,7 +1660,6 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
                   <LabelName>{label.text}</LabelName>
                   <LabelDescription>{label.description}</LabelDescription>
                 </LabelContent>
-                <LabelUsage>0 uses</LabelUsage>
                 <LabelActions className="label-actions">
                   {canUpdate && (
                     <LabelActionButton
