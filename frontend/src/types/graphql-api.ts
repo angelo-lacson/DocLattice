@@ -455,6 +455,7 @@ export type LabelSetType = Node & {
   docLabelCount?: Scalars["Int"];
   spanLabelCount?: Scalars["Int"];
   tokenLabelCount?: Scalars["Int"];
+  corpusCount?: Scalars["Int"];
   creator?: UserType;
   created?: Scalars["DateTime"];
   modified?: Scalars["DateTime"];

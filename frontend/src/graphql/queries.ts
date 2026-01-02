@@ -712,6 +712,7 @@ export interface GetLabelsetsWithLabelsInputs {
 export interface GetLabelsetsWithLabelsOutputs {
   labelsets: {
     pageInfo: PageInfo;
+    totalCount?: number;
     edges: {
       node: LabelSetType;
     }[];
@@ -732,6 +733,7 @@ export const REQUEST_LABELSETS_WITH_ALL_LABELS = gql`
         startCursor
         endCursor
       }
+      totalCount
       edges {
         node {
           id
@@ -741,6 +743,16 @@ export const REQUEST_LABELSETS_WITH_ALL_LABELS = gql`
           created
           isPublic
           myPermissions
+          docLabelCount
+          spanLabelCount
+          tokenLabelCount
+          corpusCount
+          creator {
+            id
+            slug
+            username
+            email
+          }
           allAnnotationLabels {
             id
             icon
@@ -953,8 +965,19 @@ export const GET_LABELSET_WITH_ALL_LABELS = gql`
       title
       description
       created
+      modified
       isPublic
       myPermissions
+      docLabelCount
+      spanLabelCount
+      tokenLabelCount
+      corpusCount
+      creator {
+        id
+        slug
+        username
+        email
+      }
       allAnnotationLabels {
         id
         icon
@@ -968,6 +991,35 @@ export const GET_LABELSET_WITH_ALL_LABELS = gql`
         analyzer {
           id
         }
+      }
+    }
+  }
+`;
+
+// Query for routing resolution - minimal fields needed for redirect
+export interface GetLabelsetByIdForRedirectInput {
+  id: string;
+}
+
+export interface GetLabelsetByIdForRedirectOutput {
+  labelset: {
+    id: string;
+    title: string;
+    creator: {
+      id: string;
+      slug: string;
+    };
+  } | null;
+}
+
+export const GET_LABELSET_BY_ID_FOR_REDIRECT = gql`
+  query GetLabelsetByIdForRedirect($id: ID!) {
+    labelset(id: $id) {
+      id
+      title
+      creator {
+        id
+        slug
       }
     }
   }

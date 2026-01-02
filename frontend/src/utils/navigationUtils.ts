@@ -7,6 +7,7 @@ import {
   CorpusType,
   DocumentType,
   ExtractType,
+  LabelSetType,
   UserType,
 } from "../types/graphql-api";
 
@@ -14,12 +15,20 @@ import {
  * Route parsing types
  */
 export interface ParsedRoute {
-  type: "corpus" | "document" | "extract" | "thread" | "browse" | "unknown";
+  type:
+    | "corpus"
+    | "document"
+    | "extract"
+    | "thread"
+    | "labelset"
+    | "browse"
+    | "unknown";
   userIdent?: string;
   corpusIdent?: string;
   documentIdent?: string;
   extractIdent?: string;
   threadIdent?: string;
+  labelsetIdent?: string;
   browsePath?: string;
 }
 
@@ -106,6 +115,14 @@ export function parseRoute(pathname: string): ParsedRoute {
       type: "extract",
       userIdent: segments[1],
       extractIdent: segments[2],
+    };
+  }
+
+  // LabelSet route: /label_sets/:id (ID-based, labelsets don't have slugs)
+  if (segments[0] === "label_sets" && segments.length === 2) {
+    return {
+      type: "labelset",
+      labelsetIdent: segments[1],
     };
   }
 
@@ -339,6 +356,53 @@ export function getExtractUrl(
 }
 
 /**
+ * Builds the URL for a labelset
+ * Uses ID-based URL since labelsets don't have slugs
+ *
+ * @param labelset - LabelSet object with id
+ * @returns Full labelset URL, or "#" if id missing
+ */
+export function getLabelsetUrl(labelset: Pick<LabelSetType, "id">): string {
+  if (!labelset.id) {
+    console.warn("Cannot generate labelset URL without id:", labelset);
+    return "#"; // Return a safe fallback that won't navigate
+  }
+
+  return `/label_sets/${labelset.id}`;
+}
+
+/**
+ * Smart navigation function for labelsets
+ * Only navigates if not already at the destination
+ *
+ * @param labelset - LabelSet to navigate to
+ * @param navigate - React Router navigate function
+ * @param currentPath - Current path to check if already at destination
+ */
+export function navigateToLabelset(
+  labelset: Pick<LabelSetType, "id">,
+  navigate: (path: string, options?: { replace?: boolean }) => void,
+  currentPath?: string
+) {
+  const targetPath = getLabelsetUrl(labelset);
+
+  // Don't navigate to invalid URL
+  if (targetPath === "#") {
+    console.error("Cannot navigate to labelset without id");
+    return;
+  }
+
+  // Don't navigate if we're already there
+  if (currentPath && isCanonicalPath(currentPath, targetPath)) {
+    console.log("Already at labelset path:", targetPath);
+    return;
+  }
+
+  // Push to history (not replace) so back button works
+  navigate(targetPath);
+}
+
+/**
  * Checks if the current path matches the canonical path
  * Prevents unnecessary redirects
  */
@@ -499,12 +563,13 @@ export const requestTracker = new RequestTracker();
  * Build a unique key for request deduplication
  */
 export function buildRequestKey(
-  type: "corpus" | "document" | "extract" | "thread",
+  type: "corpus" | "document" | "extract" | "thread" | "labelset",
   userIdent?: string,
   corpusIdent?: string,
   documentIdent?: string,
   extractIdent?: string,
-  threadIdent?: string
+  threadIdent?: string,
+  labelsetIdent?: string
 ): string {
   const parts = [
     type,
@@ -513,6 +578,7 @@ export function buildRequestKey(
     documentIdent,
     extractIdent,
     threadIdent,
+    labelsetIdent,
   ].filter(Boolean);
   return parts.join("-");
 }
