@@ -250,6 +250,24 @@ const FilterPopupContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
+
+  /* Give each child descending z-index so earlier dropdowns appear above later ones */
+  & > *:nth-child(1) {
+    position: relative;
+    z-index: 30;
+  }
+  & > *:nth-child(2) {
+    position: relative;
+    z-index: 20;
+  }
+  & > *:nth-child(3) {
+    position: relative;
+    z-index: 10;
+  }
+  & > *:nth-child(4) {
+    position: relative;
+    z-index: 5;
+  }
 `;
 
 const ClearFiltersButton = styled.button`
