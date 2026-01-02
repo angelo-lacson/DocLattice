@@ -28,7 +28,6 @@ import {
   showCookieAcceptModal,
   openedDocument,
   openedCorpus,
-  openedExtract,
   showSelectCorpusAnalyzerOrFieldsetModal,
   showUploadNewDocumentsModal,
   uploadModalPreloadedFiles,
@@ -68,7 +67,7 @@ import { Extracts } from "./views/Extracts";
 import { BadgeManagement } from "./components/badges/BadgeManagement";
 import { GlobalSettingsPanel, GlobalAgentManagement } from "./components/admin";
 import { useEnv } from "./components/hooks/UseEnv";
-import { EditExtractModal } from "./components/widgets/modals/EditExtractModal";
+import { ExtractDetailRoute } from "./components/routes/ExtractDetailRoute";
 import { SelectAnalyzerOrFieldsetModal } from "./components/widgets/modals/SelectCorpusAnalyzerOrFieldsetAnalyzer";
 import { DocumentUploadModal } from "./components/widgets/modals/DocumentUploadModal";
 import { FileUploadPackageProps } from "./components/widgets/modals/DocumentUploadModal";
@@ -102,7 +101,6 @@ export const App = () => {
   const show_cookie_modal = useReactiveVar(showCookieAcceptModal);
   const knowledge_base_modal = useReactiveVar(showKnowledgeBaseModal);
   const opened_corpus = useReactiveVar(openedCorpus);
-  const opened_extract = useReactiveVar(openedExtract);
   const opened_document = useReactiveVar(openedDocument);
   const document_to_edit = useReactiveVar(editingDocument);
   const document_to_view = useReactiveVar(viewingDocument);
@@ -348,12 +346,6 @@ export const App = () => {
                   onClose={() => showSelectCorpusAnalyzerOrFieldsetModal(false)}
                 />
               )}
-              {opened_extract && (
-                <EditExtractModal
-                  ext={opened_extract}
-                  open={opened_extract !== null}
-                />
-              )}
               <DocumentUploadModal
                 refetch={() => {
                   showUploadNewDocumentsModal(false);
@@ -479,6 +471,10 @@ export const App = () => {
                   <Route
                     path="/terms_of_service"
                     element={<TermsOfService />}
+                  />
+                  <Route
+                    path="/extracts/:extractId"
+                    element={<ExtractDetailRoute />}
                   />
                   <Route path="/extracts" element={<Extracts />} />
                   <Route path="/admin/badges" element={<BadgeManagement />} />

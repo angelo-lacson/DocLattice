@@ -343,7 +343,6 @@ export const showAnnotationLabels = makeVar<LabelDisplayBehavior>(
   LabelDisplayBehavior.ON_HOVER
 );
 export const pagesVisible = makeVar<Record<number, string>>({});
-export const showEditExtractModal = makeVar<boolean>(false);
 export const showDeleteExtractModal = makeVar<boolean>(false);
 export const showCreateExtractModal = makeVar<boolean>(false);
 export const showQueryViewState = makeVar<"ASK" | "VIEW" | "DETAILS">("ASK");
