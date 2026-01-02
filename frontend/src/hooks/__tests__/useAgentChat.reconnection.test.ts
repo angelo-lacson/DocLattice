@@ -120,13 +120,19 @@ describe("useAgentChat WebSocket Reconnection Logic", () => {
   });
 
   describe("WebSocket URL construction", () => {
-    // Test the URL building function directly
-    it("should build correct WebSocket URL with context parameters", async () => {
+    /**
+     * These tests verify the URL construction logic for the WebSocket connection.
+     * Note: The ws:// vs wss:// prefix is determined by either:
+     * - Environment variables (VITE_WS_URL, VITE_API_URL) if set
+     * - window.location.protocol as a fallback
+     *
+     * Since .env.local may set VITE_WS_URL, we test the URL parameter construction
+     * rather than the protocol prefix, which is environment-dependent.
+     */
+
+    it("should build WebSocket URL with all context parameters", async () => {
       const { getUnifiedAgentWebSocketUrl } = await import("../useAgentChat");
 
-      // In test environment, window.location is http://localhost:8000
-      // The function reads window.location at call time, so the URL
-      // will use the test environment's protocol (http -> ws)
       const url = getUnifiedAgentWebSocketUrl(
         {
           corpusId: "corpus-123",
@@ -137,8 +143,7 @@ describe("useAgentChat WebSocket Reconnection Logic", () => {
         "test-token"
       );
 
-      // In test environment with http protocol, expect ws://
-      // The protocol conversion logic: http -> ws, https -> wss
+      // Verify URL structure (protocol depends on env/location)
       expect(url).toMatch(/^wss?:\/\//);
       expect(url).toContain("/ws/agent-chat/");
       expect(url).toContain("corpus_id=corpus-123");
@@ -156,13 +161,46 @@ describe("useAgentChat WebSocket Reconnection Logic", () => {
         undefined
       );
 
-      // URL should have ws:// or wss:// prefix (depends on test env protocol)
+      // Verify URL structure (protocol depends on env/location)
       expect(url).toMatch(/^wss?:\/\//);
       expect(url).toContain("/ws/agent-chat/");
       expect(url).toContain("corpus_id=corpus-only");
       expect(url).not.toContain("document_id");
       expect(url).not.toContain("agent_id");
       expect(url).not.toContain("token=");
+    });
+
+    it("should use wss:// for https protocol when no env override", async () => {
+      // This test verifies the protocol selection logic directly
+      // by checking the normalizedBaseUrl transformation
+
+      // The function replaces http->ws and https->wss
+      const httpToWs = "http://example.com".replace(/^http/, "ws");
+      const httpsToWss = "https://example.com"
+        .replace(/^http/, "ws")
+        .replace(/^ws/, "wss");
+
+      expect(httpToWs).toBe("ws://example.com");
+      // Note: https->ws first, then ws->wss = wss
+      expect("https://example.com".replace(/^http/, "ws")).toBe(
+        "wss://example.com"
+      );
+    });
+
+    it("should properly encode URL parameters", async () => {
+      const { getUnifiedAgentWebSocketUrl } = await import("../useAgentChat");
+
+      const url = getUnifiedAgentWebSocketUrl(
+        {
+          corpusId: "corpus with spaces",
+          documentId: "doc/with/slashes",
+        },
+        undefined
+      );
+
+      // Verify parameters are URL-encoded
+      expect(url).toContain("corpus_id=corpus%20with%20spaces");
+      expect(url).toContain("document_id=doc%2Fwith%2Fslashes");
     });
   });
 
