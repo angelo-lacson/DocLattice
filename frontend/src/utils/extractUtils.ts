@@ -1,78 +1,63 @@
-import {
-  EXTRACT_STATUS,
-  EXTRACT_STATUS_COLORS,
-  ExtractStatus,
-} from "../assets/configurations/constants";
-import { ExtractType } from "../types/graphql-api";
+/**
+ * Shared utility functions for extract-related components
+ *
+ * These utilities are used by ExtractDetail, ExtractListCard, and other
+ * components that display extract status and metadata.
+ */
+
+import type { ExtractType } from "../types/graphql-api";
 
 /**
- * Determines the status of an extract based on its state flags.
- * @param extract - The extract to check status for
- * @returns The extract status string
+ * Extract status types
  */
-export function getExtractStatus(extract: ExtractType): ExtractStatus {
+export type ExtractStatusLabel =
+  | "Running"
+  | "Completed"
+  | "Failed"
+  | "Not Started";
+
+export type ExtractStatusColor =
+  | "success"
+  | "info"
+  | "error"
+  | "warning"
+  | "default";
+
+export interface ExtractStatusInfo {
+  label: ExtractStatusLabel;
+  color: ExtractStatusColor;
+}
+
+/**
+ * Determines the status label and color for an extract based on its state
+ *
+ * @param extract - The extract to get status for
+ * @returns Object containing the status label and color for display
+ */
+export function getExtractStatus(extract: ExtractType): ExtractStatusInfo {
   if (extract.started && !extract.finished && !extract.error) {
-    return EXTRACT_STATUS.RUNNING;
+    return { label: "Running", color: "info" };
   }
   if (extract.finished) {
-    return EXTRACT_STATUS.COMPLETED;
+    return { label: "Completed", color: "success" };
   }
   if (extract.error) {
-    return EXTRACT_STATUS.FAILED;
+    return { label: "Failed", color: "error" };
   }
-  return EXTRACT_STATUS.NOT_STARTED;
-}
-
-type ChipColor = "success" | "info" | "error" | "warning" | "default";
-
-/**
- * Returns the status chip props (color and label) for an extract.
- * @param extract - The extract to get chip props for
- * @returns Object with color and label for the status chip
- */
-export function getExtractStatusChipProps(extract: ExtractType): {
-  color: ChipColor;
-  label: ExtractStatus;
-} {
-  const status = getExtractStatus(extract);
-  return {
-    color: EXTRACT_STATUS_COLORS[status] as ChipColor,
-    label: status,
-  };
+  return { label: "Not Started", color: "default" };
 }
 
 /**
- * Checks if an extract is currently running (started but not finished or errored).
- * @param extract - The extract to check
- * @returns True if the extract is running
+ * Formats a date string to a human-readable format
+ *
+ * @param dateString - ISO date string to format
+ * @returns Formatted date string (e.g., "Jan 15, 2024")
  */
-export function isExtractRunning(extract: ExtractType): boolean {
-  return Boolean(extract.started && !extract.finished && !extract.error);
-}
-
-/**
- * Checks if an extract has completed successfully.
- * @param extract - The extract to check
- * @returns True if the extract completed without errors
- */
-export function isExtractComplete(extract: ExtractType): boolean {
-  return Boolean(extract.started && extract.finished && !extract.error);
-}
-
-/**
- * Checks if an extract has failed.
- * @param extract - The extract to check
- * @returns True if the extract has an error
- */
-export function isExtractFailed(extract: ExtractType): boolean {
-  return Boolean(extract.error);
-}
-
-/**
- * Checks if an extract can be edited (not yet started).
- * @param extract - The extract to check
- * @returns True if the extract can be edited
- */
-export function canEditExtract(extract: ExtractType): boolean {
-  return !extract.started;
+export function formatExtractDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
