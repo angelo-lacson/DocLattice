@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Routing Audit Follow-ups
+- **Notification navigation fallback** (`frontend/src/components/notifications/NotificationDropdown.tsx:182-188`, `NotificationCenter.tsx:207-213`): Added fallback navigation to `/discussions` when corpus slug data is missing. Previously, users clicking notifications with missing slug data would see no response.
+- **Network-only fetch policy optimization** (`frontend/src/routing/CentralRouteManager.tsx:621-632`): Changed thread resolution corpus query from `network-only` to `cache-and-network` since `authInitComplete` now ensures `clearStore()` completes before route queries run. This improves navigation performance when corpus data is already cached.
+- **Unit test coverage** (`frontend/src/utils/__tests__/navigationUtils.test.ts:497-503`): Added missing test for `parseRoute("/discussions")` to prevent regression of discussions route parsing.
+
 #### Type Safety and Bug Fixes
 - **User email detection** (`frontend/src/components/corpuses/CorpusListView.tsx:345-349`): Fixed currentUserEmail logic to use `userObj` reactive variable from Apollo cache instead of inferring from corpus permissions - prevents filter failures when no corpus has CAN_REMOVE permission
 - **TypeScript type casts** (`frontend/src/components/corpuses/CorpusListView.tsx`, `CorpusModal.tsx`): Removed 7 `as any` type casts by correcting `CorpusType.categories` type from `CorpusCategoryTypeConnection` to `CorpusCategoryType[]` to match backend GraphQL schema
