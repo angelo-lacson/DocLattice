@@ -83,7 +83,6 @@ import {
   VIEW_MODES,
   STATUS_FILTERS,
   DEBOUNCE,
-  POLLING,
   type ViewMode,
   type StatusFilter,
 } from "../assets/configurations/constants";
@@ -1024,32 +1023,6 @@ export const Documents = () => {
     refetchDocuments();
   }, [filtered_to_corpus]);
 
-  // Polling for processing documents
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-    const areDocumentsProcessing = document_items.some(
-      (doc) => doc.backendLock
-    );
-
-    if (areDocumentsProcessing) {
-      pollInterval = setInterval(() => {
-        refetchDocuments();
-      }, POLLING.DOCUMENT_PROCESSING_INTERVAL_MS);
-
-      const timeoutId = setTimeout(() => {
-        clearInterval(pollInterval);
-        toast.info(
-          "Document processing is taking too long... polling paused after 10 minutes."
-        );
-      }, POLLING.DOCUMENT_PROCESSING_TIMEOUT_MS);
-
-      return () => {
-        clearInterval(pollInterval);
-        clearTimeout(timeoutId);
-      };
-    }
-  }, [document_items, refetchDocuments]);
-
   // Debounced search with consolidated cleanup to prevent memory leaks.
   // The ref ensures stable reference across renders, and the cleanup
   // directly accesses the ref to cancel any pending debounce on unmount.
@@ -1215,7 +1188,7 @@ export const Documents = () => {
   // Document click handler
   const handleDocumentClick = (doc: DocumentType) => {
     if (contextMenu) return;
-    navigateToDocument(doc as any, null, navigate, window.location.pathname);
+    navigateToDocument(doc, null, navigate, window.location.pathname);
   };
 
   // Get section title based on filter

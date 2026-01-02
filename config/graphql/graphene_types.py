@@ -664,6 +664,14 @@ class LabelSetType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_token_label_count(self, info):
         return self.annotation_labels.filter(label_type="TOKEN_LABEL").count()
 
+    # Count of corpuses using this label set
+    corpus_count = graphene.Int(description="Number of corpuses using this label set")
+
+    def resolve_corpus_count(self, info):
+        """Return count of corpuses using this label set that are visible to the user."""
+        user = info.context.user
+        return self.corpus_set.visible_to_user(user).count()
+
     # To get ALL labels for a given labelset
     all_annotation_labels = graphene.Field(graphene.List(AnnotationLabelType))
 

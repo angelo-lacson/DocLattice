@@ -41,9 +41,10 @@ export function formatRelativeTime(dateString?: string | null): string {
  * Formats a date string into a compact relative time description.
  * Used in activity feeds and compact displays.
  * @param dateString - ISO date string to format
- * @returns Compact time string like "5h ago", "3d ago"
+ * @returns Compact time string like "5h ago", "3d ago", or empty string if no dateString
  */
-export function formatCompactRelativeTime(dateString: string): string {
+export function formatCompactRelativeTime(dateString?: string | null): string {
+  if (!dateString) return "";
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
