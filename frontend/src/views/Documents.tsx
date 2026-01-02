@@ -79,6 +79,14 @@ import {
   formatRelativeTime,
   getInitials,
 } from "../utils/formatters";
+import {
+  VIEW_MODES,
+  STATUS_FILTERS,
+  DEBOUNCE,
+  POLLING,
+  type ViewMode,
+  type StatusFilter,
+} from "../assets/configurations/constants";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -888,8 +896,10 @@ export const Documents = () => {
   const show_delete_documents_modal = useReactiveVar(showDeleteDocumentsModal);
 
   const [searchCache, setSearchCache] = useState<string>(document_search_term);
-  const [viewMode, setViewMode] = useState<"grid" | "list" | "compact">("grid");
-  const [activeStatusFilter, setActiveStatusFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>(VIEW_MODES.GRID);
+  const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilter>(
+    STATUS_FILTERS.ALL
+  );
   const [contextMenu, setContextMenu] = useState<{
     document: DocumentType;
     position: { x: number; y: number };
@@ -931,11 +941,11 @@ export const Documents = () => {
 
   // Filter by status
   const filteredDocuments = useMemo(() => {
-    if (activeStatusFilter === "all") return document_items;
-    if (activeStatusFilter === "processed") {
+    if (activeStatusFilter === STATUS_FILTERS.ALL) return document_items;
+    if (activeStatusFilter === STATUS_FILTERS.PROCESSED) {
       return document_items.filter((doc) => !doc.backendLock);
     }
-    if (activeStatusFilter === "processing") {
+    if (activeStatusFilter === STATUS_FILTERS.PROCESSING) {
       return document_items.filter((doc) => doc.backendLock);
     }
     // 'error' filter - would need error field in DocumentType
@@ -969,17 +979,17 @@ export const Documents = () => {
   const statusFilterItems: FilterTabItem[] = useMemo(
     () => [
       {
-        id: "all",
+        id: STATUS_FILTERS.ALL,
         label: "All Documents",
         count: String(document_items.length),
       },
       {
-        id: "processed",
+        id: STATUS_FILTERS.PROCESSED,
         label: "Processed",
         count: String(stats.processedCount),
       },
       {
-        id: "processing",
+        id: STATUS_FILTERS.PROCESSING,
         label: "Processing",
         count: String(stats.processingCount),
       },
@@ -1024,14 +1034,14 @@ export const Documents = () => {
     if (areDocumentsProcessing) {
       pollInterval = setInterval(() => {
         refetchDocuments();
-      }, 15000);
+      }, POLLING.DOCUMENT_PROCESSING_INTERVAL_MS);
 
       const timeoutId = setTimeout(() => {
         clearInterval(pollInterval);
         toast.info(
           "Document processing is taking too long... polling paused after 10 minutes."
         );
-      }, 600000);
+      }, POLLING.DOCUMENT_PROCESSING_TIMEOUT_MS);
 
       return () => {
         clearInterval(pollInterval);
@@ -1040,25 +1050,31 @@ export const Documents = () => {
     }
   }, [document_items, refetchDocuments]);
 
-  // Debounced search
+  // Debounced search with consolidated cleanup to prevent memory leaks.
+  // The ref ensures stable reference across renders, and the cleanup
+  // directly accesses the ref to cancel any pending debounce on unmount.
   const debouncedSearch = useRef(
     _.debounce((searchTerm: string) => {
       documentSearchTerm(searchTerm);
-    }, 1000)
+    }, DEBOUNCE.SEARCH_MS)
   );
 
-  // Cleanup debounce on unmount to prevent memory leaks
   useEffect(() => {
-    const currentDebounce = debouncedSearch.current;
+    // Capture ref for cleanup - access directly to ensure we cancel the current function
+    const debounceFn = debouncedSearch.current;
     return () => {
-      currentDebounce.cancel();
+      debounceFn.cancel();
     };
   }, []);
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchCache(e.target.value);
-    debouncedSearch.current(e.target.value);
-  };
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchCache(value);
+      debouncedSearch.current(value);
+    },
+    []
+  );
 
   // Mutations
   const [tryDeleteDocuments] = useMutation<
@@ -1091,19 +1107,20 @@ export const Documents = () => {
   const [tryUpdateDocument] = useMutation<
     UpdateDocumentOutputs,
     UpdateDocumentInputs
-  >(UPDATE_DOCUMENT);
+  >(UPDATE_DOCUMENT, {
+    onCompleted: () => {
+      toast.success("Document updated successfully");
+      refetchDocuments();
+    },
+    onError: (error) => {
+      toast.error(`Failed to update document: ${error.message}`);
+    },
+  });
 
   const handleUpdateDocument = (document_obj: Record<string, unknown>) => {
     tryUpdateDocument({
       variables: document_obj as unknown as UpdateDocumentInputs,
-    })
-      .then(() => {
-        toast.success("Document updated successfully");
-        refetchDocuments();
-      })
-      .catch((error) => {
-        toast.error(`Failed to update document: ${error.message}`);
-      });
+    });
   };
 
   // Infinite scroll
@@ -1163,7 +1180,7 @@ export const Documents = () => {
     if (contextMenu) {
       const timer = setTimeout(() => {
         document.addEventListener("click", handleClickOutside);
-      }, 100);
+      }, DEBOUNCE.CLICK_OUTSIDE_DELAY_MS);
       return () => {
         clearTimeout(timer);
         document.removeEventListener("click", handleClickOutside);
@@ -1187,7 +1204,7 @@ export const Documents = () => {
     // Delay to prevent immediate close from the button click
     const timer = setTimeout(() => {
       document.addEventListener("mousedown", handleClickOutside);
-    }, 100);
+    }, DEBOUNCE.CLICK_OUTSIDE_DELAY_MS);
 
     return () => {
       clearTimeout(timer);
@@ -1204,9 +1221,9 @@ export const Documents = () => {
   // Get section title based on filter
   const getSectionTitle = () => {
     switch (activeStatusFilter) {
-      case "processed":
+      case STATUS_FILTERS.PROCESSED:
         return "Processed Documents";
-      case "processing":
+      case STATUS_FILTERS.PROCESSING:
         return "Processing Documents";
       default:
         return "All Documents";
@@ -1311,7 +1328,9 @@ export const Documents = () => {
             <FilterTabs
               items={statusFilterItems}
               value={activeStatusFilter}
-              onChange={setActiveStatusFilter}
+              onChange={(id: string) =>
+                setActiveStatusFilter(id as StatusFilter)
+              }
             />
             <FilterPopupContainer ref={filterPopupRef}>
               <FilterButton
@@ -1411,29 +1430,29 @@ export const Documents = () => {
             <ActionButtons>
               <ViewToggle role="group" aria-label="Document view options">
                 <ViewToggleButton
-                  $active={viewMode === "grid"}
-                  onClick={() => setViewMode("grid")}
+                  $active={viewMode === VIEW_MODES.GRID}
+                  onClick={() => setViewMode(VIEW_MODES.GRID)}
                   title="Grid view"
                   aria-label="Grid view"
-                  aria-pressed={viewMode === "grid"}
+                  aria-pressed={viewMode === VIEW_MODES.GRID}
                 >
                   <Grid size={16} />
                 </ViewToggleButton>
                 <ViewToggleButton
-                  $active={viewMode === "list"}
-                  onClick={() => setViewMode("list")}
+                  $active={viewMode === VIEW_MODES.LIST}
+                  onClick={() => setViewMode(VIEW_MODES.LIST)}
                   title="List view"
                   aria-label="List view"
-                  aria-pressed={viewMode === "list"}
+                  aria-pressed={viewMode === VIEW_MODES.LIST}
                 >
                   <List size={16} />
                 </ViewToggleButton>
                 <ViewToggleButton
-                  $active={viewMode === "compact"}
-                  onClick={() => setViewMode("compact")}
+                  $active={viewMode === VIEW_MODES.COMPACT}
+                  onClick={() => setViewMode(VIEW_MODES.COMPACT)}
                   title="Compact view"
                   aria-label="Compact view"
-                  aria-pressed={viewMode === "compact"}
+                  aria-pressed={viewMode === VIEW_MODES.COMPACT}
                 >
                   <AlignJustify size={16} />
                 </ViewToggleButton>
@@ -1492,7 +1511,7 @@ export const Documents = () => {
 
           {filteredDocuments.length > 0 ? (
             <>
-              {viewMode === "grid" && (
+              {viewMode === VIEW_MODES.GRID && (
                 <DocumentsGrid>
                   {filteredDocuments.map((doc) => (
                     <DocumentCardWrapper
@@ -1592,7 +1611,7 @@ export const Documents = () => {
                 </DocumentsGrid>
               )}
 
-              {viewMode === "list" && (
+              {viewMode === VIEW_MODES.LIST && (
                 <DocumentsListView role="table" aria-label="Documents list">
                   <ListHeader role="rowgroup">
                     <Checkbox
@@ -1672,7 +1691,7 @@ export const Documents = () => {
                 </DocumentsListView>
               )}
 
-              {viewMode === "compact" && (
+              {viewMode === VIEW_MODES.COMPACT && (
                 <DocumentsCompactView>
                   {filteredDocuments.map((doc) => (
                     <CompactItem
@@ -1750,14 +1769,14 @@ export const Documents = () => {
               <EmptyState
                 icon={<DocumentIcon />}
                 title={
-                  activeStatusFilter !== "all"
+                  activeStatusFilter !== STATUS_FILTERS.ALL
                     ? `No ${getSectionTitle().toLowerCase()}`
                     : hasAdvancedFilters
                     ? "No documents match your filters"
                     : "No documents yet"
                 }
                 description={
-                  activeStatusFilter !== "all"
+                  activeStatusFilter !== STATUS_FILTERS.ALL
                     ? "Try selecting a different filter to see more documents."
                     : hasAdvancedFilters
                     ? "Try adjusting your filters or clearing them to see more documents."
@@ -1765,7 +1784,7 @@ export const Documents = () => {
                 }
                 size="lg"
                 action={
-                  activeStatusFilter === "all" &&
+                  activeStatusFilter === STATUS_FILTERS.ALL &&
                   !hasAdvancedFilters &&
                   auth_token ? (
                     <Button
