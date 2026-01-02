@@ -400,6 +400,7 @@ class DocumentFilter(django_filters.FilterSet):
         )
 
         # Also include documents from the M2M relationship (backward compatibility)
+        # Note: Corpus.documents is M2M, so reverse filter uses 'corpus' (not corpus_set)
         doc_ids_from_m2m = list(
             queryset.filter(corpus=corpus_pk).values_list("id", flat=True)
         )

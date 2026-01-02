@@ -6,6 +6,8 @@ import { Menu } from "semantic-ui-react";
 import { ExtractType } from "../../types/graphql-api";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
+import { formatShortDate } from "../../utils/formatters";
+import { getExtractStatus } from "../../utils/extractUtils";
 
 // Styled Components
 
@@ -83,21 +85,6 @@ const KebabIcon = () => (
 
 // Helper Functions
 
-function getStatusLabel(
-  extract: ExtractType
-): "Running" | "Completed" | "Failed" | "Not Started" {
-  if (extract.started && !extract.finished && !extract.error) {
-    return "Running";
-  }
-  if (extract.finished) {
-    return "Completed";
-  }
-  if (extract.error) {
-    return "Failed";
-  }
-  return "Not Started";
-}
-
 function formatStats(extract: ExtractType): string[] {
   const stats: string[] = [];
 
@@ -117,15 +104,6 @@ function formatStats(extract: ExtractType): string[] {
   }
 
   return stats;
-}
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 // Main Component
@@ -178,14 +156,14 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
     }
   };
 
-  const statusLabel = getStatusLabel(extract);
+  const statusLabel = getExtractStatus(extract);
   const stats = formatStats(extract);
   const permissions = getPermissions(extract.myPermissions || []);
   const canRemove = permissions.includes(PermissionTypes.CAN_REMOVE);
 
   // Add creation date to description
   const description = extract.created
-    ? `Created ${formatDate(extract.created)}`
+    ? `Created ${formatShortDate(extract.created)}`
     : "No description";
 
   return (

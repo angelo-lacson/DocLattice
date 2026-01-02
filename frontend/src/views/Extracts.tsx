@@ -22,6 +22,7 @@ import { toast } from "react-toastify";
 import _ from "lodash";
 
 import { ExtractType } from "../types/graphql-api";
+import { DEBOUNCE } from "../assets/configurations/constants";
 import {
   authToken,
   extractSearchTerm,
@@ -193,7 +194,7 @@ export const Extracts = () => {
   const debouncedSearch = useRef(
     _.debounce((searchTerm: string) => {
       extractSearchTerm(searchTerm);
-    }, 500)
+    }, DEBOUNCE.SEARCH_MS)
   );
 
   const handleSearchChange = (value: string) => {

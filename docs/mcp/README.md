@@ -4,9 +4,12 @@
 
 OpenContracts exposes a read-only [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for AI assistants to access **public** corpuses, documents, annotations, and discussion threads.
 
-- **Endpoint**: `POST /mcp/` (Streamable HTTP, stateless)
-- **Scope**: Public resources only (anonymous user visibility)
-- **Auth**: None required (public data only)
+**Endpoints**:
+- **Streamable HTTP** (recommended): `POST /mcp/` or `GET /mcp/` (stateless mode)
+- **SSE** (deprecated, backward compatible): `GET /sse/`, `POST /sse/messages/`
+
+**Scope**: Public resources only (anonymous user visibility)
+**Auth**: None required (public data only)
 
 ### Claude Desktop Quick Start
 
@@ -55,13 +58,28 @@ Resources use URI patterns for direct access:
 
 ## Transport Options
 
-### HTTP (Streamable HTTP)
+### Streamable HTTP (Recommended)
 
-The primary transport. Stateless mode - each request is independent.
+The primary transport, introduced in MCP spec 2025-03-26. Stateless mode - each request is independent.
 
 ```bash
 # Test with curl
 curl -X POST https://your-instance.com/mcp/ \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
+```
+
+### SSE (Deprecated, Backward Compatible)
+
+For older MCP clients that use the deprecated SSE transport (pre-2025-03-26 spec):
+
+```bash
+# SSE connection (GET) - establishes SSE stream
+curl https://your-instance.com/sse/
+
+# Messages endpoint (POST) - send messages to the server
+curl -X POST https://your-instance.com/sse/messages/?session_id=<id> \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
 ```
@@ -129,11 +147,19 @@ python -m opencontractserver.mcp.server
 ## Architecture
 
 ```
-┌─────────────────┐     POST /mcp/     ┌──────────────────────┐
-│  MCP Client     │ ◄────────────────► │  StreamableHTTP      │
-│  (Claude, etc)  │   JSON-RPC 2.0     │  Session Manager     │
-└─────────────────┘                    │  (stateless mode)    │
-                                       └──────────┬───────────┘
+┌─────────────────┐                    ┌──────────────────────┐
+│  MCP Client     │                    │  ASGI Router         │
+│  (Claude, etc)  │◄──────────────────►│  /mcp/* or /sse/*    │
+└─────────────────┘   JSON-RPC 2.0     └──────────┬───────────┘
+                                                  │
+                      ┌───────────────────────────┼───────────────────────────┐
+                      │                           │                           │
+           ┌──────────▼───────────┐    ┌──────────▼───────────┐    ┌──────────▼───────────┐
+           │  StreamableHTTP      │    │  SSE Transport       │    │  stdio Transport     │
+           │  /mcp (recommended)  │    │  /sse (deprecated)   │    │  (CLI only)          │
+           └──────────┬───────────┘    └──────────┬───────────┘    └──────────┬───────────┘
+                      │                           │                           │
+                      └───────────────────────────┼───────────────────────────┘
                                                   │
                                        ┌──────────▼───────────┐
                                        │  MCP Server          │
@@ -149,11 +175,12 @@ python -m opencontractserver.mcp.server
 ```
 
 **Key files**:
-- `opencontractserver/mcp/server.py` - Server setup, ASGI app, URI parsing
+- `opencontractserver/mcp/server.py` - Server setup, ASGI app, URI parsing, transport handlers
 - `opencontractserver/mcp/tools.py` - Tool implementations
 - `opencontractserver/mcp/resources.py` - Resource handlers
 - `opencontractserver/mcp/formatters.py` - Response formatters
-- `config/asgi.py` - HTTP routing (`/mcp/*` → MCP app)
+- `config/asgi.py` - HTTP routing (`/mcp/*` and `/sse/*` → MCP app)
+- `compose/production/traefik/traefik.yml` - Production routing (Traefik)
 
 ---
 

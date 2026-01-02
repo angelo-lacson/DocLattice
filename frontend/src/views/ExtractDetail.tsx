@@ -37,6 +37,15 @@ import {
   ExtractType,
 } from "../types/graphql-api";
 import { openedExtract, addingColumnToExtract } from "../graphql/cache";
+import { formatShortDate } from "../utils/formatters";
+import {
+  getExtractStatusChipProps,
+  isExtractRunning,
+  isExtractComplete,
+  isExtractFailed,
+  canEditExtract,
+} from "../utils/extractUtils";
+import { POLLING } from "../assets/configurations/constants";
 import {
   RequestGetExtractOutput,
   REQUEST_GET_EXTRACT,
@@ -428,37 +437,6 @@ const TableSvgIcon = () => (
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HELPER FUNCTIONS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const getStatusChipProps = (
-  extract: ExtractType
-): {
-  color: "success" | "info" | "error" | "warning" | "default";
-  label: string;
-} => {
-  if (extract.started && !extract.finished && !extract.error) {
-    return { color: "info", label: "Running" };
-  }
-  if (extract.finished) {
-    return { color: "success", label: "Completed" };
-  }
-  if (extract.error) {
-    return { color: "error", label: "Failed" };
-  }
-  return { color: "default", label: "Not Started" };
-};
-
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -505,17 +483,17 @@ export const ExtractDetail: React.FC = () => {
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
 
-    if (extract && extract.started && !extract.finished && !extract.error) {
+    if (extract && isExtractRunning(extract)) {
       pollInterval = setInterval(() => {
         refetch({ id: extract.id });
-      }, 5000);
+      }, POLLING.EXTRACT_POLLING_INTERVAL_MS);
 
       const timeoutId = setTimeout(() => {
         clearInterval(pollInterval);
         toast.info(
           "Job is taking too long... polling paused after 10 minutes."
         );
-      }, 600000);
+      }, POLLING.EXTRACT_POLLING_TIMEOUT_MS);
 
       return () => {
         clearInterval(pollInterval);
@@ -731,12 +709,12 @@ export const ExtractDetail: React.FC = () => {
   }, []);
 
   // Computed values
-  const isRunning = extract?.started && !extract?.finished && !extract?.error;
-  const isComplete = extract?.started && extract?.finished && !extract?.error;
-  const isFailed = Boolean(extract?.error);
-  const canEdit = !extract?.started;
+  const isRunning = extract ? isExtractRunning(extract) : false;
+  const isComplete = extract ? isExtractComplete(extract) : false;
+  const isFailed = extract ? isExtractFailed(extract) : false;
+  const canEdit = extract ? canEditExtract(extract) : false;
 
-  const statusProps = extract ? getStatusChipProps(extract) : null;
+  const statusProps = extract ? getExtractStatusChipProps(extract) : null;
 
   const stats = useMemo(() => {
     const completedCells = cells.filter((c) => c.completed).length;
@@ -802,11 +780,11 @@ export const ExtractDetail: React.FC = () => {
             <Meta>
               {extract.corpus && <span>from {extract.corpus.title}</span>}
               {extract.corpus && <MetaSeparator />}
-              <span>Created {formatDate(extract.created)}</span>
+              <span>Created {formatShortDate(extract.created)}</span>
               {extract.finished && (
                 <>
                   <MetaSeparator />
-                  <span>Completed {formatDate(extract.finished)}</span>
+                  <span>Completed {formatShortDate(extract.finished)}</span>
                 </>
               )}
             </Meta>

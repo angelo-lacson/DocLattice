@@ -5,6 +5,75 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-02
+
+### Added
+
+#### Extracts Page Redesign
+- **Extracts view redesign** (`frontend/src/views/Extracts.tsx`): Modern extract listing page using @os-legal/ui components
+  - Hero section with search and filter tabs (All, Running, Completed, Failed, Not Started)
+  - Stats grid showing extract counts and status breakdowns
+  - CollectionCard components with status badges and document/column counts
+  - Context menu for view and delete actions
+  - Infinite scroll support for large extract lists
+- **Extract detail page** (`frontend/src/views/ExtractDetail.tsx`): Full-page extract view replacing modal-based approach
+  - Route-based navigation pattern: `/extracts/:extractId`
+  - Tabbed interface for Data, Documents, and Schema views
+  - Real-time status polling for running extracts
+  - Export to CSV functionality
+  - Column management (add/edit/delete)
+- **ExtractListCard component** (`frontend/src/components/extracts/ExtractListCard.tsx`): Extract card for list views
+  - Status display, document/column counts, corpus info
+  - Context menu integration
+- **ExtractDetailRoute** (`frontend/src/components/routes/ExtractDetailRoute.tsx`): Route component for extract detail page
+  - URL-based entity resolution via GraphQL
+  - Loading and error states
+  - SEO-friendly meta tags
+- **Extract utilities** (`frontend/src/utils/extractUtils.ts`): Shared functions for extract status handling
+  - `getExtractStatus`: Determine status from extract flags
+  - `getExtractStatusChipProps`: Get Chip component props for status
+  - `isExtractRunning`, `isExtractComplete`, `isExtractFailed`, `canEditExtract`: Status check helpers
+- **formatShortDate** (`frontend/src/utils/formatters.ts`): Date formatting for "Oct 5, 2023" style display
+- **Extract constants** (`frontend/src/assets/configurations/constants.ts`):
+  - `EXTRACT_STATUS`: Status string constants
+  - `EXTRACT_STATUS_COLORS`: Chip color mapping
+  - `POLLING.EXTRACT_POLLING_INTERVAL_MS`: 5000ms polling interval
+  - `POLLING.EXTRACT_POLLING_TIMEOUT_MS`: 600000ms timeout
+
+### Changed
+- **openedExtract documentation** (`frontend/src/graphql/cache.ts:364-388`): Clarified that ExtractDetailRoute (not CentralRouteManager) sets openedExtract for the new routing pattern
+
+#### Documents Page Redesign
+- **Documents view redesign** (`frontend/src/views/Documents.tsx`): Modern document listing page using @os-legal/ui components
+  - Hero section with search and filter tabs (All, Processed, Processing)
+  - Stats grid showing document, page, and annotation counts
+  - Three view modes: Grid, List, and Compact views
+  - Advanced filters popup for corpus, label, and labelset filtering
+  - Context menu for document actions (view, edit, add to corpus, delete)
+  - Bulk selection and operations support
+  - Status badges for processing documents
+- **Utility functions** (`frontend/src/utils/formatters.ts`): Shared formatting utilities
+  - `formatFileSize`: Human-readable file size (0 B, KB, MB)
+  - `formatRelativeTime`: Relative time descriptions ("Just now", "5 hours ago")
+  - `formatCompactRelativeTime`: Compact time format ("5h ago", "3d ago")
+  - `getInitials`: Avatar initials from name/email
+- **Component tests** (`frontend/tests/Documents.ct.tsx`): 8 Playwright component tests covering view modes, filtering, search, and selection
+
+### Fixed
+
+#### Formatter Robustness
+- **Zero byte handling** (`frontend/src/utils/formatters.ts:9`): `formatFileSize` now correctly returns "0 B" for 0 bytes instead of empty string
+- **Invalid date handling** (`frontend/src/utils/formatters.ts:25,50`): Both `formatRelativeTime` and `formatCompactRelativeTime` now return empty string for invalid/unparseable date strings instead of NaN-based output
+
+#### Documents View Cleanup
+- **Removed long-polling** (`frontend/src/views/Documents.tsx`): Removed document processing polling in favor of WebSocket-based notifications, eliminating potential memory leak from interval timers
+- **Type safety** (`frontend/src/views/Documents.tsx:1192`): Removed unnecessary `as any` type assertion in `navigateToDocument` call
+
+### Changed
+- **View modes enum** (`frontend/src/assets/configurations/constants.ts`): Added `VIEW_MODES` and `STATUS_FILTERS` constants for Documents page
+
+---
+
 ## [Unreleased] - 2026-01-01
 
 ### Added
@@ -61,6 +130,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Array utilities** (`frontend/src/utils/arrayUtils.ts`): `arraysEqualUnordered` and `arraysEqualOrdered` for DRY comparison logic
 
 ### Fixed
+
+#### MCP Connection Issues with Claude and OpenAI Clients (Issue #759)
+- **Root cause**: Traefik production routing was missing `/mcp` and `/sse` paths, causing requests to be routed to the frontend (which returned HTML) instead of the Django MCP server
+- **Traefik configuration fix** (`compose/production/traefik/traefik.yml:58`, `compose/production/traefik/traefik-ci.yml:34`): Added `/mcp` and `/sse` path prefixes to the Django routing rule
+- **SSE transport support** (`opencontractserver/mcp/server.py:367-397`): Added deprecated SSE transport at `/sse` for backward compatibility with older MCP clients that don't support Streamable HTTP transport
+- **ASGI router update** (`config/asgi.py:70-84`): Extended HTTP router to dispatch both `/mcp/*` and `/sse/*` paths to the MCP ASGI app
+- **Documentation update** (`docs/mcp/README.md`): Updated to document both Streamable HTTP (recommended) and SSE (deprecated) transport options
 
 #### Security and Performance
 - **System user security** (`opencontractserver/corpuses/migrations/0035_seed_default_categories.py`): Defense-in-depth with unusable password for system user

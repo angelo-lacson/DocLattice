@@ -364,25 +364,31 @@ export const editingDocument = makeVar<DocumentType | null>(null);
 /**
  * Extract-related global variables
  *
- * ENTITY STATE (set by CentralRouteManager Phase 1):
- *   openedExtract - Extract resolved from /e/:user/:extractId route
+ * ENTITY STATE:
+ *   openedExtract - Extract resolved from /extracts/:extractId route
+ *   Set by: ExtractDetailRoute component when navigating to extract detail
+ *   Read by: ExtractDetail component for displaying extract data
  *
- * URL-DRIVEN STATE (set by CentralRouteManager Phase 2):
+ * URL-DRIVEN STATE:
  *   selectedExtractIds - Controlled by URL query parameter ?extract=
+ *   Set by: CentralRouteManager Phase 2
  *
- * CRITICAL: ONLY CentralRouteManager is allowed to SET openedExtract and selectedExtractIds
+ * WRITE RESTRICTIONS:
+ *   - openedExtract: ONLY set by ExtractDetailRoute or when clearing on navigation away
+ *   - selectedExtractIds: ONLY set by CentralRouteManager
+ *
  * All other components must:
- *   - ONLY READ via useReactiveVar()
- *   - UPDATE STATE via navigateToExtract() or updateAnnotationSelectionParams()
+ *   - READ via useReactiveVar()
+ *   - NAVIGATE via react-router to trigger route component updates
  *
  * Examples:
- *   /e/user/extract-123               → openedExtract(extractObj)
- *   /c/user/corpus?extract=456        → selectedExtractIds(["456"])
- *   /d/user/doc?extract=456,789       → selectedExtractIds(["456", "789"])
+ *   /extracts/123                      → openedExtract(extractObj) via ExtractDetailRoute
+ *   /c/user/corpus?extract=456         → selectedExtractIds(["456"])
+ *   /d/user/doc?extract=456,789        → selectedExtractIds(["456", "789"])
  */
-export const openedExtract = makeVar<ExtractType | null>(null); // ENTITY STATE - set by CentralRouteManager Phase 1
+export const openedExtract = makeVar<ExtractType | null>(null); // ENTITY STATE - set by ExtractDetailRoute
 export const selectedExtractIds = makeVar<string[]>([]); // URL-DRIVEN - set by CentralRouteManager Phase 2
-export const selectedExtract = makeVar<ExtractType | null>(null); // Legacy - kept for backward compatibility
+export const selectedExtract = makeVar<ExtractType | null>(null); // Selection state for extract in various contexts
 export const extractSearchTerm = makeVar<string>("");
 
 /**
