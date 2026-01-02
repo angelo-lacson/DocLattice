@@ -352,10 +352,14 @@ export const LabelSetEditModal = ({
 
   const handleDeleteLabel = (labels: AnnotationLabelType[]) => {
     deleteMultipleLabels({
-      variables: { labelIdsToDelete: labels.map((label) => label.id) },
+      variables: {
+        annotationLabelIdsToDelete: labels.map((label) => label.id),
+      },
     })
-      .then((data) => {
-        refetch();
+      .then((result) => {
+        if (result.data?.deleteMultipleAnnotationLabels?.ok) {
+          refetch();
+        }
       })
       .catch((err) => {
         console.log("Error deleting label", err);

@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import {
   SearchBox,
@@ -25,7 +26,6 @@ import { LabelSetType } from "../types/graphql-api";
 import {
   authToken,
   labelsetSearchTerm,
-  openedLabelset,
   showNewLabelsetModal,
   userObj,
   deletingLabelset,
@@ -47,9 +47,9 @@ import {
 } from "../components/forms/schemas";
 import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
 import { LabelSetListCard } from "../components/labelsets/LabelSetListCard";
-import { LabelSetEditModal } from "../components/labelsets/LabelSetEditModal";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../components/common/LoadingOverlay";
+import { getLabelsetUrl } from "../utils/navigationUtils";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS - Following DiscoveryLanding patterns
@@ -180,10 +180,10 @@ const TagsIcon = () => (
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const Labelsets = () => {
+  const navigate = useNavigate();
   const auth_token = useReactiveVar(authToken);
   const currentUser = useReactiveVar(userObj);
   const labelset_search_term = useReactiveVar(labelsetSearchTerm);
-  const opened_labelset = useReactiveVar(openedLabelset);
   const show_new_label_modal = useReactiveVar(showNewLabelsetModal);
   const isAuthenticated = Boolean(auth_token);
   const currentUserEmail = currentUser?.email;
@@ -373,13 +373,6 @@ export const Labelsets = () => {
     <PageContainer>
       <ContentContainer>
         {/* Modals */}
-        {opened_labelset && (
-          <LabelSetEditModal
-            open={opened_labelset !== null}
-            toggleModal={() => openedLabelset(null)}
-          />
-        )}
-
         {show_new_label_modal && (
           <CRUDModal
             open={show_new_label_modal}
@@ -487,7 +480,7 @@ export const Labelsets = () => {
                     labelset={labelset}
                     currentUserEmail={currentUserEmail}
                     onEdit={(ls) => editingLabelset(ls)}
-                    onView={(ls) => openedLabelset(ls)}
+                    onView={(ls) => navigate(getLabelsetUrl(ls))}
                     onDelete={(ls) => deletingLabelset(ls)}
                     isMenuOpen={openMenuId === labelset.id}
                     menuPosition={
