@@ -1464,6 +1464,90 @@ class MCPSSETransportTest(TestCase):
         self.assertTrue(callable(handle_sse_connection))
 
 
+class MCPHttpRouterTest(TestCase):
+    """Tests for the HTTP router that dispatches to MCP vs Django."""
+
+    def test_http_router_routes_sse_to_mcp(self):
+        """Test HTTP router routes /sse to MCP app."""
+        import asyncio
+
+        from config.asgi import create_http_router
+
+        mcp_called = []
+        django_called = []
+
+        async def mock_mcp_app(scope, receive, send):
+            mcp_called.append(scope["path"])
+
+        async def mock_django_app(scope, receive, send):
+            django_called.append(scope["path"])
+
+        router = create_http_router(mock_django_app, mock_mcp_app)
+
+        async def run_test():
+            async def mock_receive():
+                return {"type": "http.disconnect"}
+
+            async def mock_send(message):
+                pass
+
+            # Test /sse routes to MCP
+            await router({"type": "http", "path": "/sse"}, mock_receive, mock_send)
+            # Test /sse/* routes to MCP
+            await router(
+                {"type": "http", "path": "/sse/messages/"}, mock_receive, mock_send
+            )
+            # Test other paths route to Django
+            await router({"type": "http", "path": "/api/test"}, mock_receive, mock_send)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+        self.assertIn("/sse", mcp_called)
+        self.assertIn("/sse/messages/", mcp_called)
+        self.assertIn("/api/test", django_called)
+
+    def test_http_router_routes_mcp_to_mcp(self):
+        """Test HTTP router routes /mcp to MCP app."""
+        import asyncio
+
+        from config.asgi import create_http_router
+
+        mcp_called = []
+
+        async def mock_mcp_app(scope, receive, send):
+            mcp_called.append(scope["path"])
+
+        async def mock_django_app(scope, receive, send):
+            pass
+
+        router = create_http_router(mock_django_app, mock_mcp_app)
+
+        async def run_test():
+            async def mock_receive():
+                return {"type": "http.disconnect"}
+
+            async def mock_send(message):
+                pass
+
+            await router({"type": "http", "path": "/mcp"}, mock_receive, mock_send)
+            await router({"type": "http", "path": "/mcp/"}, mock_receive, mock_send)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+        self.assertIn("/mcp", mcp_called)
+        self.assertIn("/mcp/", mcp_called)
+
+
 class MCPASGIRoutingTest(TestCase):
     """Tests for MCP ASGI app routing."""
 
