@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { MetaTags } from "../seo/MetaTags";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
@@ -23,7 +23,6 @@ import {
  */
 export const ExtractDetailRoute: React.FC = () => {
   const { extractId } = useParams<{ extractId: string }>();
-  const navigate = useNavigate();
 
   // Check if we already have the extract from reactive var
   const existingExtract = useReactiveVar(openedExtract);
@@ -44,14 +43,6 @@ export const ExtractDetailRoute: React.FC = () => {
       openedExtract(data.extract);
     }
   }, [data]);
-
-  // Handle case where extract from var matches the ID
-  useEffect(() => {
-    if (existingExtract?.id === extractId) {
-      // Already have the correct extract loaded
-      return;
-    }
-  }, [existingExtract, extractId]);
 
   // Handle missing extractId
   if (!extractId) {

@@ -112,7 +112,6 @@ interface ExtractListCardProps {
   currentUserEmail?: string;
   onView?: (extract: ExtractType) => void;
   onDelete?: (extract: ExtractType) => void;
-  onDuplicate?: (extract: ExtractType) => void;
   isMenuOpen?: boolean;
   menuPosition?: { x: number; y: number } | null;
   onOpenMenu?: (e: React.MouseEvent, extractId: string) => void;
@@ -124,7 +123,6 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
   currentUserEmail,
   onView,
   onDelete,
-  onDuplicate,
   isMenuOpen,
   menuPosition,
   onOpenMenu,
@@ -204,17 +202,6 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 onView(extract);
-                onCloseMenu?.();
-              }}
-            />
-          )}
-          {onDuplicate && (
-            <Menu.Item
-              icon="copy"
-              content="Duplicate"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDuplicate(extract);
                 onCloseMenu?.();
               }}
             />
