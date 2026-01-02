@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import _ from "lodash";
 
 import { useQuery, useReactiveVar } from "@apollo/client";
@@ -417,37 +418,27 @@ export const Annotations = () => {
     notifyOnNetworkStatusChange: true,
   });
 
-  // Effects for refetching on filter changes
+  // Consolidated effect for refetching annotations on filter changes
+  // This prevents race conditions from multiple simultaneous filter changes
   useEffect(() => {
     refetch_annotations();
-  }, [filter_to_label_id]);
+  }, [
+    filter_to_label_id,
+    filter_to_labelset_id,
+    filtered_to_corpus,
+    annotation_search_term,
+    exclude_structural_annotations,
+    auth_token,
+    refetch_annotations,
+  ]);
 
-  useEffect(() => {
-    refetch_annotations();
-  }, [filter_to_labelset_id]);
-
-  useEffect(() => {
-    refetch_annotations();
-  }, [filtered_to_corpus]);
-
+  // Separate effect for opened_corpus since it also needs to refetch corpus data
   useEffect(() => {
     if (opened_corpus) {
       refetch_annotations();
       refetch_corpus();
     }
-  }, [opened_corpus]);
-
-  useEffect(() => {
-    refetch_annotations();
-  }, [annotation_search_term]);
-
-  useEffect(() => {
-    refetch_annotations();
-  }, [exclude_structural_annotations]);
-
-  useEffect(() => {
-    refetch_annotations();
-  }, [auth_token]);
+  }, [opened_corpus, refetch_annotations, refetch_corpus]);
 
   // Sync source filter with structural annotations reactive var
   useEffect(() => {
@@ -548,7 +539,17 @@ export const Annotations = () => {
   // Supports both corpus-linked and standalone documents (e.g., structural annotations)
   const handleAnnotationClick = useCallback(
     (annotation: ServerAnnotationType) => {
-      if (annotation && annotation.document) {
+      try {
+        if (!annotation) {
+          toast.error("Unable to open annotation: Invalid annotation data");
+          return;
+        }
+
+        if (!annotation.document) {
+          toast.error("Unable to open annotation: Document not available");
+          return;
+        }
+
         const queryParams: {
           annotationIds: string[];
           analysisIds?: string[];
@@ -570,8 +571,13 @@ export const Annotations = () => {
         if (url !== "#") {
           navigate(url);
         } else {
-          console.warn("Cannot navigate - missing slugs:", annotation);
+          toast.warning(
+            "Unable to navigate: Document is missing required information"
+          );
         }
+      } catch (error) {
+        console.error("Error navigating to annotation:", error);
+        toast.error("An error occurred while opening the annotation");
       }
     },
     [navigate]

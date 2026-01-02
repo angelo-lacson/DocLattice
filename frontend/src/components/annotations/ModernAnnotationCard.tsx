@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { ServerAnnotationType } from "../../types/graphql-api";
+import { sanitizeForTooltip } from "../../utils/textSanitization";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -452,12 +453,19 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
         <Tag size={12} /> {labelsetName}
       </LabelsetTag>
 
+      {/*
+        XSS Protection: React's JSX automatically escapes HTML entities in text content.
+        We use sanitizeForTooltip to normalize whitespace for cleaner display.
+        See: frontend/src/utils/textSanitization.ts
+      */}
       {labelType === "text" && annotation.rawText ? (
         <TaggedText>
           <HighlightedText>
-            {annotation.rawText.length > 150
-              ? `${annotation.rawText.substring(0, 150)}...`
-              : annotation.rawText}
+            {sanitizeForTooltip(
+              annotation.rawText.length > 150
+                ? `${annotation.rawText.substring(0, 150)}...`
+                : annotation.rawText
+            )}
           </HighlightedText>
         </TaggedText>
       ) : (
