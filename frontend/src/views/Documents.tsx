@@ -23,6 +23,8 @@ import {
   MoreVertical,
   FileText,
   Loader2,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { Menu, Checkbox } from "semantic-ui-react";
 
@@ -128,15 +130,69 @@ const SearchContainer = styled.div`
   margin-bottom: 16px;
 `;
 
-const FiltersSection = styled.div`
+const FilterTabsRow = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 32px;
-  padding: 20px;
+  align-items: center;
+  gap: 12px;
+`;
+
+const FilterButton = styled.button<{
+  $active?: boolean;
+  $hasFilters?: boolean;
+}>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: ${(props) => (props.$active ? "#f1f5f9" : "white")};
+  border: 1px solid ${(props) => (props.$hasFilters ? "#0f766e" : "#e2e8f0")};
+  border-radius: 8px;
+  color: ${(props) => (props.$hasFilters ? "#0f766e" : "#64748b")};
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #f8fafc;
+    border-color: ${(props) => (props.$hasFilters ? "#0f766e" : "#cbd5e1")};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+const FilterBadge = styled.span`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #0f766e;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+`;
+
+const FilterPopupContainer = styled.div`
+  position: relative;
+`;
+
+const FilterPopup = styled.div`
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  min-width: 320px;
+  padding: 16px;
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
 
   /* Override the harsh gradient labels from filter components */
   .ui.label {
@@ -148,14 +204,70 @@ const FiltersSection = styled.div`
     letter-spacing: 0.05em !important;
   }
 
-  /* Style the dropdowns */
-  > div {
-    flex: 1;
-    min-width: 200px;
+  @media (max-width: 640px) {
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: calc(100vw - 48px);
+    max-width: 400px;
+  }
+`;
 
-    @media (max-width: 640px) {
-      min-width: 100%;
-    }
+const FilterPopupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+`;
+
+const FilterPopupTitle = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+`;
+
+const FilterPopupClose = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #475569;
+  }
+`;
+
+const FilterPopupContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
+const ClearFiltersButton = styled.button`
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #dc2626;
   }
 `;
 
@@ -776,6 +888,7 @@ export const Documents = () => {
     document: DocumentType;
     position: { x: number; y: number };
   } | null>(null);
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -1064,9 +1177,21 @@ export const Documents = () => {
     }
   };
 
-  // Check if advanced filters are active
-  const hasAdvancedFilters =
-    filtered_to_labelset_id || filtered_to_corpus || filtered_to_label_id;
+  // Check if advanced filters are active and count them
+  const activeFilterCount = [
+    filtered_to_labelset_id,
+    filtered_to_corpus,
+    filtered_to_label_id,
+  ].filter(Boolean).length;
+  const hasAdvancedFilters = activeFilterCount > 0;
+
+  // Clear all advanced filters
+  const handleClearFilters = () => {
+    filterToLabelsetId("");
+    filterToCorpus(null);
+    filterToLabelId("");
+    setShowFilterPopup(false);
+  };
 
   return (
     <PageContainer>
@@ -1146,36 +1271,67 @@ export const Documents = () => {
             />
           </SearchContainer>
 
-          <FilterTabs
-            items={statusFilterItems}
-            value={activeStatusFilter}
-            onChange={setActiveStatusFilter}
-          />
-        </HeroSection>
-
-        {/* Advanced Filters */}
-        <FiltersSection>
-          <FilterToLabelsetSelector
-            fixed_labelset_id={
-              filtered_to_corpus?.labelSet?.id
-                ? filtered_to_corpus.labelSet.id
-                : undefined
-            }
-          />
-          <FilterToCorpusSelector uses_labelset_id={filtered_to_labelset_id} />
-          {filtered_to_labelset_id || filtered_to_corpus?.labelSet?.id ? (
-            <FilterToLabelSelector
-              label_type={LabelType.TokenLabel}
-              only_labels_for_labelset_id={
-                filtered_to_labelset_id
-                  ? filtered_to_labelset_id
-                  : filtered_to_corpus?.labelSet?.id
-                  ? filtered_to_corpus.labelSet.id
-                  : undefined
-              }
+          <FilterTabsRow>
+            <FilterTabs
+              items={statusFilterItems}
+              value={activeStatusFilter}
+              onChange={setActiveStatusFilter}
             />
-          ) : null}
-        </FiltersSection>
+            <FilterPopupContainer>
+              <FilterButton
+                $active={showFilterPopup}
+                $hasFilters={hasAdvancedFilters}
+                onClick={() => setShowFilterPopup(!showFilterPopup)}
+              >
+                <SlidersHorizontal />
+                Filters
+                {activeFilterCount > 0 && (
+                  <FilterBadge>{activeFilterCount}</FilterBadge>
+                )}
+              </FilterButton>
+              {showFilterPopup && (
+                <FilterPopup>
+                  <FilterPopupHeader>
+                    <FilterPopupTitle>Advanced Filters</FilterPopupTitle>
+                    <FilterPopupClose onClick={() => setShowFilterPopup(false)}>
+                      <X size={16} />
+                    </FilterPopupClose>
+                  </FilterPopupHeader>
+                  <FilterPopupContent>
+                    <FilterToLabelsetSelector
+                      fixed_labelset_id={
+                        filtered_to_corpus?.labelSet?.id
+                          ? filtered_to_corpus.labelSet.id
+                          : undefined
+                      }
+                    />
+                    <FilterToCorpusSelector
+                      uses_labelset_id={filtered_to_labelset_id}
+                    />
+                    {filtered_to_labelset_id ||
+                    filtered_to_corpus?.labelSet?.id ? (
+                      <FilterToLabelSelector
+                        label_type={LabelType.TokenLabel}
+                        only_labels_for_labelset_id={
+                          filtered_to_labelset_id
+                            ? filtered_to_labelset_id
+                            : filtered_to_corpus?.labelSet?.id
+                            ? filtered_to_corpus.labelSet.id
+                            : undefined
+                        }
+                      />
+                    ) : null}
+                    {hasAdvancedFilters && (
+                      <ClearFiltersButton onClick={handleClearFilters}>
+                        Clear all filters
+                      </ClearFiltersButton>
+                    )}
+                  </FilterPopupContent>
+                </FilterPopup>
+              )}
+            </FilterPopupContainer>
+          </FilterTabsRow>
+        </HeroSection>
 
         {/* Stats Grid */}
         <StatsContainer>
