@@ -4,6 +4,7 @@ import ReactSelect, {
   StylesConfig,
   components,
   OptionProps,
+  SingleValueProps,
 } from "react-select";
 
 export interface SelectOption {
@@ -19,6 +20,24 @@ interface SelectProps
   customStyles?: StylesConfig<SelectOption, boolean>;
 }
 
+// Icon component for rendering URL icons as images
+const IconImage: React.FC<{ src: string; size?: number }> = ({
+  src,
+  size = 20,
+}) => (
+  <img
+    src={src}
+    alt=""
+    style={{
+      width: size,
+      height: size,
+      borderRadius: 4,
+      objectFit: "cover",
+      flexShrink: 0,
+    }}
+  />
+);
+
 // Custom option component to support icons and subheaders
 const CustomOption: React.FC<OptionProps<SelectOption, boolean>> = (props) => {
   const { data } = props;
@@ -32,7 +51,7 @@ const CustomOption: React.FC<OptionProps<SelectOption, boolean>> = (props) => {
           style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {data.icon && <span>{data.icon}</span>}
+            {data.icon && <IconImage src={data.icon} />}
             <span style={{ fontWeight: 500 }}>{data.label}</span>
           </div>
           {data.subheader && (
@@ -40,7 +59,7 @@ const CustomOption: React.FC<OptionProps<SelectOption, boolean>> = (props) => {
               style={{
                 fontSize: "0.8125rem",
                 color: "rgba(0, 0, 0, 0.6)",
-                marginLeft: data.icon ? "1.5rem" : "0",
+                marginLeft: data.icon ? "1.75rem" : "0",
               }}
             >
               {data.subheader}
@@ -49,6 +68,22 @@ const CustomOption: React.FC<OptionProps<SelectOption, boolean>> = (props) => {
         </div>
       )}
     </components.Option>
+  );
+};
+
+// Custom single value component to show icon in selected value
+const CustomSingleValue: React.FC<SingleValueProps<SelectOption, boolean>> = (
+  props
+) => {
+  const { data } = props;
+
+  return (
+    <components.SingleValue {...props}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        {data.icon && <IconImage src={data.icon} size={18} />}
+        <span>{data.label}</span>
+      </div>
+    </components.SingleValue>
   );
 };
 
@@ -200,6 +235,7 @@ export const Select: React.FC<SelectProps> = ({ customStyles, ...props }) => {
       styles={mergedStyles}
       components={{
         Option: CustomOption,
+        SingleValue: CustomSingleValue,
         ...props.components,
       }}
       classNamePrefix="react-select"
