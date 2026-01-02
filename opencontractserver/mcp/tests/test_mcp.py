@@ -1671,3 +1671,158 @@ class MCPASGIRoutingTest(TestCase):
             self.assertEqual(len(result), 0)
         finally:
             loop.close()
+
+    def test_asgi_app_returns_404_for_unknown_path(self):
+        """Test ASGI app returns 404 with endpoint info for unknown paths."""
+        import asyncio
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        app = create_mcp_asgi_app()
+
+        async def run_test():
+            received_messages = []
+
+            async def mock_receive():
+                return {"type": "http.disconnect"}
+
+            async def mock_send(message):
+                received_messages.append(message)
+
+            # Request unknown path
+            scope = {
+                "type": "http",
+                "path": "/unknown/path",
+                "method": "GET",
+                "query_string": b"",
+                "headers": [],
+            }
+
+            await app(scope, mock_receive, mock_send)
+            return received_messages
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            # Should get a 404 response
+            self.assertTrue(len(result) >= 2)
+            # First message should be response start with 404
+            self.assertEqual(result[0]["type"], "http.response.start")
+            self.assertEqual(result[0]["status"], 404)
+            # Second message should be the body with endpoint info
+            self.assertEqual(result[1]["type"], "http.response.body")
+            body = json.loads(result[1]["body"])
+            self.assertEqual(body["error"], "Not found")
+            self.assertIn("endpoints", body)
+            self.assertIn("streamable_http", body["endpoints"])
+            self.assertIn("sse", body["endpoints"])
+        finally:
+            loop.close()
+
+    def test_asgi_app_mcp_path_error_handling(self):
+        """Test ASGI app handles errors on /mcp path."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received_messages = []
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                received_messages.append(message)
+
+            scope = {
+                "type": "http",
+                "path": "/mcp",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [[b"content-type", b"application/json"]],
+            }
+
+            # Mock both lifespan_manager and session manager
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock()
+
+            mock_manager = AsyncMock()
+            mock_manager.handle_request.side_effect = Exception("Test error")
+
+            with patch(
+                "opencontractserver.mcp.server.lifespan_manager", mock_lifespan
+            ), patch(
+                "opencontractserver.mcp.server.get_session_manager",
+                return_value=mock_manager,
+            ):
+                app = create_mcp_asgi_app()
+                await app(scope, mock_receive, mock_send)
+
+            return received_messages
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            # Should get a 500 error response
+            self.assertTrue(len(result) >= 2)
+            self.assertEqual(result[0]["type"], "http.response.start")
+            self.assertEqual(result[0]["status"], 500)
+            self.assertEqual(result[1]["type"], "http.response.body")
+            body = json.loads(result[1]["body"])
+            self.assertIn("error", body)
+            self.assertEqual(body["error"], "Test error")
+        finally:
+            loop.close()
+
+    def test_asgi_app_sse_path_error_handling(self):
+        """Test ASGI app handles errors on /sse path."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received_messages = []
+
+            async def mock_receive():
+                return {"type": "http.disconnect"}
+
+            async def mock_send(message):
+                received_messages.append(message)
+
+            scope = {
+                "type": "http",
+                "path": "/sse",
+                "method": "GET",
+                "query_string": b"",
+                "headers": [],
+            }
+
+            # Mock the sse_starlette_app to raise an exception
+            async def mock_sse_app(scope, receive, send):
+                raise Exception("SSE test error")
+
+            with patch("opencontractserver.mcp.server.sse_starlette_app", mock_sse_app):
+                # Need to recreate the app to pick up the mock
+                new_app = create_mcp_asgi_app()
+                await new_app(scope, mock_receive, mock_send)
+
+            return received_messages
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            # Should get a 500 error response
+            self.assertTrue(len(result) >= 2)
+            self.assertEqual(result[0]["type"], "http.response.start")
+            self.assertEqual(result[0]["status"], 500)
+            self.assertEqual(result[1]["type"], "http.response.body")
+            body = json.loads(result[1]["body"])
+            self.assertIn("error", body)
+            self.assertEqual(body["error"], "SSE test error")
+        finally:
+            loop.close()
