@@ -15,12 +15,12 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.test import TestCase
 
-from opencontractserver.annotations.models import AnnotationLabel, LabelSet, TOKEN_LABEL
+from opencontractserver.annotations.models import TOKEN_LABEL, AnnotationLabel, LabelSet
+from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import (
     get_users_permissions_for_obj,
     user_has_permission_for_obj,
 )
-from opencontractserver.types.enums import PermissionTypes
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -165,11 +165,17 @@ class CreatorBasedPermissionsTestCase(TestCase):
             instance=self.annotation_label,
             permission=PermissionTypes.READ,
         )
-        self.assertFalse(has_read, "Other user should NOT have READ permission on private label")
+        self.assertFalse(
+            has_read, "Other user should NOT have READ permission on private label"
+        )
 
     def test_user_has_permission_for_obj_superuser(self):
         """user_has_permission_for_obj should return True for superuser on any permission."""
-        for perm in [PermissionTypes.READ, PermissionTypes.UPDATE, PermissionTypes.DELETE]:
+        for perm in [
+            PermissionTypes.READ,
+            PermissionTypes.UPDATE,
+            PermissionTypes.DELETE,
+        ]:
             has_perm = user_has_permission_for_obj(
                 user_val=self.superuser,
                 instance=self.annotation_label,
