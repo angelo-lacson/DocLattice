@@ -63,7 +63,6 @@ import styled from "styled-components";
 interface EditExtractModalProps {
   ext: ExtractType | null;
   open: boolean;
-  toggleModal: () => void;
 }
 
 // Responsive Styled Components
@@ -610,11 +609,7 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-export const EditExtractModal = ({
-  open,
-  ext,
-  toggleModal,
-}: EditExtractModalProps) => {
+export const EditExtractModal = ({ open, ext }: EditExtractModalProps) => {
   const navigate = useNavigate();
   const dataGridRef = useRef<ExtractDataGridHandle>(null);
   const isMobile = useIsMobile();

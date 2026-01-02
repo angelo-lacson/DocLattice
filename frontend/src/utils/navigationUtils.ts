@@ -109,13 +109,14 @@ export function parseRoute(pathname: string): ParsedRoute {
     };
   }
 
-  // Browse routes: /annotations, /extracts, /corpuses, /documents, /label_sets
+  // Browse routes: /annotations, /extracts, /corpuses, /documents, /label_sets, /discussions
   const browseRoutes = [
     "annotations",
     "extracts",
     "corpuses",
     "documents",
     "label_sets",
+    "discussions",
   ];
   if (segments.length === 1 && browseRoutes.includes(segments[0])) {
     return {

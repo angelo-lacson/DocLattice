@@ -93,6 +93,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   clearAnnotationSelection,
   updateAnnotationSelectionParams,
+  getDocumentUrl,
 } from "../../../utils/navigationUtils";
 import { routingLogger } from "../../../utils/routingLogger";
 
@@ -3311,22 +3312,21 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             open={showAddToCorpusModal}
             onClose={() => setShowAddToCorpusModal(false)}
             onSuccess={(newCorpusId, newCorpus) => {
-              // Reload with corpus context - prefer slug URL if available
+              // Navigate with corpus context using proper SPA navigation
               const document = combinedData?.document;
-              if (
-                newCorpus?.creator?.slug &&
-                newCorpus?.slug &&
-                document?.slug
-              ) {
-                // Use new /d/ prefix for document routes
-                window.location.href = `/d/${newCorpus.creator.slug}/${newCorpus.slug}/${document.slug}`;
+              if (document && newCorpus) {
+                const url = getDocumentUrl(document, newCorpus);
+                if (url !== "#") {
+                  navigate(url);
+                } else {
+                  console.warn(
+                    "[DocumentKnowledgeBase] Missing slugs for navigation:",
+                    { newCorpus, document }
+                  );
+                  navigate("/documents");
+                }
               } else {
-                // Fallback shouldn't happen with new system, but keep safe
-                console.warn("Missing slugs for navigation:", {
-                  newCorpus,
-                  document,
-                });
-                window.location.href = "/documents";
+                navigate("/documents");
               }
             }}
           />

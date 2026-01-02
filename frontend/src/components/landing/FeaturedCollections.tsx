@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
+import { getCorpusUrl } from "../../utils/navigationUtils";
 import { CollectionCard, CollectionList } from "@os-legal/ui";
 import type { CollectionType } from "@os-legal/ui";
 import { GetTrendingCorpusesOutput } from "../../graphql/landing-queries";
@@ -129,8 +130,9 @@ export const FeaturedCollections: React.FC<FeaturedCollectionsProps> = ({
   const handleCorpusClick = (
     corpus: GetTrendingCorpusesOutput["corpuses"]["edges"][0]["node"]
   ) => {
-    if (corpus.creator?.slug && corpus.slug) {
-      navigate(`/c/${corpus.creator.slug}/${corpus.slug}`);
+    const url = getCorpusUrl(corpus);
+    if (url !== "#") {
+      navigate(url);
     }
   };
 
