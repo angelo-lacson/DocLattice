@@ -36,7 +36,7 @@ import {
   DocumentType,
   ExtractType,
 } from "../types/graphql-api";
-import { openedExtract, addingColumnToExtract } from "../graphql/cache";
+import { openedExtract } from "../graphql/cache";
 import {
   RequestGetExtractOutput,
   REQUEST_GET_EXTRACT,
@@ -72,10 +72,7 @@ import {
 import { CreateColumnModal } from "../components/widgets/modals/CreateColumnModal";
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import { getExtractStatus, formatExtractDate } from "../utils/extractUtils";
-import {
-  EXTRACT_POLLING_INTERVAL_MS,
-  EXTRACT_POLLING_TIMEOUT_MS,
-} from "../constants/extract";
+import { useExtractCompletionNotification } from "../hooks/useExtractCompletionNotification";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS
@@ -473,28 +470,18 @@ export const ExtractDetail: React.FC = () => {
     }
   );
 
-  // Polling for running extracts
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-
-    if (extract && extract.started && !extract.finished && !extract.error) {
-      pollInterval = setInterval(() => {
-        refetch({ id: extract.id });
-      }, EXTRACT_POLLING_INTERVAL_MS);
-
-      const timeoutId = setTimeout(() => {
-        clearInterval(pollInterval);
-        toast.info(
-          "Job is taking too long... polling paused after 10 minutes."
-        );
-      }, EXTRACT_POLLING_TIMEOUT_MS);
-
-      return () => {
-        clearInterval(pollInterval);
-        clearTimeout(timeoutId);
-      };
-    }
-  }, [extract, refetch]);
+  // Listen for extract completion via WebSocket (replaces polling)
+  const isRunningExtract = Boolean(
+    extract && extract.started && !extract.finished && !extract.error
+  );
+  useExtractCompletionNotification({
+    extractId: extract?.id ?? null,
+    onComplete: () => {
+      // Refetch to get updated data when extract completes
+      refetch();
+    },
+    enabled: isRunningExtract,
+  });
 
   // Update local state when query data changes
   useEffect(() => {
