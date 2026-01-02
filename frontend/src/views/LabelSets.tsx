@@ -40,7 +40,11 @@ import {
   CreateLabelsetInputs,
   CreateLabelsetOutputs,
   CREATE_LABELSET,
+  DeleteLabelsetInputs,
+  DeleteLabelsetOutputs,
+  DELETE_LABELSET,
 } from "../graphql/mutations";
+import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import {
   newLabelSetForm_Schema,
   newLabelSetForm_Ui_Schema,
@@ -185,6 +189,7 @@ export const Labelsets = () => {
   const currentUser = useReactiveVar(userObj);
   const labelset_search_term = useReactiveVar(labelsetSearchTerm);
   const show_new_label_modal = useReactiveVar(showNewLabelsetModal);
+  const labelset_to_delete = useReactiveVar(deletingLabelset);
   const isAuthenticated = Boolean(auth_token);
   const currentUserEmail = currentUser?.email;
 
@@ -225,6 +230,12 @@ export const Labelsets = () => {
     CreateLabelsetOutputs,
     CreateLabelsetInputs
   >(CREATE_LABELSET);
+
+  // Delete mutation
+  const [deleteLabelset, { loading: delete_labelset_loading }] = useMutation<
+    DeleteLabelsetOutputs,
+    DeleteLabelsetInputs
+  >(DELETE_LABELSET);
 
   // Extract labelsets from query data
   const labelsets: LabelSetType[] = useMemo(() => {
@@ -311,6 +322,28 @@ export const Labelsets = () => {
       });
   };
 
+  const handleDeleteLabelset = () => {
+    if (!labelset_to_delete?.id) return;
+
+    deleteLabelset({ variables: { id: labelset_to_delete.id } })
+      .then((result) => {
+        if (result.data?.deleteLabelset?.ok) {
+          toast.success("Label set deleted successfully.");
+          refetch();
+        } else {
+          toast.error(
+            result.data?.deleteLabelset?.message ||
+              "Failed to delete label set."
+          );
+        }
+        deletingLabelset(null);
+      })
+      .catch(() => {
+        toast.error("Failed to delete label set.");
+        deletingLabelset(null);
+      });
+  };
+
   const handleFetchMore = useCallback(() => {
     if (!loading && data?.labelsets?.pageInfo?.hasNextPage) {
       fetchMore({
@@ -391,6 +424,17 @@ export const Labelsets = () => {
             loading={create_labelset_loading}
           />
         )}
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmModal
+          message={`Are you sure you want to delete "${
+            labelset_to_delete?.title || "this label set"
+          }"? This action cannot be undone.`}
+          visible={Boolean(labelset_to_delete)}
+          yesAction={handleDeleteLabelset}
+          noAction={() => deletingLabelset(null)}
+          toggleModal={() => deletingLabelset(null)}
+        />
 
         {/* Hero Section */}
         <HeroSection>

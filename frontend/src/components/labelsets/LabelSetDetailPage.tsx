@@ -315,9 +315,16 @@ const LabelSetIcon = () => (
 
 const PageContainer = styled.div`
   display: flex;
+  flex-direction: column;
   height: calc(100vh - 60px);
   background: #fafafa;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+`;
+
+const PageLayout = styled.div`
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 `;
 
 const Sidebar = styled.aside`
@@ -327,6 +334,10 @@ const Sidebar = styled.aside`
   border-right: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
 `;
 
 const SidebarHeader = styled.div`
@@ -417,6 +428,77 @@ const SidebarFooter = styled.div`
   border-top: 1px solid #e2e8f0;
 `;
 
+// Mobile Navigation
+const MobileNav = styled.nav`
+  display: none;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 24px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (max-width: 900px) {
+    display: block;
+  }
+`;
+
+const MobileNavTabs = styled.div`
+  display: flex;
+  gap: 4px;
+  min-width: max-content;
+`;
+
+interface MobileNavTabProps {
+  $active?: boolean;
+}
+
+const MobileNavTab = styled.button<MobileNavTabProps>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${(props) => (props.$active ? "#0f766e" : "#475569")};
+  background: none;
+  border: none;
+  border-bottom: 2px solid
+    ${(props) => (props.$active ? "#0f766e" : "transparent")};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+
+  &:first-child {
+    padding-left: 0;
+  }
+
+  &:hover {
+    color: ${(props) => (props.$active ? "#0f766e" : "#1e293b")};
+  }
+
+  .nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+  }
+
+  .nav-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: ${(props) => (props.$active ? "#0f766e" : "#f1f5f9")};
+    color: ${(props) => (props.$active ? "#fff" : "#94a3b8")};
+  }
+`;
+
 const EditDetailsButton = styled.button`
   display: flex;
   align-items: center;
@@ -450,6 +532,36 @@ const MainHeader = styled.header`
   padding: 24px 40px;
   background: #fff;
   border-bottom: 1px solid #e2e8f0;
+
+  @media (max-width: 900px) {
+    padding: 16px 24px;
+  }
+`;
+
+const MobileBackLink = styled.button`
+  display: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  text-decoration: none;
+  padding: 6px 10px 6px 6px;
+  margin: -6px -10px 12px -6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  background: none;
+  border: none;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+  }
+
+  @media (max-width: 900px) {
+    display: inline-flex;
+  }
 `;
 
 const HeaderRow = styled.div`
@@ -475,6 +587,10 @@ const Title = styled.h1`
   font-weight: 600;
   color: #1e293b;
   margin: 0;
+
+  @media (max-width: 900px) {
+    font-size: 20px;
+  }
 `;
 
 const Badge = styled.span`
@@ -531,6 +647,10 @@ const MainContent = styled.div`
   flex: 1;
   overflow-y: auto;
   padding: 32px 40px;
+
+  @media (max-width: 900px) {
+    padding: 24px;
+  }
 `;
 
 const ContentInner = styled.div`
@@ -548,6 +668,12 @@ const OverviewHero = styled.div`
   display: flex;
   gap: 32px;
   align-items: flex-start;
+
+  @media (max-width: 900px) {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
 `;
 
 const OverviewIconBox = styled.div`
@@ -569,6 +695,11 @@ const OverviewIconBox = styled.div`
     object-fit: cover;
     border-radius: 16px;
   }
+
+  @media (max-width: 900px) {
+    width: 80px;
+    height: 80px;
+  }
 `;
 
 const OverviewDetails = styled.div`
@@ -582,6 +713,10 @@ const OverviewDescription = styled.p`
   color: #475569;
   margin: 0 0 24px 0;
   max-width: 600px;
+
+  @media (max-width: 900px) {
+    max-width: none;
+  }
 `;
 
 const OverviewStats = styled.div`
@@ -590,6 +725,13 @@ const OverviewStats = styled.div`
   gap: 16px;
   max-width: 500px;
   margin-bottom: 24px;
+
+  @media (max-width: 900px) {
+    max-width: none;
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
 `;
 
 const StatCard = styled.div`
@@ -597,6 +739,10 @@ const StatCard = styled.div`
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 16px 20px;
+
+  @media (max-width: 900px) {
+    padding: 12px 16px;
+  }
 `;
 
 const StatValue = styled.div`
@@ -605,6 +751,10 @@ const StatValue = styled.div`
   color: #0f766e;
   line-height: 1;
   margin-bottom: 4px;
+
+  @media (max-width: 900px) {
+    font-size: 24px;
+  }
 `;
 
 const StatLabel = styled.div`
@@ -615,6 +765,11 @@ const StatLabel = styled.div`
 const OverviewActions = styled.div`
   display: flex;
   gap: 12px;
+
+  @media (max-width: 900px) {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 `;
 
 const ActionButton = styled.button`
@@ -711,6 +866,14 @@ const LabelItem = styled.div`
 
   &:hover .label-actions {
     opacity: 1;
+  }
+
+  @media (max-width: 900px) {
+    padding: 12px 16px;
+
+    .label-actions {
+      opacity: 1;
+    }
   }
 `;
 
@@ -1707,119 +1870,189 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
         </Dimmer>
       )}
 
-      <Sidebar>
-        <SidebarHeader>
-          <BackLink onClick={handleBack}>
-            <ChevronLeftIcon />
-            Label Sets
-          </BackLink>
-        </SidebarHeader>
+      <PageLayout>
+        <Sidebar>
+          <SidebarHeader>
+            <BackLink onClick={handleBack}>
+              <ChevronLeftIcon />
+              Label Sets
+            </BackLink>
+          </SidebarHeader>
 
-        <SidebarNav>
-          <NavItem
-            $active={activeTab === "overview"}
-            onClick={() => setActiveTab("overview")}
-          >
-            <span className="nav-icon">
-              <OverviewIcon />
-            </span>
-            Overview
-          </NavItem>
-          <NavItem
-            $active={activeTab === "text_labels"}
-            onClick={() => setActiveTab("text_labels")}
-          >
-            <span className="nav-icon">
-              <TextLabelIcon />
-            </span>
-            Text Labels
-            <span className="nav-badge">{text_labels.length}</span>
-          </NavItem>
-          <NavItem
-            $active={activeTab === "doc_labels"}
-            onClick={() => setActiveTab("doc_labels")}
-          >
-            <span className="nav-icon">
-              <DocLabelIcon />
-            </span>
-            Doc Labels
-            <span className="nav-badge">{doc_type_labels.length}</span>
-          </NavItem>
-          <NavItem
-            $active={activeTab === "relationship_labels"}
-            onClick={() => setActiveTab("relationship_labels")}
-          >
-            <span className="nav-icon">
-              <RelationshipIcon />
-            </span>
-            Relationships
-            <span className="nav-badge">{relationship_labels.length}</span>
-          </NavItem>
-          <NavItem
-            $active={activeTab === "span_labels"}
-            onClick={() => setActiveTab("span_labels")}
-          >
-            <span className="nav-icon">
-              <SpanLabelIcon />
-            </span>
-            Span Labels
-            <span className="nav-badge">{span_labels.length}</span>
-          </NavItem>
-          <NavItem
-            $active={activeTab === "sharing"}
-            onClick={() => setActiveTab("sharing")}
-          >
-            <span className="nav-icon">
-              <ShareIcon />
-            </span>
-            Sharing
-          </NavItem>
-        </SidebarNav>
-
-        {canUpdate && (
-          <SidebarFooter>
-            <EditDetailsButton onClick={handleEditDetails}>
-              <EditIcon />
-              Edit Details
-            </EditDetailsButton>
-          </SidebarFooter>
-        )}
-      </Sidebar>
-
-      <MainContainer>
-        <MainHeader>
-          <HeaderRow>
-            <HeaderContent>
-              <TitleRow>
-                <Title>{labelset?.title || "Untitled Label Set"}</Title>
-                <Badge>{labelset?.isPublic ? "Public" : "Private"}</Badge>
-              </TitleRow>
-              <Meta>
-                <span>
-                  Created by{" "}
-                  {labelset?.creator?.username ||
-                    currentUser?.email ||
-                    "Unknown"}
-                </span>
-                <MetaSep>·</MetaSep>
-                <span>
-                  {totalLabels} {totalLabels === 1 ? "label" : "labels"}
-                </span>
-              </Meta>
-            </HeaderContent>
-            <HeaderActions>
-              <ShareButton onClick={handleShare}>
+          <SidebarNav>
+            <NavItem
+              $active={activeTab === "overview"}
+              onClick={() => setActiveTab("overview")}
+            >
+              <span className="nav-icon">
+                <OverviewIcon />
+              </span>
+              Overview
+            </NavItem>
+            <NavItem
+              $active={activeTab === "text_labels"}
+              onClick={() => setActiveTab("text_labels")}
+            >
+              <span className="nav-icon">
+                <TextLabelIcon />
+              </span>
+              Text Labels
+              <span className="nav-badge">{text_labels.length}</span>
+            </NavItem>
+            <NavItem
+              $active={activeTab === "doc_labels"}
+              onClick={() => setActiveTab("doc_labels")}
+            >
+              <span className="nav-icon">
+                <DocLabelIcon />
+              </span>
+              Doc Labels
+              <span className="nav-badge">{doc_type_labels.length}</span>
+            </NavItem>
+            <NavItem
+              $active={activeTab === "relationship_labels"}
+              onClick={() => setActiveTab("relationship_labels")}
+            >
+              <span className="nav-icon">
+                <RelationshipIcon />
+              </span>
+              Relationships
+              <span className="nav-badge">{relationship_labels.length}</span>
+            </NavItem>
+            <NavItem
+              $active={activeTab === "span_labels"}
+              onClick={() => setActiveTab("span_labels")}
+            >
+              <span className="nav-icon">
+                <SpanLabelIcon />
+              </span>
+              Span Labels
+              <span className="nav-badge">{span_labels.length}</span>
+            </NavItem>
+            <NavItem
+              $active={activeTab === "sharing"}
+              onClick={() => setActiveTab("sharing")}
+            >
+              <span className="nav-icon">
                 <ShareIcon />
-                Share
-              </ShareButton>
-            </HeaderActions>
-          </HeaderRow>
-        </MainHeader>
+              </span>
+              Sharing
+            </NavItem>
+          </SidebarNav>
 
-        <MainContent>
-          <ContentInner>{renderContent()}</ContentInner>
-        </MainContent>
-      </MainContainer>
+          {canUpdate && (
+            <SidebarFooter>
+              <EditDetailsButton onClick={handleEditDetails}>
+                <EditIcon />
+                Edit Details
+              </EditDetailsButton>
+            </SidebarFooter>
+          )}
+        </Sidebar>
+
+        <MainContainer>
+          <MainHeader>
+            <MobileBackLink onClick={handleBack}>
+              <ChevronLeftIcon />
+              Label Sets
+            </MobileBackLink>
+            <HeaderRow>
+              <HeaderContent>
+                <TitleRow>
+                  <Title>{labelset?.title || "Untitled Label Set"}</Title>
+                  <Badge>{labelset?.isPublic ? "Public" : "Private"}</Badge>
+                </TitleRow>
+                <Meta>
+                  <span>
+                    Created by{" "}
+                    {labelset?.creator?.username ||
+                      currentUser?.email ||
+                      "Unknown"}
+                  </span>
+                  <MetaSep>·</MetaSep>
+                  <span>
+                    {totalLabels} {totalLabels === 1 ? "label" : "labels"}
+                  </span>
+                </Meta>
+              </HeaderContent>
+              <HeaderActions>
+                <ShareButton onClick={handleShare}>
+                  <ShareIcon />
+                  Share
+                </ShareButton>
+              </HeaderActions>
+            </HeaderRow>
+          </MainHeader>
+
+          {/* Mobile Navigation */}
+          <MobileNav>
+            <MobileNavTabs>
+              <MobileNavTab
+                $active={activeTab === "overview"}
+                onClick={() => setActiveTab("overview")}
+              >
+                <span className="nav-icon">
+                  <OverviewIcon />
+                </span>
+                Overview
+              </MobileNavTab>
+              <MobileNavTab
+                $active={activeTab === "text_labels"}
+                onClick={() => setActiveTab("text_labels")}
+              >
+                <span className="nav-icon">
+                  <TextLabelIcon />
+                </span>
+                Text Labels
+                <span className="nav-badge">{text_labels.length}</span>
+              </MobileNavTab>
+              <MobileNavTab
+                $active={activeTab === "doc_labels"}
+                onClick={() => setActiveTab("doc_labels")}
+              >
+                <span className="nav-icon">
+                  <DocLabelIcon />
+                </span>
+                Doc Labels
+                <span className="nav-badge">{doc_type_labels.length}</span>
+              </MobileNavTab>
+              <MobileNavTab
+                $active={activeTab === "relationship_labels"}
+                onClick={() => setActiveTab("relationship_labels")}
+              >
+                <span className="nav-icon">
+                  <RelationshipIcon />
+                </span>
+                Relationships
+                <span className="nav-badge">{relationship_labels.length}</span>
+              </MobileNavTab>
+              <MobileNavTab
+                $active={activeTab === "span_labels"}
+                onClick={() => setActiveTab("span_labels")}
+              >
+                <span className="nav-icon">
+                  <SpanLabelIcon />
+                </span>
+                Span Labels
+                <span className="nav-badge">{span_labels.length}</span>
+              </MobileNavTab>
+              <MobileNavTab
+                $active={activeTab === "sharing"}
+                onClick={() => setActiveTab("sharing")}
+              >
+                <span className="nav-icon">
+                  <ShareIcon />
+                </span>
+                Sharing
+              </MobileNavTab>
+            </MobileNavTabs>
+          </MobileNav>
+
+          <MainContent>
+            <ContentInner>{renderContent()}</ContentInner>
+          </MainContent>
+        </MainContainer>
+      </PageLayout>
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal
