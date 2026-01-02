@@ -3,22 +3,32 @@ import styled from "styled-components";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useAtom } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, MessageCircle, FileText, Folder } from "lucide-react";
+import {
+  ArrowLeft,
+  MessageCircle,
+  FileText,
+  Pin,
+  Lock,
+  Trash2,
+  Users,
+} from "lucide-react";
 import {
   GET_THREAD_DETAIL,
   GetThreadDetailInput,
   GetThreadDetailOutput,
 } from "../../graphql/queries";
 import { color } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
 import {
   selectedMessageIdAtom,
   replyingToMessageIdAtom,
 } from "../../atoms/threadAtoms";
 import { buildMessageTree } from "./utils";
 import { MessageTree } from "./MessageTree";
-import { ThreadBadge } from "./ThreadBadge";
 import { RelativeTime } from "./RelativeTime";
+import {
+  DiscussionTypeBadge,
+  inferDiscussionCategory,
+} from "./DiscussionTypeBadge";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
 import { PlaceholderCard } from "../placeholders/PlaceholderCard";
@@ -26,6 +36,7 @@ import { useMessageBadges } from "../../hooks/useMessageBadges";
 import { openedCorpus, backendUserObj } from "../../graphql/cache";
 import { ReplyForm } from "./ReplyForm";
 import { formatUsername } from "./userUtils";
+import { getCorpusUrl } from "../../utils/navigationUtils";
 
 interface ThreadDetailProps {
   conversationId: string;
@@ -39,170 +50,218 @@ interface ThreadDetailProps {
   onBack?: () => void;
 }
 
-const ThreadDetailContainer = styled.div<{ $compact?: boolean }>`
-  max-width: ${(props) => (props.$compact ? "100%" : "100%")};
-  margin: 0 auto;
-  padding: ${(props) => (props.$compact ? "1.5rem" : "2rem 10%")};
-  width: 100%;
-  background: #f5f7fa;
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: ${color.N2};
+`;
 
-  @media (max-width: 1600px) {
-    padding: ${(props) => (props.$compact ? "1.5rem" : "2rem 5%")};
-  }
-
-  @media (max-width: 1024px) {
-    max-width: 100%;
-    padding: ${(props) => (props.$compact ? "1rem" : "1.5rem 3%")};
-  }
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0.75rem 1.5rem;
+  background: ${color.N1};
+  border-bottom: 1px solid ${color.N4};
+  gap: 1rem;
 
   @media (max-width: 768px) {
-    padding: 1rem 2%;
-  }
-
-  @media (max-width: 480px) {
-    padding: 0.75rem 1%;
+    padding: 0.75rem 1rem;
+    flex-direction: column;
   }
 `;
 
-const BackButton = styled.button`
+const HeaderLeft = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+`;
+
+const HeaderTop = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.xs};
-  background: white;
-  border: 1px solid #d1d5db;
-  color: #4b5563;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  padding: ${spacing.xs} ${spacing.sm};
-  border-radius: 6px;
-  margin-bottom: ${spacing.md};
-  transition: all 0.2s;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-
-  &:hover {
-    background: #f9fafb;
-    color: #111827;
-    border-color: #9ca3af;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-`;
-
-const ThreadHeader = styled.div`
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 1.75rem;
-  margin-bottom: 2rem;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.8) 0%,
-    rgba(249, 250, 251, 0.4) 100%
-  );
-  padding: 1.75rem 0;
-  border-radius: 12px;
-`;
-
-const BadgeRow = styled.div`
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 `;
 
-const ContextBadge = styled.div`
+const BackButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.25rem;
   padding: 0.375rem 0.625rem;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  border: 1px solid ${color.N4};
   border-radius: 6px;
+  background: ${color.N1};
+  color: ${color.N7};
   font-size: 12px;
   font-weight: 500;
-  color: #0369a1;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: ${color.G5};
+    color: ${color.G7};
+  }
 
   svg {
     width: 14px;
     height: 14px;
-    flex-shrink: 0;
   }
 `;
 
-const ContextRow = styled.div`
+const ContextLink = styled.a`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: ${color.N2};
+  border: 1px solid ${color.N4};
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: ${color.N7};
+  text-decoration: none;
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: ${color.G5};
+    color: ${color.G7};
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+`;
+
+const StatusBadge = styled.span<{ $variant: "pinned" | "locked" | "deleted" }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+
+  ${(props) =>
+    props.$variant === "pinned" &&
+    `
+    background: ${color.G1};
+    color: ${color.G7};
+  `}
+
+  ${(props) =>
+    props.$variant === "locked" &&
+    `
+    background: ${color.Y1};
+    color: ${color.Y8};
+  `}
+
+  ${(props) =>
+    props.$variant === "deleted" &&
+    `
+    background: ${color.R1};
+    color: ${color.R7};
+  `}
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+`;
+
+const TitleRow = styled.div`
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  align-items: center;
+  gap: 0.75rem;
   flex-wrap: wrap;
 `;
 
-const ThreadTitleLarge = styled.h1`
-  font-size: 32px;
-  font-weight: 800;
-  color: #111827;
-  margin: 0 0 1rem 0;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-
-  @media (max-width: 768px) {
-    font-size: 28px;
-  }
-
-  @media (max-width: 480px) {
-    font-size: 24px;
-  }
+const Title = styled.h1`
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: ${color.N10};
+  margin: 0;
+  letter-spacing: -0.025em;
 `;
 
-const ThreadDescription = styled.p`
-  font-size: 17px;
-  color: #4b5563;
-  line-height: 1.7;
-  margin: 0 0 1.25rem 0;
-  font-weight: 400;
-
-  @media (max-width: 768px) {
-    font-size: 16px;
-    line-height: 1.6;
-  }
-
-  @media (max-width: 480px) {
-    font-size: 15px;
-  }
+const Description = styled.p`
+  font-size: 0.875rem;
+  color: ${color.N6};
+  margin: 0;
+  line-height: 1.5;
 `;
 
-const ThreadMeta = styled.div`
+const MetaRow = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.md};
-  font-size: 13px;
-  color: #6b7280;
+  gap: 0.75rem;
+  font-size: 12px;
+  color: ${color.N6};
   flex-wrap: wrap;
 `;
 
 const MetaItem = styled.span`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
 
   strong {
-    color: #374151;
+    color: ${color.N8};
     font-weight: 600;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
   }
 `;
 
-const Separator = styled.span`
-  color: #d1d5db;
+const MetaDot = styled.span`
+  color: ${color.N5};
+`;
+
+const ContentArea = styled.div`
+  flex: 1;
+  overflow: auto;
+  padding: 1rem 1.5rem;
+
+  @media (max-width: 768px) {
+    padding: 0.75rem 1rem;
+  }
 `;
 
 const MessageListContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${spacing.md};
+  gap: 0.75rem;
+  max-width: 900px;
+  margin: 0 auto;
   width: 100%;
 `;
 
 const EmptyMessageState = styled.div`
   text-align: center;
-  padding: ${spacing.xl};
+  padding: 2rem;
   color: ${color.N6};
+`;
+
+const ReplyComposerArea = styled.div`
+  padding: 1rem 1.5rem;
+  background: ${color.N1};
+  border-top: 1px solid ${color.N4};
+
+  @media (max-width: 768px) {
+    padding: 0.75rem 1rem;
+  }
+`;
+
+const ReplyComposerInner = styled.div`
+  max-width: 900px;
+  margin: 0 auto;
 `;
 
 /**
@@ -321,38 +380,47 @@ export function ThreadDetail({
       return;
     }
 
-    // Default: Navigate back to corpus discussions tab
-    if (corpus?.creator?.slug && corpus?.slug) {
-      navigate(`/c/${corpus.creator.slug}/${corpus.slug}?tab=discussions`);
-    } else {
-      // Fallback to browser history
-      navigate(-1);
+    // Default: Navigate back to corpus discussions tab using utility
+    if (corpus) {
+      const url = getCorpusUrl(corpus, { tab: "discussions" });
+      if (url !== "#") {
+        navigate(url);
+        return;
+      }
     }
+    // Fallback to browser history
+    navigate(-1);
   };
+
+  // Infer discussion category from title/description
+  const discussionCategory = useMemo(() => {
+    if (!thread) return "question";
+    return inferDiscussionCategory(thread.title || "", thread.description);
+  }, [thread]);
 
   // Loading state
   if (loading && !data) {
     return (
-      <ThreadDetailContainer $compact={compact}>
+      <Container>
         <ModernLoadingDisplay
           type="default"
           message="Loading discussion..."
           size="medium"
         />
-      </ThreadDetailContainer>
+      </Container>
     );
   }
 
   // Error state
   if (error || !thread) {
     return (
-      <ThreadDetailContainer $compact={compact}>
+      <Container>
         <ModernErrorDisplay
           type="generic"
           error={error?.message || "Thread not found"}
           onRetry={() => refetch()}
         />
-      </ThreadDetailContainer>
+      </Container>
     );
   }
 
@@ -360,140 +428,133 @@ export function ThreadDetail({
   const messageCount = thread.allMessages?.length || 0;
 
   return (
-    <ThreadDetailContainer $compact={compact}>
-      {/* Back button - only show in compact mode (sidebar), route provides its own back button in full-page mode */}
-      {compact && (
-        <BackButton onClick={handleBack} aria-label="Back to discussions">
-          <ArrowLeft size={16} />
-          <span>Back to Discussions</span>
-        </BackButton>
-      )}
+    <Container>
+      {/* Compact Header */}
+      <Header>
+        <HeaderLeft>
+          {/* Top row: Back button (only in compact/sidebar mode) + document link + status badges */}
+          <HeaderTop>
+            {compact && (
+              <BackButton onClick={handleBack} aria-label="Back to discussions">
+                <ArrowLeft />
+                Back
+              </BackButton>
+            )}
 
-      {/* Thread header */}
-      <ThreadHeader>
-        {/* Badges */}
-        {(thread.isPinned || thread.isLocked || isDeleted) && (
-          <BadgeRow>
-            {thread.isPinned && <ThreadBadge type="pinned" />}
-            {thread.isLocked && <ThreadBadge type="locked" />}
-            {isDeleted && <ThreadBadge type="deleted" />}
-          </BadgeRow>
-        )}
+            {/* Corpus link removed - shown in route NavBar */}
 
-        {/* Context badges - show linked document and/or corpus */}
-        {(thread.chatWithDocument || thread.chatWithCorpus) && (
-          <ContextRow>
             {thread.chatWithDocument && (
-              <ContextBadge
+              <ContextLink
+                href="#"
                 title={`Linked to document: ${thread.chatWithDocument.title}`}
               >
                 <FileText />
-                <span>{thread.chatWithDocument.title}</span>
-              </ContextBadge>
+                {thread.chatWithDocument.title}
+              </ContextLink>
             )}
-            {thread.chatWithCorpus && (
-              <ContextBadge title={`In corpus: ${thread.chatWithCorpus.title}`}>
-                <Folder />
-                <span>{thread.chatWithCorpus.title}</span>
-              </ContextBadge>
+
+            {thread.isPinned && (
+              <StatusBadge $variant="pinned">
+                <Pin />
+                Pinned
+              </StatusBadge>
             )}
-          </ContextRow>
-        )}
+            {thread.isLocked && (
+              <StatusBadge $variant="locked">
+                <Lock />
+                Locked
+              </StatusBadge>
+            )}
+            {isDeleted && (
+              <StatusBadge $variant="deleted">
+                <Trash2 />
+                Deleted
+              </StatusBadge>
+            )}
+          </HeaderTop>
 
-        {/* Title */}
-        <ThreadTitleLarge>
-          {thread.title || "Untitled Discussion"}
-        </ThreadTitleLarge>
+          {/* Title row: Category badge + title */}
+          <TitleRow>
+            <DiscussionTypeBadge category={discussionCategory} />
+            <Title>{thread.title || "Untitled Discussion"}</Title>
+          </TitleRow>
 
-        {/* Description */}
-        {thread.description && (
-          <ThreadDescription>{thread.description}</ThreadDescription>
-        )}
+          {/* Description (if present) */}
+          {thread.description && (
+            <Description>{thread.description}</Description>
+          )}
 
-        {/* Metadata */}
-        <ThreadMeta>
-          <MetaItem>
-            Started by{" "}
-            <strong>
-              {formatUsername(thread.creator?.username, thread.creator?.email)}
-            </strong>
-          </MetaItem>
-
-          <Separator>•</Separator>
-
-          <MetaItem>
-            <RelativeTime date={thread.createdAt} />
-          </MetaItem>
-
-          <Separator>•</Separator>
-
-          <MetaItem>
-            <MessageCircle size={14} />
-            <span>
+          {/* Meta row: Author + time + message count */}
+          <MetaRow>
+            <MetaItem>
+              <Users />
+              <strong>
+                {formatUsername(
+                  thread.creator?.username,
+                  thread.creator?.email
+                )}
+              </strong>
+            </MetaItem>
+            <MetaDot>•</MetaDot>
+            <MetaItem>
+              <RelativeTime date={thread.createdAt} />
+            </MetaItem>
+            <MetaDot>•</MetaDot>
+            <MetaItem>
+              <MessageCircle />
               {messageCount} {messageCount === 1 ? "message" : "messages"}
-            </span>
-          </MetaItem>
-        </ThreadMeta>
+            </MetaItem>
+          </MetaRow>
+        </HeaderLeft>
+      </Header>
 
-        {/* TODO: Add moderation controls in #576 */}
-        {/* {canModerate && <ModerationControls thread={thread} />} */}
-      </ThreadHeader>
-
-      {/* Messages */}
-      {messageTree.length === 0 ? (
-        <EmptyMessageState>
-          <PlaceholderCard
-            title="No messages yet"
-            description="Be the first to post a message in this discussion."
-            compact
-          />
-        </EmptyMessageState>
-      ) : (
-        <MessageListContainer
-          role="list"
-          aria-label="Discussion messages"
-          style={{ width: "100%" }}
-        >
-          <MessageTree
-            messages={messageTree}
-            highlightedMessageId={selectedMessageId}
-            onReply={handleReply}
-            badgesByUser={badgesByUser}
-            conversationId={conversationId}
-            replyingToMessageId={replyingToMessageId}
-            onCancelReply={() => setReplyingToMessageId(null)}
-            currentUserId={currentUser?.id}
-            canModerate={canModerate}
-            corpusId={corpusId}
-            onMessageUpdated={handleMessageChange}
-            onMessageDeleted={handleMessageChange}
-          />
-        </MessageListContainer>
-      )}
+      {/* Messages area */}
+      <ContentArea>
+        {messageTree.length === 0 ? (
+          <EmptyMessageState>
+            <PlaceholderCard
+              title="No messages yet"
+              description="Be the first to post a message in this discussion."
+              compact
+            />
+          </EmptyMessageState>
+        ) : (
+          <MessageListContainer role="list" aria-label="Discussion messages">
+            <MessageTree
+              messages={messageTree}
+              highlightedMessageId={selectedMessageId}
+              onReply={handleReply}
+              badgesByUser={badgesByUser}
+              conversationId={conversationId}
+              replyingToMessageId={replyingToMessageId}
+              onCancelReply={() => setReplyingToMessageId(null)}
+              currentUserId={currentUser?.id}
+              canModerate={canModerate}
+              corpusId={corpusId}
+              onMessageUpdated={handleMessageChange}
+              onMessageDeleted={handleMessageChange}
+            />
+          </MessageListContainer>
+        )}
+      </ContentArea>
 
       {/* Bottom-level message composer */}
       {!thread.isLocked && (
-        <div
-          style={{
-            marginTop: spacing.lg,
-            paddingTop: spacing.lg,
-            borderTop: `1px solid ${color.N4}`,
-          }}
-        >
-          <ReplyForm
-            conversationId={conversationId}
-            onSuccess={() => {
-              // Apollo's refetchQueries in ReplyForm handles refetching
-              // No additional refetch needed here to avoid double-fetch issues
-            }}
-            onCancel={() => {
-              // No-op for bottom composer - it's always visible
-            }}
-            autoFocus={false}
-            corpusId={corpusId}
-          />
-        </div>
+        <ReplyComposerArea>
+          <ReplyComposerInner>
+            <ReplyForm
+              conversationId={conversationId}
+              onSuccess={() => {
+                // Apollo's refetchQueries in ReplyForm handles refetching
+              }}
+              onCancel={() => {
+                // No-op for bottom composer - it's always visible
+              }}
+              autoFocus={false}
+            />
+          </ReplyComposerInner>
+        </ReplyComposerArea>
       )}
-    </ThreadDetailContainer>
+    </Container>
   );
 }

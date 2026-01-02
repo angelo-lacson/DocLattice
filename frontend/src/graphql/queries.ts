@@ -642,6 +642,10 @@ export const GET_CORPUSES = gql`
             spanLabelCount
             tokenLabelCount
           }
+          categories {
+            id
+            name
+          }
         }
       }
     }
@@ -708,6 +712,7 @@ export interface GetLabelsetsWithLabelsInputs {
 export interface GetLabelsetsWithLabelsOutputs {
   labelsets: {
     pageInfo: PageInfo;
+    totalCount?: number;
     edges: {
       node: LabelSetType;
     }[];
@@ -728,6 +733,7 @@ export const REQUEST_LABELSETS_WITH_ALL_LABELS = gql`
         startCursor
         endCursor
       }
+      totalCount
       edges {
         node {
           id
@@ -737,6 +743,16 @@ export const REQUEST_LABELSETS_WITH_ALL_LABELS = gql`
           created
           isPublic
           myPermissions
+          docLabelCount
+          spanLabelCount
+          tokenLabelCount
+          corpusCount
+          creator {
+            id
+            slug
+            username
+            email
+          }
           allAnnotationLabels {
             id
             icon
@@ -767,6 +783,7 @@ export interface GetAnnotationsInputs {
 export interface GetAnnotationsOutputs {
   annotations: {
     pageInfo: PageInfo;
+    totalCount?: number;
     edges: {
       node: ServerAnnotationType;
     }[];
@@ -804,12 +821,21 @@ export const GET_ANNOTATIONS = gql`
       first: $limit
       after: $cursor
     ) {
+      totalCount
       edges {
         node {
           id
           tokensJsons
           json
           page
+          created
+          creator {
+            id
+            email
+            username
+            slug
+            __typename
+          }
           corpus {
             id
             slug
@@ -949,8 +975,19 @@ export const GET_LABELSET_WITH_ALL_LABELS = gql`
       title
       description
       created
+      modified
       isPublic
       myPermissions
+      docLabelCount
+      spanLabelCount
+      tokenLabelCount
+      corpusCount
+      creator {
+        id
+        slug
+        username
+        email
+      }
       allAnnotationLabels {
         id
         icon
@@ -964,6 +1001,35 @@ export const GET_LABELSET_WITH_ALL_LABELS = gql`
         analyzer {
           id
         }
+      }
+    }
+  }
+`;
+
+// Query for routing resolution - minimal fields needed for redirect
+export interface GetLabelsetByIdForRedirectInput {
+  id: string;
+}
+
+export interface GetLabelsetByIdForRedirectOutput {
+  labelset: {
+    id: string;
+    title: string;
+    creator: {
+      id: string;
+      slug: string;
+    };
+  } | null;
+}
+
+export const GET_LABELSET_BY_ID_FOR_REDIRECT = gql`
+  query GetLabelsetByIdForRedirect($id: ID!) {
+    labelset(id: $id) {
+      id
+      title
+      creator {
+        id
+        slug
       }
     }
   }
@@ -2103,6 +2169,11 @@ export const GET_CONVERSATIONS = gql`
           isPublic
           myPermissions
 
+          # Voting fields
+          upvoteCount
+          downvoteCount
+          userVote
+
           # Moderation fields
           isLocked
           lockedBy {
@@ -2173,6 +2244,11 @@ export const GET_THREAD_DETAIL = gql`
       }
       isPublic
       myPermissions
+
+      # Voting fields
+      upvoteCount
+      downvoteCount
+      userVote
 
       # Moderation fields
       isLocked
@@ -3727,6 +3803,14 @@ export const GET_NOTIFICATIONS = gql`
             id
             title
             conversationType
+            chatWithCorpus {
+              id
+              slug
+              creator {
+                id
+                slug
+              }
+            }
           }
         }
       }
@@ -4096,6 +4180,32 @@ export const GET_AGENT_CONFIGURATIONS = gql`
   }
 `;
 
+/**
+ * GET_AVAILABLE_MODERATION_TOOLS - Get available moderation tools from backend
+ * Used in CreateCorpusActionModal for inline agent creation with pre-selected tools
+ */
+export interface AvailableTool {
+  name: string;
+  description: string;
+  category: string;
+  requiresApproval: boolean;
+}
+
+export interface GetAvailableModerationToolsOutput {
+  availableTools: AvailableTool[];
+}
+
+export const GET_AVAILABLE_MODERATION_TOOLS = gql`
+  query GetAvailableModerationTools {
+    availableTools(category: "moderation") {
+      name
+      description
+      category
+      requiresApproval
+    }
+  }
+`;
+
 // ============================================================
 // CORPUS ACTION EXECUTION QUERIES
 // ============================================================
@@ -4314,4 +4424,147 @@ export interface GetCorpusActionTrailStatsInput {
 
 export interface GetCorpusActionTrailStatsOutput {
   corpusActionTrailStats: CorpusActionTrailStats;
+}
+
+// ============================================================================
+// MODERATION QUERIES
+// ============================================================================
+
+export const GET_MODERATION_ACTIONS = gql`
+  query GetModerationActions(
+    $corpusId: ID
+    $threadId: ID
+    $moderatorId: ID
+    $actionTypes: [String]
+    $automatedOnly: Boolean
+    $first: Int
+    $after: String
+  ) {
+    moderationActions(
+      corpusId: $corpusId
+      threadId: $threadId
+      moderatorId: $moderatorId
+      actionTypes: $actionTypes
+      automatedOnly: $automatedOnly
+      first: $first
+      after: $after
+    ) {
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      edges {
+        cursor
+        node {
+          id
+          actionType
+          reason
+          created
+          canRollback
+          isAutomated
+          corpusId
+          conversation {
+            id
+            title
+          }
+          message {
+            id
+            content
+          }
+          moderator {
+            id
+            username
+          }
+        }
+      }
+    }
+  }
+`;
+
+export interface GetModerationActionsInput {
+  corpusId?: string;
+  threadId?: string;
+  moderatorId?: string;
+  actionTypes?: string[];
+  automatedOnly?: boolean;
+  first?: number;
+  after?: string;
+}
+
+export interface ModerationActionNode {
+  id: string;
+  actionType: string;
+  reason: string | null;
+  created: string;
+  canRollback: boolean;
+  isAutomated: boolean;
+  corpusId: string | null;
+  conversation: {
+    id: string;
+    title: string;
+  } | null;
+  message: {
+    id: string;
+    content: string;
+  } | null;
+  moderator: {
+    id: string;
+    username: string;
+  } | null;
+}
+
+export interface GetModerationActionsOutput {
+  moderationActions: {
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string | null;
+      endCursor: string | null;
+    };
+    edges: Array<{
+      cursor: string;
+      node: ModerationActionNode;
+    }>;
+  };
+}
+
+export const GET_MODERATION_METRICS = gql`
+  query GetModerationMetrics($corpusId: ID!, $timeRangeHours: Int) {
+    moderationMetrics(corpusId: $corpusId, timeRangeHours: $timeRangeHours) {
+      totalActions
+      automatedActions
+      manualActions
+      actionsByType
+      hourlyActionRate
+      isAboveThreshold
+      thresholdExceededTypes
+      timeRangeHours
+      startTime
+      endTime
+    }
+  }
+`;
+
+export interface GetModerationMetricsInput {
+  corpusId: string;
+  timeRangeHours?: number;
+}
+
+export interface ModerationMetrics {
+  totalActions: number;
+  automatedActions: number;
+  manualActions: number;
+  actionsByType: Record<string, number>;
+  hourlyActionRate: number;
+  isAboveThreshold: boolean;
+  thresholdExceededTypes: string[];
+  timeRangeHours: number;
+  startTime: string;
+  endTime: string;
+}
+
+export interface GetModerationMetricsOutput {
+  moderationMetrics: ModerationMetrics | null;
 }

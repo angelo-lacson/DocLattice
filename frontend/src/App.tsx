@@ -63,6 +63,7 @@ import useWindowDimensions from "./components/hooks/WindowDimensionHook";
 import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { LabelDisplayBehavior } from "./types/graphql-api";
 import { CookieConsentDialog } from "./components/cookies/CookieConsent";
+import { initializeAnalyticsOnLoad } from "./utils/analytics";
 import { Extracts } from "./views/Extracts";
 import { BadgeManagement } from "./components/badges/BadgeManagement";
 import { GlobalSettingsPanel, GlobalAgentManagement } from "./components/admin";
@@ -73,6 +74,7 @@ import { DocumentUploadModal } from "./components/widgets/modals/DocumentUploadM
 import { FileUploadPackageProps } from "./components/widgets/modals/DocumentUploadModal";
 import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
 import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
+import { LabelSetLandingRoute } from "./components/routes/LabelSetLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
 import { CorpusThreadRoute } from "./components/routes/CorpusThreadRoute";
@@ -91,6 +93,7 @@ import {
 import { useBadgeNotifications } from "./hooks/useBadgeNotifications";
 import { useBadgeCelebration } from "./hooks/useBadgeCelebration";
 import { BadgeCelebrationModal } from "./components/badges/BadgeCelebrationModal";
+import { useJobNotifications } from "./hooks/useJobNotifications";
 
 export const App = () => {
   const { REACT_APP_USE_AUTH0, REACT_APP_AUDIENCE } = useEnv();
@@ -187,6 +190,10 @@ export const App = () => {
     }
   );
 
+  // Job notification system (real-time via WebSocket) - Issue #624
+  // Automatically shows toasts for document processing, extracts, analyses, exports
+  useJobNotifications({ showToast: true });
+
   // Set mobile-friendly display settings once when narrow viewport detected
   // CRITICAL: Don't include location/navigate in deps - causes infinite loop!
   useEffect(() => {
@@ -235,7 +242,7 @@ export const App = () => {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Cookie consent initialization                                          */
+  /* Cookie consent and analytics initialization                            */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     // Run once on mount in browser to determine whether to display the
@@ -249,6 +256,9 @@ export const App = () => {
     if (showCookieAcceptModal() === false && !accepted) {
       showCookieAcceptModal(true);
     }
+
+    // Initialize PostHog analytics if consent was previously given
+    initializeAnalyticsOnLoad();
   }, []);
 
   return (
@@ -342,7 +352,6 @@ export const App = () => {
                 <EditExtractModal
                   ext={opened_extract}
                   open={opened_extract !== null}
-                  toggleModal={() => openedExtract(null)}
                 />
               )}
               <DocumentUploadModal
@@ -459,6 +468,11 @@ export const App = () => {
                   ) : (
                     <></>
                   )}
+                  {/* LabelSet routes */}
+                  <Route
+                    path="/label_sets/:labelsetId"
+                    element={<LabelSetLandingRoute />}
+                  />
                   <Route path="/label_sets" element={<Labelsets />} />
                   <Route path="/annotations" element={<Annotations />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />

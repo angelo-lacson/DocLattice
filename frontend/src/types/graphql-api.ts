@@ -246,6 +246,34 @@ export type AssignmentTypeEdge = {
   cursor: Scalars["String"];
 };
 
+// Corpus Category Types
+export type CorpusCategoryType = Node & {
+  __typename?: "CorpusCategoryType";
+  id: Scalars["ID"];
+  name: Scalars["String"];
+  description?: Maybe<Scalars["String"]>;
+  icon?: Maybe<Scalars["String"]>;
+  color?: Maybe<Scalars["String"]>;
+  sortOrder?: Maybe<Scalars["Int"]>;
+  corpusCount?: Maybe<Scalars["Int"]>;
+  isPublic?: Scalars["Boolean"];
+  created?: Scalars["DateTime"];
+  modified?: Scalars["DateTime"];
+};
+
+export type CorpusCategoryTypeConnection = {
+  __typename?: "CorpusCategoryTypeConnection";
+  pageInfo: PageInfo;
+  edges: Array<Maybe<CorpusCategoryTypeEdge>>;
+  totalCount?: Maybe<Scalars["Int"]>;
+};
+
+export type CorpusCategoryTypeEdge = {
+  __typename?: "CorpusCategoryTypeEdge";
+  node?: Maybe<CorpusCategoryType>;
+  cursor: Scalars["String"];
+};
+
 export type RawCorpusType = Node & {
   __typename?: "CorpusType";
   id: Scalars["ID"];
@@ -275,6 +303,8 @@ export type RawCorpusType = Node & {
   isPublic?: Scalars["Boolean"];
   myPermissions?: string[];
   conversations?: ConversationTypeConnection;
+  // Note: categories is returned as a List (array), not a Connection, from the backend
+  categories?: CorpusCategoryType[];
 };
 
 export type CorpusType = Omit<RawCorpusType, "myPermissions"> & {
@@ -425,6 +455,7 @@ export type LabelSetType = Node & {
   docLabelCount?: Scalars["Int"];
   spanLabelCount?: Scalars["Int"];
   tokenLabelCount?: Scalars["Int"];
+  corpusCount?: Scalars["Int"];
   creator?: UserType;
   created?: Scalars["DateTime"];
   modified?: Scalars["DateTime"];
@@ -1506,6 +1537,11 @@ export type ConversationType = Node & {
   modified: Scalars["DateTime"];
   isPublic?: Scalars["Boolean"];
   myPermissions?: PermissionTypes[];
+
+  // Voting fields
+  upvoteCount?: Scalars["Int"];
+  downvoteCount?: Scalars["Int"];
+  userVote?: Maybe<Scalars["String"]>; // "UPVOTE", "DOWNVOTE", or null
 
   // Moderation fields
   isLocked?: Scalars["Boolean"];

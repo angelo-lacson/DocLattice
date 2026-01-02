@@ -33,7 +33,6 @@ import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
-import { CorpusCards } from "../components/corpuses/CorpusCards";
 import {
   CreateAndSearchBar,
   DropdownActionProps,
@@ -44,6 +43,7 @@ import {
   CorpusModal,
   CorpusFormData,
 } from "../components/corpuses/CorpusModal";
+import { CorpusListView } from "../components/corpuses/CorpusListView";
 
 import {
   openedCorpus,
@@ -1596,6 +1596,18 @@ export const Corpuses = () => {
     debouncedAnalysisSearch.current(value);
   };
 
+  // Check for ?create=true query param to open the create corpus modal
+  // This allows linking directly to corpus creation from other pages (e.g., Discover page)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get("create") === "true") {
+      setShowNewCorpusModal(true);
+      // Remove the query param from URL to prevent reopening on refresh
+      const newUrl = location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [location.search]);
+
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Setup document resolvers and mutations
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1950,6 +1962,9 @@ export const Corpuses = () => {
     if (formData.icon !== undefined && formData.icon !== null) {
       variables.icon = formData.icon;
     }
+    if (formData.categories !== undefined) {
+      variables.categories = formData.categories;
+    }
 
     tryMutateCorpus({ variables });
   };
@@ -2005,6 +2020,9 @@ export const Corpuses = () => {
       variables.preferredEmbedder = formData.preferredEmbedder;
     if (formData.icon) {
       variables.icon = formData.icon;
+    }
+    if (formData.categories && formData.categories.length > 0) {
+      variables.categories = formData.categories;
     }
 
     tryCreateCorpus({ variables })
@@ -2355,31 +2373,22 @@ export const Corpuses = () => {
     (opened_document === null || opened_document === undefined)
   ) {
     content = (
-      <div
-        style={{
-          width: "100%",
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          padding: 0,
-          margin: 0,
-          overflow: "hidden",
-          minHeight: 0,
-        }}
-      >
-        <CorpusCards
-          items={corpus_items}
-          pageInfo={corpus_response?.corpuses?.pageInfo}
-          loading={
-            loading_corpuses ||
-            delete_corpus_loading ||
-            update_corpus_loading ||
-            create_corpus_loading
-          }
-          loading_message="Loading Corpuses..."
-          fetchMore={fetchMoreCorpuses}
-        />
-      </div>
+      <CorpusListView
+        corpuses={corpus_items}
+        pageInfo={corpus_response?.corpuses?.pageInfo}
+        loading={
+          loading_corpuses ||
+          delete_corpus_loading ||
+          update_corpus_loading ||
+          create_corpus_loading
+        }
+        fetchMore={fetchMoreCorpuses}
+        onCreateCorpus={() => setShowNewCorpusModal(true)}
+        onImportCorpus={() => corpusUploadRef.current.click()}
+        searchValue={corpusSearchCache}
+        onSearchChange={handleCorpusSearchChange}
+        allowImport={REACT_APP_ALLOW_IMPORTS && Boolean(auth_token)}
+      />
     );
   } else if (
     opened_corpus && // Corpus selected
@@ -2667,12 +2676,8 @@ export const Corpuses = () => {
       }
       SearchBar={
         opened_corpus === null ? (
-          <CreateAndSearchBar
-            onChange={handleCorpusSearchChange}
-            actions={corpus_actions}
-            placeholder="Search for corpus..."
-            value={corpusSearchCache}
-          />
+          // Search is now embedded in CorpusListView component
+          <></>
         ) : currentView?.id === "home" ? (
           // Home view uses floating chat search, no top search bar needed
           <></>

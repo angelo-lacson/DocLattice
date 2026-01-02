@@ -14,7 +14,12 @@ import {
   RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL,
   GET_DOCUMENT_ANNOTATIONS_ONLY,
 } from "../graphql/queries";
-import { openedCorpus, openedDocument, authStatusVar } from "../graphql/cache";
+import {
+  openedCorpus,
+  openedDocument,
+  authStatusVar,
+  authInitCompleteVar,
+} from "../graphql/cache";
 import { isValidGraphQLId, getIdentifierType } from "../utils/idValidation";
 import { vi } from "vitest";
 
@@ -83,6 +88,7 @@ describe("ID-based Navigation", () => {
     openedDocument(null);
     // Set auth status so CentralRouteManager proceeds with entity fetching
     authStatusVar("AUTHENTICATED");
+    authInitCompleteVar(true);
     // Clear mock calls
     vi.clearAllMocks();
   });

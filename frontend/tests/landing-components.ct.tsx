@@ -5,7 +5,7 @@ import { HeroSection } from "../src/components/landing/HeroSection";
 import { StatsBar } from "../src/components/landing/StatsBar";
 import { TrendingCorpuses } from "../src/components/landing/TrendingCorpuses";
 import { RecentDiscussions } from "../src/components/landing/RecentDiscussions";
-import { TopContributors } from "../src/components/landing/TopContributors";
+import { CompactLeaderboard } from "../src/components/landing/CompactLeaderboard";
 import { CallToAction } from "../src/components/landing/CallToAction";
 import { DiscoveryLanding } from "../src/views/DiscoveryLanding";
 import { LandingTestWrapper } from "./LandingTestWrapper";
@@ -359,23 +359,23 @@ test.describe("RecentDiscussions Component", () => {
 });
 
 // ============================================================================
-// TopContributors Tests
+// CompactLeaderboard Tests
 // ============================================================================
-test.describe("TopContributors Component", () => {
-  test("should render contributor cards", async ({ mount, page }) => {
+test.describe("CompactLeaderboard Component", () => {
+  test("should render contributor rows with usernames", async ({
+    mount,
+    page,
+  }) => {
     const component = await mount(
       <LandingTestWrapper>
-        <TopContributors contributors={mockLeaderboard} loading={false} />
+        <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
       </LandingTestWrapper>
     );
 
-    // Check section header
-    await expect(page.locator("text=Top Contributors")).toBeVisible({
+    // Check contributor names are displayed
+    await expect(page.locator("text=topcontributor")).toBeVisible({
       timeout: 10000,
     });
-
-    // Check contributor names
-    await expect(page.locator("text=topcontributor")).toBeVisible();
     await expect(page.locator("text=activeuser")).toBeVisible();
 
     await component.unmount();
@@ -384,7 +384,7 @@ test.describe("TopContributors Component", () => {
   test("should display reputation scores", async ({ mount, page }) => {
     const component = await mount(
       <LandingTestWrapper>
-        <TopContributors contributors={mockLeaderboard} loading={false} />
+        <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
       </LandingTestWrapper>
     );
 
@@ -395,14 +395,14 @@ test.describe("TopContributors Component", () => {
     await component.unmount();
   });
 
-  test("should show Full Leaderboard button", async ({ mount, page }) => {
+  test("should show View Full Leaderboard button", async ({ mount, page }) => {
     const component = await mount(
       <LandingTestWrapper>
-        <TopContributors contributors={mockLeaderboard} loading={false} />
+        <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
       </LandingTestWrapper>
     );
 
-    await expect(page.locator("text=Full Leaderboard")).toBeVisible({
+    await expect(page.locator("text=View Full Leaderboard")).toBeVisible({
       timeout: 10000,
     });
 
@@ -476,8 +476,8 @@ test.describe("DiscoveryLanding Page", () => {
       </LandingTestWrapper>
     );
 
-    // Check hero section
-    await expect(page.locator("text=Discover, Analyze &")).toBeVisible({
+    // Check hero section - updated text after redesign
+    await expect(page.locator("text=The open platform for")).toBeVisible({
       timeout: 15000,
     });
 
