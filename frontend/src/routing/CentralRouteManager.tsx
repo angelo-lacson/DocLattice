@@ -619,14 +619,16 @@ export function CentralRouteManager() {
             routingLogger.debug("[RouteManager] Resolving thread");
 
             // First, resolve the corpus (needed for context and navigation)
-            // Use network-only to bypass any stale cache from before authentication
+            // Note: Using cache-and-network for corpus resolution since authInitComplete
+            // now ensures clearStore() completes before any route queries run.
+            // This allows faster navigation when corpus data is already cached.
             const { data: corpusData, error: corpusError } =
               await resolveCorpus({
                 variables: {
                   userSlug: route.userIdent || "",
                   corpusSlug: route.corpusIdent,
                 },
-                fetchPolicy: "network-only", // Force network fetch for thread resolution
+                fetchPolicy: "cache-and-network", // Use cache if available, refresh in background
               });
 
             if (corpusError) {

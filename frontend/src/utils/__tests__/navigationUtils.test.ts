@@ -493,6 +493,14 @@ describe("parseRoute()", () => {
         browsePath: "label_sets",
       });
     });
+
+    it("should parse discussions route", () => {
+      const result = parseRoute("/discussions");
+      expect(result).toEqual({
+        type: "browse",
+        browsePath: "discussions",
+      });
+    });
   });
 
   describe("invalid routes", () => {
