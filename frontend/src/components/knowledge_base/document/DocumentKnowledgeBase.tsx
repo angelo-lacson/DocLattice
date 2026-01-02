@@ -660,25 +660,43 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     };
   }, []); // Empty deps - only log on actual mount/unmount
 
-  // Handle close: use provided onClose callback or fallback to /documents
+  // Handle close: use provided onClose callback or fallback using browser history
   // Following routing mantra: route components should provide onClose to make navigation decisions
   // This component should NOT read openedCorpus() to decide navigation - that causes race conditions
   const handleClose = useCallback(() => {
+    // Helper to navigate back or fallback to /documents
+    // Uses React Router's history index to determine if there's history to go back to
+    const navigateBackOrFallback = () => {
+      // React Router v6 stores history index in window.history.state.idx
+      // idx = 0 means this is the first page in the session (no back history)
+      // idx > 0 means there's at least one page to go back to
+      const historyIdx = (window.history.state as { idx?: number })?.idx ?? 0;
+
+      if (historyIdx > 0) {
+        routingLogger.debug(
+          `[DocumentKnowledgeBase] Navigating back (historyIdx=${historyIdx})`
+        );
+        navigate(-1);
+      } else {
+        routingLogger.debug(
+          "[DocumentKnowledgeBase] Navigating to /documents (no history)"
+        );
+        navigate("/documents");
+      }
+    };
+
     try {
       const timestamp = new Date().toISOString();
       routingLogger.debug(
         `🚪 [DocumentKnowledgeBase] ════════ handleClose START ════════`
       );
       routingLogger.debug("[DocumentKnowledgeBase] Timestamp:", timestamp);
-      routingLogger.debug(
-        "[DocumentKnowledgeBase] Call stack:",
-        new Error().stack?.split("\n").slice(2, 8).join("\n")
-      );
       routingLogger.debug("[DocumentKnowledgeBase] Current state:", {
         hasOnClose: !!onClose,
         documentId,
         corpusId,
         currentUrl: window.location.pathname + window.location.search,
+        historyIdx: (window.history.state as { idx?: number })?.idx ?? 0,
       });
 
       if (onClose) {
@@ -688,12 +706,9 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         onClose();
       } else {
         console.warn(
-          "[DocumentKnowledgeBase] ⚠️  Decision: No onClose callback - fallback to /documents"
+          "[DocumentKnowledgeBase] ⚠️  Decision: No onClose callback - using browser history fallback"
         );
-        console.warn(
-          "Route components should pass explicit onClose callbacks to avoid race conditions."
-        );
-        navigate("/documents");
+        navigateBackOrFallback();
       }
 
       routingLogger.debug(
@@ -703,7 +718,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       console.error("[DocumentKnowledgeBase] ❌ ERROR in handleClose:", error);
       console.error("Stack trace:", error);
       // Fallback navigation on error
-      navigate("/documents");
+      navigateBackOrFallback();
     }
   }, [onClose, navigate, documentId, corpusId]);
 

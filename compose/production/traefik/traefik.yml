@@ -55,7 +55,7 @@ http:
         certResolver: letsencrypt
 
     web-secure-router:
-      rule: "(Host(`doclattice.opensource.legal`) || Host(`www.doclattice.opensource.legal`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
+      rule: "(Host(`doclattice.opensource.legal`) || Host(`www.doclattice.opensource.legal`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`) || PathPrefix(`/mcp`) || PathPrefix(`/sse`))"
       entryPoints:
         - "web-secure"
       middlewares:
