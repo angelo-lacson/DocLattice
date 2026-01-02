@@ -74,6 +74,11 @@ import { BulkUploadModal } from "../components/widgets/modals/BulkUploadModal";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../components/common/LoadingOverlay";
 import { navigateToDocument } from "../utils/navigationUtils";
+import {
+  formatFileSize,
+  formatRelativeTime,
+  getInitials,
+} from "../utils/formatters";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -858,41 +863,6 @@ function getDocumentType(doc: DocumentType): string {
   return "PDF";
 }
 
-function formatFileSize(bytes?: number | null): string {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDate(dateString?: string | null): string {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
-  const diffDays = diffHours / 24;
-
-  if (diffHours < 1) return "Just now";
-  if (diffHours < 24) return `${Math.floor(diffHours)} hours ago`;
-  if (diffDays < 7) return `${Math.floor(diffDays)} days ago`;
-  return date.toLocaleDateString();
-}
-
-function getInitials(name?: string | null): string {
-  if (!name) return "U";
-  // Handle email addresses - take first letter before @
-  if (name.includes("@")) {
-    return name.split("@")[0].charAt(0).toUpperCase();
-  }
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1606,7 +1576,7 @@ export const Documents = () => {
                             fallback={getInitials(doc.creator?.email)}
                             size="xs"
                           />
-                          <span>{formatDate(doc.created)}</span>
+                          <span>{formatRelativeTime(doc.created)}</span>
                         </CardUploader>
                         <CardMenuButton
                           onClick={(e) => {
@@ -1685,7 +1655,7 @@ export const Documents = () => {
                           fallback={getInitials(doc.creator?.email)}
                           size="xs"
                         />
-                        <span>{formatDate(doc.created)}</span>
+                        <span>{formatRelativeTime(doc.created)}</span>
                       </ListItemUploader>
                       <ListItemActions>
                         <CardMenuButton
