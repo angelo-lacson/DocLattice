@@ -21,6 +21,7 @@ import {
   openedDocument,
   openedExtract,
   openedThread,
+  openedLabelset,
   selectedAnnotationIds,
   selectedAnalysesIds,
   selectedExtractIds,
@@ -45,6 +46,7 @@ import {
   GET_CORPUS_BY_ID_FOR_REDIRECT,
   GET_DOCUMENT_BY_ID_FOR_REDIRECT,
   GET_THREAD_DETAIL,
+  GET_LABELSET_WITH_ALL_LABELS,
   GetCorpusByIdForRedirectInput,
   GetCorpusByIdForRedirectOutput,
   GetDocumentByIdForRedirectInput,
@@ -59,6 +61,7 @@ import {
   DocumentType,
   ExtractType,
   ConversationType,
+  LabelSetType,
 } from "../types/graphql-api";
 import {
   ResolveCorpusFullQuery,
@@ -188,6 +191,15 @@ export function CentralRouteManager() {
     fetchPolicy: "network-only", // Always fetch fresh data for route resolution
   });
 
+  // Labelset query - ID-based (labelsets don't have slugs)
+  const [resolveLabelset] = useLazyQuery<
+    { labelset: LabelSetType | null },
+    { id: string }
+  >(GET_LABELSET_WITH_ALL_LABELS, {
+    fetchPolicy: "cache-first",
+    nextFetchPolicy: "cache-and-network",
+  });
+
   // ═══════════════════════════════════════════════════════════════
   // PHASE 1: URL Path → Entity Resolution
   // ═══════════════════════════════════════════════════════════════
@@ -211,6 +223,7 @@ export function CentralRouteManager() {
       openedDocument(null);
       openedExtract(null);
       openedThread(null);
+      openedLabelset(null);
       routeLoading(false);
       routeError(null);
       lastProcessedPath.current = currentPath;
@@ -250,6 +263,7 @@ export function CentralRouteManager() {
       const currentCorpus = openedCorpus();
       const currentExtract = openedExtract();
       const currentThread = openedThread();
+      const currentLabelset = openedLabelset();
 
       const hasEntitiesForRoute =
         (route.type === "document" &&
@@ -257,7 +271,8 @@ export function CentralRouteManager() {
           (!route.corpusIdent || currentCorpus)) ||
         (route.type === "corpus" && currentCorpus) ||
         (route.type === "extract" && currentExtract) ||
-        (route.type === "thread" && currentThread && currentCorpus);
+        (route.type === "thread" && currentThread && currentCorpus) ||
+        (route.type === "labelset" && currentLabelset);
 
       routingLogger.debug("[RouteManager] Phase 1 - Entity check:", {
         routeType: route.type,
@@ -278,15 +293,16 @@ export function CentralRouteManager() {
       }
       routeError(null);
 
-      // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" | "thread" here
+      // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" | "thread" | "labelset" here
       // because "browse" and "unknown" are handled by early return above
       const requestKey = buildRequestKey(
-        route.type as "document" | "corpus" | "extract" | "thread",
+        route.type as "document" | "corpus" | "extract" | "thread" | "labelset",
         route.userIdent,
         route.corpusIdent,
         route.documentIdent,
         route.extractIdent,
-        route.threadIdent
+        route.threadIdent,
+        route.labelsetIdent
       );
 
       // Prevent duplicate simultaneous requests
@@ -678,6 +694,55 @@ export function CentralRouteManager() {
             return;
           }
 
+          // ────────────────────────────────────────────────────────
+          // LABELSET (/label_sets/:id)
+          // ────────────────────────────────────────────────────────
+          if (route.type === "labelset" && route.labelsetIdent) {
+            routingLogger.debug("[RouteManager] Resolving labelset");
+
+            // Labelsets don't have slugs, use ID-based resolution
+            const { data, error } = await resolveLabelset({
+              variables: {
+                id: route.labelsetIdent,
+              },
+            });
+
+            if (error) {
+              console.error(
+                "[RouteManager] ❌ GraphQL error resolving labelset:",
+                error
+              );
+              console.error("[RouteManager] Variables:", {
+                labelsetId: route.labelsetIdent,
+              });
+            }
+
+            if (!data?.labelset) {
+              console.warn("[RouteManager] ⚠️  labelset is null");
+            }
+
+            if (!error && data?.labelset) {
+              const labelset = data.labelset as LabelSetType;
+
+              routingLogger.debug(
+                "[RouteManager] ✅ Resolved labelset via ID:",
+                labelset.id
+              );
+
+              openedLabelset(labelset);
+              openedCorpus(null);
+              openedDocument(null);
+              openedExtract(null);
+              openedThread(null);
+              routeLoading(false);
+              return;
+            }
+
+            console.warn("[RouteManager] Labelset not found");
+            navigate("/404", { replace: true });
+            return;
+          }
+
           // Invalid route configuration
           console.warn("[RouteManager] Invalid route configuration:", route);
           navigate("/404", { replace: true });
@@ -887,6 +952,15 @@ export function CentralRouteManager() {
     if (currentRoute.type === "thread") {
       routingLogger.debug(
         "[RouteManager] Phase 3: Skipping redirect - thread route has its own URL structure"
+      );
+      return;
+    }
+    // CRITICAL: Labelset routes use simple ID-based URLs - don't apply canonical redirects
+    // Labelset routes: /label_sets/:id (no slugs, no user prefix)
+    // buildCanonicalPath() only knows about corpus/document/extract, not labelsets
+    if (currentRoute.type === "labelset") {
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Skipping redirect - labelset route uses ID-based URL"
       );
       return;
     }
