@@ -61,14 +61,22 @@ def create_http_router(django_app, mcp_app):
     """
     Create an HTTP router that dispatches to MCP or Django based on path.
 
-    Routes /mcp and /mcp/* to the MCP ASGI app, everything else to Django.
-    The MCP server uses Streamable HTTP transport in stateless mode.
+    Routes MCP endpoints to the MCP ASGI app, everything else to Django.
+    The MCP server supports two transports:
+    - Streamable HTTP at /mcp (recommended, stateless mode)
+    - SSE at /sse (deprecated, for backward compatibility)
     """
 
     async def router(scope, receive, send):
         path = scope.get("path", "")
-        # Match /mcp exactly or /mcp/* paths
-        if path == "/mcp" or path.startswith("/mcp/"):
+        # Match MCP Streamable HTTP endpoints: /mcp or /mcp/*
+        # Match MCP SSE endpoints: /sse or /sse/*
+        if (
+            path == "/mcp"
+            or path.startswith("/mcp/")
+            or path == "/sse"
+            or path.startswith("/sse/")
+        ):
             await mcp_app(scope, receive, send)
         else:
             await django_app(scope, receive, send)
@@ -155,7 +163,8 @@ else:
 # 4. URL routing
 application = ProtocolTypeRouter(
     {
-        "http": http_application,  # Routes /mcp/* to MCP, rest to Django
+        # Routes /mcp/* and /sse/* to MCP, rest to Django
+        "http": http_application,
         "websocket": websocket_auth_middleware(URLRouter(websocket_urlpatterns)),
     }
 )
