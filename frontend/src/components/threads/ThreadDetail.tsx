@@ -36,6 +36,7 @@ import { useMessageBadges } from "../../hooks/useMessageBadges";
 import { openedCorpus, backendUserObj } from "../../graphql/cache";
 import { ReplyForm } from "./ReplyForm";
 import { formatUsername } from "./userUtils";
+import { getCorpusUrl } from "../../utils/navigationUtils";
 
 interface ThreadDetailProps {
   conversationId: string;
@@ -379,13 +380,16 @@ export function ThreadDetail({
       return;
     }
 
-    // Default: Navigate back to corpus discussions tab
-    if (corpus?.creator?.slug && corpus?.slug) {
-      navigate(`/c/${corpus.creator.slug}/${corpus.slug}?tab=discussions`);
-    } else {
-      // Fallback to browser history
-      navigate(-1);
+    // Default: Navigate back to corpus discussions tab using utility
+    if (corpus) {
+      const url = getCorpusUrl(corpus, { tab: "discussions" });
+      if (url !== "#") {
+        navigate(url);
+        return;
+      }
     }
+    // Fallback to browser history
+    navigate(-1);
   };
 
   // Infer discussion category from title/description

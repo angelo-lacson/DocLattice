@@ -12,6 +12,7 @@ import {
 import { ThreadDetail } from "../threads/ThreadDetail";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
+import { getCorpusUrl } from "../../utils/navigationUtils";
 
 const Container = styled.div`
   margin: 0 auto;
@@ -138,13 +139,16 @@ export const CorpusThreadRoute: React.FC = () => {
   const error = useReactiveVar(routeError);
 
   const handleBack = () => {
-    if (corpus?.creator?.slug && corpus?.slug) {
-      // Navigate back to corpus discussions tab
-      navigate(`/c/${corpus.creator.slug}/${corpus.slug}?tab=discussions`);
-    } else {
-      // Fallback to browser history
-      navigate(-1);
+    if (corpus) {
+      // Navigate back to corpus discussions tab using utility
+      const url = getCorpusUrl(corpus, { tab: "discussions" });
+      if (url !== "#") {
+        navigate(url);
+        return;
+      }
     }
+    // Fallback to browser history
+    navigate(-1);
   };
 
   // Loading state
