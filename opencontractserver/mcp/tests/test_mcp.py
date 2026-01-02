@@ -1463,6 +1463,63 @@ class MCPSSETransportTest(TestCase):
 
         self.assertTrue(callable(handle_sse_connection))
 
+    def test_handle_sse_connection_function(self):
+        """Test handle_sse_connection with mocked SSE transport."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from opencontractserver.mcp.server import handle_sse_connection
+
+        async def run_test():
+            # Create a mock request object
+            mock_request = MagicMock()
+            mock_request.scope = {"type": "http", "path": "/sse"}
+            mock_request.receive = AsyncMock(return_value={"type": "http.disconnect"})
+            mock_request._send = AsyncMock()
+
+            # Create mock streams
+            mock_read_stream = AsyncMock()
+            mock_write_stream = AsyncMock()
+
+            # Create mock async context manager
+            mock_connect = MagicMock()
+            mock_connect.__aenter__ = AsyncMock(
+                return_value=(mock_read_stream, mock_write_stream)
+            )
+            mock_connect.__aexit__ = AsyncMock(return_value=None)
+
+            # Mock the mcp_server.run method
+            mock_mcp_run = AsyncMock()
+
+            with patch(
+                "opencontractserver.mcp.server.sse_transport.connect_sse",
+                return_value=mock_connect,
+            ), patch(
+                "opencontractserver.mcp.server.mcp_server.run", mock_mcp_run
+            ), patch(
+                "opencontractserver.mcp.server.mcp_server.create_initialization_options",
+                return_value={},
+            ):
+                result = await handle_sse_connection(mock_request)
+
+            # Verify the response is returned
+            from starlette.responses import Response
+
+            self.assertIsInstance(result, Response)
+
+            # Verify mcp_server.run was called with the streams
+            mock_mcp_run.assert_called_once()
+            call_args = mock_mcp_run.call_args
+            self.assertEqual(call_args[0][0], mock_read_stream)
+            self.assertEqual(call_args[0][1], mock_write_stream)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
 
 class MCPHttpRouterTest(TestCase):
     """Tests for the HTTP router that dispatches to MCP vs Django."""
