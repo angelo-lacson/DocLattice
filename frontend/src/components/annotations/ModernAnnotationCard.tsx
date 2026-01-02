@@ -1,0 +1,496 @@
+import React from "react";
+import styled from "styled-components";
+import { Avatar } from "@os-legal/ui";
+import {
+  FileText,
+  User,
+  Bot,
+  Settings,
+  Tag,
+  Clock,
+  ExternalLink,
+  Globe,
+  Users,
+  Lock,
+  AlignLeft,
+} from "lucide-react";
+
+import { ServerAnnotationType } from "../../types/graphql-api";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type AnnotationSourceType = "human" | "agent" | "structural";
+export type AnnotationVisibilityType = "public" | "shared" | "private";
+export type AnnotationLabelTypeFilter = "doc" | "text";
+
+export interface ModernAnnotationCardProps {
+  annotation: ServerAnnotationType;
+  onClick?: () => void;
+  isSelected?: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STYLED COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CardContainer = styled.div<{ $isSelected?: boolean }>`
+  background: white;
+  border: 1px solid ${(props) => (props.$isSelected ? "#0f766e" : "#e2e8f0")};
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+
+  ${(props) =>
+    props.$isSelected &&
+    `
+    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
+    background: #f0fdfa;
+  `}
+
+  &:hover {
+    border-color: ${(props) => (props.$isSelected ? "#0f766e" : "#cbd5e1")};
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  }
+`;
+
+const CardHeader = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+`;
+
+const LabelContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const LabelColor = styled.div<{ $color: string }>`
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background-color: ${(props) => props.$color};
+`;
+
+const LabelName = styled.span`
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+`;
+
+const BadgesContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+const SourceBadge = styled.div<{ $variant: AnnotationSourceType }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: ${(props) => {
+    switch (props.$variant) {
+      case "human":
+        return "#dbeafe";
+      case "agent":
+        return "#ede9fe";
+      case "structural":
+        return "#fef3c7";
+      default:
+        return "#f1f5f9";
+    }
+  }};
+  color: ${(props) => {
+    switch (props.$variant) {
+      case "human":
+        return "#2563eb";
+      case "agent":
+        return "#7c3aed";
+      case "structural":
+        return "#d97706";
+      default:
+        return "#64748b";
+    }
+  }};
+`;
+
+const TypeBadge = styled.div<{ $type: "doc" | "text" }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  background: ${(props) => (props.$type === "doc" ? "#dbeafe" : "#f0fdfa")};
+  color: ${(props) => (props.$type === "doc" ? "#2563eb" : "#0f766e")};
+`;
+
+const LabelsetTag = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 4px;
+  margin-bottom: 12px;
+`;
+
+const TaggedText = styled.p`
+  font-size: 14px;
+  line-height: 1.6;
+  color: #475569;
+  margin-bottom: 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`;
+
+const HighlightedText = styled.span`
+  background: linear-gradient(
+    to bottom,
+    transparent 60%,
+    rgba(15, 118, 110, 0.15) 60%
+  );
+`;
+
+const DocLabelPlaceholder = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #64748b;
+`;
+
+const CardFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+  gap: 12px;
+`;
+
+const DocumentLink = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+  text-decoration: none;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: #0f766e;
+  }
+`;
+
+const DocumentIcon = styled.span`
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+`;
+
+const DocumentName = styled.span`
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  @media (max-width: 768px) {
+    max-width: 120px;
+  }
+`;
+
+const MetaContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
+const CreatorInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+`;
+
+const TimeInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+`;
+
+const VisibilityIndicator = styled.div<{
+  $visibility: AnnotationVisibilityType;
+}>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: ${(props) => {
+    switch (props.$visibility) {
+      case "public":
+        return "#059669";
+      case "shared":
+        return "#2563eb";
+      case "private":
+        return "#64748b";
+      default:
+        return "#94a3b8";
+    }
+  }};
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Determine the source type of an annotation (human, agent, or structural)
+ */
+export function getAnnotationSource(
+  annotation: ServerAnnotationType
+): AnnotationSourceType {
+  if (annotation.structural) {
+    return "structural";
+  }
+
+  // Check if it was created by an analyzer (agent)
+  if (annotation.analysis) {
+    const analyzerId =
+      annotation.analysis?.analyzer?.analyzerId?.toLowerCase() || "";
+    // "manually" in analyzer ID indicates human annotation
+    if (analyzerId.includes("manually")) {
+      return "human";
+    }
+    return "agent";
+  }
+
+  // No analysis means manually created
+  return "human";
+}
+
+/**
+ * Determine visibility based on annotation properties
+ */
+export function getAnnotationVisibility(
+  annotation: ServerAnnotationType,
+  currentUserEmail?: string
+): AnnotationVisibilityType {
+  if (annotation.isPublic) {
+    return "public";
+  }
+
+  const isOwner = annotation.creator?.email === currentUserEmail;
+  if (isOwner) {
+    return "private";
+  }
+
+  return "shared";
+}
+
+/**
+ * Get the label type (doc or text) from annotation
+ */
+export function getAnnotationLabelType(
+  annotation: ServerAnnotationType
+): AnnotationLabelTypeFilter {
+  // DOC_TYPE_LABEL indicates document-level annotation
+  if (annotation.annotationType === "DOC_TYPE_LABEL") {
+    return "doc";
+  }
+  return "text";
+}
+
+/**
+ * Get initials from a name for avatar fallback
+ */
+function getInitials(name: string): string {
+  const parts = name.split(/[\s._@-]+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * Format the created date as relative time
+ */
+function formatRelativeTime(dateString?: string): string {
+  if (!dateString) return "";
+
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) {
+    return `${diffMins} ${diffMins === 1 ? "min" : "mins"} ago`;
+  } else if (diffHours < 24) {
+    return `${diffHours} ${diffHours === 1 ? "hour" : "hours"} ago`;
+  } else if (diffDays < 7) {
+    return `${diffDays} ${diffDays === 1 ? "day" : "days"} ago`;
+  } else {
+    return date.toLocaleDateString();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SUBCOMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SourceBadgeComponent: React.FC<{ source: AnnotationSourceType }> = ({
+  source,
+}) => {
+  const config = {
+    human: { icon: <User size={14} />, title: "Human annotated" },
+    agent: { icon: <Bot size={14} />, title: "AI annotated" },
+    structural: { icon: <Settings size={14} />, title: "Structural" },
+  };
+
+  const { icon, title } = config[source];
+
+  return (
+    <SourceBadge $variant={source} title={title}>
+      {icon}
+    </SourceBadge>
+  );
+};
+
+const VisibilityIconComponent: React.FC<{
+  visibility: AnnotationVisibilityType;
+}> = ({ visibility }) => {
+  const config = {
+    public: { icon: <Globe size={14} />, title: "Public" },
+    shared: { icon: <Users size={14} />, title: "Shared" },
+    private: { icon: <Lock size={14} />, title: "Private" },
+  };
+
+  const { icon, title } = config[visibility];
+
+  return (
+    <VisibilityIndicator $visibility={visibility} title={title}>
+      {icon}
+    </VisibilityIndicator>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
+  annotation,
+  onClick,
+  isSelected = false,
+}) => {
+  const source = getAnnotationSource(annotation);
+  const labelType = getAnnotationLabelType(annotation);
+  const visibility = getAnnotationVisibility(annotation);
+
+  const labelColor = annotation.annotationLabel?.color || "#94a3b8";
+  const labelName = annotation.annotationLabel?.text || "Unknown Label";
+  const creatorName =
+    annotation.creator?.email?.split("@")[0] ||
+    annotation.creator?.username ||
+    "Unknown";
+  const documentName = annotation.document?.title || "Unknown Document";
+
+  // Get labelset name from the corpus if available
+  const labelsetName = annotation.corpus?.labelSet?.title || "Annotations";
+
+  return (
+    <CardContainer $isSelected={isSelected} onClick={onClick}>
+      <CardHeader>
+        <LabelContainer>
+          <LabelColor $color={labelColor} />
+          <LabelName>{labelName}</LabelName>
+        </LabelContainer>
+        <BadgesContainer>
+          <SourceBadgeComponent source={source} />
+          <TypeBadge $type={labelType}>
+            {labelType === "doc" ? (
+              <>
+                <FileText size={12} /> Doc
+              </>
+            ) : (
+              <>
+                <AlignLeft size={12} /> Text
+              </>
+            )}
+          </TypeBadge>
+        </BadgesContainer>
+      </CardHeader>
+
+      <LabelsetTag>
+        <Tag size={12} /> {labelsetName}
+      </LabelsetTag>
+
+      {labelType === "text" && annotation.rawText ? (
+        <TaggedText>
+          <HighlightedText>
+            {annotation.rawText.length > 150
+              ? `${annotation.rawText.substring(0, 150)}...`
+              : annotation.rawText}
+          </HighlightedText>
+        </TaggedText>
+      ) : (
+        <DocLabelPlaceholder>
+          <FileText size={16} color="#2563eb" />
+          Applies to entire document
+        </DocLabelPlaceholder>
+      )}
+
+      <CardFooter>
+        <DocumentLink>
+          <DocumentIcon>
+            <FileText size={14} />
+          </DocumentIcon>
+          <DocumentName title={documentName}>{documentName}</DocumentName>
+          <ExternalLink size={12} />
+        </DocumentLink>
+        <MetaContainer>
+          <CreatorInfo>
+            <Avatar fallback={getInitials(creatorName)} size="xs" />
+            {creatorName}
+          </CreatorInfo>
+          {annotation.created && (
+            <TimeInfo>
+              <Clock size={12} />
+              {formatRelativeTime(annotation.created)}
+            </TimeInfo>
+          )}
+          <VisibilityIconComponent visibility={visibility} />
+        </MetaContainer>
+      </CardFooter>
+    </CardContainer>
+  );
+};
+
+export default ModernAnnotationCard;
