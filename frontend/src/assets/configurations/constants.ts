@@ -49,12 +49,10 @@ export const DEBOUNCE = {
   CLICK_OUTSIDE_DELAY_MS: 100,
 } as const;
 
-// Polling constants
+// Polling constants (legacy - most polling replaced by WebSocket notifications)
 export const POLLING = {
   DOCUMENT_PROCESSING_INTERVAL_MS: 15000,
   DOCUMENT_PROCESSING_TIMEOUT_MS: 600000,
-  EXTRACT_POLLING_INTERVAL_MS: 5000,
-  EXTRACT_POLLING_TIMEOUT_MS: 600000,
 } as const;
 
 // Extract status constants
