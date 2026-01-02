@@ -15,6 +15,7 @@ import {
 } from "../../graphql/mutations";
 import { NotificationItem } from "./NotificationItem";
 import { useNavigate } from "react-router-dom";
+import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 
 const Container = styled.div`
   max-width: 800px;
@@ -190,27 +191,29 @@ export function NotificationCenter() {
   const hasMore = data?.notifications?.pageInfo?.hasNextPage || false;
 
   const handleNotificationClick = (notification: any) => {
-    // Navigate to the relevant thread/message
+    // Navigate to the relevant thread/message using canonical slug-based URLs
     if (notification.conversation?.id) {
       const conversationId = notification.conversation.id;
-      const corpusId = notification.conversation.chatWithCorpus?.id;
+      const corpus = notification.conversation.chatWithCorpus;
+      const messageParam = notification.message?.id
+        ? `?message=${notification.message.id}`
+        : "";
 
-      if (corpusId) {
-        navigate(
-          `/corpus/${corpusId}/discussions/thread/${conversationId}${
-            notification.message?.id
-              ? `?message=${notification.message.id}`
-              : ""
-          }`
-        );
+      if (corpus) {
+        // Corpus-scoped thread: use canonical /c/user/corpus/discussions/threadId pattern
+        const threadUrl = getCorpusThreadUrl(corpus, conversationId);
+        if (threadUrl !== "#") {
+          navigate(`${threadUrl}${messageParam}`);
+        } else {
+          // Fallback if corpus is missing slug data - navigate to global discussions
+          console.warn(
+            "[NotificationCenter] Cannot navigate - corpus missing slug data, falling back to /discussions"
+          );
+          navigate(`/discussions${messageParam}`);
+        }
       } else {
-        navigate(
-          `/discussions/thread/${conversationId}${
-            notification.message?.id
-              ? `?message=${notification.message.id}`
-              : ""
-          }`
-        );
+        // General discussion: navigate to global discussions page
+        navigate(`/discussions${messageParam}`);
       }
     }
   };

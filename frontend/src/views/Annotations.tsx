@@ -1,8 +1,37 @@
-import { useEffect, useRef, useState } from "react";
-
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+  useCallback,
+} from "react";
+import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import _ from "lodash";
 
 import { useQuery, useReactiveVar } from "@apollo/client";
+import {
+  SearchBox,
+  FilterTabs,
+  StatBlock,
+  StatGrid,
+  Button,
+  EmptyState,
+} from "@os-legal/ui";
+import type { FilterTabItem } from "@os-legal/ui";
+import {
+  FileText,
+  AlignLeft,
+  User,
+  Bot,
+  Settings,
+  ChevronDown,
+  Globe,
+  Users,
+  Lock,
+  PenLine,
+} from "lucide-react";
 
 import {
   authToken,
@@ -11,13 +40,9 @@ import {
   openedCorpus,
   filterToCorpus,
   filterToLabelId,
-  showStructuralAnnotations,
   filterToStructuralAnnotations,
+  selectedAnnotationIds,
 } from "../graphql/cache";
-import { LooseObject } from "../components/types";
-import { CardLayout } from "../components/layout/CardLayout";
-import { CreateAndSearchBar } from "../components/layout/CreateAndSearchBar";
-import { useLocation } from "react-router-dom";
 import {
   GetAnnotationsInputs,
   GetAnnotationsOutputs,
@@ -26,18 +51,304 @@ import {
   GET_ANNOTATIONS,
   GET_CORPUS_LABELSET_AND_LABELS,
 } from "../graphql/queries";
-import { FilterToLabelsetSelector } from "../components/widgets/model-filters/FilterToLabelsetSelector";
-import { FilterToLabelSelector } from "../components/widgets/model-filters/FilterToLabelSelector";
+import { ServerAnnotationType, PageInfo } from "../types/graphql-api";
+import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
+import { LoadingOverlay } from "../components/common/LoadingOverlay";
+import { getDocumentUrl } from "../utils/navigationUtils";
 import {
-  AnnotationLabelType,
-  ServerAnnotationType,
-  LabelType,
-} from "../types/graphql-api";
-import { AnnotationCards } from "../components/annotations/AnnotationCards";
-import { FilterToCorpusSelector } from "../components/widgets/model-filters/FilterToCorpusSelector";
+  ModernAnnotationCard,
+  getAnnotationSource,
+  getAnnotationLabelType,
+  AnnotationSourceType,
+  AnnotationLabelTypeFilter,
+} from "../components/annotations/ModernAnnotationCard";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface LooseObject {
+  [key: string]: any;
+}
+
+type TypeFilterValue = "all" | "doc" | "text";
+type SourceFilterValue = "all" | "human" | "agent" | "structural";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STYLED COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PageContainer = styled.div`
+  height: 100%;
+  background: #fafafa;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-y: auto;
+  overflow-x: hidden;
+`;
+
+const ContentContainer = styled.main`
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+
+  @media (max-width: 768px) {
+    padding: 32px 16px 60px;
+  }
+`;
+
+const HeroSection = styled.section`
+  margin-bottom: 40px;
+`;
+
+const HeroHeader = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 32px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+`;
+
+const HeroTitle = styled.h1`
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 42px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #1e293b;
+  margin: 0 0 12px;
+
+  span {
+    color: #0f766e;
+  }
+
+  @media (max-width: 768px) {
+    font-size: 32px;
+  }
+`;
+
+const HeroSubtitle = styled.p`
+  font-size: 17px;
+  line-height: 1.6;
+  color: #64748b;
+  margin: 0;
+  max-width: 500px;
+`;
+
+const StatsContainer = styled.div`
+  margin-bottom: 32px;
+  padding: 20px 24px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+
+  /* Override stat value size */
+  [class*="StatBlock"] > *:first-child,
+  [data-testid="stat-value"] {
+    font-size: 24px !important;
+  }
+`;
+
+const StatsRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+`;
+
+const StatItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  @media (max-width: 768px) {
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+  }
+`;
+
+const StatIcon = styled.div`
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0fdfa;
+  border-radius: 10px;
+  color: #0f766e;
+`;
+
+const StatContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`;
+
+const StatValue = styled.div`
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1;
+`;
+
+const StatLabel = styled.div`
+  font-size: 13px;
+  color: #64748b;
+`;
+
+const StatDivider = styled.div`
+  width: 1px;
+  height: 40px;
+  background: #e2e8f0;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+`;
+
+const FiltersSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+`;
+
+const FiltersRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+`;
+
+const SearchContainer = styled.div`
+  flex: 1;
+  max-width: 400px;
+
+  @media (max-width: 768px) {
+    max-width: none;
+    width: 100%;
+  }
+`;
+
+const DropdownsContainer = styled.div`
+  display: flex;
+  gap: 8px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+`;
+
+const FilterDropdown = styled.button<{ $active?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${(props) => (props.$active ? "#0f766e" : "#64748b")};
+  background: ${(props) => (props.$active ? "#f0fdfa" : "white")};
+  border: 1px solid ${(props) => (props.$active ? "#0f766e" : "#e2e8f0")};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: ${(props) => (props.$active ? "#0f766e" : "#cbd5e1")};
+    color: ${(props) => (props.$active ? "#0f766e" : "#1e293b")};
+  }
+`;
+
+const AdvancedFiltersContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+`;
+
+const FilterWidgetWrapper = styled.div`
+  flex: 1;
+  min-width: 200px;
+  max-width: 300px;
+
+  @media (max-width: 768px) {
+    min-width: 100%;
+    max-width: none;
+  }
+`;
+
+const AnnotationsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const AnnotationsListContainer = styled.section`
+  position: relative;
+  min-height: 200px;
+`;
+
+const EmptyStateWrapper = styled.div`
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+`;
+
+const AnnotationIconWrapper = styled.div`
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border-radius: 16px;
+  color: #94a3b8;
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FILTER COMPONENTS (inline versions for cleaner integration)
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import { FilterToStructuralAnnotationsSelector } from "../components/widgets/model-filters/FilterStructuralAnnotations";
+import { FilterToLabelsetSelector } from "../components/widgets/model-filters/FilterToLabelsetSelector";
+import { FilterToCorpusSelector } from "../components/widgets/model-filters/FilterToCorpusSelector";
+import { FilterToLabelSelector } from "../components/widgets/model-filters/FilterToLabelSelector";
+import { LabelType } from "../types/graphql-api";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export const Annotations = () => {
+  const navigate = useNavigate();
+
+  // Reactive vars for existing filtering
   const annotation_search_term = useReactiveVar(annotationContentSearchTerm);
   const filter_to_labelset_id = useReactiveVar(filterToLabelsetId);
   const filtered_to_corpus = useReactiveVar(filterToCorpus);
@@ -47,16 +358,19 @@ export const Annotations = () => {
   const exclude_structural_annotations = useReactiveVar(
     filterToStructuralAnnotations
   );
+  const selected_annotation_ids = useReactiveVar(selectedAnnotationIds);
 
-  const location = useLocation();
+  // Local state for new filters
+  const [typeFilter, setTypeFilter] = useState<TypeFilterValue>("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilterValue>("all");
+  const [searchValue, setSearchValue] = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-  // URL query parameters (?ann=123) are now synced by CentralRouteManager
-
-  const [searchCache, setSearchCache] = useState<string>("");
-
+  // Build query variables
   let annotation_variables: LooseObject = {
     label_Type: "TEXT_LABEL",
   };
+
   if (exclude_structural_annotations === "EXCLUDE") {
     annotation_variables["structural"] = false;
   } else if (exclude_structural_annotations === "ONLY") {
@@ -76,6 +390,7 @@ export const Annotations = () => {
     annotation_variables["annotationLabelId"] = filter_to_label_id;
   }
 
+  // GraphQL queries
   const {
     refetch: refetch_annotations,
     loading: annotation_loading,
@@ -84,7 +399,7 @@ export const Annotations = () => {
     fetchMore: fetchMoreAnnotations,
   } = useQuery<GetAnnotationsOutputs, GetAnnotationsInputs>(GET_ANNOTATIONS, {
     variables: annotation_variables,
-    notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
+    notifyOnNetworkStatusChange: true,
   });
 
   const {
@@ -100,122 +415,381 @@ export const Annotations = () => {
       corpusId: filtered_to_corpus?.id || opened_corpus?.id || "",
     },
     skip: !filtered_to_corpus?.id && !opened_corpus?.id,
-    notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
+    notifyOnNetworkStatusChange: true,
   });
 
+  // Consolidated effect for refetching annotations on filter changes
+  // This prevents race conditions from multiple simultaneous filter changes
   useEffect(() => {
     refetch_annotations();
-  }, [filter_to_label_id]);
-  useEffect(() => {
-    refetch_annotations();
-  }, [filter_to_labelset_id]);
-  useEffect(() => {
-    refetch_annotations();
-  }, [filtered_to_corpus]);
+  }, [
+    filter_to_label_id,
+    filter_to_labelset_id,
+    filtered_to_corpus,
+    annotation_search_term,
+    exclude_structural_annotations,
+    auth_token,
+    refetch_annotations,
+  ]);
+
+  // Separate effect for opened_corpus since it also needs to refetch corpus data
   useEffect(() => {
     if (opened_corpus) {
       refetch_annotations();
       refetch_corpus();
     }
-  }, [opened_corpus]);
-  useEffect(() => {
-    refetch_annotations();
-  }, [annotation_search_term]);
-  useEffect(() => {
-    refetch_annotations();
-  }, [exclude_structural_annotations]);
-  useEffect(() => {
-    refetch_annotations();
-  }, [location]);
-  useEffect(() => {
-    refetch_annotations();
-  }, [auth_token]);
+  }, [opened_corpus, refetch_annotations, refetch_corpus]);
 
-  let items: ServerAnnotationType[] = [];
-  if (annotation_data?.annotations) {
-    items = annotation_data.annotations.edges.map((edge) => edge.node);
-  }
+  // Sync source filter with structural annotations reactive var
+  useEffect(() => {
+    if (sourceFilter === "structural") {
+      filterToStructuralAnnotations("ONLY");
+    } else if (
+      sourceFilter === "human" ||
+      sourceFilter === "agent" ||
+      sourceFilter === "all"
+    ) {
+      // For human/agent/all, we need structural annotations included or excluded
+      if (sourceFilter !== "all") {
+        filterToStructuralAnnotations("EXCLUDE");
+      } else {
+        filterToStructuralAnnotations("INCLUDE");
+      }
+    }
+  }, [sourceFilter]);
 
-  let labels: AnnotationLabelType[] = [];
-  if (corpus_data?.corpus?.labelSet?.allAnnotationLabels) {
-    labels = corpus_data.corpus.labelSet.allAnnotationLabels.flatMap((f) =>
-      !!f ? [f] : []
-    ) as AnnotationLabelType[];
-  }
+  // Get raw items from query
+  const rawItems: ServerAnnotationType[] = useMemo(() => {
+    if (annotation_data?.annotations) {
+      return annotation_data.annotations.edges.map((edge) => edge.node);
+    }
+    return [];
+  }, [annotation_data]);
 
-  /**
-   * Set up the debounced search handling for the Document SearchBar
-   */
+  // Apply local filters (type and source)
+  const filteredItems = useMemo(() => {
+    let items = rawItems;
+
+    // Filter by type (doc vs text)
+    if (typeFilter !== "all") {
+      items = items.filter((item) => {
+        const labelType = getAnnotationLabelType(item);
+        return labelType === typeFilter;
+      });
+    }
+
+    // Filter by source (human vs agent vs structural)
+    if (sourceFilter !== "all") {
+      items = items.filter((item) => {
+        const source = getAnnotationSource(item);
+        return source === sourceFilter;
+      });
+    }
+
+    return _.uniqBy(items, "id");
+  }, [rawItems, typeFilter, sourceFilter]);
+
+  // Calculate stats - use totalCount from backend for accurate total
+  const stats = useMemo(() => {
+    // Use backend totalCount for accurate total count, fallback to loaded items
+    const total = annotation_data?.annotations?.totalCount ?? rawItems.length;
+    const docLabels = rawItems.filter(
+      (item) => getAnnotationLabelType(item) === "doc"
+    ).length;
+    const textLabels = rawItems.filter(
+      (item) => getAnnotationLabelType(item) === "text"
+    ).length;
+    const humanAnnotated = rawItems.filter(
+      (item) => getAnnotationSource(item) === "human"
+    ).length;
+
+    return { total, docLabels, textLabels, humanAnnotated };
+  }, [rawItems, annotation_data?.annotations?.totalCount]);
+
+  // Debounced search
   const debouncedSearch = useRef(
-    _.debounce((searchTerm) => {
+    _.debounce((searchTerm: string) => {
       annotationContentSearchTerm(searchTerm);
     }, 1000)
   );
 
-  const handleSearchChange = (value: string) => {
-    setSearchCache(value);
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchValue(value);
     debouncedSearch.current(value);
-  };
+  }, []);
 
-  /**
-   * Load the labelsets
-   */
+  const handleSearchSubmit = useCallback((value: string) => {
+    annotationContentSearchTerm(value);
+  }, []);
 
-  /**
-   * Setup mutaton to create new labelset
-   */
+  // Handle infinite scroll
+  const handleFetchMore = useCallback(() => {
+    const pageInfo = annotation_data?.annotations?.pageInfo;
+    if (!annotation_loading && pageInfo?.hasNextPage) {
+      fetchMoreAnnotations({
+        variables: {
+          limit: 20,
+          cursor: pageInfo.endCursor,
+        },
+      });
+    }
+  }, [annotation_loading, annotation_data, fetchMoreAnnotations]);
+
+  // Handle annotation click - navigate to document
+  // Supports both corpus-linked and standalone documents (e.g., structural annotations)
+  const handleAnnotationClick = useCallback(
+    (annotation: ServerAnnotationType) => {
+      try {
+        if (!annotation) {
+          toast.error("Unable to open annotation: Invalid annotation data");
+          return;
+        }
+
+        if (!annotation.document) {
+          toast.error("Unable to open annotation: Document not available");
+          return;
+        }
+
+        const queryParams: {
+          annotationIds: string[];
+          analysisIds?: string[];
+        } = {
+          annotationIds: [annotation.id],
+        };
+
+        if (annotation.analysis?.id) {
+          queryParams.analysisIds = [annotation.analysis.id];
+        }
+
+        // getDocumentUrl handles null corpus by generating standalone document URL
+        const url = getDocumentUrl(
+          annotation.document,
+          annotation.corpus ?? null,
+          queryParams
+        );
+
+        if (url !== "#") {
+          navigate(url);
+        } else {
+          toast.warning(
+            "Unable to navigate: Document is missing required information"
+          );
+        }
+      } catch (error) {
+        console.error("Error navigating to annotation:", error);
+        toast.error("An error occurred while opening the annotation");
+      }
+    },
+    [navigate]
+  );
+
+  // Filter tab configurations
+  const typeFilterTabs: FilterTabItem[] = [
+    { id: "all", label: "All Types" },
+    { id: "doc", label: "Doc Labels" },
+    { id: "text", label: "Text Labels" },
+  ];
+
+  const sourceFilterTabs: FilterTabItem[] = [
+    { id: "all", label: "All Sources" },
+    { id: "human", label: "Human" },
+    { id: "agent", label: "AI Agent" },
+    { id: "structural", label: "Structural" },
+  ];
+
+  const pageInfo = annotation_data?.annotations?.pageInfo;
 
   return (
-    <CardLayout
-      SearchBar={
-        <CreateAndSearchBar
-          onChange={(value: string) => handleSearchChange(value)}
-          actions={[]}
-          filters={
-            <>
-              <FilterToStructuralAnnotationsSelector />
-              <FilterToLabelsetSelector
-                fixed_labelset_id={
-                  filtered_to_corpus?.labelSet?.id
-                    ? filtered_to_corpus.labelSet.id
-                    : undefined
-                }
+    <PageContainer>
+      <ContentContainer>
+        {/* Hero Section */}
+        <HeroSection>
+          <HeroHeader>
+            <div>
+              <HeroTitle>
+                Browse <span>annotations</span>
+              </HeroTitle>
+              <HeroSubtitle>
+                Explore and discover annotations across your documents. Filter
+                by type, source, or visibility.
+              </HeroSubtitle>
+            </div>
+          </HeroHeader>
+        </HeroSection>
+
+        {/* Stats Bar */}
+        <StatsContainer>
+          <StatsRow>
+            <StatItem>
+              <StatIcon>
+                <PenLine size={20} />
+              </StatIcon>
+              <StatContent>
+                <StatValue>{stats.total.toLocaleString()}</StatValue>
+                <StatLabel>Total Annotations</StatLabel>
+              </StatContent>
+            </StatItem>
+            <StatDivider />
+            <StatItem>
+              <StatIcon>
+                <FileText size={20} />
+              </StatIcon>
+              <StatContent>
+                <StatValue>{stats.docLabels}</StatValue>
+                <StatLabel>Doc Labels</StatLabel>
+              </StatContent>
+            </StatItem>
+            <StatDivider />
+            <StatItem>
+              <StatIcon>
+                <AlignLeft size={20} />
+              </StatIcon>
+              <StatContent>
+                <StatValue>{stats.textLabels}</StatValue>
+                <StatLabel>Text Labels</StatLabel>
+              </StatContent>
+            </StatItem>
+            <StatDivider />
+            <StatItem>
+              <StatIcon>
+                <User size={20} />
+              </StatIcon>
+              <StatContent>
+                <StatValue>{stats.humanAnnotated}</StatValue>
+                <StatLabel>Human Annotated</StatLabel>
+              </StatContent>
+            </StatItem>
+          </StatsRow>
+        </StatsContainer>
+
+        {/* Filters */}
+        <FiltersSection>
+          <FiltersRow>
+            <SearchContainer>
+              <SearchBox
+                placeholder="Search annotations by label, text, or document..."
+                value={searchValue}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onSubmit={handleSearchSubmit}
               />
-              <FilterToCorpusSelector
-                uses_labelset_id={filter_to_labelset_id}
-              />
-              {filter_to_labelset_id || filtered_to_corpus?.labelSet?.id ? (
-                <FilterToLabelSelector
-                  label_type={LabelType.TokenLabel}
-                  only_labels_for_labelset_id={
-                    filter_to_labelset_id
-                      ? filter_to_labelset_id
-                      : filtered_to_corpus?.labelSet?.id
+            </SearchContainer>
+            <DropdownsContainer>
+              <FilterDropdown
+                $active={showAdvancedFilters}
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              >
+                Advanced Filters
+                <ChevronDown size={14} />
+              </FilterDropdown>
+            </DropdownsContainer>
+          </FiltersRow>
+
+          <FiltersRow>
+            <FilterTabs
+              items={typeFilterTabs}
+              value={typeFilter}
+              onChange={(id) => setTypeFilter(id as TypeFilterValue)}
+            />
+          </FiltersRow>
+
+          <FiltersRow>
+            <FilterTabs
+              items={sourceFilterTabs}
+              value={sourceFilter}
+              onChange={(id) => setSourceFilter(id as SourceFilterValue)}
+            />
+          </FiltersRow>
+
+          {/* Advanced Filters (collapsible) */}
+          {showAdvancedFilters && (
+            <AdvancedFiltersContainer>
+              <FilterWidgetWrapper>
+                <FilterToLabelsetSelector
+                  fixed_labelset_id={
+                    filtered_to_corpus?.labelSet?.id
                       ? filtered_to_corpus.labelSet.id
                       : undefined
                   }
                 />
-              ) : (
-                <></>
+              </FilterWidgetWrapper>
+              <FilterWidgetWrapper>
+                <FilterToCorpusSelector
+                  uses_labelset_id={filter_to_labelset_id}
+                />
+              </FilterWidgetWrapper>
+              {(filter_to_labelset_id || filtered_to_corpus?.labelSet?.id) && (
+                <FilterWidgetWrapper>
+                  <FilterToLabelSelector
+                    label_type={LabelType.TokenLabel}
+                    only_labels_for_labelset_id={
+                      filter_to_labelset_id
+                        ? filter_to_labelset_id
+                        : filtered_to_corpus?.labelSet?.id
+                        ? filtered_to_corpus.labelSet.id
+                        : undefined
+                    }
+                  />
+                </FilterWidgetWrapper>
               )}
-            </>
-          }
-          placeholder="Search for annotation..."
-          value={searchCache}
-        />
-      }
-    >
-      <AnnotationCards
-        items={items}
-        fetchMore={fetchMoreAnnotations}
-        loading={annotation_loading}
-        loading_message="Loading Annotations..."
-        pageInfo={
-          annotation_data?.annotations?.pageInfo
-            ? annotation_data.annotations.pageInfo
-            : null
-        }
-      />
-    </CardLayout>
+            </AdvancedFiltersContainer>
+          )}
+        </FiltersSection>
+
+        {/* Annotations Grid */}
+        <AnnotationsListContainer>
+          <LoadingOverlay
+            active={annotation_loading}
+            inverted
+            size="large"
+            content="Loading Annotations..."
+          />
+
+          <AnnotationsGrid>
+            {filteredItems.length > 0 ? (
+              filteredItems.map((annotation) => (
+                <ModernAnnotationCard
+                  key={annotation.id}
+                  annotation={annotation}
+                  onClick={() => handleAnnotationClick(annotation)}
+                  isSelected={selected_annotation_ids.includes(annotation.id)}
+                />
+              ))
+            ) : !annotation_loading ? (
+              <EmptyStateWrapper>
+                <AnnotationIconWrapper>
+                  <PenLine size={32} />
+                </AnnotationIconWrapper>
+                <h3
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: 600,
+                    color: "#1e293b",
+                    margin: "24px 0 8px",
+                  }}
+                >
+                  No annotations found
+                </h3>
+                <p
+                  style={{
+                    fontSize: "14px",
+                    color: "#64748b",
+                    margin: 0,
+                    maxWidth: "300px",
+                  }}
+                >
+                  Try adjusting your filters or search query to find what you're
+                  looking for.
+                </p>
+              </EmptyStateWrapper>
+            ) : null}
+          </AnnotationsGrid>
+
+          {/* Infinite scroll trigger */}
+          <FetchMoreOnVisible fetchNextPage={handleFetchMore} />
+        </AnnotationsListContainer>
+      </ContentContainer>
+    </PageContainer>
   );
 };
+
+export default Annotations;

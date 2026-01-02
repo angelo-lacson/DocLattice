@@ -14,6 +14,7 @@ import { LooseObject } from "./components/types";
 import { getRuntimeEnv } from "./utils/env";
 import { HelmetProvider } from "react-helmet-async";
 import { NetworkStatusHandler } from "./components/network";
+import { allStyles } from "@os-legal/ui";
 
 import "./index.css";
 import reportWebVitals from "./reportWebVitals";
@@ -55,6 +56,12 @@ const client = new ApolloClient({
   link: ApolloLink.from([errorLink, authLink, httpLink]),
   cache,
 });
+
+// Inject OpenContracts UI component library styles
+const styleElement = document.createElement("style");
+styleElement.id = "opencontracts-ui-styles";
+styleElement.textContent = allStyles;
+document.head.appendChild(styleElement);
 
 const container = document.getElementById("root");
 const root = createRoot(container!);

@@ -477,6 +477,16 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         help_text="Moderator who pinned the thread",
     )
 
+    # Voting denormalized counts for performance
+    upvote_count = models.IntegerField(
+        default=0,
+        help_text="Cached count of upvotes for this conversation/thread",
+    )
+    downvote_count = models.IntegerField(
+        default=0,
+        help_text="Cached count of downvotes for this conversation/thread",
+    )
+
     chat_with_corpus = models.ForeignKey(
         Corpus,
         on_delete=models.SET_NULL,
@@ -591,10 +601,13 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         # No moderation rights found
         return False
 
-    def lock(self, moderator, reason: str = ""):
+    def lock(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Lock the conversation to prevent new messages.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         from django.utils import timezone
 
@@ -609,18 +622,21 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["is_locked", "locked_at", "locked_by"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.LOCK_THREAD,
+            action_type=ModerationActionType.LOCK_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
         )
 
-    def unlock(self, moderator, reason: str = ""):
+    def unlock(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Unlock the conversation to allow new messages.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         if not self.can_moderate(moderator):
             raise PermissionError(
@@ -632,19 +648,22 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.locked_by = None
         self.save(update_fields=["is_locked", "locked_at", "locked_by"])
 
-        # Create moderation action log
-        ModerationAction.objects.create(
+        # Create moderation action log - use .value for GraphQL enum compatibility
+        return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.UNLOCK_THREAD,
+            action_type=ModerationActionType.UNLOCK_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
         )
 
-    def pin(self, moderator, reason: str = ""):
+    def pin(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Pin the conversation to appear at top of list.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         from django.utils import timezone
 
@@ -659,18 +678,21 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["is_pinned", "pinned_at", "pinned_by"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.PIN_THREAD,
+            action_type=ModerationActionType.PIN_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
         )
 
-    def unpin(self, moderator, reason: str = ""):
+    def unpin(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Unpin the conversation.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         if not self.can_moderate(moderator):
             raise PermissionError(
@@ -683,18 +705,21 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["is_pinned", "pinned_at", "pinned_by"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.UNPIN_THREAD,
+            action_type=ModerationActionType.UNPIN_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
         )
 
-    def soft_delete_thread(self, moderator, reason: str = ""):
+    def soft_delete_thread(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Soft delete this conversation (for moderation).
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         from django.utils import timezone
 
@@ -707,18 +732,21 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["deleted_at"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.DELETE_THREAD,
+            action_type=ModerationActionType.DELETE_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
         )
 
-    def restore_thread(self, moderator, reason: str = ""):
+    def restore_thread(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Restore a soft-deleted conversation.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         if not self.can_moderate(moderator):
             raise PermissionError(
@@ -729,9 +757,9 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["deleted_at"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             conversation=self,
-            action_type=ModerationActionType.RESTORE_THREAD,
+            action_type=ModerationActionType.RESTORE_THREAD.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -872,10 +900,13 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
     objects = ChatMessageManager()  # Default manager with vector search support
     all_objects = models.Manager()  # Access all objects including soft-deleted
 
-    def soft_delete_message(self, moderator, reason: str = ""):
+    def soft_delete_message(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Soft delete this message (for moderation).
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         from django.utils import timezone
 
@@ -888,19 +919,22 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["deleted_at"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             message=self,
             conversation=self.conversation,
-            action_type=ModerationActionType.DELETE_MESSAGE,
+            action_type=ModerationActionType.DELETE_MESSAGE.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
         )
 
-    def restore_message(self, moderator, reason: str = ""):
+    def restore_message(self, moderator, reason: str = "") -> "ModerationAction":
         """
         Restore a soft-deleted message.
         Creates a moderation action log.
+
+        Returns:
+            ModerationAction: The created moderation action record.
         """
         if not self.conversation.can_moderate(moderator):
             raise PermissionError(
@@ -911,10 +945,10 @@ class ChatMessage(BaseOCModel, HasEmbeddingMixin):
         self.save(update_fields=["deleted_at"])
 
         # Create moderation action log
-        ModerationAction.objects.create(
+        return ModerationAction.objects.create(
             message=self,
             conversation=self.conversation,
-            action_type=ModerationActionType.RESTORE_MESSAGE,
+            action_type=ModerationActionType.RESTORE_MESSAGE.value,
             moderator=moderator,
             reason=reason,
             creator=moderator,
@@ -1033,6 +1067,77 @@ class MessageVoteGroupObjectPermission(GroupObjectPermissionBase):
 
     content_object = django.db.models.ForeignKey(
         "MessageVote", on_delete=django.db.models.CASCADE
+    )
+
+
+class ConversationVote(BaseOCModel):
+    """
+    Tracks individual votes on conversations/threads.
+    Users can upvote or downvote threads in discussion forums.
+    One vote per user per conversation (can be changed from upvote to downvote).
+
+    Permission: Users can vote on any conversation they can see (visibility-based).
+    """
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conversation", "creator"],
+                name="one_vote_per_user_per_conversation",
+            )
+        ]
+        permissions = (
+            ("permission_conversationvote", "permission conversationvote"),
+            ("create_conversationvote", "create conversationvote"),
+            ("read_conversationvote", "read conversationvote"),
+            ("update_conversationvote", "update conversationvote"),
+            ("remove_conversationvote", "delete conversationvote"),
+        )
+        indexes = [
+            models.Index(fields=["conversation", "vote_type"]),
+            models.Index(fields=["creator"]),
+        ]
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="votes",
+        help_text="The conversation/thread being voted on",
+    )
+    vote_type = models.CharField(
+        max_length=16,
+        choices=VoteType.choices,
+        help_text="Type of vote (upvote or downvote)",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the vote was cast",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when the vote was last changed",
+    )
+
+    def __str__(self) -> str:
+        return (
+            f"{self.vote_type} by {self.creator.username} "
+            f"on conversation {self.conversation.pk}"
+        )
+
+
+class ConversationVoteUserObjectPermission(UserObjectPermissionBase):
+    """Permissions for ConversationVote objects at the user level."""
+
+    content_object = django.db.models.ForeignKey(
+        "ConversationVote", on_delete=django.db.models.CASCADE
+    )
+
+
+class ConversationVoteGroupObjectPermission(GroupObjectPermissionBase):
+    """Permissions for ConversationVote objects at the group level."""
+
+    content_object = django.db.models.ForeignKey(
+        "ConversationVote", on_delete=django.db.models.CASCADE
     )
 
 

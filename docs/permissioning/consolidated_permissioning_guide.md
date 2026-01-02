@@ -98,6 +98,18 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
      - Annotations/datacells within are filtered to only show those on documents user can read
    - This allows controlled sharing of analyses while maintaining document security boundaries
 
+5. **CorpusCategory - GLOBALLY VISIBLE, ADMIN-PROVISIONED**
+   - **NO individual permissions** - Categories are visible to ALL users (including anonymous)
+   - Categories are admin-provisioned structural data managed via Django Admin only
+   - Users cannot create, modify, or delete categories - only superusers can
+   - **GraphQL Type**: Does NOT use `AnnotatePermissionsForReadMixin` (categories have no permissions)
+   - **corpusCount field**: Dynamically computed based on user's visible corpuses
+     - Anonymous users see count of public corpuses in each category
+     - Authenticated users see count of corpuses they have access to
+   - Categories are seeded via migration with a `system` user (inactive, unusable password)
+   - Implementation: `config/graphql/graphene_types.py:1589` (CorpusCategoryType)
+   - Query resolver: `config/graphql/queries.py:resolve_corpus_categories`
+
 ### Key Principles
 
 1. **Document Security First**: For annotations, document permissions are the primary security boundary
@@ -286,6 +298,36 @@ The GraphQL layer translates between backend Django Guardian format and frontend
 | **CAN_PUBLISH** | Make corpus public | Make document public | Public visibility |
 | **CAN_PERMISSION** | Manage corpus access | Manage document access | Permission management |
 | **CAN_COMMENT** | Add comments | Add comments | Comment functionality |
+
+### Voting Permissions
+
+Voting on messages and conversations/threads uses a **visibility-based permission model**:
+
+**Rule: If you can see it, you can vote on it.**
+
+This simple convention means:
+- Users can upvote/downvote any message or thread they have READ access to
+- Users CANNOT vote on their own messages or threads (enforced server-side)
+- No explicit "VOTE" permission type exists - voting is implicitly allowed with READ access
+- Vote counts are denormalized on ChatMessage and Conversation models for performance
+
+**Implementation Details:**
+- `MessageVote` model: Tracks votes on ChatMessage objects
+- `ConversationVote` model: Tracks votes on Conversation/Thread objects
+- One vote per user per object (enforced via database constraint)
+- Users can change their vote type (upvote ↔ downvote)
+- Vote mutations check visibility via `Conversation.objects.visible_to_user(user)`
+
+**Mutations:**
+- `voteMessage(messageId, voteType)` - Vote on a message
+- `removeVote(messageId)` - Remove vote from a message
+- `voteConversation(conversationId, voteType)` - Vote on a thread
+- `removeConversationVote(conversationId)` - Remove vote from a thread
+
+**GraphQL Fields:**
+- `MessageType.userVote` - Current user's vote ("UPVOTE", "DOWNVOTE", or null)
+- `ConversationType.userVote` - Current user's vote on the thread
+- `upvoteCount` / `downvoteCount` - Denormalized vote counts on both types
 
 ## Permission Model Summary by Object Type
 

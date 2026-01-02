@@ -15,11 +15,13 @@ import { unstable_batchedUpdates } from "react-dom";
 import { useLazyQuery, useApolloClient } from "@apollo/client";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
+import { arraysEqualOrdered } from "../utils/arrayUtils";
 import {
   openedCorpus,
   openedDocument,
   openedExtract,
   openedThread,
+  openedLabelset,
   selectedAnnotationIds,
   selectedAnalysesIds,
   selectedExtractIds,
@@ -30,6 +32,7 @@ import {
   routeLoading,
   routeError,
   authStatusVar,
+  authInitCompleteVar,
   showStructuralAnnotations,
   showSelectedAnnotationOnly,
   showAnnotationBoundingBoxes,
@@ -43,6 +46,7 @@ import {
   GET_CORPUS_BY_ID_FOR_REDIRECT,
   GET_DOCUMENT_BY_ID_FOR_REDIRECT,
   GET_THREAD_DETAIL,
+  GET_LABELSET_WITH_ALL_LABELS,
   GetCorpusByIdForRedirectInput,
   GetCorpusByIdForRedirectOutput,
   GetDocumentByIdForRedirectInput,
@@ -57,6 +61,7 @@ import {
   DocumentType,
   ExtractType,
   ConversationType,
+  LabelSetType,
 } from "../types/graphql-api";
 import {
   ResolveCorpusFullQuery,
@@ -186,10 +191,20 @@ export function CentralRouteManager() {
     fetchPolicy: "network-only", // Always fetch fresh data for route resolution
   });
 
+  // Labelset query - ID-based (labelsets don't have slugs)
+  const [resolveLabelset] = useLazyQuery<
+    { labelset: LabelSetType | null },
+    { id: string }
+  >(GET_LABELSET_WITH_ALL_LABELS, {
+    fetchPolicy: "cache-first",
+    nextFetchPolicy: "cache-and-network",
+  });
+
   // ═══════════════════════════════════════════════════════════════
   // PHASE 1: URL Path → Entity Resolution
   // ═══════════════════════════════════════════════════════════════
   const authStatus = useReactiveVar(authStatusVar);
+  const authInitComplete = useReactiveVar(authInitCompleteVar);
 
   useEffect(() => {
     const currentPath = location.pathname;
@@ -208,17 +223,21 @@ export function CentralRouteManager() {
       openedDocument(null);
       openedExtract(null);
       openedThread(null);
+      openedLabelset(null);
       routeLoading(false);
       routeError(null);
       lastProcessedPath.current = currentPath;
       return;
     }
 
-    // CRITICAL: Wait for auth to initialize before fetching protected entities
-    // This prevents 401/403 errors on deep links and page refreshes
-    if (authStatus === "LOADING") {
+    // CRITICAL: Wait for auth initialization to complete before fetching entities.
+    // authInitCompleteVar is set AFTER cache operations complete in AuthGate.
+    // This prevents "Store reset while query was in flight" errors caused by
+    // queries starting while clearStore() is still running.
+    if (authStatus === "LOADING" || !authInitComplete) {
       routingLogger.debug(
-        "[RouteManager] ⏳ Waiting for auth to initialize before resolving entity..."
+        "[RouteManager] ⏳ Waiting for auth initialization to complete...",
+        { authStatus, authInitComplete }
       );
       routeLoading(true);
       // Don't update lastProcessedPath - we need to re-process when auth is ready
@@ -244,6 +263,7 @@ export function CentralRouteManager() {
       const currentCorpus = openedCorpus();
       const currentExtract = openedExtract();
       const currentThread = openedThread();
+      const currentLabelset = openedLabelset();
 
       const hasEntitiesForRoute =
         (route.type === "document" &&
@@ -251,7 +271,8 @@ export function CentralRouteManager() {
           (!route.corpusIdent || currentCorpus)) ||
         (route.type === "corpus" && currentCorpus) ||
         (route.type === "extract" && currentExtract) ||
-        (route.type === "thread" && currentThread && currentCorpus);
+        (route.type === "thread" && currentThread && currentCorpus) ||
+        (route.type === "labelset" && currentLabelset);
 
       routingLogger.debug("[RouteManager] Phase 1 - Entity check:", {
         routeType: route.type,
@@ -272,15 +293,16 @@ export function CentralRouteManager() {
       }
       routeError(null);
 
-      // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" | "thread" here
+      // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" | "thread" | "labelset" here
       // because "browse" and "unknown" are handled by early return above
       const requestKey = buildRequestKey(
-        route.type as "document" | "corpus" | "extract" | "thread",
+        route.type as "document" | "corpus" | "extract" | "thread" | "labelset",
         route.userIdent,
         route.corpusIdent,
         route.documentIdent,
         route.extractIdent,
-        route.threadIdent
+        route.threadIdent,
+        route.labelsetIdent
       );
 
       // Prevent duplicate simultaneous requests
@@ -613,74 +635,37 @@ export function CentralRouteManager() {
             routingLogger.debug("[RouteManager] Resolving thread");
 
             // First, resolve the corpus (needed for context and navigation)
+            // Note: Using cache-and-network for corpus resolution since authInitComplete
+            // now ensures clearStore() completes before any route queries run.
+            // This allows faster navigation when corpus data is already cached.
             const { data: corpusData, error: corpusError } =
               await resolveCorpus({
                 variables: {
                   userSlug: route.userIdent || "",
                   corpusSlug: route.corpusIdent,
                 },
+                fetchPolicy: "cache-and-network", // Use cache if available, refresh in background
               });
 
             if (corpusError) {
-              console.error(
-                "[RouteManager] ❌ GraphQL error resolving corpus for thread:",
-                corpusError
+              routingLogger.warn(
+                "[RouteManager] Corpus query error for thread resolution:",
+                corpusError.message
               );
             }
 
-            // Then resolve the thread
-            console.log(
-              "[RouteManager] 🔍 Attempting to resolve thread:",
-              route.threadIdent
-            );
-
-            // Evict conversation from cache to force fresh fetch
-            try {
-              apolloClient.cache.evict({
-                id: apolloClient.cache.identify({
-                  __typename: "ConversationType",
-                  id: route.threadIdent,
-                }),
-              });
-              apolloClient.cache.gc();
-              console.log("[RouteManager] 🗑️  Evicted conversation from cache");
-            } catch (e) {
-              console.warn("[RouteManager] ⚠️  Cache eviction failed:", e);
-            }
-
+            // Then resolve the thread (network-only is configured in useLazyQuery)
             const { data, error } = await resolveThread({
               variables: {
                 conversationId: route.threadIdent,
               },
             });
 
-            console.log("[RouteManager] 📦 Thread query response:", {
-              hasData: !!data,
-              hasConversation: !!data?.conversation,
-              hasError: !!error,
-              data: data,
-              error: error,
-            });
-
             if (error) {
-              console.error(
-                "[RouteManager] ❌ GraphQL error resolving thread:",
-                error
+              routingLogger.warn(
+                "[RouteManager] Thread query error:",
+                error.message
               );
-              console.error("[RouteManager] Variables:", {
-                conversationId: route.threadIdent,
-              });
-              console.error(
-                "[RouteManager] Full error details:",
-                JSON.stringify(error, null, 2)
-              );
-            }
-
-            if (!data?.conversation) {
-              console.warn(
-                "[RouteManager] ⚠️  conversation is null or undefined"
-              );
-              console.warn("[RouteManager] Full data received:", data);
             }
 
             if (!error && data?.conversation && corpusData?.corpusBySlugs) {
@@ -709,6 +694,55 @@ export function CentralRouteManager() {
             return;
           }
 
+          // ────────────────────────────────────────────────────────
+          // LABELSET (/label_sets/:id)
+          // ────────────────────────────────────────────────────────
+          if (route.type === "labelset" && route.labelsetIdent) {
+            routingLogger.debug("[RouteManager] Resolving labelset");
+
+            // Labelsets don't have slugs, use ID-based resolution
+            const { data, error } = await resolveLabelset({
+              variables: {
+                id: route.labelsetIdent,
+              },
+            });
+
+            if (error) {
+              console.error(
+                "[RouteManager] ❌ GraphQL error resolving labelset:",
+                error
+              );
+              console.error("[RouteManager] Variables:", {
+                labelsetId: route.labelsetIdent,
+              });
+            }
+
+            if (!data?.labelset) {
+              console.warn("[RouteManager] ⚠️  labelset is null");
+            }
+
+            if (!error && data?.labelset) {
+              const labelset = data.labelset as LabelSetType;
+
+              routingLogger.debug(
+                "[RouteManager] ✅ Resolved labelset via ID:",
+                labelset.id
+              );
+
+              openedLabelset(labelset);
+              openedCorpus(null);
+              openedDocument(null);
+              openedExtract(null);
+              openedThread(null);
+              routeLoading(false);
+              return;
+            }
+
+            console.warn("[RouteManager] Labelset not found");
+            navigate("/404", { replace: true });
+            return;
+          }
+
           // Invalid route configuration
           console.warn("[RouteManager] Invalid route configuration:", route);
           navigate("/404", { replace: true });
@@ -724,7 +758,7 @@ export function CentralRouteManager() {
     };
 
     resolveEntity();
-  }, [location.pathname, authStatus]); // Re-run when path OR auth status changes
+  }, [location.pathname, authStatus, authInitComplete]); // Re-run when path, auth status, or init complete changes
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 2: URL Query Params → Reactive Vars
@@ -779,10 +813,6 @@ export function CentralRouteManager() {
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
     const currentLabels = showAnnotationLabels();
 
-    // Helper to compare arrays
-    const arraysEqual = (a: string[], b: string[]) =>
-      a.length === b.length && a.every((val, idx) => val === b[idx]);
-
     // Parse label display behavior (default to ON_HOVER if not specified)
     const newLabels =
       labelsParam === "ALWAYS"
@@ -795,13 +825,13 @@ export function CentralRouteManager() {
     // This prevents cascading re-renders - all updates happen in one React tick
     const updates: Array<() => void> = [];
 
-    if (!arraysEqual(currentAnnIds, annIds)) {
+    if (!arraysEqualOrdered(currentAnnIds, annIds)) {
       updates.push(() => selectedAnnotationIds(annIds));
     }
-    if (!arraysEqual(currentAnalysisIds, analysisIds)) {
+    if (!arraysEqualOrdered(currentAnalysisIds, analysisIds)) {
       updates.push(() => selectedAnalysesIds(analysisIds));
     }
-    if (!arraysEqual(currentExtractIds, extractIds)) {
+    if (!arraysEqualOrdered(currentExtractIds, extractIds)) {
       updates.push(() => selectedExtractIds(extractIds));
     }
     if (currentThreadId !== threadId) {
@@ -922,6 +952,15 @@ export function CentralRouteManager() {
     if (currentRoute.type === "thread") {
       routingLogger.debug(
         "[RouteManager] Phase 3: Skipping redirect - thread route has its own URL structure"
+      );
+      return;
+    }
+    // CRITICAL: Labelset routes use simple ID-based URLs - don't apply canonical redirects
+    // Labelset routes: /label_sets/:id (no slugs, no user prefix)
+    // buildCanonicalPath() only knows about corpus/document/extract, not labelsets
+    if (currentRoute.type === "labelset") {
+      routingLogger.debug(
+        "[RouteManager] Phase 3: Skipping redirect - labelset route uses ID-based URL"
       );
       return;
     }

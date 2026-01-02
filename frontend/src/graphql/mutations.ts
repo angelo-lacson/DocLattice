@@ -96,6 +96,7 @@ export interface UpdateCorpusInputs {
   // NOTE: isPublic removed - use SET_CORPUS_VISIBILITY mutation instead
   corpusAgentInstructions?: string;
   documentAgentInstructions?: string;
+  categories?: string[];
 }
 
 export interface UpdateCorpusOutputs {
@@ -123,6 +124,7 @@ export const UPDATE_CORPUS = gql`
     $slug: String
     $corpusAgentInstructions: String
     $documentAgentInstructions: String
+    $categories: [ID]
   ) {
     updateCorpus(
       id: $id
@@ -134,6 +136,7 @@ export const UPDATE_CORPUS = gql`
       slug: $slug
       corpusAgentInstructions: $corpusAgentInstructions
       documentAgentInstructions: $documentAgentInstructions
+      categories: $categories
     ) {
       ok
       message
@@ -228,6 +231,7 @@ export interface CreateCorpusInputs {
   filename?: string;
   labelSet?: string;
   preferredEmbedder?: string;
+  categories?: string[];
 }
 
 export interface CreateCorpusOutputs {
@@ -245,6 +249,7 @@ export const CREATE_CORPUS = gql`
     $title: String
     $preferredEmbedder: String
     $slug: String
+    $categories: [ID]
   ) {
     createCorpus(
       description: $description
@@ -253,6 +258,7 @@ export const CREATE_CORPUS = gql`
       title: $title
       preferredEmbedder: $preferredEmbedder
       slug: $slug
+      categories: $categories
     ) {
       ok
       message
@@ -2915,6 +2921,103 @@ export interface RemoveVoteOutput {
 }
 
 // ============================================================================
+// Conversation/Thread Voting Mutations
+// ============================================================================
+
+/** Response shape for conversation vote mutations */
+export interface VoteConversationResponse {
+  ok: boolean;
+  message: string;
+  obj: {
+    id: string;
+    upvoteCount: number;
+    downvoteCount: number;
+    userVote: string | null;
+  } | null;
+}
+
+/**
+ * Upvote a conversation/thread. Uses the backend vote_conversation mutation with vote_type="upvote".
+ * Returns the updated conversation with vote counts and current user's vote status.
+ */
+export const UPVOTE_CONVERSATION = gql`
+  mutation UpvoteConversation($conversationId: String!) {
+    voteConversation(conversationId: $conversationId, voteType: "upvote") {
+      ok
+      message
+      obj {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface UpvoteConversationInput {
+  conversationId: string;
+}
+
+export interface UpvoteConversationOutput {
+  voteConversation: VoteConversationResponse;
+}
+
+/**
+ * Downvote a conversation/thread. Uses the backend vote_conversation mutation with vote_type="downvote".
+ * Returns the updated conversation with vote counts and current user's vote status.
+ */
+export const DOWNVOTE_CONVERSATION = gql`
+  mutation DownvoteConversation($conversationId: String!) {
+    voteConversation(conversationId: $conversationId, voteType: "downvote") {
+      ok
+      message
+      obj {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface DownvoteConversationInput {
+  conversationId: string;
+}
+
+export interface DownvoteConversationOutput {
+  voteConversation: VoteConversationResponse;
+}
+
+/**
+ * Remove a vote from a conversation/thread.
+ * Returns the updated conversation with vote counts and current user's vote status (null after removal).
+ */
+export const REMOVE_CONVERSATION_VOTE = gql`
+  mutation RemoveConversationVote($conversationId: String!) {
+    removeConversationVote(conversationId: $conversationId) {
+      ok
+      message
+      obj {
+        id
+        upvoteCount
+        downvoteCount
+        userVote
+      }
+    }
+  }
+`;
+
+export interface RemoveConversationVoteInput {
+  conversationId: string;
+}
+
+export interface RemoveConversationVoteOutput {
+  removeConversationVote: VoteConversationResponse;
+}
+
+// ============================================================================
 // Moderation Mutations
 // ============================================================================
 
@@ -3325,5 +3428,48 @@ export interface EmptyTrashOutput {
     ok: boolean;
     message: string;
     deletedCount: number;
+  };
+}
+
+// ============================================================================
+// MODERATION MUTATIONS
+// ============================================================================
+
+export const ROLLBACK_MODERATION_ACTION = gql`
+  mutation RollbackModerationAction($actionId: ID!, $reason: String) {
+    rollbackModerationAction(actionId: $actionId, reason: $reason) {
+      ok
+      message
+      rollbackAction {
+        id
+        actionType
+        created
+        moderator {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+
+export interface RollbackModerationActionInput {
+  actionId: string;
+  reason?: string;
+}
+
+export interface RollbackModerationActionOutput {
+  rollbackModerationAction: {
+    ok: boolean;
+    message: string;
+    rollbackAction: {
+      id: string;
+      actionType: string;
+      created: string;
+      moderator: {
+        id: string;
+        username: string;
+      } | null;
+    } | null;
   };
 }

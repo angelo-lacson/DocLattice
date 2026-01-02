@@ -26,11 +26,16 @@ from opencontractserver.annotations.models import (
     NoteRevision,
     Relationship,
 )
-from opencontractserver.conversations.models import ChatMessage, Conversation
+from opencontractserver.conversations.models import (
+    ChatMessage,
+    Conversation,
+    ModerationAction,
+)
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusActionExecution,
+    CorpusCategory,
     CorpusDescriptionRevision,
     CorpusEngagementMetrics,
     CorpusFolder,
@@ -658,6 +663,14 @@ class LabelSetType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_token_label_count(self, info):
         return self.annotation_labels.filter(label_type="TOKEN_LABEL").count()
+
+    # Count of corpuses using this label set
+    corpus_count = graphene.Int(description="Number of corpuses using this label set")
+
+    def resolve_corpus_count(self, info):
+        """Return count of corpuses using this label set that are visible to the user."""
+        user = info.context.user
+        return self.corpus_set.visible_to_user(user).count()
 
     # To get ALL labels for a given labelset
     all_annotation_labels = graphene.Field(graphene.List(AnnotationLabelType))
@@ -1580,6 +1593,54 @@ class DocumentTypeConnection(CountableConnection):
         node = DocumentType
 
 
+# ---------------- Corpus Category Types ----------------
+class CorpusCategoryType(DjangoObjectType):
+    """
+    GraphQL type for corpus categories.
+
+    NOTE: This type does NOT use AnnotatePermissionsForReadMixin because
+    corpus categories are admin-provisioned structural data that is globally
+    visible to all users. Categories are managed via Django Admin only and
+    do not have per-user permissions.
+
+    See docs/permissioning/consolidated_permissioning_guide.md for details.
+    """
+
+    corpus_count = graphene.Int(description="Number of corpuses in this category")
+
+    class Meta:
+        model = CorpusCategory
+        interfaces = (relay.Node,)
+        connection_class = CountableConnection
+        fields = (
+            "id",
+            "name",
+            "description",
+            "icon",
+            "color",
+            "sort_order",
+            "creator",
+            "is_public",
+            "created",
+            "modified",
+        )
+
+    def resolve_corpus_count(self, info):
+        """
+        Return count of corpuses visible to user in this category.
+
+        NOTE: This resolver could cause N+1 queries if many categories are fetched.
+        The resolve_corpus_categories query uses annotation to pre-compute counts
+        to avoid this issue.
+        """
+        # If the count was pre-annotated by the query resolver, use it
+        if hasattr(self, "_corpus_count"):
+            return self._corpus_count
+        # Fallback to dynamic count (used when accessed individually)
+        user = info.context.user
+        return self.corpuses.visible_to_user(user).count()
+
+
 # ---------------- Engagement Metrics Types (Epic #565) ----------------
 class CorpusEngagementMetricsType(graphene.ObjectType):
     """
@@ -1816,6 +1877,13 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return self.engagement_metrics
         except CorpusEngagementMetrics.DoesNotExist:
             return None
+
+    # Categories
+    categories = graphene.List(lambda: CorpusCategoryType)
+
+    def resolve_categories(self, info):
+        """Get all categories assigned to this corpus."""
+        return self.categories.all()
 
     class Meta:
         model = Corpus
@@ -2475,6 +2543,9 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     conversation_type = graphene.Field(
         ConversationTypeEnum, description="Type of conversation (chat or thread)"
     )
+    user_vote = graphene.String(
+        description="Current user's vote on this conversation: 'UPVOTE', 'DOWNVOTE', or null"
+    )
 
     def resolve_all_messages(self, info):
         return self.chat_messages.all()
@@ -2483,6 +2554,26 @@ class ConversationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """Convert string conversation_type from model to enum."""
         if self.conversation_type:
             return ConversationTypeEnum.get(self.conversation_type)
+        return None
+
+    def resolve_user_vote(self, info):
+        """
+        Returns the current user's vote on this conversation/thread.
+
+        Returns:
+            'UPVOTE' if the user has upvoted the conversation
+            'DOWNVOTE' if the user has downvoted the conversation
+            None if the user has not voted or is not authenticated
+        """
+        user = info.context.user
+        if not user or not user.is_authenticated:
+            return None
+
+        from opencontractserver.conversations.models import ConversationVote
+
+        vote = ConversationVote.objects.filter(conversation=self, creator=user).first()
+        if vote:
+            return vote.vote_type.upper()  # Return 'UPVOTE' or 'DOWNVOTE'
         return None
 
     @classmethod
@@ -3044,3 +3135,68 @@ class CommunityStatsType(graphene.ObjectType):
     active_users_this_month = graphene.Int(
         description="Users who posted in last 30 days"
     )
+
+
+# ==============================================================================
+# MODERATION TYPES
+# ==============================================================================
+
+
+class ModerationActionType(DjangoObjectType):
+    """GraphQL type for ModerationAction audit records."""
+
+    class Meta:
+        model = ModerationAction
+        interfaces = (relay.Node,)
+        fields = [
+            "id",
+            "conversation",
+            "message",
+            "action_type",
+            "moderator",
+            "reason",
+            "created",
+            "modified",
+        ]
+
+    # Additional computed fields
+    corpus_id = graphene.ID(description="Corpus ID if action is on a corpus thread")
+    is_automated = graphene.Boolean(description="Whether this was an automated action")
+    can_rollback = graphene.Boolean(
+        description="Whether this action can be rolled back"
+    )
+
+    def resolve_corpus_id(self, info):
+        """Get corpus ID from conversation if linked."""
+        if self.conversation and self.conversation.chat_with_corpus:
+            return to_global_id("CorpusType", self.conversation.chat_with_corpus.pk)
+        return None
+
+    def resolve_is_automated(self, info):
+        """Check if this was an automated (agent) action - no human moderator."""
+        return self.moderator is None
+
+    def resolve_can_rollback(self, info):
+        """Check if this action can be rolled back."""
+        rollback_types = {
+            "delete_message",
+            "delete_thread",
+            "lock_thread",
+            "pin_thread",
+        }
+        return self.action_type in rollback_types
+
+
+class ModerationMetricsType(graphene.ObjectType):
+    """Aggregated moderation metrics for monitoring."""
+
+    total_actions = graphene.Int()
+    automated_actions = graphene.Int()
+    manual_actions = graphene.Int()
+    actions_by_type = GenericScalar()  # Dict[action_type, count]
+    hourly_action_rate = graphene.Float()
+    is_above_threshold = graphene.Boolean()
+    threshold_exceeded_types = graphene.List(graphene.String)
+    time_range_hours = graphene.Int()
+    start_time = graphene.DateTime()
+    end_time = graphene.DateTime()

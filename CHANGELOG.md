@@ -5,7 +5,95 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-02
+
+### Added
+
+#### Documents Page Redesign
+- **Documents view redesign** (`frontend/src/views/Documents.tsx`): Modern document listing page using @os-legal/ui components
+  - Hero section with search and filter tabs (All, Processed, Processing)
+  - Stats grid showing document, page, and annotation counts
+  - Three view modes: Grid, List, and Compact views
+  - Advanced filters popup for corpus, label, and labelset filtering
+  - Context menu for document actions (view, edit, add to corpus, delete)
+  - Bulk selection and operations support
+  - Status badges for processing documents
+- **Utility functions** (`frontend/src/utils/formatters.ts`): Shared formatting utilities
+  - `formatFileSize`: Human-readable file size (0 B, KB, MB)
+  - `formatRelativeTime`: Relative time descriptions ("Just now", "5 hours ago")
+  - `formatCompactRelativeTime`: Compact time format ("5h ago", "3d ago")
+  - `getInitials`: Avatar initials from name/email
+- **Component tests** (`frontend/tests/Documents.ct.tsx`): 8 Playwright component tests covering view modes, filtering, search, and selection
+
+### Fixed
+
+#### Formatter Robustness
+- **Zero byte handling** (`frontend/src/utils/formatters.ts:9`): `formatFileSize` now correctly returns "0 B" for 0 bytes instead of empty string
+- **Invalid date handling** (`frontend/src/utils/formatters.ts:25,50`): Both `formatRelativeTime` and `formatCompactRelativeTime` now return empty string for invalid/unparseable date strings instead of NaN-based output
+
+#### Documents View Cleanup
+- **Removed long-polling** (`frontend/src/views/Documents.tsx`): Removed document processing polling in favor of WebSocket-based notifications, eliminating potential memory leak from interval timers
+- **Type safety** (`frontend/src/views/Documents.tsx:1192`): Removed unnecessary `as any` type assertion in `navigateToDocument` call
+
+### Changed
+- **View modes enum** (`frontend/src/assets/configurations/constants.ts`): Added `VIEW_MODES` and `STATUS_FILTERS` constants for Documents page
+
+---
+
+## [Unreleased] - 2026-01-01
+
+### Added
+
+#### Corpuses Page Redesign
+- **CorpusListView component** (`frontend/src/components/corpuses/CorpusListView.tsx`): Modern corpus listing page using @os-legal/ui components
+  - Hero section with search and filter tabs (All, My Corpuses, Shared, Public)
+  - Stats grid showing corpus, document, annotation, and shared counts
+  - CollectionCard components with category badges, visibility status, and labelset information
+  - Context menu for edit, view, export, fork, and delete actions
+  - Infinite scroll support for large corpus lists
+- **PostHog Analytics Integration** (`frontend/src/utils/analytics.ts`): Consent-based analytics tracking
+  - Cookie consent banner integration
+  - Automatic test/CI environment detection to prevent analytics in non-production
+  - User identification and event tracking functions
+  - Page view tracking for SPA navigation
+- **Component tests** (`frontend/tests/CorpusListView.ct.tsx`): 12 Playwright component tests for CorpusListView
+- **Unit tests** (`frontend/src/utils/__tests__/analytics.test.ts`): 20 Vitest tests for analytics utility functions
+
+### Fixed
+
+#### Routing Audit Follow-ups
+- **Notification navigation fallback** (`frontend/src/components/notifications/NotificationDropdown.tsx:182-188`, `NotificationCenter.tsx:207-213`): Added fallback navigation to `/discussions` when corpus slug data is missing. Previously, users clicking notifications with missing slug data would see no response.
+- **Network-only fetch policy optimization** (`frontend/src/routing/CentralRouteManager.tsx:621-632`): Changed thread resolution corpus query from `network-only` to `cache-and-network` since `authInitComplete` now ensures `clearStore()` completes before route queries run. This improves navigation performance when corpus data is already cached.
+- **Unit test coverage** (`frontend/src/utils/__tests__/navigationUtils.test.ts:497-503`): Added missing test for `parseRoute("/discussions")` to prevent regression of discussions route parsing.
+
+#### Type Safety and Bug Fixes
+- **User email detection** (`frontend/src/components/corpuses/CorpusListView.tsx:345-349`): Fixed currentUserEmail logic to use `userObj` reactive variable from Apollo cache instead of inferring from corpus permissions - prevents filter failures when no corpus has CAN_REMOVE permission
+- **TypeScript type casts** (`frontend/src/components/corpuses/CorpusListView.tsx`, `CorpusModal.tsx`): Removed 7 `as any` type casts by correcting `CorpusType.categories` type from `CorpusCategoryTypeConnection` to `CorpusCategoryType[]` to match backend GraphQL schema
+- **N+1 query prevention** (`config/graphql/queries.py:820-825`): Added `prefetch_related("categories")` to `resolve_corpuses` to avoid N+1 queries when fetching corpus categories
+
+### Changed
+- **Deleted CorpusCards component** (`frontend/src/components/corpuses/CorpusCards.tsx`): Replaced by CorpusListView with @os-legal/ui components
+
+---
+
 ## [Unreleased] - 2025-12-31
+
+### Added
+
+#### Corpus Categories and Landing Page Redesign
+- **CorpusCategory model** (`opencontractserver/corpuses/models.py`): New model for organizing corpuses by type (Legislation, Contracts, Case Law, Knowledge)
+  - Admin-provisioned structural data - managed via Django Admin only
+  - ManyToMany relationship with Corpus for flexible categorization
+  - Default categories seeded via migration (`0035_seed_default_categories.py`)
+- **CorpusCategoryType GraphQL type** (`config/graphql/graphene_types.py:1589-1633`):
+  - Globally visible to all users (no individual permissions)
+  - `corpusCount` field with N+1 query optimization via annotation
+- **Landing page redesign** using @os-legal/ui component library:
+  - `CompactLeaderboard` component - clean list-based leaderboard replacing grid cards
+  - `CategorySelector` component for corpus categorization
+  - Skeleton loading states and error handling throughout
+- **TypeScript types** (`frontend/src/types/graphql-api.ts`): Added `CorpusCategoryType`, `CorpusCategoryTypeConnection`, `CorpusCategoryTypeEdge`
+- **Array utilities** (`frontend/src/utils/arrayUtils.ts`): `arraysEqualUnordered` and `arraysEqualOrdered` for DRY comparison logic
 
 ### Fixed
 
@@ -15,6 +103,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SSE transport support** (`opencontractserver/mcp/server.py:367-397`): Added deprecated SSE transport at `/sse` for backward compatibility with older MCP clients that don't support Streamable HTTP transport
 - **ASGI router update** (`config/asgi.py:70-84`): Extended HTTP router to dispatch both `/mcp/*` and `/sse/*` paths to the MCP ASGI app
 - **Documentation update** (`docs/mcp/README.md`): Updated to document both Streamable HTTP (recommended) and SSE (deprecated) transport options
+
+#### Security and Performance
+- **System user security** (`opencontractserver/corpuses/migrations/0035_seed_default_categories.py`): Defense-in-depth with unusable password for system user
+- **N+1 query in corpusCount** (`config/graphql/queries.py:835-866`): Pre-annotated counts in `resolve_corpus_categories` resolver
+- **Type safety** (`frontend/src/components/corpuses/CorpusModal.tsx`, `CorpusSettings.tsx`): Removed `as any` casts for categories field
+
+### Changed
+- **Permission model** (`config/graphql/graphene_types.py`): `CorpusCategoryType` no longer uses `AnnotatePermissionsForReadMixin` - categories are globally visible structural data
+- **Documentation** (`docs/permissioning/consolidated_permissioning_guide.md`): Added section on CorpusCategory permissions
+
+### Technical Details
+- Categories are created by a `system` user with `is_active=False` and unusable password
+- `corpusCount` respects user visibility: anonymous sees public corpuses only, authenticated users see corpuses they have access to
+- Removed 632-line `TopContributors.tsx` component, replaced with ~280-line `CompactLeaderboard.tsx`
+
+---
+
+## [Unreleased] - 2025-12-29
+
+### Added
+
+#### Moderation Dashboard and Rollback Features (Issue #742)
+- **ModerationActionType GraphQL type** (`config/graphql/graphene_types.py:3071-3121`): Exposes ModerationAction audit records with computed fields:
+  - `corpusId`: Links to parent corpus for filtering
+  - `isAutomated`: Identifies agent vs. human moderation
+  - `canRollback`: Indicates whether action can be undone
+- **ModerationMetricsType** (`config/graphql/graphene_types.py:3109-3121`): Aggregated metrics for monitoring moderation activity:
+  - Total/automated/manual action counts
+  - Hourly action rate with threshold alerting
+  - Actions grouped by type
+- **New GraphQL queries** (`config/graphql/queries.py:1875-2043`):
+  - `moderationActions`: Filterable query for audit logs (corpus, thread, moderator, action type)
+  - `moderationAction`: Single action lookup by ID
+  - `moderationMetrics`: Aggregated stats with threshold violations
+- **RollbackModerationActionMutation** (`config/graphql/moderation_mutations.py:594-707`): Undo automated moderation actions:
+  - Supports rollback of delete_message, delete_thread, lock_thread, pin_thread
+  - Creates new audit record for the rollback
+  - Permission-gated to moderators
+- **DeleteThreadMutation and RestoreThreadMutation** (`config/graphql/moderation_mutations.py:267-363`): Complete thread lifecycle management for frontend
+- **ModerationDashboard component** (`frontend/src/components/moderation/ModerationDashboard.tsx`): Full-featured moderation UI:
+  - Metrics display with threshold alerts
+  - Filterable action table (action type, automated only)
+  - Rollback confirmation modal
+  - Time range selector (1h, 24h, 7d, 30d)
+- **Dynamic tool fetching** (`frontend/src/components/corpuses/CreateCorpusActionModal.tsx`): Replaces hardcoded moderation tools with GraphQL query to `availableTools(category: "moderation")`
+
+### Fixed
+
+#### Race Condition in Agent Thread Actions (Issue #742)
+- **Fixed TOCTOU vulnerability** (`opencontractserver/tasks/agent_tasks.py:859-898`): Added `select_for_update()` with `transaction.atomic()` to prevent duplicate agent execution claims
+
+#### Tool Validation for Inline Agents (Issue #742)
+- **Added tool category validation** (`config/graphql/mutations.py:3875-3897`): CreateCorpusAction now validates that inline agent tools are from the MODERATION category when using thread/message triggers
+
+## [Unreleased] - 2025-12-28
 
 ### Added
 

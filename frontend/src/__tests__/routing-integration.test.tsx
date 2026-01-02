@@ -23,6 +23,7 @@ import {
   routeLoading,
   routeError,
   authStatusVar,
+  authInitCompleteVar,
 } from "../graphql/cache";
 import {
   RESOLVE_CORPUS_BY_SLUGS_FULL,
@@ -102,6 +103,7 @@ describe("Routing Integration - Full Flow", () => {
     // CRITICAL: Set auth status so CentralRouteManager proceeds with entity fetching
     // Without this, CentralRouteManager waits forever for auth to initialize
     authStatusVar("AUTHENTICATED");
+    authInitCompleteVar(true);
   });
 
   afterEach(() => {

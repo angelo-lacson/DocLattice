@@ -10,6 +10,7 @@ Tests cover:
 """
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 from django.test import TestCase
 
 from opencontractserver.conversations.models import (
@@ -97,7 +98,7 @@ class CorpusModeratorModelTest(TestCase):
         )
 
         # Attempting to create another moderator record for the same user/corpus should fail
-        with self.assertRaises(Exception):  # IntegrityError
+        with self.assertRaises(IntegrityError):
             CorpusModerator.objects.create(
                 corpus=self.corpus,
                 user=self.moderator_user,
@@ -188,7 +189,7 @@ class ConversationModerationTest(TestCase):
         actions = ModerationAction.objects.filter(conversation=self.conversation)
         self.assertEqual(actions.count(), 1)
         action = actions.first()
-        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD.value)
         self.assertEqual(action.moderator, self.moderator_user)
         self.assertEqual(action.reason, "Violates community guidelines")
 
@@ -211,8 +212,10 @@ class ConversationModerationTest(TestCase):
             conversation=self.conversation
         ).order_by("created_at")
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.LOCK_THREAD)
-        self.assertEqual(actions[1].action_type, ModerationActionType.UNLOCK_THREAD)
+        self.assertEqual(actions[0].action_type, ModerationActionType.LOCK_THREAD.value)
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.UNLOCK_THREAD.value
+        )
         self.assertEqual(actions[1].reason, "Issue resolved")
 
     def test_lock_permission_denied(self):
@@ -238,7 +241,7 @@ class ConversationModerationTest(TestCase):
 
         # Check audit trail
         action = ModerationAction.objects.get(conversation=self.conversation)
-        self.assertEqual(action.action_type, ModerationActionType.PIN_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.PIN_THREAD.value)
         self.assertEqual(action.moderator, self.moderator_user)
         self.assertEqual(action.reason, "Important announcement")
 
@@ -261,8 +264,10 @@ class ConversationModerationTest(TestCase):
             conversation=self.conversation
         ).order_by("created_at")
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.PIN_THREAD)
-        self.assertEqual(actions[1].action_type, ModerationActionType.UNPIN_THREAD)
+        self.assertEqual(actions[0].action_type, ModerationActionType.PIN_THREAD.value)
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.UNPIN_THREAD.value
+        )
 
     def test_pin_permission_denied(self):
         """Test that non-moderators cannot pin conversations."""
@@ -283,7 +288,7 @@ class ConversationModerationTest(TestCase):
 
         # Check audit trail
         action = ModerationAction.objects.get(conversation=self.conversation)
-        self.assertEqual(action.action_type, ModerationActionType.DELETE_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.DELETE_THREAD.value)
         self.assertEqual(action.moderator, self.moderator_user)
         self.assertEqual(action.reason, "Spam content")
 
@@ -311,8 +316,12 @@ class ConversationModerationTest(TestCase):
             conversation=self.conversation
         ).order_by("created_at")
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.DELETE_THREAD)
-        self.assertEqual(actions[1].action_type, ModerationActionType.RESTORE_THREAD)
+        self.assertEqual(
+            actions[0].action_type, ModerationActionType.DELETE_THREAD.value
+        )
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.RESTORE_THREAD.value
+        )
         self.assertEqual(actions[1].reason, "False positive")
 
         # Conversation should appear in default queryset again
@@ -398,7 +407,7 @@ class ChatMessageModerationTest(TestCase):
 
         # Check audit trail
         action = ModerationAction.objects.get(message=self.message)
-        self.assertEqual(action.action_type, ModerationActionType.DELETE_MESSAGE)
+        self.assertEqual(action.action_type, ModerationActionType.DELETE_MESSAGE.value)
         self.assertEqual(action.moderator, self.moderator_user)
         self.assertEqual(action.conversation, self.conversation)
         self.assertEqual(action.reason, "Inappropriate content")
@@ -425,8 +434,12 @@ class ChatMessageModerationTest(TestCase):
             "created_at"
         )
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.DELETE_MESSAGE)
-        self.assertEqual(actions[1].action_type, ModerationActionType.RESTORE_MESSAGE)
+        self.assertEqual(
+            actions[0].action_type, ModerationActionType.DELETE_MESSAGE.value
+        )
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.RESTORE_MESSAGE.value
+        )
         self.assertEqual(actions[1].reason, "Reinstated")
 
         # Message should appear in default queryset again
@@ -482,7 +495,7 @@ class ModerationActionModelTest(TestCase):
         """Test the string representation of ModerationAction."""
         action = ModerationAction.objects.create(
             conversation=self.conversation,
-            action_type=ModerationActionType.LOCK_THREAD,
+            action_type=ModerationActionType.LOCK_THREAD.value,
             moderator=self.owner,
             reason="Test reason",
             creator=self.owner,
@@ -496,14 +509,14 @@ class ModerationActionModelTest(TestCase):
         # Create multiple actions
         action1 = ModerationAction.objects.create(
             conversation=self.conversation,
-            action_type=ModerationActionType.LOCK_THREAD,
+            action_type=ModerationActionType.LOCK_THREAD.value,
             moderator=self.owner,
             creator=self.owner,
         )
 
         action2 = ModerationAction.objects.create(
             conversation=self.conversation,
-            action_type=ModerationActionType.PIN_THREAD,
+            action_type=ModerationActionType.PIN_THREAD.value,
             moderator=self.owner,
             creator=self.owner,
         )
@@ -517,7 +530,7 @@ class ModerationActionModelTest(TestCase):
         """Test that moderation actions serve as immutable audit trail."""
         ModerationAction.objects.create(
             conversation=self.conversation,
-            action_type=ModerationActionType.LOCK_THREAD,
+            action_type=ModerationActionType.LOCK_THREAD.value,
             moderator=self.owner,
             reason="Original reason",
             creator=self.owner,
@@ -531,8 +544,10 @@ class ModerationActionModelTest(TestCase):
             conversation=self.conversation
         ).order_by("created_at")
         self.assertEqual(actions.count(), 2)
-        self.assertEqual(actions[0].action_type, ModerationActionType.LOCK_THREAD)
-        self.assertEqual(actions[1].action_type, ModerationActionType.UNLOCK_THREAD)
+        self.assertEqual(actions[0].action_type, ModerationActionType.LOCK_THREAD.value)
+        self.assertEqual(
+            actions[1].action_type, ModerationActionType.UNLOCK_THREAD.value
+        )
 
 
 class NonCorpusConversationModerationTest(TestCase):
@@ -571,7 +586,7 @@ class NonCorpusConversationModerationTest(TestCase):
 
         # Check audit trail
         action = ModerationAction.objects.get(conversation=self.conversation)
-        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD)
+        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD.value)
         self.assertEqual(action.moderator, self.creator)
 
 
@@ -760,3 +775,631 @@ class ModerationMutationIDORTest(TestCase):
         self.assertEqual(
             result["data"]["updateModeratorPermissions"]["message"], "Corpus not found"
         )
+
+
+class DeleteRestoreThreadMutationTest(TestCase):
+    """Test DeleteThread and RestoreThread mutations."""
+
+    def setUp(self):
+        """Set up test data."""
+        from graphene.test import Client
+
+        from config.graphql.schema import schema
+
+        self.owner = User.objects.create_user(
+            username="thread_owner",
+            password="testpass123",
+            email="owner@test.com",
+        )
+        self.other_user = User.objects.create_user(
+            username="other_user",
+            password="testpass123",
+            email="other@test.com",
+        )
+        self.moderator_user = User.objects.create_user(
+            username="thread_mod",
+            password="testpass123",
+            email="mod@test.com",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.owner,
+            is_public=False,
+        )
+
+        self.conversation = Conversation.objects.create(
+            title="Test Thread",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.owner,
+        )
+
+        # Add moderator with delete permissions
+        CorpusModerator.objects.create(
+            corpus=self.corpus,
+            user=self.moderator_user,
+            permissions=["delete_threads"],
+            creator=self.owner,
+        )
+
+        self.client = Client(schema)
+
+    def test_delete_thread_mutation(self):
+        """Test deleting a thread via GraphQL mutation."""
+        from graphql_relay import to_global_id
+
+        conv_global_id = to_global_id("ConversationType", self.conversation.id)
+
+        mutation = f"""
+            mutation DeleteThread {{
+                deleteThread(
+                    conversationId: "{conv_global_id}"
+                    reason: "Test deletion"
+                ) {{
+                    ok
+                    message
+                    conversation {{
+                        id
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.moderator_user})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["deleteThread"]["ok"])
+        self.assertEqual(
+            result["data"]["deleteThread"]["message"], "Thread deleted successfully"
+        )
+
+        # Verify thread is soft-deleted
+        self.conversation.refresh_from_db()
+        self.assertIsNotNone(self.conversation.deleted_at)
+
+        # Verify moderation action was created
+        action = ModerationAction.objects.filter(
+            conversation=self.conversation,
+            action_type=ModerationActionType.DELETE_THREAD.value,
+        ).first()
+        self.assertIsNotNone(action)
+        self.assertEqual(action.reason, "Test deletion")
+
+    def test_delete_thread_permission_denied(self):
+        """Test that non-moderators cannot delete threads."""
+        from graphql_relay import to_global_id
+
+        conv_global_id = to_global_id("ConversationType", self.conversation.id)
+
+        mutation = f"""
+            mutation DeleteThread {{
+                deleteThread(conversationId: "{conv_global_id}") {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.other_user})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["deleteThread"]["ok"])
+        self.assertEqual(
+            result["data"]["deleteThread"]["message"],
+            "Thread not found or access denied",
+        )
+
+    def test_restore_thread_mutation(self):
+        """Test restoring a deleted thread via GraphQL mutation."""
+        from graphql_relay import to_global_id
+
+        # First delete the thread
+        self.conversation.soft_delete_thread(self.owner)
+        self.assertIsNotNone(self.conversation.deleted_at)
+
+        conv_global_id = to_global_id("ConversationType", self.conversation.id)
+
+        mutation = f"""
+            mutation RestoreThread {{
+                restoreThread(
+                    conversationId: "{conv_global_id}"
+                    reason: "Restored after review"
+                ) {{
+                    ok
+                    message
+                    conversation {{
+                        id
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["restoreThread"]["ok"])
+        self.assertEqual(
+            result["data"]["restoreThread"]["message"], "Thread restored successfully"
+        )
+
+        # Verify thread is restored
+        self.conversation.refresh_from_db()
+        self.assertIsNone(self.conversation.deleted_at)
+
+
+class RollbackModerationActionMutationTest(TestCase):
+    """Test RollbackModerationAction mutation."""
+
+    def setUp(self):
+        """Set up test data."""
+        from graphene.test import Client
+
+        from config.graphql.schema import schema
+
+        self.owner = User.objects.create_user(
+            username="rollback_owner",
+            password="testpass123",
+            email="rollback@test.com",
+        )
+        self.other_user = User.objects.create_user(
+            username="rollback_other",
+            password="testpass123",
+            email="other@test.com",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Rollback Test Corpus",
+            creator=self.owner,
+        )
+
+        self.conversation = Conversation.objects.create(
+            title="Rollback Test Thread",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.owner,
+        )
+
+        self.client = Client(schema)
+
+    def test_rollback_lock_action(self):
+        """Test rolling back a lock action unlocks the thread."""
+        from graphql_relay import to_global_id
+
+        # Lock the thread
+        lock_action = self.conversation.lock(self.owner, reason="Locked for test")
+        self.assertTrue(self.conversation.is_locked)
+
+        action_global_id = to_global_id("ModerationActionType", lock_action.id)
+
+        mutation = f"""
+            mutation RollbackAction {{
+                rollbackModerationAction(
+                    actionId: "{action_global_id}"
+                    reason: "Rolling back lock"
+                ) {{
+                    ok
+                    message
+                    rollbackAction {{
+                        id
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["rollbackModerationAction"]["ok"])
+        self.assertIn(
+            "Successfully rolled back",
+            result["data"]["rollbackModerationAction"]["message"],
+        )
+
+        # Verify thread is unlocked
+        self.conversation.refresh_from_db()
+        self.assertFalse(self.conversation.is_locked)
+
+        # Verify rollback action was created
+        self.assertIsNotNone(
+            result["data"]["rollbackModerationAction"]["rollbackAction"]
+        )
+
+    def test_rollback_pin_action(self):
+        """Test rolling back a pin action unpins the thread."""
+        from graphql_relay import to_global_id
+
+        # Pin the thread
+        pin_action = self.conversation.pin(self.owner, reason="Pinned for test")
+        self.assertTrue(self.conversation.is_pinned)
+
+        action_global_id = to_global_id("ModerationActionType", pin_action.id)
+
+        mutation = f"""
+            mutation RollbackAction {{
+                rollbackModerationAction(actionId: "{action_global_id}") {{
+                    ok
+                    message
+                    rollbackAction {{
+                        id
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["rollbackModerationAction"]["ok"])
+
+        # Verify thread is unpinned
+        self.conversation.refresh_from_db()
+        self.assertFalse(self.conversation.is_pinned)
+
+        # Verify rollback action was created
+        self.assertIsNotNone(
+            result["data"]["rollbackModerationAction"]["rollbackAction"]
+        )
+
+    def test_rollback_delete_thread_action(self):
+        """Test rolling back a delete action restores the thread."""
+        from graphql_relay import to_global_id
+
+        # Delete the thread
+        delete_action = self.conversation.soft_delete_thread(
+            self.owner, reason="Deleted for test"
+        )
+        self.assertIsNotNone(self.conversation.deleted_at)
+
+        action_global_id = to_global_id("ModerationActionType", delete_action.id)
+
+        mutation = f"""
+            mutation RollbackAction {{
+                rollbackModerationAction(actionId: "{action_global_id}") {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["rollbackModerationAction"]["ok"])
+
+        # Verify thread is restored
+        self.conversation.refresh_from_db()
+        self.assertIsNone(self.conversation.deleted_at)
+
+    def test_rollback_non_rollbackable_action(self):
+        """Test that already-rolled-back actions cannot be rolled back."""
+        from graphql_relay import to_global_id
+
+        # Create an unlock action (which is a rollback of lock, not rollbackable itself)
+        self.conversation.lock(self.owner)
+        unlock_action = self.conversation.unlock(self.owner)
+
+        action_global_id = to_global_id("ModerationActionType", unlock_action.id)
+
+        mutation = f"""
+            mutation RollbackAction {{
+                rollbackModerationAction(actionId: "{action_global_id}") {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["rollbackModerationAction"]["ok"])
+        self.assertIn(
+            "cannot be rolled back",
+            result["data"]["rollbackModerationAction"]["message"],
+        )
+
+    def test_rollback_permission_denied(self):
+        """Test that non-moderators cannot rollback actions."""
+        from graphql_relay import to_global_id
+
+        lock_action = self.conversation.lock(self.owner)
+        action_global_id = to_global_id("ModerationActionType", lock_action.id)
+
+        mutation = f"""
+            mutation RollbackAction {{
+                rollbackModerationAction(actionId: "{action_global_id}") {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.other_user})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["rollbackModerationAction"]["ok"])
+        self.assertIn(
+            "permission",
+            result["data"]["rollbackModerationAction"]["message"].lower(),
+        )
+
+    def test_rollback_nonexistent_action(self):
+        """Test rolling back a non-existent action."""
+        from graphql_relay import to_global_id
+
+        fake_action_id = to_global_id("ModerationActionType", 999999)
+
+        mutation = f"""
+            mutation RollbackAction {{
+                rollbackModerationAction(actionId: "{fake_action_id}") {{
+                    ok
+                    message
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            mutation,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["rollbackModerationAction"]["ok"])
+        self.assertIn(
+            "not found", result["data"]["rollbackModerationAction"]["message"]
+        )
+
+
+class ModerationQueriesTest(TestCase):
+    """Test moderation-related GraphQL queries."""
+
+    def setUp(self):
+        """Set up test data."""
+        from graphene.test import Client
+
+        from config.graphql.schema import schema
+
+        self.owner = User.objects.create_user(
+            username="queries_owner",
+            password="testpass123",
+            email="queries@test.com",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Queries Test Corpus",
+            creator=self.owner,
+        )
+
+        self.conversation = Conversation.objects.create(
+            title="Queries Test Thread",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.owner,
+        )
+
+        # Create some moderation actions
+        self.lock_action = self.conversation.lock(self.owner, reason="Lock reason")
+        self.pin_action = self.conversation.pin(self.owner, reason="Pin reason")
+
+        self.client = Client(schema)
+
+    def test_moderation_actions_query(self):
+        """Test querying moderation actions for a corpus."""
+        from graphql_relay import to_global_id
+
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+
+        query = f"""
+            query ModerationActions {{
+                moderationActions(corpusId: "{corpus_global_id}", first: 10) {{
+                    edges {{
+                        node {{
+                            id
+                            actionType
+                            reason
+                            moderator {{
+                                username
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            query,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        edges = result["data"]["moderationActions"]["edges"]
+        self.assertEqual(len(edges), 2)
+
+        action_types = [edge["node"]["actionType"] for edge in edges]
+        self.assertIn("LOCK_THREAD", action_types)
+        self.assertIn("PIN_THREAD", action_types)
+
+    def test_moderation_action_query(self):
+        """Test querying a single moderation action by ID."""
+        from graphql_relay import to_global_id
+
+        action_global_id = to_global_id("ModerationActionType", self.lock_action.id)
+
+        query = f"""
+            query ModerationAction {{
+                moderationAction(id: "{action_global_id}") {{
+                    id
+                    actionType
+                    reason
+                    canRollback
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            query,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        action = result["data"]["moderationAction"]
+        self.assertIsNotNone(action)
+        self.assertEqual(action["actionType"], "LOCK_THREAD")
+        self.assertEqual(action["reason"], "Lock reason")
+        self.assertTrue(action["canRollback"])
+
+    def test_moderation_metrics_query(self):
+        """Test querying moderation metrics for a corpus."""
+        from graphql_relay import to_global_id
+
+        corpus_global_id = to_global_id("CorpusType", self.corpus.id)
+
+        query = f"""
+            query ModerationMetrics {{
+                moderationMetrics(corpusId: "{corpus_global_id}", timeRangeHours: 24) {{
+                    totalActions
+                    automatedActions
+                    manualActions
+                    hourlyActionRate
+                    isAboveThreshold
+                    thresholdExceededTypes
+                }}
+            }}
+        """
+
+        result = self.client.execute(
+            query,
+            context_value=type("Request", (), {"user": self.owner})(),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        metrics = result["data"]["moderationMetrics"]
+        self.assertIsNotNone(metrics)
+        self.assertEqual(metrics["totalActions"], 2)
+        self.assertEqual(metrics["manualActions"], 2)
+        self.assertEqual(metrics["automatedActions"], 0)
+
+
+class ModerationMethodReturnValueTest(TestCase):
+    """Test that moderation methods return the created ModerationAction."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.owner = User.objects.create_user(
+            username="return_owner",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Return Test Corpus",
+            creator=self.owner,
+        )
+        self.conversation = Conversation.objects.create(
+            title="Return Test Thread",
+            conversation_type=ConversationTypeChoices.THREAD,
+            chat_with_corpus=self.corpus,
+            creator=self.owner,
+        )
+
+    def test_lock_returns_moderation_action(self):
+        """Test that lock() returns the created ModerationAction."""
+        action = self.conversation.lock(self.owner, reason="Test lock")
+
+        self.assertIsInstance(action, ModerationAction)
+        self.assertEqual(action.action_type, ModerationActionType.LOCK_THREAD.value)
+        self.assertEqual(action.moderator, self.owner)
+        self.assertEqual(action.reason, "Test lock")
+
+    def test_unlock_returns_moderation_action(self):
+        """Test that unlock() returns the created ModerationAction."""
+        self.conversation.lock(self.owner)
+        action = self.conversation.unlock(self.owner, reason="Test unlock")
+
+        self.assertIsInstance(action, ModerationAction)
+        self.assertEqual(action.action_type, ModerationActionType.UNLOCK_THREAD.value)
+
+    def test_pin_returns_moderation_action(self):
+        """Test that pin() returns the created ModerationAction."""
+        action = self.conversation.pin(self.owner, reason="Test pin")
+
+        self.assertIsInstance(action, ModerationAction)
+        self.assertEqual(action.action_type, ModerationActionType.PIN_THREAD.value)
+
+    def test_unpin_returns_moderation_action(self):
+        """Test that unpin() returns the created ModerationAction."""
+        self.conversation.pin(self.owner)
+        action = self.conversation.unpin(self.owner, reason="Test unpin")
+
+        self.assertIsInstance(action, ModerationAction)
+        self.assertEqual(action.action_type, ModerationActionType.UNPIN_THREAD.value)
+
+    def test_soft_delete_thread_returns_moderation_action(self):
+        """Test that soft_delete_thread() returns the created ModerationAction."""
+        action = self.conversation.soft_delete_thread(self.owner, reason="Test delete")
+
+        self.assertIsInstance(action, ModerationAction)
+        self.assertEqual(action.action_type, ModerationActionType.DELETE_THREAD.value)
+
+    def test_restore_thread_returns_moderation_action(self):
+        """Test that restore_thread() returns the created ModerationAction."""
+        self.conversation.soft_delete_thread(self.owner)
+        action = self.conversation.restore_thread(self.owner, reason="Test restore")
+
+        self.assertIsInstance(action, ModerationAction)
+        self.assertEqual(action.action_type, ModerationActionType.RESTORE_THREAD.value)
+
+    def test_soft_delete_message_returns_moderation_action(self):
+        """Test that soft_delete_message() returns the created ModerationAction."""
+        from opencontractserver.conversations.models import ChatMessage
+
+        message = ChatMessage.objects.create(
+            conversation=self.conversation,
+            msg_type="HUMAN",
+            content="Test message",
+            creator=self.owner,
+        )
+
+        action = message.soft_delete_message(self.owner, reason="Test delete message")
+
+        self.assertIsInstance(action, ModerationAction)
+        self.assertEqual(action.action_type, ModerationActionType.DELETE_MESSAGE.value)
+
+    def test_restore_message_returns_moderation_action(self):
+        """Test that restore_message() returns the created ModerationAction."""
+        from opencontractserver.conversations.models import ChatMessage
+
+        message = ChatMessage.objects.create(
+            conversation=self.conversation,
+            msg_type="HUMAN",
+            content="Test message",
+            creator=self.owner,
+        )
+        message.soft_delete_message(self.owner)
+        action = message.restore_message(self.owner, reason="Test restore message")
+
+        self.assertIsInstance(action, ModerationAction)
+        self.assertEqual(action.action_type, ModerationActionType.RESTORE_MESSAGE.value)

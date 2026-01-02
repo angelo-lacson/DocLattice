@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { color } from "../../theme/colors";
+import { getCorpusUrl } from "../../utils/navigationUtils";
 import { GetTrendingCorpusesOutput } from "../../graphql/landing-queries";
 
 interface TrendingCorpusesProps {
@@ -431,8 +432,9 @@ export const TrendingCorpuses: React.FC<TrendingCorpusesProps> = ({
   const handleCorpusClick = (
     corpus: GetTrendingCorpusesOutput["corpuses"]["edges"][0]["node"]
   ) => {
-    if (corpus.creator?.slug && corpus.slug) {
-      navigate(`/c/${corpus.creator.slug}/${corpus.slug}`);
+    const url = getCorpusUrl(corpus);
+    if (url !== "#") {
+      navigate(url);
     }
   };
 

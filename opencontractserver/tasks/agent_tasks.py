@@ -533,56 +533,47 @@ async def _run_agent_corpus_action_async(
         f"'{document.title}' (id={document_id})"
     )
 
-    # Create or get result record with atomic status claiming.
-    # Race condition prevention:
-    # 1. If record doesn't exist, create with RUNNING status
-    # 2. If record exists, atomically try to claim it by updating status to RUNNING
-    #    (only if not already RUNNING or COMPLETED)
-    # 3. If atomic update fails (0 rows affected), another task owns it - skip
+    # Create or claim result record using select_for_update for safety
     @database_sync_to_async
     def get_or_create_and_claim():
-        # First, try to get or create
-        result, created = AgentActionResult.objects.get_or_create(
-            corpus_action=action,
-            document=document,
-            defaults={
-                "creator_id": user_id,
-                "status": AgentActionResult.Status.RUNNING,
-                "started_at": timezone.now(),
-            },
-        )
+        from django.db import transaction
 
-        if created:
-            # We created it with RUNNING status, we own it
-            return result, "created"
-
-        # Record exists - try to atomically claim it
-        # Only update if status is NOT already RUNNING or COMPLETED
-        claimed = (
-            AgentActionResult.objects.filter(
-                pk=result.pk,
+        # Wrap entire operation in transaction to prevent race conditions.
+        # This ensures get/create and any subsequent lock/claim are atomic.
+        with transaction.atomic():
+            # Try to get existing record first with a lock
+            existing = (
+                AgentActionResult.objects.select_for_update()
+                .filter(
+                    corpus_action=action,
+                    document=document,
+                )
+                .first()
             )
-            .exclude(
-                status__in=[
-                    AgentActionResult.Status.RUNNING,
-                    AgentActionResult.Status.COMPLETED,
-                ]
-            )
-            .update(
-                status=AgentActionResult.Status.RUNNING,
-                started_at=timezone.now(),
-                error_message="",
-            )
-        )
 
-        if claimed:
-            # We successfully claimed it
-            result.refresh_from_db()
-            return result, "claimed"
+            if existing is None:
+                # No existing record, create new one
+                result = AgentActionResult.objects.create(
+                    corpus_action=action,
+                    document=document,
+                    creator_id=user_id,
+                    status=AgentActionResult.Status.RUNNING,
+                    started_at=timezone.now(),
+                )
+                return result, "created"
 
-        # Couldn't claim - it's RUNNING or COMPLETED
-        result.refresh_from_db()
-        return result, f"already_{result.status}"
+            # Record exists and we hold the lock - try to claim it
+            if existing.status not in [
+                AgentActionResult.Status.RUNNING,
+                AgentActionResult.Status.COMPLETED,
+            ]:
+                existing.status = AgentActionResult.Status.RUNNING
+                existing.started_at = timezone.now()
+                existing.error_message = ""
+                existing.save(update_fields=["status", "started_at", "error_message"])
+                return existing, "claimed"
+
+            return existing, f"already_{existing.status}"
 
     result, status = await get_or_create_and_claim()
 
@@ -859,43 +850,46 @@ async def _run_agent_thread_action_async(
     # Create or claim result record
     @database_sync_to_async
     def get_or_create_result():
-        # For thread-based actions, use triggering_conversation and triggering_message
-        result, created = AgentActionResult.objects.get_or_create(
-            corpus_action=action,
-            triggering_conversation=conversation,
-            triggering_message=message,
-            defaults={
-                "creator_id": user_id,
-                "status": AgentActionResult.Status.RUNNING,
-                "started_at": timezone.now(),
-            },
-        )
+        from django.db import transaction
 
-        if created:
-            return result, "created"
-
-        # Try to claim existing record
-        claimed = (
-            AgentActionResult.objects.filter(pk=result.pk)
-            .exclude(
-                status__in=[
-                    AgentActionResult.Status.RUNNING,
-                    AgentActionResult.Status.COMPLETED,
-                ]
+        # Wrap entire operation in transaction to prevent race conditions.
+        # This ensures get_or_create and any subsequent lock/claim are atomic.
+        with transaction.atomic():
+            # Try to get existing record first with a lock
+            existing = (
+                AgentActionResult.objects.select_for_update()
+                .filter(
+                    corpus_action=action,
+                    triggering_conversation=conversation,
+                    triggering_message=message,
+                )
+                .first()
             )
-            .update(
-                status=AgentActionResult.Status.RUNNING,
-                started_at=timezone.now(),
-                error_message="",
-            )
-        )
 
-        if claimed:
-            result.refresh_from_db()
-            return result, "claimed"
+            if existing is None:
+                # No existing record, create new one
+                result = AgentActionResult.objects.create(
+                    corpus_action=action,
+                    triggering_conversation=conversation,
+                    triggering_message=message,
+                    creator_id=user_id,
+                    status=AgentActionResult.Status.RUNNING,
+                    started_at=timezone.now(),
+                )
+                return result, "created"
 
-        result.refresh_from_db()
-        return result, f"already_{result.status}"
+            # Record exists and we hold the lock - try to claim it
+            if existing.status not in [
+                AgentActionResult.Status.RUNNING,
+                AgentActionResult.Status.COMPLETED,
+            ]:
+                existing.status = AgentActionResult.Status.RUNNING
+                existing.started_at = timezone.now()
+                existing.error_message = ""
+                existing.save(update_fields=["status", "started_at", "error_message"])
+                return existing, "claimed"
+
+            return existing, f"already_{existing.status}"
 
     result, status = await get_or_create_result()
 
@@ -912,17 +906,12 @@ async def _run_agent_thread_action_async(
             tools = action.agent_config.available_tools or []
 
         # Ensure moderation tools are available for thread actions
-        moderation_tools = [
-            "get_thread_context",
-            "get_thread_messages",
-            "get_message_content",
-            "delete_message",
-            "lock_thread",
-            "unlock_thread",
-            "add_thread_message",
-            "pin_thread",
-            "unpin_thread",
-        ]
+        # Use registry to get all moderation tools dynamically
+        from opencontractserver.llms.tools.tool_registry import (
+            get_moderation_tool_names,
+        )
+
+        moderation_tools = get_moderation_tool_names()
         for tool in moderation_tools:
             if tool not in tools:
                 tools.append(tool)

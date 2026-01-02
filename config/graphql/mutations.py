@@ -78,9 +78,12 @@ from config.graphql.graphene_types import (
 # Import moderation mutations
 from config.graphql.moderation_mutations import (
     AddModeratorMutation,
+    DeleteThreadMutation,
     LockThreadMutation,
     PinThreadMutation,
     RemoveModeratorMutation,
+    RestoreThreadMutation,
+    RollbackModerationActionMutation,
     UnlockThreadMutation,
     UnpinThreadMutation,
     UpdateModeratorPermissionsMutation,
@@ -111,7 +114,12 @@ from config.graphql.smart_label_mutations import (
 )
 
 # Import voting mutations
-from config.graphql.voting_mutations import RemoveVoteMutation, VoteMessageMutation
+from config.graphql.voting_mutations import (
+    RemoveConversationVoteMutation,
+    RemoveVoteMutation,
+    VoteConversationMutation,
+    VoteMessageMutation,
+)
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import (
@@ -818,6 +826,35 @@ class AcceptCookieConsent(graphene.Mutation):
             logger.error(f"Error recording cookie consent: {e}")
             return AcceptCookieConsent(
                 ok=False, message=f"Failed to record cookie consent: {str(e)}"
+            )
+
+
+class DismissGettingStarted(graphene.Mutation):
+    """
+    Mutation to record when a user dismisses the Getting Started guide.
+    This preference is stored on the user model and persists across sessions.
+    """
+
+    class Arguments:
+        pass
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(root, info):
+        try:
+            user = info.context.user
+            user.dismissed_getting_started = True
+            user.save(update_fields=["dismissed_getting_started"])
+
+            return DismissGettingStarted(
+                ok=True, message="Getting Started guide dismissed successfully"
+            )
+        except Exception as e:
+            logger.error(f"Error dismissing Getting Started guide: {e}")
+            return DismissGettingStarted(
+                ok=False, message=f"Failed to dismiss Getting Started guide: {str(e)}"
             )
 
 
@@ -2628,7 +2665,7 @@ class DeleteMultipleLabelMutation(graphene.Mutation):
 
 class CreateCorpusMutation(DRFMutation):
     class IOSettings:
-        pk_fields = ["label_set"]
+        pk_fields = ["label_set", "categories"]
         serializer = CorpusSerializer
         model = Corpus
         graphene_model = CorpusType
@@ -2640,6 +2677,9 @@ class CreateCorpusMutation(DRFMutation):
         label_set = graphene.String(required=False)
         preferred_embedder = graphene.String(required=False)
         slug = graphene.String(required=False)
+        categories = graphene.List(
+            graphene.ID, required=False, description="Category IDs to assign"
+        )
 
     @classmethod
     def mutate(cls, root, info, *args, **kwargs):
@@ -2669,7 +2709,7 @@ class CreateCorpusMutation(DRFMutation):
 class UpdateCorpusMutation(DRFMutation):
     class IOSettings:
         lookup_field = "id"
-        pk_fields = ["label_set"]
+        pk_fields = ["label_set", "categories"]
         serializer = CorpusSerializer
         model = Corpus
         graphene_model = CorpusType
@@ -2686,6 +2726,11 @@ class UpdateCorpusMutation(DRFMutation):
         # This prevents bypassing permission checks via UpdateCorpusMutation
         corpus_agent_instructions = graphene.String(required=False)
         document_agent_instructions = graphene.String(required=False)
+        categories = graphene.List(
+            graphene.ID,
+            required=False,
+            description="Category IDs to assign (replaces existing)",
+        )
 
 
 class UpdateMe(graphene.Mutation):
@@ -3812,6 +3857,44 @@ class CreateCorpusAction(graphene.Mutation):
                         obj=None,
                     )
 
+            # For thread/message triggers with inline agent, validate tools are moderation category.
+            # Rationale: Thread/message triggered actions are specifically designed for automated
+            # moderation workflows (spam detection, content filtering, etc.). Restricting tools
+            # to the MODERATION category ensures these agents can only perform moderation-related
+            # operations and cannot access broader corpus/document manipulation tools which could
+            # pose security risks when triggered automatically by user content.
+            if create_agent_inline and trigger in ["new_thread", "new_message"]:
+                from opencontractserver.llms.tools.tool_registry import (
+                    TOOL_REGISTRY,
+                    ToolCategory,
+                )
+
+                # Get valid moderation tool names
+                valid_moderation_tools = {
+                    tool.name
+                    for tool in TOOL_REGISTRY
+                    if tool.category == ToolCategory.MODERATION
+                }
+
+                # Require at least one tool for moderation agents
+                if not inline_agent_tools:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message="At least one tool is required for moderation agents. "
+                        f"Available moderation tools: {', '.join(sorted(valid_moderation_tools))}",
+                        obj=None,
+                    )
+
+                # Validate provided tools are valid moderation tools
+                invalid_tools = set(inline_agent_tools) - valid_moderation_tools
+                if invalid_tools:
+                    return CreateCorpusAction(
+                        ok=False,
+                        message=f"Invalid tools for moderation agent: {', '.join(sorted(invalid_tools))}. "
+                        f"Valid moderation tools: {', '.join(sorted(valid_moderation_tools))}",
+                        obj=None,
+                    )
+
             # Validate that exactly one of fieldset_id, analyzer_id, agent_config_id, or create_agent_inline is provided
             action_types_provided = sum(
                 [
@@ -4794,6 +4877,7 @@ class Mutation(graphene.ObjectType):
 
     # USER PREFERENCE MUTATIONS #################################################
     accept_cookie_consent = AcceptCookieConsent.Field()
+    dismiss_getting_started = DismissGettingStarted.Field()
 
     # ANALYSIS MUTATIONS #########################################################
     start_analysis_on_doc = StartDocumentAnalysisMutation.Field()
@@ -4847,13 +4931,18 @@ class Mutation(graphene.ObjectType):
     unlock_thread = UnlockThreadMutation.Field()
     pin_thread = PinThreadMutation.Field()
     unpin_thread = UnpinThreadMutation.Field()
+    delete_thread = DeleteThreadMutation.Field()
+    restore_thread = RestoreThreadMutation.Field()
     add_moderator = AddModeratorMutation.Field()
     remove_moderator = RemoveModeratorMutation.Field()
     update_moderator_permissions = UpdateModeratorPermissionsMutation.Field()
+    rollback_moderation_action = RollbackModerationActionMutation.Field()
 
     # VOTING MUTATIONS ###########################################################
     vote_message = VoteMessageMutation.Field()
     remove_vote = RemoveVoteMutation.Field()
+    vote_conversation = VoteConversationMutation.Field()
+    remove_conversation_vote = RemoveConversationVoteMutation.Field()
 
     # NOTIFICATION MUTATIONS #####################################################
     mark_notification_read = MarkNotificationReadMutation.Field()

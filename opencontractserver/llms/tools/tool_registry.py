@@ -520,3 +520,16 @@ def validate_tool_names(names: list[str]) -> tuple[list[str], list[str]]:
     valid = [n for n in names if n in valid_names]
     invalid = [n for n in names if n not in valid_names]
     return valid, invalid
+
+
+def get_moderation_tool_names() -> list[str]:
+    """Get names of all moderation tools."""
+    return [
+        tool.name
+        for tool in AVAILABLE_TOOLS
+        if tool.category == ToolCategory.MODERATION
+    ]
+
+
+# Alias for backwards compatibility
+TOOL_REGISTRY = AVAILABLE_TOOLS

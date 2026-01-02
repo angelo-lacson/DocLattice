@@ -1,8 +1,8 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Folder, ChevronRight } from "lucide-react";
 import {
   openedCorpus,
   openedThread,
@@ -12,6 +12,7 @@ import {
 import { ThreadDetail } from "../threads/ThreadDetail";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { ModernErrorDisplay } from "../widgets/ModernErrorDisplay";
+import { getCorpusUrl } from "../../utils/navigationUtils";
 
 const Container = styled.div`
   margin: 0 auto;
@@ -22,47 +23,88 @@ const Container = styled.div`
   overflow-x: hidden;
 `;
 
-const BackButtonWrapper = styled.div`
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 1.5rem 10% 0;
-
-  @media (max-width: 1600px) {
-    padding: 1.5rem 5% 0;
-  }
-
-  @media (max-width: 1024px) {
-    padding: 1rem 3% 0;
-  }
+const NavBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
 
   @media (max-width: 768px) {
-    padding: 1rem 2% 0;
-  }
-
-  @media (max-width: 480px) {
-    padding: 0.75rem 1% 0;
+    padding: 0.5rem 1rem;
+    flex-wrap: wrap;
   }
 `;
 
 const BackButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   background: white;
-  color: #64748b;
-  font-size: 0.875rem;
+  color: #374151;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    background: #f8fafc;
-    border-color: #4a90e2;
-    color: #0f172a;
+    background: #f9fafb;
+    border-color: #22c55e;
+    color: #166534;
   }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+
+const NavSeparator = styled.span`
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+
+const CorpusLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  text-decoration: none;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+    color: #1e293b;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+`;
+
+const ThreadLabel = styled.span`
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
 `;
 
 /**
@@ -97,13 +139,16 @@ export const CorpusThreadRoute: React.FC = () => {
   const error = useReactiveVar(routeError);
 
   const handleBack = () => {
-    if (corpus?.creator?.slug && corpus?.slug) {
-      // Navigate back to corpus discussions tab
-      navigate(`/c/${corpus.creator.slug}/${corpus.slug}?tab=discussions`);
-    } else {
-      // Fallback to browser history
-      navigate(-1);
+    if (corpus) {
+      // Navigate back to corpus discussions tab using utility
+      const url = getCorpusUrl(corpus, { tab: "discussions" });
+      if (url !== "#") {
+        navigate(url);
+        return;
+      }
     }
+    // Fallback to browser history
+    navigate(-1);
   };
 
   // Loading state
@@ -131,12 +176,30 @@ export const CorpusThreadRoute: React.FC = () => {
   // Success state - render thread detail
   return (
     <Container>
-      <BackButtonWrapper>
+      <NavBar>
         <BackButton onClick={handleBack} aria-label="Back to Discussions">
-          <ArrowLeft size={16} />
-          Back to Discussions
+          <ArrowLeft />
+          Back
         </BackButton>
-      </BackButtonWrapper>
+        {corpus && (
+          <>
+            <NavSeparator>
+              <ChevronRight />
+            </NavSeparator>
+            <CorpusLink
+              to={`/c/${corpus.creator?.slug}/${corpus.slug}`}
+              title={corpus.title}
+            >
+              <Folder />
+              {corpus.title}
+            </CorpusLink>
+            <NavSeparator>
+              <ChevronRight />
+            </NavSeparator>
+            <ThreadLabel>Discussion</ThreadLabel>
+          </>
+        )}
+      </NavBar>
 
       <ThreadDetail conversationId={thread.id} corpusId={corpus?.id} />
     </Container>

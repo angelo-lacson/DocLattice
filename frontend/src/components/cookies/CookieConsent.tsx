@@ -2,17 +2,21 @@ import { List, Modal, Header, Icon, Button } from "semantic-ui-react";
 import { useMutation, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 
-import inverted_cookie_icon from "../../assets/icons/noun-cookie-2123093-FFFFFF.png";
 import { showCookieAcceptModal, authToken } from "../../graphql/cache";
 import {
   ACCEPT_COOKIE_CONSENT,
   AcceptCookieConsentInputs,
   AcceptCookieConsentOutputs,
 } from "../../graphql/mutations";
+import {
+  setAnalyticsConsent,
+  isPostHogConfigured,
+} from "../../utils/analytics";
 
 export const CookieConsentDialog = () => {
   const auth_token = useReactiveVar(authToken);
   const isAuthenticated = Boolean(auth_token);
+  const analyticsEnabled = isPostHogConfigured();
 
   const [acceptCookieConsent, { loading }] = useMutation<
     AcceptCookieConsentOutputs,
@@ -20,7 +24,9 @@ export const CookieConsentDialog = () => {
   >(ACCEPT_COOKIE_CONSENT, {
     onCompleted: (data) => {
       if (data.acceptCookieConsent.ok) {
-        toast.success("Cookie consent recorded");
+        toast.success("Consent recorded");
+        // Enable analytics tracking
+        setAnalyticsConsent(true);
         showCookieAcceptModal(false);
       } else {
         toast.error(
@@ -28,6 +34,7 @@ export const CookieConsentDialog = () => {
         );
         // Still close the modal and set localStorage as fallback
         localStorage.setItem("oc_cookieAccepted", "true");
+        setAnalyticsConsent(true);
         showCookieAcceptModal(false);
       }
     },
@@ -35,6 +42,7 @@ export const CookieConsentDialog = () => {
       toast.error(`Error recording consent: ${error.message}`);
       // Still close the modal and set localStorage as fallback
       localStorage.setItem("oc_cookieAccepted", "true");
+      setAnalyticsConsent(true);
       showCookieAcceptModal(false);
     },
   });
@@ -46,6 +54,7 @@ export const CookieConsentDialog = () => {
     } else {
       // For anonymous users, use localStorage only
       localStorage.setItem("oc_cookieAccepted", "true");
+      setAnalyticsConsent(true);
       showCookieAcceptModal(false);
     }
   };
@@ -132,6 +141,39 @@ export const CookieConsentDialog = () => {
             <List.Content>Configured Data Extractors</List.Content>
           </List.Item>
         </List>
+        {analyticsEnabled && (
+          <>
+            <Header inverted textAlign="center">
+              <Header.Content as="h4">
+                <u>Analytics & Usage Tracking</u>
+              </Header.Content>
+            </Header>
+            <p>
+              We use PostHog to collect anonymous usage analytics to help us
+              understand how OpenContracts is used and improve the experience.
+              This includes:
+            </p>
+            <List>
+              <List.Item>
+                <List.Icon name="chart line" />
+                <List.Content>Page views and navigation patterns</List.Content>
+              </List.Item>
+              <List.Item>
+                <List.Icon name="mouse pointer" />
+                <List.Content>Feature usage statistics</List.Content>
+              </List.Item>
+              <List.Item>
+                <List.Icon name="bug" />
+                <List.Content>Error tracking for debugging</List.Content>
+              </List.Item>
+            </List>
+            <p style={{ fontSize: "0.9em", opacity: 0.8 }}>
+              Analytics data is used solely to improve OpenContracts and is
+              never sold or shared with third parties. You can opt out at any
+              time through your browser settings or by using Do Not Track.
+            </p>
+          </>
+        )}
       </Modal.Content>
       <Modal.Actions>
         <Button
