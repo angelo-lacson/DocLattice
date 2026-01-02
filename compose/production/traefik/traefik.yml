@@ -55,7 +55,7 @@ http:
         certResolver: letsencrypt
 
     web-secure-router:
-      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`))"
+      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`) || PathPrefix(`/mcp`) || PathPrefix(`/sse`))"
       entryPoints:
         - "web-secure"
       middlewares:

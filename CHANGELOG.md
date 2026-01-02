@@ -97,6 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### MCP Connection Issues with Claude and OpenAI Clients (Issue #759)
+- **Root cause**: Traefik production routing was missing `/mcp` and `/sse` paths, causing requests to be routed to the frontend (which returned HTML) instead of the Django MCP server
+- **Traefik configuration fix** (`compose/production/traefik/traefik.yml:58`, `compose/production/traefik/traefik-ci.yml:34`): Added `/mcp` and `/sse` path prefixes to the Django routing rule
+- **SSE transport support** (`opencontractserver/mcp/server.py:367-397`): Added deprecated SSE transport at `/sse` for backward compatibility with older MCP clients that don't support Streamable HTTP transport
+- **ASGI router update** (`config/asgi.py:70-84`): Extended HTTP router to dispatch both `/mcp/*` and `/sse/*` paths to the MCP ASGI app
+- **Documentation update** (`docs/mcp/README.md`): Updated to document both Streamable HTTP (recommended) and SSE (deprecated) transport options
+
 #### Security and Performance
 - **System user security** (`opencontractserver/corpuses/migrations/0035_seed_default_categories.py`): Defense-in-depth with unusable password for system user
 - **N+1 query in corpusCount** (`config/graphql/queries.py:835-866`): Pre-annotated counts in `resolve_corpus_categories` resolver
