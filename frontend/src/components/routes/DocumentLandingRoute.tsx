@@ -95,39 +95,45 @@ export const DocumentLandingRoute: React.FC = () => {
     });
   }, [loading]);
 
-  // Close handler: Route component owns navigation decision
-  // Following routing mantra: route components make navigation decisions based on their reactive var reads
+  // Close handler: Navigate back to previous route, or fall back to corpus/documents
+  // Uses browser history when available (user navigated from within the app)
+  // Falls back to corpus home or /documents for direct URL access (bookmarks, shared links)
   const handleClose = useCallback(() => {
     const timestamp = new Date().toISOString();
     routingLogger.debug(
       `🚪 [DocumentLandingRoute] ════════ handleClose START ════════`
     );
     routingLogger.debug("[DocumentLandingRoute] Timestamp:", timestamp);
-    routingLogger.debug(
-      "[DocumentLandingRoute] Call stack:",
-      new Error().stack?.split("\n").slice(2, 8).join("\n")
-    );
     routingLogger.debug("[DocumentLandingRoute] Current state:", {
       currentUrl: location.pathname + location.search,
+      referrer: window.document.referrer,
+      historyLength: window.history.length,
       hasCorpus: !!corpus,
-      corpusId: corpus?.id,
       corpusSlug: corpus?.slug,
-      corpusCreatorSlug: corpus?.creator?.slug,
-      hasDocument: !!document,
-      documentId: document?.id,
-      documentSlug: document?.slug,
     });
 
-    if (corpus?.creator?.slug && corpus?.slug) {
+    // Check if user navigated here from within the app (same origin)
+    const referrer = window.document.referrer;
+    const sameOrigin =
+      referrer && new URL(referrer).origin === window.location.origin;
+
+    if (sameOrigin) {
+      // User came from within the app - go back to previous route
+      routingLogger.debug(
+        "[DocumentLandingRoute] ✅ Decision: Navigate back (same origin referrer)"
+      );
+      baseNavigate(-1);
+    } else if (corpus?.creator?.slug && corpus?.slug) {
+      // Direct access with corpus context - go to corpus home
       const targetUrl = `/c/${corpus.creator.slug}/${corpus.slug}`;
       routingLogger.debug(
-        `[DocumentLandingRoute] ✅ Decision: Navigate to corpus`
+        `[DocumentLandingRoute] ✅ Decision: Navigate to corpus (no referrer)`
       );
-      routingLogger.debug(`[DocumentLandingRoute] Target URL: "${targetUrl}"`);
       navigate(targetUrl);
     } else {
+      // Direct access without corpus - go to documents list
       routingLogger.debug(
-        "[DocumentLandingRoute] ⚠️  Decision: No corpus, navigate to /documents"
+        "[DocumentLandingRoute] ⚠️  Decision: Navigate to /documents (no referrer, no corpus)"
       );
       navigate("/documents");
     }
@@ -135,7 +141,7 @@ export const DocumentLandingRoute: React.FC = () => {
     routingLogger.debug(
       `[DocumentLandingRoute] ════════ handleClose END ════════`
     );
-  }, [corpus, document, navigate, location]);
+  }, [corpus, baseNavigate, navigate, location]);
 
   if (loading) {
     return <ModernLoadingDisplay type="document" size="large" />;
