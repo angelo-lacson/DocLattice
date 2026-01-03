@@ -751,4 +751,188 @@ test.describe("LabelSetDetailPage", () => {
       ).toBeVisible();
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CRUD OPERATIONS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  test.describe("CRUD Operations", () => {
+    test("shows create form when Add Label clicked", async ({ mount }) => {
+      const mocks = [
+        createLabelsetMock(mockLabelsetWithPermissions),
+        createLabelsetMock(mockLabelsetWithPermissions),
+      ];
+
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
+      );
+
+      await expect(component.getByText("Test Label Set")).toBeVisible({
+        timeout: 10000,
+      });
+
+      // Navigate to Span Labels tab
+      await component.getByRole("button", { name: /Span Labels/i }).click();
+
+      // Click Add Label button
+      await component.getByRole("button", { name: /Add Label/i }).click();
+
+      // Verify create form appears with correct fields
+      await expect(
+        component.getByPlaceholder("Enter label name")
+      ).toBeVisible();
+      await expect(
+        component.getByPlaceholder("Describe what this label is used for")
+      ).toBeVisible();
+
+      // Verify Create and Cancel buttons are present
+      await expect(component.getByTitle("Create")).toBeVisible();
+      await expect(component.getByTitle("Cancel")).toBeVisible();
+    });
+
+    test("can cancel create form", async ({ mount }) => {
+      const mocks = [
+        createLabelsetMock(mockLabelsetWithPermissions),
+        createLabelsetMock(mockLabelsetWithPermissions),
+      ];
+
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
+      );
+
+      await expect(component.getByText("Test Label Set")).toBeVisible({
+        timeout: 10000,
+      });
+
+      // Navigate to Span Labels tab
+      await component.getByRole("button", { name: /Span Labels/i }).click();
+
+      // Click Add Label button
+      await component.getByRole("button", { name: /Add Label/i }).click();
+
+      // Verify form is visible
+      await expect(
+        component.getByPlaceholder("Enter label name")
+      ).toBeVisible();
+
+      // Click Cancel
+      await component.getByTitle("Cancel").click();
+
+      // Form should be hidden
+      await expect(
+        component.getByPlaceholder("Enter label name")
+      ).not.toBeVisible();
+
+      // Add Label button should be visible again
+      await expect(
+        component.getByRole("button", { name: /Add Label/i })
+      ).toBeVisible();
+    });
+
+    test("validates create form requires label name", async ({ mount }) => {
+      const mocks = [
+        createLabelsetMock(mockLabelsetWithPermissions),
+        createLabelsetMock(mockLabelsetWithPermissions),
+      ];
+
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
+      );
+
+      await expect(component.getByText("Test Label Set")).toBeVisible({
+        timeout: 10000,
+      });
+
+      // Navigate to Span Labels tab
+      await component.getByRole("button", { name: /Span Labels/i }).click();
+
+      // Click Add Label button
+      await component.getByRole("button", { name: /Add Label/i }).click();
+
+      // Try to submit without filling in name
+      await component.getByTitle("Create").click();
+
+      // Form should still be visible (validation prevents submission)
+      await expect(
+        component.getByPlaceholder("Enter label name")
+      ).toBeVisible();
+    });
+
+    test("shows empty state with Add First Label when no labels exist", async ({
+      mount,
+    }) => {
+      // Create labelset with no span labels
+      const noSpanLabelsLabelset = {
+        ...mockLabelsetWithPermissions,
+        allAnnotationLabels: [
+          ...mockTextLabels,
+          ...mockDocLabels,
+          ...mockRelationshipLabels,
+          // No span labels
+        ],
+        spanLabelCount: 0,
+      };
+
+      const mocks = [
+        createLabelsetMock(noSpanLabelsLabelset),
+        createLabelsetMock(noSpanLabelsLabelset),
+      ];
+
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        noSpanLabelsLabelset.id
+      );
+
+      await expect(component.getByText("Test Label Set")).toBeVisible({
+        timeout: 10000,
+      });
+
+      // Navigate to Span Labels tab
+      await component.getByRole("button", { name: /Span Labels/i }).click();
+
+      // Should show empty state with "Add First Label" button
+      await expect(component.getByText(/No span labels yet/i)).toBeVisible();
+      await expect(
+        component.getByRole("button", { name: /Add First Label/i })
+      ).toBeVisible();
+    });
+
+    test("shows no matches message when search has no results", async ({
+      mount,
+    }) => {
+      const mocks = [
+        createLabelsetMock(mockLabelsetWithPermissions),
+        createLabelsetMock(mockLabelsetWithPermissions),
+      ];
+
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
+      );
+
+      await expect(component.getByText("Test Label Set")).toBeVisible({
+        timeout: 10000,
+      });
+
+      // Navigate to Span Labels tab
+      await component.getByRole("button", { name: /Span Labels/i }).click();
+
+      // Search for non-existent term
+      const searchInput = component.getByPlaceholder(/Search labels/i);
+      await searchInput.fill("xyznonexistent");
+
+      // Should show no matches message
+      await expect(
+        component.getByText(/No labels match "xyznonexistent"/i)
+      ).toBeVisible();
+    });
+  });
 });
