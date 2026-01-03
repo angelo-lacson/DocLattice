@@ -81,6 +81,8 @@ interface CorpusHomeProps {
   onChatSubmit?: (query: string) => void;
   onViewChatHistory?: () => void;
   onNavigateToCorpuses?: () => void;
+  // Mobile navigation
+  onOpenMobileMenu?: () => void;
 }
 
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
@@ -91,6 +93,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   onChatSubmit,
   onViewChatHistory,
   onNavigateToCorpuses,
+  onOpenMobileMenu,
 }) => {
   const [mdContent, setMdContent] = useState<string | null>(null);
 
@@ -140,6 +143,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         onChatSubmit={onChatSubmit || (() => {})}
         onViewChatHistory={onViewChatHistory || (() => {})}
         onNavigateToCorpuses={onNavigateToCorpuses}
+        onOpenMobileMenu={onOpenMobileMenu}
         autoFocusChat={true}
         showQuickActions={true}
         testId="corpus-home-hero"

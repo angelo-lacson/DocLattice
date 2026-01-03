@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { useMutation, useReactiveVar } from "@apollo/client";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -66,6 +66,8 @@ interface ExtractCardsProps {
   fetchMore: (args?: any) => void | any;
   /** If true, clicking selects via URL params instead of navigating away */
   useInlineSelection?: boolean;
+  /** Filter extracts by status: all, running, completed, failed, not_started */
+  activeFilter?: string;
 }
 
 export const ExtractCards = ({
@@ -77,12 +79,29 @@ export const ExtractCards = ({
   fetchMore,
   pageInfo,
   useInlineSelection = false,
+  activeFilter = "all",
 }: ExtractCardsProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const auth_token = useReactiveVar(authToken);
   const selected_extract_ids = useReactiveVar(selectedExtractIds);
   const isAuthenticated = Boolean(auth_token);
+
+  // Filter extracts based on active filter
+  const filteredExtracts = useMemo(() => {
+    switch (activeFilter) {
+      case "running":
+        return extracts.filter((ex) => ex.started && !ex.finished && !ex.error);
+      case "completed":
+        return extracts.filter((ex) => ex.finished && !ex.error);
+      case "failed":
+        return extracts.filter((ex) => ex.error);
+      case "not_started":
+        return extracts.filter((ex) => !ex.started);
+      default:
+        return extracts;
+    }
+  }, [extracts, activeFilter]);
 
   // Context menu state
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -190,10 +209,10 @@ export const ExtractCards = ({
       />
 
       <ListContainer>
-        {extracts.length > 0 ? (
+        {filteredExtracts.length > 0 ? (
           <>
             <CollectionList gap="md">
-              {extracts.map((extract) => (
+              {filteredExtracts.map((extract) => (
                 <ExtractListCard
                   key={extract.id}
                   extract={extract}
@@ -217,11 +236,19 @@ export const ExtractCards = ({
           <EmptyStateWrapper>
             <EmptyState
               icon={<TableIcon />}
-              title="No extracts in this corpus"
-              description="Create an extract to pull structured data from documents in this corpus."
+              title={
+                activeFilter !== "all"
+                  ? `No ${activeFilter.replace("_", " ")} extracts`
+                  : "No extracts in this corpus"
+              }
+              description={
+                activeFilter !== "all"
+                  ? "Try selecting a different filter to see more extracts."
+                  : "Create an extract to pull structured data from documents in this corpus."
+              }
               size="lg"
               action={
-                isAuthenticated ? (
+                activeFilter === "all" && isAuthenticated ? (
                   <Button
                     variant="primary"
                     leftIcon={<Plus size={16} />}
