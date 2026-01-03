@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import styled from "styled-components";
 import { useMutation, useReactiveVar } from "@apollo/client";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { CollectionList, EmptyState, Button } from "@os-legal/ui";
 import { Plus } from "lucide-react";
@@ -10,12 +10,17 @@ import { ExtractListCard } from "./ExtractListCard";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExtractType, CorpusType, PageInfo } from "../../types/graphql-api";
-import { authToken, showCreateExtractModal } from "../../graphql/cache";
+import {
+  authToken,
+  showCreateExtractModal,
+  selectedExtractIds,
+} from "../../graphql/cache";
 import {
   REQUEST_DELETE_EXTRACT,
   RequestDeleteExtractInputType,
   RequestDeleteExtractOutputType,
 } from "../../graphql/mutations";
+import { updateAnnotationSelectionParams } from "../../utils/navigationUtils";
 
 // Modern styled components matching standalone Extracts view
 const Container = styled.div`
@@ -59,6 +64,8 @@ interface ExtractCardsProps {
   loading: boolean;
   loading_message: string;
   fetchMore: (args?: any) => void | any;
+  /** If true, clicking selects via URL params instead of navigating away */
+  useInlineSelection?: boolean;
 }
 
 export const ExtractCards = ({
@@ -69,9 +76,12 @@ export const ExtractCards = ({
   loading,
   fetchMore,
   pageInfo,
+  useInlineSelection = false,
 }: ExtractCardsProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const auth_token = useReactiveVar(authToken);
+  const selected_extract_ids = useReactiveVar(selectedExtractIds);
   const isAuthenticated = Boolean(auth_token);
 
   // Context menu state
@@ -92,23 +102,22 @@ export const ExtractCards = ({
     onError: () => {
       toast.error("Failed to delete extract");
     },
-    update: (cache, { data }) => {
-      if (!opened_corpus?.id) return;
-
-      try {
-        // Refetch will be triggered by parent component
-      } catch (error) {
-        console.warn("Failed to update cache after extract deletion:", error);
-      }
-    },
   });
 
-  // Handlers
-  const handleViewExtract = useCallback(
+  // Handle click - either navigate or select inline
+  const handleSelectExtract = useCallback(
     (extract: ExtractType) => {
-      navigate(`/extracts/${extract.id}`);
+      if (useInlineSelection) {
+        // Select via URL params - CentralRouteManager will update selectedExtractIds
+        updateAnnotationSelectionParams(location, navigate, {
+          extractIds: [extract.id],
+        });
+      } else {
+        // Navigate to full extract page
+        navigate(`/extracts/${extract.id}`);
+      }
     },
-    [navigate]
+    [useInlineSelection, location, navigate]
   );
 
   const handleDeleteExtract = useCallback(
@@ -188,12 +197,16 @@ export const ExtractCards = ({
                 <ExtractListCard
                   key={extract.id}
                   extract={extract}
-                  onView={handleViewExtract}
+                  onView={handleSelectExtract}
                   onDelete={handleDeleteExtract}
                   isMenuOpen={openMenuId === extract.id}
                   menuPosition={openMenuId === extract.id ? menuPosition : null}
                   onOpenMenu={handleOpenContextMenu}
                   onCloseMenu={handleCloseMenu}
+                  isSelected={
+                    useInlineSelection &&
+                    selected_extract_ids.includes(extract.id)
+                  }
                 />
               ))}
             </CollectionList>

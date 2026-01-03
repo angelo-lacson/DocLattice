@@ -10,8 +10,17 @@ import { getExtractStatus, formatExtractDate } from "../../utils/extractUtils";
 
 // Styled Components
 
-const CardWrapper = styled.div`
+const CardWrapper = styled.div<{ $isSelected?: boolean }>`
   position: relative;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+
+  ${(props) =>
+    props.$isSelected &&
+    `
+    box-shadow: 0 0 0 2px #0f766e;
+    background: #f0fdfa;
+  `}
 `;
 
 const MenuButton = styled.button`
@@ -135,6 +144,8 @@ interface ExtractListCardProps {
   menuPosition?: { x: number; y: number } | null;
   onOpenMenu?: (e: React.MouseEvent, extractId: string) => void;
   onCloseMenu?: () => void;
+  /** Whether the card is currently selected (for inline selection mode) */
+  isSelected?: boolean;
 }
 
 export const ExtractListCard: React.FC<ExtractListCardProps> = ({
@@ -146,6 +157,7 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
   menuPosition,
   onOpenMenu,
   onCloseMenu,
+  isSelected = false,
 }) => {
   const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -154,8 +166,12 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
     // Don't navigate if menu is open
     if (isMenuOpen) return;
 
-    // Navigate to new route-based detail page
-    navigate(`/extracts/${extract.id}`);
+    // Use callback if provided, otherwise navigate directly
+    if (onView) {
+      onView(extract);
+    } else {
+      navigate(`/extracts/${extract.id}`);
+    }
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -269,6 +285,7 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
   return (
     <>
       <CardWrapper
+        $isSelected={isSelected}
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
         tabIndex={0}

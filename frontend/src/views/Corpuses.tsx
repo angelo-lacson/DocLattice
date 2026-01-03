@@ -64,8 +64,12 @@ import {
   showQueryViewState,
   showSelectCorpusAnalyzerOrFieldsetModal,
   selectedTab,
+  selectedExtractIds,
 } from "../graphql/cache";
-import { updateTabParam } from "../utils/navigationUtils";
+import {
+  updateTabParam,
+  updateAnnotationSelectionParams,
+} from "../utils/navigationUtils";
 import {
   UPDATE_CORPUS,
   UpdateCorpusOutputs,
@@ -109,6 +113,7 @@ import useWindowDimensions from "../components/hooks/WindowDimensionHook";
 import { SelectExportTypeModal } from "../components/widgets/modals/SelectExportTypeModal";
 import { FilterToCorpusActionOutputs } from "../components/widgets/model-filters/FilterToCorpusActionOutputs";
 import { CorpusExtractCards } from "../components/extracts/CorpusExtractCards";
+import { CorpusExtractDetail } from "../components/extracts/CorpusExtractDetail";
 import { getPermissions } from "../utils/transform";
 import { MOBILE_VIEW_BREAKPOINT } from "../assets/configurations/constants";
 import { useEnv } from "../components/hooks/UseEnv";
@@ -1295,6 +1300,101 @@ const NotificationBadge = styled.div`
   }
 `;
 
+// Split view container for extracts tab
+const ExtractsSplitView = styled.div`
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 1px;
+  background: #e2e8f0;
+`;
+
+const ExtractsListPane = styled.div<{ $hasSelection: boolean }>`
+  flex: ${(props) => (props.$hasSelection ? "0 0 360px" : "1")};
+  overflow: hidden;
+  background: #fafafa;
+  transition: flex 0.2s ease;
+
+  @media (max-width: 1024px) {
+    flex: ${(props) => (props.$hasSelection ? "0 0 280px" : "1")};
+  }
+
+  @media (max-width: 768px) {
+    display: ${(props) => (props.$hasSelection ? "none" : "block")};
+    flex: 1;
+  }
+`;
+
+const ExtractsDetailPane = styled.div`
+  flex: 1;
+  overflow: hidden;
+  background: white;
+
+  @media (max-width: 768px) {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+  }
+`;
+
+/**
+ * ExtractsTabContent - Split view for corpus extracts tab
+ * Shows list on left, detail on right when an extract is selected
+ */
+const ExtractsTabContent: React.FC<{ setActiveTab: (tab: number) => void }> = ({
+  setActiveTab,
+}) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const selected_extract_ids = useReactiveVar(selectedExtractIds);
+  const selectedExtractId = selected_extract_ids[0] || null;
+
+  const handleCloseDetail = () => {
+    // Clear extract selection via URL
+    updateAnnotationSelectionParams(location, navigate, {
+      extractIds: [],
+    });
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        position: "relative",
+      }}
+    >
+      <TabNavigationHeader>
+        <BackNavButton
+          onClick={() => setActiveTab(0)}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          title="Back to Home"
+        >
+          <ArrowLeft />
+        </BackNavButton>
+        <TabTitle>Extracts</TabTitle>
+      </TabNavigationHeader>
+
+      <ExtractsSplitView>
+        <ExtractsListPane $hasSelection={Boolean(selectedExtractId)}>
+          <CorpusExtractCards useInlineSelection />
+        </ExtractsListPane>
+
+        {selectedExtractId && (
+          <ExtractsDetailPane>
+            <CorpusExtractDetail
+              extractId={selectedExtractId}
+              onClose={handleCloseDetail}
+            />
+          </ExtractsDetailPane>
+        )}
+      </ExtractsSplitView>
+    </div>
+  );
+};
+
 export const Corpuses = () => {
   const { width } = useWindowDimensions();
 
@@ -2059,26 +2159,7 @@ export const Corpuses = () => {
         label: "Extracts",
         icon: <Table />,
         badge: stats.totalExtracts,
-        component: (
-          <div
-            style={{ display: "flex", flexDirection: "column", height: "100%" }}
-          >
-            <TabNavigationHeader>
-              <BackNavButton
-                onClick={() => setActiveTab(0)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="Back to Home"
-              >
-                <ArrowLeft />
-              </BackNavButton>
-              <TabTitle>Extracts</TabTitle>
-            </TabNavigationHeader>
-            <div style={{ flex: 1, overflow: "hidden" }}>
-              <CorpusExtractCards />
-            </div>
-          </div>
-        ),
+        component: <ExtractsTabContent setActiveTab={setActiveTab} />,
       },
       {
         id: "discussions",
