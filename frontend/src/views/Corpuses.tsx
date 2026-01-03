@@ -225,132 +225,6 @@ const SearchToConversationInput = styled.div<{ $isExpanded: boolean }>`
   }
 `;
 
-// Add new styled components for enhanced UI
-const FloatingSearchContainer = styled(motion.div)`
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.375rem;
-  width: 100px;
-  max-width: 720px;
-  min-height: 42px;
-  height: auto;
-  transition: all 0.35s ease;
-  margin: 0 auto;
-
-  /* Add gap to form children only when expanded */
-  & > form {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    transition: gap 0.35s ease, justify-content 0.35s ease;
-    width: 100%;
-  }
-
-  &:hover,
-  &:focus-within {
-    width: min(720px, 90%);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    border-color: #cbd5e1;
-    align-items: flex-start;
-    justify-content: flex-start;
-    padding: 0.75rem;
-
-    & > form {
-      gap: 0.75rem;
-      justify-content: flex-start;
-    }
-  }
-
-  @media (max-width: 768px) {
-    width: clamp(80px, 20vw, 96px);
-    max-width: calc(100vw - 2rem);
-    min-height: 40px;
-    padding: 0.375rem;
-
-    &:active,
-    &:hover,
-    &:focus-within {
-      width: 85%;
-      max-width: 320px;
-      padding: 0.5rem;
-
-      & > form {
-        gap: 0.5rem;
-        justify-content: flex-start;
-      }
-    }
-  }
-`;
-
-// Hide the input until hover/focus
-const EnhancedSearchInput = styled.textarea`
-  flex: 1;
-  width: 0;
-  opacity: 0;
-  padding: 0;
-  border: none;
-  outline: none;
-  font-size: 1rem;
-  background: transparent;
-  color: #0f172a;
-  font-weight: 500;
-  transition: all 0.35s ease; /* match container timing */
-  resize: none;
-  font-family: inherit;
-  line-height: 1.5;
-  min-height: 40px;
-  max-height: 144px; /* ~6 lines at 1.5 line-height */
-  overflow-y: auto;
-  min-width: 0; /* ensure it can shrink properly */
-
-  /* Custom scrollbar for textarea */
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 3px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 3px;
-  }
-
-  &::placeholder {
-    color: #94a3b8;
-    font-weight: 400;
-  }
-
-  ${FloatingSearchContainer}:hover &,
-  ${FloatingSearchContainer}:focus-within & {
-    width: 100%;
-    opacity: 1;
-    padding: 0.75rem 1rem;
-    min-height: 40px;
-  }
-
-  @media (max-width: 768px) {
-    font-size: 0.875rem;
-    max-height: 120px; /* ~5-6 lines on mobile */
-
-    ${FloatingSearchContainer}:hover &,
-    ${FloatingSearchContainer}:focus-within & {
-      padding: 0.625rem 0.875rem;
-      width: 100%;
-    }
-  }
-`;
-
 const SearchActionsContainer = styled.div`
   display: flex;
   align-items: center;
@@ -655,73 +529,19 @@ const CorpusQueryView = ({
               canUpdate={canUpdate}
               stats={stats}
               statsLoading={statsLoading}
-            />
-            <div
-              style={{
-                position: "absolute",
-                bottom: width <= 768 ? "1rem" : "2rem",
-                left: "50%",
-                transform: "translateX(-50%)",
-                display: "flex",
-                flexDirection: "row",
-                justifyContent: "center",
-                alignItems: "center",
-                padding: width <= 768 ? "0.25rem" : "0.5rem",
-                width:
-                  width <= 768
-                    ? "95%"
-                    : "85%" /* give more room for expansion on mobile */,
-                maxWidth: "760px" /* match the search container max */,
+              chatQuery={searchQuery}
+              onChatQueryChange={setSearchQuery}
+              onChatSubmit={(query) => {
+                if (query.trim()) {
+                  setSearchQuery(query);
+                  setChatExpanded(true);
+                  setIsSearchMode(false);
+                  showQueryViewState("ASK");
+                }
               }}
-            >
-              <FloatingSearchContainer
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-              >
-                <form onSubmit={handleSearchSubmit}>
-                  <EnhancedSearchInput
-                    ref={inputRef}
-                    placeholder="Ask a question about this corpus..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    autoFocus={isDesktop} // Auto-focus on desktop only to avoid mobile keyboard popup issues
-                    onKeyDown={(e) => {
-                      // Submit on Enter without Shift
-                      if (
-                        e.key === "Enter" &&
-                        !e.shiftKey &&
-                        searchQuery.trim()
-                      ) {
-                        e.preventDefault();
-                        handleSearchSubmit(e);
-                      }
-                    }}
-                    rows={1}
-                  />
-                  <SearchActionsContainer>
-                    <ActionButton
-                      type="button"
-                      onClick={openHistoryView}
-                      title="View conversation history"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <History size={18} />
-                    </ActionButton>
-                    <ActionButton
-                      type="submit"
-                      className="primary"
-                      disabled={!searchQuery.trim()}
-                      whileHover={searchQuery.trim() ? { scale: 1.05 } : {}}
-                      whileTap={searchQuery.trim() ? { scale: 0.95 } : {}}
-                    >
-                      <Send size={18} />
-                    </ActionButton>
-                  </SearchActionsContainer>
-                </form>
-              </FloatingSearchContainer>
-            </div>
+              onViewChatHistory={openHistoryView}
+              onNavigateToCorpuses={onBack}
+            />
           </ContentWrapper>
         </DashboardContainer>
       </motion.div>
@@ -2103,6 +1923,7 @@ export const Corpuses = () => {
     "analyses",
     "extracts",
     "discussions",
+    "chats",
     "analytics",
     "settings",
     "badges",
@@ -2266,6 +2087,36 @@ export const Corpuses = () => {
         badge: stats.totalThreads || 0,
         component: opened_corpus?.id ? (
           <CorpusDiscussionsView corpusId={opened_corpus.id} />
+        ) : null,
+      },
+      {
+        id: "chats",
+        label: "Chats",
+        icon: <Brain />,
+        component: opened_corpus?.id ? (
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Chat History</TabTitle>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusChat
+                corpusId={opened_corpus.id}
+                showLoad={true}
+                onMessageSelect={() => {}}
+                setShowLoad={() => {}}
+              />
+            </div>
+          </div>
         ) : null,
       },
       {
