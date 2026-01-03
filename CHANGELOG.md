@@ -9,34 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Documents Page Redesign
-- **Documents view redesign** (`frontend/src/views/Documents.tsx`): Modern document listing page using @os-legal/ui components
-  - Hero section with search and filter tabs (All, Processed, Processing)
-  - Stats grid showing document, page, and annotation counts
-  - Three view modes: Grid, List, and Compact views
-  - Advanced filters popup for corpus, label, and labelset filtering
-  - Context menu for document actions (view, edit, add to corpus, delete)
-  - Bulk selection and operations support
-  - Status badges for processing documents
-- **Utility functions** (`frontend/src/utils/formatters.ts`): Shared formatting utilities
-  - `formatFileSize`: Human-readable file size (0 B, KB, MB)
-  - `formatRelativeTime`: Relative time descriptions ("Just now", "5 hours ago")
-  - `formatCompactRelativeTime`: Compact time format ("5h ago", "3d ago")
-  - `getInitials`: Avatar initials from name/email
-- **Component tests** (`frontend/tests/Documents.ct.tsx`): 8 Playwright component tests covering view modes, filtering, search, and selection
+#### Extract View Refactoring (PR #772)
+- **Route-based extract detail view** (`frontend/src/views/ExtractDetail.tsx:439-1063`, `frontend/src/components/routes/ExtractDetailRoute.tsx:1-58`): Complete refactor from modal-based to route-based architecture
+  - Modern full-page layout with tabbed interface (Data, Documents, Schema)
+  - Stats grid showing document count, column count, rows, and success rate
+  - WebSocket-based real-time updates for running extracts (replaced polling)
+  - Responsive design following existing patterns
+- **WebSocket notification hook** (`frontend/src/hooks/useExtractCompletionNotification.ts:1-86`): Real-time extract completion detection
+  - Listens for `EXTRACT_COMPLETE` notifications via WebSocket
+  - Filters for specific extract ID and triggers refetch on completion
+  - Eliminates need for polling (previously every 5 seconds)
+- **Extracts list page** (`frontend/src/views/Extracts.tsx:1-410`): New landing page for extract management
+  - Filter tabs (All, My Extracts, Running, Completed)
+  - Search with debounced input and cleanup on unmount
+  - CollectionCard components with status indicators
+- **Extract list card** (`frontend/src/components/extracts/ExtractListCard.tsx:1-228`): Card component for extract listing
+  - Status-aware styling (Running, Completed, Failed, Not Started)
+  - Context menu with view and delete actions
+  - Keyboard accessibility (Escape to close, Enter/Space to activate)
+- **Shared utilities** (`frontend/src/utils/extractUtils.ts:1-70`): DRY utility functions using centralized constants
+- **Extract landing route** (`frontend/src/components/routes/ExtractLandingRoute.tsx:1-35`): Route component for /extracts
 
-### Fixed
-
-#### Formatter Robustness
-- **Zero byte handling** (`frontend/src/utils/formatters.ts:9`): `formatFileSize` now correctly returns "0 B" for 0 bytes instead of empty string
-- **Invalid date handling** (`frontend/src/utils/formatters.ts:25,50`): Both `formatRelativeTime` and `formatCompactRelativeTime` now return empty string for invalid/unparseable date strings instead of NaN-based output
-
-#### Documents View Cleanup
-- **Removed long-polling** (`frontend/src/views/Documents.tsx`): Removed document processing polling in favor of WebSocket-based notifications, eliminating potential memory leak from interval timers
-- **Type safety** (`frontend/src/views/Documents.tsx:1192`): Removed unnecessary `as any` type assertion in `navigateToDocument` call
+### Removed
+- **EditExtractModal component**: Replaced by route-based ExtractDetail view - modal approach deprecated
+- **Obsolete test files** (`frontend/tests/EditExtractModal.ct.tsx`, `frontend/tests/EditExtractModalTestWrapper.tsx`): Removed tests for deleted modal component
+- **Polling constants** (`frontend/src/constants/extract.ts`): Removed `EXTRACT_POLLING_INTERVAL_MS` and `EXTRACT_POLLING_TIMEOUT_MS` - replaced by WebSocket notifications
 
 ### Changed
-- **View modes enum** (`frontend/src/assets/configurations/constants.ts`): Added `VIEW_MODES` and `STATUS_FILTERS` constants for Documents page
+- **openedExtract reactive var documentation** (`frontend/src/graphql/cache.ts:364-388`): Clarified that route components (like ExtractDetailRoute) can set this var, not just CentralRouteManager
+- **Consolidated constants** (`frontend/src/assets/configurations/constants.ts:47-51`): Moved `EXTRACT_SEARCH_DEBOUNCE_MS` to centralized `DEBOUNCE` object
+- **extractUtils refactor** (`frontend/src/utils/extractUtils.ts:32-55`): Now uses `EXTRACT_STATUS` and `EXTRACT_STATUS_COLORS` constants instead of hardcoded values
 
 ---
 
@@ -96,13 +98,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Array utilities** (`frontend/src/utils/arrayUtils.ts`): `arraysEqualUnordered` and `arraysEqualOrdered` for DRY comparison logic
 
 ### Fixed
-
-#### MCP Connection Issues with Claude and OpenAI Clients (Issue #759)
-- **Root cause**: Traefik production routing was missing `/mcp` and `/sse` paths, causing requests to be routed to the frontend (which returned HTML) instead of the Django MCP server
-- **Traefik configuration fix** (`compose/production/traefik/traefik.yml:58`, `compose/production/traefik/traefik-ci.yml:34`): Added `/mcp` and `/sse` path prefixes to the Django routing rule
-- **SSE transport support** (`opencontractserver/mcp/server.py:367-397`): Added deprecated SSE transport at `/sse` for backward compatibility with older MCP clients that don't support Streamable HTTP transport
-- **ASGI router update** (`config/asgi.py:70-84`): Extended HTTP router to dispatch both `/mcp/*` and `/sse/*` paths to the MCP ASGI app
-- **Documentation update** (`docs/mcp/README.md`): Updated to document both Streamable HTTP (recommended) and SSE (deprecated) transport options
 
 #### Security and Performance
 - **System user security** (`opencontractserver/corpuses/migrations/0035_seed_default_categories.py`): Defense-in-depth with unusable password for system user

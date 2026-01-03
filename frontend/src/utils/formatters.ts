@@ -87,3 +87,19 @@ export function getInitials(name?: string | null): string {
     .toUpperCase()
     .slice(0, 2);
 }
+
+/**
+ * Formats a date string into a short localized format.
+ * @param dateString - ISO date string to format
+ * @returns Formatted date string like "Oct 5, 2023", or empty string if invalid
+ */
+export function formatShortDate(dateString?: string | null): string {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
