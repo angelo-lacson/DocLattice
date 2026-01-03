@@ -295,7 +295,7 @@ export const Extracts = () => {
     let totalColumns = 0;
 
     extracts.forEach((ex) => {
-      totalDocuments += ex.documents?.length || 0;
+      totalDocuments += ex.fullDocumentList?.length || 0;
       totalColumns += ex.fieldset?.fullColumnList?.length || 0;
     });
 

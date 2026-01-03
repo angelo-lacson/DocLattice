@@ -1606,14 +1606,12 @@ export const GET_EXTRACTS = gql`
             id
             name
             inUse
-            columns {
-              edges {
-                node {
-                  id
-                  query
-                }
-              }
+            fullColumnList {
+              id
             }
+          }
+          fullDocumentList {
+            id
           }
           creator {
             id
@@ -1624,6 +1622,7 @@ export const GET_EXTRACTS = gql`
           started
           finished
           error
+          myPermissions
         }
       }
       pageInfo {

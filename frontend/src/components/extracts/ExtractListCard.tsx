@@ -106,11 +106,11 @@ const KebabIcon = () => (
 function formatStats(extract: ExtractType): string[] {
   const stats: string[] = [];
 
-  // Document count
-  const docCount = extract.documents?.length || 0;
+  // Document count (use fullDocumentList from GraphQL query)
+  const docCount = extract.fullDocumentList?.length || 0;
   stats.push(`${docCount} ${docCount === 1 ? "document" : "documents"}`);
 
-  // Column count (from fieldset)
+  // Column count (from fieldset's fullColumnList)
   const columnCount = extract.fieldset?.fullColumnList?.length || 0;
   if (columnCount > 0) {
     stats.push(`${columnCount} ${columnCount === 1 ? "column" : "columns"}`);
