@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 import uuid
 
 import jwt
@@ -13,6 +14,29 @@ from config.graphql_auth0_auth.settings import auth0_settings
 
 logger = logging.getLogger(__name__)
 
+# JWKS cache to avoid fetching on every token validation
+# Cache expires after 10 minutes (600 seconds)
+_jwks_cache: dict = {"data": None, "expires_at": 0}
+_JWKS_CACHE_TTL = 600  # seconds
+
+
+def _get_cached_jwks(domain: str) -> dict:
+    """
+    Fetch JWKS from Auth0 with caching.
+    Returns cached JWKS if still valid, otherwise fetches fresh data.
+    """
+    global _jwks_cache
+
+    current_time = time.time()
+    if _jwks_cache["data"] is not None and current_time < _jwks_cache["expires_at"]:
+        logger.debug("_get_cached_jwks() - Using cached JWKS")
+        return _jwks_cache["data"]
+
+    logger.debug("_get_cached_jwks() - Fetching fresh JWKS from Auth0")
+    jwks = requests.get(f"https://{domain}/.well-known/jwks.json", timeout=10).json()
+    _jwks_cache = {"data": jwks, "expires_at": current_time + _JWKS_CACHE_TTL}
+    return jwks
+
 
 def jwt_auth0_decode(token):
     logger.debug(
@@ -21,9 +45,7 @@ def jwt_auth0_decode(token):
     try:
         header = jwt.get_unverified_header(token)
         logger.debug(f"jwt_auth0_decode() - Header: {header}")
-        jwks = requests.get(
-            f"https://{auth0_settings.AUTH0_DOMAIN}/.well-known/jwks.json"
-        ).json()
+        jwks = _get_cached_jwks(auth0_settings.AUTH0_DOMAIN)
         logger.debug(
             f"jwt_auth0_decode() - Retrieved JWKS with {len(jwks.get('keys', []))} keys"
         )
