@@ -2266,7 +2266,30 @@ export const Corpuses = () => {
         icon: <MessageSquare />,
         badge: stats.totalThreads || 0,
         component: opened_corpus?.id ? (
-          <CorpusDiscussionsView corpusId={opened_corpus.id} />
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Discussions</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusDiscussionsView corpusId={opened_corpus.id} hideHeader />
+            </div>
+          </div>
         ) : null,
       },
       {
