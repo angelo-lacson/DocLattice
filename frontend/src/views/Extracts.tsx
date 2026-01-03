@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import {
   SearchBox,
@@ -45,7 +46,7 @@ import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import { CreateExtractModal } from "../components/widgets/modals/CreateExtractModal";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../components/common/LoadingOverlay";
-import { EXTRACT_SEARCH_DEBOUNCE_MS } from "../constants/extract";
+import { DEBOUNCE } from "../assets/configurations/constants";
 
 // Styled Components - Following LabelSets patterns
 
@@ -194,8 +195,15 @@ export const Extracts = () => {
   const debouncedSearch = useRef(
     _.debounce((searchTerm: string) => {
       extractSearchTerm(searchTerm);
-    }, EXTRACT_SEARCH_DEBOUNCE_MS)
+    }, DEBOUNCE.EXTRACT_SEARCH_MS)
   );
+
+  // Cleanup debounce on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      debouncedSearch.current.cancel();
+    };
+  }, []);
 
   const handleSearchChange = (value: string) => {
     setSearchCache(value);
@@ -299,7 +307,17 @@ export const Extracts = () => {
     };
   }, [extracts, filterCounts]);
 
+  // Navigation
+  const navigate = useNavigate();
+
   // Handlers
+  const handleViewExtract = useCallback(
+    (extract: ExtractType) => {
+      navigate(`/extracts/${extract.id}`);
+    },
+    [navigate]
+  );
+
   const handleDeleteExtract = (extract: ExtractType) => {
     setExtractToDelete(extract);
     showDeleteExtractModal(true);
@@ -338,7 +356,7 @@ export const Extracts = () => {
     setMenuPosition(null);
   }, []);
 
-  // Close menu when clicking outside
+  // Close menu when clicking outside or pressing Escape
   useEffect(() => {
     const handleClickOutside = () => {
       if (openMenuId) {
@@ -346,13 +364,22 @@ export const Extracts = () => {
       }
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && openMenuId) {
+        e.preventDefault();
+        handleCloseMenu();
+      }
+    };
+
     if (openMenuId) {
       const timer = setTimeout(() => {
         document.addEventListener("click", handleClickOutside);
+        document.addEventListener("keydown", handleKeyDown);
       }, 100);
       return () => {
         clearTimeout(timer);
         document.removeEventListener("click", handleClickOutside);
+        document.removeEventListener("keydown", handleKeyDown);
       };
     }
   }, [openMenuId, handleCloseMenu]);
@@ -495,6 +522,7 @@ export const Extracts = () => {
                     key={extract.id}
                     extract={extract}
                     currentUserEmail={currentUserEmail}
+                    onView={handleViewExtract}
                     onDelete={handleDeleteExtract}
                     isMenuOpen={openMenuId === extract.id}
                     menuPosition={

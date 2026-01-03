@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { CollectionCard } from "@os-legal/ui";
@@ -37,7 +37,7 @@ const MenuButton = styled.button`
 
 const FloatingMenu = styled(Menu)`
   &.ui.menu {
-    position: fixed;
+    position: absolute;
     z-index: 9999;
     min-width: 180px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -51,15 +51,19 @@ const FloatingMenu = styled(Menu)`
       display: flex !important;
       align-items: center !important;
       gap: 10px !important;
+      cursor: pointer;
 
-      &:hover {
+      &:hover,
+      &:focus {
         background: #f1f5f9 !important;
+        outline: none;
       }
 
       &.danger {
         color: #dc2626 !important;
 
-        &:hover {
+        &:hover,
+        &:focus {
           background: #fef2f2 !important;
         }
       }
@@ -69,6 +73,21 @@ const FloatingMenu = styled(Menu)`
         opacity: 0.7;
       }
     }
+  }
+`;
+
+// Portal container for floating menu to handle positioning relative to viewport
+const MenuPortal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9998;
+  pointer-events: none;
+
+  & > * {
+    pointer-events: auto;
   }
 `;
 
@@ -129,6 +148,7 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
   onCloseMenu,
 }) => {
   const navigate = useNavigate();
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleClick = () => {
     // Don't navigate if menu is open
@@ -153,6 +173,87 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
     }
   };
 
+  // Handle keyboard shortcut (Shift+F10) for context menu
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.shiftKey && e.key === "F10" && onOpenMenu) {
+        e.preventDefault();
+        // Open menu at card center
+        const rect = e.currentTarget.getBoundingClientRect();
+        const syntheticEvent = {
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2,
+          preventDefault: () => {},
+          stopPropagation: () => {},
+        } as React.MouseEvent;
+        onOpenMenu(syntheticEvent, extract.id);
+      }
+    },
+    [extract.id, onOpenMenu]
+  );
+
+  // Handle keyboard navigation within menu
+  const handleMenuKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCloseMenu?.();
+      } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const items = menuRef.current?.querySelectorAll('[role="menuitem"]');
+        if (!items?.length) return;
+
+        const currentIndex = Array.from(items).findIndex(
+          (item) => item === document.activeElement
+        );
+        let nextIndex: number;
+        if (e.key === "ArrowDown") {
+          nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        } else {
+          nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        }
+        (items[nextIndex] as HTMLElement).focus();
+      }
+    },
+    [onCloseMenu]
+  );
+
+  // Focus first menu item when menu opens
+  useEffect(() => {
+    if (isMenuOpen && menuRef.current) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        const firstItem = menuRef.current?.querySelector(
+          '[role="menuitem"]'
+        ) as HTMLElement;
+        firstItem?.focus();
+      }, 0);
+    }
+  }, [isMenuOpen]);
+
+  // Calculate bounded menu position to keep within viewport
+  const getBoundedMenuPosition = () => {
+    if (!menuPosition) return { left: 0, top: 0 };
+
+    const menuWidth = 180;
+    const menuHeight = 100; // Approximate
+    const padding = 8;
+
+    let { x, y } = menuPosition;
+
+    // Bound to viewport
+    if (x + menuWidth > window.innerWidth - padding) {
+      x = window.innerWidth - menuWidth - padding;
+    }
+    if (y + menuHeight > window.innerHeight - padding) {
+      y = window.innerHeight - menuHeight - padding;
+    }
+    if (x < padding) x = padding;
+    if (y < padding) y = padding;
+
+    return { left: x, top: y };
+  };
+
   const statusLabel = getExtractStatus(extract).label;
   const stats = formatStats(extract);
   const permissions = getPermissions(extract.myPermissions || []);
@@ -163,9 +264,17 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
     ? `Created ${formatExtractDate(extract.created)}`
     : "No description";
 
+  const boundedPosition = getBoundedMenuPosition();
+
   return (
     <>
-      <CardWrapper onContextMenu={handleContextMenu}>
+      <CardWrapper
+        onContextMenu={handleContextMenu}
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        role="article"
+        aria-label={`Extract: ${extract.name || "Untitled Extract"}`}
+      >
         <CollectionCard
           type="default"
           status={statusLabel}
@@ -178,6 +287,8 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
               type="button"
               className="oc-collection-card__menu-button"
               aria-label="Open menu"
+              aria-haspopup="menu"
+              aria-expanded={isMenuOpen}
               onClick={handleMenuButtonClick}
             >
               <KebabIcon />
@@ -188,37 +299,61 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
 
       {/* Floating Context Menu */}
       {isMenuOpen && menuPosition && (
-        <FloatingMenu
-          vertical
-          style={{
-            left: menuPosition.x,
-            top: menuPosition.y,
-          }}
-        >
-          {onView && (
-            <Menu.Item
-              icon="eye"
-              content="View Details"
-              onClick={(e) => {
-                e.stopPropagation();
-                onView(extract);
-                onCloseMenu?.();
-              }}
-            />
-          )}
-          {canRemove && onDelete && (
-            <Menu.Item
-              className="danger"
-              icon="trash"
-              content="Delete"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(extract);
-                onCloseMenu?.();
-              }}
-            />
-          )}
-        </FloatingMenu>
+        <MenuPortal>
+          <div
+            ref={menuRef}
+            style={{
+              position: "absolute",
+              left: boundedPosition.left,
+              top: boundedPosition.top,
+            }}
+            onKeyDown={handleMenuKeyDown}
+          >
+            <FloatingMenu vertical role="menu" aria-label="Extract actions">
+              {onView && (
+                <Menu.Item
+                  role="menuitem"
+                  tabIndex={0}
+                  icon="eye"
+                  content="View Details"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onView(extract);
+                    onCloseMenu?.();
+                  }}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onView(extract);
+                      onCloseMenu?.();
+                    }
+                  }}
+                />
+              )}
+              {canRemove && onDelete && (
+                <Menu.Item
+                  role="menuitem"
+                  tabIndex={0}
+                  className="danger"
+                  icon="trash"
+                  content="Delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(extract);
+                    onCloseMenu?.();
+                  }}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onDelete(extract);
+                      onCloseMenu?.();
+                    }
+                  }}
+                />
+              )}
+            </FloatingMenu>
+          </div>
+        </MenuPortal>
       )}
     </>
   );

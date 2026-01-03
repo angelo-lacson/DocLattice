@@ -6,25 +6,20 @@
  */
 
 import type { ExtractType } from "../types/graphql-api";
+import {
+  EXTRACT_STATUS,
+  EXTRACT_STATUS_COLORS,
+  ExtractStatus,
+} from "../assets/configurations/constants";
 
 /**
- * Extract status types
+ * Extract status color type from the status colors constant
  */
-export type ExtractStatusLabel =
-  | "Running"
-  | "Completed"
-  | "Failed"
-  | "Not Started";
-
 export type ExtractStatusColor =
-  | "success"
-  | "info"
-  | "error"
-  | "warning"
-  | "default";
+  (typeof EXTRACT_STATUS_COLORS)[keyof typeof EXTRACT_STATUS_COLORS];
 
 export interface ExtractStatusInfo {
-  label: ExtractStatusLabel;
+  label: ExtractStatus;
   color: ExtractStatusColor;
 }
 
@@ -36,15 +31,27 @@ export interface ExtractStatusInfo {
  */
 export function getExtractStatus(extract: ExtractType): ExtractStatusInfo {
   if (extract.started && !extract.finished && !extract.error) {
-    return { label: "Running", color: "info" };
+    return {
+      label: EXTRACT_STATUS.RUNNING,
+      color: EXTRACT_STATUS_COLORS[EXTRACT_STATUS.RUNNING],
+    };
   }
   if (extract.finished) {
-    return { label: "Completed", color: "success" };
+    return {
+      label: EXTRACT_STATUS.COMPLETED,
+      color: EXTRACT_STATUS_COLORS[EXTRACT_STATUS.COMPLETED],
+    };
   }
   if (extract.error) {
-    return { label: "Failed", color: "error" };
+    return {
+      label: EXTRACT_STATUS.FAILED,
+      color: EXTRACT_STATUS_COLORS[EXTRACT_STATUS.FAILED],
+    };
   }
-  return { label: "Not Started", color: "default" };
+  return {
+    label: EXTRACT_STATUS.NOT_STARTED,
+    color: EXTRACT_STATUS_COLORS[EXTRACT_STATUS.NOT_STARTED],
+  };
 }
 
 /**

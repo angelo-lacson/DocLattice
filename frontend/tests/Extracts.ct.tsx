@@ -38,7 +38,7 @@ const mockExtractRunning: ExtractType = {
     },
     __typename: "FieldsetType",
   },
-  myPermissions: ["read", "update", "delete"],
+  myPermissions: ["read_extract", "update_extract", "remove_extract"],
 } as ExtractType;
 
 const mockExtractCompleted: ExtractType = {
@@ -74,7 +74,7 @@ const mockExtractCompleted: ExtractType = {
     },
     __typename: "FieldsetType",
   },
-  myPermissions: ["read", "update", "delete"],
+  myPermissions: ["read_extract", "update_extract", "remove_extract"],
 } as ExtractType;
 
 const mockExtractNotStarted: ExtractType = {
@@ -92,7 +92,7 @@ const mockExtractNotStarted: ExtractType = {
   },
   corpus: null,
   fieldset: null,
-  myPermissions: ["read", "update", "delete"],
+  myPermissions: ["read_extract", "update_extract", "remove_extract"],
 } as ExtractType;
 
 const mockExtractFailed: ExtractType = {
@@ -128,7 +128,7 @@ const mockExtractFailed: ExtractType = {
     },
     __typename: "FieldsetType",
   },
-  myPermissions: ["read", "update", "delete"],
+  myPermissions: ["read_extract", "update_extract", "remove_extract"],
 } as ExtractType;
 
 const allExtracts = [
@@ -326,6 +326,162 @@ test.describe("Extracts View - New Extract Button", () => {
 
     // New Extract button should be visible
     await expect(page.locator("text=New Extract")).toBeVisible();
+
+    await component.unmount();
+  });
+});
+
+test.describe("Extracts View - Permission-based UI", () => {
+  test("should show delete option only when user has CAN_REMOVE permission", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractsTestWrapper extracts={allExtracts} />
+    );
+
+    // Wait for extracts to load
+    await expect(page.locator("text=Running Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Right-click on the extract card to open context menu
+    const extractCard = page.locator("text=Running Extract").first();
+    await extractCard.click({ button: "right" });
+
+    // Wait for menu to appear
+    await page.waitForTimeout(300);
+
+    // Delete option should be visible (extract has delete permission in mock)
+    await expect(page.locator("text=Delete")).toBeVisible({ timeout: 3000 });
+
+    await component.unmount();
+  });
+
+  test("should hide delete option when user lacks CAN_REMOVE permission", async ({
+    mount,
+    page,
+  }) => {
+    // Create extract without delete permission
+    const extractWithoutDelete: ExtractType = {
+      ...mockExtractCompleted,
+      id: "RXh0cmFjdFR5cGU6NQ==",
+      name: "Read Only Extract",
+      myPermissions: ["read_extract"], // Only read permission
+    } as ExtractType;
+
+    const component = await mount(
+      <ExtractsTestWrapper extracts={[extractWithoutDelete]} />
+    );
+
+    // Wait for extract to load
+    await expect(page.locator("text=Read Only Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Right-click on the extract card to open context menu
+    const extractCard = page.locator("text=Read Only Extract").first();
+    await extractCard.click({ button: "right" });
+
+    // Wait for menu to appear
+    await page.waitForTimeout(300);
+
+    // Menu should appear with View Details but NOT Delete
+    await expect(page.locator("text=View Details")).toBeVisible({
+      timeout: 3000,
+    });
+
+    // Count menu items - should only have View Details, not Delete
+    const menuItems = page.locator(".ui.menu.vertical .item");
+    await expect(menuItems).toHaveCount(1);
+
+    await component.unmount();
+  });
+});
+
+test.describe("Extracts View - Keyboard Accessibility", () => {
+  test("should close context menu on Escape key", async ({ mount, page }) => {
+    const component = await mount(
+      <ExtractsTestWrapper extracts={allExtracts} />
+    );
+
+    // Wait for extracts to load
+    await expect(page.locator("text=Running Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Right-click on the extract card to open context menu
+    const extractCard = page.locator("text=Running Extract").first();
+    await extractCard.click({ button: "right" });
+
+    // Wait for menu to appear
+    await page.waitForTimeout(300);
+
+    // Context menu should appear
+    const contextMenu = page.locator(".ui.menu.vertical");
+    await expect(contextMenu).toBeVisible({ timeout: 3000 });
+
+    // Press Escape to close
+    await page.keyboard.press("Escape");
+
+    // Context menu should be hidden
+    await expect(contextMenu).toBeHidden({ timeout: 3000 });
+
+    await component.unmount();
+  });
+
+  test("should have accessible menu button with aria attributes", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractsTestWrapper extracts={allExtracts} />
+    );
+
+    // Wait for extracts to load
+    await expect(page.locator("text=Running Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Menu button should have proper aria attributes
+    const menuButton = page.locator('[aria-label="Open menu"]').first();
+    await expect(menuButton).toBeVisible();
+    await expect(menuButton).toHaveAttribute("aria-haspopup", "menu");
+
+    await component.unmount();
+  });
+
+  test("should have accessible cards with proper roles", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractsTestWrapper extracts={allExtracts} />
+    );
+
+    // Wait for extracts to load
+    await expect(page.locator("text=Running Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Card wrapper should have article role
+    const cardWrapper = page.locator('[role="article"]').first();
+    await expect(cardWrapper).toBeVisible();
+
+    await component.unmount();
+  });
+});
+
+test.describe("Extracts View - Error States", () => {
+  test("should handle GraphQL errors gracefully", async ({ mount, page }) => {
+    const component = await mount(
+      <ExtractsTestWrapper extracts={[]} error={true} />
+    );
+
+    // Should not crash, page header should still be rendered
+    await expect(
+      page.getByRole("heading", { name: "Your Extracts" })
+    ).toBeVisible({ timeout: 10000 });
 
     await component.unmount();
   });
