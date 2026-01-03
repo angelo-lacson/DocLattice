@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useLocation } from "react-router-dom";
@@ -16,7 +16,14 @@ import {
   GET_EXTRACTS,
 } from "../../graphql/queries";
 
-export const CorpusExtractCards = () => {
+interface CorpusExtractCardsProps {
+  /** If true, clicking selects via URL params instead of navigating away */
+  useInlineSelection?: boolean;
+}
+
+export const CorpusExtractCards: React.FC<CorpusExtractCardsProps> = ({
+  useInlineSelection = false,
+}) => {
   const show_corpus_action_outputs = useReactiveVar(showCorpusActionOutputs);
   const opened_corpus = useReactiveVar(openedCorpus);
   const analysis_search_term = useReactiveVar(analysisSearchTerm);
@@ -80,6 +87,7 @@ export const CorpusExtractCards = () => {
       loading_message="Extracts Loading..."
       pageInfo={extracts_response?.extracts?.pageInfo}
       fetchMore={fetchMoreExtracts}
+      useInlineSelection={useInlineSelection}
       style={{ minHeight: "70vh", overflowY: "unset" }}
     />
   );
