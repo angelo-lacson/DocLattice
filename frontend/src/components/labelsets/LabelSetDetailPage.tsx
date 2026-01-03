@@ -24,11 +24,7 @@ import {
 } from "../../graphql/mutations";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { openedLabelset, userObj } from "../../graphql/cache";
-import {
-  AnnotationLabelType,
-  LabelSetType,
-  LabelType,
-} from "../../types/graphql-api";
+import { AnnotationLabelType, LabelType } from "../../types/graphql-api";
 import { toast } from "react-toastify";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
@@ -124,6 +120,7 @@ import {
 const fuse_options = {
   includeScore: false,
   findAllMatches: true,
+  threshold: 0.3, // Stricter matching (0 = exact, 1 = match anything)
   keys: ["text", "description"],
 };
 
@@ -160,9 +157,10 @@ const isValidHexColor = (color: string): boolean => {
  * Strips leading # and validates format
  */
 const sanitizeColor = (
-  color: string,
+  color: string | null | undefined,
   fallback: string = DEFAULT_LABEL_COLOR
 ): string => {
+  if (!color) return fallback;
   const cleaned = color.replace("#", "");
   return isValidHexColor(cleaned) ? cleaned : fallback;
 };
@@ -480,6 +478,8 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   );
 
   // Setup fuzzy search
+  // Note: Not using useMemo here as it causes React error #310 in Playwright component tests
+  // This is a known issue with Playwright CT and certain hook usage patterns
   const text_label_fuse = new Fuse(text_labels, fuse_options);
   const doc_label_fuse = new Fuse(doc_type_labels, fuse_options);
   const relationship_label_fuse = new Fuse(relationship_labels, fuse_options);

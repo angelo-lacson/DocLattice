@@ -11,14 +11,9 @@
 
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
-import { MockedProvider, MockedResponse } from "@apollo/client/testing";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { Provider as JotaiProvider } from "jotai";
-import { LabelSetDetailPage } from "../src/components/labelsets/LabelSetDetailPage";
-import {
-  GET_LABELSET_WITH_ALL_LABELS,
-  GetLabelsetWithLabelsOutputs,
-} from "../src/graphql/queries";
+import { MockedResponse } from "@apollo/client/testing";
+import { LabelSetDetailPageTestWrapper } from "./LabelSetDetailPageTestWrapper";
+import { GET_LABELSET_WITH_ALL_LABELS } from "../src/graphql/queries";
 import {
   DELETE_MULTIPLE_ANNOTATION_LABELS,
   UPDATE_ANNOTATION_LABEL,
@@ -26,13 +21,13 @@ import {
   DELETE_LABELSET,
 } from "../src/graphql/mutations";
 import { openedLabelset } from "../src/graphql/cache";
-import { InMemoryCache } from "@apollo/client";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MOCK DATA
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const mockLabelsetBase = {
+  __typename: "LabelSetType" as const,
   id: "TGFiZWxTZXRUeXBlOjE=",
   icon: null,
   title: "Test Label Set",
@@ -45,6 +40,7 @@ const mockLabelsetBase = {
   tokenLabelCount: 1,
   corpusCount: 5,
   creator: {
+    __typename: "UserType" as const,
     id: "user-1",
     slug: "testuser",
     username: "testuser",
@@ -54,6 +50,7 @@ const mockLabelsetBase = {
 
 const mockTextLabels = [
   {
+    __typename: "AnnotationLabelType" as const,
     id: "label-text-1",
     icon: "tag",
     labelType: "TOKEN_LABEL",
@@ -69,6 +66,7 @@ const mockTextLabels = [
 
 const mockDocLabels = [
   {
+    __typename: "AnnotationLabelType" as const,
     id: "label-doc-1",
     icon: "file",
     labelType: "DOC_TYPE_LABEL",
@@ -81,6 +79,7 @@ const mockDocLabels = [
     analyzer: null,
   },
   {
+    __typename: "AnnotationLabelType" as const,
     id: "label-doc-2",
     icon: "file",
     labelType: "DOC_TYPE_LABEL",
@@ -96,6 +95,7 @@ const mockDocLabels = [
 
 const mockSpanLabels = [
   {
+    __typename: "AnnotationLabelType" as const,
     id: "label-span-1",
     icon: "tag",
     labelType: "SPAN_LABEL",
@@ -108,6 +108,7 @@ const mockSpanLabels = [
     analyzer: null,
   },
   {
+    __typename: "AnnotationLabelType" as const,
     id: "label-span-2",
     icon: "tag",
     labelType: "SPAN_LABEL",
@@ -120,6 +121,7 @@ const mockSpanLabels = [
     analyzer: null,
   },
   {
+    __typename: "AnnotationLabelType" as const,
     id: "label-span-3",
     icon: "tag",
     labelType: "SPAN_LABEL",
@@ -135,6 +137,7 @@ const mockSpanLabels = [
 
 const mockRelationshipLabels = [
   {
+    __typename: "AnnotationLabelType" as const,
     id: "label-rel-1",
     icon: "arrows alternate horizontal",
     labelType: "RELATIONSHIP_LABEL",
@@ -155,17 +158,17 @@ const allLabels = [
   ...mockRelationshipLabels,
 ];
 
-// Labelset with full permissions
+// Labelset with full permissions (format: action_modelname for getPermissions)
 const mockLabelsetWithPermissions = {
   ...mockLabelsetBase,
-  myPermissions: ["READ", "UPDATE", "DELETE"],
+  myPermissions: ["read_labelset", "update_labelset", "remove_labelset"],
   allAnnotationLabels: allLabels,
 };
 
 // Labelset with read-only permissions
 const mockLabelsetReadOnly = {
   ...mockLabelsetBase,
-  myPermissions: ["READ"],
+  myPermissions: ["read_labelset"],
   allAnnotationLabels: allLabels,
 };
 
@@ -185,6 +188,7 @@ const createLabelsetMock = (
       labelset,
     },
   },
+  maxUsageCount: Infinity, // Allow unlimited reuse of this mock
 });
 
 const createDeleteLabelMock = (
@@ -279,40 +283,35 @@ const createDeleteLabelsetMock = (
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TEST WRAPPER
+// MOUNT HELPER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface TestWrapperProps {
-  children: React.ReactNode;
-  mocks: MockedResponse[];
-  labelsetId: string;
-}
+/**
+ * Helper to mount LabelSetDetailPage with proper setup.
+ * Sets reactive var BEFORE mount (critical for Playwright component tests).
+ */
+const mountLabelSetDetailPage = (
+  mount: any,
+  mocks: MockedResponse[],
+  labelsetId: string,
+  permissions: string[] = [
+    "read_labelset",
+    "update_labelset",
+    "remove_labelset",
+  ]
+) => {
+  // Set reactive var BEFORE mount - this runs in browser context
+  openedLabelset({
+    id: labelsetId,
+    myPermissions: permissions,
+  } as any);
 
-const TestWrapper: React.FC<TestWrapperProps> = ({
-  children,
-  mocks,
-  labelsetId,
-}) => {
-  // Set the opened labelset in Apollo cache
-  React.useEffect(() => {
-    openedLabelset({
-      id: labelsetId,
-      myPermissions: ["READ", "UPDATE", "DELETE"],
-    } as any);
-  }, [labelsetId]);
-
-  const cache = new InMemoryCache();
-
-  return (
-    <JotaiProvider>
-      <MockedProvider mocks={mocks} addTypename={false} cache={cache}>
-        <MemoryRouter initialEntries={["/label_sets"]}>
-          <Routes>
-            <Route path="/label_sets" element={children} />
-          </Routes>
-        </MemoryRouter>
-      </MockedProvider>
-    </JotaiProvider>
+  return mount(
+    <LabelSetDetailPageTestWrapper
+      mocks={mocks}
+      labelsetId={labelsetId}
+      permissions={permissions}
+    />
   );
 };
 
@@ -334,10 +333,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions), // For refetch
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       // Wait for data to load
@@ -359,10 +358,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -372,8 +371,10 @@ test.describe("LabelSetDetailPage", () => {
       // Click on Text Labels tab
       await component.getByRole("button", { name: /Text Labels/i }).click();
 
-      // Verify text label is visible
-      await expect(component.getByText("Important Text")).toBeVisible();
+      // Verify text label is visible (use exact match to avoid matching description)
+      await expect(
+        component.getByText("Important Text", { exact: true })
+      ).toBeVisible();
     });
 
     test("renders Doc Labels tab with correct label count", async ({
@@ -384,10 +385,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -397,9 +398,13 @@ test.describe("LabelSetDetailPage", () => {
       // Click on Doc Labels tab
       await component.getByRole("button", { name: /Doc Labels/i }).click();
 
-      // Verify doc labels are visible
-      await expect(component.getByText("Contract")).toBeVisible();
-      await expect(component.getByText("Invoice")).toBeVisible();
+      // Verify doc labels are visible (use exact match to avoid matching description)
+      await expect(
+        component.getByText("Contract", { exact: true })
+      ).toBeVisible();
+      await expect(
+        component.getByText("Invoice", { exact: true })
+      ).toBeVisible();
     });
 
     test("renders Span Labels tab with correct labels", async ({ mount }) => {
@@ -408,10 +413,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -421,10 +426,14 @@ test.describe("LabelSetDetailPage", () => {
       // Click on Span Labels tab
       await component.getByRole("button", { name: /Span Labels/i }).click();
 
-      // Verify span labels are visible
-      await expect(component.getByText("Entity Name")).toBeVisible();
-      await expect(component.getByText("Date")).toBeVisible();
-      await expect(component.getByText("Amount")).toBeVisible();
+      // Verify span labels are visible (use exact match to avoid matching description)
+      await expect(
+        component.getByText("Entity Name", { exact: true })
+      ).toBeVisible();
+      await expect(component.getByText("Date", { exact: true })).toBeVisible();
+      await expect(
+        component.getByText("Amount", { exact: true })
+      ).toBeVisible();
     });
 
     test("displays loading state while fetching", async ({ mount }) => {
@@ -442,13 +451,10 @@ test.describe("LabelSetDetailPage", () => {
         delay: 5000,
       };
 
-      const component = await mount(
-        <TestWrapper
-          mocks={[delayedMock]}
-          labelsetId={mockLabelsetWithPermissions.id}
-        >
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        [delayedMock],
+        mockLabelsetWithPermissions.id
       );
 
       // Should show loading state
@@ -467,10 +473,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -495,10 +501,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -509,10 +515,14 @@ test.describe("LabelSetDetailPage", () => {
       await component.getByRole("button", { name: /Span Labels/i }).click();
 
       // Wait for labels to be visible
-      await expect(component.getByText("Entity Name")).toBeVisible();
+      await expect(
+        component.getByText("Entity Name", { exact: true })
+      ).toBeVisible();
 
       // Hover over a label to reveal action buttons
-      const labelItem = component.getByText("Entity Name").locator("..");
+      const labelItem = component
+        .getByText("Entity Name", { exact: true })
+        .locator("..");
       await labelItem.hover();
 
       // Edit button should become visible (actions have opacity 0 by default)
@@ -528,28 +538,17 @@ test.describe("LabelSetDetailPage", () => {
     test("hides Add Label button when user lacks UPDATE permission", async ({
       mount,
     }) => {
-      // Set read-only permissions in the reactive var
-      const component = await mount(
-        <JotaiProvider>
-          <MockedProvider
-            mocks={[
-              createLabelsetMock(mockLabelsetReadOnly),
-              createLabelsetMock(mockLabelsetReadOnly),
-            ]}
-            addTypename={false}
-          >
-            <MemoryRouter>
-              <LabelSetDetailPage />
-            </MemoryRouter>
-          </MockedProvider>
-        </JotaiProvider>
-      );
+      const mocks = [
+        createLabelsetMock(mockLabelsetReadOnly),
+        createLabelsetMock(mockLabelsetReadOnly),
+      ];
 
-      // Set opened labelset with READ only permissions
-      openedLabelset({
-        id: mockLabelsetReadOnly.id,
-        myPermissions: ["READ"],
-      } as any);
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetReadOnly.id,
+        ["read_labelset"]
+      );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
         timeout: 10000,
@@ -576,10 +575,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -589,21 +588,31 @@ test.describe("LabelSetDetailPage", () => {
       // Navigate to Span Labels tab
       await component.getByRole("button", { name: /Span Labels/i }).click();
 
-      // All span labels should be visible
-      await expect(component.getByText("Entity Name")).toBeVisible();
-      await expect(component.getByText("Date")).toBeVisible();
-      await expect(component.getByText("Amount")).toBeVisible();
+      // All span labels should be visible (use exact match to avoid matching description)
+      await expect(
+        component.getByText("Entity Name", { exact: true })
+      ).toBeVisible();
+      await expect(component.getByText("Date", { exact: true })).toBeVisible();
+      await expect(
+        component.getByText("Amount", { exact: true })
+      ).toBeVisible();
 
       // Search for "Entity"
       const searchInput = component.getByPlaceholder(/Search labels/i);
       await searchInput.fill("Entity");
 
       // Only "Entity Name" should be visible
-      await expect(component.getByText("Entity Name")).toBeVisible();
+      await expect(
+        component.getByText("Entity Name", { exact: true })
+      ).toBeVisible();
 
       // These should not be visible after filtering
-      await expect(component.getByText("Date")).not.toBeVisible();
-      await expect(component.getByText("Amount")).not.toBeVisible();
+      await expect(
+        component.getByText("Date", { exact: true })
+      ).not.toBeVisible();
+      await expect(
+        component.getByText("Amount", { exact: true })
+      ).not.toBeVisible();
     });
 
     test("clears filter when search cleared", async ({ mount }) => {
@@ -612,10 +621,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -629,17 +638,25 @@ test.describe("LabelSetDetailPage", () => {
       const searchInput = component.getByPlaceholder(/Search labels/i);
       await searchInput.fill("Entity");
 
-      // Only Entity Name should be visible
-      await expect(component.getByText("Entity Name")).toBeVisible();
-      await expect(component.getByText("Date")).not.toBeVisible();
+      // Only Entity Name should be visible (use exact match)
+      await expect(
+        component.getByText("Entity Name", { exact: true })
+      ).toBeVisible();
+      await expect(
+        component.getByText("Date", { exact: true })
+      ).not.toBeVisible();
 
       // Clear search
       await searchInput.fill("");
 
-      // All labels should be visible again
-      await expect(component.getByText("Entity Name")).toBeVisible();
-      await expect(component.getByText("Date")).toBeVisible();
-      await expect(component.getByText("Amount")).toBeVisible();
+      // All labels should be visible again (use exact match)
+      await expect(
+        component.getByText("Entity Name", { exact: true })
+      ).toBeVisible();
+      await expect(component.getByText("Date", { exact: true })).toBeVisible();
+      await expect(
+        component.getByText("Amount", { exact: true })
+      ).toBeVisible();
     });
 
     test("shows empty state when no matches", async ({ mount }) => {
@@ -648,10 +665,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -665,10 +682,16 @@ test.describe("LabelSetDetailPage", () => {
       const searchInput = component.getByPlaceholder(/Search labels/i);
       await searchInput.fill("xyznonexistent");
 
-      // Should show empty state or no results
-      await expect(component.getByText("Entity Name")).not.toBeVisible();
-      await expect(component.getByText("Date")).not.toBeVisible();
-      await expect(component.getByText("Amount")).not.toBeVisible();
+      // Should show empty state or no results (use exact match)
+      await expect(
+        component.getByText("Entity Name", { exact: true })
+      ).not.toBeVisible();
+      await expect(
+        component.getByText("Date", { exact: true })
+      ).not.toBeVisible();
+      await expect(
+        component.getByText("Amount", { exact: true })
+      ).not.toBeVisible();
     });
   });
 
@@ -686,10 +709,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -709,10 +732,10 @@ test.describe("LabelSetDetailPage", () => {
         createLabelsetMock(mockLabelsetWithPermissions),
       ];
 
-      const component = await mount(
-        <TestWrapper mocks={mocks} labelsetId={mockLabelsetWithPermissions.id}>
-          <LabelSetDetailPage />
-        </TestWrapper>
+      const component = await mountLabelSetDetailPage(
+        mount,
+        mocks,
+        mockLabelsetWithPermissions.id
       );
 
       await expect(component.getByText("Test Label Set")).toBeVisible({
@@ -722,8 +745,10 @@ test.describe("LabelSetDetailPage", () => {
       // Click on Span Labels tab in mobile view
       await component.getByRole("button", { name: /Span/i }).first().click();
 
-      // Span labels should be visible
-      await expect(component.getByText("Entity Name")).toBeVisible();
+      // Span labels should be visible (use exact match)
+      await expect(
+        component.getByText("Entity Name", { exact: true })
+      ).toBeVisible();
     });
   });
 });
