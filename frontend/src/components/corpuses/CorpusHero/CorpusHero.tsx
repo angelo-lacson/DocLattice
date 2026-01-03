@@ -1,4 +1,5 @@
 import React from "react";
+import styled from "styled-components";
 import {
   ChevronRight,
   Users,
@@ -6,6 +7,7 @@ import {
   Hash,
   Globe,
   Shield,
+  MoreVertical,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { InlineChatBar } from "./InlineChatBar";
@@ -20,6 +22,48 @@ import {
   MetadataSeparator,
   AccessBadge,
 } from "./styles";
+
+// Mobile menu button (kebab) - only visible on mobile, positioned inline with title
+const MobileMenuButton = styled.button`
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  margin-right: 6px;
+
+  &:hover {
+    background: #f0fdfa;
+    color: #0f766e;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  @media (max-width: 768px) {
+    display: flex;
+  }
+`;
+
+// Wrapper to keep title and mobile menu button inline
+const TitleWithMenu = styled.div`
+  display: flex;
+  align-items: center;
+`;
 
 /** Minimal corpus data required for CorpusHero */
 export interface CorpusHeroData {
@@ -48,6 +92,8 @@ export interface CorpusHeroProps {
   onViewChatHistory: () => void;
   /** Callback to navigate back to corpus list */
   onNavigateToCorpuses?: () => void;
+  /** Callback to open mobile sidebar menu */
+  onOpenMobileMenu?: () => void;
   /** Whether to auto-focus the chat input */
   autoFocusChat?: boolean;
   /** Whether to show quick action chips */
@@ -73,6 +119,7 @@ export const CorpusHero: React.FC<CorpusHeroProps> = ({
   onChatSubmit,
   onViewChatHistory,
   onNavigateToCorpuses,
+  onOpenMobileMenu,
   autoFocusChat = false,
   showQuickActions = true,
   testId = "corpus-hero",
@@ -103,9 +150,22 @@ export const CorpusHero: React.FC<CorpusHeroProps> = ({
 
       <HeroTitleRow>
         <TitleSection>
-          <HeroTitle data-testid={`${testId}-title`}>
-            <span className="accent">Corpus</span> {corpus.title || "Untitled"}
-          </HeroTitle>
+          <TitleWithMenu>
+            {/* Mobile menu button - only visible on mobile, inline with title */}
+            {onOpenMobileMenu && (
+              <MobileMenuButton
+                onClick={onOpenMobileMenu}
+                aria-label="Open navigation menu"
+                data-testid={`${testId}-mobile-menu`}
+              >
+                <MoreVertical />
+              </MobileMenuButton>
+            )}
+            <HeroTitle data-testid={`${testId}-title`}>
+              <span className="accent">Corpus</span>{" "}
+              {corpus.title || "Untitled"}
+            </HeroTitle>
+          </TitleWithMenu>
 
           <MetadataRow data-testid={`${testId}-metadata`}>
             <AccessBadge $isPublic={corpus.isPublic}>

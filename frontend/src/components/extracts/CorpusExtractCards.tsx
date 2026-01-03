@@ -19,10 +19,13 @@ import {
 interface CorpusExtractCardsProps {
   /** If true, clicking selects via URL params instead of navigating away */
   useInlineSelection?: boolean;
+  /** Filter extracts by status: all, running, completed, failed, not_started */
+  activeFilter?: string;
 }
 
 export const CorpusExtractCards: React.FC<CorpusExtractCardsProps> = ({
   useInlineSelection = false,
+  activeFilter = "all",
 }) => {
   const show_corpus_action_outputs = useReactiveVar(showCorpusActionOutputs);
   const opened_corpus = useReactiveVar(openedCorpus);
@@ -88,6 +91,7 @@ export const CorpusExtractCards: React.FC<CorpusExtractCardsProps> = ({
       pageInfo={extracts_response?.extracts?.pageInfo}
       fetchMore={fetchMoreExtracts}
       useInlineSelection={useInlineSelection}
+      activeFilter={activeFilter}
       style={{ minHeight: "70vh", overflowY: "unset" }}
     />
   );
