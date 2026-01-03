@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import {
   SearchBox,
@@ -25,7 +26,6 @@ import { LabelSetType } from "../types/graphql-api";
 import {
   authToken,
   labelsetSearchTerm,
-  openedLabelset,
   showNewLabelsetModal,
   userObj,
   deletingLabelset,
@@ -40,16 +40,20 @@ import {
   CreateLabelsetInputs,
   CreateLabelsetOutputs,
   CREATE_LABELSET,
+  DeleteLabelsetInputs,
+  DeleteLabelsetOutputs,
+  DELETE_LABELSET,
 } from "../graphql/mutations";
+import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import {
   newLabelSetForm_Schema,
   newLabelSetForm_Ui_Schema,
 } from "../components/forms/schemas";
 import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
 import { LabelSetListCard } from "../components/labelsets/LabelSetListCard";
-import { LabelSetEditModal } from "../components/labelsets/LabelSetEditModal";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../components/common/LoadingOverlay";
+import { getLabelsetUrl } from "../utils/navigationUtils";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS - Following DiscoveryLanding patterns
@@ -180,11 +184,12 @@ const TagsIcon = () => (
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const Labelsets = () => {
+  const navigate = useNavigate();
   const auth_token = useReactiveVar(authToken);
   const currentUser = useReactiveVar(userObj);
   const labelset_search_term = useReactiveVar(labelsetSearchTerm);
-  const opened_labelset = useReactiveVar(openedLabelset);
   const show_new_label_modal = useReactiveVar(showNewLabelsetModal);
+  const labelset_to_delete = useReactiveVar(deletingLabelset);
   const isAuthenticated = Boolean(auth_token);
   const currentUserEmail = currentUser?.email;
 
@@ -225,6 +230,12 @@ export const Labelsets = () => {
     CreateLabelsetOutputs,
     CreateLabelsetInputs
   >(CREATE_LABELSET);
+
+  // Delete mutation
+  const [deleteLabelset, { loading: delete_labelset_loading }] = useMutation<
+    DeleteLabelsetOutputs,
+    DeleteLabelsetInputs
+  >(DELETE_LABELSET);
 
   // Extract labelsets from query data
   const labelsets: LabelSetType[] = useMemo(() => {
@@ -311,6 +322,28 @@ export const Labelsets = () => {
       });
   };
 
+  const handleDeleteLabelset = () => {
+    if (!labelset_to_delete?.id) return;
+
+    deleteLabelset({ variables: { id: labelset_to_delete.id } })
+      .then((result) => {
+        if (result.data?.deleteLabelset?.ok) {
+          toast.success("Label set deleted successfully.");
+          refetch();
+        } else {
+          toast.error(
+            result.data?.deleteLabelset?.message ||
+              "Failed to delete label set."
+          );
+        }
+        deletingLabelset(null);
+      })
+      .catch(() => {
+        toast.error("Failed to delete label set.");
+        deletingLabelset(null);
+      });
+  };
+
   const handleFetchMore = useCallback(() => {
     if (!loading && data?.labelsets?.pageInfo?.hasNextPage) {
       fetchMore({
@@ -373,13 +406,6 @@ export const Labelsets = () => {
     <PageContainer>
       <ContentContainer>
         {/* Modals */}
-        {opened_labelset && (
-          <LabelSetEditModal
-            open={opened_labelset !== null}
-            toggleModal={() => openedLabelset(null)}
-          />
-        )}
-
         {show_new_label_modal && (
           <CRUDModal
             open={show_new_label_modal}
@@ -398,6 +424,17 @@ export const Labelsets = () => {
             loading={create_labelset_loading}
           />
         )}
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmModal
+          message={`Are you sure you want to delete "${
+            labelset_to_delete?.title || "this label set"
+          }"? This action cannot be undone.`}
+          visible={Boolean(labelset_to_delete)}
+          yesAction={handleDeleteLabelset}
+          noAction={() => deletingLabelset(null)}
+          toggleModal={() => deletingLabelset(null)}
+        />
 
         {/* Hero Section */}
         <HeroSection>
@@ -487,7 +524,7 @@ export const Labelsets = () => {
                     labelset={labelset}
                     currentUserEmail={currentUserEmail}
                     onEdit={(ls) => editingLabelset(ls)}
-                    onView={(ls) => openedLabelset(ls)}
+                    onView={(ls) => navigate(getLabelsetUrl(ls))}
                     onDelete={(ls) => deletingLabelset(ls)}
                     isMenuOpen={openMenuId === labelset.id}
                     menuPosition={

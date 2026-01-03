@@ -7,6 +7,12 @@ export const TABLET_BREAKPOINT = 768;
 // Used for truncating annotation text in mention chips and pickers
 export const MENTION_PREVIEW_LENGTH = 24;
 
+// Label/UI colors
+// Default neutral gray color (Tailwind slate-400) used for inactive/placeholder states
+export const DEFAULT_LABEL_COLOR = "94a3b8";
+// Primary teal color used for new label creation
+export const PRIMARY_LABEL_COLOR = "0F766E";
+
 // File size constants for formatting
 export const FILE_SIZE = {
   BYTES_PER_KB: 1024,
