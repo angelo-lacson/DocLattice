@@ -46,11 +46,31 @@ export type StatusFilter = (typeof STATUS_FILTERS)[keyof typeof STATUS_FILTERS];
 // Debounce timing constants
 export const DEBOUNCE = {
   SEARCH_MS: 1000,
+  EXTRACT_SEARCH_MS: 500,
   CLICK_OUTSIDE_DELAY_MS: 100,
 } as const;
 
-// Polling constants
+// Polling constants (legacy - most polling replaced by WebSocket notifications)
 export const POLLING = {
   DOCUMENT_PROCESSING_INTERVAL_MS: 15000,
   DOCUMENT_PROCESSING_TIMEOUT_MS: 600000,
+} as const;
+
+// Extract status constants
+export const EXTRACT_STATUS = {
+  RUNNING: "Running",
+  COMPLETED: "Completed",
+  FAILED: "Failed",
+  NOT_STARTED: "Not Started",
+} as const;
+
+export type ExtractStatus =
+  (typeof EXTRACT_STATUS)[keyof typeof EXTRACT_STATUS];
+
+// Extract chip color mapping
+export const EXTRACT_STATUS_COLORS = {
+  [EXTRACT_STATUS.RUNNING]: "info",
+  [EXTRACT_STATUS.COMPLETED]: "success",
+  [EXTRACT_STATUS.FAILED]: "error",
+  [EXTRACT_STATUS.NOT_STARTED]: "default",
 } as const;
