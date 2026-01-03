@@ -24,11 +24,7 @@ import {
 } from "../../graphql/mutations";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { openedLabelset, userObj } from "../../graphql/cache";
-import {
-  AnnotationLabelType,
-  LabelSetType,
-  LabelType,
-} from "../../types/graphql-api";
+import { AnnotationLabelType, LabelType } from "../../types/graphql-api";
 import { toast } from "react-toastify";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
@@ -124,6 +120,7 @@ import {
 const fuse_options = {
   includeScore: false,
   findAllMatches: true,
+  threshold: 0.3, // Stricter matching (0 = exact, 1 = match anything)
   keys: ["text", "description"],
 };
 
@@ -156,15 +153,31 @@ const isValidHexColor = (color: string): boolean => {
 };
 
 /**
+ * Expands a 3-character hex color to 6-character format
+ * e.g., "abc" becomes "aabbcc"
+ */
+const expandHexColor = (color: string): string => {
+  if (color.length === 3) {
+    return color
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  return color;
+};
+
+/**
  * Sanitizes a color value, returning the fallback if invalid
- * Strips leading # and validates format
+ * Strips leading #, validates format, and expands 3-char to 6-char
  */
 const sanitizeColor = (
-  color: string,
+  color: string | null | undefined,
   fallback: string = DEFAULT_LABEL_COLOR
 ): string => {
+  if (!color) return fallback;
   const cleaned = color.replace("#", "");
-  return isValidHexColor(cleaned) ? cleaned : fallback;
+  if (!isValidHexColor(cleaned)) return fallback;
+  return expandHexColor(cleaned);
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -197,18 +210,19 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   const canUpdate = my_permissions.includes(PermissionTypes.CAN_UPDATE);
   const canRemove = my_permissions.includes(PermissionTypes.CAN_REMOVE);
 
-  // Mutations
-  const [createAnnotationLabelForLabelset] = useMutation<
-    CreateAnnotationLabelForLabelsetOutputs,
-    CreateAnnotationLabelForLabelsetInputs
-  >(CREATE_ANNOTATION_LABEL_FOR_LABELSET);
+  // Mutations with loading states to prevent race conditions
+  const [createAnnotationLabelForLabelset, { loading: createLoading }] =
+    useMutation<
+      CreateAnnotationLabelForLabelsetOutputs,
+      CreateAnnotationLabelForLabelsetInputs
+    >(CREATE_ANNOTATION_LABEL_FOR_LABELSET);
 
-  const [deleteMultipleLabels] = useMutation<
+  const [deleteMultipleLabels, { loading: deleteLabelsLoading }] = useMutation<
     DeleteMultipleAnnotationLabelOutputs,
     DeleteMultipleAnnotationLabelInputs
   >(DELETE_MULTIPLE_ANNOTATION_LABELS);
 
-  const [updateAnnotationLabel] = useMutation<
+  const [updateAnnotationLabel, { loading: updateLoading }] = useMutation<
     UpdateAnnotationLabelOutputs,
     UpdateAnnotationLabelInputs
   >(UPDATE_ANNOTATION_LABEL);
@@ -217,6 +231,10 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
     DeleteLabelsetOutputs,
     DeleteLabelsetInputs
   >(DELETE_LABELSET);
+
+  // Combined loading state for any mutation in progress
+  const isMutating =
+    createLoading || deleteLabelsLoading || updateLoading || delete_loading;
 
   // Query
   const {
@@ -246,8 +264,18 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   };
 
   const handleDeleteLabel = (labels: AnnotationLabelType[]) => {
+    if (!labels || labels.length === 0) {
+      toast.error("No labels selected for deletion");
+      return;
+    }
+
     if (!canRemove) {
       toast.error("You don't have permission to delete labels");
+      return;
+    }
+
+    if (isMutating) {
+      toast.warning("Please wait for current operation to complete");
       return;
     }
 
@@ -274,7 +302,12 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   };
 
   const handleStartEdit = (label: AnnotationLabelType) => {
+    if (isMutating) {
+      toast.warning("Please wait for current operation to complete");
+      return;
+    }
     setEditingLabelId(label.id);
+    setCreatingLabelType(null); // Cancel any create in progress
     setEditForm({
       text: label.text || "",
       description: label.description || "",
@@ -295,6 +328,10 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
     }
 
     if (!editingLabelId) return;
+
+    if (isMutating) {
+      return; // Already submitting, prevent double-click
+    }
 
     updateAnnotationLabel({
       variables: {
@@ -323,6 +360,10 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   };
 
   const handleStartCreate = (labelType: LabelType) => {
+    if (isMutating) {
+      toast.warning("Please wait for current operation to complete");
+      return;
+    }
     // Cancel any existing edit
     setEditingLabelId(null);
     // Start creating a new label
@@ -343,6 +384,10 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
     if (!creatingLabelType || !editForm.text.trim()) {
       toast.error("Please enter a label name");
       return;
+    }
+
+    if (isMutating) {
+      return; // Already submitting, prevent double-click
     }
 
     createAnnotationLabelForLabelset({
@@ -480,6 +525,8 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   );
 
   // Setup fuzzy search
+  // Note: Not using useMemo here as it causes React error #310 in Playwright component tests
+  // This is a known issue with Playwright CT and certain hook usage patterns
   const text_label_fuse = new Fuse(text_labels, fuse_options);
   const doc_label_fuse = new Fuse(doc_type_labels, fuse_options);
   const relationship_label_fuse = new Fuse(relationship_labels, fuse_options);

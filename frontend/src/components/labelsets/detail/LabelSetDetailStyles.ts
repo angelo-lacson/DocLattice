@@ -787,5 +787,4 @@ export const LoadingContainer = styled.div`
   min-height: 400px;
 `;
 
-// Re-export the color constants for use in component logic
-export { DEFAULT_LABEL_COLOR, PRIMARY_LABEL_COLOR };
+// Note: Color constants are re-exported from index.ts for component logic
