@@ -405,8 +405,10 @@ export interface DeleteLabelsetInputs {
 }
 
 export interface DeleteLabelsetOutputs {
-  ok?: boolean;
-  message?: string;
+  deleteLabelset: {
+    ok?: boolean;
+    message?: string;
+  };
 }
 
 export const DELETE_LABELSET = gql`
@@ -496,8 +498,10 @@ export interface UpdateAnnotationLabelInputs {
 }
 
 export interface UpdateAnnotationLabelOutputs {
-  ok?: boolean;
-  message?: string;
+  updateAnnotationLabel: {
+    ok?: boolean;
+    message?: string;
+  };
 }
 
 export const UPDATE_ANNOTATION_LABEL = gql`
@@ -737,17 +741,21 @@ export const DELETE_ANNOTATION_LABEL = gql`
 `;
 
 export interface DeleteMultipleAnnotationLabelInputs {
-  labelIdsToDelete: string[];
+  annotationLabelIdsToDelete: string[];
 }
 
 export interface DeleteMultipleAnnotationLabelOutputs {
-  ok?: boolean;
-  message?: string;
+  deleteMultipleAnnotationLabels: {
+    ok?: boolean;
+    message?: string;
+  };
 }
 
 export const DELETE_MULTIPLE_ANNOTATION_LABELS = gql`
-  mutation ($labelIdsToDelete: [String]!) {
-    deleteMultipleLabels(labelIdsToDelete: $labelIdsToDelete) {
+  mutation ($annotationLabelIdsToDelete: [String]!) {
+    deleteMultipleAnnotationLabels(
+      annotationLabelIdsToDelete: $annotationLabelIdsToDelete
+    ) {
       ok
       message
     }
