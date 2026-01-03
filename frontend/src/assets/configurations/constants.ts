@@ -46,6 +46,7 @@ export type StatusFilter = (typeof STATUS_FILTERS)[keyof typeof STATUS_FILTERS];
 // Debounce timing constants
 export const DEBOUNCE = {
   SEARCH_MS: 1000,
+  EXTRACT_SEARCH_MS: 500,
   CLICK_OUTSIDE_DELAY_MS: 100,
 } as const;
 
