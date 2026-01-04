@@ -150,7 +150,7 @@ const LoadingContainer = styled.div`
 
 const ErrorContainer = styled.div`
   padding: 20px;
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   font-size: 14px;
   text-align: center;
 `;

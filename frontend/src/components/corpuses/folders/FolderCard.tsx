@@ -311,11 +311,11 @@ const ContextMenuItem = styled.button`
   }
 
   &.danger {
-    color: #dc2626;
+    color: ${OS_LEGAL_COLORS.danger};
 
     &:hover {
-      background-color: #fee2e2;
-      color: #991b1b;
+      background-color: ${OS_LEGAL_COLORS.dangerLight};
+      color: ${OS_LEGAL_COLORS.dangerHover};
     }
   }
 `;

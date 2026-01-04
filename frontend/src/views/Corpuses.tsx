@@ -102,7 +102,10 @@ import { FilterToLabelSelector } from "../components/widgets/model-filters/Filte
 import { ensureValidCorpusId } from "../utils/graphqlGuards";
 import { CorpusAnnotationCards } from "../components/annotations/CorpusAnnotationCards";
 import { CorpusDocumentCards } from "../components/documents/CorpusDocumentCards";
-import { FolderDocumentBrowser } from "../components/corpuses/folders/FolderDocumentBrowser";
+import {
+  FolderDocumentBrowser,
+  ViewMode,
+} from "../components/corpuses/folders/FolderDocumentBrowser";
 import { CorpusAnalysesCards } from "../components/analyses/CorpusAnalysesCards";
 import { FilterToAnalysesSelector } from "../components/widgets/model-filters/FilterToAnalysesSelector";
 import useWindowDimensions from "../components/hooks/WindowDimensionHook";
@@ -1542,6 +1545,10 @@ export const Corpuses = () => {
     annotation_search_term
   );
 
+  // View mode state for the Documents tab
+  const [documentsViewMode, setDocumentsViewMode] =
+    useState<ViewMode>("modern-list");
+
   const opened_corpus_id = opened_corpus?.id ? opened_corpus.id : null;
   let raw_permissions = opened_corpus?.myPermissions;
   if (opened_corpus && raw_permissions !== undefined) {
@@ -2173,8 +2180,15 @@ export const Corpuses = () => {
             </TabNavigationHeader>
             <div style={{ flex: 1, overflow: "hidden" }}>
               {opened_corpus_id && (
-                <FolderDocumentBrowser corpusId={opened_corpus_id}>
-                  <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />
+                <FolderDocumentBrowser
+                  corpusId={opened_corpus_id}
+                  viewMode={documentsViewMode}
+                  onViewModeChange={setDocumentsViewMode}
+                >
+                  <CorpusDocumentCards
+                    opened_corpus_id={opened_corpus_id}
+                    viewMode={documentsViewMode}
+                  />
                 </FolderDocumentBrowser>
               )}
             </div>
