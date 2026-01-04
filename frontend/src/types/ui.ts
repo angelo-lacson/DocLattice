@@ -1,5 +1,13 @@
 import { TokenId } from "../components/types";
 
+/**
+ * View mode for folder document browser.
+ * - modern-list: Compact list view with file details
+ * - modern-card: Card grid view with document previews
+ * - grid: Traditional table/grid view with metadata columns
+ */
+export type FolderViewMode = "modern-card" | "modern-list" | "grid";
+
 export interface MenuItemProps {
   key: string;
   content: string;

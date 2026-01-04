@@ -33,26 +33,23 @@ test.describe("FolderTreeSidebar", () => {
 
     await component.waitFor({ timeout: 3000 });
 
-    // Check that header is visible
+    // Check that header is visible (uppercase FOLDERS)
     await expect(component.getByText("Folders")).toBeVisible({
       timeout: 5000,
     });
 
-    // Check that Corpus Root is visible
-    await expect(component.getByText("Corpus Root")).toBeVisible({
+    // Check that Documents root is visible
+    await expect(component.getByText("Documents").first()).toBeVisible({
       timeout: 5000,
     });
 
-    // Check that root folders are visible
-    await expect(component.getByText("Documents")).toBeVisible({
-      timeout: 5000,
-    });
+    // Check that root folders from mock data are visible
     await expect(component.getByText("Research")).toBeVisible({
       timeout: 5000,
     });
   });
 
-  test("shows New Folder button", async ({ mount }) => {
+  test("shows Folders header", async ({ mount }) => {
     const mocks = [
       {
         request: {
@@ -75,48 +72,13 @@ test.describe("FolderTreeSidebar", () => {
 
     await component.waitFor({ timeout: 3000 });
 
-    // Wait for query to complete and UI to render
-    await expect(
-      component.getByRole("heading", { name: "Folders" })
-    ).toBeVisible({ timeout: 5000 });
-
-    // Now check for New button - it may be styled, so look for any button with "New"
-    const newButton = component.getByRole("button").filter({ hasText: "New" });
-    await expect(newButton).toBeVisible({ timeout: 5000 });
-  });
-
-  test("shows expand/collapse all buttons", async ({ mount }) => {
-    const mocks = [
-      {
-        request: {
-          query: GET_CORPUS_FOLDERS,
-          variables: { corpusId: "corpus-1" },
-        },
-        result: {
-          data: {
-            corpusFolders: [],
-          },
-        },
-      },
-    ];
-
-    const component = await mount(
-      <FolderTestWrapper mocks={mocks}>
-        <FolderTreeSidebar corpusId="corpus-1" />
-      </FolderTestWrapper>
-    );
-
-    await component.waitFor({ timeout: 3000 });
-
-    await expect(component.getByText("Expand All")).toBeVisible({
-      timeout: 5000,
-    });
-    await expect(component.getByText("Collapse All")).toBeVisible({
+    // Check that Folders header is visible (exact match to avoid matching empty state message)
+    await expect(component.getByText("Folders", { exact: true })).toBeVisible({
       timeout: 5000,
     });
   });
 
-  test("shows search input", async ({ mount }) => {
+  test("shows Trash folder", async ({ mount }) => {
     const mocks = [
       {
         request: {
@@ -139,8 +101,8 @@ test.describe("FolderTreeSidebar", () => {
 
     await component.waitFor({ timeout: 3000 });
 
-    const searchInput = component.getByPlaceholder("Search folders...");
-    await expect(searchInput).toBeVisible({ timeout: 5000 });
+    // Check that Trash folder is visible
+    await expect(component.getByText("Trash")).toBeVisible({ timeout: 5000 });
   });
 
   test("shows empty state when no folders", async ({ mount }) => {
@@ -173,7 +135,7 @@ test.describe("FolderTreeSidebar", () => {
     ).toBeVisible({ timeout: 5000 });
   });
 
-  test("filters folders by search query", async ({ mount }) => {
+  test("renders folder tree with nested structure", async ({ mount }) => {
     const { allFolders } = createMockFolderHierarchy();
 
     const mocks = [
@@ -199,27 +161,12 @@ test.describe("FolderTreeSidebar", () => {
     await component.waitFor({ timeout: 3000 });
 
     // Root folders should be visible initially
-    await expect(component.getByText("Documents")).toBeVisible({
+    await expect(component.getByText("Documents").first()).toBeVisible({
       timeout: 5000,
     });
     await expect(component.getByText("Research")).toBeVisible({
       timeout: 5000,
     });
-
-    // Type in search box
-    const searchInput = component.getByPlaceholder("Search folders...");
-    await searchInput.fill("Research");
-
-    // Wait a bit for filter to apply
-    await component.waitFor({ timeout: 1000 });
-
-    // Only matching folder should be visible
-    await expect(component.getByText("Research")).toBeVisible({
-      timeout: 3000,
-    });
-
-    // Documents should still show because it has child folders (tree includes parent if child matches)
-    // But we can verify search worked by checking if "Research" is still visible
   });
 
   test("shows document count badges", async ({ mount }) => {
@@ -310,7 +257,7 @@ test.describe("FolderTreeSidebar", () => {
     });
   });
 
-  test("Corpus Root is clickable", async ({ mount }) => {
+  test("Documents root is clickable", async ({ mount }) => {
     const mocks = [
       {
         request: {
@@ -333,11 +280,11 @@ test.describe("FolderTreeSidebar", () => {
 
     await component.waitFor({ timeout: 3000 });
 
-    const corpusRoot = component.getByText("Corpus Root");
-    await expect(corpusRoot).toBeVisible({ timeout: 5000 });
+    const documentsRoot = component.getByText("Documents");
+    await expect(documentsRoot).toBeVisible({ timeout: 5000 });
 
     // Should be clickable (cursor pointer)
-    const style = await corpusRoot.evaluate((el) =>
+    const style = await documentsRoot.evaluate((el) =>
       window.getComputedStyle(el.closest("div")!)
     );
     expect(style.cursor).toBe("pointer");

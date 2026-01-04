@@ -35,6 +35,8 @@ import {
   GET_CORPUS_ENGAGEMENT_METRICS,
   GET_BADGES,
 } from "../src/graphql/queries";
+import { GET_CORPUS_FOLDERS } from "../src/graphql/queries/folders";
+import { GET_CORPUS_METADATA_COLUMNS } from "../src/graphql/metadataOperations";
 import { CorpusType } from "../src/types/graphql-api";
 import { corpusStateAtom } from "../src/components/annotator/context/CorpusAtom";
 import { getPermissions } from "../src/utils/transform";
@@ -169,6 +171,7 @@ const WILDCARD_QUERIES = [
   { name: "GetCorpusStats", query: GET_CORPUS_STATS },
   { name: "GetCorpusWithHistory", query: GET_CORPUS_WITH_HISTORY },
   { name: "GetCorpusConversations", query: GET_CORPUS_CONVERSATIONS },
+  { name: "GetCorpusFolders", query: GET_CORPUS_FOLDERS },
 ] as const;
 
 // Create wildcard link to respond to repeated queries with consistent results
@@ -185,6 +188,39 @@ const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
     }
   }
 
+  // Find the latest (most complete) document result that has documents
+  const documentsResults = mocks.filter(
+    (m) => m.request.query === GET_DOCUMENTS
+  );
+  const documentsWithData = documentsResults.find(
+    (m) =>
+      (m.result as any)?.data?.documents?.edges?.length > 0 ||
+      (m.request.variables as any)?.inCorpusWithId
+  );
+  const documentsResult =
+    documentsWithData?.result || documentsResults[0]?.result;
+  if (documentsResult) {
+    canonicalResults.set("GetDocuments", documentsResult);
+  }
+
+  // Find metadata columns result with actual columns (not empty)
+  const metadataColumnsResults = mocks.filter(
+    (m) => m.request.query === GET_CORPUS_METADATA_COLUMNS
+  );
+  const columnsWithData = metadataColumnsResults.find(
+    (m) => (m.result as any)?.data?.corpusMetadataColumns?.length > 0
+  );
+  // Use columns with data after some requests, otherwise use first mock
+  let metadataColumnsCallCount = 0;
+  const getMetadataColumnsResult = () => {
+    metadataColumnsCallCount++;
+    // After 2 calls (initial + refetch), return columns with data
+    if (metadataColumnsCallCount > 2 && columnsWithData) {
+      return columnsWithData.result;
+    }
+    return metadataColumnsResults[0]?.result;
+  };
+
   return new ApolloLink((operation) => {
     const opName = operation.operationName;
 
@@ -196,6 +232,20 @@ const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
           console.log(`[MOCK] wildcard ${name}`, operation.variables);
           return Observable.of(result);
         }
+      }
+    }
+
+    // Special handling for metadata columns (progressive response)
+    if (operation.query === GET_CORPUS_METADATA_COLUMNS) {
+      const result = getMetadataColumnsResult();
+      if (result) {
+        console.log(
+          "[MOCK] wildcard GetCorpusMetadataColumns (call #" +
+            metadataColumnsCallCount +
+            ")",
+          operation.variables
+        );
+        return Observable.of(result as any);
       }
     }
 

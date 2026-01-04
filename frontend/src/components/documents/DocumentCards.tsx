@@ -43,8 +43,6 @@ const ResponsiveCardGrid = styled.div`
   @media (min-width: 1601px) {
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 20px;
-    max-width: 2000px;
-    margin: 0 auto;
   }
 `;
 
@@ -83,8 +81,6 @@ const ModernCardGrid = styled.div`
   @media (min-width: 1601px) {
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 18px;
-    max-width: 2000px;
-    margin: 0 auto;
   }
 `;
 
@@ -93,9 +89,7 @@ const ModernListContainer = styled.div`
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  padding: 12px;
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 12px 16px;
 
   @media (max-width: 640px) {
     padding: 8px;
