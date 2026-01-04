@@ -5,6 +5,23 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-03
+
+### Fixed
+
+#### WebSocket Connection Performance (Issue: Chat "Reconnecting" delay)
+- **Auth0 JWKS caching** (`config/graphql_auth0_auth/utils.py:17-38`): Added in-memory cache for Auth0 JWKS with 10-minute TTL
+  - Previously fetched JWKS from Auth0 on every token validation, causing 6-10 second delays
+  - Now caches JWKS keys, reducing subsequent WebSocket auth to near-instant
+- **CorpusChat double connection fix** (`frontend/src/components/corpuses/CorpusChat.tsx:1043-1056`): Skip forceNewChat useEffect on initial mount
+  - `isNewChat` state already initialized from `forceNewChat` prop
+  - Prevents redundant `startNewChat()` call that caused socket close/reconnect cycle
+- **Notification WebSocket auth guard** (`frontend/src/hooks/useNotificationWebSocket.ts:312-318`): Skip connection attempt without auth token
+  - Prevents 403 Access Denied errors when connecting before auth token is available
+  - Eliminates unnecessary connection attempts and error spam in console
+
+---
+
 ## [Unreleased] - 2026-01-02
 
 ### Added

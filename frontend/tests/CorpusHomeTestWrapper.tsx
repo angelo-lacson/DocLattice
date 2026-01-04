@@ -49,6 +49,10 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({ mocks, corpus }) => {
           onEditDescription={() => {}}
           stats={stats}
           statsLoading={false}
+          chatQuery=""
+          onChatQueryChange={() => {}}
+          onChatSubmit={() => {}}
+          onViewChatHistory={() => {}}
         />
       </MockedProvider>
     </Provider>
