@@ -339,6 +339,7 @@ This section provides a comprehensive reference for how permissions work across 
 |-------------|------------------|---------------------------|------------------|---------------|
 | **Corpus** | Direct | Object permissions | `is_public` flag | Creator has full access |
 | **Document** | Direct | Object permissions | `is_public` flag | Creator has full access |
+| **DocumentRelationship** | Direct | Object permissions | `is_public` flag | CREATE requires CREATE on source AND target docs |
 | **CorpusFolder** | Inherited (Corpus) | Parent corpus permissions | None | No individual permissions; write requires UPDATE on corpus |
 | **Annotation** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
 | **Relationship** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
@@ -356,6 +357,44 @@ This section provides a comprehensive reference for how permissions work across 
 ```
 Can Access = is_superuser OR is_creator OR has_object_permission OR (is_public AND READ)
 ```
+
+#### DocumentRelationship (Direct Permissions)
+
+DocumentRelationship objects have their OWN django-guardian permissions (unlike annotation Relationships which inherit from document/corpus). This allows document-level links to be independently shared.
+
+```
+CREATE Check:
+  can_create = has_CREATE_permission_on_source_document
+               AND has_CREATE_permission_on_target_document
+               AND (no corpus OR has_CREATE_permission_on_corpus)
+
+UPDATE Check:
+  can_update = is_superuser
+               OR is_creator
+               OR has_UPDATE_permission_on_relationship
+
+DELETE Check:
+  can_delete = is_superuser
+               OR is_creator
+               OR has_DELETE_permission_on_relationship
+
+READ Check:
+  can_read = is_superuser
+             OR is_creator
+             OR relationship.is_public
+             OR has_READ_permission_on_relationship
+```
+
+**Key differences from annotation Relationship:**
+- DocumentRelationship connects two Document objects (not annotations)
+- Has its own permission records via django-guardian
+- Types: `RELATIONSHIP` (labeled semantic link) or `NOTES` (free-form notes between docs)
+- Can be independently shared without affecting document/corpus permissions
+
+**Query Optimizer**: Use `DocumentRelationshipQueryOptimizer` for:
+- IDOR-safe fetches with `get_relationship_by_id(user, id)`
+- Filtered queries with `get_visible_relationships(user, ...)`
+- Document-specific queries with `get_relationships_for_document(user, doc_id, ...)`
 
 #### Annotations & Relationships
 ```
