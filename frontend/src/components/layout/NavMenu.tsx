@@ -5,6 +5,7 @@ import { showExportModal, showUserSettingsModal } from "../../graphql/cache";
 import UserSettingsModal from "../modals/UserSettingsModal";
 import { VERSION_TAG } from "../../assets/configurations/constants";
 import { useNavMenu } from "./useNavMenu";
+import logo from "../../assets/images/os_legal_128.png";
 
 // Icons for user menu
 const DownloadIcon = () => (
@@ -149,6 +150,13 @@ export const NavMenu = () => {
     <>
       <UserSettingsModal />
       <NavBar
+        logo={
+          <img
+            src={logo}
+            alt="Open Contracts Logo"
+            style={{ width: 32, height: 32, objectFit: "contain" }}
+          />
+        }
         brandName="Open Contracts"
         version={VERSION_TAG}
         items={navItems}
