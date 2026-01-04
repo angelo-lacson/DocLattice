@@ -8,11 +8,16 @@ import { useNavMenu } from "./useNavMenu";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import logo from "../../assets/images/os_legal_128.png";
 
-// Custom styles for version badge - filled background like the design
-const versionBadgeStyles = `
+// Custom styles for navbar
+const navbarCustomStyles = `
+  /* Version badge - filled background */
   .oc-navbar .oc-chip {
     background: rgba(255, 255, 255, 0.15) !important;
     color: rgba(255, 255, 255, 0.9) !important;
+  }
+  /* Keep brand name visible on mobile */
+  .oc-navbar__brand-name {
+    display: block !important;
   }
 `;
 
@@ -162,7 +167,7 @@ export const NavMenu = () => {
 
   return (
     <>
-      <style>{versionBadgeStyles}</style>
+      <style>{navbarCustomStyles}</style>
       <UserSettingsModal />
       <NavBar
         logo={
