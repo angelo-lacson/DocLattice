@@ -4,32 +4,32 @@ import { BreadcrumbFixture } from "./utils/testFixtures";
 import { createDeepFolderHierarchy } from "./utils/mockFolderData";
 
 test.describe("FolderBreadcrumb", () => {
-  test("shows only Corpus Root when no folder selected", async ({ mount }) => {
+  test("shows only Documents when no folder selected", async ({ mount }) => {
     const component = await mount(
       <FolderTestWrapper>
         <BreadcrumbFixture folderId={null} folders={[]} />
       </FolderTestWrapper>
     );
 
-    await expect(component.getByText("Corpus Root")).toBeVisible();
+    await expect(component.getByText("Documents")).toBeVisible();
 
-    // Should not show any folder names
-    await expect(component.getByText("Corpus Root")).toBeVisible();
+    // Should not show any folder names besides root
+    await expect(component.getByText("Documents")).toBeVisible();
   });
 
   test("shows breadcrumb path for selected folder", async ({ mount }) => {
     const folders = [
       {
         id: "folder-1",
-        name: "Documents",
+        name: "Contracts",
         parent: null,
-        path: "Documents",
+        path: "Contracts",
       },
       {
         id: "folder-2",
         name: "Legal",
-        parent: { id: "folder-1", name: "Documents" },
-        path: "Documents / Legal",
+        parent: { id: "folder-1", name: "Contracts" },
+        path: "Contracts / Legal",
       },
     ];
 
@@ -39,9 +39,9 @@ test.describe("FolderBreadcrumb", () => {
       </FolderTestWrapper>
     );
 
-    // Should show full path
-    await expect(component.getByText("Corpus Root")).toBeVisible();
+    // Should show full path (Documents is the root label)
     await expect(component.getByText("Documents")).toBeVisible();
+    await expect(component.getByText("Contracts")).toBeVisible();
     await expect(component.getByText("Legal")).toBeVisible();
   });
 
@@ -66,18 +66,18 @@ test.describe("FolderBreadcrumb", () => {
     ).toBeVisible();
   });
 
-  test("shows Home icon for Corpus Root", async ({ mount }) => {
+  test("shows Home icon for Documents root", async ({ mount }) => {
     const component = await mount(
       <FolderTestWrapper>
         <BreadcrumbFixture folderId={null} folders={[]} />
       </FolderTestWrapper>
     );
 
-    const corpusRoot = component.getByText("Corpus Root");
-    await expect(corpusRoot).toBeVisible();
+    const documentsRoot = component.getByText("Documents");
+    await expect(documentsRoot).toBeVisible();
 
     // Check that an svg icon is present (Home icon from lucide-react)
-    const svg = await corpusRoot.locator("..").locator("svg").first();
+    const svg = await documentsRoot.locator("..").locator("svg").first();
     await expect(svg).toBeVisible();
   });
 
@@ -115,9 +115,9 @@ test.describe("FolderBreadcrumb", () => {
     const folders = [
       {
         id: "folder-1",
-        name: "Documents",
+        name: "Contracts",
         parent: null,
-        path: "Documents",
+        path: "Contracts",
       },
     ];
 
@@ -127,11 +127,11 @@ test.describe("FolderBreadcrumb", () => {
       </FolderTestWrapper>
     );
 
-    const documentsButton = component.getByText("Documents");
-    await expect(documentsButton).toBeVisible();
+    const contractsButton = component.getByText("Contracts");
+    await expect(contractsButton).toBeVisible();
 
     // Check that it has cursor: default (not clickable)
-    const style = await documentsButton.evaluate((el) =>
+    const style = await contractsButton.evaluate((el) =>
       window.getComputedStyle(el)
     );
     expect(style.cursor).toBe("default");
@@ -141,15 +141,15 @@ test.describe("FolderBreadcrumb", () => {
     const folders = [
       {
         id: "folder-1",
-        name: "Documents",
+        name: "Contracts",
         parent: null,
-        path: "Documents",
+        path: "Contracts",
       },
       {
         id: "folder-2",
         name: "Legal",
-        parent: { id: "folder-1", name: "Documents" },
-        path: "Documents / Legal",
+        parent: { id: "folder-1", name: "Contracts" },
+        path: "Contracts / Legal",
       },
     ];
 
@@ -159,19 +159,19 @@ test.describe("FolderBreadcrumb", () => {
       </FolderTestWrapper>
     );
 
-    const corpusRoot = component.getByText("Corpus Root");
-    const documentsLink = component.getByText("Documents");
+    const documentsRoot = component.getByText("Documents");
+    const contractsLink = component.getByText("Contracts");
 
     // Both should be clickable (cursor pointer)
-    const corpusRootStyle = await corpusRoot.evaluate((el) =>
+    const documentsRootStyle = await documentsRoot.evaluate((el) =>
       window.getComputedStyle(el)
     );
-    expect(corpusRootStyle.cursor).toBe("pointer");
+    expect(documentsRootStyle.cursor).toBe("pointer");
 
-    const documentsStyle = await documentsLink.evaluate((el) =>
+    const contractsStyle = await contractsLink.evaluate((el) =>
       window.getComputedStyle(el)
     );
-    expect(documentsStyle.cursor).toBe("pointer");
+    expect(contractsStyle.cursor).toBe("pointer");
   });
 
   test("shows loading state when folder selected but breadcrumb empty", async ({
@@ -207,15 +207,15 @@ test.describe("FolderBreadcrumb", () => {
     const folders = [
       {
         id: "folder-1",
-        name: "Documents",
+        name: "Contracts",
         parent: null,
-        path: "Documents",
+        path: "Contracts",
       },
       {
         id: "folder-2",
         name: "Legal",
-        parent: { id: "folder-1", name: "Documents" },
-        path: "Documents / Legal",
+        parent: { id: "folder-1", name: "Contracts" },
+        path: "Contracts / Legal",
       },
     ];
 
@@ -226,18 +226,18 @@ test.describe("FolderBreadcrumb", () => {
     );
 
     const legalButton = component.getByText("Legal");
-    const documentsButton = component.getByText("Documents");
+    const contractsButton = component.getByText("Contracts");
 
     // Get computed styles
     const legalStyle = await legalButton.evaluate((el) =>
       window.getComputedStyle(el)
     );
-    const documentsStyle = await documentsButton.evaluate((el) =>
+    const contractsStyle = await contractsButton.evaluate((el) =>
       window.getComputedStyle(el)
     );
 
     // Legal (current) should have different color and be bold
-    expect(legalStyle.fontWeight).toBe("600");
-    expect(documentsStyle.fontWeight).toBe("400");
+    expect(legalStyle.fontWeight).toBe("500");
+    expect(contractsStyle.fontWeight).toBe("400");
   });
 });

@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import styled from "styled-components";
-import { ChevronRight, ChevronDown, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -16,6 +16,10 @@ import {
   draggingFolderIdAtom,
 } from "../../../atoms/folderAtoms";
 import { FolderTreeNode as FolderTreeNodeType } from "../../../graphql/queries/folders";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
+} from "../../../assets/configurations/osLegalStyles";
 
 /**
  * FolderTreeNode - Recursive tree node component for folder hierarchy
@@ -57,27 +61,27 @@ const NodeContainer = styled.div<{
   transition: all 0.15s ease;
   background-color: ${(props) =>
     props.$isSelected
-      ? "rgba(59, 130, 246, 0.1)"
+      ? OS_LEGAL_COLORS.selectedBg
       : props.$isDropTarget
-      ? "rgba(34, 197, 94, 0.1)"
+      ? OS_LEGAL_COLORS.dropTargetBg
       : "transparent"};
   border: 1px solid
     ${(props) =>
       props.$isSelected
-        ? "rgba(59, 130, 246, 0.3)"
+        ? OS_LEGAL_COLORS.selectedBorder
         : props.$isDropTarget
-        ? "rgba(34, 197, 94, 0.3)"
+        ? OS_LEGAL_COLORS.dropTargetBorder
         : "transparent"};
 
   &:hover {
     background-color: ${(props) =>
       props.$isSelected
-        ? "rgba(59, 130, 246, 0.15)"
+        ? OS_LEGAL_COLORS.accentLight
         : "rgba(148, 163, 184, 0.1)"};
   }
 
   &:active {
-    background-color: rgba(59, 130, 246, 0.2);
+    background-color: ${OS_LEGAL_COLORS.accentLight};
   }
 `;
 
@@ -92,12 +96,12 @@ const ChevronButton = styled.button<{ $isExpanded: boolean }>`
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   transition: transform 0.2s ease, color 0.15s ease;
   transform: rotate(${(props) => (props.$isExpanded ? 90 : 0)}deg);
 
   &:hover {
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   &:focus {
@@ -111,17 +115,18 @@ const IconPlaceholder = styled.div`
   margin-right: 4px;
 `;
 
-const FolderIconWrapper = styled.div<{ $color: string }>`
+const FolderIconWrapper = styled.div`
   display: flex;
   align-items: center;
   margin-right: 8px;
-  color: ${(props) => props.$color};
+  color: ${OS_LEGAL_COLORS.folderIcon};
 `;
 
 const FolderName = styled.span<{ $isSelected: boolean }>`
   flex: 1;
   font-size: 14px;
-  color: ${(props) => (props.$isSelected ? "#1e40af" : "#1e293b")};
+  color: ${(props) =>
+    props.$isSelected ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textPrimary};
   font-weight: ${(props) => (props.$isSelected ? "600" : "400")};
   white-space: nowrap;
   min-width: 0;
@@ -135,16 +140,16 @@ const DocumentCountBadge = styled.span`
   height: 18px;
   padding: 0 6px;
   margin-left: 8px;
-  background-color: #e2e8f0;
-  color: #475569;
+  background-color: ${OS_LEGAL_COLORS.border};
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-size: 11px;
   font-weight: 600;
   border-radius: 9px;
   transition: all 0.15s ease;
 
   ${NodeContainer}:hover & {
-    background-color: #cbd5e1;
-    color: #334155;
+    background-color: ${OS_LEGAL_COLORS.borderHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -161,10 +166,10 @@ const ContextMenu = styled.div<{ $x: number; $y: number }>`
   position: fixed;
   top: ${(props) => props.$y}px;
   left: ${(props) => props.$x}px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 24px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surface};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 4px;
   min-width: 180px;
   z-index: 1000;
@@ -180,25 +185,25 @@ const ContextMenuItem = styled.button`
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   text-align: left;
   transition: all 0.15s ease;
 
   &:hover {
-    background-color: #f1f5f9;
-    color: #1e293b;
+    background-color: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   &:active {
-    background-color: #e2e8f0;
+    background-color: ${OS_LEGAL_COLORS.border};
   }
 
   &.danger {
-    color: #dc2626;
+    color: ${OS_LEGAL_COLORS.danger};
 
     &:hover {
-      background-color: #fee2e2;
-      color: #991b1b;
+      background-color: ${OS_LEGAL_COLORS.dangerLight};
+      color: ${OS_LEGAL_COLORS.dangerHover};
     }
   }
 `;
@@ -331,7 +336,7 @@ export const FolderTreeNode: React.FC<FolderTreeNodeProps> = ({
           <IconPlaceholder />
         )}
 
-        <FolderIconWrapper $color={folder.color}>
+        <FolderIconWrapper>
           {isExpanded ? <FolderOpen size={18} /> : <Folder size={18} />}
         </FolderIconWrapper>
 
