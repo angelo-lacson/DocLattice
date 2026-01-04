@@ -7,12 +7,12 @@ This module tests the JWKS cache in config/graphql_auth0_auth/utils.py to ensure
 3. Cache expires correctly after TTL
 """
 
-import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from config.graphql_auth0_auth.utils import _get_cached_jwks, _jwks_cache, _JWKS_CACHE_TTL
+from config.graphql_auth0_auth.utils import (
+    _JWKS_CACHE_TTL,
+    _get_cached_jwks,
+)
 
 
 class TestJWKSCache:
@@ -20,7 +20,6 @@ class TestJWKSCache:
 
     def setup_method(self):
         """Reset cache before each test."""
-        global _jwks_cache
         # Import and reset the module-level cache
         import config.graphql_auth0_auth.utils as utils_module
 
