@@ -301,7 +301,8 @@ class DocumentRelationshipMutationTestCase(TestCase):
 
         data = result["data"]["createDocumentRelationship"]
         self.assertFalse(data["ok"])
-        self.assertIn("permission", data["message"].lower())
+        # IDOR protection: same message for not found or no permission
+        self.assertIn("not found", data["message"].lower())
 
     def test_collaborator_read_only_cannot_create(self):
         """Test that collaborator with only READ permission cannot create."""
@@ -336,7 +337,8 @@ class DocumentRelationshipMutationTestCase(TestCase):
 
         data = result["data"]["createDocumentRelationship"]
         self.assertFalse(data["ok"])
-        self.assertIn("permission", data["message"].lower())
+        # IDOR protection: same message for not found or no permission
+        self.assertIn("not found", data["message"].lower())
 
     def test_create_relationship_docs_not_in_corpus_fails(self):
         """Test that creating a relationship fails if documents aren't in the corpus."""

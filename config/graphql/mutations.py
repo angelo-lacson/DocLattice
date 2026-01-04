@@ -2674,8 +2674,10 @@ class CreateDocumentRelationship(graphene.Mutation):
             target_doc_pk = from_global_id(target_document_id)[1]
             corpus_pk = from_global_id(corpus_id)[1]
 
-            # Validate relationship_type
-            valid_types = ["RELATIONSHIP", "NOTES"]
+            # Validate relationship_type (use model constant)
+            valid_types = [
+                choice[0] for choice in DocumentRelationship.RELATIONSHIP_TYPE_CHOICES
+            ]
             if relationship_type not in valid_types:
                 return CreateDocumentRelationship(
                     ok=False,
@@ -2701,6 +2703,7 @@ class CreateDocumentRelationship(graphene.Mutation):
                     message="Corpus not found",
                 )
 
+            # IDOR-safe: same message for not found or no permission
             if not user_has_permission_for_obj(
                 info.context.user,
                 corpus,
@@ -2710,7 +2713,7 @@ class CreateDocumentRelationship(graphene.Mutation):
                 return CreateDocumentRelationship(
                     ok=False,
                     document_relationship=None,
-                    message="You don't have permission to create relationships in this corpus",
+                    message="Corpus not found",
                 )
 
             # Fetch source document and check permission (before same-corpus check
@@ -2890,9 +2893,11 @@ class UpdateDocumentRelationship(graphene.Mutation):
                     message="You don't have permission to update this document relationship",
                 )
 
-            # Validate relationship_type if provided
+            # Validate relationship_type if provided (use model constant)
+            valid_types = [
+                choice[0] for choice in DocumentRelationship.RELATIONSHIP_TYPE_CHOICES
+            ]
             if relationship_type is not None:
-                valid_types = ["RELATIONSHIP", "NOTES"]
                 if relationship_type not in valid_types:
                     return UpdateDocumentRelationship(
                         ok=False,
@@ -2918,23 +2923,42 @@ class UpdateDocumentRelationship(graphene.Mutation):
                         )
                     doc_relationship.annotation_label_id = annotation_label_pk
 
+            # Explicit validation: RELATIONSHIP type requires annotation_label
+            # (Check before full_clean for clearer error message)
+            final_type = relationship_type or doc_relationship.relationship_type
+            final_label = (
+                doc_relationship.annotation_label_id
+                if annotation_label_id != ""
+                else None
+            )
+            if final_type == "RELATIONSHIP" and not final_label:
+                return UpdateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="annotation_label_id is required for RELATIONSHIP type",
+                )
+
             # Handle corpus update
             if corpus_id is not None:
                 if corpus_id == "":
-                    # Explicitly clearing the corpus
-                    doc_relationship.corpus_id = None
+                    return UpdateDocumentRelationship(
+                        ok=False,
+                        document_relationship=None,
+                        message="Corpus is required for document relationships",
+                    )
                 else:
                     corpus_pk = from_global_id(corpus_id)[1]
                     try:
                         corpus = Corpus.objects.get(pk=corpus_pk)
                     except Corpus.DoesNotExist:
+                        # IDOR-safe: same message for not found or no permission
                         return UpdateDocumentRelationship(
                             ok=False,
                             document_relationship=None,
                             message="Corpus not found",
                         )
 
-                    # Check permission on the new corpus
+                    # Check permission on the new corpus (IDOR-safe message)
                     if not user_has_permission_for_obj(
                         info.context.user,
                         corpus,
@@ -2944,7 +2968,21 @@ class UpdateDocumentRelationship(graphene.Mutation):
                         return UpdateDocumentRelationship(
                             ok=False,
                             document_relationship=None,
-                            message="You don't have permission to associate relationships with this corpus",
+                            message="Corpus not found",
+                        )
+
+                    # Validate both documents are in the new corpus
+                    docs_in_corpus = corpus.documents.filter(
+                        id__in=[
+                            doc_relationship.source_document_id,
+                            doc_relationship.target_document_id,
+                        ]
+                    ).count()
+                    if docs_in_corpus != 2:
+                        return UpdateDocumentRelationship(
+                            ok=False,
+                            document_relationship=None,
+                            message="Both documents must be in the specified corpus",
                         )
                     doc_relationship.corpus_id = corpus_pk
 
@@ -2952,7 +2990,7 @@ class UpdateDocumentRelationship(graphene.Mutation):
             if data is not None:
                 doc_relationship.data = data
 
-            # Validate before saving (model's clean() will check RELATIONSHIP requires label)
+            # Validate before saving
             doc_relationship.full_clean()
             doc_relationship.save()
 
@@ -3055,28 +3093,34 @@ class DeleteDocumentRelationships(graphene.Mutation):
     @login_required
     def mutate(root, info, document_relationship_ids):
         user = info.context.user
-        deleted_count = 0
 
         try:
-            for graphene_id in document_relationship_ids:
-                doc_rel_pk = from_global_id(graphene_id)[1]
+            # Decode all IDs first
+            relationship_pks = [
+                int(from_global_id(gid)[1]) for gid in document_relationship_ids
+            ]
 
-                # Use optimizer for IDOR-safe fetch with visibility check
-                doc_relationship = (
-                    DocumentRelationshipQueryOptimizer.get_relationship_by_id(
-                        user=user,
-                        relationship_id=int(doc_rel_pk),
-                    )
-                )
+            # Fetch all relationships in a single query (fixes N+1)
+            visible_relationships = (
+                DocumentRelationshipQueryOptimizer.get_visible_relationships(
+                    user=user
+                ).filter(id__in=relationship_pks)
+            )
 
-                # IDOR protection: same message for not found or not accessible
-                if doc_relationship is None:
+            # Build a dict for O(1) lookup
+            relationship_map = {rel.id: rel for rel in visible_relationships}
+
+            # Check all relationships are visible (IDOR protection)
+            for pk in relationship_pks:
+                if pk not in relationship_map:
                     return DeleteDocumentRelationships(
                         ok=False,
                         message="Document relationship not found",
-                        deleted_count=deleted_count,
+                        deleted_count=0,
                     )
 
+            # Check DELETE permission for each relationship
+            for pk, doc_relationship in relationship_map.items():
                 if not user_has_permission_for_obj(
                     user,
                     doc_relationship,
@@ -3085,12 +3129,13 @@ class DeleteDocumentRelationships(graphene.Mutation):
                 ):
                     return DeleteDocumentRelationships(
                         ok=False,
-                        message="Permission denied for one or more relationships",
-                        deleted_count=deleted_count,
+                        message="Document relationship not found",
+                        deleted_count=0,
                     )
 
-                doc_relationship.delete()
-                deleted_count += 1
+            # Delete all at once
+            deleted_count = len(relationship_pks)
+            DocumentRelationship.objects.filter(id__in=relationship_pks).delete()
 
             return DeleteDocumentRelationships(
                 ok=True,

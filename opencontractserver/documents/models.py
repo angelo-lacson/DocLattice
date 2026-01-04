@@ -489,6 +489,7 @@ class DocumentRelationship(BaseOCModel):
             django.db.models.Index(fields=["target_document"]),
             django.db.models.Index(fields=["relationship_type"]),
             django.db.models.Index(fields=["annotation_label"]),
+            django.db.models.Index(fields=["corpus"]),
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
