@@ -97,14 +97,11 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
 }) => {
   const [mdContent, setMdContent] = useState<string | null>(null);
 
-  // CRITICAL: Memoize corpus ID to prevent infinite query loops
+  // CRITICAL: Memoize variables object to prevent Apollo refetch on every render
   // Parent passes new corpus object reference on every render (reactive var issue)
   // Apollo refetches queries when variables object changes, so we must stabilize it
-  const corpusId = useMemo(() => corpus.id, [corpus.id]);
-
-  // CRITICAL: Memoize variables object to prevent Apollo refetch on every render
-  // Even though corpusId is memoized, { id: corpusId } creates a NEW object every time
-  const historyVariables = useMemo(() => ({ id: corpusId }), [corpusId]);
+  // Note: corpus.id is already a primitive, so we only need to memoize the object
+  const historyVariables = useMemo(() => ({ id: corpus.id }), [corpus.id]);
 
   // Fetch corpus with description history
   const { data: corpusData, loading: corpusLoading } = useQuery<
@@ -118,7 +115,12 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   useEffect(() => {
     if (corpusData?.corpus?.mdDescription) {
       fetch(corpusData.corpus.mdDescription)
-        .then((res) => res.text())
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.text();
+        })
         .then((text) => setMdContent(text))
         .catch((err) => {
           console.error("Error fetching corpus description:", err);

@@ -5,9 +5,14 @@ This module tests the JWKS cache in config/graphql_auth0_auth/utils.py to ensure
 1. JWKS is fetched from Auth0 on first request
 2. Subsequent requests use cached data within TTL
 3. Cache expires correctly after TTL
+4. Thread-safe access to the cache
+5. Graceful fallback to stale cache on network errors
 """
 
 from unittest.mock import MagicMock, patch
+
+import pytest
+import requests
 
 from config.graphql_auth0_auth.utils import (
     _JWKS_CACHE_TTL,
@@ -39,6 +44,7 @@ class TestJWKSCache:
         mock_get.assert_called_once_with(
             "https://test-domain.auth0.com/.well-known/jwks.json", timeout=10
         )
+        mock_response.raise_for_status.assert_called_once()
 
     @patch("config.graphql_auth0_auth.utils.requests.get")
     def test_second_request_uses_cache(self, mock_get):
@@ -102,3 +108,83 @@ class TestJWKSCache:
         assert result == mock_jwks
         # Should only be called once (cache still valid)
         assert mock_get.call_count == 1
+
+    @patch("config.graphql_auth0_auth.utils.requests.get")
+    @patch("config.graphql_auth0_auth.utils.time.time")
+    def test_network_error_returns_stale_cache(self, mock_time, mock_get):
+        """Network error should return stale cache if available."""
+        mock_jwks = {"keys": [{"kid": "test-key-id", "kty": "RSA"}]}
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_jwks
+        mock_get.return_value = mock_response
+
+        # First request succeeds at time 0
+        mock_time.return_value = 0
+        result1 = _get_cached_jwks("test-domain.auth0.com")
+        assert result1 == mock_jwks
+
+        # Second request after TTL expires, but network fails
+        mock_time.return_value = _JWKS_CACHE_TTL + 1
+        mock_get.side_effect = requests.RequestException("Network error")
+
+        # Should return stale cache
+        result2 = _get_cached_jwks("test-domain.auth0.com")
+        assert result2 == mock_jwks
+
+    @patch("config.graphql_auth0_auth.utils.requests.get")
+    def test_network_error_raises_when_no_cache(self, mock_get):
+        """Network error should raise when no cache is available."""
+        mock_get.side_effect = requests.RequestException("Network error")
+
+        with pytest.raises(requests.RequestException):
+            _get_cached_jwks("test-domain.auth0.com")
+
+    @patch("config.graphql_auth0_auth.utils.requests.get")
+    @patch("config.graphql_auth0_auth.utils.time.time")
+    def test_http_error_returns_stale_cache(self, mock_time, mock_get):
+        """HTTP error should return stale cache if available."""
+        mock_jwks = {"keys": [{"kid": "test-key-id", "kty": "RSA"}]}
+        mock_response_success = MagicMock()
+        mock_response_success.json.return_value = mock_jwks
+
+        # First request succeeds at time 0
+        mock_time.return_value = 0
+        mock_get.return_value = mock_response_success
+        result1 = _get_cached_jwks("test-domain.auth0.com")
+        assert result1 == mock_jwks
+
+        # Second request after TTL expires, but HTTP error
+        mock_time.return_value = _JWKS_CACHE_TTL + 1
+        mock_response_error = MagicMock()
+        mock_response_error.raise_for_status.side_effect = requests.HTTPError(
+            "500 Server Error"
+        )
+        mock_get.return_value = mock_response_error
+
+        # Should return stale cache
+        result2 = _get_cached_jwks("test-domain.auth0.com")
+        assert result2 == mock_jwks
+
+    @patch("config.graphql_auth0_auth.utils.requests.get")
+    @patch("config.graphql_auth0_auth.utils.time.time")
+    def test_json_parse_error_returns_stale_cache(self, mock_time, mock_get):
+        """JSON parse error should return stale cache if available."""
+        mock_jwks = {"keys": [{"kid": "test-key-id", "kty": "RSA"}]}
+        mock_response_success = MagicMock()
+        mock_response_success.json.return_value = mock_jwks
+
+        # First request succeeds at time 0
+        mock_time.return_value = 0
+        mock_get.return_value = mock_response_success
+        result1 = _get_cached_jwks("test-domain.auth0.com")
+        assert result1 == mock_jwks
+
+        # Second request after TTL expires, but JSON parse fails
+        mock_time.return_value = _JWKS_CACHE_TTL + 1
+        mock_response_bad_json = MagicMock()
+        mock_response_bad_json.json.side_effect = ValueError("Invalid JSON")
+        mock_get.return_value = mock_response_bad_json
+
+        # Should return stale cache
+        result2 = _get_cached_jwks("test-domain.auth0.com")
+        assert result2 == mock_jwks
