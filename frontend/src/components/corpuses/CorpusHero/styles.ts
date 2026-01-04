@@ -306,6 +306,14 @@ export const QuickActionChip = styled(motion.button)`
     color: ${CORPUS_COLORS.teal[700]};
   }
 
+  &:focus-visible {
+    outline: 2px solid ${CORPUS_COLORS.teal[500]};
+    outline-offset: 2px;
+    background: ${CORPUS_COLORS.teal[50]};
+    border-color: ${CORPUS_COLORS.teal[200]};
+    color: ${CORPUS_COLORS.teal[700]};
+  }
+
   ${mediaQuery.tablet} {
     font-size: 0.75rem;
     padding: 0.25rem 0.625rem;
