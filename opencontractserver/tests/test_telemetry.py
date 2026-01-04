@@ -181,3 +181,80 @@ class UsageHeartbeatTestCase(TestCase):
             result = send_usage_heartbeat()
 
         self.assertIsNone(result)
+
+
+class TelemetryMigrationTestCase(TestCase):
+    """Tests for the telemetry periodic task migration."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Import migration module using importlib (can't use normal import for numeric names)
+        import importlib
+
+        cls.migration_module = importlib.import_module(
+            "opencontractserver.users.migrations.0024_setup_telemetry_periodic_task"
+        )
+
+    def test_setup_telemetry_task_creates_periodic_task(self):
+        """Test that the migration creates the periodic task when telemetry is enabled."""
+        from django.apps import apps
+        from django_celery_beat.models import PeriodicTask
+
+        # Clean up any existing task from previous test runs
+        PeriodicTask.objects.filter(name="usage-heartbeat-daily").delete()
+
+        with override_settings(TELEMETRY_ENABLED=True):
+            self.migration_module.setup_telemetry_task(apps, None)
+
+        # Verify task was created
+        task = PeriodicTask.objects.get(name="usage-heartbeat-daily")
+        self.assertEqual(
+            task.task,
+            "opencontractserver.tasks.telemetry_tasks.send_usage_heartbeat",
+        )
+        self.assertTrue(task.enabled)
+        self.assertIsNotNone(task.crontab)
+
+        # Verify crontab schedule
+        self.assertEqual(task.crontab.minute, "0")
+        self.assertEqual(task.crontab.hour, "0")
+
+    def test_setup_telemetry_task_skips_when_disabled(self):
+        """Test that the migration skips task creation when telemetry is disabled."""
+        from django.apps import apps
+        from django_celery_beat.models import PeriodicTask
+
+        # Clean up any existing task
+        PeriodicTask.objects.filter(name="usage-heartbeat-daily").delete()
+
+        with override_settings(TELEMETRY_ENABLED=False):
+            self.migration_module.setup_telemetry_task(apps, None)
+
+        # Verify task was NOT created
+        self.assertFalse(
+            PeriodicTask.objects.filter(name="usage-heartbeat-daily").exists()
+        )
+
+    def test_reverse_telemetry_task_removes_periodic_task(self):
+        """Test that the reverse migration removes the periodic task."""
+        from django.apps import apps
+        from django_celery_beat.models import PeriodicTask
+
+        # First create the task
+        PeriodicTask.objects.filter(name="usage-heartbeat-daily").delete()
+        with override_settings(TELEMETRY_ENABLED=True):
+            self.migration_module.setup_telemetry_task(apps, None)
+
+        # Verify it exists
+        self.assertTrue(
+            PeriodicTask.objects.filter(name="usage-heartbeat-daily").exists()
+        )
+
+        # Now reverse it
+        self.migration_module.reverse_telemetry_task(apps, None)
+
+        # Verify it's gone
+        self.assertFalse(
+            PeriodicTask.objects.filter(name="usage-heartbeat-daily").exists()
+        )
