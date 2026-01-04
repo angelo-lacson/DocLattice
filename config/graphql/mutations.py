@@ -141,6 +141,9 @@ from opencontractserver.documents.models import (
     DocumentPath,
     DocumentRelationship,
 )
+from opencontractserver.documents.query_optimizer import (
+    DocumentRelationshipQueryOptimizer,
+)
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.tasks import (
@@ -2845,10 +2848,16 @@ class UpdateDocumentRelationship(graphene.Mutation):
             # Decode global ID
             doc_rel_pk = from_global_id(document_relationship_id)[1]
 
-            # Fetch the document relationship
-            try:
-                doc_relationship = DocumentRelationship.objects.get(pk=doc_rel_pk)
-            except DocumentRelationship.DoesNotExist:
+            # Use optimizer for IDOR-safe fetch with visibility check
+            doc_relationship = (
+                DocumentRelationshipQueryOptimizer.get_relationship_by_id(
+                    user=info.context.user,
+                    relationship_id=int(doc_rel_pk),
+                )
+            )
+
+            # IDOR protection: same message for not found or not accessible
+            if doc_relationship is None:
                 return UpdateDocumentRelationship(
                     ok=False,
                     document_relationship=None,
@@ -2972,10 +2981,16 @@ class DeleteDocumentRelationship(graphene.Mutation):
             # Decode global ID
             doc_rel_pk = from_global_id(document_relationship_id)[1]
 
-            # Fetch the document relationship
-            try:
-                doc_relationship = DocumentRelationship.objects.get(pk=doc_rel_pk)
-            except DocumentRelationship.DoesNotExist:
+            # Use optimizer for IDOR-safe fetch with visibility check
+            doc_relationship = (
+                DocumentRelationshipQueryOptimizer.get_relationship_by_id(
+                    user=info.context.user,
+                    relationship_id=int(doc_rel_pk),
+                )
+            )
+
+            # IDOR protection: same message for not found or not accessible
+            if doc_relationship is None:
                 return DeleteDocumentRelationship(
                     ok=False, message="Document relationship not found"
                 )
@@ -3033,12 +3048,19 @@ class DeleteDocumentRelationships(graphene.Mutation):
             for graphene_id in document_relationship_ids:
                 doc_rel_pk = from_global_id(graphene_id)[1]
 
-                try:
-                    doc_relationship = DocumentRelationship.objects.get(pk=doc_rel_pk)
-                except DocumentRelationship.DoesNotExist:
+                # Use optimizer for IDOR-safe fetch with visibility check
+                doc_relationship = (
+                    DocumentRelationshipQueryOptimizer.get_relationship_by_id(
+                        user=user,
+                        relationship_id=int(doc_rel_pk),
+                    )
+                )
+
+                # IDOR protection: same message for not found or not accessible
+                if doc_relationship is None:
                     return DeleteDocumentRelationships(
                         ok=False,
-                        message=f"Document relationship not found: {graphene_id}",
+                        message="Document relationship not found",
                         deleted_count=deleted_count,
                     )
 

@@ -578,7 +578,11 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
         )
 
     def test_delete_relationship_without_permission_fails(self):
-        """Test that outsider cannot delete a document relationship."""
+        """Test that outsider cannot delete a document relationship.
+
+        IDOR Protection: Returns "not found" for both non-existent AND inaccessible
+        resources to prevent attackers from discovering what exists.
+        """
         mutation = """
             mutation DeleteDocRel($documentRelationshipId: String!) {
                 deleteDocumentRelationship(
@@ -601,7 +605,8 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
 
         data = result["data"]["deleteDocumentRelationship"]
         self.assertFalse(data["ok"])
-        self.assertIn("permission", data["message"].lower())
+        # IDOR protection: same "not found" message for inaccessible as non-existent
+        self.assertIn("not found", data["message"].lower())
 
         # Verify it still exists
         self.assertTrue(
