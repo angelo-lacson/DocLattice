@@ -5,7 +5,16 @@ import { showExportModal, showUserSettingsModal } from "../../graphql/cache";
 import UserSettingsModal from "../modals/UserSettingsModal";
 import { VERSION_TAG } from "../../assets/configurations/constants";
 import { useNavMenu } from "./useNavMenu";
+import useWindowDimensions from "../hooks/WindowDimensionHook";
 import logo from "../../assets/images/os_legal_128.png";
+
+// Custom styles for version badge - filled background like the design
+const versionBadgeStyles = `
+  .oc-navbar .oc-chip {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+`;
 
 // Icons for user menu
 const DownloadIcon = () => (
@@ -60,6 +69,11 @@ export const NavMenu = () => {
     doLogin,
   } = useNavMenu();
   const navigate = useNavigate();
+  const { width } = useWindowDimensions();
+
+  // On mobile (< 1100px where NavBar collapses), show "OC - version" instead of just version
+  const isMobile = width < 1100;
+  const versionDisplay = isMobile ? `OC - ${VERSION_TAG}` : VERSION_TAG;
 
   const isSuperuser = user && (user as any).isSuperuser;
 
@@ -148,6 +162,7 @@ export const NavMenu = () => {
 
   return (
     <>
+      <style>{versionBadgeStyles}</style>
       <UserSettingsModal />
       <NavBar
         logo={
@@ -158,7 +173,7 @@ export const NavMenu = () => {
           />
         }
         brandName="Open Contracts"
-        version={VERSION_TAG}
+        version={versionDisplay}
         items={navItems}
         activeId={activeId}
         onNavigate={handleNavigate}
