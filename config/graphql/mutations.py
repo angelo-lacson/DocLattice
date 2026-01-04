@@ -2618,13 +2618,14 @@ class UpdateRelations(graphene.Mutation):
 
 class CreateDocumentRelationship(graphene.Mutation):
     """
-    Create a new relationship between two documents.
+    Create a new relationship between two documents in the same corpus.
 
     Permission requirements:
     - User must have CREATE permission on BOTH source and target documents
-    - If corpus_id is provided, user must have CREATE permission on the corpus
+    - User must have CREATE permission on the corpus
 
     Validation:
+    - Both documents must be in the specified corpus
     - For RELATIONSHIP type: annotation_label_id is required
     - For NOTES type: annotation_label_id is optional
     """
@@ -2645,7 +2646,8 @@ class CreateDocumentRelationship(graphene.Mutation):
             description="ID of the annotation label (required for RELATIONSHIP type)",
         )
         corpus_id = graphene.String(
-            required=False, description="ID of the corpus for this relationship"
+            required=True,
+            description="ID of the corpus (both documents must be in this corpus)",
         )
         data = GenericScalar(
             required=False, description="JSON data payload (e.g., for notes content)"
@@ -2662,14 +2664,15 @@ class CreateDocumentRelationship(graphene.Mutation):
         source_document_id,
         target_document_id,
         relationship_type,
+        corpus_id,
         annotation_label_id=None,
-        corpus_id=None,
         data=None,
     ):
         try:
             # Decode global IDs
             source_doc_pk = from_global_id(source_document_id)[1]
             target_doc_pk = from_global_id(target_document_id)[1]
+            corpus_pk = from_global_id(corpus_id)[1]
 
             # Validate relationship_type
             valid_types = ["RELATIONSHIP", "NOTES"]
@@ -2688,7 +2691,30 @@ class CreateDocumentRelationship(graphene.Mutation):
                     message="annotation_label_id is required for RELATIONSHIP type",
                 )
 
-            # Fetch source document and check permission
+            # Fetch corpus first and check permission
+            try:
+                corpus = Corpus.objects.get(pk=corpus_pk)
+            except Corpus.DoesNotExist:
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="Corpus not found",
+                )
+
+            if not user_has_permission_for_obj(
+                info.context.user,
+                corpus,
+                PermissionTypes.CREATE,
+                include_group_permissions=True,
+            ):
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="You don't have permission to create relationships in this corpus",
+                )
+
+            # Fetch source document and check permission (before same-corpus check
+            # for better error messages)
             try:
                 source_doc = Document.objects.get(pk=source_doc_pk)
             except Document.DoesNotExist:
@@ -2732,30 +2758,17 @@ class CreateDocumentRelationship(graphene.Mutation):
                     message="You don't have permission to create relationships for the target document",
                 )
 
-            # Handle optional corpus
-            corpus_pk = None
-            if corpus_id:
-                corpus_pk = from_global_id(corpus_id)[1]
-                try:
-                    corpus = Corpus.objects.get(pk=corpus_pk)
-                except Corpus.DoesNotExist:
-                    return CreateDocumentRelationship(
-                        ok=False,
-                        document_relationship=None,
-                        message="Corpus not found",
-                    )
-
-                if not user_has_permission_for_obj(
-                    info.context.user,
-                    corpus,
-                    PermissionTypes.CREATE,
-                    include_group_permissions=True,
-                ):
-                    return CreateDocumentRelationship(
-                        ok=False,
-                        document_relationship=None,
-                        message="You don't have permission to create relationships in this corpus",
-                    )
+            # Efficient single-query validation: both docs must be in the corpus
+            # (Now that we know both docs exist)
+            docs_in_corpus = corpus.documents.filter(
+                id__in=[source_doc_pk, target_doc_pk]
+            ).count()
+            if docs_in_corpus != 2:
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="Both documents must be in the same corpus",
+                )
 
             # Handle optional annotation_label
             annotation_label_pk = None

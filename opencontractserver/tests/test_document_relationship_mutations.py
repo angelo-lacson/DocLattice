@@ -88,6 +88,9 @@ class DocumentRelationshipMutationTestCase(TestCase):
             creator=self.owner,
         )
 
+        # Add documents to corpus (required for DocumentRelationship)
+        self.corpus.documents.add(self.source_doc, self.target_doc)
+
         # Set permissions for owner
         set_permissions_for_obj_to_user(
             self.owner, self.source_doc, [PermissionTypes.CRUD]
@@ -117,15 +120,15 @@ class DocumentRelationshipMutationTestCase(TestCase):
                 $sourceDocumentId: String!,
                 $targetDocumentId: String!,
                 $relationshipType: String!,
-                $annotationLabelId: String,
-                $corpusId: String
+                $corpusId: String!,
+                $annotationLabelId: String
             ) {
                 createDocumentRelationship(
                     sourceDocumentId: $sourceDocumentId,
                     targetDocumentId: $targetDocumentId,
                     relationshipType: $relationshipType,
-                    annotationLabelId: $annotationLabelId,
-                    corpusId: $corpusId
+                    corpusId: $corpusId,
+                    annotationLabelId: $annotationLabelId
                 ) {
                     ok
                     message
@@ -184,12 +187,14 @@ class DocumentRelationshipMutationTestCase(TestCase):
                 $sourceDocumentId: String!,
                 $targetDocumentId: String!,
                 $relationshipType: String!,
+                $corpusId: String!,
                 $data: GenericScalar
             ) {
                 createDocumentRelationship(
                     sourceDocumentId: $sourceDocumentId,
                     targetDocumentId: $targetDocumentId,
                     relationshipType: $relationshipType,
+                    corpusId: $corpusId,
                     data: $data
                 ) {
                     ok
@@ -207,6 +212,7 @@ class DocumentRelationshipMutationTestCase(TestCase):
             "sourceDocumentId": to_global_id("DocumentType", self.source_doc.id),
             "targetDocumentId": to_global_id("DocumentType", self.target_doc.id),
             "relationshipType": "NOTES",
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
             "data": {"note": "Test note content"},
         }
 
@@ -227,12 +233,14 @@ class DocumentRelationshipMutationTestCase(TestCase):
             mutation CreateDocRel(
                 $sourceDocumentId: String!,
                 $targetDocumentId: String!,
-                $relationshipType: String!
+                $relationshipType: String!,
+                $corpusId: String!
             ) {
                 createDocumentRelationship(
                     sourceDocumentId: $sourceDocumentId,
                     targetDocumentId: $targetDocumentId,
-                    relationshipType: $relationshipType
+                    relationshipType: $relationshipType,
+                    corpusId: $corpusId
                 ) {
                     ok
                     message
@@ -247,6 +255,7 @@ class DocumentRelationshipMutationTestCase(TestCase):
             "sourceDocumentId": to_global_id("DocumentType", self.source_doc.id),
             "targetDocumentId": to_global_id("DocumentType", self.target_doc.id),
             "relationshipType": "RELATIONSHIP",
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
         }
 
         result = self.owner_client.execute(mutation, variables=variables)
@@ -262,12 +271,14 @@ class DocumentRelationshipMutationTestCase(TestCase):
             mutation CreateDocRel(
                 $sourceDocumentId: String!,
                 $targetDocumentId: String!,
-                $relationshipType: String!
+                $relationshipType: String!,
+                $corpusId: String!
             ) {
                 createDocumentRelationship(
                     sourceDocumentId: $sourceDocumentId,
                     targetDocumentId: $targetDocumentId,
-                    relationshipType: $relationshipType
+                    relationshipType: $relationshipType,
+                    corpusId: $corpusId
                 ) {
                     ok
                     message
@@ -282,6 +293,7 @@ class DocumentRelationshipMutationTestCase(TestCase):
             "sourceDocumentId": to_global_id("DocumentType", self.source_doc.id),
             "targetDocumentId": to_global_id("DocumentType", self.target_doc.id),
             "relationshipType": "NOTES",
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
         }
 
         result = self.outsider_client.execute(mutation, variables=variables)
@@ -297,12 +309,14 @@ class DocumentRelationshipMutationTestCase(TestCase):
             mutation CreateDocRel(
                 $sourceDocumentId: String!,
                 $targetDocumentId: String!,
-                $relationshipType: String!
+                $relationshipType: String!,
+                $corpusId: String!
             ) {
                 createDocumentRelationship(
                     sourceDocumentId: $sourceDocumentId,
                     targetDocumentId: $targetDocumentId,
-                    relationshipType: $relationshipType
+                    relationshipType: $relationshipType,
+                    corpusId: $corpusId
                 ) {
                     ok
                     message
@@ -314,6 +328,7 @@ class DocumentRelationshipMutationTestCase(TestCase):
             "sourceDocumentId": to_global_id("DocumentType", self.source_doc.id),
             "targetDocumentId": to_global_id("DocumentType", self.target_doc.id),
             "relationshipType": "NOTES",
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
         }
 
         result = self.collaborator_client.execute(mutation, variables=variables)
@@ -322,6 +337,51 @@ class DocumentRelationshipMutationTestCase(TestCase):
         data = result["data"]["createDocumentRelationship"]
         self.assertFalse(data["ok"])
         self.assertIn("permission", data["message"].lower())
+
+    def test_create_relationship_docs_not_in_corpus_fails(self):
+        """Test that creating a relationship fails if documents aren't in the corpus."""
+        # Create a different corpus without the documents
+        other_corpus = Corpus.objects.create(
+            title="Other Corpus",
+            creator=self.owner,
+            is_public=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, other_corpus, [PermissionTypes.CRUD]
+        )
+
+        mutation = """
+            mutation CreateDocRel(
+                $sourceDocumentId: String!,
+                $targetDocumentId: String!,
+                $relationshipType: String!,
+                $corpusId: String!
+            ) {
+                createDocumentRelationship(
+                    sourceDocumentId: $sourceDocumentId,
+                    targetDocumentId: $targetDocumentId,
+                    relationshipType: $relationshipType,
+                    corpusId: $corpusId
+                ) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        variables = {
+            "sourceDocumentId": to_global_id("DocumentType", self.source_doc.id),
+            "targetDocumentId": to_global_id("DocumentType", self.target_doc.id),
+            "relationshipType": "NOTES",
+            "corpusId": to_global_id("CorpusType", other_corpus.id),
+        }
+
+        result = self.owner_client.execute(mutation, variables=variables)
+        self.assertIsNone(result.get("errors"))
+
+        data = result["data"]["createDocumentRelationship"]
+        self.assertFalse(data["ok"])
+        self.assertIn("same corpus", data["message"].lower())
 
 
 class DocumentRelationshipUpdateMutationTestCase(TestCase):
@@ -373,6 +433,9 @@ class DocumentRelationshipUpdateMutationTestCase(TestCase):
             label_type="RELATIONSHIP_LABEL",
             creator=self.owner,
         )
+
+        # Add documents to corpus (required for DocumentRelationship)
+        self.corpus.documents.add(self.source_doc, self.target_doc)
 
         # Create existing relationship
         self.relationship = DocumentRelationship.objects.create(
@@ -510,6 +573,13 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
         self.owner_client = Client(schema, context_value=TestContext(self.owner))
         self.outsider_client = Client(schema, context_value=TestContext(self.outsider))
 
+        # Create test corpus
+        self.corpus = Corpus.objects.create(
+            title="TestCorpus",
+            creator=self.owner,
+            is_public=False,
+        )
+
         # Create test documents
         pdf_file = ContentFile(
             SAMPLE_PDF_FILE_TWO_PATH.open("rb").read(), name="test.pdf"
@@ -531,6 +601,9 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
             is_public=False,
         )
 
+        # Add documents to corpus (required for DocumentRelationship)
+        self.corpus.documents.add(self.source_doc, self.target_doc)
+
         # Create existing relationship
         self.relationship = DocumentRelationship.objects.create(
             source_document=self.source_doc,
@@ -538,12 +611,14 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
             relationship_type="NOTES",
             data={"note": "Test note"},
             creator=self.owner,
+            corpus=self.corpus,
         )
 
         # Set permissions
         set_permissions_for_obj_to_user(
             self.owner, self.relationship, [PermissionTypes.CRUD]
         )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
     def test_delete_document_relationship_as_owner(self):
         """Test that owner can delete a document relationship."""
@@ -622,6 +697,7 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
             relationship_type="NOTES",
             data={"note": "Second note"},
             creator=self.owner,
+            corpus=self.corpus,
         )
         set_permissions_for_obj_to_user(
             self.owner, relationship2, [PermissionTypes.CRUD]
@@ -669,6 +745,13 @@ class DocumentRelationshipValidationTestCase(TestCase):
         self.owner = User.objects.create_user(username="owner", password="test")
         self.owner_client = Client(schema, context_value=TestContext(self.owner))
 
+        # Create test corpus
+        self.corpus = Corpus.objects.create(
+            title="TestCorpus",
+            creator=self.owner,
+            is_public=False,
+        )
+
         # Create test documents
         pdf_file = ContentFile(
             SAMPLE_PDF_FILE_TWO_PATH.open("rb").read(), name="test.pdf"
@@ -695,6 +778,9 @@ class DocumentRelationshipValidationTestCase(TestCase):
             creator=self.owner,
         )
 
+        # Add documents to corpus (required for DocumentRelationship)
+        self.corpus.documents.add(self.source_doc, self.target_doc)
+
         # Set permissions
         set_permissions_for_obj_to_user(
             self.owner, self.source_doc, [PermissionTypes.CRUD]
@@ -702,6 +788,7 @@ class DocumentRelationshipValidationTestCase(TestCase):
         set_permissions_for_obj_to_user(
             self.owner, self.target_doc, [PermissionTypes.CRUD]
         )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
     def test_invalid_relationship_type_rejected(self):
         """Test that invalid relationship_type is rejected."""
@@ -709,12 +796,14 @@ class DocumentRelationshipValidationTestCase(TestCase):
             mutation CreateDocRel(
                 $sourceDocumentId: String!,
                 $targetDocumentId: String!,
-                $relationshipType: String!
+                $relationshipType: String!,
+                $corpusId: String!
             ) {
                 createDocumentRelationship(
                     sourceDocumentId: $sourceDocumentId,
                     targetDocumentId: $targetDocumentId,
-                    relationshipType: $relationshipType
+                    relationshipType: $relationshipType,
+                    corpusId: $corpusId
                 ) {
                     ok
                     message
@@ -726,6 +815,7 @@ class DocumentRelationshipValidationTestCase(TestCase):
             "sourceDocumentId": to_global_id("DocumentType", self.source_doc.id),
             "targetDocumentId": to_global_id("DocumentType", self.target_doc.id),
             "relationshipType": "INVALID_TYPE",
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
         }
 
         result = self.owner_client.execute(mutation, variables=variables)
@@ -741,12 +831,14 @@ class DocumentRelationshipValidationTestCase(TestCase):
             mutation CreateDocRel(
                 $sourceDocumentId: String!,
                 $targetDocumentId: String!,
-                $relationshipType: String!
+                $relationshipType: String!,
+                $corpusId: String!
             ) {
                 createDocumentRelationship(
                     sourceDocumentId: $sourceDocumentId,
                     targetDocumentId: $targetDocumentId,
-                    relationshipType: $relationshipType
+                    relationshipType: $relationshipType,
+                    corpusId: $corpusId
                 ) {
                     ok
                     message
@@ -758,6 +850,7 @@ class DocumentRelationshipValidationTestCase(TestCase):
             "sourceDocumentId": to_global_id("DocumentType", 99999),
             "targetDocumentId": to_global_id("DocumentType", self.target_doc.id),
             "relationshipType": "NOTES",
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
         }
 
         result = self.owner_client.execute(mutation, variables=variables)
@@ -774,12 +867,14 @@ class DocumentRelationshipValidationTestCase(TestCase):
                 $sourceDocumentId: String!,
                 $targetDocumentId: String!,
                 $relationshipType: String!,
+                $corpusId: String!,
                 $annotationLabelId: String
             ) {
                 createDocumentRelationship(
                     sourceDocumentId: $sourceDocumentId,
                     targetDocumentId: $targetDocumentId,
                     relationshipType: $relationshipType,
+                    corpusId: $corpusId,
                     annotationLabelId: $annotationLabelId
                 ) {
                     ok
@@ -792,6 +887,7 @@ class DocumentRelationshipValidationTestCase(TestCase):
             "sourceDocumentId": to_global_id("DocumentType", self.source_doc.id),
             "targetDocumentId": to_global_id("DocumentType", self.target_doc.id),
             "relationshipType": "RELATIONSHIP",
+            "corpusId": to_global_id("CorpusType", self.corpus.id),
             "annotationLabelId": to_global_id("AnnotationLabelType", 99999),
         }
 

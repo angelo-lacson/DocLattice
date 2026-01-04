@@ -83,6 +83,9 @@ class DocumentRelationshipPermissionTestCase(TestCase):
             creator=self.owner,
         )
 
+        # Add documents to corpus (required for DocumentRelationship)
+        self.corpus.documents.add(self.source_doc, self.target_doc)
+
         # Create document relationship
         self.relationship = DocumentRelationship.objects.create(
             source_document=self.source_doc,
@@ -212,6 +215,13 @@ class DocumentRelationshipVisibilityTestCase(TestCase):
         self.owner = User.objects.create_user(username="owner", password="test")
         self.other_user = User.objects.create_user(username="other", password="test")
 
+        # Create test corpus
+        self.corpus = Corpus.objects.create(
+            title="TestCorpus",
+            creator=self.owner,
+            is_public=False,
+        )
+
         # Create documents
         pdf_file = ContentFile(
             SAMPLE_PDF_FILE_TWO_PATH.open("rb").read(), name="test.pdf"
@@ -233,6 +243,9 @@ class DocumentRelationshipVisibilityTestCase(TestCase):
             is_public=False,
         )
 
+        # Add documents to corpus (required for DocumentRelationship)
+        self.corpus.documents.add(self.source_doc, self.target_doc)
+
         # Create private relationship
         self.private_relationship = DocumentRelationship.objects.create(
             source_document=self.source_doc,
@@ -240,6 +253,7 @@ class DocumentRelationshipVisibilityTestCase(TestCase):
             relationship_type="NOTES",
             data={"note": "Private note"},
             creator=self.owner,
+            corpus=self.corpus,
             is_public=False,
         )
 
@@ -250,6 +264,7 @@ class DocumentRelationshipVisibilityTestCase(TestCase):
             relationship_type="NOTES",
             data={"note": "Public note"},
             creator=self.owner,
+            corpus=self.corpus,
             is_public=True,
         )
 
@@ -257,6 +272,7 @@ class DocumentRelationshipVisibilityTestCase(TestCase):
         set_permissions_for_obj_to_user(
             self.owner, self.private_relationship, [PermissionTypes.CRUD]
         )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
     def test_owner_sees_all_own_relationships(self):
         """Test that owner can see both private and public relationships."""
@@ -293,6 +309,13 @@ class DocumentRelationshipPermissionEscalationTestCase(TestCase):
         self.owner = User.objects.create_user(username="owner", password="test")
         self.attacker = User.objects.create_user(username="attacker", password="test")
 
+        # Create test corpus
+        self.corpus = Corpus.objects.create(
+            title="TestCorpus",
+            creator=self.owner,
+            is_public=True,  # Public so attacker can see it
+        )
+
         # Create documents - attacker can see but not modify
         pdf_file = ContentFile(
             SAMPLE_PDF_FILE_TWO_PATH.open("rb").read(), name="test.pdf"
@@ -314,6 +337,9 @@ class DocumentRelationshipPermissionEscalationTestCase(TestCase):
             is_public=True,  # Public so attacker can see it
         )
 
+        # Add documents to corpus (required for DocumentRelationship)
+        self.corpus.documents.add(self.source_doc, self.target_doc)
+
         # Create relationship owned by owner
         self.relationship = DocumentRelationship.objects.create(
             source_document=self.source_doc,
@@ -321,6 +347,7 @@ class DocumentRelationshipPermissionEscalationTestCase(TestCase):
             relationship_type="NOTES",
             data={"sensitive": "data"},
             creator=self.owner,
+            corpus=self.corpus,
             is_public=False,  # Private relationship
         )
 
@@ -334,6 +361,7 @@ class DocumentRelationshipPermissionEscalationTestCase(TestCase):
         set_permissions_for_obj_to_user(
             self.owner, self.target_doc, [PermissionTypes.CRUD]
         )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
         # Attacker only gets READ on documents (they're public), nothing on relationship
         set_permissions_for_obj_to_user(
