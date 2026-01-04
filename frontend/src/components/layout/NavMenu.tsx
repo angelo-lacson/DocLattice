@@ -1,31 +1,65 @@
-import { Menu, Icon, Label } from "semantic-ui-react";
-import { Link } from "react-router-dom";
+import { NavBar } from "@os-legal/ui";
+import type { NavItem, UserMenuItem } from "@os-legal/ui";
+import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import Dropdown from "../common/Dropdown";
-
-import logo from "../../assets/images/os_legal_128.png";
-import user_logo from "../../assets/icons/noun-person-113116-FFFFFF.png";
+import { Download, User, Settings, LogOut } from "lucide-react";
 import { showExportModal, showUserSettingsModal } from "../../graphql/cache";
 import UserSettingsModal from "../modals/UserSettingsModal";
-import { useReactiveVar } from "@apollo/client";
 import { VERSION_TAG } from "../../assets/configurations/constants";
 import { useNavMenu } from "./useNavMenu";
-import { useNavigate } from "react-router-dom";
+import useWindowDimensions from "../hooks/WindowDimensionHook";
+import logo from "../../assets/images/os_legal_128.png";
 
-const MiniImage = styled.img`
-  width: 35px;
-  height: 35px;
-  margin-right: 1.5em;
-  object-fit: contain;
+/**
+ * User properties accessed by NavMenu.
+ * Covers both Auth0 User (name) and local UserType (username, isSuperuser).
+ */
+interface NavMenuUserProps {
+  name?: string;
+  username?: string;
+  isSuperuser?: boolean;
+}
+
+/** Type guard to safely access user properties from Auth0 User or local UserType */
+const getUserProps = (user: unknown): NavMenuUserProps => {
+  if (!user || typeof user !== "object") return {};
+  const u = user as Record<string, unknown>;
+  return {
+    name: typeof u.name === "string" ? u.name : undefined,
+    username: typeof u.username === "string" ? u.username : undefined,
+    isSuperuser: typeof u.isSuperuser === "boolean" ? u.isSuperuser : false,
+  };
+};
+
+// Styled login button for navbar - matches dark navbar theme
+const LoginButton = styled.button`
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
 `;
 
-const AvatarImage = styled.img`
-  width: 2em;
-  height: 2em;
-  border-radius: 50%;
-  object-fit: cover;
-  display: inline-block;
-  vertical-align: middle;
+// Custom styles for navbar - overrides for @os-legal/ui NavBar
+// Note: These use !important due to specificity requirements with external component
+const navbarCustomStyles = `
+  /* Version badge - filled background */
+  .oc-navbar .oc-chip {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+  /* Keep brand name visible on mobile */
+  .oc-navbar__brand-name {
+    display: block !important;
+  }
 `;
 
 export const NavMenu = () => {
@@ -36,206 +70,130 @@ export const NavMenu = () => {
     public_header_items,
     private_header_items,
     show_export_modal,
-    pathname,
-    isActive: getIsActive,
+    isActive,
     requestLogout,
     doLogin,
   } = useNavMenu();
   const navigate = useNavigate();
+  const { width } = useWindowDimensions();
 
-  // Note: CentralRouteManager automatically clears openedCorpus/openedDocument when navigating
-  // No need to manually clear on menu clicks
+  // On mobile (< 1100px where NavBar collapses), hide version badge but keep brand name
+  const isMobile = width < 1100;
+  const versionDisplay = isMobile ? undefined : VERSION_TAG;
 
-  const isSuperuser = user && (user as any).isSuperuser;
+  // Extract typed user properties
+  const userProps = getUserProps(user);
+  const isSuperuser = userProps.isSuperuser;
 
-  const items = public_header_items.map((item) => (
-    <Menu.Item
-      id={item.id}
-      name={item.title}
-      active={getIsActive(item.route)}
-      key={`${item.title}`}
-      as={Link}
-      to={item.route}
-    >
-      {item.title}
-    </Menu.Item>
-  ));
+  // Build nav items from menu configuration
+  const baseNavItems = [
+    ...public_header_items,
+    ...(user ? private_header_items : []),
+  ];
 
-  const private_items = private_header_items.map((item) => (
-    <Menu.Item
-      id={item.id}
-      name={item.title}
-      active={getIsActive(item.route)}
-      key={`${item.title}`}
-      as={Link}
-      to={item.route}
-    >
-      {item.title}
-    </Menu.Item>
-  ));
+  // Add superuser-only Badge Management item
+  const allMenuItems = isSuperuser
+    ? [
+        ...baseNavItems,
+        {
+          title: "Badge Management",
+          route: "/admin/badges",
+          id: "admin_badges_menu_button",
+          protected: true,
+        },
+      ]
+    : baseNavItems;
 
-  if (REACT_APP_USE_AUTH0) {
-    return (
-      <>
-        <UserSettingsModal />
-        <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
-          <Menu.Item header>
-            <MiniImage src={logo} alt="Open Contracts Logo" />
-            Open Contracts
-            <Label
-              size="tiny"
-              color="grey"
-              style={{ marginLeft: "0.5em", verticalAlign: "middle" }}
-            >
-              {VERSION_TAG}
-            </Label>
-          </Menu.Item>
-          {!isLoading && user ? [...items, ...private_items] : items}
-          {!isLoading && user && (user as any).isSuperuser && (
-            <Menu.Item
-              id="admin_badges_menu_button"
-              name="Badge Management"
-              active={getIsActive("/admin/badges")}
-              as={Link}
-              to="/admin/badges"
-            >
-              Badge Management
-            </Menu.Item>
-          )}
-          <Menu.Menu position="right">
-            {!isLoading && user ? (
-              <>
-                <Menu.Item>
-                  <AvatarImage src={user_logo} alt="User Avatar" />
-                  <Dropdown
-                    item
-                    simple
-                    icon={
-                      <Icon style={{ marginLeft: "5px" }} name="dropdown" />
-                    }
-                    text={` ${user?.name ? user.name : user.username}`}
-                    style={{ margin: "0px", padding: "0px" }}
-                    header="Logout"
-                  >
-                    <Dropdown.Menu>
-                      <Dropdown.Item
-                        text="Exports"
-                        onClick={() => showExportModal(!show_export_modal)}
-                        icon={<Icon name="download" />}
-                      />
-                      <Dropdown.Item
-                        text="Profile"
-                        onClick={() => showUserSettingsModal(true)}
-                        icon={<Icon name="user circle" />}
-                      />
-                      {isSuperuser && (
-                        <Dropdown.Item
-                          text="Admin Settings"
-                          onClick={() => navigate("/admin/settings")}
-                          icon={<Icon name="settings" />}
-                        />
-                      )}
-                      <Dropdown.Item
-                        text="Logout"
-                        onClick={() => requestLogout()}
-                        icon={<Icon name="log out" />}
-                      />
-                    </Dropdown.Menu>
-                  </Dropdown>
-                </Menu.Item>
-              </>
-            ) : (
-              <Menu.Item onClick={doLogin}>Login</Menu.Item>
-            )}
-          </Menu.Menu>
-        </Menu>
-      </>
-    );
-  } else {
-    return (
-      <>
-        <UserSettingsModal />
-        <Menu fluid inverted attached style={{ marginBottom: "0px" }}>
-          <Menu.Item header>
-            <MiniImage src={logo} alt="Open Contracts Logo" />
-            Open Contracts
-            <Label
-              size="tiny"
-              color="grey"
-              style={{ marginLeft: "0.5em", verticalAlign: "middle" }}
-            >
-              {VERSION_TAG}
-            </Label>
-          </Menu.Item>
-          {user ? [...items, ...private_items] : items}
-          {user && (user as any).isSuperuser && (
-            <Menu.Item
-              id="admin_badges_menu_button"
-              name="Badge Management"
-              active={getIsActive("/admin/badges")}
-              as={Link}
-              to="/admin/badges"
-            >
-              Badge Management
-            </Menu.Item>
-          )}
-          <Menu.Menu position="right">
-            {user ? (
-              <>
-                <Menu.Item>
-                  <AvatarImage src={user_logo} alt="User Avatar" />
-                  <Dropdown
-                    item
-                    simple
-                    icon={
-                      <Icon style={{ marginLeft: "5px" }} name="dropdown" />
-                    }
-                    text={` ${user?.name ? user.name : user.username}`}
-                    style={{ margin: "0px", padding: "0px" }}
-                    header="Logout"
-                  >
-                    <Dropdown.Menu>
-                      <Dropdown.Item
-                        text="Exports"
-                        onClick={() => showExportModal(!show_export_modal)}
-                        icon={<Icon name="download" />}
-                      />
-                      <Dropdown.Item
-                        text="Profile"
-                        onClick={() => showUserSettingsModal(true)}
-                        icon={<Icon name="user circle" />}
-                      />
-                      {isSuperuser && (
-                        <Dropdown.Item
-                          text="Admin Settings"
-                          onClick={() => navigate("/admin/settings")}
-                          icon={<Icon name="settings" />}
-                        />
-                      )}
-                      <Dropdown.Item
-                        text="Logout"
-                        onClick={() => requestLogout()}
-                        icon={<Icon name="log out" />}
-                      />
-                    </Dropdown.Menu>
-                  </Dropdown>
-                </Menu.Item>
-              </>
-            ) : (
-              <Menu.Item
-                id="login_nav_button"
-                name="Login"
-                active={pathname === "/login"}
-                key="login_nav_button"
-                as={Link}
-                to="/login"
-              >
-                Login
-              </Menu.Item>
-            )}
-          </Menu.Menu>
-        </Menu>
-      </>
-    );
-  }
+  // Map to NavItem format with onClick handlers for navigation
+  const navItems: NavItem[] = allMenuItems.map((item) => ({
+    id: item.id,
+    label: item.title,
+    onClick: () => navigate(item.route),
+  }));
+
+  // Login button for unauthenticated users (rendered on right side via actions prop)
+  const handleLogin = REACT_APP_USE_AUTH0 ? doLogin : () => navigate("/login");
+
+  // Build user menu items
+  const userMenuItems: UserMenuItem[] = user
+    ? [
+        {
+          id: "exports",
+          label: "Exports",
+          icon: <Download size={16} />,
+          onClick: () => showExportModal(!show_export_modal),
+        },
+        {
+          id: "profile",
+          label: "Profile",
+          icon: <User size={16} />,
+          onClick: () => showUserSettingsModal(true),
+        },
+        ...(isSuperuser
+          ? [
+              {
+                id: "admin",
+                label: "Admin Settings",
+                icon: <Settings size={16} />,
+                onClick: () => navigate("/admin/settings"),
+              },
+            ]
+          : []),
+        { id: "divider", label: "", divider: true },
+        {
+          id: "logout",
+          label: "Logout",
+          icon: <LogOut size={16} />,
+          danger: true,
+          onClick: requestLogout,
+        },
+      ]
+    : [];
+
+  // Find active nav item by checking routes
+  const findActiveId = (): string | undefined => {
+    for (const item of allMenuItems) {
+      if (isActive(item.route)) {
+        return item.id;
+      }
+    }
+    return undefined;
+  };
+
+  const activeId = findActiveId();
+
+  // Handle navigation from NavBar
+  const handleNavigate = (id: string) => {
+    const item = navItems.find((i) => i.id === id);
+    item?.onClick?.();
+  };
+
+  return (
+    <>
+      <style>{navbarCustomStyles}</style>
+      <UserSettingsModal />
+      <NavBar
+        logo={
+          <img
+            src={logo}
+            alt="Open Contracts Logo"
+            style={{ width: 32, height: 32, objectFit: "contain" }}
+          />
+        }
+        brandName="Open Contracts"
+        version={versionDisplay}
+        items={navItems}
+        activeId={activeId}
+        onNavigate={handleNavigate}
+        userName={user ? userProps.name || userProps.username : undefined}
+        userMenuItems={userMenuItems}
+        hideUserMenu={isLoading || !user}
+        actions={
+          !user && !isLoading ? (
+            <LoginButton onClick={handleLogin}>Login</LoginButton>
+          ) : undefined
+        }
+      />
+    </>
+  );
 };

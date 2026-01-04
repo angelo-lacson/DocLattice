@@ -5,6 +5,60 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-04
+
+### Changed
+
+#### NavMenu Refactoring (PR #779)
+- **Migrated to @os-legal/ui NavBar** (`frontend/src/components/layout/NavMenu.tsx`): Complete refactor from Semantic UI Menu to unified NavBar component
+  - Single responsive component replaces separate NavMenu and MobileNavMenu
+  - Built-in hamburger menu at 1100px breakpoint eliminates conditional rendering in App.tsx
+  - Modern styling consistent with os-legal-style design system
+- **Deleted obsolete files**: Removed `MobileNavMenu.tsx` and `MobileNavMenu.css` (~370 lines)
+- **Simplified App.tsx** (`frontend/src/App.tsx:320-325`): Removed conditional menu rendering and `useWindowDimensions` dependency
+- **Improved code quality** (`frontend/src/components/layout/NavMenu.tsx`):
+  - Replaced inline SVG icons with lucide-react imports (Download, User, Settings, LogOut)
+  - Refactored login button to use styled-components instead of inline styles
+  - Added type-safe `getUserProps` helper to replace `as any` casts for user properties
+
+### Added
+
+#### NavMenu Component Tests
+- **Playwright component tests** (`frontend/tests/NavMenu.ct.tsx`): 18 comprehensive tests covering:
+  - Navigation items and active state highlighting
+  - Authentication states (login button vs user menu)
+  - User menu items (Exports, Profile, Admin Settings, Logout)
+  - Superuser-only features (Badge Management nav item, Admin Settings menu)
+  - Branding elements (logo, version badge, brand name)
+  - Responsive behavior (hamburger menu, mobile navigation)
+- **Test wrapper** (`frontend/tests/NavMenuTestWrapper.tsx`): Provides Auth0Provider, MockedProvider, MemoryRouter, and JotaiProvider context
+
+### Fixed
+
+#### Superuser Features in Non-Auth0 Mode
+- **LOGIN_MUTATION missing isSuperuser** (`frontend/src/graphql/mutations.ts:49-65`): Added `isSuperuser` field to login query
+  - Previously, superuser features (Badge Management, Admin Settings) were broken in non-Auth0 mode
+  - Updated `LoginOutputs` interface to include `username`, `isUsageCapped`, and `isSuperuser` fields
+
+---
+
+## [Unreleased] - 2026-01-03
+
+### Fixed
+
+#### WebSocket Connection Performance (Issue: Chat "Reconnecting" delay)
+- **Auth0 JWKS caching** (`config/graphql_auth0_auth/utils.py:17-38`): Added in-memory cache for Auth0 JWKS with 10-minute TTL
+  - Previously fetched JWKS from Auth0 on every token validation, causing 6-10 second delays
+  - Now caches JWKS keys, reducing subsequent WebSocket auth to near-instant
+- **CorpusChat double connection fix** (`frontend/src/components/corpuses/CorpusChat.tsx:1043-1056`): Skip forceNewChat useEffect on initial mount
+  - `isNewChat` state already initialized from `forceNewChat` prop
+  - Prevents redundant `startNewChat()` call that caused socket close/reconnect cycle
+- **Notification WebSocket auth guard** (`frontend/src/hooks/useNotificationWebSocket.ts:312-318`): Skip connection attempt without auth token
+  - Prevents 403 Access Denied errors when connecting before auth token is available
+  - Eliminates unnecessary connection attempts and error spam in console
+
+---
+
 ## [Unreleased] - 2026-01-02
 
 ### Added

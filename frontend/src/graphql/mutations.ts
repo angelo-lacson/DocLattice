@@ -39,6 +39,9 @@ export interface LoginOutputs {
       id: string;
       email: string;
       name: string;
+      username: string;
+      isUsageCapped: boolean;
+      isSuperuser: boolean;
     };
   };
 }
@@ -55,6 +58,7 @@ export const LOGIN_MUTATION = gql`
         name
         username
         isUsageCapped
+        isSuperuser
       }
     }
   }

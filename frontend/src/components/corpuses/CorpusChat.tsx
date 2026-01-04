@@ -1040,8 +1040,16 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     };
   }, [auth_token, corpusId, selectedConversationId, isNewChat]);
 
-  // Force new chat mode when forceNewChat prop changes
+  // Track if this is the initial mount - skip forceNewChat effect on mount
+  // since isNewChat is already initialized from forceNewChat prop
+  const isInitialMountRef = useRef(true);
+
+  // Force new chat mode when forceNewChat prop changes (but not on initial mount)
   useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
     if (forceNewChat) {
       startNewChat();
     }
