@@ -10,6 +10,27 @@ import { useNavMenu } from "./useNavMenu";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import logo from "../../assets/images/os_legal_128.png";
 
+/**
+ * User properties accessed by NavMenu.
+ * Covers both Auth0 User (name) and local UserType (username, isSuperuser).
+ */
+interface NavMenuUserProps {
+  name?: string;
+  username?: string;
+  isSuperuser?: boolean;
+}
+
+/** Type guard to safely access user properties from Auth0 User or local UserType */
+const getUserProps = (user: unknown): NavMenuUserProps => {
+  if (!user || typeof user !== "object") return {};
+  const u = user as Record<string, unknown>;
+  return {
+    name: typeof u.name === "string" ? u.name : undefined,
+    username: typeof u.username === "string" ? u.username : undefined,
+    isSuperuser: typeof u.isSuperuser === "boolean" ? u.isSuperuser : false,
+  };
+};
+
 // Styled login button for navbar - matches dark navbar theme
 const LoginButton = styled.button`
   background: transparent;
@@ -60,7 +81,9 @@ export const NavMenu = () => {
   const isMobile = width < 1100;
   const versionDisplay = isMobile ? undefined : VERSION_TAG;
 
-  const isSuperuser = user && (user as any).isSuperuser;
+  // Extract typed user properties
+  const userProps = getUserProps(user);
+  const isSuperuser = userProps.isSuperuser;
 
   // Build nav items from menu configuration
   const baseNavItems = [
@@ -162,9 +185,7 @@ export const NavMenu = () => {
         items={navItems}
         activeId={activeId}
         onNavigate={handleNavigate}
-        userName={
-          user ? (user as any).name || (user as any).username : undefined
-        }
+        userName={user ? userProps.name || userProps.username : undefined}
         userMenuItems={userMenuItems}
         hideUserMenu={isLoading || !user}
         actions={
