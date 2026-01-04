@@ -123,6 +123,9 @@ from opencontractserver.corpuses.models import (
     CorpusAction,
 )
 from opencontractserver.documents.models import Document, DocumentRelationship
+from opencontractserver.documents.query_optimizer import (
+    DocumentRelationshipQueryOptimizer,
+)
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.notifications.models import Notification
@@ -2151,23 +2154,34 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_document_relationships(self, info, **kwargs):
-        # Start with base queryset using visible_to_user
-        queryset = DocumentRelationship.objects.visible_to_user(info.context.user)
+        """
+        Resolve document relationships with proper permission filtering.
+        Uses DocumentRelationshipQueryOptimizer for consistent eager loading.
+        """
+        user = info.context.user
 
-        # Apply filters if provided
+        # Parse optional filters
         corpus_id = kwargs.get("corpus_id")
-        if corpus_id:
-            corpus_pk = from_global_id(corpus_id)[1]
-            queryset = queryset.filter(
-                Q(source_document__corpus=corpus_pk)
-                | Q(target_document__corpus=corpus_pk)
-            )
+        corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
 
         document_id = kwargs.get("document_id")
-        if document_id:
-            doc_pk = from_global_id(document_id)[1]
-            queryset = queryset.filter(
-                Q(source_document_id=doc_pk) | Q(target_document_id=doc_pk)
+        doc_pk = int(from_global_id(document_id)[1]) if document_id else None
+
+        # Use optimizer for visibility and eager loading
+        if doc_pk:
+            # Get relationships for specific document
+            queryset = (
+                DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+                    user=user,
+                    document_id=doc_pk,
+                    corpus_id=corpus_pk,
+                )
+            )
+        else:
+            # Get all visible relationships with optional corpus filter
+            queryset = DocumentRelationshipQueryOptimizer.get_visible_relationships(
+                user=user,
+                corpus_id=corpus_pk,
             )
 
         return queryset.distinct().order_by("-created")
@@ -2176,24 +2190,18 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_document_relationship(self, info, **kwargs):
+        """
+        Resolve a single document relationship by ID.
+        Uses optimizer for IDOR-safe fetching with proper eager loading.
+        """
         django_pk = from_global_id(kwargs.get("id", None))[1]
-        queryset = DocumentRelationship.objects.visible_to_user(info.context.user)
-        queryset = queryset.select_related(
-            "source_document",
-            "target_document",
-            "relationship_label",
-            "creator",
-            "analyzer",
-            "analysis",
-        ).prefetch_related(  # Prefetch might be overkill for a single object, but harmless
-            "relationship_label",
-            "corpus",
-            "document",
-            "creator",
-            "analyzer",
-            "analysis",
+        result = DocumentRelationshipQueryOptimizer.get_relationship_by_id(
+            user=info.context.user,
+            relationship_id=int(django_pk),
         )
-        return queryset.get(id=django_pk)
+        if result is None:
+            raise DocumentRelationship.DoesNotExist()
+        return result
 
     # Also add a bulk resolver similar to bulk_doc_relationships_in_corpus
     bulk_doc_relationships = graphene.Field(
@@ -2205,24 +2213,27 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_bulk_doc_relationships(self, info, document_id, **kwargs):
-        # Start with base queryset using visible_to_user
-        queryset = DocumentRelationship.objects.visible_to_user(info.context.user)
+        """
+        Bulk resolver for document relationships involving a specific document.
+        Uses DocumentRelationshipQueryOptimizer for proper eager loading.
+        """
+        user = info.context.user
 
-        # Always filter by document
-        doc_pk = from_global_id(document_id)[1]
-        queryset = queryset.filter(
-            Q(source_document_id=doc_pk) | Q(target_document_id=doc_pk)
+        # Parse document_id (required)
+        doc_pk = int(from_global_id(document_id)[1])
+
+        # Parse optional corpus filter
+        corpus_id = kwargs.get("corpus_id")
+        corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
+
+        # Use optimizer for visibility and eager loading
+        queryset = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=user,
+            document_id=doc_pk,
+            corpus_id=corpus_pk,
         )
 
-        # Apply optional filters
-        corpus_id = kwargs.get("corpus_id")
-        if corpus_id:
-            corpus_pk = from_global_id(corpus_id)[1]
-            queryset = queryset.filter(
-                Q(source_document__corpus=corpus_pk)
-                | Q(target_document__corpus=corpus_pk)
-            )
-
+        # Apply optional relationship_type filter
         relationship_type = kwargs.get("relationship_type")
         if relationship_type:
             queryset = queryset.filter(relationship_type=relationship_type)
