@@ -164,7 +164,11 @@ OpenContracts collects anonymous usage data to guide development priorities. We 
 
 We do not collect document contents, extracted data, user identities, or query contents.
 
-Disable with `TELEMETRY_ENABLED=False` in your settings.
+### Disabling Telemetry
+
+**Backend telemetry** (server-side events): Set `TELEMETRY_ENABLED=False` in your Django settings.
+
+**Frontend analytics** (browser-side tracking via PostHog): Leave `REACT_APP_POSTHOG_API_KEY` unset or empty in `frontend/public/env-config.js`. The frontend also respects the browser's Do Not Track setting and requires explicit user consent before any tracking occurs.
 
 ---
 
