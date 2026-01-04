@@ -1,4 +1,4 @@
-import { NavBar, Button } from "@os-legal/ui";
+import { NavBar } from "@os-legal/ui";
 import type { NavItem, UserMenuItem } from "@os-legal/ui";
 import { useNavigate } from "react-router-dom";
 import { showExportModal, showUserSettingsModal } from "../../graphql/cache";
@@ -161,9 +161,28 @@ export const NavMenu = () => {
         hideUserMenu={isLoading || !user}
         actions={
           !user && !isLoading ? (
-            <Button variant="secondary" size="sm" onClick={handleLogin}>
+            <button
+              onClick={handleLogin}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "rgba(255, 255, 255, 0.9)",
+                fontSize: "14px",
+                fontWeight: 500,
+                cursor: "pointer",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                transition: "background 0.15s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "transparent")
+              }
+            >
               Login
-            </Button>
+            </button>
           ) : undefined
         }
       />
