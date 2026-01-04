@@ -59,7 +59,6 @@ import "semantic-ui-css/semantic.min.css";
 import "./App.css";
 import "react-toastify/dist/ReactToastify.css";
 import useWindowDimensions from "./components/hooks/WindowDimensionHook";
-import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { LabelDisplayBehavior } from "./types/graphql-api";
 import { CookieConsentDialog } from "./components/cookies/CookieConsent";
 import { initializeAnalyticsOnLoad } from "./utils/analytics";
@@ -125,10 +124,8 @@ export const App = () => {
     });
   }, []);
 
-  // For now, our responsive layout is a bit hacky, but it's working well enough to
-  // provide a passable UI on mobile. Your results not guaranteed X-)
+  // For mobile display settings
   const { width } = useWindowDimensions();
-  const show_mobile_menu = width <= 1000;
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -322,7 +319,7 @@ export const App = () => {
               overflow: "hidden",
             }}
           >
-            {show_mobile_menu ? <MobileNavMenu /> : <NavMenu />}
+            <NavMenu />
             <Container
               id="AppContainer"
               style={{
