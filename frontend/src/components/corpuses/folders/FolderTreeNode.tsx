@@ -115,11 +115,11 @@ const IconPlaceholder = styled.div`
   margin-right: 4px;
 `;
 
-const FolderIconWrapper = styled.div<{ $color: string }>`
+const FolderIconWrapper = styled.div`
   display: flex;
   align-items: center;
   margin-right: 8px;
-  color: ${(props) => props.$color};
+  color: ${OS_LEGAL_COLORS.folderIcon};
 `;
 
 const FolderName = styled.span<{ $isSelected: boolean }>`
@@ -199,11 +199,11 @@ const ContextMenuItem = styled.button`
   }
 
   &.danger {
-    color: #dc2626;
+    color: ${OS_LEGAL_COLORS.danger};
 
     &:hover {
-      background-color: #fee2e2;
-      color: #991b1b;
+      background-color: ${OS_LEGAL_COLORS.dangerLight};
+      color: ${OS_LEGAL_COLORS.dangerHover};
     }
   }
 `;
@@ -336,7 +336,7 @@ export const FolderTreeNode: React.FC<FolderTreeNodeProps> = ({
           <IconPlaceholder />
         )}
 
-        <FolderIconWrapper $color={folder.color}>
+        <FolderIconWrapper>
           {isExpanded ? <FolderOpen size={18} /> : <Folder size={18} />}
         </FolderIconWrapper>
 

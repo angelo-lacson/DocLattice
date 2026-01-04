@@ -1,20 +1,14 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { toast } from "react-toastify";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import { Button, Popup } from "semantic-ui-react";
-import styled from "styled-components";
-import { navigateToDocument } from "../../utils/navigationUtils";
-import useWindowDimensions from "../hooks/WindowDimensionHook";
-import {
-  OS_LEGAL_COLORS,
-  OS_LEGAL_SPACING,
-} from "../../assets/configurations/osLegalStyles";
 
+import { navigateToDocument } from "../../utils/navigationUtils";
 import { DocumentCards } from "../../components/documents/DocumentCards";
 import { DocumentMetadataGrid } from "../../components/documents/DocumentMetadataGrid";
 import { FolderCard } from "../corpuses/folders/FolderCard";
 import { ParentFolderCard } from "../corpuses/folders/ParentFolderCard";
+import { ViewMode } from "../corpuses/folders/FolderDocumentBrowser";
 
 import {
   selectedDocumentIds,
@@ -45,67 +39,15 @@ import {
 import { DocumentType } from "../../types/graphql-api";
 import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
 
-const ViewToggleContainer = styled.div`
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10; /* Keep below sidebar (z-index: 100) and backdrop (z-index: 98) */
-
-  @media (max-width: 768px) {
-    top: 0.75rem;
-    right: 0.75rem;
-  }
-`;
-
-const ViewToggleButton = styled(Button)`
-  &&& {
-    background: ${OS_LEGAL_COLORS.surface};
-    border: 1px solid ${OS_LEGAL_COLORS.border};
-    box-shadow: ${OS_LEGAL_SPACING.shadowCard};
-    padding: 0.75rem;
-    min-width: auto;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: ${OS_LEGAL_COLORS.surfaceHover};
-      border-color: ${OS_LEGAL_COLORS.borderHover};
-      transform: translateY(-1px);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
-    }
-
-    &.active {
-      background: ${OS_LEGAL_COLORS.accent};
-      color: white;
-      border-color: ${OS_LEGAL_COLORS.accent};
-
-      &:hover {
-        background: ${OS_LEGAL_COLORS.accentHover};
-        border-color: ${OS_LEGAL_COLORS.accentHover};
-      }
-    }
-
-    @media (max-width: 768px) {
-      padding: 0.625rem;
-
-      .icon {
-        font-size: 1rem;
-      }
-    }
-  }
-`;
+interface CorpusDocumentCardsProps {
+  opened_corpus_id: string | null;
+  viewMode?: ViewMode;
+}
 
 export const CorpusDocumentCards = ({
   opened_corpus_id,
-}: {
-  opened_corpus_id: string | null;
-}) => {
-  const { width } = useWindowDimensions();
-  const isMobile = width <= 768;
-
-  const [viewMode, setViewMode] = useState<
-    "modern-card" | "modern-list" | "grid"
-  >(isMobile ? "modern-list" : "modern-card");
-
+  viewMode = "modern-list",
+}: CorpusDocumentCardsProps) => {
   /**
    * Similar to AnnotationCorpusCards, this component wraps the DocumentCards component
    * (which is a pure rendering component) with some query logic for a given corpus_id.
@@ -293,7 +235,7 @@ export const CorpusDocumentCards = ({
     (f) => f.id === selected_folder_id
   );
   const parentFolderId = currentFolder?.parent?.id || null;
-  const parentFolderName = currentFolder?.parent?.name || "Corpus Root";
+  const parentFolderName = currentFolder?.parent?.name || "Documents";
 
   // Build prefix items: ParentFolderCard (if in subfolder) + folder cards
   const prefixItems: React.ReactNode[] = [];
@@ -322,6 +264,7 @@ export const CorpusDocumentCards = ({
   });
 
   // Note: DndContext is now provided by FolderDocumentBrowser parent component
+  // View toggles are now in the FolderDocumentBrowser toolbar
   return (
     <div
       style={{
@@ -334,44 +277,6 @@ export const CorpusDocumentCards = ({
         overflow: "hidden",
       }}
     >
-      <ViewToggleContainer>
-        <Button.Group>
-          <Popup
-            content="Card View"
-            trigger={
-              <ViewToggleButton
-                icon="grid layout"
-                active={viewMode === "modern-card"}
-                onClick={() => setViewMode("modern-card")}
-                data-testid="card-view-button"
-              />
-            }
-          />
-          <Popup
-            content="List View"
-            trigger={
-              <ViewToggleButton
-                icon="list"
-                active={viewMode === "modern-list"}
-                onClick={() => setViewMode("modern-list")}
-                data-testid="list-view-button"
-              />
-            }
-          />
-          <Popup
-            content="Table View"
-            trigger={
-              <ViewToggleButton
-                icon="table"
-                active={viewMode === "grid"}
-                onClick={() => setViewMode("grid")}
-                data-testid="grid-view-button"
-              />
-            }
-          />
-        </Button.Group>
-      </ViewToggleContainer>
-
       <div
         id="corpus-document-card-content-container"
         style={{
