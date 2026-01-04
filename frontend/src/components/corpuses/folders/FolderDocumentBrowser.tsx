@@ -44,6 +44,10 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
 } from "../../../assets/configurations/osLegalStyles";
+import { FolderViewMode } from "../../../types/ui";
+
+// Re-export FolderViewMode as ViewMode for backward compatibility
+export type ViewMode = FolderViewMode;
 
 /**
  * FolderDocumentBrowser - Main container for folder-based document browsing
@@ -66,8 +70,6 @@ import {
  * - viewMode: Current view mode
  * - onViewModeChange: Callback when view mode changes
  */
-
-export type ViewMode = "modern-card" | "modern-list" | "grid";
 
 interface FolderDocumentBrowserProps {
   corpusId: string;

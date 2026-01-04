@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import styled from "styled-components";
 import {
@@ -18,12 +18,18 @@ import {
   canCreateFoldersAtom,
   folderBreadcrumbAtom,
 } from "../../../atoms/folderAtoms";
-import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
+import {
+  TABLET_BREAKPOINT,
+  DESKTOP_BREAKPOINT,
+} from "../../../assets/configurations/constants";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
 } from "../../../assets/configurations/osLegalStyles";
-import { ViewMode } from "./FolderDocumentBrowser";
+import { FolderViewMode } from "../../../types/ui";
+
+// Re-export for backward compatibility with existing imports
+export type ViewMode = FolderViewMode;
 
 /**
  * FolderToolbar - Toolbar component for folder-based document browsing
@@ -312,7 +318,7 @@ const MobileMenuOverlay = styled.div<{ $visible: boolean }>`
   bottom: 0;
   z-index: 99;
 
-  @media (min-width: ${TABLET_BREAKPOINT + 1}px) {
+  @media (min-width: ${DESKTOP_BREAKPOINT}px) {
     display: none;
   }
 `;
@@ -330,7 +336,7 @@ const MobileMenu = styled.div<{ $visible: boolean }>`
   z-index: 100;
   overflow: hidden;
 
-  @media (min-width: ${TABLET_BREAKPOINT + 1}px) {
+  @media (min-width: ${DESKTOP_BREAKPOINT}px) {
     display: none;
   }
 `;
@@ -396,11 +402,34 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
       : "Loading..."
     : "Documents";
 
-  const handleViewModeChange = (mode: ViewMode) => {
-    if (onViewModeChange) {
-      onViewModeChange(mode);
+  // Memoized view mode change handler to prevent unnecessary re-renders
+  const handleViewModeChange = useCallback(
+    (mode: ViewMode) => {
+      if (onViewModeChange) {
+        onViewModeChange(mode);
+      }
+    },
+    [onViewModeChange]
+  );
+
+  // Close mobile menu handler
+  const closeMobileMenu = useCallback(() => {
+    setMobileMenuOpen(false);
+  }, []);
+
+  // Escape key handler for accessibility - closes mobile menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && mobileMenuOpen) {
+        closeMobileMenu();
+      }
+    };
+
+    if (mobileMenuOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
     }
-  };
+  }, [mobileMenuOpen, closeMobileMenu]);
 
   return (
     <ToolbarContainer>
@@ -503,15 +532,22 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
       {/* Mobile menu overlay - click to close */}
       <MobileMenuOverlay
         $visible={mobileMenuOpen}
-        onClick={() => setMobileMenuOpen(false)}
+        onClick={closeMobileMenu}
+        role="presentation"
+        aria-hidden="true"
       />
 
       {/* Mobile dropdown menu */}
-      <MobileMenu $visible={mobileMenuOpen}>
+      <MobileMenu
+        $visible={mobileMenuOpen}
+        role="menu"
+        aria-label="Toolbar actions menu"
+      >
         <MobileMenuItem
+          role="menuitem"
           onClick={() => {
             setSidebarCollapsed(false);
-            setMobileMenuOpen(false);
+            closeMobileMenu();
           }}
         >
           <PanelLeftOpen />
@@ -519,9 +555,10 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
         </MobileMenuItem>
         {canCreateFolders && (
           <MobileMenuItem
+            role="menuitem"
             onClick={() => {
               onNewFolder();
-              setMobileMenuOpen(false);
+              closeMobileMenu();
             }}
           >
             <FolderPlus />
@@ -529,9 +566,10 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
           </MobileMenuItem>
         )}
         <MobileMenuItem
+          role="menuitem"
           onClick={() => {
             onUpload();
-            setMobileMenuOpen(false);
+            closeMobileMenu();
           }}
         >
           <Upload />
