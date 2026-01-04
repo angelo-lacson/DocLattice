@@ -309,6 +309,14 @@ export function useNotificationWebSocket(
       return;
     }
 
+    // Don't attempt connection without auth token - will get 403
+    if (!token) {
+      console.debug(
+        "[useNotificationWebSocket] Skipping connection - no auth token yet"
+      );
+      return;
+    }
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -316,7 +324,7 @@ export function useNotificationWebSocket(
     clearReconnect();
     setConnectionState("connecting");
 
-    const wsUrl = getNotificationUpdatesWebSocket(token || undefined);
+    const wsUrl = getNotificationUpdatesWebSocket(token);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
