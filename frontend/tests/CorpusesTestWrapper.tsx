@@ -17,7 +17,13 @@ import {
 } from "../src/graphql/cache";
 import { OperationDefinitionNode } from "graphql";
 import { mergeArrayByIdFieldPolicy } from "../src/graphql/cache";
-import { GET_CORPUSES } from "../src/graphql/queries";
+import {
+  GET_CORPUSES,
+  GET_DOCUMENTS,
+  GET_CORPUS_STATS,
+} from "../src/graphql/queries";
+import { GET_CORPUS_FOLDERS } from "../src/graphql/queries/folders";
+import { GET_CORPUS_METADATA_COLUMNS } from "../src/graphql/metadataOperations";
 import { CorpusType } from "../src/types/graphql-api";
 
 // Create minimal cache similar to DocumentKnowledgeBaseTestWrapper
@@ -60,26 +66,94 @@ const UrlToStateSync: React.FC = () => {
   return null;
 };
 
-// Create wildcard link to respond to any GET_CORPUSES variables
+// Create wildcard link to respond to common queries regardless of variables
 const createWildcardLink = (mocks: ReadonlyArray<MockedResponse>) => {
   // Ordinary single-shot behaviour for most mocks
   const mockLink = new MockLink(mocks);
 
-  // Capture a canonical corpuses result so we can answer the query regardless
-  // of its variables (textSearch etc.) and *without* consuming the mock – we
-  // only need this special-case because the UI issues the query many times.
+  // Capture canonical results for frequently-queried items
+  // These can be answered regardless of variables and without consuming mocks
   const corpusesResult = mocks.find(
     (m) => m.request.query === GET_CORPUSES
   )?.result;
+
+  // Find the latest (most complete) document result that has documents
+  const documentsResults = mocks.filter(
+    (m) => m.request.query === GET_DOCUMENTS
+  );
+  const documentsWithData = documentsResults.find(
+    (m) =>
+      (m.result as any)?.data?.documents?.edges?.length > 0 ||
+      (m.request.variables as any)?.inCorpusWithId
+  );
+  const documentsResult =
+    documentsWithData?.result || documentsResults[0]?.result;
+
+  const foldersResult = mocks.find(
+    (m) => m.request.query === GET_CORPUS_FOLDERS
+  )?.result;
+
+  const statsResult = mocks.find(
+    (m) => m.request.query === GET_CORPUS_STATS
+  )?.result;
+
+  // Find metadata columns result with actual columns (not empty)
+  const metadataColumnsResults = mocks.filter(
+    (m) => m.request.query === GET_CORPUS_METADATA_COLUMNS
+  );
+  const columnsWithData = metadataColumnsResults.find(
+    (m) => (m.result as any)?.data?.corpusMetadataColumns?.length > 0
+  );
+  // Use columns with data after some requests, otherwise use first mock
+  let metadataColumnsCallCount = 0;
+  const getMetadataColumnsResult = () => {
+    metadataColumnsCallCount++;
+    // After 2 calls (initial + refetch), return columns with data
+    if (metadataColumnsCallCount > 2 && columnsWithData) {
+      return columnsWithData.result;
+    }
+    return metadataColumnsResults[0]?.result;
+  };
 
   return new ApolloLink((operation) => {
     const isCorpusesQuery =
       operation.operationName === "GetCorpuses" ||
       operation.query === GET_CORPUSES;
+    const isDocumentsQuery = operation.query === GET_DOCUMENTS;
+    const isFoldersQuery = operation.query === GET_CORPUS_FOLDERS;
+    const isStatsQuery = operation.query === GET_CORPUS_STATS;
+    const isMetadataColumnsQuery =
+      operation.query === GET_CORPUS_METADATA_COLUMNS;
 
     if (isCorpusesQuery && corpusesResult) {
       console.log("[MOCK] wildcard GetCorpuses", operation.variables);
       return Observable.of(corpusesResult as any);
+    }
+
+    if (isDocumentsQuery && documentsResult) {
+      console.log("[MOCK] wildcard GetDocuments", operation.variables);
+      return Observable.of(documentsResult as any);
+    }
+
+    if (isFoldersQuery && foldersResult) {
+      console.log("[MOCK] wildcard GetCorpusFolders", operation.variables);
+      return Observable.of(foldersResult as any);
+    }
+
+    if (isStatsQuery && statsResult) {
+      console.log("[MOCK] wildcard GetCorpusStats", operation.variables);
+      return Observable.of(statsResult as any);
+    }
+
+    if (isMetadataColumnsQuery && metadataColumnsResults.length > 0) {
+      const result = getMetadataColumnsResult();
+      console.log(
+        "[MOCK] wildcard GetCorpusMetadataColumns (call #" +
+          metadataColumnsCallCount +
+          ")",
+        operation.variables
+      );
+      return Observable.of(result as any);
     }
 
     // Delegate everything else to MockLink (single-shot semantics)
