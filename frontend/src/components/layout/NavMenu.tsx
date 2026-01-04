@@ -1,4 +1,4 @@
-import { NavBar } from "@os-legal/ui";
+import { NavBar, Button } from "@os-legal/ui";
 import type { NavItem, UserMenuItem } from "@os-legal/ui";
 import { useNavigate } from "react-router-dom";
 import { showExportModal, showUserSettingsModal } from "../../graphql/cache";
@@ -88,15 +88,8 @@ export const NavMenu = () => {
     onClick: () => navigate(item.route),
   }));
 
-  // Add login item for unauthenticated users
-  if (!user && !isLoading) {
-    const loginItem: NavItem = {
-      id: "login",
-      label: "Login",
-      onClick: REACT_APP_USE_AUTH0 ? doLogin : () => navigate("/login"),
-    };
-    navItems.push(loginItem);
-  }
+  // Login button for unauthenticated users (rendered on right side via actions prop)
+  const handleLogin = REACT_APP_USE_AUTH0 ? doLogin : () => navigate("/login");
 
   // Build user menu items
   const userMenuItems: UserMenuItem[] = user
@@ -166,6 +159,13 @@ export const NavMenu = () => {
         }
         userMenuItems={userMenuItems}
         hideUserMenu={isLoading || !user}
+        actions={
+          !user && !isLoading ? (
+            <Button variant="secondary" size="sm" onClick={handleLogin}>
+              Login
+            </Button>
+          ) : undefined
+        }
       />
     </>
   );
