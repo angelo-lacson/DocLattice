@@ -33,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Responsive behavior (hamburger menu, mobile navigation)
 - **Test wrapper** (`frontend/tests/NavMenuTestWrapper.tsx`): Provides Auth0Provider, MockedProvider, MemoryRouter, and JotaiProvider context
 
+### Fixed
+
+#### Superuser Features in Non-Auth0 Mode
+- **LOGIN_MUTATION missing isSuperuser** (`frontend/src/graphql/mutations.ts:49-65`): Added `isSuperuser` field to login query
+  - Previously, superuser features (Badge Management, Admin Settings) were broken in non-Auth0 mode
+  - Updated `LoginOutputs` interface to include `username`, `isUsageCapped`, and `isSuperuser` fields
+
 ---
 
 ## [Unreleased] - 2026-01-03
