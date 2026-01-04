@@ -16,7 +16,7 @@ import {
  * FolderBreadcrumb - Navigation breadcrumb showing path from root to current folder
  *
  * Features:
- * - Shows "Corpus Root" > Folder1 > Folder2 > ...
+ * - Shows Home icon > "Documents" > Folder1 > Folder2 > ...
  * - Clickable segments to navigate up hierarchy
  * - Compact display with ellipsis for deep nesting
  * - Highlights current folder
@@ -34,12 +34,11 @@ interface FolderBreadcrumbProps {
 const BreadcrumbContainer = styled.div`
   display: flex;
   align-items: center;
-  padding: 12px 16px;
-  background: ${OS_LEGAL_COLORS.surfaceHover};
-  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  gap: 6px;
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
+  min-width: 0;
 
   /* Custom scrollbar for horizontal overflow */
   &::-webkit-scrollbar {
@@ -47,7 +46,7 @@ const BreadcrumbContainer = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: transparent;
   }
 
   &::-webkit-scrollbar-thumb {
@@ -63,29 +62,28 @@ const BreadcrumbContainer = styled.div`
 const BreadcrumbItem = styled.button<{ $isLast: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   background: none;
   border: none;
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
   font-size: 14px;
-  font-weight: ${(props) => (props.$isLast ? "600" : "400")};
+  font-weight: ${(props) => (props.$isLast ? "500" : "400")};
   color: ${(props) =>
-    props.$isLast ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textSecondary};
+    props.$isLast
+      ? OS_LEGAL_COLORS.textPrimary
+      : OS_LEGAL_COLORS.textSecondary};
   cursor: ${(props) => (props.$isLast ? "default" : "pointer")};
   transition: all 0.15s ease;
   white-space: nowrap;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: ${(props) =>
-      props.$isLast ? "transparent" : "rgba(148, 163, 184, 0.1)"};
+      props.$isLast ? "transparent" : OS_LEGAL_COLORS.surfaceHover};
     color: ${(props) =>
-      props.$isLast ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textPrimary};
-  }
-
-  &:active {
-    background: ${(props) =>
-      props.$isLast ? "transparent" : "rgba(148, 163, 184, 0.15)"};
+      props.$isLast
+        ? OS_LEGAL_COLORS.textPrimary
+        : OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -93,13 +91,13 @@ const BreadcrumbSeparator = styled.div`
   display: flex;
   align-items: center;
   color: ${OS_LEGAL_COLORS.borderHover};
-  margin: 0 4px;
+  font-size: 12px;
 `;
 
 const Ellipsis = styled.div`
   display: flex;
   align-items: center;
-  padding: 6px 8px;
+  padding: 4px 6px;
   color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 14px;
   user-select: none;
@@ -107,6 +105,7 @@ const Ellipsis = styled.div`
 
 const HomeIcon = styled(Home)`
   flex-shrink: 0;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const EmptyState = styled.div`
@@ -147,7 +146,7 @@ export const FolderBreadcrumb: React.FC<FolderBreadcrumbProps> = ({
           onClick={() => handleBreadcrumbClick(null)}
         >
           <HomeIcon size={16} />
-          Corpus Root
+          Documents
         </BreadcrumbItem>
       </BreadcrumbContainer>
     );
@@ -173,13 +172,13 @@ export const FolderBreadcrumb: React.FC<FolderBreadcrumbProps> = ({
 
   return (
     <BreadcrumbContainer>
-      {/* Corpus Root */}
+      {/* Documents Root */}
       <BreadcrumbItem
         $isLast={false}
         onClick={() => handleBreadcrumbClick(null)}
       >
         <HomeIcon size={16} />
-        Corpus Root
+        Documents
       </BreadcrumbItem>
 
       <BreadcrumbSeparator>

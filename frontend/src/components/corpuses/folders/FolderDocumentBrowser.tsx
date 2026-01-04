@@ -3,7 +3,18 @@ import { useSetAtom, useAtom, useAtomValue } from "jotai";
 import { useReactiveVar, useMutation } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { Folder, FolderOpen, PanelLeftOpen, X } from "lucide-react";
+import {
+  FolderPlus,
+  Upload,
+  List,
+  LayoutGrid,
+  Table2,
+  PanelLeftOpen,
+  X,
+  ChevronLeft,
+  ChevronUp,
+  MoreVertical,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import {
   DndContext,
@@ -15,6 +26,10 @@ import {
   closestCenter,
 } from "@dnd-kit/core";
 import { selectedFolderId as selectedFolderIdReactiveVar } from "../../../graphql/cache";
+import {
+  showUploadNewDocumentsModal,
+  openedCorpus,
+} from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
 import { CreateFolderModal } from "./CreateFolderModal";
@@ -28,6 +43,7 @@ import {
   sidebarCollapsedAtom,
   openCreateFolderModalAtom,
   folderListAtom,
+  canCreateFoldersAtom,
 } from "../../../atoms/folderAtoms";
 import {
   MOVE_DOCUMENT_TO_FOLDER,
@@ -48,9 +64,9 @@ import {
  * FolderDocumentBrowser - Main container for folder-based document browsing
  *
  * Features:
- * - Three-column layout: Sidebar | Breadcrumb + Content | Modals
+ * - File system layout: Toolbar | Sidebar + Content | Modals
  * - Folder tree navigation on left (collapsible)
- * - Breadcrumb navigation at top of content area
+ * - Toolbar with breadcrumb, navigation, actions, view toggles
  * - Document list in main content area (passed as children)
  * - All folder modals mounted and controlled by atoms
  * - Responsive: sidebar collapses on mobile
@@ -62,7 +78,11 @@ import {
  * - children: Main content area (typically CorpusDocumentCards)
  * - showSidebar: Whether to show folder sidebar (default: true)
  * - showBreadcrumb: Whether to show breadcrumb (default: true)
+ * - viewMode: Current view mode
+ * - onViewModeChange: Callback when view mode changes
  */
+
+export type ViewMode = "modern-card" | "modern-list" | "grid";
 
 interface FolderDocumentBrowserProps {
   corpusId: string;
@@ -71,34 +91,374 @@ interface FolderDocumentBrowserProps {
   children?: React.ReactNode;
   showSidebar?: boolean;
   showBreadcrumb?: boolean;
+  viewMode?: ViewMode;
+  onViewModeChange?: (mode: ViewMode) => void;
 }
+
+// ===============================================
+// FILE SYSTEM LAYOUT COMPONENTS
+// ===============================================
 
 const BrowserContainer = styled.div`
   position: relative;
   display: flex;
+  flex-direction: column;
   height: 100%;
   overflow: hidden;
   background: ${OS_LEGAL_COLORS.surfaceHover};
+  padding: 8px;
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: 4px;
+  }
+`;
+
+const FileSystemContainer = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
+  overflow: hidden;
+  min-height: 0;
+`;
+
+// ===============================================
+// TOOLBAR COMPONENTS
+// ===============================================
+
+const Toolbar = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surface};
+  flex-shrink: 0;
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+`;
+
+const ToolbarBreadcrumb = styled.div`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    display: none;
+  }
+`;
+
+const ToolbarActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+`;
+
+const NavButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+const ActionButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  font-size: 13px;
+  font-weight: 500;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+    color: ${OS_LEGAL_COLORS.folderIcon};
+  }
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: 8px;
+
+    span {
+      display: none;
+    }
+  }
+`;
+
+const PrimaryButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: ${OS_LEGAL_COLORS.accent};
+  border: 1px solid ${OS_LEGAL_COLORS.accent};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.accentHover};
+    border-color: ${OS_LEGAL_COLORS.accentHover};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: 8px 12px;
+
+    span {
+      display: none;
+    }
+  }
+`;
+
+const ViewToggleGroup = styled.div`
+  display: flex;
+  align-items: center;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  overflow: hidden;
+`;
+
+const ViewToggleButton = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.surface};
+  border: none;
+  border-right: 1px solid ${OS_LEGAL_COLORS.border};
+  color: ${(props) =>
+    props.$active ? "white" : OS_LEGAL_COLORS.textSecondary};
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:last-child {
+    border-right: none;
+  }
+
+  &:hover:not(:disabled) {
+    background: ${(props) =>
+      props.$active
+        ? OS_LEGAL_COLORS.accentHover
+        : OS_LEGAL_COLORS.surfaceHover};
+    color: ${(props) =>
+      props.$active ? "white" : OS_LEGAL_COLORS.textPrimary};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+// Desktop sidebar toggle button - appears in toolbar when sidebar is collapsed
+const SidebarToggleButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-right: 8px;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    display: none;
+  }
+`;
+
+// Mobile kebab menu button - replaces FAB on mobile
+const MobileKebabButton = styled.button`
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: auto;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    display: flex;
+  }
+`;
+
+// Mobile menu overlay - closes menu when clicking outside
+const MobileMenuOverlay = styled.div<{ $visible: boolean }>`
+  display: ${(props) => (props.$visible ? "block" : "none")};
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99;
+
+  @media (min-width: ${TABLET_BREAKPOINT + 1}px) {
+    display: none;
+  }
+`;
+
+// Mobile dropdown menu
+const MobileMenu = styled.div<{ $visible: boolean }>`
+  display: ${(props) => (props.$visible ? "block" : "none")};
+  position: absolute;
+  top: 100%;
+  right: 8px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+
+  @media (min-width: ${TABLET_BREAKPOINT + 1}px) {
+    display: none;
+  }
+`;
+
+const MobileMenuItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
+
+  &:active {
+    background: ${OS_LEGAL_COLORS.border};
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    color: ${OS_LEGAL_COLORS.textSecondary};
+  }
+
+  &:not(:last-child) {
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  }
+`;
+
+// ===============================================
+// CONTENT LAYOUT COMPONENTS
+// ===============================================
+
+const ContentWrapper = styled.div`
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
 `;
 
 const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
-  width: ${(props) => (props.$collapsed ? "0px" : "320px")};
-  min-width: ${(props) => (props.$collapsed ? "0px" : "320px")};
-  height: 100%;
+  width: ${(props) => (props.$collapsed ? "0px" : "240px")};
+  min-width: ${(props) => (props.$collapsed ? "0px" : "240px")};
   display: ${(props) => (props.$visible ? "flex" : "none")};
   flex-direction: column;
   border-right: ${(props) =>
     props.$collapsed ? "none" : `1px solid ${OS_LEGAL_COLORS.border}`};
-  background: ${OS_LEGAL_COLORS.surface};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: ${TABLET_BREAKPOINT}px) {
     position: absolute;
-    left: ${(props) => (props.$visible && !props.$collapsed ? "0" : "-320px")};
+    left: ${(props) => (props.$visible && !props.$collapsed ? "0" : "-240px")};
+    top: 0;
+    bottom: 0;
     z-index: 100;
-    width: 320px;
-    min-width: 320px;
+    width: 240px;
+    min-width: 240px;
     box-shadow: ${(props) =>
       props.$visible && !props.$collapsed
         ? "4px 0 12px rgba(0, 0, 0, 0.1)"
@@ -106,22 +466,12 @@ const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
   }
 `;
 
-const MainContent = styled.main<{ $hasSidebar: boolean }>`
+const MainContent = styled.main`
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100%;
   overflow: hidden;
-  margin-left: ${(props) => (props.$hasSidebar ? "0" : "0")};
-
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    margin-left: 0;
-  }
-`;
-
-const BreadcrumbWrapper = styled.div<{ $visible: boolean }>`
-  display: ${(props) => (props.$visible ? "block" : "none")};
-  flex-shrink: 0;
+  min-width: 0;
 `;
 
 const ContentArea = styled.div`
@@ -148,113 +498,6 @@ const ContentArea = styled.div`
     &:hover {
       background: ${OS_LEGAL_COLORS.textMuted};
     }
-  }
-`;
-
-const ToggleButton = styled.button<{ $collapsed: boolean }>`
-  position: absolute;
-  left: ${(props) => (props.$collapsed ? "0" : "320px")};
-  top: 50%;
-  transform: translateY(-50%);
-  width: ${(props) => (props.$collapsed ? "40px" : "32px")};
-  height: ${(props) => (props.$collapsed ? "80px" : "60px")};
-  background: ${(props) =>
-    props.$collapsed ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textSecondary};
-  border: 1px solid
-    ${(props) =>
-      props.$collapsed
-        ? OS_LEGAL_COLORS.accent
-        : OS_LEGAL_COLORS.textSecondary};
-  border-left: ${(props) =>
-    props.$collapsed ? `1px solid ${OS_LEGAL_COLORS.accent}` : "none"};
-  border-radius: ${(props) =>
-    props.$collapsed
-      ? `0 ${OS_LEGAL_SPACING.borderRadiusButton} ${OS_LEGAL_SPACING.borderRadiusButton} 0`
-      : `0 ${OS_LEGAL_SPACING.borderRadiusButton} ${OS_LEGAL_SPACING.borderRadiusButton} 0`};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 101;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  color: white;
-  box-shadow: ${(props) =>
-    props.$collapsed
-      ? "4px 0 12px rgba(15, 118, 110, 0.4)"
-      : "-4px 0 12px rgba(100, 116, 139, 0.3)"};
-
-  &:hover {
-    background: ${(props) =>
-      props.$collapsed
-        ? OS_LEGAL_COLORS.accentHover
-        : OS_LEGAL_COLORS.textPrimary};
-    border-color: ${(props) =>
-      props.$collapsed
-        ? OS_LEGAL_COLORS.accentHover
-        : OS_LEGAL_COLORS.textPrimary};
-    color: white;
-    box-shadow: ${(props) =>
-      props.$collapsed
-        ? "4px 0 16px rgba(15, 118, 110, 0.5)"
-        : "-4px 0 16px rgba(100, 116, 139, 0.4)"};
-    transform: translateY(-50%)
-      ${(props) => (props.$collapsed ? "translateX(2px)" : "translateX(-2px)")};
-  }
-
-  &:active {
-    transform: translateY(-50%) scale(0.95);
-  }
-
-  svg {
-    width: ${(props) => (props.$collapsed ? "24px" : "18px")};
-    height: ${(props) => (props.$collapsed ? "24px" : "18px")};
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    display: none;
-  }
-`;
-
-// Mobile toggle button - shows on mobile when sidebar is hidden
-const MobileToggleButton = styled.button<{ $visible: boolean }>`
-  display: none;
-  position: fixed;
-  left: 12px;
-  bottom: 80px;
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(
-    135deg,
-    ${OS_LEGAL_COLORS.accent} 0%,
-    ${OS_LEGAL_COLORS.accentHover} 100%
-  );
-  border: none;
-  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
-  color: white;
-  cursor: pointer;
-  z-index: 99; /* Above backdrop (98) */
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.4);
-  transition: all 0.3s ease;
-  align-items: center;
-  justify-content: center;
-
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    display: ${(props) => (props.$visible ? "flex" : "none")};
-  }
-
-  &:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.5);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  svg {
-    width: 24px;
-    height: 24px;
   }
 `;
 
@@ -364,6 +607,8 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   children,
   showSidebar = true,
   showBreadcrumb = true,
+  viewMode = "modern-list",
+  onViewModeChange,
 }) => {
   const setCorpusId = useSetAtom(folderCorpusIdAtom);
   const setSelectedFolderId = useSetAtom(selectedFolderIdAtom);
@@ -371,6 +616,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom);
   const openCreateModal = useSetAtom(openCreateFolderModalAtom);
   const folderList = useAtomValue(folderListAtom);
+  const canCreateFolders = useAtomValue(canCreateFoldersAtom);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -385,6 +631,9 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     x: number;
     y: number;
   } | null>(null);
+
+  // Mobile kebab menu state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
@@ -650,6 +899,40 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     closeContextMenu();
   }, [selectedFolderId, openCreateModal, closeContextMenu]);
 
+  // Handle "New Folder" toolbar button
+  const handleNewFolder = React.useCallback(() => {
+    openCreateModal(selectedFolderId);
+  }, [selectedFolderId, openCreateModal]);
+
+  // Handle "Upload" toolbar button
+  const handleUpload = React.useCallback(() => {
+    showUploadNewDocumentsModal(true);
+  }, []);
+
+  // Handle view mode change
+  const handleViewModeChange = React.useCallback(
+    (mode: ViewMode) => {
+      if (onViewModeChange) {
+        onViewModeChange(mode);
+      }
+    },
+    [onViewModeChange]
+  );
+
+  // Navigate back/up functionality
+  const canGoBack = selectedFolderId !== null && selectedFolderId !== "trash";
+  const handleGoBack = React.useCallback(() => {
+    if (parentFolderId) {
+      handleFolderSelect(parentFolderId);
+    } else {
+      handleFolderSelect(null);
+    }
+  }, [parentFolderId]);
+
+  const handleGoUp = React.useCallback(() => {
+    handleFolderSelect(null);
+  }, []);
+
   return (
     <DndContext
       sensors={sensors}
@@ -664,79 +947,192 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
           onClick={() => setSidebarCollapsed(true)}
         />
 
-        {/* Folder Tree Sidebar */}
-        <Sidebar $visible={showSidebar} $collapsed={sidebarCollapsed}>
-          {/* Mobile close button */}
-          <MobileSidebarCloseButton
-            onClick={() => setSidebarCollapsed(true)}
-            aria-label="Close folders"
-            title="Close folders"
-          >
-            <X />
-          </MobileSidebarCloseButton>
-          <FolderTreeSidebar
-            corpusId={corpusId}
-            onFolderSelect={(folderId) => {
-              handleFolderSelect(folderId);
-              // Auto-close sidebar on mobile/tablet after selection
-              if (window.innerWidth <= TABLET_BREAKPOINT) {
-                setSidebarCollapsed(true);
-              }
-            }}
-          />
-        </Sidebar>
+        <FileSystemContainer>
+          {/* Toolbar with breadcrumb, navigation, and actions */}
+          {showBreadcrumb && selectedFolderId !== "trash" && (
+            <Toolbar>
+              {/* Desktop sidebar toggle */}
+              {showSidebar && (
+                <SidebarToggleButton
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  aria-label={
+                    sidebarCollapsed ? "Show folders" : "Hide folders"
+                  }
+                  title={sidebarCollapsed ? "Show folders" : "Hide folders"}
+                >
+                  <PanelLeftOpen />
+                </SidebarToggleButton>
+              )}
 
-        {/* Desktop Toggle Button */}
-        {showSidebar && (
-          <ToggleButton
-            $collapsed={sidebarCollapsed}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={sidebarCollapsed ? "Open folders" : "Close folders"}
-            title={sidebarCollapsed ? "Open folders" : "Close folders"}
-          >
-            {sidebarCollapsed ? <Folder /> : <FolderOpen />}
-          </ToggleButton>
-        )}
+              <ToolbarBreadcrumb>
+                <FolderBreadcrumb onFolderSelect={handleFolderSelect} />
+              </ToolbarBreadcrumb>
 
-        {/* Mobile Toggle Button - shows when sidebar is hidden */}
-        {showSidebar && (
-          <MobileToggleButton
-            $visible={sidebarCollapsed}
-            onClick={() => setSidebarCollapsed(false)}
-            aria-label="Open folders"
-            title="Open folders"
-          >
-            <PanelLeftOpen />
-          </MobileToggleButton>
-        )}
+              <ToolbarActions>
+                {/* Navigation buttons */}
+                <NavButton
+                  onClick={handleGoBack}
+                  disabled={!canGoBack}
+                  title="Go back"
+                  aria-label="Go back"
+                >
+                  <ChevronLeft />
+                </NavButton>
+                <NavButton
+                  onClick={handleGoUp}
+                  disabled={selectedFolderId === null}
+                  title="Go to root"
+                  aria-label="Go to root"
+                >
+                  <ChevronUp />
+                </NavButton>
 
-        {/* Main Content Area */}
-        <MainContent $hasSidebar={showSidebar && !sidebarCollapsed}>
-          {/* Breadcrumb Navigation - hide for trash folder */}
-          <BreadcrumbWrapper
-            $visible={showBreadcrumb && selectedFolderId !== "trash"}
-          >
-            <FolderBreadcrumb onFolderSelect={handleFolderSelect} />
-          </BreadcrumbWrapper>
+                {/* New Folder button */}
+                {canCreateFolders && (
+                  <ActionButton
+                    onClick={handleNewFolder}
+                    title="Create new folder"
+                  >
+                    <FolderPlus />
+                    <span>New Folder</span>
+                  </ActionButton>
+                )}
 
-          {/* Document List or Custom Content - Dropzone handled by DocumentCards child */}
-          <ContentArea
-            onContextMenu={
-              selectedFolderId === "trash"
-                ? undefined
-                : handleContentAreaContextMenu
-            }
-          >
-            {selectedFolderId === "trash" ? (
-              <TrashFolderView
-                corpusId={corpusId}
-                onBack={() => handleFolderSelect(null)}
+                {/* Upload button */}
+                <PrimaryButton onClick={handleUpload} title="Upload documents">
+                  <Upload />
+                  <span>Upload</span>
+                </PrimaryButton>
+
+                {/* View toggle buttons */}
+                {onViewModeChange && (
+                  <ViewToggleGroup>
+                    <ViewToggleButton
+                      $active={viewMode === "modern-list"}
+                      onClick={() => handleViewModeChange("modern-list")}
+                      title="List view"
+                      aria-label="List view"
+                    >
+                      <List />
+                    </ViewToggleButton>
+                    <ViewToggleButton
+                      $active={viewMode === "modern-card"}
+                      onClick={() => handleViewModeChange("modern-card")}
+                      title="Card view"
+                      aria-label="Card view"
+                    >
+                      <LayoutGrid />
+                    </ViewToggleButton>
+                    <ViewToggleButton
+                      $active={viewMode === "grid"}
+                      onClick={() => handleViewModeChange("grid")}
+                      title="Table view"
+                      aria-label="Table view"
+                    >
+                      <Table2 />
+                    </ViewToggleButton>
+                  </ViewToggleGroup>
+                )}
+              </ToolbarActions>
+
+              {/* Mobile kebab menu */}
+              {showSidebar && (
+                <MobileKebabButton
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  aria-label="More options"
+                  title="More options"
+                >
+                  <MoreVertical />
+                </MobileKebabButton>
+              )}
+
+              {/* Mobile menu overlay - click to close */}
+              <MobileMenuOverlay
+                $visible={mobileMenuOpen}
+                onClick={() => setMobileMenuOpen(false)}
               />
-            ) : (
-              children
-            )}
-          </ContentArea>
-        </MainContent>
+
+              {/* Mobile dropdown menu */}
+              <MobileMenu $visible={mobileMenuOpen}>
+                <MobileMenuItem
+                  onClick={() => {
+                    setSidebarCollapsed(false);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <PanelLeftOpen />
+                  Show Folders
+                </MobileMenuItem>
+                {canCreateFolders && (
+                  <MobileMenuItem
+                    onClick={() => {
+                      handleNewFolder();
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <FolderPlus />
+                    New Folder
+                  </MobileMenuItem>
+                )}
+                <MobileMenuItem
+                  onClick={() => {
+                    handleUpload();
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <Upload />
+                  Upload Documents
+                </MobileMenuItem>
+              </MobileMenu>
+            </Toolbar>
+          )}
+
+          {/* Content area with sidebar and main content */}
+          <ContentWrapper>
+            {/* Folder Tree Sidebar */}
+            <Sidebar $visible={showSidebar} $collapsed={sidebarCollapsed}>
+              {/* Mobile close button */}
+              <MobileSidebarCloseButton
+                onClick={() => setSidebarCollapsed(true)}
+                aria-label="Close folders"
+                title="Close folders"
+              >
+                <X />
+              </MobileSidebarCloseButton>
+              <FolderTreeSidebar
+                corpusId={corpusId}
+                onFolderSelect={(folderId) => {
+                  handleFolderSelect(folderId);
+                  // Auto-close sidebar on mobile/tablet after selection
+                  if (window.innerWidth <= TABLET_BREAKPOINT) {
+                    setSidebarCollapsed(true);
+                  }
+                }}
+              />
+            </Sidebar>
+
+            {/* Main Content Area */}
+            <MainContent>
+              {/* Document List or Custom Content */}
+              <ContentArea
+                onContextMenu={
+                  selectedFolderId === "trash"
+                    ? undefined
+                    : handleContentAreaContextMenu
+                }
+              >
+                {selectedFolderId === "trash" ? (
+                  <TrashFolderView
+                    corpusId={corpusId}
+                    onBack={() => handleFolderSelect(null)}
+                  />
+                ) : (
+                  children
+                )}
+              </ContentArea>
+            </MainContent>
+          </ContentWrapper>
+        </FileSystemContainer>
       </BrowserContainer>
 
       {/* Folder Action Modals */}

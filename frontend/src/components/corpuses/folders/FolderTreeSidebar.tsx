@@ -2,28 +2,16 @@ import React, { useCallback, useMemo } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
-import { Loader, Input, Button } from "semantic-ui-react";
-import {
-  FolderPlus,
-  Search,
-  ChevronDown,
-  ChevronUp,
-  Home,
-  Trash2,
-} from "lucide-react";
+import { Loader } from "semantic-ui-react";
+import { Home, Trash2 } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
-import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
 import { FolderTreeNode } from "./FolderTreeNode";
 import {
   folderTreeAtom,
   folderListAtom,
   folderCorpusIdAtom,
   selectedFolderIdAtom,
-  openCreateFolderModalAtom,
   folderSearchQueryAtom,
-  expandAllFoldersAtom,
-  collapseAllFoldersAtom,
-  canCreateFoldersAtom,
 } from "../../../atoms/folderAtoms";
 import {
   GET_CORPUS_FOLDERS,
@@ -33,7 +21,6 @@ import {
 } from "../../../graphql/queries/folders";
 import {
   OS_LEGAL_COLORS,
-  OS_LEGAL_TYPOGRAPHY,
   OS_LEGAL_SPACING,
 } from "../../../assets/configurations/osLegalStyles";
 
@@ -63,110 +50,19 @@ const SidebarContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: ${OS_LEGAL_COLORS.surface};
-  border-right: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   overflow: hidden;
 `;
 
 const SidebarHeader = styled.div`
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
-  background: ${OS_LEGAL_COLORS.surfaceHover};
-
-  /* On mobile/tablet, add right padding for the close button overlay */
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    padding-right: 56px;
-  }
-`;
-
-const HeaderRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-`;
-
-const HeaderTitle = styled.h3`
-  margin: 0;
-  font-size: 16px;
+  padding: 12px 16px;
+  font-size: 11px;
   font-weight: 600;
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
-  color: ${OS_LEGAL_COLORS.textPrimary};
-`;
-
-const CreateFolderButton = styled(Button)`
-  &.ui.button {
-    padding: 8px 12px;
-    background: ${OS_LEGAL_COLORS.accent};
-    color: white;
-    font-size: 13px;
-    border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.15s ease;
-
-    &:hover {
-      background: ${OS_LEGAL_COLORS.accentHover};
-      transform: translateY(-1px);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-`;
-
-const SearchInputWrapper = styled.div`
-  margin-bottom: 8px;
-
-  .ui.input {
-    width: 100%;
-
-    input {
-      border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-      border: 1px solid ${OS_LEGAL_COLORS.borderHover};
-      padding: 8px 12px;
-      font-size: 14px;
-
-      &:focus {
-        border-color: ${OS_LEGAL_COLORS.accent};
-        box-shadow: 0 0 0 3px ${OS_LEGAL_COLORS.accentLight};
-      }
-    }
-  }
-`;
-
-const ActionRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const ActionButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  background: none;
-  border: 1px solid ${OS_LEGAL_COLORS.borderHover};
-  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  font-size: 12px;
-  color: ${OS_LEGAL_COLORS.textSecondary};
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: ${OS_LEGAL_COLORS.surfaceHover};
-    border-color: ${OS_LEGAL_COLORS.textMuted};
-    color: ${OS_LEGAL_COLORS.textPrimary};
-  }
-
-  &:active {
-    background: ${OS_LEGAL_COLORS.border};
-  }
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surface};
 `;
 
 const TreeContainer = styled.div`
@@ -266,8 +162,8 @@ const EmptyState = styled.div`
   font-size: 14px;
 `;
 
-// Component for making Corpus Root droppable
-const CorpusRootDropTarget: React.FC<{
+// Component for making Documents root droppable
+const DocumentsRootDropTarget: React.FC<{
   isSelected: boolean;
   onClick: () => void;
 }> = ({ isSelected, onClick }) => {
@@ -285,7 +181,7 @@ const CorpusRootDropTarget: React.FC<{
       <RootFolderIcon>
         <Home size={18} />
       </RootFolderIcon>
-      <RootFolderName $isSelected={isSelected}>Corpus Root</RootFolderName>
+      <RootFolderName $isSelected={isSelected}>Documents</RootFolderName>
     </RootFolderItem>
   );
 };
@@ -313,12 +209,7 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
   const [, setFolderCorpusId] = useAtom(folderCorpusIdAtom);
   const [selectedFolderId, setSelectedFolderId] = useAtom(selectedFolderIdAtom);
   const folderTree = useAtomValue(folderTreeAtom);
-  const [searchQuery, setSearchQuery] = useAtom(folderSearchQueryAtom);
-  const canCreateFolders = useAtomValue(canCreateFoldersAtom);
-
-  const openCreateModal = useSetAtom(openCreateFolderModalAtom);
-  const expandAll = useSetAtom(expandAllFoldersAtom);
-  const collapseAll = useSetAtom(collapseAllFoldersAtom);
+  const [searchQuery] = useAtom(folderSearchQueryAtom);
 
   // Note: Drag-and-drop is now handled by FolderDocumentBrowser's unified DndContext
   // This component just renders droppable tree nodes
@@ -381,59 +272,16 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
     }
   }, [onFolderSelect, setSelectedFolderId]);
 
-  const handleCreateFolder = useCallback(() => {
-    openCreateModal(null); // null = create at root
-  }, [openCreateModal]);
-
-  const handleExpandAll = useCallback(() => {
-    expandAll();
-  }, [expandAll]);
-
-  const handleCollapseAll = useCallback(() => {
-    collapseAll();
-  }, [collapseAll]);
-
   // Note: Drag-and-drop handlers are now in FolderDocumentBrowser's unified DndContext
 
   return (
     <SidebarContainer>
-      <SidebarHeader>
-        <HeaderRow>
-          <HeaderTitle>Folders</HeaderTitle>
-          {canCreateFolders && (
-            <CreateFolderButton size="mini" onClick={handleCreateFolder}>
-              <FolderPlus size={14} />
-              New
-            </CreateFolderButton>
-          )}
-        </HeaderRow>
-
-        <SearchInputWrapper>
-          <Input
-            icon={<Search size={14} />}
-            iconPosition="left"
-            placeholder="Search folders..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </SearchInputWrapper>
-
-        <ActionRow>
-          <ActionButton onClick={handleExpandAll}>
-            <ChevronDown size={14} />
-            Expand All
-          </ActionButton>
-          <ActionButton onClick={handleCollapseAll}>
-            <ChevronUp size={14} />
-            Collapse All
-          </ActionButton>
-        </ActionRow>
-      </SidebarHeader>
+      <SidebarHeader>Folders</SidebarHeader>
 
       {/* TreeContainer is a droppable area - DndContext is provided by FolderDocumentBrowser */}
       <TreeContainer>
-        {/* Corpus Root Item (Droppable) */}
-        <CorpusRootDropTarget
+        {/* Documents Root Item (Droppable) */}
+        <DocumentsRootDropTarget
           isSelected={selectedFolderId === null}
           onClick={handleRootClick}
         />

@@ -70,10 +70,10 @@ const CardContainer = styled.div<{ $isDropTarget: boolean }>`
   }
 `;
 
-const CardPreview = styled.div<{ $color: string }>`
+const CardPreview = styled.div`
   position: relative;
   height: 90px;
-  background: ${(props) => props.$color || OS_LEGAL_COLORS.surfaceHover};
+  background: ${OS_LEGAL_COLORS.folderIconBg};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -81,7 +81,7 @@ const CardPreview = styled.div<{ $color: string }>`
 `;
 
 const FolderIconWrapper = styled.div`
-  color: rgba(255, 255, 255, 0.9);
+  color: ${OS_LEGAL_COLORS.folderIcon};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -198,16 +198,16 @@ const ListContainer = styled.div<{ $isDropTarget: boolean }>`
   }
 `;
 
-const ListIconWrapper = styled.div<{ $color: string }>`
+const ListIconWrapper = styled.div`
   flex-shrink: 0;
   width: 48px;
   height: 48px;
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  background: ${(props) => props.$color || OS_LEGAL_COLORS.surfaceHover};
+  background: ${OS_LEGAL_COLORS.folderIconBg};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.9);
+  color: ${OS_LEGAL_COLORS.folderIcon};
 
   @media (max-width: 640px) {
     width: 40px;
@@ -455,7 +455,7 @@ export const FolderCard: React.FC<FolderCardProps> = ({
           onClick={handleClick}
           onContextMenu={handleContextMenu}
         >
-          <ListIconWrapper $color={folder.color}>
+          <ListIconWrapper>
             <Folder size={24} />
           </ListIconWrapper>
 
@@ -520,7 +520,7 @@ export const FolderCard: React.FC<FolderCardProps> = ({
         onClick={handleClick}
         onContextMenu={handleContextMenu}
       >
-        <CardPreview $color={folder.color}>
+        <CardPreview>
           <FolderIconWrapper>
             <Folder size={48} />
           </FolderIconWrapper>

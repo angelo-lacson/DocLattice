@@ -17,6 +17,8 @@ export const OS_LEGAL_COLORS = {
   selectedBorder: "#0f766e",
   dropTargetBg: "rgba(34, 197, 94, 0.1)", // Keep green for drop targets
   dropTargetBorder: "rgba(34, 197, 94, 0.3)",
+  folderIcon: "#D97706", // Golden/amber for folder icons
+  folderIconBg: "linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)",
 } as const;
 
 export const OS_LEGAL_TYPOGRAPHY = {
