@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Optional
 from django.db.models import QuerySet
 
 if TYPE_CHECKING:
-    pass
+    from opencontractserver.documents.models import DocumentRelationship
 
 
 class DocumentActionsQueryOptimizer:
@@ -309,3 +309,149 @@ class DocumentActionsQueryOptimizer:
         return document.rows.filter(analysis__in=visible_analyses).select_related(
             "analysis", "analysis__analyzer"
         )
+
+
+class DocumentRelationshipQueryOptimizer:
+    """
+    Optimized queries for DocumentRelationship objects.
+
+    DocumentRelationship has its own guardian permissions (unlike annotation
+    Relationships which inherit from document/corpus). This optimizer provides
+    centralized, permission-aware queries with proper eager loading.
+    """
+
+    @classmethod
+    def get_visible_relationships(
+        cls,
+        user,
+        source_document_id: Optional[int] = None,
+        target_document_id: Optional[int] = None,
+        corpus_id: Optional[int] = None,
+        relationship_type: Optional[str] = None,
+    ) -> QuerySet:
+        """
+        Get DocumentRelationship objects visible to the user.
+
+        Args:
+            user: The requesting user
+            source_document_id: Optional filter by source document
+            target_document_id: Optional filter by target document
+            corpus_id: Optional filter by corpus
+            relationship_type: Optional filter by type ("RELATIONSHIP" or "NOTES")
+
+        Returns:
+            QuerySet of DocumentRelationship objects with eager loading
+        """
+        from opencontractserver.documents.models import DocumentRelationship
+
+        queryset = DocumentRelationship.objects.visible_to_user(user)
+
+        # Apply filters
+        if source_document_id:
+            queryset = queryset.filter(source_document_id=source_document_id)
+        if target_document_id:
+            queryset = queryset.filter(target_document_id=target_document_id)
+        if corpus_id:
+            queryset = queryset.filter(corpus_id=corpus_id)
+        if relationship_type:
+            queryset = queryset.filter(relationship_type=relationship_type)
+
+        # Eager load related objects
+        return queryset.select_related(
+            "source_document",
+            "target_document",
+            "annotation_label",
+            "corpus",
+            "creator",
+        )
+
+    @classmethod
+    def get_relationships_for_document(
+        cls,
+        user,
+        document_id: int,
+        corpus_id: Optional[int] = None,
+        include_as_source: bool = True,
+        include_as_target: bool = True,
+    ) -> QuerySet:
+        """
+        Get all DocumentRelationship objects where a document is source or target.
+
+        Args:
+            user: The requesting user
+            document_id: The document ID
+            corpus_id: Optional corpus filter
+            include_as_source: Include relationships where doc is source
+            include_as_target: Include relationships where doc is target
+
+        Returns:
+            QuerySet of DocumentRelationship objects
+        """
+        from django.db.models import Q
+
+        from opencontractserver.documents.models import Document, DocumentRelationship
+
+        # Check document exists and user can access it
+        try:
+            document = Document.objects.get(id=document_id)
+        except Document.DoesNotExist:
+            return DocumentRelationship.objects.none()
+
+        if not DocumentActionsQueryOptimizer._check_document_permission(user, document):
+            return DocumentRelationship.objects.none()
+
+        # Build filter for source/target
+        q_filter = Q()
+        if include_as_source:
+            q_filter |= Q(source_document_id=document_id)
+        if include_as_target:
+            q_filter |= Q(target_document_id=document_id)
+
+        if not q_filter:
+            return DocumentRelationship.objects.none()
+
+        queryset = DocumentRelationship.objects.visible_to_user(user).filter(q_filter)
+
+        if corpus_id:
+            queryset = queryset.filter(corpus_id=corpus_id)
+
+        return queryset.select_related(
+            "source_document",
+            "target_document",
+            "annotation_label",
+            "corpus",
+            "creator",
+        )
+
+    @classmethod
+    def get_relationship_by_id(
+        cls,
+        user,
+        relationship_id: int,
+    ) -> Optional["DocumentRelationship"]:
+        """
+        Get a single DocumentRelationship by ID with permission check.
+
+        Args:
+            user: The requesting user
+            relationship_id: The relationship ID
+
+        Returns:
+            DocumentRelationship object or None if not found/not accessible
+        """
+        from opencontractserver.documents.models import DocumentRelationship
+
+        try:
+            return (
+                DocumentRelationship.objects.visible_to_user(user)
+                .select_related(
+                    "source_document",
+                    "target_document",
+                    "annotation_label",
+                    "corpus",
+                    "creator",
+                )
+                .get(id=relationship_id)
+            )
+        except DocumentRelationship.DoesNotExist:
+            return None

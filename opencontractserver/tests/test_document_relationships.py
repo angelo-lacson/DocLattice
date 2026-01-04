@@ -61,6 +61,9 @@ class DocumentRelationshipsQueryTestCase(TestCase):
             creator=self.user,
         )
 
+        # Add documents to corpus (required for DocumentRelationship)
+        self.corpus.documents.add(self.source_doc, self.target_doc)
+
         # Create test relationships
         self.relationship = DocumentRelationship.objects.create(
             source_document=self.source_doc,
