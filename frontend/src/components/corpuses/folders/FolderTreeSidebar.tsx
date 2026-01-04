@@ -31,6 +31,11 @@ import {
   GetCorpusFoldersOutputs,
   FolderTreeNode as FolderTreeNodeType,
 } from "../../../graphql/queries/folders";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_TYPOGRAPHY,
+  OS_LEGAL_SPACING,
+} from "../../../assets/configurations/osLegalStyles";
 
 /**
  * FolderTreeSidebar - Main folder tree navigation component
@@ -58,8 +63,8 @@ const SidebarContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #ffffff;
-  border-right: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surface};
+  border-right: 1px solid ${OS_LEGAL_COLORS.border};
   overflow: hidden;
 `;
 
@@ -67,8 +72,8 @@ const SidebarHeader = styled.div`
   display: flex;
   flex-direction: column;
   padding: 16px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 
   /* On mobile/tablet, add right padding for the close button overlay */
   @media (max-width: ${TABLET_BREAKPOINT}px) {
@@ -87,23 +92,24 @@ const HeaderTitle = styled.h3`
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const CreateFolderButton = styled(Button)`
   &.ui.button {
     padding: 8px 12px;
-    background: #3b82f6;
+    background: ${OS_LEGAL_COLORS.accent};
     color: white;
     font-size: 13px;
-    border-radius: 6px;
+    border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
     display: flex;
     align-items: center;
     gap: 6px;
     transition: all 0.15s ease;
 
     &:hover {
-      background: #2563eb;
+      background: ${OS_LEGAL_COLORS.accentHover};
       transform: translateY(-1px);
     }
 
@@ -120,14 +126,14 @@ const SearchInputWrapper = styled.div`
     width: 100%;
 
     input {
-      border-radius: 6px;
-      border: 1px solid #cbd5e1;
+      border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+      border: 1px solid ${OS_LEGAL_COLORS.borderHover};
       padding: 8px 12px;
       font-size: 14px;
 
       &:focus {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        border-color: ${OS_LEGAL_COLORS.accent};
+        box-shadow: 0 0 0 3px ${OS_LEGAL_COLORS.accentLight};
       }
     }
   }
@@ -145,21 +151,21 @@ const ActionButton = styled.button`
   gap: 4px;
   padding: 6px 10px;
   background: none;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid ${OS_LEGAL_COLORS.borderHover};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
   font-size: 12px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: #f1f5f9;
-    border-color: #94a3b8;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.textMuted};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   &:active {
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
   }
 `;
 
@@ -176,20 +182,20 @@ const TreeContainer = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 4px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 
   &::-webkit-scrollbar-corner {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
@@ -202,23 +208,23 @@ const RootFolderItem = styled.div<{ $isSelected: boolean; $isOver?: boolean }>`
   border-radius: 6px;
   background-color: ${(props) =>
     props.$isSelected
-      ? "rgba(59, 130, 246, 0.1)"
+      ? OS_LEGAL_COLORS.selectedBg
       : props.$isOver
-      ? "rgba(34, 197, 94, 0.1)"
+      ? OS_LEGAL_COLORS.dropTargetBg
       : "transparent"};
   border: 1px solid
     ${(props) =>
       props.$isSelected
-        ? "rgba(59, 130, 246, 0.3)"
+        ? OS_LEGAL_COLORS.selectedBorder
         : props.$isOver
-        ? "rgba(34, 197, 94, 0.3)"
+        ? OS_LEGAL_COLORS.dropTargetBorder
         : "transparent"};
   transition: all 0.15s ease;
 
   &:hover {
     background-color: ${(props) =>
       props.$isSelected
-        ? "rgba(59, 130, 246, 0.15)"
+        ? OS_LEGAL_COLORS.accentLight
         : "rgba(148, 163, 184, 0.1)"};
   }
 `;
@@ -227,13 +233,14 @@ const RootFolderIcon = styled.div`
   display: flex;
   align-items: center;
   margin-right: 10px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const RootFolderName = styled.span<{ $isSelected: boolean }>`
   font-size: 14px;
   font-weight: ${(props) => (props.$isSelected ? "600" : "500")};
-  color: ${(props) => (props.$isSelected ? "#1e40af" : "#475569")};
+  color: ${(props) =>
+    props.$isSelected ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textPrimary};
 `;
 
 const LoadingContainer = styled.div`
@@ -242,7 +249,7 @@ const LoadingContainer = styled.div`
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const ErrorContainer = styled.div`
@@ -255,7 +262,7 @@ const ErrorContainer = styled.div`
 const EmptyState = styled.div`
   padding: 40px 20px;
   text-align: center;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 14px;
 `;
 

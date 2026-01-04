@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useState, useRef } from "react";
 import { useSetAtom, useAtom, useAtomValue } from "jotai";
-import { useReactiveVar, useMutation, useQuery } from "@apollo/client";
+import { useReactiveVar, useMutation } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { Folder, FolderOpen, PanelLeftOpen, X } from "lucide-react";
@@ -9,7 +9,6 @@ import {
   DndContext,
   DragEndEvent,
   DragStartEvent,
-  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
@@ -39,8 +38,11 @@ import {
   MoveCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
-import { GET_DOCUMENTS } from "../../../graphql/queries";
 import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
+} from "../../../assets/configurations/osLegalStyles";
 
 /**
  * FolderDocumentBrowser - Main container for folder-based document browsing
@@ -76,7 +78,7 @@ const BrowserContainer = styled.div`
   display: flex;
   height: 100%;
   overflow: hidden;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
@@ -85,8 +87,9 @@ const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
   height: 100%;
   display: ${(props) => (props.$visible ? "flex" : "none")};
   flex-direction: column;
-  border-right: ${(props) => (props.$collapsed ? "none" : "1px solid #e2e8f0")};
-  background: white;
+  border-right: ${(props) =>
+    props.$collapsed ? "none" : `1px solid ${OS_LEGAL_COLORS.border}`};
+  background: ${OS_LEGAL_COLORS.surface};
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -126,7 +129,7 @@ const ContentArea = styled.div`
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0;
-  background: white;
+  background: ${OS_LEGAL_COLORS.surface};
   position: relative;
 
   /* Custom scrollbar */
@@ -135,15 +138,15 @@ const ContentArea = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 5px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
@@ -155,11 +158,19 @@ const ToggleButton = styled.button<{ $collapsed: boolean }>`
   transform: translateY(-50%);
   width: ${(props) => (props.$collapsed ? "40px" : "32px")};
   height: ${(props) => (props.$collapsed ? "80px" : "60px")};
-  background: ${(props) => (props.$collapsed ? "#3b82f6" : "#64748b")};
-  border: 1px solid ${(props) => (props.$collapsed ? "#3b82f6" : "#64748b")};
-  border-left: ${(props) => (props.$collapsed ? "1px solid #3b82f6" : "none")};
+  background: ${(props) =>
+    props.$collapsed ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textSecondary};
+  border: 1px solid
+    ${(props) =>
+      props.$collapsed
+        ? OS_LEGAL_COLORS.accent
+        : OS_LEGAL_COLORS.textSecondary};
+  border-left: ${(props) =>
+    props.$collapsed ? `1px solid ${OS_LEGAL_COLORS.accent}` : "none"};
   border-radius: ${(props) =>
-    props.$collapsed ? "0 8px 8px 0" : "0 8px 8px 0"};
+    props.$collapsed
+      ? `0 ${OS_LEGAL_SPACING.borderRadiusButton} ${OS_LEGAL_SPACING.borderRadiusButton} 0`
+      : `0 ${OS_LEGAL_SPACING.borderRadiusButton} ${OS_LEGAL_SPACING.borderRadiusButton} 0`};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -169,16 +180,22 @@ const ToggleButton = styled.button<{ $collapsed: boolean }>`
   color: white;
   box-shadow: ${(props) =>
     props.$collapsed
-      ? "4px 0 12px rgba(59, 130, 246, 0.4)"
+      ? "4px 0 12px rgba(15, 118, 110, 0.4)"
       : "-4px 0 12px rgba(100, 116, 139, 0.3)"};
 
   &:hover {
-    background: ${(props) => (props.$collapsed ? "#2563eb" : "#475569")};
-    border-color: ${(props) => (props.$collapsed ? "#2563eb" : "#475569")};
+    background: ${(props) =>
+      props.$collapsed
+        ? OS_LEGAL_COLORS.accentHover
+        : OS_LEGAL_COLORS.textPrimary};
+    border-color: ${(props) =>
+      props.$collapsed
+        ? OS_LEGAL_COLORS.accentHover
+        : OS_LEGAL_COLORS.textPrimary};
     color: white;
     box-shadow: ${(props) =>
       props.$collapsed
-        ? "4px 0 16px rgba(59, 130, 246, 0.5)"
+        ? "4px 0 16px rgba(15, 118, 110, 0.5)"
         : "-4px 0 16px rgba(100, 116, 139, 0.4)"};
     transform: translateY(-50%)
       ${(props) => (props.$collapsed ? "translateX(2px)" : "translateX(-2px)")};
@@ -207,13 +224,17 @@ const MobileToggleButton = styled.button<{ $visible: boolean }>`
   bottom: 80px;
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.accent} 0%,
+    ${OS_LEGAL_COLORS.accentHover} 100%
+  );
   border: none;
-  border-radius: 12px;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
   color: white;
   cursor: pointer;
   z-index: 99; /* Above backdrop (98) */
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.4);
   transition: all 0.3s ease;
   align-items: center;
   justify-content: center;
@@ -224,7 +245,7 @@ const MobileToggleButton = styled.button<{ $visible: boolean }>`
 
   &:hover {
     transform: scale(1.05);
-    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.5);
   }
 
   &:active {
@@ -245,10 +266,10 @@ const MobileSidebarCloseButton = styled.button`
   right: 12px;
   width: 36px;
   height: 36px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   z-index: 10;
   align-items: center;
@@ -260,8 +281,8 @@ const MobileSidebarCloseButton = styled.button`
   }
 
   &:hover {
-    background: #e2e8f0;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.border};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   svg {
@@ -302,10 +323,10 @@ const ContextMenu = styled.div<{ $x: number; $y: number }>`
   position: fixed;
   top: ${(props) => props.$y}px;
   left: ${(props) => props.$x}px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 24px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surface};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 4px;
   min-width: 180px;
   max-width: calc(100vw - 16px);
@@ -322,17 +343,17 @@ const ContextMenuItem = styled.button`
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   text-align: left;
   transition: all 0.15s ease;
 
   &:hover {
-    background-color: #f1f5f9;
-    color: #1e293b;
+    background-color: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   &:active {
-    background-color: #e2e8f0;
+    background-color: ${OS_LEGAL_COLORS.border};
   }
 `;
 

@@ -7,6 +7,10 @@ import {
   selectAndExpandFolderAtom,
   selectedFolderIdAtom,
 } from "../../../atoms/folderAtoms";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
+} from "../../../assets/configurations/osLegalStyles";
 
 /**
  * FolderBreadcrumb - Navigation breadcrumb showing path from root to current folder
@@ -31,8 +35,8 @@ const BreadcrumbContainer = styled.div`
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
@@ -47,11 +51,11 @@ const BreadcrumbContainer = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 3px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
@@ -63,10 +67,11 @@ const BreadcrumbItem = styled.button<{ $isLast: boolean }>`
   padding: 6px 10px;
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
   font-size: 14px;
   font-weight: ${(props) => (props.$isLast ? "600" : "400")};
-  color: ${(props) => (props.$isLast ? "#1e40af" : "#64748b")};
+  color: ${(props) =>
+    props.$isLast ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textSecondary};
   cursor: ${(props) => (props.$isLast ? "default" : "pointer")};
   transition: all 0.15s ease;
   white-space: nowrap;
@@ -74,7 +79,8 @@ const BreadcrumbItem = styled.button<{ $isLast: boolean }>`
   &:hover {
     background: ${(props) =>
       props.$isLast ? "transparent" : "rgba(148, 163, 184, 0.1)"};
-    color: ${(props) => (props.$isLast ? "#1e40af" : "#475569")};
+    color: ${(props) =>
+      props.$isLast ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textPrimary};
   }
 
   &:active {
@@ -86,7 +92,7 @@ const BreadcrumbItem = styled.button<{ $isLast: boolean }>`
 const BreadcrumbSeparator = styled.div`
   display: flex;
   align-items: center;
-  color: #cbd5e1;
+  color: ${OS_LEGAL_COLORS.borderHover};
   margin: 0 4px;
 `;
 
@@ -94,7 +100,7 @@ const Ellipsis = styled.div`
   display: flex;
   align-items: center;
   padding: 6px 8px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 14px;
   user-select: none;
 `;
@@ -104,7 +110,7 @@ const HomeIcon = styled(Home)`
 `;
 
 const EmptyState = styled.div`
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 14px;
   font-style: italic;
 `;

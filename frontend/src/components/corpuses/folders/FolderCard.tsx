@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import styled from "styled-components";
-import { Folder, FolderOpen, FileText, MoreVertical } from "lucide-react";
+import { Folder, FileText, MoreVertical } from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useDroppable } from "@dnd-kit/core";
 import {
@@ -10,6 +10,10 @@ import {
   openCreateFolderModalAtom,
 } from "../../../atoms/folderAtoms";
 import { FolderTreeNode } from "../../../graphql/queries/folders";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
+} from "../../../assets/configurations/osLegalStyles";
 
 /**
  * FolderCard - Card view component for folders in document grid
@@ -33,25 +37,31 @@ interface FolderCardProps {
 // ===============================================
 const CardContainer = styled.div<{ $isDropTarget: boolean }>`
   position: relative;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
   overflow: hidden;
   transition: all 0.2s ease;
   cursor: pointer;
   height: 200px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
   background-color: ${(props) =>
-    props.$isDropTarget ? "rgba(34, 197, 94, 0.05)" : "white"};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.dropTargetBg
+      : OS_LEGAL_COLORS.surface};
   border-color: ${(props) =>
-    props.$isDropTarget ? "rgba(34, 197, 94, 0.3)" : "#e2e8f0"};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.dropTargetBorder
+      : OS_LEGAL_COLORS.border};
 
   &:hover {
     border-color: ${(props) =>
-      props.$isDropTarget ? "rgba(34, 197, 94, 0.5)" : "#cbd5e1"};
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      props.$isDropTarget
+        ? "rgba(34, 197, 94, 0.5)"
+        : OS_LEGAL_COLORS.borderHover};
+    box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
     transform: translateY(-2px);
 
     .action-button {
@@ -63,7 +73,7 @@ const CardContainer = styled.div<{ $isDropTarget: boolean }>`
 const CardPreview = styled.div<{ $color: string }>`
   position: relative;
   height: 90px;
-  background: ${(props) => props.$color || "#f8fafc"};
+  background: ${(props) => props.$color || OS_LEGAL_COLORS.surfaceHover};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -89,7 +99,7 @@ const CardContent = styled.div`
 const CardTitle = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -105,7 +115,7 @@ const CardStats = styled.div`
   gap: 12px;
   margin-top: auto;
   font-size: 12px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const Stat = styled.div`
@@ -120,10 +130,10 @@ const ActionButton = styled.button`
   right: 8px;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
   border: none;
   background: rgba(255, 255, 255, 0.95);
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -134,8 +144,8 @@ const ActionButton = styled.button`
   z-index: 10;
 
   &:hover {
-    background: white;
-    color: #1e293b;
+    background: ${OS_LEGAL_COLORS.surface};
+    color: ${OS_LEGAL_COLORS.textPrimary};
     transform: scale(1.05);
   }
 
@@ -149,9 +159,9 @@ const ActionButton = styled.button`
 // ===============================================
 const ListContainer = styled.div<{ $isDropTarget: boolean }>`
   position: relative;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
   padding: 12px 16px;
   display: flex;
   align-items: center;
@@ -159,15 +169,23 @@ const ListContainer = styled.div<{ $isDropTarget: boolean }>`
   cursor: pointer;
   transition: all 0.15s ease;
   background-color: ${(props) =>
-    props.$isDropTarget ? "rgba(34, 197, 94, 0.05)" : "white"};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.dropTargetBg
+      : OS_LEGAL_COLORS.surface};
   border-color: ${(props) =>
-    props.$isDropTarget ? "rgba(34, 197, 94, 0.3)" : "#e2e8f0"};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.dropTargetBorder
+      : OS_LEGAL_COLORS.border};
 
   &:hover {
     border-color: ${(props) =>
-      props.$isDropTarget ? "rgba(34, 197, 94, 0.5)" : "#cbd5e1"};
+      props.$isDropTarget
+        ? "rgba(34, 197, 94, 0.5)"
+        : OS_LEGAL_COLORS.borderHover};
     background-color: ${(props) =>
-      props.$isDropTarget ? "rgba(34, 197, 94, 0.08)" : "#f8fafc"};
+      props.$isDropTarget
+        ? "rgba(34, 197, 94, 0.08)"
+        : OS_LEGAL_COLORS.surfaceHover};
 
     .action-button {
       opacity: 1;
@@ -184,8 +202,8 @@ const ListIconWrapper = styled.div<{ $color: string }>`
   flex-shrink: 0;
   width: 48px;
   height: 48px;
-  border-radius: 8px;
-  background: ${(props) => props.$color || "#f8fafc"};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  background: ${(props) => props.$color || OS_LEGAL_COLORS.surfaceHover};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -208,7 +226,7 @@ const ListContent = styled.div`
 const ListTitle = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -223,7 +241,7 @@ const ListStats = styled.div`
   align-items: center;
   gap: 12px;
   font-size: 12px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   @media (max-width: 640px) {
     font-size: 11px;
@@ -259,10 +277,10 @@ const ContextMenu = styled.div<{ $x: number; $y: number }>`
   position: fixed;
   top: ${(props) => props.$y}px;
   left: ${(props) => props.$x}px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 24px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surface};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 4px;
   min-width: 180px;
   max-width: calc(100vw - 16px);
@@ -279,17 +297,17 @@ const ContextMenuItem = styled.button`
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   text-align: left;
   transition: all 0.15s ease;
 
   &:hover {
-    background-color: #f1f5f9;
-    color: #1e293b;
+    background-color: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   &:active {
-    background-color: #e2e8f0;
+    background-color: ${OS_LEGAL_COLORS.border};
   }
 
   &.danger {
