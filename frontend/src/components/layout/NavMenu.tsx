@@ -71,9 +71,9 @@ export const NavMenu = () => {
   const navigate = useNavigate();
   const { width } = useWindowDimensions();
 
-  // On mobile (< 1100px where NavBar collapses), show "OC - version" instead of just version
+  // On mobile (< 1100px where NavBar collapses), hide version badge but keep brand name
   const isMobile = width < 1100;
-  const versionDisplay = isMobile ? `OC - ${VERSION_TAG}` : VERSION_TAG;
+  const versionDisplay = isMobile ? undefined : VERSION_TAG;
 
   const isSuperuser = user && (user as any).isSuperuser;
 
