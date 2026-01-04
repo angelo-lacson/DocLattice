@@ -1,8 +1,12 @@
 import React, { useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import styled from "styled-components";
-import { ArrowUp, FolderUp } from "lucide-react";
+import { FolderUp } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
+} from "../../../assets/configurations/osLegalStyles";
 
 /**
  * ParentFolderCard - Special card for navigating up one folder level
@@ -26,9 +30,9 @@ interface ParentFolderCardProps {
 // ===============================================
 const CardContainer = styled.div<{ $isDropTarget: boolean }>`
   position: relative;
-  background: white;
-  border: 2px dashed #cbd5e1;
-  border-radius: 8px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 2px dashed ${OS_LEGAL_COLORS.borderHover};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
   overflow: hidden;
   transition: all 0.2s ease;
   cursor: pointer;
@@ -38,17 +42,23 @@ const CardContainer = styled.div<{ $isDropTarget: boolean }>`
   align-items: center;
   justify-content: center;
   background-color: ${(props) =>
-    props.$isDropTarget ? "rgba(34, 197, 94, 0.08)" : "#f8fafc"};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.dropTargetBg
+      : OS_LEGAL_COLORS.surfaceHover};
   border-color: ${(props) =>
-    props.$isDropTarget ? "rgba(34, 197, 94, 0.5)" : "#cbd5e1"};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.dropTargetBorder
+      : OS_LEGAL_COLORS.borderHover};
 
   &:hover {
     border-color: ${(props) =>
-      props.$isDropTarget ? "rgba(34, 197, 94, 0.7)" : "#94a3b8"};
+      props.$isDropTarget
+        ? "rgba(34, 197, 94, 0.7)"
+        : OS_LEGAL_COLORS.textMuted};
     background-color: ${(props) =>
       props.$isDropTarget ? "rgba(34, 197, 94, 0.12)" : "#f1f5f9"};
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: ${OS_LEGAL_SPACING.shadowCard};
   }
 `;
 
@@ -59,20 +69,22 @@ const IconWrapper = styled.div<{ $isDropTarget: boolean }>`
   background: ${(props) =>
     props.$isDropTarget
       ? "linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.25) 100%)"
-      : "linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)"};
+      : `linear-gradient(135deg, ${OS_LEGAL_COLORS.border} 0%, ${OS_LEGAL_COLORS.borderHover} 100%)`};
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 12px;
   transition: all 0.2s ease;
-  color: ${(props) => (props.$isDropTarget ? "#16a34a" : "#64748b")};
+  color: ${(props) =>
+    props.$isDropTarget ? "#16a34a" : OS_LEGAL_COLORS.textSecondary};
 
   ${CardContainer}:hover & {
     background: ${(props) =>
       props.$isDropTarget
         ? "linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.35) 100%)"
-        : "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)"};
-    color: ${(props) => (props.$isDropTarget ? "#15803d" : "#475569")};
+        : `linear-gradient(135deg, ${OS_LEGAL_COLORS.borderHover} 0%, ${OS_LEGAL_COLORS.textMuted} 100%)`};
+    color: ${(props) =>
+      props.$isDropTarget ? "#15803d" : OS_LEGAL_COLORS.textPrimary};
     transform: scale(1.05);
   }
 `;
@@ -80,13 +92,14 @@ const IconWrapper = styled.div<{ $isDropTarget: boolean }>`
 const CardTitle = styled.div<{ $isDropTarget: boolean }>`
   font-size: 14px;
   font-weight: 600;
-  color: ${(props) => (props.$isDropTarget ? "#16a34a" : "#475569")};
+  color: ${(props) =>
+    props.$isDropTarget ? "#16a34a" : OS_LEGAL_COLORS.textPrimary};
   text-align: center;
 `;
 
 const CardSubtitle = styled.div`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 4px;
   text-align: center;
 `;
@@ -96,9 +109,9 @@ const CardSubtitle = styled.div`
 // ===============================================
 const ListContainer = styled.div<{ $isDropTarget: boolean }>`
   position: relative;
-  background: white;
-  border: 2px dashed #cbd5e1;
-  border-radius: 8px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 2px dashed ${OS_LEGAL_COLORS.borderHover};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
   padding: 12px 16px;
   display: flex;
   align-items: center;
@@ -106,13 +119,19 @@ const ListContainer = styled.div<{ $isDropTarget: boolean }>`
   cursor: pointer;
   transition: all 0.15s ease;
   background-color: ${(props) =>
-    props.$isDropTarget ? "rgba(34, 197, 94, 0.08)" : "#f8fafc"};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.dropTargetBg
+      : OS_LEGAL_COLORS.surfaceHover};
   border-color: ${(props) =>
-    props.$isDropTarget ? "rgba(34, 197, 94, 0.5)" : "#cbd5e1"};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.dropTargetBorder
+      : OS_LEGAL_COLORS.borderHover};
 
   &:hover {
     border-color: ${(props) =>
-      props.$isDropTarget ? "rgba(34, 197, 94, 0.7)" : "#94a3b8"};
+      props.$isDropTarget
+        ? "rgba(34, 197, 94, 0.7)"
+        : OS_LEGAL_COLORS.textMuted};
     background-color: ${(props) =>
       props.$isDropTarget ? "rgba(34, 197, 94, 0.12)" : "#f1f5f9"};
   }
@@ -127,15 +146,16 @@ const ListIconWrapper = styled.div<{ $isDropTarget: boolean }>`
   flex-shrink: 0;
   width: 48px;
   height: 48px;
-  border-radius: 8px;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
   background: ${(props) =>
     props.$isDropTarget
       ? "linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.25) 100%)"
-      : "linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)"};
+      : `linear-gradient(135deg, ${OS_LEGAL_COLORS.border} 0%, ${OS_LEGAL_COLORS.borderHover} 100%)`};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${(props) => (props.$isDropTarget ? "#16a34a" : "#64748b")};
+  color: ${(props) =>
+    props.$isDropTarget ? "#16a34a" : OS_LEGAL_COLORS.textSecondary};
   transition: all 0.15s ease;
 
   @media (max-width: 640px) {
@@ -155,7 +175,8 @@ const ListContent = styled.div`
 const ListTitle = styled.div<{ $isDropTarget: boolean }>`
   font-size: 14px;
   font-weight: 600;
-  color: ${(props) => (props.$isDropTarget ? "#16a34a" : "#475569")};
+  color: ${(props) =>
+    props.$isDropTarget ? "#16a34a" : OS_LEGAL_COLORS.textPrimary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -167,7 +188,7 @@ const ListTitle = styled.div<{ $isDropTarget: boolean }>`
 
 const ListSubtitle = styled.div`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 
   @media (max-width: 640px) {
     font-size: 11px;

@@ -6,6 +6,10 @@ import { Button, Popup } from "semantic-ui-react";
 import styled from "styled-components";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
+} from "../../assets/configurations/osLegalStyles";
 
 import { DocumentCards } from "../../components/documents/DocumentCards";
 import { DocumentMetadataGrid } from "../../components/documents/DocumentMetadataGrid";
@@ -55,28 +59,28 @@ const ViewToggleContainer = styled.div`
 
 const ViewToggleButton = styled(Button)`
   &&& {
-    background: white;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: ${OS_LEGAL_COLORS.surface};
+    border: 1px solid ${OS_LEGAL_COLORS.border};
+    box-shadow: ${OS_LEGAL_SPACING.shadowCard};
     padding: 0.75rem;
     min-width: auto;
     transition: all 0.2s ease;
 
     &:hover {
-      background: #f8fafc;
-      border-color: #cbd5e1;
+      background: ${OS_LEGAL_COLORS.surfaceHover};
+      border-color: ${OS_LEGAL_COLORS.borderHover};
       transform: translateY(-1px);
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
     }
 
     &.active {
-      background: #3b82f6;
+      background: ${OS_LEGAL_COLORS.accent};
       color: white;
-      border-color: #3b82f6;
+      border-color: ${OS_LEGAL_COLORS.accent};
 
       &:hover {
-        background: #2563eb;
-        border-color: #2563eb;
+        background: ${OS_LEGAL_COLORS.accentHover};
+        border-color: ${OS_LEGAL_COLORS.accentHover};
       }
     }
 
