@@ -119,36 +119,46 @@ function mountCorpusHome(mount: any) {
 
 test.use({ viewport: { width: 1200, height: 800 } });
 
-test("renders corpus header, stats and description controls", async ({
+test("renders corpus hero, chat bar and description controls", async ({
   mount,
   page,
 }) => {
   await mountCorpusHome(mount);
 
   /* ------------------------------------------------------------------
-   * Header (title, privacy badge, stats)
+   * Hero section (title, privacy badge, breadcrumbs)
    * ------------------------------------------------------------------ */
-  const topBar = page.locator("#corpus-home-top-bar");
-  await expect(topBar).toBeVisible();
+  const hero = page.getByTestId("corpus-home-hero");
+  await expect(hero).toBeVisible();
 
-  // Title is rendered
-  await expect(
-    topBar.locator("h1", { hasText: dummyCorpus.title })
-  ).toBeVisible();
+  // Breadcrumbs are rendered
+  await expect(hero.locator("text=Corpuses")).toBeVisible();
+
+  // Title contains corpus name with "Corpus" accent
+  const title = page.getByTestId("corpus-home-hero-title");
+  await expect(title).toBeVisible();
+  await expect(title.locator("text=Corpus")).toBeVisible();
+  await expect(title).toContainText(dummyCorpus.title);
 
   // Privacy badge reflects corpus.isPublic
   const privacyText = dummyCorpus.isPublic ? "Public" : "Private";
-  await expect(topBar.locator(`text=${privacyText}`)).toBeVisible();
+  await expect(hero.locator(`text=${privacyText}`)).toBeVisible();
 
-  // Stat labels are present (values mocked via GET_CORPUS_STATS)
-  const statLabels = ["Docs", "Notes", "Analyses", "Extracts"];
-  for (const label of statLabels) {
-    await expect(topBar.locator(`text=${label}`)).toBeVisible();
-  }
+  /* ------------------------------------------------------------------
+   * Inline chat bar
+   * ------------------------------------------------------------------ */
+  const chatBar = page.getByTestId("corpus-home-hero-chat");
+  await expect(chatBar).toBeVisible();
 
-  // Wait for mocked stats values to appear
-  await expect(topBar.locator("text=3")).toBeVisible(); // Docs
-  await expect(topBar.locator("text=5")).toBeVisible(); // Notes
+  // Chat input placeholder
+  await expect(
+    chatBar.locator('textarea[placeholder*="Ask a question"]')
+  ).toBeVisible();
+
+  // Quick action chips
+  await expect(chatBar.locator("text=Summarize")).toBeVisible();
+  await expect(chatBar.locator("text=Search")).toBeVisible();
+  await expect(chatBar.locator("text=Analyze")).toBeVisible();
 
   /* ------------------------------------------------------------------
    * Description card
@@ -175,6 +185,6 @@ test("renders corpus header, stats and description controls", async ({
 
   // Either "Edit Description" or "Add Description" should be available depending on permissions
   await expect(
-    page.getByRole("button", { name: /(?:Edit|Add) Description/i })
+    page.getByRole("button", { name: /(?:Edit|Add)/i })
   ).toBeVisible();
 });
