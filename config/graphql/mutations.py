@@ -63,6 +63,7 @@ from config.graphql.graphene_types import (
     CorpusActionType,
     CorpusType,
     DatacellType,
+    DocumentRelationshipType,
     DocumentType,
     ExtractType,
     FieldsetType,
@@ -135,7 +136,11 @@ from opencontractserver.corpuses.models import (
     CorpusFolder,
     TemporaryFileHandle,
 )
-from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.documents.models import (
+    Document,
+    DocumentPath,
+    DocumentRelationship,
+)
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.tasks import (
@@ -2603,6 +2608,470 @@ class UpdateRelations(graphene.Mutation):
         return UpdateRelations(ok=True, message="Success")
 
 
+# ============================================================================
+# DOCUMENT RELATIONSHIP MUTATIONS
+# ============================================================================
+
+
+class CreateDocumentRelationship(graphene.Mutation):
+    """
+    Create a new relationship between two documents.
+
+    Permission requirements:
+    - User must have CREATE permission on BOTH source and target documents
+    - If corpus_id is provided, user must have CREATE permission on the corpus
+
+    Validation:
+    - For RELATIONSHIP type: annotation_label_id is required
+    - For NOTES type: annotation_label_id is optional
+    """
+
+    class Arguments:
+        source_document_id = graphene.String(
+            required=True, description="ID of the source document"
+        )
+        target_document_id = graphene.String(
+            required=True, description="ID of the target document"
+        )
+        relationship_type = graphene.String(
+            required=True,
+            description="Type of relationship: 'RELATIONSHIP' or 'NOTES'",
+        )
+        annotation_label_id = graphene.String(
+            required=False,
+            description="ID of the annotation label (required for RELATIONSHIP type)",
+        )
+        corpus_id = graphene.String(
+            required=False, description="ID of the corpus for this relationship"
+        )
+        data = GenericScalar(
+            required=False, description="JSON data payload (e.g., for notes content)"
+        )
+
+    ok = graphene.Boolean()
+    document_relationship = graphene.Field(DocumentRelationshipType)
+    message = graphene.String()
+
+    @login_required
+    def mutate(
+        root,
+        info,
+        source_document_id,
+        target_document_id,
+        relationship_type,
+        annotation_label_id=None,
+        corpus_id=None,
+        data=None,
+    ):
+        try:
+            # Decode global IDs
+            source_doc_pk = from_global_id(source_document_id)[1]
+            target_doc_pk = from_global_id(target_document_id)[1]
+
+            # Validate relationship_type
+            valid_types = ["RELATIONSHIP", "NOTES"]
+            if relationship_type not in valid_types:
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message=f"Invalid relationship_type. Must be one of: {valid_types}",
+                )
+
+            # Validate that RELATIONSHIP type has annotation_label
+            if relationship_type == "RELATIONSHIP" and not annotation_label_id:
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="annotation_label_id is required for RELATIONSHIP type",
+                )
+
+            # Fetch source document and check permission
+            try:
+                source_doc = Document.objects.get(pk=source_doc_pk)
+            except Document.DoesNotExist:
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="Source document not found",
+                )
+
+            if not user_has_permission_for_obj(
+                info.context.user,
+                source_doc,
+                PermissionTypes.CREATE,
+                include_group_permissions=True,
+            ):
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="You don't have permission to create relationships for the source document",
+                )
+
+            # Fetch target document and check permission
+            try:
+                target_doc = Document.objects.get(pk=target_doc_pk)
+            except Document.DoesNotExist:
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="Target document not found",
+                )
+
+            if not user_has_permission_for_obj(
+                info.context.user,
+                target_doc,
+                PermissionTypes.CREATE,
+                include_group_permissions=True,
+            ):
+                return CreateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="You don't have permission to create relationships for the target document",
+                )
+
+            # Handle optional corpus
+            corpus_pk = None
+            if corpus_id:
+                corpus_pk = from_global_id(corpus_id)[1]
+                try:
+                    corpus = Corpus.objects.get(pk=corpus_pk)
+                except Corpus.DoesNotExist:
+                    return CreateDocumentRelationship(
+                        ok=False,
+                        document_relationship=None,
+                        message="Corpus not found",
+                    )
+
+                if not user_has_permission_for_obj(
+                    info.context.user,
+                    corpus,
+                    PermissionTypes.CREATE,
+                    include_group_permissions=True,
+                ):
+                    return CreateDocumentRelationship(
+                        ok=False,
+                        document_relationship=None,
+                        message="You don't have permission to create relationships in this corpus",
+                    )
+
+            # Handle optional annotation_label
+            annotation_label_pk = None
+            if annotation_label_id:
+                annotation_label_pk = from_global_id(annotation_label_id)[1]
+                try:
+                    AnnotationLabel.objects.get(pk=annotation_label_pk)
+                except AnnotationLabel.DoesNotExist:
+                    return CreateDocumentRelationship(
+                        ok=False,
+                        document_relationship=None,
+                        message="Annotation label not found",
+                    )
+
+            # Create the document relationship
+            doc_relationship = DocumentRelationship.objects.create(
+                creator=info.context.user,
+                source_document_id=source_doc_pk,
+                target_document_id=target_doc_pk,
+                relationship_type=relationship_type,
+                annotation_label_id=annotation_label_pk,
+                corpus_id=corpus_pk,
+                data=data or {},
+            )
+
+            # Set permissions for the creator
+            set_permissions_for_obj_to_user(
+                info.context.user, doc_relationship, [PermissionTypes.CRUD]
+            )
+
+            return CreateDocumentRelationship(
+                ok=True,
+                document_relationship=doc_relationship,
+                message="Document relationship created successfully",
+            )
+
+        except Exception as e:
+            logger.error(f"Error creating document relationship: {e}")
+            return CreateDocumentRelationship(
+                ok=False,
+                document_relationship=None,
+                message=f"Error creating document relationship: {str(e)}",
+            )
+
+
+class UpdateDocumentRelationship(graphene.Mutation):
+    """
+    Update an existing document relationship.
+
+    Permission requirements:
+    - User must have UPDATE permission on the document relationship
+    - OR UPDATE permission on BOTH source and target documents
+
+    Updatable fields:
+    - relationship_type (with validation for annotation_label requirement)
+    - annotation_label_id
+    - data (JSON payload)
+    - corpus_id
+    """
+
+    class Arguments:
+        document_relationship_id = graphene.String(
+            required=True, description="ID of the document relationship to update"
+        )
+        relationship_type = graphene.String(
+            required=False,
+            description="New relationship type: 'RELATIONSHIP' or 'NOTES'",
+        )
+        annotation_label_id = graphene.String(
+            required=False, description="New annotation label ID"
+        )
+        corpus_id = graphene.String(required=False, description="New corpus ID")
+        data = GenericScalar(required=False, description="Updated JSON data payload")
+
+    ok = graphene.Boolean()
+    document_relationship = graphene.Field(DocumentRelationshipType)
+    message = graphene.String()
+
+    @login_required
+    def mutate(
+        root,
+        info,
+        document_relationship_id,
+        relationship_type=None,
+        annotation_label_id=None,
+        corpus_id=None,
+        data=None,
+    ):
+        try:
+            # Decode global ID
+            doc_rel_pk = from_global_id(document_relationship_id)[1]
+
+            # Fetch the document relationship
+            try:
+                doc_relationship = DocumentRelationship.objects.get(pk=doc_rel_pk)
+            except DocumentRelationship.DoesNotExist:
+                return UpdateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="Document relationship not found",
+                )
+
+            # Check UPDATE permission on the relationship itself
+            if not user_has_permission_for_obj(
+                info.context.user,
+                doc_relationship,
+                PermissionTypes.UPDATE,
+                include_group_permissions=True,
+            ):
+                return UpdateDocumentRelationship(
+                    ok=False,
+                    document_relationship=None,
+                    message="You don't have permission to update this document relationship",
+                )
+
+            # Validate relationship_type if provided
+            if relationship_type is not None:
+                valid_types = ["RELATIONSHIP", "NOTES"]
+                if relationship_type not in valid_types:
+                    return UpdateDocumentRelationship(
+                        ok=False,
+                        document_relationship=None,
+                        message=f"Invalid relationship_type. Must be one of: {valid_types}",
+                    )
+                doc_relationship.relationship_type = relationship_type
+
+            # Handle annotation_label update
+            if annotation_label_id is not None:
+                if annotation_label_id == "":
+                    # Explicitly clearing the annotation label
+                    doc_relationship.annotation_label_id = None
+                else:
+                    annotation_label_pk = from_global_id(annotation_label_id)[1]
+                    try:
+                        AnnotationLabel.objects.get(pk=annotation_label_pk)
+                    except AnnotationLabel.DoesNotExist:
+                        return UpdateDocumentRelationship(
+                            ok=False,
+                            document_relationship=None,
+                            message="Annotation label not found",
+                        )
+                    doc_relationship.annotation_label_id = annotation_label_pk
+
+            # Handle corpus update
+            if corpus_id is not None:
+                if corpus_id == "":
+                    # Explicitly clearing the corpus
+                    doc_relationship.corpus_id = None
+                else:
+                    corpus_pk = from_global_id(corpus_id)[1]
+                    try:
+                        corpus = Corpus.objects.get(pk=corpus_pk)
+                    except Corpus.DoesNotExist:
+                        return UpdateDocumentRelationship(
+                            ok=False,
+                            document_relationship=None,
+                            message="Corpus not found",
+                        )
+
+                    # Check permission on the new corpus
+                    if not user_has_permission_for_obj(
+                        info.context.user,
+                        corpus,
+                        PermissionTypes.UPDATE,
+                        include_group_permissions=True,
+                    ):
+                        return UpdateDocumentRelationship(
+                            ok=False,
+                            document_relationship=None,
+                            message="You don't have permission to associate relationships with this corpus",
+                        )
+                    doc_relationship.corpus_id = corpus_pk
+
+            # Handle data update
+            if data is not None:
+                doc_relationship.data = data
+
+            # Validate before saving (model's clean() will check RELATIONSHIP requires label)
+            doc_relationship.full_clean()
+            doc_relationship.save()
+
+            return UpdateDocumentRelationship(
+                ok=True,
+                document_relationship=doc_relationship,
+                message="Document relationship updated successfully",
+            )
+
+        except Exception as e:
+            logger.error(f"Error updating document relationship: {e}")
+            return UpdateDocumentRelationship(
+                ok=False,
+                document_relationship=None,
+                message=f"Error updating document relationship: {str(e)}",
+            )
+
+
+class DeleteDocumentRelationship(graphene.Mutation):
+    """
+    Delete a document relationship.
+
+    Permission requirements:
+    - User must have DELETE permission on the document relationship
+    - OR DELETE permission on BOTH source and target documents
+    """
+
+    class Arguments:
+        document_relationship_id = graphene.String(
+            required=True, description="ID of the document relationship to delete"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(root, info, document_relationship_id):
+        try:
+            # Decode global ID
+            doc_rel_pk = from_global_id(document_relationship_id)[1]
+
+            # Fetch the document relationship
+            try:
+                doc_relationship = DocumentRelationship.objects.get(pk=doc_rel_pk)
+            except DocumentRelationship.DoesNotExist:
+                return DeleteDocumentRelationship(
+                    ok=False, message="Document relationship not found"
+                )
+
+            # Check DELETE permission
+            if not user_has_permission_for_obj(
+                info.context.user,
+                doc_relationship,
+                PermissionTypes.DELETE,
+                include_group_permissions=True,
+            ):
+                return DeleteDocumentRelationship(
+                    ok=False,
+                    message="You don't have permission to delete this document relationship",
+                )
+
+            doc_relationship.delete()
+
+            return DeleteDocumentRelationship(
+                ok=True, message="Document relationship deleted successfully"
+            )
+
+        except Exception as e:
+            logger.error(f"Error deleting document relationship: {e}")
+            return DeleteDocumentRelationship(
+                ok=False, message=f"Error deleting document relationship: {str(e)}"
+            )
+
+
+class DeleteDocumentRelationships(graphene.Mutation):
+    """
+    Delete multiple document relationships at once.
+
+    Permission requirements:
+    - User must have DELETE permission on each document relationship
+    """
+
+    class Arguments:
+        document_relationship_ids = graphene.List(
+            graphene.String,
+            required=True,
+            description="List of document relationship IDs to delete",
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    deleted_count = graphene.Int()
+
+    @login_required
+    def mutate(root, info, document_relationship_ids):
+        user = info.context.user
+        deleted_count = 0
+
+        try:
+            for graphene_id in document_relationship_ids:
+                doc_rel_pk = from_global_id(graphene_id)[1]
+
+                try:
+                    doc_relationship = DocumentRelationship.objects.get(pk=doc_rel_pk)
+                except DocumentRelationship.DoesNotExist:
+                    return DeleteDocumentRelationships(
+                        ok=False,
+                        message=f"Document relationship not found: {graphene_id}",
+                        deleted_count=deleted_count,
+                    )
+
+                if not user_has_permission_for_obj(
+                    user,
+                    doc_relationship,
+                    PermissionTypes.DELETE,
+                    include_group_permissions=True,
+                ):
+                    return DeleteDocumentRelationships(
+                        ok=False,
+                        message="Permission denied for one or more relationships",
+                        deleted_count=deleted_count,
+                    )
+
+                doc_relationship.delete()
+                deleted_count += 1
+
+            return DeleteDocumentRelationships(
+                ok=True,
+                message=f"Successfully deleted {deleted_count} document relationship(s)",
+                deleted_count=deleted_count,
+            )
+
+        except Exception as e:
+            logger.error(f"Error deleting document relationships: {e}")
+            return DeleteDocumentRelationships(
+                ok=False,
+                message=f"Error deleting document relationships: {str(e)}",
+                deleted_count=deleted_count,
+            )
+
+
 class DeleteLabelMutation(DRFDeletion):
     class IOSettings:
         model = AnnotationLabel
@@ -4813,6 +5282,12 @@ class Mutation(graphene.ObjectType):
     remove_relationships = RemoveRelationships.Field()
     update_relationship = UpdateRelationship.Field()
     update_relationships = UpdateRelations.Field()
+
+    # DOCUMENT RELATIONSHIP MUTATIONS ############################################
+    create_document_relationship = CreateDocumentRelationship.Field()
+    update_document_relationship = UpdateDocumentRelationship.Field()
+    delete_document_relationship = DeleteDocumentRelationship.Field()
+    delete_document_relationships = DeleteDocumentRelationships.Field()
 
     # LABELSET MUTATIONS #######################################################
     create_labelset = CreateLabelset.Field()
