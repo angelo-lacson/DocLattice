@@ -489,6 +489,7 @@ class DocumentRelationship(BaseOCModel):
             django.db.models.Index(fields=["target_document"]),
             django.db.models.Index(fields=["relationship_type"]),
             django.db.models.Index(fields=["annotation_label"]),
+            django.db.models.Index(fields=["corpus"]),
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
@@ -502,14 +503,36 @@ class DocumentRelationship(BaseOCModel):
         ]
 
     def clean(self):
-        """Validate that annotation_label is present for RELATIONSHIP type."""
+        """
+        Validate DocumentRelationship constraints:
+        1. annotation_label is required for RELATIONSHIP type
+        2. corpus is required
+        3. Both documents must be in the specified corpus
+        """
         super().clean()
+
         if self.relationship_type == "RELATIONSHIP" and not self.annotation_label:
             raise ValidationError(
                 {
                     "annotation_label": "Annotation label is required for relationship type RELATIONSHIP."
                 }
             )
+
+        # Corpus is required
+        if not self.corpus_id:
+            raise ValidationError(
+                {"corpus": "Corpus is required for document relationships."}
+            )
+
+        # Both documents must be in the same corpus (efficient single query)
+        if self.source_document_id and self.target_document_id and self.corpus_id:
+            docs_in_corpus = self.corpus.documents.filter(
+                id__in=[self.source_document_id, self.target_document_id]
+            ).count()
+            if docs_in_corpus != 2:
+                raise ValidationError(
+                    "Both source and target documents must be in the specified corpus."
+                )
 
     def save(self, *args, **kwargs):
         self.full_clean()
