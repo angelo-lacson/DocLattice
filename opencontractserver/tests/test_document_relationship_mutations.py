@@ -899,3 +899,218 @@ class DocumentRelationshipValidationTestCase(TestCase):
         data = result["data"]["createDocumentRelationship"]
         self.assertFalse(data["ok"])
         self.assertIn("not found", data["message"].lower())
+
+
+class DocumentRelationshipQueryOptimizerTestCase(TestCase):
+    """Test DocumentRelationshipQueryOptimizer methods for coverage."""
+
+    def setUp(self):
+        """Set up test data."""
+        self.owner = User.objects.create_user(username="owner", password="test")
+        self.outsider = User.objects.create_user(username="outsider", password="test")
+
+        # Create test corpus
+        self.corpus = Corpus.objects.create(
+            title="TestCorpus",
+            creator=self.owner,
+            is_public=False,
+        )
+
+        # Create test documents
+        pdf_file = ContentFile(
+            SAMPLE_PDF_FILE_TWO_PATH.open("rb").read(), name="test.pdf"
+        )
+
+        self.source_doc = Document.objects.create(
+            creator=self.owner,
+            title="Source Doc",
+            pdf_file=pdf_file,
+            backend_lock=True,
+            is_public=False,
+        )
+
+        self.target_doc = Document.objects.create(
+            creator=self.owner,
+            title="Target Doc",
+            pdf_file=pdf_file,
+            backend_lock=True,
+            is_public=False,
+        )
+
+        # Create annotation label
+        self.annotation_label = AnnotationLabel.objects.create(
+            text="Test Label",
+            label_type="RELATIONSHIP_LABEL",
+            creator=self.owner,
+        )
+
+        # Add documents to corpus
+        self.corpus.documents.add(self.source_doc, self.target_doc)
+
+        # Create test relationships
+        self.relationship = DocumentRelationship.objects.create(
+            source_document=self.source_doc,
+            target_document=self.target_doc,
+            relationship_type="RELATIONSHIP",
+            annotation_label=self.annotation_label,
+            creator=self.owner,
+            corpus=self.corpus,
+        )
+
+        self.note = DocumentRelationship.objects.create(
+            source_document=self.source_doc,
+            target_document=self.target_doc,
+            relationship_type="NOTES",
+            data={"note": "Test note"},
+            creator=self.owner,
+            corpus=self.corpus,
+        )
+
+        # Set permissions
+        set_permissions_for_obj_to_user(
+            self.owner, self.relationship, [PermissionTypes.CRUD]
+        )
+        set_permissions_for_obj_to_user(self.owner, self.note, [PermissionTypes.CRUD])
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
+        set_permissions_for_obj_to_user(
+            self.owner, self.source_doc, [PermissionTypes.CRUD]
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, self.target_doc, [PermissionTypes.CRUD]
+        )
+
+    def test_get_visible_relationships_with_source_filter(self):
+        """Test filtering by source_document_id."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_visible_relationships(
+            user=self.owner,
+            source_document_id=self.source_doc.id,
+        )
+        self.assertEqual(result.count(), 2)
+
+    def test_get_visible_relationships_with_target_filter(self):
+        """Test filtering by target_document_id."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_visible_relationships(
+            user=self.owner,
+            target_document_id=self.target_doc.id,
+        )
+        self.assertEqual(result.count(), 2)
+
+    def test_get_visible_relationships_with_corpus_filter(self):
+        """Test filtering by corpus_id."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_visible_relationships(
+            user=self.owner,
+            corpus_id=self.corpus.id,
+        )
+        self.assertEqual(result.count(), 2)
+
+    def test_get_visible_relationships_with_type_filter(self):
+        """Test filtering by relationship_type."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_visible_relationships(
+            user=self.owner,
+            relationship_type="RELATIONSHIP",
+        )
+        self.assertEqual(result.count(), 1)
+        self.assertEqual(result.first().relationship_type, "RELATIONSHIP")
+
+    def test_get_relationships_for_document_nonexistent(self):
+        """Test with nonexistent document returns empty queryset."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=self.owner,
+            document_id=99999,
+        )
+        self.assertEqual(result.count(), 0)
+
+    def test_get_relationships_for_document_no_permission(self):
+        """Test with document user can't access returns empty queryset."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=self.outsider,
+            document_id=self.source_doc.id,
+        )
+        self.assertEqual(result.count(), 0)
+
+    def test_get_relationships_for_document_as_source_only(self):
+        """Test include_as_source=True, include_as_target=False."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=self.owner,
+            document_id=self.source_doc.id,
+            include_as_source=True,
+            include_as_target=False,
+        )
+        self.assertEqual(result.count(), 2)
+
+    def test_get_relationships_for_document_as_target_only(self):
+        """Test include_as_source=False, include_as_target=True."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=self.owner,
+            document_id=self.target_doc.id,
+            include_as_source=False,
+            include_as_target=True,
+        )
+        self.assertEqual(result.count(), 2)
+
+    def test_get_relationships_for_document_neither_source_nor_target(self):
+        """Test include_as_source=False, include_as_target=False returns empty."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=self.owner,
+            document_id=self.source_doc.id,
+            include_as_source=False,
+            include_as_target=False,
+        )
+        self.assertEqual(result.count(), 0)
+
+    def test_get_relationships_for_document_with_corpus_filter(self):
+        """Test filtering by corpus_id."""
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        result = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=self.owner,
+            document_id=self.source_doc.id,
+            corpus_id=self.corpus.id,
+        )
+        self.assertEqual(result.count(), 2)
+
+        # Test with wrong corpus returns empty
+        result = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=self.owner,
+            document_id=self.source_doc.id,
+            corpus_id=99999,
+        )
+        self.assertEqual(result.count(), 0)
