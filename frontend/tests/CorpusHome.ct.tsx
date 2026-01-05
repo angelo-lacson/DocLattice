@@ -6,7 +6,9 @@ import { CorpusHomeTestWrapper } from "./CorpusHomeTestWrapper";
 import {
   GET_CORPUS_STATS,
   GET_CORPUS_WITH_HISTORY,
+  GET_DOCUMENT_RELATIONSHIPS,
 } from "../src/graphql/queries";
+import { DOCUMENT_RELATIONSHIP_TOC_LIMIT } from "../src/assets/configurations/constants";
 import { PermissionTypes } from "../src/components/types";
 
 /* --------------------------------------------------------------------------
@@ -75,6 +77,30 @@ const mocks: MockedResponse[] = [
           totalAnalyses: 0,
           totalExtracts: 0,
           __typename: "CorpusStatsType",
+        },
+      },
+    },
+  },
+  {
+    request: {
+      query: GET_DOCUMENT_RELATIONSHIPS,
+      variables: {
+        corpusId: dummyCorpus.id,
+        first: DOCUMENT_RELATIONSHIP_TOC_LIMIT,
+      },
+    },
+    result: {
+      data: {
+        documentRelationships: {
+          edges: [],
+          totalCount: 0,
+          pageInfo: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: null,
+            endCursor: null,
+          },
+          __typename: "DocumentRelationshipTypeConnection",
         },
       },
     },

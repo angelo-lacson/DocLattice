@@ -1,4 +1,10 @@
-import React, { useEffect, useCallback, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useCallback,
+  useState,
+  useRef,
+  useMemo,
+} from "react";
 import { useSetAtom, useAtom, useAtomValue } from "jotai";
 import { useReactiveVar, useMutation } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -398,7 +404,11 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   });
 
   // Get parent folder ID for current folder (for ".." navigation)
-  const currentFolder = folderList.find((f) => f.id === selectedFolderId);
+  // Memoized to prevent unnecessary recalculations
+  const currentFolder = useMemo(
+    () => folderList.find((f) => f.id === selectedFolderId),
+    [folderList, selectedFolderId]
+  );
   const parentFolderId = currentFolder?.parent?.id || null;
 
   // Unified drag-drop handlers

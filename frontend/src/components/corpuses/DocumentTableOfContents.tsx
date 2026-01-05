@@ -18,11 +18,12 @@ import {
   DocumentRelationshipNode,
 } from "../../graphql/queries";
 import { openedCorpus } from "../../graphql/cache";
-import { navigateToDocument } from "../../utils/navigationUtils";
+import { navigateToRelationshipDocument } from "../../utils/navigationUtils";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
 } from "../../assets/configurations/osLegalStyles";
+import { DOCUMENT_RELATIONSHIP_TOC_LIMIT } from "../../assets/configurations/constants";
 
 // ============================================================================
 // TYPES
@@ -154,7 +155,7 @@ export const DocumentTableOfContents: React.FC<
   >(GET_DOCUMENT_RELATIONSHIPS, {
     variables: {
       corpusId,
-      first: 500, // Get a reasonable number of relationships
+      first: DOCUMENT_RELATIONSHIP_TOC_LIMIT,
     },
     skip: !corpusId,
     fetchPolicy: "cache-and-network",
@@ -260,21 +261,19 @@ export const DocumentTableOfContents: React.FC<
     return { rootNodes: roots, hasParentRelationships: true };
   }, [data, maxDepth]);
 
-  // Handle document click
+  // Handle document click - uses shared utility for type safety
   const handleDocumentClick = (doc: {
     id: string;
     title: string;
     slug?: string;
   }) => {
     const corpus = openedCorpus();
-    if (corpus) {
-      navigateToDocument(
-        { id: doc.id, title: doc.title, slug: doc.slug } as any,
-        corpus as any,
-        navigate,
-        window.location.pathname
-      );
-    }
+    navigateToRelationshipDocument(
+      doc,
+      corpus,
+      navigate,
+      window.location.pathname
+    );
   };
 
   // Toggle expand/collapse

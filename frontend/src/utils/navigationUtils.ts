@@ -876,3 +876,67 @@ export function navigateToThreadWithMessage(
   }
   navigate({ search: searchParams.toString() }, { replace: true });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Simplified Document Click Handler for Relationship Views
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Minimal document interface for relationship views
+ * Used by DocumentTableOfContents and CorpusDocumentRelationships
+ */
+export interface RelationshipDocumentInfo {
+  id: string;
+  title: string;
+  slug?: string | null;
+  creator?: { slug?: string | null } | null;
+}
+
+/**
+ * Navigate to a document from relationship views (Table of Contents, Relationships tab)
+ * Uses the currently opened corpus context from the reactive variable.
+ *
+ * @param document - Document info from relationship query
+ * @param corpus - Corpus to use for context (with creator slug info)
+ * @param navigate - React Router navigate function
+ * @param currentPath - Current pathname for dedup check
+ */
+export function navigateToRelationshipDocument(
+  document: RelationshipDocumentInfo,
+  corpus: {
+    id?: string;
+    slug?: string | null;
+    creator?: { slug?: string | null } | null;
+  } | null,
+  navigate: (path: string, options?: { replace?: boolean }) => void,
+  currentPath?: string
+) {
+  if (!corpus) {
+    console.warn("Cannot navigate to document - no corpus context");
+    return;
+  }
+
+  // Build the document object with creator info
+  // If document has its own creator, use that; otherwise inherit from corpus
+  // Convert null to undefined for type compatibility
+  // Note: navigateToDocument only uses creator.slug for URL building
+  const docForNav: Parameters<typeof navigateToDocument>[0] = {
+    id: document.id,
+    slug: document.slug ?? undefined,
+    creator: document.creator?.slug
+      ? { id: "", slug: document.creator.slug }
+      : corpus.creator?.slug
+      ? { id: "", slug: corpus.creator.slug }
+      : undefined,
+  };
+
+  const corpusForNav: Parameters<typeof navigateToDocument>[1] = {
+    id: corpus.id ?? "",
+    slug: corpus.slug ?? undefined,
+    creator: corpus.creator?.slug
+      ? { id: "", slug: corpus.creator.slug }
+      : undefined,
+  };
+
+  navigateToDocument(docForNav, corpusForNav, navigate, currentPath);
+}

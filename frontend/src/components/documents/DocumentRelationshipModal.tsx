@@ -252,27 +252,41 @@ export const DocumentRelationshipModal: React.FC<
     CreateDocumentRelationshipInputs
   >(CREATE_DOCUMENT_RELATIONSHIP);
 
-  // Get available documents (excluding source documents)
-  const availableDocuments = useMemo(() => {
-    const docs =
+  // All documents from query
+  const allDocuments = useMemo(() => {
+    return (
       documentsData?.documents?.edges
         ?.map((e) => e?.node)
         .filter(
           (doc): doc is NonNullable<typeof doc> => doc != null && doc.id != null
-        ) || [];
-    return docs.filter((doc) => !sourceDocumentIds.includes(doc.id));
-  }, [documentsData, sourceDocumentIds]);
+        ) || []
+    );
+  }, [documentsData]);
+
+  // Derive source document info from query when not provided via props
+  const resolvedSourceDocuments = useMemo(() => {
+    if (sourceDocuments.length > 0) {
+      return sourceDocuments;
+    }
+    // Find source documents from the query results
+    return allDocuments
+      .filter((doc) => sourceDocumentIds.includes(doc.id))
+      .map((doc) => ({
+        id: doc.id,
+        title: doc.title || "Untitled",
+        icon: doc.icon || undefined,
+      }));
+  }, [sourceDocuments, allDocuments, sourceDocumentIds]);
+
+  // Get available documents (excluding source documents)
+  const availableDocuments = useMemo(() => {
+    return allDocuments.filter((doc) => !sourceDocumentIds.includes(doc.id));
+  }, [allDocuments, sourceDocumentIds]);
 
   // Get selected target documents with info
   const selectedTargetDocuments = useMemo(() => {
-    const docs =
-      documentsData?.documents?.edges
-        ?.map((e) => e?.node)
-        .filter(
-          (doc): doc is NonNullable<typeof doc> => doc != null && doc.id != null
-        ) || [];
-    return docs.filter((doc) => targetDocumentIds.includes(doc.id));
-  }, [documentsData, targetDocumentIds]);
+    return allDocuments.filter((doc) => targetDocumentIds.includes(doc.id));
+  }, [allDocuments, targetDocumentIds]);
 
   // Filter relationship labels
   const filteredRelationshipLabels = useMemo(() => {
@@ -511,8 +525,8 @@ export const DocumentRelationshipModal: React.FC<
             Source Documents ({sourceDocumentIds.length})
           </div>
           <div className="pills-container">
-            {sourceDocuments.length > 0 ? (
-              sourceDocuments.map((doc) => (
+            {resolvedSourceDocuments.length > 0 ? (
+              resolvedSourceDocuments.map((doc) => (
                 <DocumentPill key={doc.id} $variant="source">
                   <FileText size={14} />
                   <span>
@@ -522,6 +536,10 @@ export const DocumentRelationshipModal: React.FC<
                   </span>
                 </DocumentPill>
               ))
+            ) : documentsLoading ? (
+              <span style={{ color: "#64748b", fontStyle: "italic" }}>
+                Loading document info...
+              </span>
             ) : (
               <span style={{ color: "#64748b", fontStyle: "italic" }}>
                 {sourceDocumentIds.length} document

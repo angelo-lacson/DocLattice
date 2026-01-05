@@ -25,13 +25,14 @@ import {
   DeleteDocumentRelationshipOutputs,
 } from "../../graphql/mutations";
 import { openedCorpus } from "../../graphql/cache";
-import { navigateToDocument } from "../../utils/navigationUtils";
+import { navigateToRelationshipDocument } from "../../utils/navigationUtils";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
 } from "../../assets/configurations/osLegalStyles";
+import { DOCUMENT_RELATIONSHIP_PAGINATION_LIMIT } from "../../assets/configurations/constants";
 import { formatDistanceToNow } from "date-fns";
 
 // ============================================================================
@@ -275,7 +276,7 @@ export const CorpusDocumentRelationships: React.FC<
   >(GET_DOCUMENT_RELATIONSHIPS, {
     variables: {
       corpusId,
-      first: 50,
+      first: DOCUMENT_RELATIONSHIP_PAGINATION_LIMIT,
     },
     skip: !corpusId,
     fetchPolicy: "cache-and-network",
@@ -309,18 +310,16 @@ export const CorpusDocumentRelationships: React.FC<
 
   const totalCount = data?.documentRelationships?.totalCount ?? 0;
 
-  // Handle document navigation
+  // Handle document navigation - uses shared utility for type safety
   const handleDocumentClick = useCallback(
     (doc: { id: string; title: string; slug?: string }) => {
       const corpus = openedCorpus();
-      if (corpus) {
-        navigateToDocument(
-          { id: doc.id, title: doc.title, slug: doc.slug } as any,
-          corpus as any,
-          navigate,
-          window.location.pathname
-        );
-      }
+      navigateToRelationshipDocument(
+        doc,
+        corpus,
+        navigate,
+        window.location.pathname
+      );
     },
     [navigate]
   );

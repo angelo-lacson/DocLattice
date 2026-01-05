@@ -15,6 +15,10 @@ const createTestCache = () =>
         fields: {
           corpuses: relayStylePagination(),
           documents: relayStylePagination(),
+          documentRelationships: relayStylePagination([
+            "corpusId",
+            "documentId",
+          ]),
         },
       },
       CorpusType: {
@@ -23,6 +27,9 @@ const createTestCache = () =>
           // CRITICAL: Handle DocumentTypeConnection properly to prevent infinite loops
           documents: relayStylePagination(),
         },
+      },
+      DocumentRelationshipType: {
+        keyFields: ["id"],
       },
     },
   });
