@@ -2,6 +2,7 @@ import React from "react";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { InMemoryCache } from "@apollo/client";
 import { Provider } from "jotai";
+import { MemoryRouter } from "react-router-dom";
 import { relayStylePagination } from "@apollo/client/utilities";
 import { CorpusDocumentRelationships } from "../src/components/corpuses/CorpusDocumentRelationships";
 import { GET_DOCUMENT_RELATIONSHIPS } from "../src/graphql/queries";
@@ -229,9 +230,15 @@ export const CorpusDocumentRelationshipsTestWrapper: React.FC<Props> = ({
 
   return (
     <Provider>
-      <MockedProvider mocks={getMocks()} cache={createTestCache()} addTypename>
-        <CorpusDocumentRelationships corpusId={TEST_CORPUS_ID} />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider
+          mocks={getMocks()}
+          cache={createTestCache()}
+          addTypename
+        >
+          <CorpusDocumentRelationships corpusId={TEST_CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
     </Provider>
   );
 };

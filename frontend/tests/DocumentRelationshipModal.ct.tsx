@@ -92,12 +92,12 @@ test.describe("DocumentRelationshipModal", () => {
   test("shows relationship count preview", async ({ mount, page }) => {
     await mount(<DocumentRelationshipModalTestWrapper />);
 
-    await page.waitForSelector('text="Creating 0 relationship"', {
+    // Initial state shows "Creating 0 relationships" (plural because 0 !== 1)
+    await page.waitForSelector('text="Creating 0 relationships"', {
       timeout: 10000,
     });
 
-    // Initial state - 0 relationships because no targets selected
-    await expect(page.getByText(/Creating 0 relationship/)).toBeVisible();
+    await expect(page.getByText(/Creating 0 relationships/)).toBeVisible();
   });
 
   test("displays available documents", async ({ mount, page }) => {

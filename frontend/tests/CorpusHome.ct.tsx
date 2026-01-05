@@ -63,6 +63,32 @@ const dummyCorpus: CorpusType = {
   __typename: "CorpusType",
 };
 
+// Document relationships mock - used for DocumentTableOfContents
+const documentRelationshipsMock: MockedResponse = {
+  request: {
+    query: GET_DOCUMENT_RELATIONSHIPS,
+    variables: {
+      corpusId: dummyCorpus.id,
+      first: DOCUMENT_RELATIONSHIP_TOC_LIMIT,
+    },
+  },
+  result: {
+    data: {
+      documentRelationships: {
+        edges: [],
+        totalCount: 0,
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: null,
+          endCursor: null,
+        },
+        __typename: "DocumentRelationshipTypeConnection",
+      },
+    },
+  },
+};
+
 const mocks: MockedResponse[] = [
   {
     request: {
@@ -81,30 +107,9 @@ const mocks: MockedResponse[] = [
       },
     },
   },
-  {
-    request: {
-      query: GET_DOCUMENT_RELATIONSHIPS,
-      variables: {
-        corpusId: dummyCorpus.id,
-        first: DOCUMENT_RELATIONSHIP_TOC_LIMIT,
-      },
-    },
-    result: {
-      data: {
-        documentRelationships: {
-          edges: [],
-          totalCount: 0,
-          pageInfo: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: null,
-            endCursor: null,
-          },
-          __typename: "DocumentRelationshipTypeConnection",
-        },
-      },
-    },
-  },
+  // Duplicate for cache-and-network fetch policy
+  documentRelationshipsMock,
+  { ...documentRelationshipsMock },
   {
     request: {
       query: GET_CORPUS_WITH_HISTORY,

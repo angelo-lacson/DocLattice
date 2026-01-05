@@ -2,6 +2,7 @@ import React from "react";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { InMemoryCache } from "@apollo/client";
 import { Provider } from "jotai";
+import { MemoryRouter } from "react-router-dom";
 import { relayStylePagination } from "@apollo/client/utilities";
 import { DocumentTableOfContents } from "../src/components/corpuses/DocumentTableOfContents";
 import { GET_DOCUMENT_RELATIONSHIPS } from "../src/graphql/queries";
@@ -189,36 +190,43 @@ export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
       ];
     }
 
-    return [
-      {
-        request: {
-          query: GET_DOCUMENT_RELATIONSHIPS,
-          variables: baseVariables,
-        },
-        result: {
-          data: {
-            documentRelationships: {
-              edges: mockParentRelationships,
-              totalCount: mockParentRelationships.length,
-              pageInfo: {
-                hasNextPage: false,
-                hasPreviousPage: false,
-                startCursor: null,
-                endCursor: null,
-              },
-              __typename: "DocumentRelationshipTypeConnection",
+    // Return duplicate mocks for cache-and-network fetch policy
+    const defaultMock = {
+      request: {
+        query: GET_DOCUMENT_RELATIONSHIPS,
+        variables: baseVariables,
+      },
+      result: {
+        data: {
+          documentRelationships: {
+            edges: mockParentRelationships,
+            totalCount: mockParentRelationships.length,
+            pageInfo: {
+              hasNextPage: false,
+              hasPreviousPage: false,
+              startCursor: null,
+              endCursor: null,
             },
+            __typename: "DocumentRelationshipTypeConnection",
           },
         },
       },
-    ];
+    };
+
+    return [defaultMock, { ...defaultMock }];
   };
 
   return (
     <Provider>
-      <MockedProvider mocks={getMocks()} cache={createTestCache()} addTypename>
-        <DocumentTableOfContents corpusId={TEST_CORPUS_ID} maxDepth={4} />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider
+          mocks={getMocks()}
+          cache={createTestCache()}
+          addTypename
+        >
+          <DocumentTableOfContents corpusId={TEST_CORPUS_ID} maxDepth={4} />
+        </MockedProvider>
+      </MemoryRouter>
     </Provider>
   );
 };

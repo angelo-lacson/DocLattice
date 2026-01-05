@@ -44,6 +44,11 @@ import { DEFAULT_LABEL_COLOR } from "../../assets/configurations/constants";
  * Validates and sanitizes a color string to prevent CSS injection.
  * Only allows valid hex colors (3 or 6 chars, with or without #).
  * Returns a safe default color if validation fails.
+ *
+ * SECURITY NOTE: This is defense-in-depth. The backend GraphQL mutations
+ * should also validate color values before storage. If invalid colors are
+ * detected here, investigate the source and consider adding backend
+ * validation to the AnnotationLabel mutation.
  */
 function sanitizeColor(color: string | null | undefined): string {
   if (!color) return `#${DEFAULT_LABEL_COLOR}`;
@@ -59,7 +64,8 @@ function sanitizeColor(color: string | null | undefined): string {
     return `#${colorWithoutHash}`;
   }
 
-  // Invalid color - return safe default
+  // Log warning for invalid color - helps identify data quality issues
+  console.warn(`[sanitizeColor] Invalid color value rejected: "${color}"`);
   return `#${DEFAULT_LABEL_COLOR}`;
 }
 

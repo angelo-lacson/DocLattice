@@ -9,6 +9,7 @@ import {
   ChevronDown,
   FolderTree,
   ListTree,
+  AlertTriangle,
 } from "lucide-react";
 
 import {
@@ -147,6 +148,28 @@ const ErrorState = styled.div`
   color: #ef4444;
 `;
 
+const WarningBanner = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 0.875rem;
+
+  .warning-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .warning-text {
+    flex: 1;
+  }
+`;
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -173,7 +196,12 @@ export const DocumentTableOfContents: React.FC<
   });
 
   // Build tree from relationships
-  const { rootNodes, hasParentRelationships } = useMemo(() => {
+  const {
+    rootNodes,
+    hasParentRelationships,
+    hasCircularRefs,
+    circularRefDocs,
+  } = useMemo(() => {
     const relationships = data?.documentRelationships?.edges || [];
 
     // Filter to only "parent" labeled relationships
@@ -187,7 +215,12 @@ export const DocumentTableOfContents: React.FC<
       );
 
     if (parentRelationships.length === 0) {
-      return { rootNodes: [], hasParentRelationships: false };
+      return {
+        rootNodes: [],
+        hasParentRelationships: false,
+        hasCircularRefs: false,
+        circularRefDocs: [],
+      };
     }
 
     // Build a map of document info
@@ -232,6 +265,9 @@ export const DocumentTableOfContents: React.FC<
     const allDocIds = new Set([...documentMap.keys()]);
     const rootDocIds = Array.from(allDocIds).filter((id) => !parentMap.has(id));
 
+    // Track circular references for user warning
+    const circularRefs: string[] = [];
+
     // Build tree recursively with depth limit and cycle detection
     const buildTree = (
       docId: string,
@@ -240,9 +276,8 @@ export const DocumentTableOfContents: React.FC<
     ): DocumentNode | null => {
       // Prevent infinite recursion from circular references
       if (visited.has(docId)) {
-        console.warn(
-          `Circular reference detected in document hierarchy: ${docId}`
-        );
+        const docTitle = documentMap.get(docId)?.title || docId;
+        circularRefs.push(docTitle);
         return null;
       }
       if (currentDepth > maxDepth) return null;
@@ -280,7 +315,12 @@ export const DocumentTableOfContents: React.FC<
       .filter((node): node is DocumentNode => node !== null)
       .sort((a, b) => a.title.localeCompare(b.title));
 
-    return { rootNodes: roots, hasParentRelationships: true };
+    return {
+      rootNodes: roots,
+      hasParentRelationships: true,
+      hasCircularRefs: circularRefs.length > 0,
+      circularRefDocs: circularRefs,
+    };
   }, [data, maxDepth]);
 
   // Handle document click - uses shared utility for type safety
@@ -457,6 +497,18 @@ export const DocumentTableOfContents: React.FC<
           Table of Contents
         </Title>
       </Header>
+      {hasCircularRefs && (
+        <WarningBanner role="alert">
+          <AlertTriangle size={16} className="warning-icon" />
+          <span className="warning-text">
+            Circular parent references detected. Some documents may not appear
+            in the hierarchy. Check the parent relationships for:{" "}
+            {circularRefDocs.slice(0, 3).join(", ")}
+            {circularRefDocs.length > 3 &&
+              ` and ${circularRefDocs.length - 3} more`}
+          </span>
+        </WarningBanner>
+      )}
       <TreeContainer role="tree" aria-label="Document hierarchy">
         {rootNodes.map((node) => renderNode(node, 0))}
       </TreeContainer>

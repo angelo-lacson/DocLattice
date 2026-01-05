@@ -2,6 +2,7 @@ import React, { ReactNode } from "react";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { InMemoryCache } from "@apollo/client";
 import { Provider } from "jotai";
+import { MemoryRouter } from "react-router-dom";
 import { CorpusHome } from "../src/components/corpuses/CorpusHome";
 import { CorpusType } from "../src/types/graphql-api";
 import { relayStylePagination } from "@apollo/client/utilities";
@@ -50,18 +51,20 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({ mocks, corpus }) => {
 
   return (
     <Provider>
-      <MockedProvider mocks={mocks} cache={createTestCache()} addTypename>
-        <CorpusHome
-          corpus={corpus}
-          onEditDescription={() => {}}
-          stats={stats}
-          statsLoading={false}
-          chatQuery=""
-          onChatQueryChange={() => {}}
-          onChatSubmit={() => {}}
-          onViewChatHistory={() => {}}
-        />
-      </MockedProvider>
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} cache={createTestCache()} addTypename>
+          <CorpusHome
+            corpus={corpus}
+            onEditDescription={() => {}}
+            stats={stats}
+            statsLoading={false}
+            chatQuery=""
+            onChatQueryChange={() => {}}
+            onChatSubmit={() => {}}
+            onViewChatHistory={() => {}}
+          />
+        </MockedProvider>
+      </MemoryRouter>
     </Provider>
   );
 };
