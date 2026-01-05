@@ -101,6 +101,17 @@ const NodeItem = styled.div<{ $hasChildren: boolean }>`
     background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
+  &:focus {
+    outline: 2px solid ${OS_LEGAL_COLORS.accent};
+    outline-offset: -2px;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${OS_LEGAL_COLORS.accent};
+    outline-offset: -2px;
+  }
+
   .chevron {
     color: ${OS_LEGAL_COLORS.textMuted};
     flex-shrink: 0;
@@ -301,6 +312,38 @@ export const DocumentTableOfContents: React.FC<
     });
   };
 
+  // Handle keyboard navigation for accessibility
+  const handleKeyDown = (
+    e: React.KeyboardEvent,
+    node: DocumentNode,
+    hasChildren: boolean,
+    isExpanded: boolean
+  ) => {
+    switch (e.key) {
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        handleDocumentClick(node);
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        if (hasChildren && !isExpanded) {
+          setExpandedNodes((prev) => new Set(prev).add(node.id));
+        }
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        if (hasChildren && isExpanded) {
+          setExpandedNodes((prev) => {
+            const next = new Set(prev);
+            next.delete(node.id);
+            return next;
+          });
+        }
+        break;
+    }
+  };
+
   // Render a tree node recursively
   const renderNode = (node: DocumentNode, depth: number) => {
     const isExpanded = expandedNodes.has(node.id);
@@ -311,10 +354,18 @@ export const DocumentTableOfContents: React.FC<
         <NodeItem
           $hasChildren={hasChildren}
           onClick={() => handleDocumentClick(node)}
+          onKeyDown={(e) => handleKeyDown(e, node, hasChildren, isExpanded)}
+          role="treeitem"
+          tabIndex={0}
+          aria-expanded={hasChildren ? isExpanded : undefined}
+          aria-label={`${node.title}${
+            hasChildren ? `, ${isExpanded ? "expanded" : "collapsed"}` : ""
+          }`}
         >
           <span
             className="chevron"
             onClick={(e) => hasChildren && toggleNode(node.id, e)}
+            aria-hidden="true"
           >
             {hasChildren ? (
               isExpanded ? (
@@ -326,13 +377,13 @@ export const DocumentTableOfContents: React.FC<
               <span style={{ width: 14 }} />
             )}
           </span>
-          <FileText size={14} className="icon" />
+          <FileText size={14} className="icon" aria-hidden="true" />
           <span className="title" title={node.title}>
             {node.title}
           </span>
         </NodeItem>
         {hasChildren && isExpanded && (
-          <div>
+          <div role="group">
             {node.children.map((child) => renderNode(child, depth + 1))}
           </div>
         )}
@@ -406,7 +457,7 @@ export const DocumentTableOfContents: React.FC<
           Table of Contents
         </Title>
       </Header>
-      <TreeContainer>
+      <TreeContainer role="tree" aria-label="Document hierarchy">
         {rootNodes.map((node) => renderNode(node, 0))}
       </TreeContainer>
     </Container>

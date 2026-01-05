@@ -243,6 +243,9 @@ export const DocumentRelationshipModal: React.FC<
   }, [documentSearchTerm]);
 
   // Query for documents in corpus (for target selection)
+  // TODO: Backend enhancement opportunity - add excludeIds parameter to GET_DOCUMENTS
+  // to filter out source documents server-side for better performance at scale.
+  // Currently filtered client-side in availableDocuments memo below.
   const { data: documentsData, loading: documentsLoading } =
     useQuery<RequestDocumentsOutputs>(GET_DOCUMENTS, {
       variables: {
