@@ -399,6 +399,8 @@ interface ModernDocumentItemProps {
   onShiftClick?: (document: DocumentType) => void;
   onClick?: (document: DocumentType) => void;
   removeFromCorpus?: (doc_ids: string[]) => void;
+  /** Callback when user wants to link this document to another */
+  onLinkToDocument?: (document: DocumentType) => void;
 }
 
 export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
@@ -407,6 +409,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   onShiftClick,
   onClick,
   removeFromCorpus,
+  onLinkToDocument,
 }) => {
   const navigate = useNavigate();
   const [isDownloading, setIsDownloading] = useState(false);
@@ -613,6 +616,19 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
       label: "Edit Document",
       icon: "edit",
       onClick: handleEdit,
+      disabled: backendLock,
+    });
+  }
+
+  // Add link to document option if handler provided
+  if (onLinkToDocument) {
+    contextMenuItems.push({
+      label: "Link to Document...",
+      icon: "linkify",
+      onClick: (e) => {
+        e.stopPropagation();
+        onLinkToDocument(item);
+      },
       disabled: backendLock,
     });
   }

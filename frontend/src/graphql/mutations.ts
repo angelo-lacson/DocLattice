@@ -3485,3 +3485,211 @@ export interface RollbackModerationActionOutput {
     } | null;
   };
 }
+
+// ============================================================================
+// DOCUMENT RELATIONSHIP MUTATIONS
+// ============================================================================
+
+export interface CreateDocumentRelationshipInputs {
+  sourceDocumentId: string;
+  targetDocumentId: string;
+  relationshipType: string; // "RELATIONSHIP" | "NOTES"
+  corpusId: string;
+  annotationLabelId?: string;
+  data?: Record<string, any>;
+}
+
+export interface CreateDocumentRelationshipOutputs {
+  createDocumentRelationship: {
+    ok: boolean;
+    message: string;
+    documentRelationship: {
+      id: string;
+      relationshipType: string;
+      data?: Record<string, any>;
+      sourceDocument: {
+        id: string;
+        title: string;
+        icon?: string;
+      };
+      targetDocument: {
+        id: string;
+        title: string;
+        icon?: string;
+      };
+      annotationLabel?: {
+        id: string;
+        text: string;
+        color: string;
+        icon?: string;
+      };
+      corpus: {
+        id: string;
+      };
+      creator: {
+        id: string;
+        username: string;
+      };
+      created: string;
+      myPermissions?: string[];
+    } | null;
+  };
+}
+
+export const CREATE_DOCUMENT_RELATIONSHIP = gql`
+  mutation CreateDocumentRelationship(
+    $sourceDocumentId: String!
+    $targetDocumentId: String!
+    $relationshipType: String!
+    $corpusId: String!
+    $annotationLabelId: String
+    $data: GenericScalar
+  ) {
+    createDocumentRelationship(
+      sourceDocumentId: $sourceDocumentId
+      targetDocumentId: $targetDocumentId
+      relationshipType: $relationshipType
+      corpusId: $corpusId
+      annotationLabelId: $annotationLabelId
+      data: $data
+    ) {
+      ok
+      message
+      documentRelationship {
+        id
+        relationshipType
+        data
+        sourceDocument {
+          id
+          title
+          icon
+        }
+        targetDocument {
+          id
+          title
+          icon
+        }
+        annotationLabel {
+          id
+          text
+          color
+          icon
+        }
+        corpus {
+          id
+        }
+        creator {
+          id
+          username
+        }
+        created
+        myPermissions
+      }
+    }
+  }
+`;
+
+export interface UpdateDocumentRelationshipInputs {
+  documentRelationshipId: string;
+  relationshipType?: string;
+  annotationLabelId?: string;
+  data?: Record<string, any>;
+}
+
+export interface UpdateDocumentRelationshipOutputs {
+  updateDocumentRelationship: {
+    ok: boolean;
+    message: string;
+    documentRelationship: {
+      id: string;
+      relationshipType: string;
+      data?: Record<string, any>;
+      annotationLabel?: {
+        id: string;
+        text: string;
+        color: string;
+        icon?: string;
+      };
+      modified: string;
+      myPermissions?: string[];
+    } | null;
+  };
+}
+
+export const UPDATE_DOCUMENT_RELATIONSHIP = gql`
+  mutation UpdateDocumentRelationship(
+    $documentRelationshipId: String!
+    $relationshipType: String
+    $annotationLabelId: String
+    $data: GenericScalar
+  ) {
+    updateDocumentRelationship(
+      documentRelationshipId: $documentRelationshipId
+      relationshipType: $relationshipType
+      annotationLabelId: $annotationLabelId
+      data: $data
+    ) {
+      ok
+      message
+      documentRelationship {
+        id
+        relationshipType
+        data
+        annotationLabel {
+          id
+          text
+          color
+          icon
+        }
+        modified
+        myPermissions
+      }
+    }
+  }
+`;
+
+export interface DeleteDocumentRelationshipInputs {
+  documentRelationshipId: string;
+}
+
+export interface DeleteDocumentRelationshipOutputs {
+  deleteDocumentRelationship: {
+    ok: boolean;
+    message: string;
+  };
+}
+
+export const DELETE_DOCUMENT_RELATIONSHIP = gql`
+  mutation DeleteDocumentRelationship($documentRelationshipId: String!) {
+    deleteDocumentRelationship(
+      documentRelationshipId: $documentRelationshipId
+    ) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface DeleteDocumentRelationshipsInputs {
+  documentRelationshipIds: string[];
+}
+
+export interface DeleteDocumentRelationshipsOutputs {
+  deleteDocumentRelationships: {
+    ok: boolean;
+    message: string;
+    deletedCount: number;
+  };
+}
+
+export const DELETE_DOCUMENT_RELATIONSHIPS = gql`
+  mutation DeleteDocumentRelationships($documentRelationshipIds: [String!]!) {
+    deleteDocumentRelationships(
+      documentRelationshipIds: $documentRelationshipIds
+    ) {
+      ok
+      message
+      deletedCount
+    }
+  }
+`;

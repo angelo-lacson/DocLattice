@@ -28,6 +28,7 @@ import {
   Trophy,
   BarChart3,
   MoreVertical,
+  Link2,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -133,6 +134,7 @@ import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptio
 import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
 import { BadgeManagement } from "../components/badges/BadgeManagement";
 import { CorpusEngagementDashboard } from "../components/analytics/CorpusEngagementDashboard";
+import { CorpusDocumentRelationships } from "../components/corpuses/CorpusDocumentRelationships";
 
 // Add these styled components near your other styled components
 const DashboardContainer = styled.div`
@@ -2104,6 +2106,7 @@ export const Corpuses = () => {
     "annotations",
     "analyses",
     "extracts",
+    "relationships",
     "discussions",
     "chats",
     "analytics",
@@ -2273,6 +2276,37 @@ export const Corpuses = () => {
             onOpenMobileMenu={() => setMobileSidebarOpen(true)}
           />
         ),
+      },
+      {
+        id: "relationships",
+        label: "Relationships",
+        icon: <Link2 />,
+        component: opened_corpus?.id ? (
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Document Relationships</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusDocumentRelationships corpusId={opened_corpus.id} />
+            </div>
+          </div>
+        ) : null,
       },
       {
         id: "discussions",

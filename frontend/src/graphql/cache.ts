@@ -230,6 +230,12 @@ export const cache = new InMemoryCache({
         chatMessages: relayStylePagination(),
       },
     },
+    DocumentRelationshipType: {
+      keyFields: ["id"],
+      fields: {
+        // Define field policies if necessary
+      },
+    },
     ChatMessageType: {
       fields: {
         // CRITICAL: Handle all Connection types properly to prevent infinite loops
@@ -271,6 +277,8 @@ export const cache = new InMemoryCache({
         relationshipLabels: relayStylePagination(),
         extracts: relayStylePagination(),
         columns: relayStylePagination(),
+        // Document relationships - cache by corpus/document context
+        documentRelationships: relayStylePagination(["corpusId", "documentId"]),
         // Slug resolution queries - cache by input parameters
         userBySlug: {
           keyArgs: ["slug"],

@@ -4567,3 +4567,158 @@ export interface ModerationMetrics {
 export interface GetModerationMetricsOutput {
   moderationMetrics: ModerationMetrics | null;
 }
+
+// ============================================================================
+// DOCUMENT RELATIONSHIP QUERIES
+// ============================================================================
+
+export interface GetDocumentRelationshipsInput {
+  corpusId?: string;
+  documentId?: string;
+  first?: number;
+  after?: string;
+}
+
+export interface DocumentRelationshipNode {
+  id: string;
+  relationshipType: string;
+  data?: Record<string, any>;
+  sourceDocument: {
+    id: string;
+    title: string;
+    icon?: string;
+    slug?: string;
+    creator?: {
+      slug?: string;
+    };
+  };
+  targetDocument: {
+    id: string;
+    title: string;
+    icon?: string;
+    slug?: string;
+    creator?: {
+      slug?: string;
+    };
+  };
+  annotationLabel?: {
+    id: string;
+    text: string;
+    color: string;
+    icon?: string;
+  };
+  corpus: {
+    id: string;
+    slug?: string;
+    creator?: {
+      slug?: string;
+    };
+  };
+  creator: {
+    id: string;
+    username: string;
+  };
+  created: string;
+  modified: string;
+  myPermissions?: string[];
+}
+
+export interface GetDocumentRelationshipsOutput {
+  documentRelationships: {
+    edges: Array<{
+      node: DocumentRelationshipNode;
+      cursor: string;
+    }>;
+    pageInfo: PageInfo;
+    totalCount: number;
+  };
+}
+
+export const GET_DOCUMENT_RELATIONSHIPS = gql`
+  query GetDocumentRelationships(
+    $corpusId: ID
+    $documentId: ID
+    $first: Int
+    $after: String
+  ) {
+    documentRelationships(
+      corpusId: $corpusId
+      documentId: $documentId
+      first: $first
+      after: $after
+    ) {
+      edges {
+        node {
+          id
+          relationshipType
+          data
+          sourceDocument {
+            id
+            title
+            icon
+            slug
+            creator {
+              slug
+            }
+          }
+          targetDocument {
+            id
+            title
+            icon
+            slug
+            creator {
+              slug
+            }
+          }
+          annotationLabel {
+            id
+            text
+            color
+            icon
+          }
+          corpus {
+            id
+            slug
+            creator {
+              slug
+            }
+          }
+          creator {
+            id
+            username
+          }
+          created
+          modified
+          myPermissions
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      totalCount
+    }
+  }
+`;
+
+export interface GetDocumentRelationshipCountInput {
+  documentId: string;
+  corpusId?: string;
+}
+
+export interface GetDocumentRelationshipCountOutput {
+  documentRelationships: {
+    totalCount: number;
+  };
+}
+
+export const GET_DOCUMENT_RELATIONSHIP_COUNT = gql`
+  query GetDocumentRelationshipCount($documentId: ID!, $corpusId: ID) {
+    documentRelationships(documentId: $documentId, corpusId: $corpusId) {
+      totalCount
+    }
+  }
+`;

@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronUp,
   MoreVertical,
+  Link2,
 } from "lucide-react";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
 import {
@@ -54,6 +55,10 @@ interface FolderToolbarProps {
   onGoUp: () => void;
   onNewFolder: () => void;
   onUpload: () => void;
+  /** Number of currently selected documents (for multi-select actions) */
+  selectedDocumentCount?: number;
+  /** Callback when user clicks Link Documents button */
+  onLinkDocuments?: () => void;
 }
 
 // ===============================================
@@ -389,6 +394,8 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
   onGoUp,
   onNewFolder,
   onUpload,
+  selectedDocumentCount = 0,
+  onLinkDocuments,
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom);
   const canCreateFolders = useAtomValue(canCreateFoldersAtom);
@@ -469,6 +476,17 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
         >
           <ChevronUp />
         </NavButton>
+
+        {/* Link Documents button - visible when 2+ documents selected */}
+        {selectedDocumentCount >= 2 && onLinkDocuments && (
+          <ActionButton
+            onClick={onLinkDocuments}
+            title={`Link ${selectedDocumentCount} selected documents`}
+          >
+            <Link2 />
+            <span>Link Documents</span>
+          </ActionButton>
+        )}
 
         {/* New Folder button */}
         {canCreateFolders && (
@@ -553,6 +571,18 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
           <PanelLeftOpen />
           Show Folders
         </MobileMenuItem>
+        {selectedDocumentCount >= 2 && onLinkDocuments && (
+          <MobileMenuItem
+            role="menuitem"
+            onClick={() => {
+              onLinkDocuments();
+              closeMobileMenu();
+            }}
+          >
+            <Link2 />
+            Link Documents ({selectedDocumentCount})
+          </MobileMenuItem>
+        )}
         {canCreateFolders && (
           <MobileMenuItem
             role="menuitem"
