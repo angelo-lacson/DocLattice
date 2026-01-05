@@ -34,6 +34,34 @@ import {
 } from "../../assets/configurations/osLegalStyles";
 import { DOCUMENT_RELATIONSHIP_PAGINATION_LIMIT } from "../../assets/configurations/constants";
 import { formatDistanceToNow } from "date-fns";
+import { DEFAULT_LABEL_COLOR } from "../../assets/configurations/constants";
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+/**
+ * Validates and sanitizes a color string to prevent CSS injection.
+ * Only allows valid hex colors (3 or 6 chars, with or without #).
+ * Returns a safe default color if validation fails.
+ */
+function sanitizeColor(color: string | null | undefined): string {
+  if (!color) return `#${DEFAULT_LABEL_COLOR}`;
+
+  // Remove # prefix if present for validation
+  const colorWithoutHash = color.replace(/^#/, "");
+
+  // Validate: must be 3 or 6 hex characters only
+  if (/^[0-9A-Fa-f]{3}$/.test(colorWithoutHash)) {
+    return `#${colorWithoutHash}`;
+  }
+  if (/^[0-9A-Fa-f]{6}$/.test(colorWithoutHash)) {
+    return `#${colorWithoutHash}`;
+  }
+
+  // Invalid color - return safe default
+  return `#${DEFAULT_LABEL_COLOR}`;
+}
 
 // ============================================================================
 // TYPES
@@ -472,7 +500,13 @@ export const CorpusDocumentRelationships: React.FC<
                     </DocumentLink>
                   </td>
                   <td>
-                    <TypeBadge $type={rel.relationshipType as any}>
+                    <TypeBadge
+                      $type={
+                        rel.relationshipType === "RELATIONSHIP"
+                          ? "RELATIONSHIP"
+                          : "NOTES"
+                      }
+                    >
                       {rel.relationshipType === "RELATIONSHIP" ? (
                         <>
                           <Link2 size={12} />
@@ -489,7 +523,7 @@ export const CorpusDocumentRelationships: React.FC<
                   <td>
                     {rel.annotationLabel ? (
                       <LabelBadge
-                        $color={rel.annotationLabel.color || "#6b7280"}
+                        $color={sanitizeColor(rel.annotationLabel.color)}
                       >
                         {rel.annotationLabel.text}
                       </LabelBadge>

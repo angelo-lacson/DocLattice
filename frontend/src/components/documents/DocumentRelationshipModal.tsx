@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Modal,
   Form,
@@ -28,6 +28,11 @@ import {
   RequestDocumentsOutputs,
   GET_DOCUMENT_RELATIONSHIPS,
 } from "../../graphql/queries";
+import {
+  DOCUMENT_PICKER_SEARCH_LIMIT,
+  MUTATION_BATCH_SIZE,
+  DEBOUNCE,
+} from "../../assets/configurations/constants";
 
 // ============================================================================
 // TYPES
@@ -208,6 +213,7 @@ export const DocumentRelationshipModal: React.FC<
   // Target document selection
   const [targetDocumentIds, setTargetDocumentIds] = useState<string[]>([]);
   const [documentSearchTerm, setDocumentSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
   // Label selection (for RELATIONSHIP mode)
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
@@ -227,13 +233,22 @@ export const DocumentRelationshipModal: React.FC<
   const hasCorpus = Boolean(corpusId && selectedCorpus?.id);
   const hasLabelset = Boolean(selectedCorpus?.labelSet);
 
+  // Debounce search term to avoid excessive queries
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(documentSearchTerm);
+    }, DEBOUNCE.SEARCH_MS);
+
+    return () => clearTimeout(timer);
+  }, [documentSearchTerm]);
+
   // Query for documents in corpus (for target selection)
   const { data: documentsData, loading: documentsLoading } =
     useQuery<RequestDocumentsOutputs>(GET_DOCUMENTS, {
       variables: {
         inCorpusWithId: corpusId,
-        textSearch: documentSearchTerm || undefined,
-        limit: 20,
+        textSearch: debouncedSearchTerm || undefined,
+        limit: DOCUMENT_PICKER_SEARCH_LIMIT,
         annotateDocLabels: false,
         includeMetadata: false,
       },
@@ -406,49 +421,101 @@ export const DocumentRelationshipModal: React.FC<
     return true;
   }, [targetDocumentIds, mode, selectedLabelId]);
 
-  // Handle form submission
+  // Handle form submission with batched mutations
   const handleSubmit = async () => {
     if (!canSubmit) return;
 
     setIsSubmitting(true);
 
     try {
-      // Create relationships for each source-target pair
-      const promises = sourceDocumentIds.flatMap((sourceId) =>
-        targetDocumentIds.map((targetId) =>
-          createDocumentRelationship({
-            variables: {
-              sourceDocumentId: sourceId,
-              targetDocumentId: targetId,
-              relationshipType: mode,
-              corpusId,
-              annotationLabelId:
-                mode === "RELATIONSHIP"
-                  ? selectedLabelId ?? undefined
-                  : undefined,
-              data:
-                mode === "NOTES" && notesContent
-                  ? { notes: notesContent }
-                  : undefined,
-            },
-            refetchQueries: [
-              {
-                query: GET_DOCUMENT_RELATIONSHIPS,
-                variables: { corpusId },
-              },
-            ],
-          })
-        )
+      // Build all mutation configs
+      const mutations = sourceDocumentIds.flatMap((sourceId) =>
+        targetDocumentIds.map((targetId) => ({
+          sourceId,
+          targetId,
+          variables: {
+            sourceDocumentId: sourceId,
+            targetDocumentId: targetId,
+            relationshipType: mode,
+            corpusId,
+            annotationLabelId:
+              mode === "RELATIONSHIP"
+                ? selectedLabelId ?? undefined
+                : undefined,
+            data:
+              mode === "NOTES" && notesContent
+                ? { notes: notesContent }
+                : undefined,
+          },
+        }))
       );
 
-      const results = await Promise.all(promises);
+      const totalCount = mutations.length;
+      let successCount = 0;
+      const failures: Array<{
+        sourceId: string;
+        targetId: string;
+        error: string;
+      }> = [];
 
-      // Check results
-      const successCount = results.filter(
-        (r) => r.data?.createDocumentRelationship?.ok
-      ).length;
-      const totalCount = results.length;
+      // Process mutations in batches to avoid overwhelming the server
+      for (let i = 0; i < mutations.length; i += MUTATION_BATCH_SIZE) {
+        const batch = mutations.slice(i, i + MUTATION_BATCH_SIZE);
+        const batchPromises = batch.map((mutation) =>
+          createDocumentRelationship({
+            variables: mutation.variables,
+            // Only refetch on the last batch to avoid excessive refetches
+            refetchQueries:
+              i + MUTATION_BATCH_SIZE >= mutations.length
+                ? [
+                    {
+                      query: GET_DOCUMENT_RELATIONSHIPS,
+                      variables: { corpusId },
+                    },
+                  ]
+                : [],
+          })
+            .then((result) => ({
+              mutation,
+              result,
+              success: result.data?.createDocumentRelationship?.ok ?? false,
+              error: result.data?.createDocumentRelationship?.message,
+            }))
+            .catch((err) => ({
+              mutation,
+              result: null,
+              success: false,
+              error: err instanceof Error ? err.message : "Network error",
+            }))
+        );
 
+        const batchResults = await Promise.allSettled(batchPromises);
+
+        // Process batch results
+        batchResults.forEach((settledResult) => {
+          if (settledResult.status === "fulfilled") {
+            const { mutation, success, error } = settledResult.value;
+            if (success) {
+              successCount++;
+            } else {
+              failures.push({
+                sourceId: mutation.sourceId,
+                targetId: mutation.targetId,
+                error: error || "Unknown error",
+              });
+            }
+          } else {
+            // Promise rejected (shouldn't happen with our .catch, but handle it)
+            failures.push({
+              sourceId: "unknown",
+              targetId: "unknown",
+              error: settledResult.reason?.message || "Unknown error",
+            });
+          }
+        });
+      }
+
+      // Report results with detailed error information
       if (successCount === totalCount) {
         toast.success(
           `Created ${successCount} document relationship${
@@ -458,20 +525,30 @@ export const DocumentRelationshipModal: React.FC<
         onSuccess?.();
         handleClose();
       } else if (successCount > 0) {
+        const uniqueErrors = [...new Set(failures.map((f) => f.error))];
+        const errorSummary =
+          uniqueErrors.length === 1
+            ? uniqueErrors[0]
+            : `${uniqueErrors.length} different errors`;
         toast.warning(
-          `Created ${successCount} of ${totalCount} relationships. Some failed.`
+          `Created ${successCount} of ${totalCount} relationships. Failed: ${failures.length} (${errorSummary})`
         );
         onSuccess?.();
         handleClose();
       } else {
+        const uniqueErrors = [...new Set(failures.map((f) => f.error))];
         const errorMsg =
-          results[0]?.data?.createDocumentRelationship?.message ||
-          "Failed to create relationships";
-        toast.error(errorMsg);
+          uniqueErrors.length === 1
+            ? uniqueErrors[0]
+            : `Multiple errors: ${uniqueErrors.slice(0, 3).join(", ")}${
+                uniqueErrors.length > 3 ? "..." : ""
+              }`;
+        toast.error(`Failed to create relationships: ${errorMsg}`);
       }
     } catch (error) {
-      console.error("Error creating document relationships:", error);
-      toast.error("Failed to create relationships");
+      const message =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      toast.error(`Failed to create relationships: ${message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -482,6 +559,7 @@ export const DocumentRelationshipModal: React.FC<
     setMode("RELATIONSHIP");
     setTargetDocumentIds([]);
     setDocumentSearchTerm("");
+    setDebouncedSearchTerm("");
     setSelectedLabelId(null);
     setLabelSearchTerm("");
     setShowCreateLabel(false);

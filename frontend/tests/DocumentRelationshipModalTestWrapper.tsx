@@ -7,6 +7,7 @@ import { DocumentRelationshipModal } from "../src/components/documents/DocumentR
 import { GET_DOCUMENTS } from "../src/graphql/queries";
 import { openedCorpus } from "../src/graphql/cache";
 import { corpusStateAtom } from "../src/components/annotator/context/CorpusAtom";
+import { DOCUMENT_PICKER_SEARCH_LIMIT } from "../src/assets/configurations/constants";
 
 // Test corpus ID
 const TEST_CORPUS_ID = "corpus-1";
@@ -148,14 +149,14 @@ export const DocumentRelationshipModalTestWrapper: React.FC<Props> = (
   // Build mocks
   const getMocks = (): MockedResponse[] => {
     return [
-      // Document query mock
+      // Document query mock - initial query with empty debounced search term
       {
         request: {
           query: GET_DOCUMENTS,
           variables: {
             inCorpusWithId: TEST_CORPUS_ID,
             textSearch: undefined,
-            limit: 20,
+            limit: DOCUMENT_PICKER_SEARCH_LIMIT,
             annotateDocLabels: false,
             includeMetadata: false,
           },
@@ -175,14 +176,14 @@ export const DocumentRelationshipModalTestWrapper: React.FC<Props> = (
           },
         },
       },
-      // Duplicate for refetch
+      // Duplicate for refetch or debounce cycle
       {
         request: {
           query: GET_DOCUMENTS,
           variables: {
             inCorpusWithId: TEST_CORPUS_ID,
             textSearch: undefined,
-            limit: 20,
+            limit: DOCUMENT_PICKER_SEARCH_LIMIT,
             annotateDocLabels: false,
             includeMetadata: false,
           },

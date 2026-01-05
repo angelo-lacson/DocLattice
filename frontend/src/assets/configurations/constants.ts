@@ -86,3 +86,9 @@ export const EXTRACT_STATUS_COLORS = {
 // Document relationship pagination limits
 export const DOCUMENT_RELATIONSHIP_PAGINATION_LIMIT = 50;
 export const DOCUMENT_RELATIONSHIP_TOC_LIMIT = 500;
+
+// Document search/picker limits
+export const DOCUMENT_PICKER_SEARCH_LIMIT = 20;
+
+// Mutation batching
+export const MUTATION_BATCH_SIZE = 10;

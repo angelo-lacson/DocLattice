@@ -221,15 +221,26 @@ export const DocumentTableOfContents: React.FC<
     const allDocIds = new Set([...documentMap.keys()]);
     const rootDocIds = Array.from(allDocIds).filter((id) => !parentMap.has(id));
 
-    // Build tree recursively with depth limit
+    // Build tree recursively with depth limit and cycle detection
     const buildTree = (
       docId: string,
-      currentDepth: number
+      currentDepth: number,
+      visited: Set<string> = new Set()
     ): DocumentNode | null => {
+      // Prevent infinite recursion from circular references
+      if (visited.has(docId)) {
+        console.warn(
+          `Circular reference detected in document hierarchy: ${docId}`
+        );
+        return null;
+      }
       if (currentDepth > maxDepth) return null;
 
       const docInfo = documentMap.get(docId);
       if (!docInfo) return null;
+
+      // Add current node to visited set for this branch
+      const branchVisited = new Set(visited).add(docId);
 
       const childIds = childrenMap.get(docId) || [];
       // Sort children alphabetically by title
@@ -240,7 +251,7 @@ export const DocumentTableOfContents: React.FC<
       });
 
       const children = sortedChildIds
-        .map((childId) => buildTree(childId, currentDepth + 1))
+        .map((childId) => buildTree(childId, currentDepth + 1, branchVisited))
         .filter((child): child is DocumentNode => child !== null);
 
       return {
@@ -254,7 +265,7 @@ export const DocumentTableOfContents: React.FC<
 
     // Build trees from root nodes, sorted alphabetically
     const roots = rootDocIds
-      .map((id) => buildTree(id, 0))
+      .map((id) => buildTree(id, 0, new Set()))
       .filter((node): node is DocumentNode => node !== null)
       .sort((a, b) => a.title.localeCompare(b.title));
 

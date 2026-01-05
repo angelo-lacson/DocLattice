@@ -206,8 +206,6 @@ export function buildCanonicalPath(
 export function buildQueryParams(params: QueryParams): string {
   const searchParams = new URLSearchParams();
 
-  console.log("[buildQueryParams] Input params:", params);
-
   // Selection state
   if (params.annotationIds?.length) {
     searchParams.set("ann", params.annotationIds.join(","));
@@ -247,9 +245,7 @@ export function buildQueryParams(params: QueryParams): string {
   }
 
   const query = searchParams.toString();
-  const result = query ? `?${query}` : "";
-  console.log("[buildQueryParams] Output:", result);
-  return result;
+  return query ? `?${query}` : "";
 }
 
 /**
@@ -394,7 +390,6 @@ export function navigateToLabelset(
 
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
-    console.log("Already at labelset path:", targetPath);
     return;
   }
 
@@ -446,7 +441,6 @@ export function navigateToCorpus(
 
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
-    console.log("Already at canonical corpus path:", targetPath);
     return;
   }
 
@@ -487,7 +481,6 @@ export function navigateToDocument(
 
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
-    console.log("Already at canonical document path:", targetPath);
     return;
   }
 
@@ -522,7 +515,6 @@ export function navigateToExtract(
 
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
-    console.log("Already at canonical extract path:", targetPath);
     return;
   }
 
@@ -760,24 +752,8 @@ export function navigateToCorpusThread(
   currentPath: string
 ) {
   const url = getCorpusThreadUrl(corpus, threadId);
-  console.log("[navigationUtils] navigateToCorpusThread", {
-    threadId,
-    corpusSlug: corpus.slug,
-    creatorSlug: corpus.creator?.slug,
-    url,
-    currentPath,
-    willNavigate: url !== "#" && currentPath !== url,
-  });
   if (url !== "#" && currentPath !== url) {
     navigate(url);
-  } else if (url === "#") {
-    console.warn(
-      "[navigationUtils] Cannot navigate - invalid URL (missing corpus slugs)"
-    );
-  } else if (currentPath === url) {
-    console.log(
-      "[navigationUtils] Skipping navigation - already at target URL"
-    );
   }
 }
 
