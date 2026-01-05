@@ -128,87 +128,71 @@ export const CorpusDocumentRelationshipsTestWrapper: React.FC<Props> = ({
     };
 
     if (mockType === "error") {
-      return [
-        {
-          request: {
-            query: GET_DOCUMENT_RELATIONSHIPS,
-            variables: baseVariables,
-          },
-          error: new Error("Failed to load relationships"),
+      const errorMock = {
+        request: {
+          query: GET_DOCUMENT_RELATIONSHIPS,
+          variables: baseVariables,
         },
-      ];
+        error: new Error("Failed to load relationships"),
+      };
+      // Duplicate for cache-and-network
+      return [errorMock, { ...errorMock }];
     }
 
     if (mockType === "empty") {
-      return [
-        {
-          request: {
-            query: GET_DOCUMENT_RELATIONSHIPS,
-            variables: baseVariables,
-          },
-          result: {
-            data: {
-              documentRelationships: {
-                edges: [],
-                totalCount: 0,
-                pageInfo: {
-                  hasNextPage: false,
-                  hasPreviousPage: false,
-                  startCursor: null,
-                  endCursor: null,
-                },
-                __typename: "DocumentRelationshipTypeConnection",
+      const emptyMock = {
+        request: {
+          query: GET_DOCUMENT_RELATIONSHIPS,
+          variables: baseVariables,
+        },
+        result: {
+          data: {
+            documentRelationships: {
+              edges: [],
+              totalCount: 0,
+              pageInfo: {
+                hasNextPage: false,
+                hasPreviousPage: false,
+                startCursor: null,
+                endCursor: null,
               },
+              __typename: "DocumentRelationshipTypeConnection",
             },
           },
         },
-      ];
+      };
+      // Duplicate for cache-and-network
+      return [emptyMock, { ...emptyMock }];
     }
 
+    // Create relationship query result
+    const relationshipQueryResult = {
+      request: {
+        query: GET_DOCUMENT_RELATIONSHIPS,
+        variables: baseVariables,
+      },
+      result: {
+        data: {
+          documentRelationships: {
+            edges: mockRelationships,
+            totalCount: mockRelationships.length,
+            pageInfo: {
+              hasNextPage: false,
+              hasPreviousPage: false,
+              startCursor: null,
+              endCursor: null,
+            },
+            __typename: "DocumentRelationshipTypeConnection",
+          },
+        },
+      },
+    };
+
     return [
-      {
-        request: {
-          query: GET_DOCUMENT_RELATIONSHIPS,
-          variables: baseVariables,
-        },
-        result: {
-          data: {
-            documentRelationships: {
-              edges: mockRelationships,
-              totalCount: mockRelationships.length,
-              pageInfo: {
-                hasNextPage: false,
-                hasPreviousPage: false,
-                startCursor: null,
-                endCursor: null,
-              },
-              __typename: "DocumentRelationshipTypeConnection",
-            },
-          },
-        },
-      },
-      // Refetch mock
-      {
-        request: {
-          query: GET_DOCUMENT_RELATIONSHIPS,
-          variables: baseVariables,
-        },
-        result: {
-          data: {
-            documentRelationships: {
-              edges: mockRelationships,
-              totalCount: mockRelationships.length,
-              pageInfo: {
-                hasNextPage: false,
-                hasPreviousPage: false,
-                startCursor: null,
-                endCursor: null,
-              },
-              __typename: "DocumentRelationshipTypeConnection",
-            },
-          },
-        },
-      },
+      // Initial query + cache-and-network refetches (provide multiple)
+      relationshipQueryResult,
+      { ...relationshipQueryResult },
+      { ...relationshipQueryResult },
       // Delete mutation mock
       {
         request: {
