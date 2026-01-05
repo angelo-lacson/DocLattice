@@ -1,4 +1,10 @@
-import React, { useEffect, useCallback, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useCallback,
+  useState,
+  useRef,
+  useMemo,
+} from "react";
 import { useSetAtom, useAtom, useAtomValue } from "jotai";
 import { useReactiveVar, useMutation } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -14,11 +20,15 @@ import {
   useSensors,
   closestCenter,
 } from "@dnd-kit/core";
-import { selectedFolderId as selectedFolderIdReactiveVar } from "../../../graphql/cache";
-import { showUploadNewDocumentsModal } from "../../../graphql/cache";
+import {
+  selectedFolderId as selectedFolderIdReactiveVar,
+  showUploadNewDocumentsModal,
+  selectedDocumentIds as selectedDocumentIdsReactiveVar,
+} from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderToolbar } from "./FolderToolbar";
 import { CreateFolderModal } from "./CreateFolderModal";
+import { DocumentRelationshipModal } from "../../documents/DocumentRelationshipModal";
 import { EditFolderModal } from "./EditFolderModal";
 import { MoveFolderModal } from "./MoveFolderModal";
 import { DeleteFolderModal } from "./DeleteFolderModal";
@@ -307,6 +317,10 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     "document" | "folder" | null
   >(null);
 
+  // Document relationship modal state
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const selectedDocumentIds = useReactiveVar(selectedDocumentIdsReactiveVar);
+
   // Context menu state for right-clicking in content area
   const [contextMenu, setContextMenu] = React.useState<{
     x: number;
@@ -390,7 +404,11 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   });
 
   // Get parent folder ID for current folder (for ".." navigation)
-  const currentFolder = folderList.find((f) => f.id === selectedFolderId);
+  // Memoized to prevent unnecessary recalculations
+  const currentFolder = useMemo(
+    () => folderList.find((f) => f.id === selectedFolderId),
+    [folderList, selectedFolderId]
+  );
   const parentFolderId = currentFolder?.parent?.id || null;
 
   // Unified drag-drop handlers
@@ -629,6 +647,8 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
               onGoUp={handleGoUp}
               onNewFolder={handleNewFolder}
               onUpload={handleUpload}
+              selectedDocumentCount={selectedDocumentIds.length}
+              onLinkDocuments={() => setShowLinkModal(true)}
             />
           )}
 
@@ -685,6 +705,19 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       <EditFolderModal />
       <MoveFolderModal />
       <DeleteFolderModal />
+
+      {/* Document Relationship Modal */}
+      <DocumentRelationshipModal
+        open={showLinkModal}
+        onClose={() => setShowLinkModal(false)}
+        corpusId={corpusId}
+        sourceDocumentIds={selectedDocumentIds}
+        onSuccess={() => {
+          setShowLinkModal(false);
+          // Clear selection after successful link
+          selectedDocumentIdsReactiveVar([]);
+        }}
+      />
 
       {/* Context menu for content area */}
       {contextMenu && (

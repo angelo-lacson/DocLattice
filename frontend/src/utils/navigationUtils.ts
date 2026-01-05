@@ -206,8 +206,6 @@ export function buildCanonicalPath(
 export function buildQueryParams(params: QueryParams): string {
   const searchParams = new URLSearchParams();
 
-  console.log("[buildQueryParams] Input params:", params);
-
   // Selection state
   if (params.annotationIds?.length) {
     searchParams.set("ann", params.annotationIds.join(","));
@@ -247,9 +245,7 @@ export function buildQueryParams(params: QueryParams): string {
   }
 
   const query = searchParams.toString();
-  const result = query ? `?${query}` : "";
-  console.log("[buildQueryParams] Output:", result);
-  return result;
+  return query ? `?${query}` : "";
 }
 
 /**
@@ -394,7 +390,6 @@ export function navigateToLabelset(
 
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
-    console.log("Already at labelset path:", targetPath);
     return;
   }
 
@@ -446,7 +441,6 @@ export function navigateToCorpus(
 
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
-    console.log("Already at canonical corpus path:", targetPath);
     return;
   }
 
@@ -487,7 +481,6 @@ export function navigateToDocument(
 
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
-    console.log("Already at canonical document path:", targetPath);
     return;
   }
 
@@ -522,7 +515,6 @@ export function navigateToExtract(
 
   // Don't navigate if we're already there
   if (currentPath && isCanonicalPath(currentPath, targetPath)) {
-    console.log("Already at canonical extract path:", targetPath);
     return;
   }
 
@@ -760,24 +752,8 @@ export function navigateToCorpusThread(
   currentPath: string
 ) {
   const url = getCorpusThreadUrl(corpus, threadId);
-  console.log("[navigationUtils] navigateToCorpusThread", {
-    threadId,
-    corpusSlug: corpus.slug,
-    creatorSlug: corpus.creator?.slug,
-    url,
-    currentPath,
-    willNavigate: url !== "#" && currentPath !== url,
-  });
   if (url !== "#" && currentPath !== url) {
     navigate(url);
-  } else if (url === "#") {
-    console.warn(
-      "[navigationUtils] Cannot navigate - invalid URL (missing corpus slugs)"
-    );
-  } else if (currentPath === url) {
-    console.log(
-      "[navigationUtils] Skipping navigation - already at target URL"
-    );
   }
 }
 
@@ -875,4 +851,68 @@ export function navigateToThreadWithMessage(
     searchParams.set("message", messageId);
   }
   navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Simplified Document Click Handler for Relationship Views
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Minimal document interface for relationship views
+ * Used by DocumentTableOfContents and CorpusDocumentRelationships
+ */
+export interface RelationshipDocumentInfo {
+  id: string;
+  title: string;
+  slug?: string | null;
+  creator?: { slug?: string | null } | null;
+}
+
+/**
+ * Navigate to a document from relationship views (Table of Contents, Relationships tab)
+ * Uses the currently opened corpus context from the reactive variable.
+ *
+ * @param document - Document info from relationship query
+ * @param corpus - Corpus to use for context (with creator slug info)
+ * @param navigate - React Router navigate function
+ * @param currentPath - Current pathname for dedup check
+ */
+export function navigateToRelationshipDocument(
+  document: RelationshipDocumentInfo,
+  corpus: {
+    id?: string;
+    slug?: string | null;
+    creator?: { slug?: string | null } | null;
+  } | null,
+  navigate: (path: string, options?: { replace?: boolean }) => void,
+  currentPath?: string
+) {
+  if (!corpus) {
+    console.warn("Cannot navigate to document - no corpus context");
+    return;
+  }
+
+  // Build the document object with creator info
+  // If document has its own creator, use that; otherwise inherit from corpus
+  // Convert null to undefined for type compatibility
+  // Note: navigateToDocument only uses creator.slug for URL building
+  const docForNav: Parameters<typeof navigateToDocument>[0] = {
+    id: document.id,
+    slug: document.slug ?? undefined,
+    creator: document.creator?.slug
+      ? { id: "", slug: document.creator.slug }
+      : corpus.creator?.slug
+      ? { id: "", slug: corpus.creator.slug }
+      : undefined,
+  };
+
+  const corpusForNav: Parameters<typeof navigateToDocument>[1] = {
+    id: corpus.id ?? "",
+    slug: corpus.slug ?? undefined,
+    creator: corpus.creator?.slug
+      ? { id: "", slug: corpus.creator.slug }
+      : undefined,
+  };
+
+  navigateToDocument(docForNav, corpusForNav, navigate, currentPath);
 }

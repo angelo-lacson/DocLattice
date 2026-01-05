@@ -12,6 +12,7 @@ import { PermissionTypes } from "../types";
 import { getPermissions } from "../../utils/transform";
 import { CorpusAbout } from "./CorpusAbout";
 import { CorpusHero } from "./CorpusHero";
+import { DocumentTableOfContents } from "./DocumentTableOfContents";
 
 // Styled Components
 const Container = styled.div`
@@ -162,6 +163,8 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
               onEditDescription={onEditDescription}
               testId="corpus-home-description-card"
             />
+            {/* Table of Contents based on document parent relationships */}
+            <DocumentTableOfContents corpusId={corpus.id} maxDepth={4} />
           </ContentWrapper>
         </StretchWrapper>
       </MainContent>
