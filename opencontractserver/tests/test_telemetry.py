@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase, override_settings
 
 from config.telemetry import _reset_posthog_client, record_event
-from opencontractserver.users.models import Installation
+from opencontractserver.tasks.telemetry_tasks import send_usage_heartbeat
+from opencontractserver.users.models import Installation, User
 
 
 class TelemetryTestCase(TestCase):
@@ -97,4 +98,163 @@ class TelemetryTestCase(TestCase):
         properties = self.mock_posthog.capture.call_args[1]["properties"]
         self.assertEqual(
             set(properties.keys()), {"package", "timestamp", "installation_id"}
+        )
+
+
+class UsageHeartbeatTestCase(TestCase):
+    """Tests for the send_usage_heartbeat Celery task."""
+
+    def setUp(self):
+        # Ensure Installation exists
+        self.installation = Installation.get()
+
+        # Create a test user
+        self.user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="testpass123",
+        )
+
+    def tearDown(self):
+        _reset_posthog_client()
+
+    @patch("opencontractserver.tasks.telemetry_tasks.record_event")
+    def test_heartbeat_collects_correct_stats(self, mock_record_event):
+        """Test that heartbeat collects and sends correct statistics."""
+        mock_record_event.return_value = True
+
+        with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
+            result = send_usage_heartbeat()
+
+        # Verify record_event was called
+        mock_record_event.assert_called_once()
+        call_args = mock_record_event.call_args
+
+        # Check event type
+        self.assertEqual(call_args[0][0], "usage_heartbeat")
+
+        # Check stats structure
+        stats = call_args[0][1]
+        self.assertIn("user_count", stats)
+        self.assertIn("document_count", stats)
+        self.assertIn("corpus_count", stats)
+        self.assertIn("annotation_count", stats)
+        self.assertIn("conversation_count", stats)
+        self.assertIn("message_count", stats)
+        self.assertIn("version", stats)
+        self.assertIn("installation_age_days", stats)
+
+        # Verify user count includes our test user
+        self.assertGreaterEqual(stats["user_count"], 1)
+
+        # Verify installation age is non-negative
+        self.assertGreaterEqual(stats["installation_age_days"], 0)
+
+        # Verify result matches stats
+        self.assertEqual(result, stats)
+
+    @patch("opencontractserver.tasks.telemetry_tasks.record_event")
+    def test_heartbeat_disabled_in_test_mode(self, mock_record_event):
+        """Test that heartbeat doesn't send in TEST mode."""
+        with override_settings(MODE="TEST", TELEMETRY_ENABLED=True):
+            result = send_usage_heartbeat()
+
+        mock_record_event.assert_not_called()
+        self.assertIsNone(result)
+
+    @patch("opencontractserver.tasks.telemetry_tasks.record_event")
+    def test_heartbeat_disabled_when_telemetry_off(self, mock_record_event):
+        """Test that heartbeat doesn't send when telemetry is disabled."""
+        with override_settings(MODE="DEV", TELEMETRY_ENABLED=False):
+            result = send_usage_heartbeat()
+
+        mock_record_event.assert_not_called()
+        self.assertIsNone(result)
+
+    @patch("opencontractserver.tasks.telemetry_tasks.record_event")
+    def test_heartbeat_handles_errors_gracefully(self, mock_record_event):
+        """Test that heartbeat handles errors without crashing."""
+        mock_record_event.side_effect = Exception("Network error")
+
+        with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
+            # Should not raise, just return None
+            result = send_usage_heartbeat()
+
+        self.assertIsNone(result)
+
+
+class TelemetryMigrationTestCase(TestCase):
+    """Tests for the telemetry periodic task migration."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Import migration module using importlib (can't use normal import for numeric names)
+        import importlib
+
+        cls.migration_module = importlib.import_module(
+            "opencontractserver.users.migrations.0024_setup_telemetry_periodic_task"
+        )
+
+    def test_setup_telemetry_task_creates_periodic_task(self):
+        """Test that the migration creates the periodic task when telemetry is enabled."""
+        from django.apps import apps
+        from django_celery_beat.models import PeriodicTask
+
+        # Clean up any existing task from previous test runs
+        PeriodicTask.objects.filter(name="usage-heartbeat-daily").delete()
+
+        with override_settings(TELEMETRY_ENABLED=True):
+            self.migration_module.setup_telemetry_task(apps, None)
+
+        # Verify task was created
+        task = PeriodicTask.objects.get(name="usage-heartbeat-daily")
+        self.assertEqual(
+            task.task,
+            "opencontractserver.tasks.telemetry_tasks.send_usage_heartbeat",
+        )
+        self.assertTrue(task.enabled)
+        self.assertIsNotNone(task.crontab)
+
+        # Verify crontab schedule
+        self.assertEqual(task.crontab.minute, "0")
+        self.assertEqual(task.crontab.hour, "0")
+
+    def test_setup_telemetry_task_skips_when_disabled(self):
+        """Test that the migration skips task creation when telemetry is disabled."""
+        from django.apps import apps
+        from django_celery_beat.models import PeriodicTask
+
+        # Clean up any existing task
+        PeriodicTask.objects.filter(name="usage-heartbeat-daily").delete()
+
+        with override_settings(TELEMETRY_ENABLED=False):
+            self.migration_module.setup_telemetry_task(apps, None)
+
+        # Verify task was NOT created
+        self.assertFalse(
+            PeriodicTask.objects.filter(name="usage-heartbeat-daily").exists()
+        )
+
+    def test_reverse_telemetry_task_removes_periodic_task(self):
+        """Test that the reverse migration removes the periodic task."""
+        from django.apps import apps
+        from django_celery_beat.models import PeriodicTask
+
+        # First create the task
+        PeriodicTask.objects.filter(name="usage-heartbeat-daily").delete()
+        with override_settings(TELEMETRY_ENABLED=True):
+            self.migration_module.setup_telemetry_task(apps, None)
+
+        # Verify it exists
+        self.assertTrue(
+            PeriodicTask.objects.filter(name="usage-heartbeat-daily").exists()
+        )
+
+        # Now reverse it
+        self.migration_module.reverse_telemetry_task(apps, None)
+
+        # Verify it's gone
+        self.assertFalse(
+            PeriodicTask.objects.filter(name="usage-heartbeat-daily").exists()
         )
