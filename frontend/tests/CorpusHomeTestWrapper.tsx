@@ -6,7 +6,11 @@ import { MemoryRouter, useSearchParams } from "react-router-dom";
 import { CorpusHome } from "../src/components/corpuses/CorpusHome";
 import { CorpusType } from "../src/types/graphql-api";
 import { relayStylePagination } from "@apollo/client/utilities";
-import { corpusHomeView, CorpusHomeViewType } from "../src/graphql/cache";
+import {
+  corpusHomeView,
+  CorpusHomeViewType,
+  tocExpandAll,
+} from "../src/graphql/cache";
 
 // Minimal cache matching production cache configuration
 const createTestCache = () =>
@@ -39,16 +43,18 @@ interface Props {
   mocks: ReadonlyArray<MockedResponse>;
   corpus: CorpusType;
   initialHomeView?: CorpusHomeViewType | null;
+  initialTocExpanded?: boolean;
 }
 
 /**
  * Helper component that simulates CentralRouteManager Phase 2 behavior
- * by setting the corpusHomeView reactive var from URL params
+ * by setting the corpusHomeView and tocExpandAll reactive vars from URL params
  */
 const RouteParamInitializer: React.FC<{
   children: React.ReactNode;
   initialHomeView?: CorpusHomeViewType | null;
-}> = ({ children, initialHomeView }) => {
+  initialTocExpanded?: boolean;
+}> = ({ children, initialHomeView, initialTocExpanded }) => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -60,11 +66,16 @@ const RouteParamInitializer: React.FC<{
         : initialHomeView ?? null;
     corpusHomeView(newHomeView);
 
+    // Parse tocExpanded from URL
+    const tocExpandedParam = searchParams.get("tocExpanded") === "true";
+    tocExpandAll(tocExpandedParam || initialTocExpanded || false);
+
     // Cleanup on unmount
     return () => {
       corpusHomeView(null);
+      tocExpandAll(false);
     };
-  }, [searchParams, initialHomeView]);
+  }, [searchParams, initialHomeView, initialTocExpanded]);
 
   return <>{children}</>;
 };
@@ -73,6 +84,7 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({
   mocks,
   corpus,
   initialHomeView,
+  initialTocExpanded,
 }) => {
   // Default stats matching the mock data in CorpusHome.ct.tsx
   const stats = {
@@ -82,16 +94,25 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({
     totalExtracts: 0,
   };
 
-  // Build initial route with homeView query param if specified
-  const initialRoute = initialHomeView
-    ? `/c/test-user/test-corpus?homeView=${initialHomeView}`
-    : "/c/test-user/test-corpus";
+  // Build initial route with homeView and tocExpanded query params if specified
+  const params: string[] = [];
+  if (initialHomeView) {
+    params.push(`homeView=${initialHomeView}`);
+  }
+  if (initialTocExpanded) {
+    params.push("tocExpanded=true");
+  }
+  const queryString = params.length > 0 ? `?${params.join("&")}` : "";
+  const initialRoute = `/c/test-user/test-corpus${queryString}`;
 
   return (
     <Provider>
       <MemoryRouter initialEntries={[initialRoute]}>
         <MockedProvider mocks={mocks} cache={createTestCache()} addTypename>
-          <RouteParamInitializer initialHomeView={initialHomeView}>
+          <RouteParamInitializer
+            initialHomeView={initialHomeView}
+            initialTocExpanded={initialTocExpanded}
+          >
             <CorpusHome
               corpus={corpus}
               onEditDescription={() => {}}

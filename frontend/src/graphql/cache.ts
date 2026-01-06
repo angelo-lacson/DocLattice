@@ -563,6 +563,19 @@ export type CorpusHomeViewType = "about" | "toc";
 export const corpusHomeView = makeVar<CorpusHomeViewType | null>(null);
 
 /**
+ * TOC expand all state (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * When true, all nodes in the Table of Contents are expanded by default.
+ * Useful for deep-linking to a fully expanded TOC view.
+ * Defaults to false when not specified in URL.
+ *
+ * URL Examples:
+ *   /c/user/corpus?homeView=toc                    → tocExpandAll(false) = default collapsed
+ *   /c/user/corpus?homeView=toc&tocExpanded=true   → tocExpandAll(true) = all nodes expanded
+ */
+export const tocExpandAll = makeVar<boolean>(false);
+
+/**
  * Auth-related global variables
  */
 export const userObj = makeVar<User | null>(null);
