@@ -338,6 +338,10 @@ export const DocumentTableOfContents: React.FC<
     fetchPolicy: "cache-and-network",
   });
 
+  // Check if we've hit the limit (potential truncation)
+  const totalCount = data?.documentRelationships?.totalCount ?? 0;
+  const isLimitExceeded = totalCount > DOCUMENT_RELATIONSHIP_TOC_LIMIT;
+
   // Build tree from relationships
   const {
     rootNodes,
@@ -654,6 +658,15 @@ export const DocumentTableOfContents: React.FC<
 
   return (
     <Wrapper>
+      {isLimitExceeded && (
+        <WarningBanner role="alert">
+          <AlertTriangle size={18} className="warning-icon" />
+          <span className="warning-text">
+            Showing first {DOCUMENT_RELATIONSHIP_TOC_LIMIT} of {totalCount}{" "}
+            relationships. Some documents may not appear in the hierarchy.
+          </span>
+        </WarningBanner>
+      )}
       {hasCircularRefs && (
         <WarningBanner role="alert">
           <AlertTriangle size={18} className="warning-icon" />

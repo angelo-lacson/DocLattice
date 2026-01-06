@@ -374,9 +374,23 @@ export const CorpusDocumentRelationships: React.FC<
               "Failed to delete relationship"
           );
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Error deleting relationship:", err);
-        toast.error("Failed to delete relationship");
+        // Extract GraphQL error message if available for better UX
+        let errorMessage = "Failed to delete relationship";
+        if (
+          err &&
+          typeof err === "object" &&
+          "graphQLErrors" in err &&
+          Array.isArray((err as { graphQLErrors: unknown[] }).graphQLErrors)
+        ) {
+          const gqlError = (err as { graphQLErrors: { message?: string }[] })
+            .graphQLErrors[0]?.message;
+          if (gqlError) {
+            errorMessage = gqlError;
+          }
+        }
+        toast.error(errorMessage);
       } finally {
         setDeleteConfirm(null);
       }

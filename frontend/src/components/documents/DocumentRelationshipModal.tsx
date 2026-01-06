@@ -60,10 +60,6 @@ interface DocumentRelationshipModalProps {
   initialSourceIds?: string[];
   /** Initial documents to place in target column (can be moved to source) */
   initialTargetIds?: string[];
-  /** @deprecated Use initialSourceIds instead */
-  sourceDocumentIds?: string[];
-  /** @deprecated Use via initialSourceIds lookup instead */
-  sourceDocuments?: DocumentInfo[];
   onSuccess?: () => void;
 }
 
@@ -258,24 +254,11 @@ export const DocumentRelationshipModal: React.FC<
   open,
   onClose,
   corpusId,
-  initialSourceIds,
-  initialTargetIds,
-  // Backwards compatibility
-  sourceDocumentIds: deprecatedSourceDocumentIds,
-  sourceDocuments: deprecatedSourceDocuments = [],
+  initialSourceIds = [],
+  initialTargetIds = [],
   onSuccess,
 }) => {
   const { relationLabels, selectedCorpus, setCorpus } = useCorpusState();
-
-  // Normalize initial IDs (support deprecated props for backwards compatibility)
-  const normalizedInitialSourceIds = useMemo(
-    () => initialSourceIds ?? deprecatedSourceDocumentIds ?? [],
-    [initialSourceIds, deprecatedSourceDocumentIds]
-  );
-  const normalizedInitialTargetIds = useMemo(
-    () => initialTargetIds ?? [],
-    [initialTargetIds]
-  );
 
   // Mode state
   const [mode, setMode] = useState<RelationshipMode>("RELATIONSHIP");
@@ -308,10 +291,10 @@ export const DocumentRelationshipModal: React.FC<
   // Initialize source/target IDs when modal opens
   useEffect(() => {
     if (open) {
-      setSourceIds(normalizedInitialSourceIds);
-      setTargetIds(normalizedInitialTargetIds);
+      setSourceIds(initialSourceIds);
+      setTargetIds(initialTargetIds);
     }
-  }, [open, normalizedInitialSourceIds, normalizedInitialTargetIds]);
+  }, [open, initialSourceIds, initialTargetIds]);
 
   // Check if we have corpus context
   const hasCorpus = Boolean(corpusId && selectedCorpus?.id);
