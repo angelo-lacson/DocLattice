@@ -1546,6 +1546,23 @@ export const Corpuses = () => {
   const [documentsViewMode, setDocumentsViewMode] =
     useState<ViewMode>("modern-list");
 
+  // Debug: Log state changes
+  console.log("[Corpuses] Current documentsViewMode:", documentsViewMode);
+
+  // Wrapped setter with logging
+  const handleViewModeChange = useCallback(
+    (mode: ViewMode) => {
+      console.log(
+        "[Corpuses] handleViewModeChange called with:",
+        mode,
+        "from:",
+        documentsViewMode
+      );
+      setDocumentsViewMode(mode);
+    },
+    [documentsViewMode]
+  );
+
   const opened_corpus_id = opened_corpus?.id ? opened_corpus.id : null;
   let raw_permissions = opened_corpus?.myPermissions;
   if (opened_corpus && raw_permissions !== undefined) {
@@ -2189,7 +2206,7 @@ export const Corpuses = () => {
                 <FolderDocumentBrowser
                   corpusId={opened_corpus_id}
                   viewMode={documentsViewMode}
-                  onViewModeChange={setDocumentsViewMode}
+                  onViewModeChange={handleViewModeChange}
                 >
                   <CorpusDocumentCards
                     opened_corpus_id={opened_corpus_id}
@@ -2481,6 +2498,7 @@ export const Corpuses = () => {
     stats.totalAnalyses,
     stats.totalExtracts,
     canUpdateCorpus,
+    documentsViewMode, // Required for view mode toggle to work
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);

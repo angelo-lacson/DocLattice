@@ -19,6 +19,7 @@ import {
   uploadModalPreloadedFiles,
   openedCorpus,
   selectedFolderId,
+  linkDocumentsModalState,
 } from "../../graphql/cache";
 import {
   GET_CORPUS_FOLDERS,
@@ -54,6 +55,7 @@ export const CorpusDocumentCards = ({
    * If the corpus_id is passed in, it will query and display the documents for
    * that corpus and let you browse them.
    */
+  console.log("[CorpusDocumentCards] Rendering with viewMode:", viewMode);
 
   const selected_document_ids = useReactiveVar(selectedDocumentIds);
   const document_search_term = useReactiveVar(documentSearchTerm);
@@ -216,6 +218,30 @@ export const CorpusDocumentCards = ({
     );
   };
 
+  // Handler for linking a document to another (via context menu)
+  const onLinkToDocument = useCallback((document: DocumentType) => {
+    linkDocumentsModalState({
+      open: true,
+      initialSourceIds: [document.id],
+      initialTargetIds: [],
+    });
+  }, []);
+
+  // Handler for drag-and-drop document linking (source dropped onto target)
+  const onDocumentDrop = useCallback(
+    (sourceDocId: string, targetDocId: string) => {
+      // Don't allow linking a document to itself
+      if (sourceDocId === targetDocId) return;
+
+      linkDocumentsModalState({
+        open: true,
+        initialSourceIds: [sourceDocId],
+        initialTargetIds: [targetDocId],
+      });
+    },
+    []
+  );
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const filePackages: FileUploadPackageProps[] = acceptedFiles.map(
       (file) => ({
@@ -314,6 +340,8 @@ export const CorpusDocumentCards = ({
             onDrop={onDrop}
             viewMode={viewMode}
             prefixItems={prefixItems}
+            onLinkToDocument={onLinkToDocument}
+            onDocumentDrop={onDocumentDrop}
           />
         ) : (
           <div

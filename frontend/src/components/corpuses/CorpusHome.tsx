@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { useQuery } from "@apollo/client";
+import { BookOpen, ListTree } from "lucide-react";
 
 import {
   GET_CORPUS_WITH_HISTORY,
@@ -13,6 +14,10 @@ import { getPermissions } from "../../utils/transform";
 import { CorpusAbout } from "./CorpusAbout";
 import { CorpusHero } from "./CorpusHero";
 import { DocumentTableOfContents } from "./DocumentTableOfContents";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
+} from "../../assets/configurations/osLegalStyles";
 
 // Styled Components
 const Container = styled.div`
@@ -63,6 +68,93 @@ const ContentWrapper = styled.div`
   overflow: hidden;
 `;
 
+const TabContainer = styled.div`
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+`;
+
+const TabHeader = styled.div`
+  display: flex;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard}
+    ${OS_LEGAL_SPACING.borderRadiusCard} 0 0;
+`;
+
+const Tab = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 28px;
+  border: none;
+  background: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.surface : "transparent"};
+  color: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textSecondary};
+  font-size: 1rem;
+  font-weight: ${(props) => (props.$active ? "600" : "500")};
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+
+  ${(props) =>
+    props.$active &&
+    `
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: ${OS_LEGAL_COLORS.accent};
+    }
+  `}
+
+  &:hover {
+    color: ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textPrimary};
+    background: ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.surface : "rgba(0,0,0,0.02)"};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${OS_LEGAL_COLORS.accent};
+    outline-offset: -2px;
+  }
+
+  svg {
+    opacity: ${(props) => (props.$active ? 1 : 0.7)};
+  }
+`;
+
+const TabContent = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
+  &::-webkit-scrollbar-thumb {
+    background: ${OS_LEGAL_COLORS.border};
+    border-radius: 4px;
+    &:hover {
+      background: ${OS_LEGAL_COLORS.borderHover};
+    }
+  }
+`;
+
 interface CorpusHomeProps {
   corpus: CorpusType;
   onEditDescription: () => void;
@@ -86,6 +178,8 @@ interface CorpusHomeProps {
   onOpenMobileMenu?: () => void;
 }
 
+type TabType = "about" | "toc";
+
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
   onEditDescription,
@@ -97,6 +191,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   onOpenMobileMenu,
 }) => {
   const [mdContent, setMdContent] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>("about");
 
   // CRITICAL: Memoize variables object to prevent Apollo refetch on every render
   // Parent passes new corpus object reference on every render (reactive var issue)
@@ -155,16 +250,56 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       <MainContent id="corpus-home-main-content">
         <StretchWrapper>
           <ContentWrapper id="corpus-home-content">
-            <CorpusAbout
-              corpus={fullCorpus}
-              mdContent={mdContent}
-              isLoading={corpusLoading}
-              canEdit={canEdit}
-              onEditDescription={onEditDescription}
-              testId="corpus-home-description-card"
-            />
-            {/* Table of Contents based on document parent relationships */}
-            <DocumentTableOfContents corpusId={corpus.id} maxDepth={4} />
+            <TabContainer>
+              <TabHeader role="tablist" aria-label="Corpus information tabs">
+                <Tab
+                  role="tab"
+                  $active={activeTab === "about"}
+                  onClick={() => setActiveTab("about")}
+                  aria-selected={activeTab === "about"}
+                  aria-controls="about-panel"
+                  id="about-tab"
+                >
+                  <BookOpen size={20} />
+                  About
+                </Tab>
+                <Tab
+                  role="tab"
+                  $active={activeTab === "toc"}
+                  onClick={() => setActiveTab("toc")}
+                  aria-selected={activeTab === "toc"}
+                  aria-controls="toc-panel"
+                  id="toc-tab"
+                >
+                  <ListTree size={20} />
+                  Table of Contents
+                </Tab>
+              </TabHeader>
+              <TabContent
+                role="tabpanel"
+                id={activeTab === "about" ? "about-panel" : "toc-panel"}
+                aria-labelledby={
+                  activeTab === "about" ? "about-tab" : "toc-tab"
+                }
+              >
+                {activeTab === "about" ? (
+                  <CorpusAbout
+                    corpus={fullCorpus}
+                    mdContent={mdContent}
+                    isLoading={corpusLoading}
+                    canEdit={canEdit}
+                    onEditDescription={onEditDescription}
+                    testId="corpus-home-description-card"
+                  />
+                ) : (
+                  <DocumentTableOfContents
+                    corpusId={corpus.id}
+                    maxDepth={4}
+                    embedded={true}
+                  />
+                )}
+              </TabContent>
+            </TabContainer>
           </ContentWrapper>
         </StretchWrapper>
       </MainContent>

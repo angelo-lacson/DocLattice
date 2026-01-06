@@ -11,7 +11,15 @@ import {
 import styled from "styled-components";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
-import { Link2, FileText, X, Plus, Search } from "lucide-react";
+import {
+  Link2,
+  FileText,
+  X,
+  Plus,
+  Search,
+  ArrowRight,
+  ArrowLeft,
+} from "lucide-react";
 
 import { useCorpusState } from "../annotator/context/CorpusAtom";
 import { LabelType, DocumentType } from "../../types/graphql-api";
@@ -38,12 +46,24 @@ import {
 // TYPES
 // ============================================================================
 
+interface DocumentInfo {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
 interface DocumentRelationshipModalProps {
   open: boolean;
   onClose: () => void;
   corpusId: string;
-  sourceDocumentIds: string[];
-  sourceDocuments?: Array<{ id: string; title: string; icon?: string }>;
+  /** Initial documents to place in source column (can be moved to target) */
+  initialSourceIds?: string[];
+  /** Initial documents to place in target column (can be moved to source) */
+  initialTargetIds?: string[];
+  /** @deprecated Use initialSourceIds instead */
+  sourceDocumentIds?: string[];
+  /** @deprecated Use via initialSourceIds lookup instead */
+  sourceDocuments?: DocumentInfo[];
   onSuccess?: () => void;
 }
 
@@ -95,10 +115,10 @@ const DocumentPill = styled.div<{ $variant?: "source" | "target" }>`
   color: ${(props) => (props.$variant === "source" ? "#1e40af" : "#166534")};
 `;
 
-const RemoveButton = styled.button`
+const PillButton = styled.button`
   background: none;
   border: none;
-  padding: 0;
+  padding: 2px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -106,9 +126,46 @@ const RemoveButton = styled.button`
   color: inherit;
   opacity: 0.6;
   transition: opacity 0.15s;
+  border-radius: 4px;
 
   &:hover {
     opacity: 1;
+    background: rgba(0, 0, 0, 0.1);
+  }
+`;
+
+const TwoColumnLayout = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ColumnHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+
+  .column-title {
+    font-weight: 600;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .column-count {
+    font-size: 0.75rem;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 10px;
   }
 `;
 
@@ -201,19 +258,38 @@ export const DocumentRelationshipModal: React.FC<
   open,
   onClose,
   corpusId,
-  sourceDocumentIds,
-  sourceDocuments = [],
+  initialSourceIds,
+  initialTargetIds,
+  // Backwards compatibility
+  sourceDocumentIds: deprecatedSourceDocumentIds,
+  sourceDocuments: deprecatedSourceDocuments = [],
   onSuccess,
 }) => {
   const { relationLabels, selectedCorpus, setCorpus } = useCorpusState();
 
+  // Normalize initial IDs (support deprecated props for backwards compatibility)
+  const normalizedInitialSourceIds = useMemo(
+    () => initialSourceIds ?? deprecatedSourceDocumentIds ?? [],
+    [initialSourceIds, deprecatedSourceDocumentIds]
+  );
+  const normalizedInitialTargetIds = useMemo(
+    () => initialTargetIds ?? [],
+    [initialTargetIds]
+  );
+
   // Mode state
   const [mode, setMode] = useState<RelationshipMode>("RELATIONSHIP");
 
-  // Target document selection
-  const [targetDocumentIds, setTargetDocumentIds] = useState<string[]>([]);
+  // Source and target document IDs (can be moved between lists)
+  const [sourceIds, setSourceIds] = useState<string[]>([]);
+  const [targetIds, setTargetIds] = useState<string[]>([]);
+
+  // Document search for adding more documents
   const [documentSearchTerm, setDocumentSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [addingToSide, setAddingToSide] = useState<"source" | "target" | null>(
+    null
+  );
 
   // Label selection (for RELATIONSHIP mode)
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
@@ -228,6 +304,14 @@ export const DocumentRelationshipModal: React.FC<
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Initialize source/target IDs when modal opens
+  useEffect(() => {
+    if (open) {
+      setSourceIds(normalizedInitialSourceIds);
+      setTargetIds(normalizedInitialTargetIds);
+    }
+  }, [open, normalizedInitialSourceIds, normalizedInitialTargetIds]);
 
   // Check if we have corpus context
   const hasCorpus = Boolean(corpusId && selectedCorpus?.id);
@@ -281,48 +365,46 @@ export const DocumentRelationshipModal: React.FC<
     );
   }, [documentsData]);
 
-  // Derive source document info from query when not provided via props
-  const resolvedSourceDocuments = useMemo(() => {
-    if (sourceDocuments.length > 0) {
-      return sourceDocuments;
-    }
-    // Find source documents from the query results
+  // Get source documents with info from query results
+  const sourceDocuments = useMemo(() => {
     return allDocuments
-      .filter((doc) => sourceDocumentIds.includes(doc.id))
+      .filter((doc) => sourceIds.includes(doc.id))
       .map((doc) => ({
         id: doc.id,
         title: doc.title || "Untitled",
         icon: doc.icon || undefined,
       }));
-  }, [sourceDocuments, allDocuments, sourceDocumentIds]);
+  }, [allDocuments, sourceIds]);
 
-  // Get available documents (excluding source documents)
+  // Get target documents with info from query results
+  const targetDocuments = useMemo(() => {
+    return allDocuments
+      .filter((doc) => targetIds.includes(doc.id))
+      .map((doc) => ({
+        id: doc.id,
+        title: doc.title || "Untitled",
+        icon: doc.icon || undefined,
+      }));
+  }, [allDocuments, targetIds]);
+
+  // Get available documents (excluding already selected source and target)
   const availableDocuments = useMemo(() => {
-    return allDocuments.filter((doc) => !sourceDocumentIds.includes(doc.id));
-  }, [allDocuments, sourceDocumentIds]);
+    const usedIds = new Set([...sourceIds, ...targetIds]);
+    return allDocuments.filter((doc) => !usedIds.has(doc.id));
+  }, [allDocuments, sourceIds, targetIds]);
 
-  // Get selected target documents with info
-  const selectedTargetDocuments = useMemo(() => {
-    return allDocuments.filter((doc) => targetDocumentIds.includes(doc.id));
-  }, [allDocuments, targetDocumentIds]);
-
-  // Filter relationship labels
+  // Get all relationship labels (Dropdown's search prop handles filtering)
   const filteredRelationshipLabels = useMemo(() => {
-    if (!hasCorpus || !selectedCorpus?.labelSet) {
+    if (!hasCorpus) {
       return [];
     }
 
-    const labels =
+    return (
       relationLabels?.filter(
         (label) => label.labelType === LabelType.RelationshipLabel
-      ) || [];
-
-    if (!labelSearchTerm) return labels;
-
-    return labels.filter((label) =>
-      label.text?.toLowerCase().includes(labelSearchTerm.toLowerCase())
+      ) || []
     );
-  }, [relationLabels, labelSearchTerm, hasCorpus, selectedCorpus?.labelSet]);
+  }, [relationLabels, hasCorpus]);
 
   // Get selected label info
   const selectedLabel = useMemo(() => {
@@ -404,25 +486,50 @@ export const DocumentRelationshipModal: React.FC<
     setCorpus,
   ]);
 
-  // Handle adding/removing target documents
-  const toggleTargetDocument = useCallback((docId: string) => {
-    setTargetDocumentIds((prev) =>
-      prev.includes(docId)
-        ? prev.filter((id) => id !== docId)
-        : [...prev, docId]
-    );
+  // Move document from source to target
+  const moveToTarget = useCallback((docId: string) => {
+    setSourceIds((prev) => prev.filter((id) => id !== docId));
+    setTargetIds((prev) => [...prev, docId]);
   }, []);
 
-  const removeTargetDocument = useCallback((docId: string) => {
-    setTargetDocumentIds((prev) => prev.filter((id) => id !== docId));
+  // Move document from target to source
+  const moveToSource = useCallback((docId: string) => {
+    setTargetIds((prev) => prev.filter((id) => id !== docId));
+    setSourceIds((prev) => [...prev, docId]);
   }, []);
+
+  // Remove document from source
+  const removeFromSource = useCallback((docId: string) => {
+    setSourceIds((prev) => prev.filter((id) => id !== docId));
+  }, []);
+
+  // Remove document from target
+  const removeFromTarget = useCallback((docId: string) => {
+    setTargetIds((prev) => prev.filter((id) => id !== docId));
+  }, []);
+
+  // Add document to source or target
+  const addDocument = useCallback(
+    (docId: string, side: "source" | "target") => {
+      if (side === "source") {
+        setSourceIds((prev) => [...prev, docId]);
+      } else {
+        setTargetIds((prev) => [...prev, docId]);
+      }
+      setAddingToSide(null);
+      setDocumentSearchTerm("");
+    },
+    []
+  );
 
   // Check if form is valid
   const canSubmit = useMemo(() => {
-    if (targetDocumentIds.length === 0) return false;
+    // Need at least one source and one target
+    if (sourceIds.length === 0) return false;
+    if (targetIds.length === 0) return false;
     if (mode === "RELATIONSHIP" && !selectedLabelId) return false;
     return true;
-  }, [targetDocumentIds, mode, selectedLabelId]);
+  }, [sourceIds.length, targetIds.length, mode, selectedLabelId]);
 
   // Handle form submission with batched mutations
   const handleSubmit = async () => {
@@ -432,8 +539,8 @@ export const DocumentRelationshipModal: React.FC<
 
     try {
       // Build all mutation configs
-      const mutations = sourceDocumentIds.flatMap((sourceId) =>
-        targetDocumentIds.map((targetId) => ({
+      const mutations = sourceIds.flatMap((sourceId) =>
+        targetIds.map((targetId) => ({
           sourceId,
           targetId,
           variables: {
@@ -560,9 +667,11 @@ export const DocumentRelationshipModal: React.FC<
   // Reset state on close
   const handleClose = () => {
     setMode("RELATIONSHIP");
-    setTargetDocumentIds([]);
+    setSourceIds([]);
+    setTargetIds([]);
     setDocumentSearchTerm("");
     setDebouncedSearchTerm("");
+    setAddingToSide(null);
     setSelectedLabelId(null);
     setLabelSearchTerm("");
     setShowCreateLabel(false);
@@ -599,36 +708,173 @@ export const DocumentRelationshipModal: React.FC<
           </div>
         )}
 
-        {/* Source Documents Section */}
-        <DocumentSection>
-          <div className="section-title">
-            <Icon name="arrow right" color="blue" />
-            Source Documents ({sourceDocumentIds.length})
-          </div>
-          <div className="pills-container">
-            {resolvedSourceDocuments.length > 0 ? (
-              resolvedSourceDocuments.map((doc) => (
-                <DocumentPill key={doc.id} $variant="source">
-                  <FileText size={14} />
-                  <span>
-                    {doc.title.length > 30
-                      ? `${doc.title.substring(0, 30)}...`
-                      : doc.title}
-                  </span>
-                </DocumentPill>
-              ))
-            ) : documentsLoading ? (
-              <span style={{ color: "#64748b", fontStyle: "italic" }}>
-                Loading document info...
-              </span>
-            ) : (
-              <span style={{ color: "#64748b", fontStyle: "italic" }}>
-                {sourceDocumentIds.length} document
-                {sourceDocumentIds.length > 1 ? "s" : ""} selected
-              </span>
-            )}
-          </div>
-        </DocumentSection>
+        {/* Two-Column Source/Target Layout */}
+        <TwoColumnLayout>
+          {/* Source Documents Column */}
+          <DocumentSection>
+            <ColumnHeader>
+              <div className="column-title">
+                <Icon name="arrow right" color="blue" size="small" />
+                Source Documents
+              </div>
+              <span className="column-count">{sourceIds.length}</span>
+            </ColumnHeader>
+            <div className="pills-container">
+              {sourceDocuments.length > 0 ? (
+                sourceDocuments.map((doc) => (
+                  <DocumentPill key={doc.id} $variant="source">
+                    <FileText size={14} />
+                    <span title={doc.title}>
+                      {doc.title.length > 20
+                        ? `${doc.title.substring(0, 20)}...`
+                        : doc.title}
+                    </span>
+                    <PillButton
+                      onClick={() => moveToTarget(doc.id)}
+                      title="Move to targets"
+                    >
+                      <ArrowRight size={12} />
+                    </PillButton>
+                    <PillButton
+                      onClick={() => removeFromSource(doc.id)}
+                      title="Remove"
+                    >
+                      <X size={12} />
+                    </PillButton>
+                  </DocumentPill>
+                ))
+              ) : documentsLoading ? (
+                <span style={{ color: "#64748b", fontStyle: "italic" }}>
+                  Loading...
+                </span>
+              ) : (
+                <span style={{ color: "#64748b", fontStyle: "italic" }}>
+                  No source documents
+                </span>
+              )}
+            </div>
+            <Button
+              size="tiny"
+              basic
+              icon
+              labelPosition="left"
+              onClick={() =>
+                setAddingToSide(addingToSide === "source" ? null : "source")
+              }
+              style={{ marginTop: "0.5rem" }}
+            >
+              <Icon name={addingToSide === "source" ? "close" : "plus"} />
+              {addingToSide === "source" ? "Cancel" : "Add Source"}
+            </Button>
+          </DocumentSection>
+
+          {/* Target Documents Column */}
+          <DocumentSection>
+            <ColumnHeader>
+              <div className="column-title">
+                <Icon name="bullseye" color="green" size="small" />
+                Target Documents
+              </div>
+              <span className="column-count">{targetIds.length}</span>
+            </ColumnHeader>
+            <div className="pills-container">
+              {targetDocuments.length > 0 ? (
+                targetDocuments.map((doc) => (
+                  <DocumentPill key={doc.id} $variant="target">
+                    <PillButton
+                      onClick={() => moveToSource(doc.id)}
+                      title="Move to sources"
+                    >
+                      <ArrowLeft size={12} />
+                    </PillButton>
+                    <FileText size={14} />
+                    <span title={doc.title}>
+                      {doc.title.length > 20
+                        ? `${doc.title.substring(0, 20)}...`
+                        : doc.title}
+                    </span>
+                    <PillButton
+                      onClick={() => removeFromTarget(doc.id)}
+                      title="Remove"
+                    >
+                      <X size={12} />
+                    </PillButton>
+                  </DocumentPill>
+                ))
+              ) : (
+                <span style={{ color: "#64748b", fontStyle: "italic" }}>
+                  No target documents
+                </span>
+              )}
+            </div>
+            <Button
+              size="tiny"
+              basic
+              icon
+              labelPosition="left"
+              onClick={() =>
+                setAddingToSide(addingToSide === "target" ? null : "target")
+              }
+              style={{ marginTop: "0.5rem" }}
+            >
+              <Icon name={addingToSide === "target" ? "close" : "plus"} />
+              {addingToSide === "target" ? "Cancel" : "Add Target"}
+            </Button>
+          </DocumentSection>
+        </TwoColumnLayout>
+
+        {/* Document Search (when adding) */}
+        {addingToSide && (
+          <DocumentSection style={{ marginTop: "1rem" }}>
+            <div className="section-title">
+              <Search size={16} />
+              Add to {addingToSide === "source" ? "Sources" : "Targets"}
+            </div>
+            <Form.Field>
+              <Input
+                fluid
+                icon="search"
+                placeholder="Search documents in corpus..."
+                value={documentSearchTerm}
+                onChange={(e) => setDocumentSearchTerm(e.target.value)}
+                autoFocus
+              />
+            </Form.Field>
+            <div
+              style={{
+                maxHeight: "150px",
+                overflowY: "auto",
+                marginTop: "0.5rem",
+              }}
+            >
+              {documentsLoading ? (
+                <EmptyState>Loading documents...</EmptyState>
+              ) : availableDocuments.length > 0 ? (
+                availableDocuments.slice(0, 10).map((doc) => (
+                  <SearchResultItem
+                    key={doc.id}
+                    $selected={false}
+                    onClick={() => addDocument(doc.id, addingToSide)}
+                  >
+                    <div className="doc-icon">
+                      <FileText size={16} color="#64748b" />
+                    </div>
+                    <div className="doc-info">
+                      <div className="doc-title">{doc.title}</div>
+                    </div>
+                    <Plus size={16} color="#64748b" />
+                  </SearchResultItem>
+                ))
+              ) : (
+                <EmptyState>
+                  {documentSearchTerm
+                    ? "No documents found"
+                    : "No available documents"}
+                </EmptyState>
+              )}
+            </div>
+          </DocumentSection>
+        )}
 
         {/* Relationship Type Selection */}
         <ModeSection style={{ marginTop: "1rem" }}>
@@ -681,97 +927,97 @@ export const DocumentRelationshipModal: React.FC<
 
               {!selectedLabel ? (
                 !showCreateLabel ? (
-                  <>
-                    <Form.Field style={{ marginTop: "1rem" }}>
-                      <label>Search or Create Relationship Label</label>
-                      <Input
-                        fluid
-                        icon="search"
-                        placeholder="Search for a relationship label..."
-                        value={labelSearchTerm}
-                        onChange={(e) => setLabelSearchTerm(e.target.value)}
-                      />
-                    </Form.Field>
-
-                    {filteredRelationshipLabels.length > 0 ? (
-                      <Form.Field>
-                        <label>Select from existing labels:</label>
-                        <Dropdown
-                          placeholder="Select relationship label"
-                          fluid
-                          selection
-                          options={filteredRelationshipLabels.map((label) => ({
-                            key: label.id,
-                            text: label.text,
-                            value: label.id,
-                            icon: label.icon || undefined,
-                          }))}
-                          value={selectedLabelId || undefined}
-                          onChange={(_, data) =>
-                            setSelectedLabelId(data.value as string)
-                          }
-                        />
-                      </Form.Field>
-                    ) : (
-                      <p
-                        style={{
-                          color: "#64748b",
-                          fontStyle: "italic",
-                          margin: "0.5rem 0",
-                        }}
-                      >
-                        No matching labels found.
-                      </p>
-                    )}
-
-                    {labelSearchTerm && (
-                      <Button
-                        icon
-                        labelPosition="left"
-                        color="green"
-                        onClick={() => {
-                          setNewLabelText(labelSearchTerm);
+                  <Form.Field style={{ marginTop: "1rem" }}>
+                    <label>Relationship Label</label>
+                    <Dropdown
+                      placeholder="Search or type to create..."
+                      fluid
+                      selection
+                      search
+                      allowAdditions
+                      additionLabel="Create label: "
+                      noResultsMessage="Type to create a new label"
+                      options={filteredRelationshipLabels.map((label) => ({
+                        key: label.id,
+                        text: label.text,
+                        value: label.id,
+                        content: (
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 2,
+                                backgroundColor: label.color || "#10b981",
+                                flexShrink: 0,
+                              }}
+                            />
+                            {label.text}
+                          </span>
+                        ),
+                      }))}
+                      value={selectedLabelId || undefined}
+                      onSearchChange={(_, data) =>
+                        setLabelSearchTerm(data.searchQuery)
+                      }
+                      onChange={(_, data) => {
+                        const value = data.value as string;
+                        // Check if this is an existing label or a new one
+                        const existingLabel = filteredRelationshipLabels.find(
+                          (l) => l.id === value
+                        );
+                        if (existingLabel) {
+                          setSelectedLabelId(value);
+                        } else {
+                          // User selected the "add" option - show create form
+                          setNewLabelText(value);
                           setShowCreateLabel(true);
-                        }}
-                        style={{ marginTop: "0.5rem" }}
-                        size="small"
-                      >
-                        <Icon name="plus" />
-                        Create "{labelSearchTerm}" label
-                      </Button>
-                    )}
-                  </>
+                        }
+                      }}
+                    />
+                  </Form.Field>
                 ) : (
                   <>
                     <Form.Field style={{ marginTop: "1rem" }}>
-                      <label>Label Name</label>
+                      <label>Create New Label</label>
                       <Input
                         fluid
                         placeholder="Enter label name"
                         value={newLabelText}
                         onChange={(e) => setNewLabelText(e.target.value)}
+                        autoFocus
                       />
                     </Form.Field>
 
-                    <Form.Field>
-                      <label>Color</label>
-                      <Input
-                        type="color"
-                        value={newLabelColor}
-                        onChange={(e) => setNewLabelColor(e.target.value)}
-                        style={{ width: "60px" }}
-                      />
-                    </Form.Field>
+                    <Form.Group widths="equal">
+                      <Form.Field>
+                        <label>Color</label>
+                        <Input
+                          type="color"
+                          value={newLabelColor}
+                          onChange={(e) => setNewLabelColor(e.target.value)}
+                          style={{ width: "60px", padding: "2px" }}
+                        />
+                      </Form.Field>
 
-                    <Form.Field>
-                      <label>Description (optional)</label>
-                      <Input
-                        fluid
-                        placeholder="Enter description"
-                        value={newLabelDescription}
-                        onChange={(e) => setNewLabelDescription(e.target.value)}
-                      />
-                    </Form.Field>
+                      <Form.Field>
+                        <label>Description (optional)</label>
+                        <Input
+                          fluid
+                          placeholder="Enter description"
+                          value={newLabelDescription}
+                          onChange={(e) =>
+                            setNewLabelDescription(e.target.value)
+                          }
+                        />
+                      </Form.Field>
+                    </Form.Group>
 
                     <Button.Group fluid style={{ marginTop: "0.5rem" }}>
                       <Button
@@ -852,97 +1098,22 @@ export const DocumentRelationshipModal: React.FC<
           )}
         </ModeSection>
 
-        {/* Target Documents Section */}
-        <DocumentSection>
-          <div className="section-title">
-            <Icon name="bullseye" color="green" />
-            Target Documents
-          </div>
-
-          {/* Selected targets */}
-          {selectedTargetDocuments.length > 0 && (
-            <div
-              className="pills-container"
-              style={{ marginBottom: "0.75rem" }}
-            >
-              {selectedTargetDocuments.map((doc) => (
-                <DocumentPill key={doc.id} $variant="target">
-                  <FileText size={14} />
-                  <span>
-                    {(doc.title || "Untitled").length > 25
-                      ? `${(doc.title || "Untitled").substring(0, 25)}...`
-                      : doc.title || "Untitled"}
-                  </span>
-                  <RemoveButton
-                    onClick={() => removeTargetDocument(doc.id)}
-                    title="Remove"
-                  >
-                    <X size={14} />
-                  </RemoveButton>
-                </DocumentPill>
-              ))}
-            </div>
-          )}
-
-          {/* Search for documents */}
-          <Form.Field>
-            <Input
-              fluid
-              icon="search"
-              placeholder="Search documents in corpus..."
-              value={documentSearchTerm}
-              onChange={(e) => setDocumentSearchTerm(e.target.value)}
-            />
-          </Form.Field>
-
-          {/* Document search results */}
-          <div
-            style={{
-              maxHeight: "200px",
-              overflowY: "auto",
-              marginTop: "0.5rem",
-            }}
-          >
-            {documentsLoading ? (
-              <EmptyState>Loading documents...</EmptyState>
-            ) : availableDocuments.length > 0 ? (
-              availableDocuments.map((doc) => (
-                <SearchResultItem
-                  key={doc.id}
-                  $selected={targetDocumentIds.includes(doc.id)}
-                  onClick={() => toggleTargetDocument(doc.id)}
-                >
-                  <div className="doc-icon">
-                    <FileText size={20} color="#64748b" />
-                  </div>
-                  <div className="doc-info">
-                    <div className="doc-title">{doc.title}</div>
-                  </div>
-                  {targetDocumentIds.includes(doc.id) && (
-                    <Icon name="check" color="green" />
-                  )}
-                </SearchResultItem>
-              ))
-            ) : (
-              <EmptyState>
-                {documentSearchTerm
-                  ? "No documents found matching your search"
-                  : "No other documents in this corpus"}
-              </EmptyState>
-            )}
-          </div>
-        </DocumentSection>
-
         <InfoBox>
           <strong>
-            Creating{" "}
-            {sourceDocumentIds.length * Math.max(targetDocumentIds.length, 0)}{" "}
-            relationship
-            {sourceDocumentIds.length * targetDocumentIds.length !== 1
-              ? "s"
-              : ""}
+            Creating {sourceIds.length * targetIds.length} relationship
+            {sourceIds.length * targetIds.length !== 1 ? "s" : ""}
           </strong>
           : Each source document will be linked to each target document.
+          {sourceIds.length === 0 && (
+            <span style={{ color: "#ef4444", display: "block", marginTop: 4 }}>
+              ⚠ Add at least one source document
+            </span>
+          )}
+          {targetIds.length === 0 && (
+            <span style={{ color: "#ef4444", display: "block", marginTop: 4 }}>
+              ⚠ Add at least one target document
+            </span>
+          )}
         </InfoBox>
       </ModalContent>
 
@@ -957,7 +1128,8 @@ export const DocumentRelationshipModal: React.FC<
           loading={isSubmitting}
         >
           <Link2 size={16} style={{ marginRight: "0.5rem" }} />
-          Create Relationship{targetDocumentIds.length > 1 ? "s" : ""}
+          Create Relationship
+          {sourceIds.length * targetIds.length !== 1 ? "s" : ""}
         </Button>
       </Modal.Actions>
     </Modal>

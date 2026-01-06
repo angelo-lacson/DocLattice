@@ -24,6 +24,7 @@ import {
   selectedFolderId as selectedFolderIdReactiveVar,
   showUploadNewDocumentsModal,
   selectedDocumentIds as selectedDocumentIdsReactiveVar,
+  linkDocumentsModalState,
 } from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderToolbar } from "./FolderToolbar";
@@ -317,9 +318,27 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     "document" | "folder" | null
   >(null);
 
-  // Document relationship modal state
-  const [showLinkModal, setShowLinkModal] = useState(false);
+  // Document relationship modal state (from reactive var for cross-component access)
+  const linkModalState = useReactiveVar(linkDocumentsModalState);
   const selectedDocumentIds = useReactiveVar(selectedDocumentIdsReactiveVar);
+
+  // Helper to open the link modal
+  const openLinkModal = (sourceIds: string[], targetIds: string[] = []) => {
+    linkDocumentsModalState({
+      open: true,
+      initialSourceIds: sourceIds,
+      initialTargetIds: targetIds,
+    });
+  };
+
+  // Helper to close the link modal
+  const closeLinkModal = () => {
+    linkDocumentsModalState({
+      open: false,
+      initialSourceIds: [],
+      initialTargetIds: [],
+    });
+  };
 
   // Context menu state for right-clicking in content area
   const [contextMenu, setContextMenu] = React.useState<{
@@ -377,17 +396,13 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     MoveDocumentToFolderOutputs,
     MoveDocumentToFolderInputs
   >(MOVE_DOCUMENT_TO_FOLDER, {
-    // Evict all documents queries from cache to force refetch
+    // Evict documents and folders from cache to force refetch
+    // This ensures both the document list and folder tree (with doc counts) update
     update(cache) {
       cache.evict({ fieldName: "documents" });
+      cache.evict({ fieldName: "corpusFolders" });
       cache.gc();
     },
-    refetchQueries: [
-      {
-        query: GET_CORPUS_FOLDERS,
-        variables: { corpusId },
-      },
-    ],
   });
 
   // Move folder mutation
@@ -434,6 +449,17 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       // Determine what was dropped and where
       const isDraggingDocument = dragData?.type === "document";
 
+      // Check for document-to-document drop (for creating relationships)
+      if (
+        isDraggingDocument &&
+        dropData?.type === "document-drop-target" &&
+        dragData.documentId !== dropData.documentId
+      ) {
+        // Open the relationship modal with source and target pre-populated
+        openLinkModal([dragData.documentId], [dropData.documentId]);
+        return;
+      }
+
       // Extract target folder ID from drop target
       let targetFolderId: string | null;
       const overId = over.id as string;
@@ -452,8 +478,9 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
         // Dropped on folder in sidebar tree
         targetFolderId = dropData.folderId || (overId as string);
       } else {
-        // Try to use overId as folder ID (for sidebar tree nodes)
-        targetFolderId = overId;
+        // Invalid drop target - not a folder or recognized drop zone
+        // This can happen when dropping on the container itself or other non-droppable areas
+        return;
       }
 
       if (isDraggingDocument) {
@@ -648,7 +675,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
               onNewFolder={handleNewFolder}
               onUpload={handleUpload}
               selectedDocumentCount={selectedDocumentIds.length}
-              onLinkDocuments={() => setShowLinkModal(true)}
+              onLinkDocuments={() => openLinkModal(selectedDocumentIds)}
             />
           )}
 
@@ -708,12 +735,13 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
 
       {/* Document Relationship Modal */}
       <DocumentRelationshipModal
-        open={showLinkModal}
-        onClose={() => setShowLinkModal(false)}
+        open={linkModalState.open}
+        onClose={closeLinkModal}
         corpusId={corpusId}
-        sourceDocumentIds={selectedDocumentIds}
+        initialSourceIds={linkModalState.initialSourceIds}
+        initialTargetIds={linkModalState.initialTargetIds}
         onSuccess={() => {
-          setShowLinkModal(false);
+          closeLinkModal();
           // Clear selection after successful link
           selectedDocumentIdsReactiveVar([]);
         }}

@@ -87,6 +87,24 @@ export const GET_DOCUMENTS = gql`
           versionCount
           isLatestVersion
           canViewHistory
+          docRelationshipCount(corpusId: $inCorpusWithId)
+          allDocRelationships(corpusId: $inCorpusWithId) {
+            id
+            relationshipType
+            sourceDocument {
+              id
+              title
+            }
+            targetDocument {
+              id
+              title
+            }
+            annotationLabel {
+              id
+              text
+              color
+            }
+          }
           doc_label_annotations: docAnnotations(
             annotationLabel_LabelType: DOC_TYPE_LABEL
           ) @include(if: $annotateDocLabels) {
@@ -1891,7 +1909,7 @@ export const GET_ANNOTATIONS_FOR_ANALYSIS = gql`
         }
         allSourceNodeInRelationship {
           id
-          relationshipLabel {
+          annotationLabel {
             id
             text
             color
@@ -1908,7 +1926,7 @@ export const GET_ANNOTATIONS_FOR_ANALYSIS = gql`
         }
         allTargetNodeInRelationship {
           id
-          relationshipLabel {
+          annotationLabel {
             id
             text
             color
@@ -2694,7 +2712,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
           email
         }
       }
-      allDocRelationships(corpusId: $corpusId) {
+      allDocRelationships {
         id
         relationshipType
         sourceDocument {
@@ -4586,6 +4604,8 @@ export interface DocumentRelationshipNode {
   sourceDocument: {
     id: string;
     title: string;
+    description?: string;
+    fileType?: string;
     icon?: string;
     slug?: string;
     creator?: {
@@ -4595,6 +4615,8 @@ export interface DocumentRelationshipNode {
   targetDocument: {
     id: string;
     title: string;
+    description?: string;
+    fileType?: string;
     icon?: string;
     slug?: string;
     creator?: {
@@ -4655,6 +4677,8 @@ export const GET_DOCUMENT_RELATIONSHIPS = gql`
           sourceDocument {
             id
             title
+            description
+            fileType
             icon
             slug
             creator {
@@ -4664,6 +4688,8 @@ export const GET_DOCUMENT_RELATIONSHIPS = gql`
           targetDocument {
             id
             title
+            description
+            fileType
             icon
             slug
             creator {

@@ -1625,8 +1625,13 @@ class Query(graphene.ObjectType):
 
         user = info.context.user
 
-        document_pk = from_global_id(document_id)[1]
+        # Guard against empty strings - from_global_id('') returns ('', '')
+        document_pk = from_global_id(document_id)[1] if document_id else None
         corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+
+        # Validate document_id is required and not empty
+        if not document_pk:
+            raise Exception("documentId is required and must be a valid ID")
 
         # Use centralized permission-aware optimizer
         actions = DocumentActionsQueryOptimizer.get_document_actions(
@@ -2150,6 +2155,8 @@ class Query(graphene.ObjectType):
         filterset_class=DocumentRelationshipFilter,
         corpus_id=graphene.ID(required=False),
         document_id=graphene.ID(required=False),
+        # Higher limit for Table of Contents which needs full hierarchy
+        max_limit=500,
     )
 
     @login_required

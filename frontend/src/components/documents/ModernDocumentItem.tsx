@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { Icon } from "semantic-ui-react";
 import styled, { keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { useDraggable } from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { Link2, ArrowRight, FileText } from "lucide-react";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 
@@ -34,7 +35,7 @@ const CardContainer = styled.div<{ isLongPressing?: boolean }>`
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.2s ease;
   cursor: pointer;
   height: 200px;
@@ -74,6 +75,7 @@ const CardPreview = styled.div`
   height: 90px;
   background: #f8fafc;
   overflow: hidden;
+  border-radius: 7px 7px 0 0;
 
   img {
     width: 100%;
@@ -99,6 +101,7 @@ const CardContent = styled.div`
   flex-direction: column;
   gap: 6px;
   min-height: 0;
+  overflow: visible;
 `;
 
 const CardTitle = styled.div`
@@ -119,6 +122,7 @@ const CardMeta = styled.div`
   font-size: 0.75rem;
   color: #64748b;
   margin-top: auto;
+  overflow: visible;
 
   .meta-item {
     display: flex;
@@ -201,6 +205,241 @@ const VersionBadgeWrapper = styled.div`
   }
 `;
 
+// Relationship badge positioned at bottom-right of card preview
+const RelationshipBadgeContainer = styled.div`
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 5;
+`;
+
+const RelationshipBadge = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  backdrop-filter: blur(4px);
+  color: white;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.3);
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(20, 184, 166, 0.4);
+  }
+`;
+
+const RelationshipPopup = styled.div`
+  position: absolute;
+  bottom: calc(100% + 12px);
+  right: 0;
+  min-width: 280px;
+  max-width: 320px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  padding: 0;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: all 0.2s ease;
+  overflow: hidden;
+
+  ${RelationshipBadgeContainer}:hover & {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    right: 16px;
+    width: 12px;
+    height: 12px;
+    background: white;
+    transform: rotate(45deg);
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.05);
+  }
+`;
+
+const PopupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  span {
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+`;
+
+const PopupContent = styled.div`
+  padding: 12px 16px;
+  max-height: 240px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+`;
+
+const RelationshipItem = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  &:first-child {
+    padding-top: 0;
+  }
+`;
+
+const RelationshipIcon = styled.div<{ $color?: string }>`
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: ${(props) => props.$color || "#f1f5f9"};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: ${(props) => (props.$color ? "white" : "#64748b")};
+  }
+`;
+
+const RelationshipDetails = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const RelationshipLabel = styled.div<{ $color?: string }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: ${(props) => (props.$color ? `${props.$color}20` : "#f1f5f9")};
+  color: ${(props) => props.$color || "#64748b"};
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+`;
+
+const LinkedDocTitle = styled.div`
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #0f172a;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const RelationshipDirection = styled.div`
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  margin-top: 2px;
+`;
+
+// List view relationship badge (inline in meta)
+const ListRelationshipBadge = styled.div`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &:hover {
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  }
+`;
+
+const ListRelationshipPopup = styled.div`
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 280px;
+  max-width: 320px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  padding: 0;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  overflow: hidden;
+
+  ${ListRelationshipBadge}:hover & {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 12px;
+    height: 12px;
+    background: white;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.05);
+  }
+`;
+
 // ===============================================
 // LIST VIEW (Mobile)
 // ===============================================
@@ -216,6 +455,7 @@ const ListContainer = styled.div<{ isLongPressing?: boolean }>`
   cursor: pointer;
   transition: all 0.2s ease;
   min-height: 80px;
+  overflow: visible;
 
   &:hover {
     border-color: #cbd5e1;
@@ -273,6 +513,7 @@ const ListContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow: visible;
 `;
 
 const ListTitle = styled.div`
@@ -300,6 +541,8 @@ const ListMeta = styled.div`
   gap: 8px;
   font-size: 0.7rem;
   color: #94a3b8;
+  overflow: visible;
+  position: relative;
 
   .meta-item {
     display: flex;
@@ -401,6 +644,8 @@ interface ModernDocumentItemProps {
   removeFromCorpus?: (doc_ids: string[]) => void;
   /** Callback when user wants to link this document to another */
   onLinkToDocument?: (document: DocumentType) => void;
+  /** Callback when a document is dropped onto this document (for creating relationships) */
+  onDocumentDrop?: (sourceDocId: string, targetDocId: string) => void;
 }
 
 export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
@@ -410,6 +655,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   onClick,
   removeFromCorpus,
   onLinkToDocument,
+  onDocumentDrop,
 }) => {
   const navigate = useNavigate();
   const [isDownloading, setIsDownloading] = useState(false);
@@ -423,20 +669,54 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   const longPressStartPos = useRef<{ x: number; y: number } | null>(null);
 
   // Draggable setup (documents can be dragged to folders)
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: `document-${item.id}`,
-      data: {
-        type: "document",
-        documentId: item.id,
-      },
-    });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: `document-${item.id}`,
+    data: {
+      type: "document",
+      documentId: item.id,
+    },
+  });
 
-  // Apply transform for drag preview
+  // Droppable setup (documents can receive other documents for linking)
+  const {
+    setNodeRef: setDroppableRef,
+    isOver,
+    active,
+  } = useDroppable({
+    id: `document-drop-${item.id}`,
+    data: {
+      type: "document-drop-target",
+      documentId: item.id,
+    },
+  });
+
+  // Check if the active dragged item is a document (not a folder)
+  const isDocumentDragOver =
+    isOver && active?.data?.current?.type === "document";
+
+  // Combine draggable and droppable refs
+  const setNodeRef = (node: HTMLElement | null) => {
+    setDraggableRef(node);
+    setDroppableRef(node);
+  };
+
+  // Apply transform for drag preview + drop target highlight
   const style = transform
     ? {
         transform: CSS.Translate.toString(transform),
         opacity: isDragging ? 0.5 : 1,
+      }
+    : isDocumentDragOver
+    ? {
+        outline: "2px dashed #3b82f6",
+        outlineOffset: "2px",
+        background: "#eff6ff",
       }
     : undefined;
 
@@ -457,6 +737,9 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
     versionCount,
     isLatestVersion,
     canViewHistory,
+    // Relationship data
+    docRelationshipCount,
+    allDocRelationships,
   } = item;
 
   const handleClick = (event: React.MouseEvent) => {
@@ -801,6 +1084,67 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                 />
               </VersionBadgeWrapper>
             )}
+            {!!docRelationshipCount && docRelationshipCount > 0 && (
+              <RelationshipBadgeContainer onClick={(e) => e.stopPropagation()}>
+                <RelationshipBadge>
+                  <Link2 />
+                  {docRelationshipCount}
+                </RelationshipBadge>
+                <RelationshipPopup>
+                  <PopupHeader>
+                    <Link2 />
+                    <span>
+                      {docRelationshipCount} Linked Document
+                      {docRelationshipCount !== 1 ? "s" : ""}
+                    </span>
+                  </PopupHeader>
+                  <PopupContent>
+                    {allDocRelationships && allDocRelationships.length > 0 ? (
+                      allDocRelationships.map((rel) => {
+                        const isSource = rel.sourceDocument?.id === id;
+                        const linkedDoc = isSource
+                          ? rel.targetDocument
+                          : rel.sourceDocument;
+                        const labelColor = rel.annotationLabel?.color;
+
+                        return (
+                          <RelationshipItem key={rel.id}>
+                            <RelationshipIcon $color={labelColor || "#14b8a6"}>
+                              <FileText />
+                            </RelationshipIcon>
+                            <RelationshipDetails>
+                              {rel.annotationLabel?.text && (
+                                <RelationshipLabel $color={labelColor}>
+                                  {rel.annotationLabel.text}
+                                </RelationshipLabel>
+                              )}
+                              <LinkedDocTitle>
+                                {linkedDoc?.title || "Untitled Document"}
+                              </LinkedDocTitle>
+                              <RelationshipDirection>
+                                {isSource ? (
+                                  <>
+                                    This doc <ArrowRight size={10} /> linked doc
+                                  </>
+                                ) : (
+                                  <>
+                                    Linked doc <ArrowRight size={10} /> this doc
+                                  </>
+                                )}
+                              </RelationshipDirection>
+                            </RelationshipDetails>
+                          </RelationshipItem>
+                        );
+                      })
+                    ) : (
+                      <div style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
+                        Loading relationships...
+                      </div>
+                    )}
+                  </PopupContent>
+                </RelationshipPopup>
+              </RelationshipBadgeContainer>
+            )}
           </CardPreview>
 
           <CardContent>
@@ -926,6 +1270,65 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                 <Icon name="code branch" />v{versionCount || 1}
                 {hasVersionHistory && ` (${versionCount} versions)`}
               </div>
+            )}
+            {!!docRelationshipCount && docRelationshipCount > 0 && (
+              <ListRelationshipBadge onClick={(e) => e.stopPropagation()}>
+                <Link2 />
+                {docRelationshipCount}
+                <ListRelationshipPopup>
+                  <PopupHeader>
+                    <Link2 />
+                    <span>
+                      {docRelationshipCount} Linked Document
+                      {docRelationshipCount !== 1 ? "s" : ""}
+                    </span>
+                  </PopupHeader>
+                  <PopupContent>
+                    {allDocRelationships && allDocRelationships.length > 0 ? (
+                      allDocRelationships.map((rel) => {
+                        const isSource = rel.sourceDocument?.id === id;
+                        const linkedDoc = isSource
+                          ? rel.targetDocument
+                          : rel.sourceDocument;
+                        const labelColor = rel.annotationLabel?.color;
+
+                        return (
+                          <RelationshipItem key={rel.id}>
+                            <RelationshipIcon $color={labelColor || "#14b8a6"}>
+                              <FileText />
+                            </RelationshipIcon>
+                            <RelationshipDetails>
+                              {rel.annotationLabel?.text && (
+                                <RelationshipLabel $color={labelColor}>
+                                  {rel.annotationLabel.text}
+                                </RelationshipLabel>
+                              )}
+                              <LinkedDocTitle>
+                                {linkedDoc?.title || "Untitled Document"}
+                              </LinkedDocTitle>
+                              <RelationshipDirection>
+                                {isSource ? (
+                                  <>
+                                    This doc <ArrowRight size={10} /> linked doc
+                                  </>
+                                ) : (
+                                  <>
+                                    Linked doc <ArrowRight size={10} /> this doc
+                                  </>
+                                )}
+                              </RelationshipDirection>
+                            </RelationshipDetails>
+                          </RelationshipItem>
+                        );
+                      })
+                    ) : (
+                      <div style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
+                        Loading relationships...
+                      </div>
+                    )}
+                  </PopupContent>
+                </ListRelationshipPopup>
+              </ListRelationshipBadge>
             )}
           </ListMeta>
         </ListContent>
