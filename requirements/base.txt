@@ -31,7 +31,7 @@ django-tree-queries[admin]==0.21.0  # https://pypi.org/project/django-tree-queri
 django-cte==2.0.0  # https://github.com/dimagi/django-cte
 pgvector  # For vector embeddings
 channels==4.3.1  # https://github.com/django/channels
-daphne==4.1.2  # https://github.com/django/daphne
+daphne==4.2.1  # https://github.com/django/daphne
 channels-redis==4.3.0
 Twisted[tls,http2]
 
@@ -72,7 +72,7 @@ django-ratelimit==4.1.0  # https://github.com/jsocol/django-ratelimit
 
 # Telemetry
 # ------------------------------------------------------------------------------
-posthog==3.8.3  # https://github.com/posthog/posthog-python
+posthog==7.4.3  # https://github.com/posthog/posthog-python
 
 # JSON Schema
 # ------------------------------------------------------------------------------

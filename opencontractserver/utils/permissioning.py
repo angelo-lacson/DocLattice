@@ -213,6 +213,38 @@ def get_users_permissions_for_obj(
     app_label = instance._meta.app_label
     logger.info(f"get_users_permissions_for_obj - App name: {app_label}")
 
+    # Check if the model has django-guardian permission tables
+    # Some models (like AnnotationLabel) use creator-based permissions instead
+    if not hasattr(instance, f"{model_name}userobjectpermission_set"):
+        logger.info(
+            f"Model {model_name} does not have guardian permissions, using creator-based permissions"
+        )
+        # For models without guardian permissions, use creator-based permissions
+        model_permissions_for_user: set[str] = set()
+
+        # Superusers have all permissions
+        if user.is_superuser:
+            model_permissions_for_user = {
+                f"create_{model_name}",
+                f"read_{model_name}",
+                f"update_{model_name}",
+                f"remove_{model_name}",
+            }
+        # Creator has full CRUD permissions
+        elif hasattr(instance, "creator_id") and instance.creator_id == user.id:
+            model_permissions_for_user = {
+                f"create_{model_name}",
+                f"read_{model_name}",
+                f"update_{model_name}",
+                f"remove_{model_name}",
+            }
+        # Public objects are readable by all
+        elif hasattr(instance, "is_public") and instance.is_public:
+            model_permissions_for_user.add(f"read_{model_name}")
+
+        logger.info(f"Creator-based permissions: {model_permissions_for_user}")
+        return model_permissions_for_user
+
     this_user_perms = getattr(instance, f"{model_name}userobjectpermission_set")
 
     logger.info(f"get_users_permissions_for_obj - this_user_perms: {this_user_perms}")

@@ -202,10 +202,32 @@ graph TB
 | `?folder=`   | Filter by folder in corpus  | `?folder=folder-123`              | Phase 2 or 4   |
 | `?tab=`      | Select active tab           | `?tab=discussions`                | Phase 2 or 4   |
 | `?message=`  | Highlight message in thread | `?message=msg-456`                | Phase 2 or 4   |
+| `?homeView=` | Corpus home view (about/toc)| `?homeView=toc`                   | Phase 2 or 4   |
+| `?tocExpanded=` | Expand all TOC nodes     | `?tocExpanded=true`               | Phase 2 or 4   |
 
 **Tab Values:**
-- **Corpus tabs**: `home` (default), `documents`, `annotations`, `analyses`, `extracts`, `discussions`, `analytics`, `settings`, `badges`
+- **Corpus tabs**: `home` (default), `documents`, `annotations`, `analyses`, `extracts`, `discussions`, `chats`, `analytics`, `settings`, `badges`
 - **Document sidebar tabs**: `chat` (default), `feed`, `extract`, `analysis`, `discussions`
+
+**Home View Values:**
+- `about` (default): Shows corpus description/summary
+- `toc`: Shows table of contents (document relationships hierarchy)
+
+**TOC Expanded:**
+- When `tocExpanded=true`, all nodes in the Table of Contents are expanded by default
+- Useful for deep-linking to a fully expanded TOC view
+- Defaults to collapsed (false) when not specified
+
+**Corpus Tab Inline Detail Views:**
+
+The corpus view supports inline detail panels for certain entity types. When viewing extracts within a corpus tab, selecting an extract shows a split-view layout with the list on the left and detail on the right, rather than navigating to a separate route.
+
+| Tab | Inline Selection | URL Pattern | Behavior |
+|-----|------------------|-------------|----------|
+| `extracts` | `?extract=123` | `/c/user/corpus?tab=extracts&extract=123` | Split view: list + detail panel |
+| `documents` | `?folder=123` | `/c/user/corpus?tab=documents&folder=123` | Filter documents by folder |
+
+This pattern keeps users in the corpus context while viewing entity details, with the option to "Open full page" to navigate to the standalone entity route (`/extracts/123`).
 
 **Visualization Parameters (Document Viewer):**
 
@@ -247,6 +269,18 @@ graph TB
 
 # Full-page thread with message highlight
 /c/john/legal-corpus/discussions/thread-456?message=msg-789
+
+# Corpus extracts tab with inline extract detail (split view)
+/c/john/legal-corpus?tab=extracts&extract=456
+
+# Corpus chat history tab
+/c/john/legal-corpus?tab=chats
+
+# Corpus home with table of contents view
+/c/john/legal-corpus?homeView=toc
+
+# Corpus home with fully expanded table of contents (for deep-linking)
+/c/john/legal-corpus?homeView=toc&tocExpanded=true
 ```
 
 ### Route Configuration
@@ -2019,11 +2053,12 @@ The OpenContracts routing system follows the principle: **One Place to Rule Them
 This includes:
 - Entity state: `openedCorpus`, `openedDocument`
 - Selection state: `selectedAnnotationIds`, `selectedAnalysesIds`, `selectedExtractIds`
+- UI state: `selectedTab`, `selectedFolderId`, `selectedThreadId`, `selectedMessageId`, `corpusHomeView`, `tocExpandAll`
 - Visualization state: `showStructuralAnnotations`, `showSelectedAnnotationOnly`, `showAnnotationBoundingBoxes`, `showAnnotationLabels`
 
 All other components:
 - READ ONLY via `useReactiveVar()`
-- UPDATE STATE via URL utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`
+- UPDATE STATE via URL utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`, `updateTabParam()`, `updateHomeViewParam()`, `updateTocExpandedParam()`
 
 Violations cause race conditions, infinite loops, and unpredictable behavior.
 

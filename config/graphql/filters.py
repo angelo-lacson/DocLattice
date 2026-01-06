@@ -21,7 +21,7 @@ from opencontractserver.conversations.models import (
     Conversation,
     ModerationAction,
 )
-from opencontractserver.corpuses.models import Corpus
+from opencontractserver.corpuses.models import Corpus, CorpusCategory
 from opencontractserver.documents.models import Document, DocumentRelationship
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.users.models import Assignment, UserExport
@@ -127,12 +127,28 @@ class CorpusFilter(django_filters.FilterSet):
         django_pk = from_global_id(value)[1]
         return queryset.filter(label_set_id=django_pk)
 
+    categories = django_filters.ModelMultipleChoiceFilter(
+        queryset=CorpusCategory.objects.all(),
+        field_name="categories",
+    )
+
     class Meta:
         model = Corpus
         fields = {
             "description": ["exact", "contains"],
             "id": ["exact"],
             "title": ["contains"],
+        }
+
+
+class CorpusCategoryFilter(django_filters.FilterSet):
+    """Filter for CorpusCategory."""
+
+    class Meta:
+        model = CorpusCategory
+        fields = {
+            "name": ["exact", "contains"],
+            "description": ["contains"],
         }
 
 
@@ -384,6 +400,7 @@ class DocumentFilter(django_filters.FilterSet):
         )
 
         # Also include documents from the M2M relationship (backward compatibility)
+        # Note: Corpus.documents is M2M, so reverse filter uses 'corpus' (not corpus_set)
         doc_ids_from_m2m = list(
             queryset.filter(corpus=corpus_pk).values_list("id", flat=True)
         )

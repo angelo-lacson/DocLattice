@@ -5,6 +5,157 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-04
+
+### Changed
+
+#### NavMenu Refactoring (PR #779)
+- **Migrated to @os-legal/ui NavBar** (`frontend/src/components/layout/NavMenu.tsx`): Complete refactor from Semantic UI Menu to unified NavBar component
+  - Single responsive component replaces separate NavMenu and MobileNavMenu
+  - Built-in hamburger menu at 1100px breakpoint eliminates conditional rendering in App.tsx
+  - Modern styling consistent with os-legal-style design system
+- **Deleted obsolete files**: Removed `MobileNavMenu.tsx` and `MobileNavMenu.css` (~370 lines)
+- **Simplified App.tsx** (`frontend/src/App.tsx:320-325`): Removed conditional menu rendering and `useWindowDimensions` dependency
+- **Improved code quality** (`frontend/src/components/layout/NavMenu.tsx`):
+  - Replaced inline SVG icons with lucide-react imports (Download, User, Settings, LogOut)
+  - Refactored login button to use styled-components instead of inline styles
+  - Added type-safe `getUserProps` helper to replace `as any` casts for user properties
+
+### Added
+
+#### NavMenu Component Tests
+- **Playwright component tests** (`frontend/tests/NavMenu.ct.tsx`): 18 comprehensive tests covering:
+  - Navigation items and active state highlighting
+  - Authentication states (login button vs user menu)
+  - User menu items (Exports, Profile, Admin Settings, Logout)
+  - Superuser-only features (Badge Management nav item, Admin Settings menu)
+  - Branding elements (logo, version badge, brand name)
+  - Responsive behavior (hamburger menu, mobile navigation)
+- **Test wrapper** (`frontend/tests/NavMenuTestWrapper.tsx`): Provides Auth0Provider, MockedProvider, MemoryRouter, and JotaiProvider context
+
+### Fixed
+
+#### Superuser Features in Non-Auth0 Mode
+- **LOGIN_MUTATION missing isSuperuser** (`frontend/src/graphql/mutations.ts:49-65`): Added `isSuperuser` field to login query
+  - Previously, superuser features (Badge Management, Admin Settings) were broken in non-Auth0 mode
+  - Updated `LoginOutputs` interface to include `username`, `isUsageCapped`, and `isSuperuser` fields
+
+---
+
+## [Unreleased] - 2026-01-03
+
+### Fixed
+
+#### WebSocket Connection Performance (Issue: Chat "Reconnecting" delay)
+- **Auth0 JWKS caching** (`config/graphql_auth0_auth/utils.py:17-38`): Added in-memory cache for Auth0 JWKS with 10-minute TTL
+  - Previously fetched JWKS from Auth0 on every token validation, causing 6-10 second delays
+  - Now caches JWKS keys, reducing subsequent WebSocket auth to near-instant
+- **CorpusChat double connection fix** (`frontend/src/components/corpuses/CorpusChat.tsx:1043-1056`): Skip forceNewChat useEffect on initial mount
+  - `isNewChat` state already initialized from `forceNewChat` prop
+  - Prevents redundant `startNewChat()` call that caused socket close/reconnect cycle
+- **Notification WebSocket auth guard** (`frontend/src/hooks/useNotificationWebSocket.ts:312-318`): Skip connection attempt without auth token
+  - Prevents 403 Access Denied errors when connecting before auth token is available
+  - Eliminates unnecessary connection attempts and error spam in console
+
+---
+
+## [Unreleased] - 2026-01-02
+
+### Added
+
+#### Extract View Refactoring (PR #772)
+- **Route-based extract detail view** (`frontend/src/views/ExtractDetail.tsx:439-1063`, `frontend/src/components/routes/ExtractDetailRoute.tsx:1-58`): Complete refactor from modal-based to route-based architecture
+  - Modern full-page layout with tabbed interface (Data, Documents, Schema)
+  - Stats grid showing document count, column count, rows, and success rate
+  - WebSocket-based real-time updates for running extracts (replaced polling)
+  - Responsive design following existing patterns
+- **WebSocket notification hook** (`frontend/src/hooks/useExtractCompletionNotification.ts:1-86`): Real-time extract completion detection
+  - Listens for `EXTRACT_COMPLETE` notifications via WebSocket
+  - Filters for specific extract ID and triggers refetch on completion
+  - Eliminates need for polling (previously every 5 seconds)
+- **Extracts list page** (`frontend/src/views/Extracts.tsx:1-410`): New landing page for extract management
+  - Filter tabs (All, My Extracts, Running, Completed)
+  - Search with debounced input and cleanup on unmount
+  - CollectionCard components with status indicators
+- **Extract list card** (`frontend/src/components/extracts/ExtractListCard.tsx:1-228`): Card component for extract listing
+  - Status-aware styling (Running, Completed, Failed, Not Started)
+  - Context menu with view and delete actions
+  - Keyboard accessibility (Escape to close, Enter/Space to activate)
+- **Shared utilities** (`frontend/src/utils/extractUtils.ts:1-70`): DRY utility functions using centralized constants
+- **Extract landing route** (`frontend/src/components/routes/ExtractLandingRoute.tsx:1-35`): Route component for /extracts
+
+### Removed
+- **EditExtractModal component**: Replaced by route-based ExtractDetail view - modal approach deprecated
+- **Obsolete test files** (`frontend/tests/EditExtractModal.ct.tsx`, `frontend/tests/EditExtractModalTestWrapper.tsx`): Removed tests for deleted modal component
+- **Polling constants** (`frontend/src/constants/extract.ts`): Removed `EXTRACT_POLLING_INTERVAL_MS` and `EXTRACT_POLLING_TIMEOUT_MS` - replaced by WebSocket notifications
+
+### Changed
+- **openedExtract reactive var documentation** (`frontend/src/graphql/cache.ts:364-388`): Clarified that route components (like ExtractDetailRoute) can set this var, not just CentralRouteManager
+- **Consolidated constants** (`frontend/src/assets/configurations/constants.ts:47-51`): Moved `EXTRACT_SEARCH_DEBOUNCE_MS` to centralized `DEBOUNCE` object
+- **extractUtils refactor** (`frontend/src/utils/extractUtils.ts:32-55`): Now uses `EXTRACT_STATUS` and `EXTRACT_STATUS_COLORS` constants instead of hardcoded values
+
+---
+
+## [Unreleased] - 2026-01-01
+
+### Added
+
+#### Corpuses Page Redesign
+- **CorpusListView component** (`frontend/src/components/corpuses/CorpusListView.tsx`): Modern corpus listing page using @os-legal/ui components
+  - Hero section with search and filter tabs (All, My Corpuses, Shared, Public)
+  - Stats grid showing corpus, document, annotation, and shared counts
+  - CollectionCard components with category badges, visibility status, and labelset information
+  - Context menu for edit, view, export, fork, and delete actions
+  - Infinite scroll support for large corpus lists
+- **PostHog Analytics Integration** (`frontend/src/utils/analytics.ts`): Consent-based analytics tracking
+  - Cookie consent banner integration
+  - Automatic test/CI environment detection to prevent analytics in non-production
+  - User identification and event tracking functions
+  - Page view tracking for SPA navigation
+- **Component tests** (`frontend/tests/CorpusListView.ct.tsx`): 12 Playwright component tests for CorpusListView
+- **Unit tests** (`frontend/src/utils/__tests__/analytics.test.ts`): 20 Vitest tests for analytics utility functions
+
+### Fixed
+
+#### Routing Audit Follow-ups
+- **Notification navigation fallback** (`frontend/src/components/notifications/NotificationDropdown.tsx:182-188`, `NotificationCenter.tsx:207-213`): Added fallback navigation to `/discussions` when corpus slug data is missing. Previously, users clicking notifications with missing slug data would see no response.
+- **Network-only fetch policy optimization** (`frontend/src/routing/CentralRouteManager.tsx:621-632`): Changed thread resolution corpus query from `network-only` to `cache-and-network` since `authInitComplete` now ensures `clearStore()` completes before route queries run. This improves navigation performance when corpus data is already cached.
+- **Unit test coverage** (`frontend/src/utils/__tests__/navigationUtils.test.ts:497-503`): Added missing test for `parseRoute("/discussions")` to prevent regression of discussions route parsing.
+
+#### Type Safety and Bug Fixes
+- **User email detection** (`frontend/src/components/corpuses/CorpusListView.tsx:345-349`): Fixed currentUserEmail logic to use `userObj` reactive variable from Apollo cache instead of inferring from corpus permissions - prevents filter failures when no corpus has CAN_REMOVE permission
+- **TypeScript type casts** (`frontend/src/components/corpuses/CorpusListView.tsx`, `CorpusModal.tsx`): Removed 7 `as any` type casts by correcting `CorpusType.categories` type from `CorpusCategoryTypeConnection` to `CorpusCategoryType[]` to match backend GraphQL schema
+- **N+1 query prevention** (`config/graphql/queries.py:820-825`): Added `prefetch_related("categories")` to `resolve_corpuses` to avoid N+1 queries when fetching corpus categories
+
+### Changed
+- **Deleted CorpusCards component** (`frontend/src/components/corpuses/CorpusCards.tsx`): Replaced by CorpusListView with @os-legal/ui components
+
+#### LabelSet Detail Page Refactoring
+- **LabelSetDetailPage component split** (`frontend/src/components/labelsets/LabelSetDetailPage.tsx`): Reduced from 2,064 lines to ~1,100 lines
+  - Extracted 16 SVG icons to `detail/LabelSetIcons.tsx`
+  - Extracted 40+ styled-components to `detail/LabelSetDetailStyles.ts`
+  - Added barrel exports in `detail/index.ts`
+- **Color constants centralized** (`frontend/src/assets/configurations/constants.ts`): Added `DEFAULT_LABEL_COLOR` and `PRIMARY_LABEL_COLOR`
+
+### Security
+- **Frontend permission checks** (`frontend/src/components/labelsets/LabelSetDetailPage.tsx:1189-1344`): Added defensive permission checks to all mutation handlers
+  - `handleDeleteLabel` now verifies `canRemove` before deletion
+  - `handleSaveEdit` now verifies `canUpdate` before updating
+  - `handleSaveCreate` now verifies `canUpdate` before creation
+  - `handleDelete` (labelset) now verifies `canRemove` before deletion
+- **Color input sanitization** (`frontend/src/components/labelsets/LabelSetDetailPage.tsx:125-143`): Added `isValidHexColor` and `sanitizeColor` utilities
+  - Validates hex color format (3 or 6 character, with or without #)
+  - Prevents potential XSS via CSS color injection
+
+### Technical Details
+- New test file: `frontend/tests/LabelSetDetailPage.ct.tsx` with comprehensive component tests
+  - Rendering tests for all tabs (Overview, Text/Doc/Span/Relationship Labels)
+  - Permission-based UI visibility tests
+  - Search functionality tests
+  - Mobile navigation tests
+
+---
+
 ## [Unreleased] - 2025-12-31
 
 ### Added
@@ -32,6 +183,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Security tests (`opencontractserver/tests/test_zip_security.py`): 49 tests for path sanitization, validation, edge cases
   - Integration tests (`opencontractserver/tests/test_zip_import_integration.py`): 17 tests for task and folder service
 - **Design documentation** (`docs/features/zip_import_with_folders_design.md`): Complete specification including security model, API, error handling
+
+#### Corpus Categories and Landing Page Redesign
+- **CorpusCategory model** (`opencontractserver/corpuses/models.py`): New model for organizing corpuses by type (Legislation, Contracts, Case Law, Knowledge)
+  - Admin-provisioned structural data - managed via Django Admin only
+  - ManyToMany relationship with Corpus for flexible categorization
+  - Default categories seeded via migration (`0035_seed_default_categories.py`)
+- **CorpusCategoryType GraphQL type** (`config/graphql/graphene_types.py:1589-1633`):
+  - Globally visible to all users (no individual permissions)
+  - `corpusCount` field with N+1 query optimization via annotation
+- **Landing page redesign** using @os-legal/ui component library:
+  - `CompactLeaderboard` component - clean list-based leaderboard replacing grid cards
+  - `CategorySelector` component for corpus categorization
+  - Skeleton loading states and error handling throughout
+- **TypeScript types** (`frontend/src/types/graphql-api.ts`): Added `CorpusCategoryType`, `CorpusCategoryTypeConnection`, `CorpusCategoryTypeEdge`
+- **Array utilities** (`frontend/src/utils/arrayUtils.ts`): `arraysEqualUnordered` and `arraysEqualOrdered` for DRY comparison logic
+
+### Fixed
+
+#### Security and Performance
+- **System user security** (`opencontractserver/corpuses/migrations/0035_seed_default_categories.py`): Defense-in-depth with unusable password for system user
+- **N+1 query in corpusCount** (`config/graphql/queries.py:835-866`): Pre-annotated counts in `resolve_corpus_categories` resolver
+- **Type safety** (`frontend/src/components/corpuses/CorpusModal.tsx`, `CorpusSettings.tsx`): Removed `as any` casts for categories field
+
+### Changed
+- **Permission model** (`config/graphql/graphene_types.py`): `CorpusCategoryType` no longer uses `AnnotatePermissionsForReadMixin` - categories are globally visible structural data
+- **Documentation** (`docs/permissioning/consolidated_permissioning_guide.md`): Added section on CorpusCategory permissions
+
+### Technical Details
+- Categories are created by a `system` user with `is_active=False` and unusable password
+- `corpusCount` respects user visibility: anonymous sees public corpuses only, authenticated users see corpuses they have access to
+- Removed 632-line `TopContributors.tsx` component, replaced with ~280-line `CompactLeaderboard.tsx`
+
+---
 
 ## [Unreleased] - 2025-12-29
 

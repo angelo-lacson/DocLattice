@@ -7,6 +7,7 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusActionExecution,
+    CorpusCategory,
 )
 from opencontractserver.tasks.permissioning_tasks import make_corpus_public_task
 
@@ -46,6 +47,18 @@ class CorpusAdmin(GuardedModelAdmin):
         )
 
     make_public.short_description = "Make selected corpuses public"
+
+
+@admin.register(CorpusCategory)
+class CorpusCategoryAdmin(admin.ModelAdmin):
+    list_display = ("name", "color", "icon", "sort_order", "created")
+    list_editable = ("sort_order",)
+    search_fields = ("name", "description")
+    ordering = ("sort_order", "name")
+    fieldsets = (
+        (None, {"fields": ("name", "description")}),
+        ("Appearance", {"fields": ("icon", "color", "sort_order")}),
+    )
 
 
 @admin.register(CorpusAction)

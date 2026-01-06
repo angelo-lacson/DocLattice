@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Tab, Menu } from "semantic-ui-react";
 import _ from "lodash";
 import { toast } from "react-toastify";
@@ -23,27 +23,29 @@ import {
   ChevronRight,
   ChevronUp,
   Search,
-  AlignJustify,
   Send,
   History,
   Trophy,
   BarChart3,
+  MoreVertical,
+  Link2,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
+import { SearchBox, FilterTabs } from "@os-legal/ui";
+import type { FilterTabItem } from "@os-legal/ui";
 
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
-import { CorpusCards } from "../components/corpuses/CorpusCards";
 import {
   CreateAndSearchBar,
   DropdownActionProps,
 } from "../components/layout/CreateAndSearchBar";
 import { CardLayout } from "../components/layout/CardLayout";
-import { CorpusBreadcrumbs } from "../components/corpuses/CorpusBreadcrumbs";
 import {
   CorpusModal,
   CorpusFormData,
 } from "../components/corpuses/CorpusModal";
+import { CorpusListView } from "../components/corpuses/CorpusListView";
 
 import {
   openedCorpus,
@@ -64,8 +66,12 @@ import {
   showQueryViewState,
   showSelectCorpusAnalyzerOrFieldsetModal,
   selectedTab,
+  selectedExtractIds,
 } from "../graphql/cache";
-import { updateTabParam } from "../utils/navigationUtils";
+import {
+  updateTabParam,
+  updateAnnotationSelectionParams,
+} from "../utils/navigationUtils";
 import {
   UPDATE_CORPUS,
   UpdateCorpusOutputs,
@@ -102,15 +108,22 @@ import { FilterToLabelSelector } from "../components/widgets/model-filters/Filte
 import { ensureValidCorpusId } from "../utils/graphqlGuards";
 import { CorpusAnnotationCards } from "../components/annotations/CorpusAnnotationCards";
 import { CorpusDocumentCards } from "../components/documents/CorpusDocumentCards";
-import { FolderDocumentBrowser } from "../components/corpuses/folders/FolderDocumentBrowser";
+import {
+  FolderDocumentBrowser,
+  ViewMode,
+} from "../components/corpuses/folders/FolderDocumentBrowser";
 import { CorpusAnalysesCards } from "../components/analyses/CorpusAnalysesCards";
 import { FilterToAnalysesSelector } from "../components/widgets/model-filters/FilterToAnalysesSelector";
 import useWindowDimensions from "../components/hooks/WindowDimensionHook";
 import { SelectExportTypeModal } from "../components/widgets/modals/SelectExportTypeModal";
 import { FilterToCorpusActionOutputs } from "../components/widgets/model-filters/FilterToCorpusActionOutputs";
 import { CorpusExtractCards } from "../components/extracts/CorpusExtractCards";
+import { CorpusExtractDetail } from "../components/extracts/CorpusExtractDetail";
 import { getPermissions } from "../utils/transform";
-import { MOBILE_VIEW_BREAKPOINT } from "../assets/configurations/constants";
+import {
+  MOBILE_VIEW_BREAKPOINT,
+  DEBOUNCE,
+} from "../assets/configurations/constants";
 import { useEnv } from "../components/hooks/UseEnv";
 import { CorpusDashboard } from "../components/corpuses/CorpusDashboard";
 import { useCorpusState } from "../components/annotator/context/CorpusAtom";
@@ -121,6 +134,7 @@ import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptio
 import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
 import { BadgeManagement } from "../components/badges/BadgeManagement";
 import { CorpusEngagementDashboard } from "../components/analytics/CorpusEngagementDashboard";
+import { CorpusDocumentRelationships } from "../components/corpuses/CorpusDocumentRelationships";
 
 // Add these styled components near your other styled components
 const DashboardContainer = styled.div`
@@ -221,132 +235,6 @@ const SearchToConversationInput = styled.div<{ $isExpanded: boolean }>`
       @media (max-width: 768px) {
         display: none;
       }
-    }
-  }
-`;
-
-// Add new styled components for enhanced UI
-const FloatingSearchContainer = styled(motion.div)`
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.375rem;
-  width: 100px;
-  max-width: 720px;
-  min-height: 42px;
-  height: auto;
-  transition: all 0.35s ease;
-  margin: 0 auto;
-
-  /* Add gap to form children only when expanded */
-  & > form {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    transition: gap 0.35s ease, justify-content 0.35s ease;
-    width: 100%;
-  }
-
-  &:hover,
-  &:focus-within {
-    width: min(720px, 90%);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    border-color: #cbd5e1;
-    align-items: flex-start;
-    justify-content: flex-start;
-    padding: 0.75rem;
-
-    & > form {
-      gap: 0.75rem;
-      justify-content: flex-start;
-    }
-  }
-
-  @media (max-width: 768px) {
-    width: clamp(80px, 20vw, 96px);
-    max-width: calc(100vw - 2rem);
-    min-height: 40px;
-    padding: 0.375rem;
-
-    &:active,
-    &:hover,
-    &:focus-within {
-      width: 85%;
-      max-width: 320px;
-      padding: 0.5rem;
-
-      & > form {
-        gap: 0.5rem;
-        justify-content: flex-start;
-      }
-    }
-  }
-`;
-
-// Hide the input until hover/focus
-const EnhancedSearchInput = styled.textarea`
-  flex: 1;
-  width: 0;
-  opacity: 0;
-  padding: 0;
-  border: none;
-  outline: none;
-  font-size: 1rem;
-  background: transparent;
-  color: #0f172a;
-  font-weight: 500;
-  transition: all 0.35s ease; /* match container timing */
-  resize: none;
-  font-family: inherit;
-  line-height: 1.5;
-  min-height: 40px;
-  max-height: 144px; /* ~6 lines at 1.5 line-height */
-  overflow-y: auto;
-  min-width: 0; /* ensure it can shrink properly */
-
-  /* Custom scrollbar for textarea */
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 3px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 3px;
-  }
-
-  &::placeholder {
-    color: #94a3b8;
-    font-weight: 400;
-  }
-
-  ${FloatingSearchContainer}:hover &,
-  ${FloatingSearchContainer}:focus-within & {
-    width: 100%;
-    opacity: 1;
-    padding: 0.75rem 1rem;
-    min-height: 40px;
-  }
-
-  @media (max-width: 768px) {
-    font-size: 0.875rem;
-    max-height: 120px; /* ~5-6 lines on mobile */
-
-    ${FloatingSearchContainer}:hover &,
-    ${FloatingSearchContainer}:focus-within & {
-      padding: 0.625rem 0.875rem;
-      width: 100%;
     }
   }
 `;
@@ -467,6 +355,7 @@ const CorpusQueryView = ({
   canUpdate,
   stats,
   statsLoading,
+  onOpenMobileMenu,
 }: {
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
@@ -481,6 +370,7 @@ const CorpusQueryView = ({
     totalExtracts: number;
   };
   statsLoading: boolean;
+  onOpenMobileMenu?: () => void;
 }) => {
   const [chatExpanded, setChatExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -655,73 +545,20 @@ const CorpusQueryView = ({
               canUpdate={canUpdate}
               stats={stats}
               statsLoading={statsLoading}
-            />
-            <div
-              style={{
-                position: "absolute",
-                bottom: width <= 768 ? "1rem" : "2rem",
-                left: "50%",
-                transform: "translateX(-50%)",
-                display: "flex",
-                flexDirection: "row",
-                justifyContent: "center",
-                alignItems: "center",
-                padding: width <= 768 ? "0.25rem" : "0.5rem",
-                width:
-                  width <= 768
-                    ? "95%"
-                    : "85%" /* give more room for expansion on mobile */,
-                maxWidth: "760px" /* match the search container max */,
+              chatQuery={searchQuery}
+              onChatQueryChange={setSearchQuery}
+              onChatSubmit={(query) => {
+                if (query.trim()) {
+                  setSearchQuery(query);
+                  setChatExpanded(true);
+                  setIsSearchMode(false);
+                  showQueryViewState("ASK");
+                }
               }}
-            >
-              <FloatingSearchContainer
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-              >
-                <form onSubmit={handleSearchSubmit}>
-                  <EnhancedSearchInput
-                    ref={inputRef}
-                    placeholder="Ask a question about this corpus..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    autoFocus={isDesktop} // Auto-focus on desktop only to avoid mobile keyboard popup issues
-                    onKeyDown={(e) => {
-                      // Submit on Enter without Shift
-                      if (
-                        e.key === "Enter" &&
-                        !e.shiftKey &&
-                        searchQuery.trim()
-                      ) {
-                        e.preventDefault();
-                        handleSearchSubmit(e);
-                      }
-                    }}
-                    rows={1}
-                  />
-                  <SearchActionsContainer>
-                    <ActionButton
-                      type="button"
-                      onClick={openHistoryView}
-                      title="View conversation history"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <History size={18} />
-                    </ActionButton>
-                    <ActionButton
-                      type="submit"
-                      className="primary"
-                      disabled={!searchQuery.trim()}
-                      whileHover={searchQuery.trim() ? { scale: 1.05 } : {}}
-                      whileTap={searchQuery.trim() ? { scale: 0.95 } : {}}
-                    >
-                      <Send size={18} />
-                    </ActionButton>
-                  </SearchActionsContainer>
-                </form>
-              </FloatingSearchContainer>
-            </div>
+              onViewChatHistory={openHistoryView}
+              onNavigateToCorpuses={onBack}
+              onOpenMobileMenu={onOpenMobileMenu}
+            />
           </ContentWrapper>
         </DashboardContainer>
       </motion.div>
@@ -1297,49 +1134,6 @@ const MobileBackButton = styled.button`
   }
 `;
 
-// Mobile bottom navigation FAB - opens corpus sidebar navigation
-// z-index: 150 ensures it appears above folder sidebar toggle (101) and other UI elements
-const BottomNavigationHandle = styled(motion.button)<{ isOpen?: boolean }>`
-  display: none;
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-  border: none;
-  border-radius: 16px;
-  cursor: pointer;
-  z-index: 150; /* Raised from 100 to ensure visibility above folder toggle (101) */
-  box-shadow: 0 8px 24px rgba(74, 144, 226, 0.4), 0 2px 8px rgba(0, 0, 0, 0.12);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 0;
-  align-items: center;
-  justify-content: center;
-  color: white;
-
-  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    display: flex;
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  &:hover {
-    box-shadow: 0 12px 32px rgba(74, 144, 226, 0.5),
-      0 4px 12px rgba(0, 0, 0, 0.15);
-  }
-
-  svg {
-    width: 28px;
-    height: 28px;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
-  }
-`;
-
-// Removed unused bottom handle components - now using simple FAB design
-
 // Back navigation header for non-home tabs - CRISPY VERSION
 const TabNavigationHeader = styled.div`
   display: flex;
@@ -1355,6 +1149,42 @@ const TabNavigationHeader = styled.div`
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     padding: 0.625rem 1rem;
     min-height: 48px;
+  }
+`;
+
+// Mobile kebab menu button for tab headers - only visible on mobile
+const MobileKebabButton = styled.button`
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  margin-left: auto;
+
+  &:hover {
+    background: #f0fdfa;
+    color: #0f766e;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    display: flex;
   }
 `;
 
@@ -1475,6 +1305,176 @@ const NotificationBadge = styled.div`
   }
 `;
 
+// Split view container for extracts tab
+const ExtractsSplitView = styled.div`
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 1px;
+  background: #e2e8f0;
+`;
+
+const ExtractsListPane = styled.div<{ $hasSelection: boolean }>`
+  flex: ${(props) => (props.$hasSelection ? "0 0 360px" : "1")};
+  overflow: hidden;
+  background: #fafafa;
+  transition: flex 0.2s ease;
+
+  @media (max-width: 1024px) {
+    flex: ${(props) => (props.$hasSelection ? "0 0 280px" : "1")};
+  }
+
+  @media (max-width: 768px) {
+    display: ${(props) => (props.$hasSelection ? "none" : "block")};
+    flex: 1;
+  }
+`;
+
+const ExtractsDetailPane = styled.div`
+  flex: 1;
+  overflow: hidden;
+  background: white;
+
+  @media (max-width: 768px) {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+  }
+`;
+
+// Search and filter container for extracts tab
+const ExtractsToolbar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+`;
+
+const ExtractsSearchRow = styled.div`
+  max-width: 400px;
+`;
+
+/**
+ * ExtractsTabContent - Split view for corpus extracts tab
+ * Shows list on left, detail on right when an extract is selected
+ * Includes search and filter functionality matching standalone Extracts view
+ */
+const ExtractsTabContent: React.FC<{
+  setActiveTab: (tab: number) => void;
+  onOpenMobileMenu?: () => void;
+}> = ({ setActiveTab, onOpenMobileMenu }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const selected_extract_ids = useReactiveVar(selectedExtractIds);
+  const analysis_search_term = useReactiveVar(analysisSearchTerm);
+  const selectedExtractId = selected_extract_ids[0] || null;
+
+  // Local state for search and filter
+  const [searchCache, setSearchCache] = useState(analysis_search_term);
+  const [activeFilter, setActiveFilter] = useState("all");
+
+  // Debounced search - updates the reactive var used by CorpusExtractCards
+  const debouncedSearch = useRef(
+    _.debounce((searchTerm: string) => {
+      analysisSearchTerm(searchTerm);
+    }, DEBOUNCE.EXTRACT_SEARCH_MS)
+  );
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSearch.current.cancel();
+    };
+  }, []);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchCache(value);
+    debouncedSearch.current(value);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    // Clear extract selection via URL
+    updateAnnotationSelectionParams(location, navigate, {
+      extractIds: [],
+    });
+  }, [location, navigate]);
+
+  // Filter tabs configuration
+  const filterItems: FilterTabItem[] = [
+    { id: "all", label: "All" },
+    { id: "running", label: "Running" },
+    { id: "completed", label: "Completed" },
+    { id: "failed", label: "Failed" },
+    { id: "not_started", label: "Not Started" },
+  ];
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        position: "relative",
+      }}
+    >
+      <TabNavigationHeader>
+        <BackNavButton
+          onClick={() => setActiveTab(0)}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          title="Back to Home"
+        >
+          <ArrowLeft />
+        </BackNavButton>
+        <TabTitle>Extracts</TabTitle>
+        {onOpenMobileMenu && (
+          <MobileKebabButton
+            onClick={onOpenMobileMenu}
+            aria-label="Open navigation menu"
+          >
+            <MoreVertical />
+          </MobileKebabButton>
+        )}
+      </TabNavigationHeader>
+
+      {/* Search and Filter Toolbar */}
+      <ExtractsToolbar>
+        <ExtractsSearchRow>
+          <SearchBox
+            placeholder="Search extracts..."
+            value={searchCache}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onSubmit={(value) => handleSearchChange(value)}
+          />
+        </ExtractsSearchRow>
+        <FilterTabs
+          items={filterItems}
+          value={activeFilter}
+          onChange={setActiveFilter}
+        />
+      </ExtractsToolbar>
+
+      <ExtractsSplitView>
+        <ExtractsListPane $hasSelection={Boolean(selectedExtractId)}>
+          <CorpusExtractCards useInlineSelection activeFilter={activeFilter} />
+        </ExtractsListPane>
+
+        {selectedExtractId && (
+          <ExtractsDetailPane>
+            <CorpusExtractDetail
+              extractId={selectedExtractId}
+              onClose={handleCloseDetail}
+            />
+          </ExtractsDetailPane>
+        )}
+      </ExtractsSplitView>
+    </div>
+  );
+};
+
 export const Corpuses = () => {
   const { width } = useWindowDimensions();
 
@@ -1542,6 +1542,27 @@ export const Corpuses = () => {
     annotation_search_term
   );
 
+  // View mode state for the Documents tab
+  const [documentsViewMode, setDocumentsViewMode] =
+    useState<ViewMode>("modern-list");
+
+  // Debug: Log state changes
+  console.log("[Corpuses] Current documentsViewMode:", documentsViewMode);
+
+  // Wrapped setter with logging
+  const handleViewModeChange = useCallback(
+    (mode: ViewMode) => {
+      console.log(
+        "[Corpuses] handleViewModeChange called with:",
+        mode,
+        "from:",
+        documentsViewMode
+      );
+      setDocumentsViewMode(mode);
+    },
+    [documentsViewMode]
+  );
+
   const opened_corpus_id = opened_corpus?.id ? opened_corpus.id : null;
   let raw_permissions = opened_corpus?.myPermissions;
   if (opened_corpus && raw_permissions !== undefined) {
@@ -1595,6 +1616,18 @@ export const Corpuses = () => {
     setAnalysesSearchCache(value);
     debouncedAnalysisSearch.current(value);
   };
+
+  // Check for ?create=true query param to open the create corpus modal
+  // This allows linking directly to corpus creation from other pages (e.g., Discover page)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get("create") === "true") {
+      setShowNewCorpusModal(true);
+      // Remove the query param from URL to prevent reopening on refresh
+      const newUrl = location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [location.search]);
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Setup document resolvers and mutations
@@ -1950,6 +1983,9 @@ export const Corpuses = () => {
     if (formData.icon !== undefined && formData.icon !== null) {
       variables.icon = formData.icon;
     }
+    if (formData.categories !== undefined) {
+      variables.categories = formData.categories;
+    }
 
     tryMutateCorpus({ variables });
   };
@@ -2005,6 +2041,9 @@ export const Corpuses = () => {
       variables.preferredEmbedder = formData.preferredEmbedder;
     if (formData.icon) {
       variables.icon = formData.icon;
+    }
+    if (formData.categories && formData.categories.length > 0) {
+      variables.categories = formData.categories;
     }
 
     tryCreateCorpus({ variables })
@@ -2084,7 +2123,9 @@ export const Corpuses = () => {
     "annotations",
     "analyses",
     "extracts",
+    "relationships",
     "discussions",
+    "chats",
     "analytics",
     "settings",
     "badges",
@@ -2130,6 +2171,7 @@ export const Corpuses = () => {
             canUpdate={canUpdateCorpus}
             stats={stats}
             statsLoading={effectiveStatsLoading}
+            onOpenMobileMenu={() => setMobileSidebarOpen(true)}
           />
         ),
       },
@@ -2152,11 +2194,24 @@ export const Corpuses = () => {
                 <ArrowLeft />
               </BackNavButton>
               <TabTitle>Documents</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
             </TabNavigationHeader>
             <div style={{ flex: 1, overflow: "hidden" }}>
               {opened_corpus_id && (
-                <FolderDocumentBrowser corpusId={opened_corpus_id}>
-                  <CorpusDocumentCards opened_corpus_id={opened_corpus_id} />
+                <FolderDocumentBrowser
+                  corpusId={opened_corpus_id}
+                  viewMode={documentsViewMode}
+                  onViewModeChange={handleViewModeChange}
+                >
+                  <CorpusDocumentCards
+                    opened_corpus_id={opened_corpus_id}
+                    viewMode={documentsViewMode}
+                  />
                 </FolderDocumentBrowser>
               )}
             </div>
@@ -2182,6 +2237,12 @@ export const Corpuses = () => {
                 <ArrowLeft />
               </BackNavButton>
               <TabTitle>Annotations</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
             </TabNavigationHeader>
             <div style={{ flex: 1, overflow: "hidden" }}>
               <CorpusAnnotationCards opened_corpus_id={opened_corpus_id} />
@@ -2208,6 +2269,12 @@ export const Corpuses = () => {
                 <ArrowLeft />
               </BackNavButton>
               <TabTitle>Analyses</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
             </TabNavigationHeader>
             <div style={{ flex: 1, overflow: "hidden" }}>
               <CorpusAnalysesCards />
@@ -2221,6 +2288,17 @@ export const Corpuses = () => {
         icon: <Table />,
         badge: stats.totalExtracts,
         component: (
+          <ExtractsTabContent
+            setActiveTab={setActiveTab}
+            onOpenMobileMenu={() => setMobileSidebarOpen(true)}
+          />
+        ),
+      },
+      {
+        id: "relationships",
+        label: "Relationships",
+        icon: <Link2 />,
+        component: opened_corpus?.id ? (
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
           >
@@ -2233,13 +2311,19 @@ export const Corpuses = () => {
               >
                 <ArrowLeft />
               </BackNavButton>
-              <TabTitle>Extracts</TabTitle>
+              <TabTitle>Document Relationships</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
             </TabNavigationHeader>
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <CorpusExtractCards />
+              <CorpusDocumentRelationships corpusId={opened_corpus.id} />
             </div>
           </div>
-        ),
+        ) : null,
       },
       {
         id: "discussions",
@@ -2247,7 +2331,66 @@ export const Corpuses = () => {
         icon: <MessageSquare />,
         badge: stats.totalThreads || 0,
         component: opened_corpus?.id ? (
-          <CorpusDiscussionsView corpusId={opened_corpus.id} />
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Discussions</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusDiscussionsView corpusId={opened_corpus.id} hideHeader />
+            </div>
+          </div>
+        ) : null,
+      },
+      {
+        id: "chats",
+        label: "Chats",
+        icon: <Brain />,
+        component: opened_corpus?.id ? (
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Chat History</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusChat
+                corpusId={opened_corpus.id}
+                showLoad={true}
+                onMessageSelect={() => {}}
+                setShowLoad={() => {}}
+              />
+            </div>
+          </div>
         ) : null,
       },
       {
@@ -2282,6 +2425,12 @@ export const Corpuses = () => {
                       <ArrowLeft />
                     </BackNavButton>
                     <TabTitle>Settings</TabTitle>
+                    <MobileKebabButton
+                      onClick={() => setMobileSidebarOpen(true)}
+                      aria-label="Open navigation menu"
+                    >
+                      <MoreVertical />
+                    </MobileKebabButton>
                   </TabNavigationHeader>
                   <div style={{ flex: 1, overflow: "hidden" }}>
                     <CorpusSettings
@@ -2325,6 +2474,12 @@ export const Corpuses = () => {
                       <ArrowLeft />
                     </BackNavButton>
                     <TabTitle>Badges</TabTitle>
+                    <MobileKebabButton
+                      onClick={() => setMobileSidebarOpen(true)}
+                      aria-label="Open navigation menu"
+                    >
+                      <MoreVertical />
+                    </MobileKebabButton>
                   </TabNavigationHeader>
                   <div style={{ flex: 1, overflow: "auto" }}>
                     <BadgeManagement corpusId={opened_corpus.id} />
@@ -2343,6 +2498,7 @@ export const Corpuses = () => {
     stats.totalAnalyses,
     stats.totalExtracts,
     canUpdateCorpus,
+    documentsViewMode, // Required for view mode toggle to work
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);
@@ -2355,31 +2511,22 @@ export const Corpuses = () => {
     (opened_document === null || opened_document === undefined)
   ) {
     content = (
-      <div
-        style={{
-          width: "100%",
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          padding: 0,
-          margin: 0,
-          overflow: "hidden",
-          minHeight: 0,
-        }}
-      >
-        <CorpusCards
-          items={corpus_items}
-          pageInfo={corpus_response?.corpuses?.pageInfo}
-          loading={
-            loading_corpuses ||
-            delete_corpus_loading ||
-            update_corpus_loading ||
-            create_corpus_loading
-          }
-          loading_message="Loading Corpuses..."
-          fetchMore={fetchMoreCorpuses}
-        />
-      </div>
+      <CorpusListView
+        corpuses={corpus_items}
+        pageInfo={corpus_response?.corpuses?.pageInfo}
+        loading={
+          loading_corpuses ||
+          delete_corpus_loading ||
+          update_corpus_loading ||
+          create_corpus_loading
+        }
+        fetchMore={fetchMoreCorpuses}
+        onCreateCorpus={() => setShowNewCorpusModal(true)}
+        onImportCorpus={() => corpusUploadRef.current.click()}
+        searchValue={corpusSearchCache}
+        onSearchChange={handleCorpusSearchChange}
+        allowImport={REACT_APP_ALLOW_IMPORTS && Boolean(auth_token)}
+      />
     );
   } else if (
     opened_corpus && // Corpus selected
@@ -2532,31 +2679,6 @@ export const Corpuses = () => {
         >
           {currentView?.component}
         </MainContentArea>
-
-        {/* Bottom Navigation FAB - Mobile Only (hidden on home page) */}
-        <AnimatePresence>
-          {use_mobile_layout &&
-            opened_corpus &&
-            !mobileSidebarOpen &&
-            active_tab !== 0 && ( // Hide on home page (tab 0)
-              <BottomNavigationHandle
-                isOpen={mobileSidebarOpen}
-                onClick={() => setMobileSidebarOpen(true)}
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 25,
-                }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <AlignJustify />
-              </BottomNavigationHandle>
-            )}
-        </AnimatePresence>
       </CorpusViewContainer>
     );
   } else if (
@@ -2667,12 +2789,8 @@ export const Corpuses = () => {
       }
       SearchBar={
         opened_corpus === null ? (
-          <CreateAndSearchBar
-            onChange={handleCorpusSearchChange}
-            actions={corpus_actions}
-            placeholder="Search for corpus..."
-            value={corpusSearchCache}
-          />
+          // Search is now embedded in CorpusListView component
+          <></>
         ) : currentView?.id === "home" ? (
           // Home view uses floating chat search, no top search bar needed
           <></>
@@ -2774,7 +2892,7 @@ export const Corpuses = () => {
           />
         )
       }
-      BreadCrumbs={opened_corpus !== null ? <CorpusBreadcrumbs /> : null}
+      BreadCrumbs={null}
     >
       <input
         ref={corpusUploadRef}

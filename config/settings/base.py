@@ -569,6 +569,8 @@ CELERY_RESULT_SERIALIZER = "json"
 # TODO: set to whatever value is adequate in your circumstances
 # CELERY_TASK_SOFT_TIME_LIMIT = 3600
 # http://docs.celeryproject.org/en/latest/userguide/configuration.html#beat-scheduler
+# Uses database scheduler - periodic tasks are set up via migrations
+# See: opencontractserver/users/migrations/0024_setup_telemetry_periodic_task.py
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_WORKER_MAX_MEMORY_PER_CHILD = 14240000  # 14 GB (thousands of kilobytes)
 CELERY_MAX_TASKS_PER_CHILD = 4

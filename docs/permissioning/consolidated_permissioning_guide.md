@@ -98,6 +98,18 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
      - Annotations/datacells within are filtered to only show those on documents user can read
    - This allows controlled sharing of analyses while maintaining document security boundaries
 
+5. **CorpusCategory - GLOBALLY VISIBLE, ADMIN-PROVISIONED**
+   - **NO individual permissions** - Categories are visible to ALL users (including anonymous)
+   - Categories are admin-provisioned structural data managed via Django Admin only
+   - Users cannot create, modify, or delete categories - only superusers can
+   - **GraphQL Type**: Does NOT use `AnnotatePermissionsForReadMixin` (categories have no permissions)
+   - **corpusCount field**: Dynamically computed based on user's visible corpuses
+     - Anonymous users see count of public corpuses in each category
+     - Authenticated users see count of corpuses they have access to
+   - Categories are seeded via migration with a `system` user (inactive, unusable password)
+   - Implementation: `config/graphql/graphene_types.py:1589` (CorpusCategoryType)
+   - Query resolver: `config/graphql/queries.py:resolve_corpus_categories`
+
 ### Key Principles
 
 1. **Document Security First**: For annotations, document permissions are the primary security boundary
@@ -327,6 +339,7 @@ This section provides a comprehensive reference for how permissions work across 
 |-------------|------------------|---------------------------|------------------|---------------|
 | **Corpus** | Direct | Object permissions | `is_public` flag | Creator has full access |
 | **Document** | Direct | Object permissions | `is_public` flag | Creator has full access |
+| **DocumentRelationship** | Inherited (Doc+Corpus) | Source + Target doc permissions | Corpus permissions | `Effective = MIN(source_doc, target_doc, corpus)` |
 | **CorpusFolder** | Inherited (Corpus) | Parent corpus permissions | None | No individual permissions; write requires UPDATE on corpus |
 | **Annotation** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
 | **Relationship** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
@@ -344,6 +357,47 @@ This section provides a comprehensive reference for how permissions work across 
 ```
 Can Access = is_superuser OR is_creator OR has_object_permission OR (is_public AND READ)
 ```
+
+#### DocumentRelationship (Inherited Permissions)
+
+DocumentRelationship objects inherit permissions from their source_document, target_document, and corpus (same model as annotation Relationships). User must have permission on BOTH documents AND corpus (if set).
+
+```
+Permission Formula:
+  Effective Permission = MIN(source_doc_permission, target_doc_permission, corpus_permission)
+
+READ Check:
+  can_read = is_superuser
+             OR (can_read_source_document AND can_read_target_document
+                 AND (no_corpus OR can_read_corpus))
+
+CREATE Check:
+  can_create = has_CREATE_permission_on_source_document
+               AND has_CREATE_permission_on_target_document
+               AND (no corpus OR has_CREATE_permission_on_corpus)
+
+UPDATE Check:
+  can_update = has_UPDATE_permission_on_source_document
+               AND has_UPDATE_permission_on_target_document
+               AND (no corpus OR has_UPDATE_permission_on_corpus)
+
+DELETE Check:
+  can_delete = has_DELETE_permission_on_source_document
+               AND has_DELETE_permission_on_target_document
+               AND (no corpus OR has_DELETE_permission_on_corpus)
+```
+
+**Key characteristics:**
+- DocumentRelationship connects two Document objects (not annotations)
+- NO individual guardian permissions - inherits from source_doc + target_doc + corpus
+- Types: `RELATIONSHIP` (labeled semantic link) or `NOTES` (free-form notes between docs)
+- Permission model matches annotation Relationship for consistency
+
+**Query Optimizer**: Use `DocumentRelationshipQueryOptimizer` for:
+- IDOR-safe fetches with `get_relationship_by_id(user, id)`
+- Filtered queries with `get_visible_relationships(user, ...)`
+- Document-specific queries with `get_relationships_for_document(user, doc_id, ...)`
+- Permission checks with `user_has_permission(user, doc_relationship, permission_type)`
 
 #### Annotations & Relationships
 ```

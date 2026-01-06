@@ -5,7 +5,7 @@ from typing import Optional
 
 import graphene
 from django.conf import settings
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
@@ -24,6 +24,7 @@ from config.graphql.filters import (
     BadgeFilter,
     ColumnFilter,
     ConversationFilter,
+    CorpusCategoryFilter,
     CorpusFilter,
     DatacellFilter,
     DocumentFilter,
@@ -56,6 +57,7 @@ from config.graphql.graphene_types import (
     CorpusActionExecutionType,
     CorpusActionTrailStatsType,
     CorpusActionType,
+    CorpusCategoryType,
     CorpusFolderType,
     CorpusStatsType,
     CorpusType,
@@ -121,6 +123,9 @@ from opencontractserver.corpuses.models import (
     CorpusAction,
 )
 from opencontractserver.documents.models import Document, DocumentRelationship
+from opencontractserver.documents.query_optimizer import (
+    DocumentRelationshipQueryOptimizer,
+)
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.notifications.models import Notification
@@ -816,11 +821,52 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpuses(self, info, **kwargs):
-        return Corpus.objects.visible_to_user(info.context.user).select_related(
-            "creator", "engagement_metrics"
+        return (
+            Corpus.objects.visible_to_user(info.context.user)
+            .select_related("creator", "engagement_metrics")
+            .prefetch_related("categories")
         )
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
+
+    # CORPUS CATEGORY RESOLVERS #####################################
+    corpus_categories = DjangoFilterConnectionField(
+        CorpusCategoryType,
+        filterset_class=CorpusCategoryFilter,
+        description="List all corpus categories",
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_corpus_categories(self, info, **kwargs):
+        """
+        Get all corpus categories, ordered by sort_order and name.
+
+        Annotates corpus_count to avoid N+1 queries when rendering category lists.
+        For anonymous users, counts only public corpuses. For authenticated users,
+        counts all corpuses the user can see (public + those with permissions).
+
+        Uses Corpus.objects.visible_to_user() to ensure guardian permissions are
+        respected - users with explicit READ permissions on private corpuses will
+        see them in counts.
+        """
+        from opencontractserver.corpuses.models import Corpus, CorpusCategory
+
+        user = info.context.user
+
+        # Get IDs of all corpuses visible to this user
+        # This properly respects guardian permissions for shared private corpuses
+        visible_corpus_ids = list(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+
+        # Count corpuses per category, filtering to only visible ones
+        categories = CorpusCategory.objects.annotate(
+            _corpus_count=Count(
+                "corpuses", filter=Q(corpuses__id__in=visible_corpus_ids), distinct=True
+            )
+        ).order_by("sort_order", "name")
+
+        return categories
 
     # CORPUS FOLDER RESOLVERS #####################################
 
@@ -1579,8 +1625,13 @@ class Query(graphene.ObjectType):
 
         user = info.context.user
 
-        document_pk = from_global_id(document_id)[1]
+        # Guard against empty strings - from_global_id('') returns ('', '')
+        document_pk = from_global_id(document_id)[1] if document_id else None
         corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+
+        # Validate document_id is required and not empty
+        if not document_pk:
+            raise Exception("documentId is required and must be a valid ID")
 
         # Use centralized permission-aware optimizer
         actions = DocumentActionsQueryOptimizer.get_document_actions(
@@ -2104,27 +2155,40 @@ class Query(graphene.ObjectType):
         filterset_class=DocumentRelationshipFilter,
         corpus_id=graphene.ID(required=False),
         document_id=graphene.ID(required=False),
+        # Higher limit for Table of Contents which needs full hierarchy
+        max_limit=500,
     )
 
     @login_required
     def resolve_document_relationships(self, info, **kwargs):
-        # Start with base queryset using visible_to_user
-        queryset = DocumentRelationship.objects.visible_to_user(info.context.user)
+        """
+        Resolve document relationships with proper permission filtering.
+        Uses DocumentRelationshipQueryOptimizer for consistent eager loading.
+        """
+        user = info.context.user
 
-        # Apply filters if provided
+        # Parse optional filters
         corpus_id = kwargs.get("corpus_id")
-        if corpus_id:
-            corpus_pk = from_global_id(corpus_id)[1]
-            queryset = queryset.filter(
-                Q(source_document__corpus=corpus_pk)
-                | Q(target_document__corpus=corpus_pk)
-            )
+        corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
 
         document_id = kwargs.get("document_id")
-        if document_id:
-            doc_pk = from_global_id(document_id)[1]
-            queryset = queryset.filter(
-                Q(source_document_id=doc_pk) | Q(target_document_id=doc_pk)
+        doc_pk = int(from_global_id(document_id)[1]) if document_id else None
+
+        # Use optimizer for visibility and eager loading
+        if doc_pk:
+            # Get relationships for specific document
+            queryset = (
+                DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+                    user=user,
+                    document_id=doc_pk,
+                    corpus_id=corpus_pk,
+                )
+            )
+        else:
+            # Get all visible relationships with optional corpus filter
+            queryset = DocumentRelationshipQueryOptimizer.get_visible_relationships(
+                user=user,
+                corpus_id=corpus_pk,
             )
 
         return queryset.distinct().order_by("-created")
@@ -2133,24 +2197,18 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_document_relationship(self, info, **kwargs):
+        """
+        Resolve a single document relationship by ID.
+        Uses optimizer for IDOR-safe fetching with proper eager loading.
+        """
         django_pk = from_global_id(kwargs.get("id", None))[1]
-        queryset = DocumentRelationship.objects.visible_to_user(info.context.user)
-        queryset = queryset.select_related(
-            "source_document",
-            "target_document",
-            "relationship_label",
-            "creator",
-            "analyzer",
-            "analysis",
-        ).prefetch_related(  # Prefetch might be overkill for a single object, but harmless
-            "relationship_label",
-            "corpus",
-            "document",
-            "creator",
-            "analyzer",
-            "analysis",
+        result = DocumentRelationshipQueryOptimizer.get_relationship_by_id(
+            user=info.context.user,
+            relationship_id=int(django_pk),
         )
-        return queryset.get(id=django_pk)
+        if result is None:
+            raise DocumentRelationship.DoesNotExist()
+        return result
 
     # Also add a bulk resolver similar to bulk_doc_relationships_in_corpus
     bulk_doc_relationships = graphene.Field(
@@ -2162,24 +2220,27 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_bulk_doc_relationships(self, info, document_id, **kwargs):
-        # Start with base queryset using visible_to_user
-        queryset = DocumentRelationship.objects.visible_to_user(info.context.user)
+        """
+        Bulk resolver for document relationships involving a specific document.
+        Uses DocumentRelationshipQueryOptimizer for proper eager loading.
+        """
+        user = info.context.user
 
-        # Always filter by document
-        doc_pk = from_global_id(document_id)[1]
-        queryset = queryset.filter(
-            Q(source_document_id=doc_pk) | Q(target_document_id=doc_pk)
+        # Parse document_id (required)
+        doc_pk = int(from_global_id(document_id)[1])
+
+        # Parse optional corpus filter
+        corpus_id = kwargs.get("corpus_id")
+        corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
+
+        # Use optimizer for visibility and eager loading
+        queryset = DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+            user=user,
+            document_id=doc_pk,
+            corpus_id=corpus_pk,
         )
 
-        # Apply optional filters
-        corpus_id = kwargs.get("corpus_id")
-        if corpus_id:
-            corpus_pk = from_global_id(corpus_id)[1]
-            queryset = queryset.filter(
-                Q(source_document__corpus=corpus_pk)
-                | Q(target_document__corpus=corpus_pk)
-            )
-
+        # Apply optional relationship_type filter
         relationship_type = kwargs.get("relationship_type")
         if relationship_type:
             queryset = queryset.filter(relationship_type=relationship_type)

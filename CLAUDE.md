@@ -221,8 +221,13 @@ docker compose -f production.yml up
 1. No dead code - when deprecating or replacing code, always try to fully replace older code and, once it's no longer in use, delete it and related texts.
 2. DRY - please always architect code for maximal dryness and always see if you can consolidate related code and remove duplicative code.
 3. Single Responsibility Principle - Generally, ensure that each module / script has a single purpose or related purpose.
-4. No magic numbers - we have constants files in opencontractserver/constants/. Use them for any hardcoded values.
+4. No magic numbers - we have constants files in opencontractserver/constants/ (backend) and frontend/src/assets/configurations/constants.ts (frontend). Use them for any hardcoded values.
 5. Don't touch old tests without permission - if pre-existing tests fail after changes, try to identify why and present user with root cause analysis. If the test logic is correct but expectations need updating due to intentional behavior changes, document the change clearly.
+6. Utility functions belong in utility files:
+   - **Before writing new utilities**: Check existing utility files first (`frontend/src/utils/`, `opencontractserver/utils/`)
+   - **When reviewing code**: If you find utility functions defined inline in components/views, check if they already exist in utility files. If not, consider whether they should be extracted there for reuse.
+   - **Frontend utilities**: `frontend/src/utils/formatters.ts` (formatting), `frontend/src/utils/files.ts` (file operations), etc.
+   - **Backend utilities**: `opencontractserver/utils/` contains permissioning, PDF processing, and other shared utilities
 
 ## Testing Patterns
 
