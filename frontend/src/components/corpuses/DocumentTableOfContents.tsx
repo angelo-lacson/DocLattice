@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
 import { Icon } from "semantic-ui-react";
@@ -538,14 +538,47 @@ export const DocumentTableOfContents: React.FC<
     };
   }, [data, maxDepth]);
 
+  // Track if we've handled the initial expand all state
+  const hasHandledExpandAllRef = useRef<boolean>(false);
+  // Track the last value we acted upon to detect actual user-driven changes
+  const lastExpandAllValueRef = useRef<boolean | null>(null);
+
   // Sync expand state from URL parameter
+  // Only responds to actual user-driven URL changes, not initial renders or other updates
   useEffect(() => {
-    if (expandAllFromUrl && allNodeIds.length > 0) {
-      setExpandedNodes(new Set(allNodeIds));
-    } else if (!expandAllFromUrl) {
-      // Collapse all when URL param is removed/false
-      setExpandedNodes(new Set());
+    // Skip if expandAllFromUrl hasn't actually changed from what we last handled
+    if (lastExpandAllValueRef.current === expandAllFromUrl) {
+      return;
     }
+
+    // On initial mount with expandAllFromUrl=true, expand all
+    if (!hasHandledExpandAllRef.current && expandAllFromUrl) {
+      hasHandledExpandAllRef.current = true;
+      lastExpandAllValueRef.current = expandAllFromUrl;
+      if (allNodeIds.length > 0) {
+        setExpandedNodes(new Set(allNodeIds));
+      }
+      return;
+    }
+
+    // After initial mount, only respond to explicit changes
+    if (
+      hasHandledExpandAllRef.current ||
+      lastExpandAllValueRef.current !== null
+    ) {
+      const wasExpanded = lastExpandAllValueRef.current;
+      lastExpandAllValueRef.current = expandAllFromUrl;
+
+      if (expandAllFromUrl && !wasExpanded && allNodeIds.length > 0) {
+        // User toggled expand all ON
+        setExpandedNodes(new Set(allNodeIds));
+      } else if (!expandAllFromUrl && wasExpanded) {
+        // User toggled expand all OFF
+        setExpandedNodes(new Set());
+      }
+    }
+
+    hasHandledExpandAllRef.current = true;
   }, [expandAllFromUrl, allNodeIds]);
 
   // Check if all expandable nodes are currently expanded
@@ -748,20 +781,9 @@ export const DocumentTableOfContents: React.FC<
   }
 
   if (!hasParentRelationships || rootNodes.length === 0) {
-    return (
-      <Wrapper>
-        <TreeContainer>
-          <div className="empty-state">
-            <ListTree size={48} className="empty-icon" />
-            <div className="empty-title">No Document Hierarchy</div>
-            <div className="empty-description">
-              Create &ldquo;parent&rdquo; relationships between documents to
-              build a navigable table of contents for this corpus.
-            </div>
-          </div>
-        </TreeContainer>
-      </Wrapper>
-    );
+    // Return null when there are no parent relationships - component should not render
+    // This allows parent components to conditionally show/hide the TOC section
+    return null;
   }
 
   return (

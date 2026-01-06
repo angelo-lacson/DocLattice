@@ -132,17 +132,30 @@ test.describe("DocumentTableOfContents", () => {
     await parentNode.focus();
     await page.keyboard.press("ArrowRight");
 
+    // Wait for expansion to complete (aria-expanded changes to true)
+    await expect(parentNode).toHaveAttribute("aria-expanded", "true", {
+      timeout: 5000,
+    });
+
     // Wait for children to be visible
     await expect(page.getByText("Child Document 1")).toBeVisible({
       timeout: 5000,
     });
+
+    // Re-focus the parent node to ensure keyboard events go to the right element
+    await parentNode.focus();
+
+    // Small settle time for React state
+    await page.waitForTimeout(100);
 
     // Press ArrowLeft to collapse
     await page.keyboard.press("ArrowLeft");
 
     // Children should be hidden (though they may still be in DOM, just not displayed)
     // Check aria-expanded attribute instead
-    await expect(parentNode).toHaveAttribute("aria-expanded", "false");
+    await expect(parentNode).toHaveAttribute("aria-expanded", "false", {
+      timeout: 5000,
+    });
   });
 
   test("aria-expanded reflects node state", async ({ mount, page }) => {
