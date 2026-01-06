@@ -43,6 +43,7 @@ export interface QueryParams {
   folderId?: string | null;
   tab?: string | null;
   messageId?: string | null;
+  homeView?: string | null; // "about" | "toc" - corpus home view selection
   showStructural?: boolean;
   showSelectedOnly?: boolean;
   showBoundingBoxes?: boolean;
@@ -227,6 +228,9 @@ export function buildQueryParams(params: QueryParams): string {
   }
   if (params.messageId) {
     searchParams.set("message", params.messageId);
+  }
+  if (params.homeView) {
+    searchParams.set("homeView", params.homeView);
   }
 
   // Visualization state - only add non-default values to keep URLs clean
@@ -807,6 +811,29 @@ export function updateTabParam(
     searchParams.set("tab", tabId);
   } else {
     searchParams.delete("tab");
+  }
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Update corpus home view selection in URL
+ * Used for deep-linking to specific view (about/summary vs table of contents) on corpus home
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param homeView - View identifier ("about" or "toc")
+ *                   Pass null to clear and use default (about)
+ */
+export function updateHomeViewParam(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  homeView: "about" | "toc" | null
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (homeView && homeView !== "about") {
+    // Only add to URL if not default value
+    searchParams.set("homeView", homeView);
+  } else {
+    searchParams.delete("homeView");
   }
   navigate({ search: searchParams.toString() }, { replace: true });
 }

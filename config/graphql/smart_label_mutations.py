@@ -7,7 +7,7 @@ from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
 from config.graphql.graphene_types import AnnotationLabelType, LabelSetType
-from config.graphql.mutations import validate_color
+from config.graphql.validation_utils import validate_color
 from opencontractserver.annotations.models import AnnotationLabel, LabelSet
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.types.enums import PermissionTypes

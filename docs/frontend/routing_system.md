@@ -202,10 +202,15 @@ graph TB
 | `?folder=`   | Filter by folder in corpus  | `?folder=folder-123`              | Phase 2 or 4   |
 | `?tab=`      | Select active tab           | `?tab=discussions`                | Phase 2 or 4   |
 | `?message=`  | Highlight message in thread | `?message=msg-456`                | Phase 2 or 4   |
+| `?homeView=` | Corpus home view (about/toc)| `?homeView=toc`                   | Phase 2 or 4   |
 
 **Tab Values:**
 - **Corpus tabs**: `home` (default), `documents`, `annotations`, `analyses`, `extracts`, `discussions`, `chats`, `analytics`, `settings`, `badges`
 - **Document sidebar tabs**: `chat` (default), `feed`, `extract`, `analysis`, `discussions`
+
+**Home View Values:**
+- `about` (default): Shows corpus description/summary
+- `toc`: Shows table of contents (document relationships hierarchy)
 
 **Corpus Tab Inline Detail Views:**
 
@@ -264,6 +269,9 @@ This pattern keeps users in the corpus context while viewing entity details, wit
 
 # Corpus chat history tab
 /c/john/legal-corpus?tab=chats
+
+# Corpus home with table of contents view
+/c/john/legal-corpus?homeView=toc
 ```
 
 ### Route Configuration
@@ -2036,11 +2044,12 @@ The OpenContracts routing system follows the principle: **One Place to Rule Them
 This includes:
 - Entity state: `openedCorpus`, `openedDocument`
 - Selection state: `selectedAnnotationIds`, `selectedAnalysesIds`, `selectedExtractIds`
+- UI state: `selectedTab`, `selectedFolderId`, `selectedThreadId`, `selectedMessageId`, `corpusHomeView`
 - Visualization state: `showStructuralAnnotations`, `showSelectedAnnotationOnly`, `showAnnotationBoundingBoxes`, `showAnnotationLabels`
 
 All other components:
 - READ ONLY via `useReactiveVar()`
-- UPDATE STATE via URL utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`
+- UPDATE STATE via URL utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`, `updateTabParam()`, `updateHomeViewParam()`
 
 Violations cause race conditions, infinite loops, and unpredictable behavior.
 
