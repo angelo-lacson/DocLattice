@@ -3159,7 +3159,7 @@ class DeleteDocumentRelationships(graphene.Mutation):
             return DeleteDocumentRelationships(
                 ok=False,
                 message=f"Error deleting document relationships: {str(e)}",
-                deleted_count=deleted_count,
+                deleted_count=0,
             )
 
 

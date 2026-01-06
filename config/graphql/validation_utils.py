@@ -6,8 +6,13 @@ This module exists to avoid circular imports between mutation modules.
 
 import re
 
-# Regex pattern for validating hex color codes (3, 4, 6, or 8 hex digits with #)
-HEX_COLOR_PATTERN = r"^#(?:[0-9a-fA-F]{3}){1,2}$|^#(?:[0-9a-fA-F]{4}){1,2}$"
+# Regex pattern for validating hex color codes
+# Explicit alternation for #RGB, #RRGGBB, #RGBA, #RRGGBBAA formats
+# Using explicit length matching instead of {1,2} quantifier for clarity
+HEX_COLOR_PATTERN = (
+    r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"  # #RGB or #RRGGBB
+    r"|^#(?:[0-9a-fA-F]{4}|[0-9a-fA-F]{8})$"  # #RGBA or #RRGGBBAA
+)
 
 
 def validate_color(color: str | None) -> tuple[bool, str | None]:
