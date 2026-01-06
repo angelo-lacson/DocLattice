@@ -309,6 +309,8 @@ type CategoryFilter = "all" | DiscussionCategory;
 
 interface CorpusDiscussionsViewProps {
   corpusId: string;
+  /** When true, hides the built-in header (for embedding in corpus tabs) */
+  hideHeader?: boolean;
 }
 
 /**
@@ -323,6 +325,7 @@ interface CorpusDiscussionsViewProps {
  */
 export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   corpusId,
+  hideHeader = false,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -427,26 +430,28 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
 
   return (
     <Container>
-      {/* Compact Header: Breadcrumb + Title + Create button */}
-      <Header>
-        <TitleSection>
-          <Breadcrumb>
-            <a href="/corpuses">Corpuses</a>
-            <span>/</span>
-            <a href={`/c/${corpus.creator?.slug}/${corpus.slug}`}>
-              {corpus.title}
-            </a>
-          </Breadcrumb>
-          <Title>Discussions</Title>
-        </TitleSection>
-        <CreateButton
-          onClick={() => setShowCreateModal(true)}
-          aria-label="Create new discussion"
-        >
-          <Plus />
-          <span>New Discussion</span>
-        </CreateButton>
-      </Header>
+      {/* Compact Header: Breadcrumb + Title + Create button (hidden when embedded) */}
+      {!hideHeader && (
+        <Header>
+          <TitleSection>
+            <Breadcrumb>
+              <a href="/corpuses">Corpuses</a>
+              <span>/</span>
+              <a href={`/c/${corpus.creator?.slug}/${corpus.slug}`}>
+                {corpus.title}
+              </a>
+            </Breadcrumb>
+            <Title>Discussions</Title>
+          </TitleSection>
+          <CreateButton
+            onClick={() => setShowCreateModal(true)}
+            aria-label="Create new discussion"
+          >
+            <Plus />
+            <span>New Discussion</span>
+          </CreateButton>
+        </Header>
+      )}
 
       {/* Single Toolbar: Category filters + Search + Sort + Tabs */}
       <Toolbar>

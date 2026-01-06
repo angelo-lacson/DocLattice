@@ -230,6 +230,12 @@ export const cache = new InMemoryCache({
         chatMessages: relayStylePagination(),
       },
     },
+    DocumentRelationshipType: {
+      keyFields: ["id"],
+      fields: {
+        // Define field policies if necessary
+      },
+    },
     ChatMessageType: {
       fields: {
         // CRITICAL: Handle all Connection types properly to prevent infinite loops
@@ -271,6 +277,8 @@ export const cache = new InMemoryCache({
         relationshipLabels: relayStylePagination(),
         extracts: relayStylePagination(),
         columns: relayStylePagination(),
+        // Document relationships - cache by corpus/document context
+        documentRelationships: relayStylePagination(["corpusId", "documentId"]),
         // Slug resolution queries - cache by input parameters
         userBySlug: {
           keyArgs: ["slug"],
@@ -343,7 +351,6 @@ export const showAnnotationLabels = makeVar<LabelDisplayBehavior>(
   LabelDisplayBehavior.ON_HOVER
 );
 export const pagesVisible = makeVar<Record<number, string>>({});
-export const showEditExtractModal = makeVar<boolean>(false);
 export const showDeleteExtractModal = makeVar<boolean>(false);
 export const showCreateExtractModal = makeVar<boolean>(false);
 export const showQueryViewState = makeVar<"ASK" | "VIEW" | "DETAILS">("ASK");
@@ -363,25 +370,49 @@ export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
 
 /**
+ * Document relationship modal state.
+ * Used to trigger the link documents modal from various entry points:
+ * - Right-click context menu on a single document
+ * - Drag and drop one document onto another
+ * - Multi-select + click "Link Documents" button
+ */
+export interface LinkDocumentsModalState {
+  open: boolean;
+  initialSourceIds: string[];
+  initialTargetIds: string[];
+}
+export const linkDocumentsModalState = makeVar<LinkDocumentsModalState>({
+  open: false,
+  initialSourceIds: [],
+  initialTargetIds: [],
+});
+
+/**
  * Extract-related global variables
  *
- * ENTITY STATE (set by CentralRouteManager Phase 1):
- *   openedExtract - Extract resolved from /e/:user/:extractId route
+ * ENTITY STATE:
+ *   openedExtract - Extract resolved from /extracts/:extractId route
+ *   Set by: CentralRouteManager OR route components (ExtractDetailRoute)
  *
- * URL-DRIVEN STATE (set by CentralRouteManager Phase 2):
+ * URL-DRIVEN STATE:
  *   selectedExtractIds - Controlled by URL query parameter ?extract=
+ *   Set by: CentralRouteManager Phase 2
  *
- * CRITICAL: ONLY CentralRouteManager is allowed to SET openedExtract and selectedExtractIds
+ * Write access is restricted to:
+ *   - CentralRouteManager (for legacy /e/:user/:extractId routes)
+ *   - Route components like ExtractDetailRoute (for new /extracts/:extractId routes)
+ *
  * All other components must:
  *   - ONLY READ via useReactiveVar()
- *   - UPDATE STATE via navigateToExtract() or updateAnnotationSelectionParams()
+ *   - UPDATE STATE via navigate() to change the URL (which triggers route resolution)
  *
  * Examples:
- *   /e/user/extract-123               → openedExtract(extractObj)
+ *   /extracts/extract-123             → openedExtract(extractObj) via ExtractDetailRoute
+ *   /e/user/extract-123               → openedExtract(extractObj) via CentralRouteManager
  *   /c/user/corpus?extract=456        → selectedExtractIds(["456"])
  *   /d/user/doc?extract=456,789       → selectedExtractIds(["456", "789"])
  */
-export const openedExtract = makeVar<ExtractType | null>(null); // ENTITY STATE - set by CentralRouteManager Phase 1
+export const openedExtract = makeVar<ExtractType | null>(null); // ENTITY STATE - set by route components
 export const selectedExtractIds = makeVar<string[]>([]); // URL-DRIVEN - set by CentralRouteManager Phase 2
 export const selectedExtract = makeVar<ExtractType | null>(null); // Legacy - kept for backward compatibility
 export const extractSearchTerm = makeVar<string>("");
@@ -516,6 +547,33 @@ export const selectedTab = makeVar<string | null>(null);
  *   /d/user/doc?thread=thread-123&message=msg-456          → selectedMessageId("msg-456")
  */
 export const selectedMessageId = makeVar<string | null>(null);
+
+/**
+ * Corpus home view selection (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Controls which view is shown on the corpus home tab: "about" (summary) or "toc" (table of contents).
+ * Defaults to "about" when not specified in URL.
+ *
+ * URL Examples:
+ *   /c/user/corpus                    → corpusHomeView(null) = default "about"
+ *   /c/user/corpus?homeView=toc       → corpusHomeView("toc")
+ *   /c/user/corpus?homeView=about     → corpusHomeView("about")
+ */
+export type CorpusHomeViewType = "about" | "toc";
+export const corpusHomeView = makeVar<CorpusHomeViewType | null>(null);
+
+/**
+ * TOC expand all state (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * When true, all nodes in the Table of Contents are expanded by default.
+ * Useful for deep-linking to a fully expanded TOC view.
+ * Defaults to false when not specified in URL.
+ *
+ * URL Examples:
+ *   /c/user/corpus?homeView=toc                    → tocExpandAll(false) = default collapsed
+ *   /c/user/corpus?homeView=toc&tocExpanded=true   → tocExpandAll(true) = all nodes expanded
+ */
+export const tocExpandAll = makeVar<boolean>(false);
 
 /**
  * Auth-related global variables

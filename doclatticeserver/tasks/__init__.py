@@ -17,6 +17,7 @@ from .lookup_tasks import build_label_lookups_task
 
 # Materialized view tasks removed - using direct queries instead
 from .permissioning_tasks import make_analysis_public_task, make_corpus_public_task
+from .telemetry_tasks import send_usage_heartbeat
 
 # Great, quick guidance on how to restructure tasks into multiple modules:
 # https://blog.sneawo.com/blog/2018/12/05/how-to-split-celery-tasks-file/
@@ -40,4 +41,5 @@ __all__ = [
     "check_badges_for_all_users",
     "generate_agent_response",
     "trigger_agent_responses_for_message",
+    "send_usage_heartbeat",
 ]

@@ -1,24 +1,35 @@
-import React, { useEffect, useCallback, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useCallback,
+  useState,
+  useRef,
+  useMemo,
+} from "react";
 import { useSetAtom, useAtom, useAtomValue } from "jotai";
-import { useReactiveVar, useMutation, useQuery } from "@apollo/client";
+import { useReactiveVar, useMutation } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { Folder, FolderOpen, PanelLeftOpen, X } from "lucide-react";
+import { X } from "lucide-react";
 import { toast } from "react-toastify";
 import {
   DndContext,
   DragEndEvent,
   DragStartEvent,
-  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
   closestCenter,
 } from "@dnd-kit/core";
-import { selectedFolderId as selectedFolderIdReactiveVar } from "../../../graphql/cache";
+import {
+  selectedFolderId as selectedFolderIdReactiveVar,
+  showUploadNewDocumentsModal,
+  selectedDocumentIds as selectedDocumentIdsReactiveVar,
+  linkDocumentsModalState,
+} from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
-import { FolderBreadcrumb } from "./FolderBreadcrumb";
+import { FolderToolbar } from "./FolderToolbar";
 import { CreateFolderModal } from "./CreateFolderModal";
+import { DocumentRelationshipModal } from "../../documents/DocumentRelationshipModal";
 import { EditFolderModal } from "./EditFolderModal";
 import { MoveFolderModal } from "./MoveFolderModal";
 import { DeleteFolderModal } from "./DeleteFolderModal";
@@ -39,16 +50,23 @@ import {
   MoveCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
-import { GET_DOCUMENTS } from "../../../graphql/queries";
 import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
+} from "../../../assets/configurations/osLegalStyles";
+import { FolderViewMode } from "../../../types/ui";
+
+// Re-export FolderViewMode as ViewMode for backward compatibility
+export type ViewMode = FolderViewMode;
 
 /**
  * FolderDocumentBrowser - Main container for folder-based document browsing
  *
  * Features:
- * - Three-column layout: Sidebar | Breadcrumb + Content | Modals
+ * - File system layout: Toolbar | Sidebar + Content | Modals
  * - Folder tree navigation on left (collapsible)
- * - Breadcrumb navigation at top of content area
+ * - Toolbar with breadcrumb, navigation, actions, view toggles
  * - Document list in main content area (passed as children)
  * - All folder modals mounted and controlled by atoms
  * - Responsive: sidebar collapses on mobile
@@ -60,6 +78,8 @@ import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
  * - children: Main content area (typically CorpusDocumentCards)
  * - showSidebar: Whether to show folder sidebar (default: true)
  * - showBreadcrumb: Whether to show breadcrumb (default: true)
+ * - viewMode: Current view mode
+ * - onViewModeChange: Callback when view mode changes
  */
 
 interface FolderDocumentBrowserProps {
@@ -69,33 +89,69 @@ interface FolderDocumentBrowserProps {
   children?: React.ReactNode;
   showSidebar?: boolean;
   showBreadcrumb?: boolean;
+  viewMode?: ViewMode;
+  onViewModeChange?: (mode: ViewMode) => void;
 }
+
+// ===============================================
+// FILE SYSTEM LAYOUT COMPONENTS
+// ===============================================
 
 const BrowserContainer = styled.div`
   position: relative;
   display: flex;
+  flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  padding: 8px;
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: 4px;
+  }
+`;
+
+const FileSystemContainer = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
+  overflow: hidden;
+  min-height: 0;
+`;
+
+// ===============================================
+// CONTENT LAYOUT COMPONENTS
+// ===============================================
+
+const ContentWrapper = styled.div`
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
 `;
 
 const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
-  width: ${(props) => (props.$collapsed ? "0px" : "320px")};
-  min-width: ${(props) => (props.$collapsed ? "0px" : "320px")};
-  height: 100%;
+  width: ${(props) => (props.$collapsed ? "0px" : "240px")};
+  min-width: ${(props) => (props.$collapsed ? "0px" : "240px")};
   display: ${(props) => (props.$visible ? "flex" : "none")};
   flex-direction: column;
-  border-right: ${(props) => (props.$collapsed ? "none" : "1px solid #e2e8f0")};
-  background: white;
+  border-right: ${(props) =>
+    props.$collapsed ? "none" : `1px solid ${OS_LEGAL_COLORS.border}`};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: ${TABLET_BREAKPOINT}px) {
     position: absolute;
-    left: ${(props) => (props.$visible && !props.$collapsed ? "0" : "-320px")};
+    left: ${(props) => (props.$visible && !props.$collapsed ? "0" : "-240px")};
+    top: 0;
+    bottom: 0;
     z-index: 100;
-    width: 320px;
-    min-width: 320px;
+    width: 240px;
+    min-width: 240px;
     box-shadow: ${(props) =>
       props.$visible && !props.$collapsed
         ? "4px 0 12px rgba(0, 0, 0, 0.1)"
@@ -103,22 +159,12 @@ const Sidebar = styled.aside<{ $visible: boolean; $collapsed: boolean }>`
   }
 `;
 
-const MainContent = styled.main<{ $hasSidebar: boolean }>`
+const MainContent = styled.main`
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100%;
   overflow: hidden;
-  margin-left: ${(props) => (props.$hasSidebar ? "0" : "0")};
-
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    margin-left: 0;
-  }
-`;
-
-const BreadcrumbWrapper = styled.div<{ $visible: boolean }>`
-  display: ${(props) => (props.$visible ? "block" : "none")};
-  flex-shrink: 0;
+  min-width: 0;
 `;
 
 const ContentArea = styled.div`
@@ -126,7 +172,7 @@ const ContentArea = styled.div`
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0;
-  background: white;
+  background: ${OS_LEGAL_COLORS.surface};
   position: relative;
 
   /* Custom scrollbar */
@@ -135,105 +181,16 @@ const ContentArea = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 5px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
-  }
-`;
-
-const ToggleButton = styled.button<{ $collapsed: boolean }>`
-  position: absolute;
-  left: ${(props) => (props.$collapsed ? "0" : "320px")};
-  top: 50%;
-  transform: translateY(-50%);
-  width: ${(props) => (props.$collapsed ? "40px" : "32px")};
-  height: ${(props) => (props.$collapsed ? "80px" : "60px")};
-  background: ${(props) => (props.$collapsed ? "#3b82f6" : "#64748b")};
-  border: 1px solid ${(props) => (props.$collapsed ? "#3b82f6" : "#64748b")};
-  border-left: ${(props) => (props.$collapsed ? "1px solid #3b82f6" : "none")};
-  border-radius: ${(props) =>
-    props.$collapsed ? "0 8px 8px 0" : "0 8px 8px 0"};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 101;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  color: white;
-  box-shadow: ${(props) =>
-    props.$collapsed
-      ? "4px 0 12px rgba(59, 130, 246, 0.4)"
-      : "-4px 0 12px rgba(100, 116, 139, 0.3)"};
-
-  &:hover {
-    background: ${(props) => (props.$collapsed ? "#2563eb" : "#475569")};
-    border-color: ${(props) => (props.$collapsed ? "#2563eb" : "#475569")};
-    color: white;
-    box-shadow: ${(props) =>
-      props.$collapsed
-        ? "4px 0 16px rgba(59, 130, 246, 0.5)"
-        : "-4px 0 16px rgba(100, 116, 139, 0.4)"};
-    transform: translateY(-50%)
-      ${(props) => (props.$collapsed ? "translateX(2px)" : "translateX(-2px)")};
-  }
-
-  &:active {
-    transform: translateY(-50%) scale(0.95);
-  }
-
-  svg {
-    width: ${(props) => (props.$collapsed ? "24px" : "18px")};
-    height: ${(props) => (props.$collapsed ? "24px" : "18px")};
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    display: none;
-  }
-`;
-
-// Mobile toggle button - shows on mobile when sidebar is hidden
-const MobileToggleButton = styled.button<{ $visible: boolean }>`
-  display: none;
-  position: fixed;
-  left: 12px;
-  bottom: 80px;
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border: none;
-  border-radius: 12px;
-  color: white;
-  cursor: pointer;
-  z-index: 99; /* Above backdrop (98) */
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-  transition: all 0.3s ease;
-  align-items: center;
-  justify-content: center;
-
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    display: ${(props) => (props.$visible ? "flex" : "none")};
-  }
-
-  &:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  svg {
-    width: 24px;
-    height: 24px;
   }
 `;
 
@@ -245,10 +202,10 @@ const MobileSidebarCloseButton = styled.button`
   right: 12px;
   width: 36px;
   height: 36px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   z-index: 10;
   align-items: center;
@@ -260,8 +217,8 @@ const MobileSidebarCloseButton = styled.button`
   }
 
   &:hover {
-    background: #e2e8f0;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.border};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   svg {
@@ -302,10 +259,10 @@ const ContextMenu = styled.div<{ $x: number; $y: number }>`
   position: fixed;
   top: ${(props) => props.$y}px;
   left: ${(props) => props.$x}px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 24px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surface};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 4px;
   min-width: 180px;
   max-width: calc(100vw - 16px);
@@ -322,17 +279,17 @@ const ContextMenuItem = styled.button`
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   text-align: left;
   transition: all 0.15s ease;
 
   &:hover {
-    background-color: #f1f5f9;
-    color: #1e293b;
+    background-color: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   &:active {
-    background-color: #e2e8f0;
+    background-color: ${OS_LEGAL_COLORS.border};
   }
 `;
 
@@ -343,6 +300,8 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   children,
   showSidebar = true,
   showBreadcrumb = true,
+  viewMode = "modern-list",
+  onViewModeChange,
 }) => {
   const setCorpusId = useSetAtom(folderCorpusIdAtom);
   const setSelectedFolderId = useSetAtom(selectedFolderIdAtom);
@@ -358,6 +317,28 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   const [activeDragType, setActiveDragType] = useState<
     "document" | "folder" | null
   >(null);
+
+  // Document relationship modal state (from reactive var for cross-component access)
+  const linkModalState = useReactiveVar(linkDocumentsModalState);
+  const selectedDocumentIds = useReactiveVar(selectedDocumentIdsReactiveVar);
+
+  // Helper to open the link modal
+  const openLinkModal = (sourceIds: string[], targetIds: string[] = []) => {
+    linkDocumentsModalState({
+      open: true,
+      initialSourceIds: sourceIds,
+      initialTargetIds: targetIds,
+    });
+  };
+
+  // Helper to close the link modal
+  const closeLinkModal = () => {
+    linkDocumentsModalState({
+      open: false,
+      initialSourceIds: [],
+      initialTargetIds: [],
+    });
+  };
 
   // Context menu state for right-clicking in content area
   const [contextMenu, setContextMenu] = React.useState<{
@@ -415,17 +396,13 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     MoveDocumentToFolderOutputs,
     MoveDocumentToFolderInputs
   >(MOVE_DOCUMENT_TO_FOLDER, {
-    // Evict all documents queries from cache to force refetch
+    // Evict documents and folders from cache to force refetch
+    // This ensures both the document list and folder tree (with doc counts) update
     update(cache) {
       cache.evict({ fieldName: "documents" });
+      cache.evict({ fieldName: "corpusFolders" });
       cache.gc();
     },
-    refetchQueries: [
-      {
-        query: GET_CORPUS_FOLDERS,
-        variables: { corpusId },
-      },
-    ],
   });
 
   // Move folder mutation
@@ -442,7 +419,11 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   });
 
   // Get parent folder ID for current folder (for ".." navigation)
-  const currentFolder = folderList.find((f) => f.id === selectedFolderId);
+  // Memoized to prevent unnecessary recalculations
+  const currentFolder = useMemo(
+    () => folderList.find((f) => f.id === selectedFolderId),
+    [folderList, selectedFolderId]
+  );
   const parentFolderId = currentFolder?.parent?.id || null;
 
   // Unified drag-drop handlers
@@ -468,6 +449,17 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       // Determine what was dropped and where
       const isDraggingDocument = dragData?.type === "document";
 
+      // Check for document-to-document drop (for creating relationships)
+      if (
+        isDraggingDocument &&
+        dropData?.type === "document-drop-target" &&
+        dragData.documentId !== dropData.documentId
+      ) {
+        // Open the relationship modal with source and target pre-populated
+        openLinkModal([dragData.documentId], [dropData.documentId]);
+        return;
+      }
+
       // Extract target folder ID from drop target
       let targetFolderId: string | null;
       const overId = over.id as string;
@@ -486,8 +478,9 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
         // Dropped on folder in sidebar tree
         targetFolderId = dropData.folderId || (overId as string);
       } else {
-        // Try to use overId as folder ID (for sidebar tree nodes)
-        targetFolderId = overId;
+        // Invalid drop target - not a folder or recognized drop zone
+        // This can happen when dropping on the container itself or other non-droppable areas
+        return;
       }
 
       if (isDraggingDocument) {
@@ -629,6 +622,30 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     closeContextMenu();
   }, [selectedFolderId, openCreateModal, closeContextMenu]);
 
+  // Handle "New Folder" toolbar button
+  const handleNewFolder = React.useCallback(() => {
+    openCreateModal(selectedFolderId);
+  }, [selectedFolderId, openCreateModal]);
+
+  // Handle "Upload" toolbar button
+  const handleUpload = React.useCallback(() => {
+    showUploadNewDocumentsModal(true);
+  }, []);
+
+  // Navigate back/up functionality
+  const canGoBack = selectedFolderId !== null && selectedFolderId !== "trash";
+  const handleGoBack = React.useCallback(() => {
+    if (parentFolderId) {
+      handleFolderSelect(parentFolderId);
+    } else {
+      handleFolderSelect(null);
+    }
+  }, [parentFolderId]);
+
+  const handleGoUp = React.useCallback(() => {
+    handleFolderSelect(null);
+  }, []);
+
   return (
     <DndContext
       sensors={sensors}
@@ -643,79 +660,71 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
           onClick={() => setSidebarCollapsed(true)}
         />
 
-        {/* Folder Tree Sidebar */}
-        <Sidebar $visible={showSidebar} $collapsed={sidebarCollapsed}>
-          {/* Mobile close button */}
-          <MobileSidebarCloseButton
-            onClick={() => setSidebarCollapsed(true)}
-            aria-label="Close folders"
-            title="Close folders"
-          >
-            <X />
-          </MobileSidebarCloseButton>
-          <FolderTreeSidebar
-            corpusId={corpusId}
-            onFolderSelect={(folderId) => {
-              handleFolderSelect(folderId);
-              // Auto-close sidebar on mobile/tablet after selection
-              if (window.innerWidth <= TABLET_BREAKPOINT) {
-                setSidebarCollapsed(true);
-              }
-            }}
-          />
-        </Sidebar>
+        <FileSystemContainer>
+          {/* Toolbar with breadcrumb, navigation, and actions */}
+          {showBreadcrumb && selectedFolderId !== "trash" && (
+            <FolderToolbar
+              showSidebar={showSidebar}
+              selectedFolderId={selectedFolderId}
+              canGoBack={canGoBack}
+              viewMode={viewMode}
+              onViewModeChange={onViewModeChange}
+              onFolderSelect={handleFolderSelect}
+              onGoBack={handleGoBack}
+              onGoUp={handleGoUp}
+              onNewFolder={handleNewFolder}
+              onUpload={handleUpload}
+              selectedDocumentCount={selectedDocumentIds.length}
+              onLinkDocuments={() => openLinkModal(selectedDocumentIds)}
+            />
+          )}
 
-        {/* Desktop Toggle Button */}
-        {showSidebar && (
-          <ToggleButton
-            $collapsed={sidebarCollapsed}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={sidebarCollapsed ? "Open folders" : "Close folders"}
-            title={sidebarCollapsed ? "Open folders" : "Close folders"}
-          >
-            {sidebarCollapsed ? <Folder /> : <FolderOpen />}
-          </ToggleButton>
-        )}
-
-        {/* Mobile Toggle Button - shows when sidebar is hidden */}
-        {showSidebar && (
-          <MobileToggleButton
-            $visible={sidebarCollapsed}
-            onClick={() => setSidebarCollapsed(false)}
-            aria-label="Open folders"
-            title="Open folders"
-          >
-            <PanelLeftOpen />
-          </MobileToggleButton>
-        )}
-
-        {/* Main Content Area */}
-        <MainContent $hasSidebar={showSidebar && !sidebarCollapsed}>
-          {/* Breadcrumb Navigation - hide for trash folder */}
-          <BreadcrumbWrapper
-            $visible={showBreadcrumb && selectedFolderId !== "trash"}
-          >
-            <FolderBreadcrumb onFolderSelect={handleFolderSelect} />
-          </BreadcrumbWrapper>
-
-          {/* Document List or Custom Content - Dropzone handled by DocumentCards child */}
-          <ContentArea
-            onContextMenu={
-              selectedFolderId === "trash"
-                ? undefined
-                : handleContentAreaContextMenu
-            }
-          >
-            {selectedFolderId === "trash" ? (
-              <TrashFolderView
+          {/* Content area with sidebar and main content */}
+          <ContentWrapper>
+            {/* Folder Tree Sidebar */}
+            <Sidebar $visible={showSidebar} $collapsed={sidebarCollapsed}>
+              {/* Mobile close button */}
+              <MobileSidebarCloseButton
+                onClick={() => setSidebarCollapsed(true)}
+                aria-label="Close folders"
+                title="Close folders"
+              >
+                <X />
+              </MobileSidebarCloseButton>
+              <FolderTreeSidebar
                 corpusId={corpusId}
-                onBack={() => handleFolderSelect(null)}
+                onFolderSelect={(folderId) => {
+                  handleFolderSelect(folderId);
+                  // Auto-close sidebar on mobile/tablet after selection
+                  if (window.innerWidth <= TABLET_BREAKPOINT) {
+                    setSidebarCollapsed(true);
+                  }
+                }}
               />
-            ) : (
-              children
-            )}
-          </ContentArea>
-        </MainContent>
+            </Sidebar>
+
+            {/* Main Content Area */}
+            <MainContent>
+              {/* Document List or Custom Content */}
+              <ContentArea
+                onContextMenu={
+                  selectedFolderId === "trash"
+                    ? undefined
+                    : handleContentAreaContextMenu
+                }
+              >
+                {selectedFolderId === "trash" ? (
+                  <TrashFolderView
+                    corpusId={corpusId}
+                    onBack={() => handleFolderSelect(null)}
+                  />
+                ) : (
+                  children
+                )}
+              </ContentArea>
+            </MainContent>
+          </ContentWrapper>
+        </FileSystemContainer>
       </BrowserContainer>
 
       {/* Folder Action Modals */}
@@ -723,6 +732,20 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       <EditFolderModal />
       <MoveFolderModal />
       <DeleteFolderModal />
+
+      {/* Document Relationship Modal */}
+      <DocumentRelationshipModal
+        open={linkModalState.open}
+        onClose={closeLinkModal}
+        corpusId={corpusId}
+        initialSourceIds={linkModalState.initialSourceIds}
+        initialTargetIds={linkModalState.initialTargetIds}
+        onSuccess={() => {
+          closeLinkModal();
+          // Clear selection after successful link
+          selectedDocumentIdsReactiveVar([]);
+        }}
+      />
 
       {/* Context menu for content area */}
       {contextMenu && (

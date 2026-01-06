@@ -28,7 +28,6 @@ import {
   showCookieAcceptModal,
   openedDocument,
   openedCorpus,
-  openedExtract,
   showSelectCorpusAnalyzerOrFieldsetModal,
   showUploadNewDocumentsModal,
   uploadModalPreloadedFiles,
@@ -60,19 +59,20 @@ import "semantic-ui-css/semantic.min.css";
 import "./App.css";
 import "react-toastify/dist/ReactToastify.css";
 import useWindowDimensions from "./components/hooks/WindowDimensionHook";
-import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { LabelDisplayBehavior } from "./types/graphql-api";
 import { CookieConsentDialog } from "./components/cookies/CookieConsent";
+import { initializeAnalyticsOnLoad } from "./utils/analytics";
 import { Extracts } from "./views/Extracts";
 import { BadgeManagement } from "./components/badges/BadgeManagement";
 import { GlobalSettingsPanel, GlobalAgentManagement } from "./components/admin";
 import { useEnv } from "./components/hooks/UseEnv";
-import { EditExtractModal } from "./components/widgets/modals/EditExtractModal";
+import { ExtractDetailRoute } from "./components/routes/ExtractDetailRoute";
 import { SelectAnalyzerOrFieldsetModal } from "./components/widgets/modals/SelectCorpusAnalyzerOrFieldsetAnalyzer";
 import { DocumentUploadModal } from "./components/widgets/modals/DocumentUploadModal";
 import { FileUploadPackageProps } from "./components/widgets/modals/DocumentUploadModal";
 import { DocumentLandingRoute } from "./components/routes/DocumentLandingRoute";
 import { ExtractLandingRoute } from "./components/routes/ExtractLandingRoute";
+import { LabelSetLandingRoute } from "./components/routes/LabelSetLandingRoute";
 import { NotFound } from "./components/routes/NotFound";
 import { CorpusLandingRoute } from "./components/routes/CorpusLandingRoute";
 import { CorpusThreadRoute } from "./components/routes/CorpusThreadRoute";
@@ -100,7 +100,6 @@ export const App = () => {
   const show_cookie_modal = useReactiveVar(showCookieAcceptModal);
   const knowledge_base_modal = useReactiveVar(showKnowledgeBaseModal);
   const opened_corpus = useReactiveVar(openedCorpus);
-  const opened_extract = useReactiveVar(openedExtract);
   const opened_document = useReactiveVar(openedDocument);
   const document_to_edit = useReactiveVar(editingDocument);
   const document_to_view = useReactiveVar(viewingDocument);
@@ -125,10 +124,8 @@ export const App = () => {
     });
   }, []);
 
-  // For now, our responsive layout is a bit hacky, but it's working well enough to
-  // provide a passable UI on mobile. Your results not guaranteed X-)
+  // For mobile display settings
   const { width } = useWindowDimensions();
-  const show_mobile_menu = width <= 1000;
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -240,7 +237,7 @@ export const App = () => {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Cookie consent initialization                                          */
+  /* Cookie consent and analytics initialization                            */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     // Run once on mount in browser to determine whether to display the
@@ -254,6 +251,9 @@ export const App = () => {
     if (showCookieAcceptModal() === false && !accepted) {
       showCookieAcceptModal(true);
     }
+
+    // Initialize PostHog analytics if consent was previously given
+    initializeAnalyticsOnLoad();
   }, []);
 
   return (
@@ -319,7 +319,7 @@ export const App = () => {
               overflow: "hidden",
             }}
           >
-            {show_mobile_menu ? <MobileNavMenu /> : <NavMenu />}
+            <NavMenu />
             <Container
               id="AppContainer"
               style={{
@@ -341,13 +341,6 @@ export const App = () => {
                   corpus={opened_corpus}
                   document={opened_document ? opened_document : undefined}
                   onClose={() => showSelectCorpusAnalyzerOrFieldsetModal(false)}
-                />
-              )}
-              {opened_extract && (
-                <EditExtractModal
-                  ext={opened_extract}
-                  open={opened_extract !== null}
-                  toggleModal={() => openedExtract(null)}
                 />
               )}
               <DocumentUploadModal
@@ -464,12 +457,21 @@ export const App = () => {
                   ) : (
                     <></>
                   )}
+                  {/* LabelSet routes */}
+                  <Route
+                    path="/label_sets/:labelsetId"
+                    element={<LabelSetLandingRoute />}
+                  />
                   <Route path="/label_sets" element={<Labelsets />} />
                   <Route path="/annotations" element={<Annotations />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route
                     path="/terms_of_service"
                     element={<TermsOfService />}
+                  />
+                  <Route
+                    path="/extracts/:extractId"
+                    element={<ExtractDetailRoute />}
                   />
                   <Route path="/extracts" element={<Extracts />} />
                   <Route path="/admin/badges" element={<BadgeManagement />} />

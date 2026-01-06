@@ -474,21 +474,17 @@ class DocumentRelationship(BaseOCModel):
         blank=True,
     )
 
+    # Note: DocumentRelationship inherits permissions from source_document,
+    # target_document, and corpus - no individual guardian permissions needed.
+    # Use DocumentRelationshipQueryOptimizer for permission-aware queries.
+
     class Meta:
-        permissions = (
-            ("permission_documentrelationship", "permission document relationship"),
-            ("publish_documentrelationship", "publish document relationship"),
-            ("create_documentrelationship", "create document relationship"),
-            ("read_documentrelationship", "read document relationship"),
-            ("update_documentrelationship", "update document relationship"),
-            ("remove_documentrelationship", "delete document relationship"),
-            ("comment_documentrelationship", "comment document relationship"),
-        )
         indexes = [
             django.db.models.Index(fields=["source_document"]),
             django.db.models.Index(fields=["target_document"]),
             django.db.models.Index(fields=["relationship_type"]),
             django.db.models.Index(fields=["annotation_label"]),
+            django.db.models.Index(fields=["corpus"]),
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
@@ -502,8 +498,14 @@ class DocumentRelationship(BaseOCModel):
         ]
 
     def clean(self):
-        """Validate that annotation_label is present for RELATIONSHIP type."""
+        """
+        Validate DocumentRelationship constraints:
+        1. annotation_label is required for RELATIONSHIP type
+        2. corpus is required
+        3. Both documents must be in the specified corpus
+        """
         super().clean()
+
         if self.relationship_type == "RELATIONSHIP" and not self.annotation_label:
             raise ValidationError(
                 {
@@ -511,23 +513,29 @@ class DocumentRelationship(BaseOCModel):
                 }
             )
 
+        # Corpus is required
+        if not self.corpus_id:
+            raise ValidationError(
+                {"corpus": "Corpus is required for document relationships."}
+            )
+
+        # Both documents must be in the corpus via DocumentPath
+        if self.source_document_id and self.target_document_id and self.corpus_id:
+            docs_in_corpus = DocumentPath.objects.filter(
+                corpus_id=self.corpus_id,
+                document_id__in=[self.source_document_id, self.target_document_id],
+                is_current=True,
+                is_deleted=False,
+            ).count()
+
+            if docs_in_corpus != 2:
+                raise ValidationError(
+                    "Both source and target documents must be in the specified corpus."
+                )
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
-
-
-# Model for Django Guardian permissions
-class DocumentRelationshipUserObjectPermission(UserObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "DocumentRelationship", on_delete=django.db.models.CASCADE
-    )
-
-
-# Model for Django Guardian permissions
-class DocumentRelationshipGroupObjectPermission(GroupObjectPermissionBase):
-    content_object = django.db.models.ForeignKey(
-        "DocumentRelationship", on_delete=django.db.models.CASCADE
-    )
 
 
 # -------------------- DocumentPath -------------------- #

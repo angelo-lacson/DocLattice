@@ -7,7 +7,11 @@ from graphql_relay import to_global_id
 from config.graphql.schema import schema
 from doclatticeserver.annotations.models import AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
-from doclatticeserver.documents.models import Document, DocumentRelationship
+from doclatticeserver.documents.models import (
+    Document,
+    DocumentPath,
+    DocumentRelationship,
+)
 from doclatticeserver.tests.fixtures import SAMPLE_PDF_FILE_TWO_PATH
 
 User = get_user_model()
@@ -59,6 +63,26 @@ class DocumentRelationshipsQueryTestCase(TestCase):
             text="Test Relationship",
             label_type="DOC_RELATIONSHIP_LABEL",
             creator=self.user,
+        )
+
+        # Add documents to corpus via DocumentPath (required for DocumentRelationship)
+        DocumentPath.objects.create(
+            document=self.source_doc,
+            corpus=self.corpus,
+            creator=self.user,
+            path="/source_doc",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=self.target_doc,
+            corpus=self.corpus,
+            creator=self.user,
+            path="/target_doc",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
         )
 
         # Create test relationships

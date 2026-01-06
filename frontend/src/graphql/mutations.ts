@@ -39,6 +39,9 @@ export interface LoginOutputs {
       id: string;
       email: string;
       name: string;
+      username: string;
+      isUsageCapped: boolean;
+      isSuperuser: boolean;
     };
   };
 }
@@ -55,6 +58,7 @@ export const LOGIN_MUTATION = gql`
         name
         username
         isUsageCapped
+        isSuperuser
       }
     }
   }
@@ -96,6 +100,7 @@ export interface UpdateCorpusInputs {
   // NOTE: isPublic removed - use SET_CORPUS_VISIBILITY mutation instead
   corpusAgentInstructions?: string;
   documentAgentInstructions?: string;
+  categories?: string[];
 }
 
 export interface UpdateCorpusOutputs {
@@ -123,6 +128,7 @@ export const UPDATE_CORPUS = gql`
     $slug: String
     $corpusAgentInstructions: String
     $documentAgentInstructions: String
+    $categories: [ID]
   ) {
     updateCorpus(
       id: $id
@@ -134,6 +140,7 @@ export const UPDATE_CORPUS = gql`
       slug: $slug
       corpusAgentInstructions: $corpusAgentInstructions
       documentAgentInstructions: $documentAgentInstructions
+      categories: $categories
     ) {
       ok
       message
@@ -228,6 +235,7 @@ export interface CreateCorpusInputs {
   filename?: string;
   labelSet?: string;
   preferredEmbedder?: string;
+  categories?: string[];
 }
 
 export interface CreateCorpusOutputs {
@@ -245,6 +253,7 @@ export const CREATE_CORPUS = gql`
     $title: String
     $preferredEmbedder: String
     $slug: String
+    $categories: [ID]
   ) {
     createCorpus(
       description: $description
@@ -253,6 +262,7 @@ export const CREATE_CORPUS = gql`
       title: $title
       preferredEmbedder: $preferredEmbedder
       slug: $slug
+      categories: $categories
     ) {
       ok
       message
@@ -399,8 +409,10 @@ export interface DeleteLabelsetInputs {
 }
 
 export interface DeleteLabelsetOutputs {
-  ok?: boolean;
-  message?: string;
+  deleteLabelset: {
+    ok?: boolean;
+    message?: string;
+  };
 }
 
 export const DELETE_LABELSET = gql`
@@ -490,8 +502,10 @@ export interface UpdateAnnotationLabelInputs {
 }
 
 export interface UpdateAnnotationLabelOutputs {
-  ok?: boolean;
-  message?: string;
+  updateAnnotationLabel: {
+    ok?: boolean;
+    message?: string;
+  };
 }
 
 export const UPDATE_ANNOTATION_LABEL = gql`
@@ -731,17 +745,21 @@ export const DELETE_ANNOTATION_LABEL = gql`
 `;
 
 export interface DeleteMultipleAnnotationLabelInputs {
-  labelIdsToDelete: string[];
+  annotationLabelIdsToDelete: string[];
 }
 
 export interface DeleteMultipleAnnotationLabelOutputs {
-  ok?: boolean;
-  message?: string;
+  deleteMultipleAnnotationLabels: {
+    ok?: boolean;
+    message?: string;
+  };
 }
 
 export const DELETE_MULTIPLE_ANNOTATION_LABELS = gql`
-  mutation ($labelIdsToDelete: [String]!) {
-    deleteMultipleLabels(labelIdsToDelete: $labelIdsToDelete) {
+  mutation ($annotationLabelIdsToDelete: [String]!) {
+    deleteMultipleAnnotationLabels(
+      annotationLabelIdsToDelete: $annotationLabelIdsToDelete
+    ) {
       ok
       message
     }
@@ -3467,3 +3485,211 @@ export interface RollbackModerationActionOutput {
     } | null;
   };
 }
+
+// ============================================================================
+// DOCUMENT RELATIONSHIP MUTATIONS
+// ============================================================================
+
+export interface CreateDocumentRelationshipInputs {
+  sourceDocumentId: string;
+  targetDocumentId: string;
+  relationshipType: string; // "RELATIONSHIP" | "NOTES"
+  corpusId: string;
+  annotationLabelId?: string;
+  data?: Record<string, any>;
+}
+
+export interface CreateDocumentRelationshipOutputs {
+  createDocumentRelationship: {
+    ok: boolean;
+    message: string;
+    documentRelationship: {
+      id: string;
+      relationshipType: string;
+      data?: Record<string, any>;
+      sourceDocument: {
+        id: string;
+        title: string;
+        icon?: string;
+      };
+      targetDocument: {
+        id: string;
+        title: string;
+        icon?: string;
+      };
+      annotationLabel?: {
+        id: string;
+        text: string;
+        color: string;
+        icon?: string;
+      };
+      corpus: {
+        id: string;
+      };
+      creator: {
+        id: string;
+        username: string;
+      };
+      created: string;
+      myPermissions?: string[];
+    } | null;
+  };
+}
+
+export const CREATE_DOCUMENT_RELATIONSHIP = gql`
+  mutation CreateDocumentRelationship(
+    $sourceDocumentId: String!
+    $targetDocumentId: String!
+    $relationshipType: String!
+    $corpusId: String!
+    $annotationLabelId: String
+    $data: GenericScalar
+  ) {
+    createDocumentRelationship(
+      sourceDocumentId: $sourceDocumentId
+      targetDocumentId: $targetDocumentId
+      relationshipType: $relationshipType
+      corpusId: $corpusId
+      annotationLabelId: $annotationLabelId
+      data: $data
+    ) {
+      ok
+      message
+      documentRelationship {
+        id
+        relationshipType
+        data
+        sourceDocument {
+          id
+          title
+          icon
+        }
+        targetDocument {
+          id
+          title
+          icon
+        }
+        annotationLabel {
+          id
+          text
+          color
+          icon
+        }
+        corpus {
+          id
+        }
+        creator {
+          id
+          username
+        }
+        created
+        myPermissions
+      }
+    }
+  }
+`;
+
+export interface UpdateDocumentRelationshipInputs {
+  documentRelationshipId: string;
+  relationshipType?: string;
+  annotationLabelId?: string;
+  data?: Record<string, any>;
+}
+
+export interface UpdateDocumentRelationshipOutputs {
+  updateDocumentRelationship: {
+    ok: boolean;
+    message: string;
+    documentRelationship: {
+      id: string;
+      relationshipType: string;
+      data?: Record<string, any>;
+      annotationLabel?: {
+        id: string;
+        text: string;
+        color: string;
+        icon?: string;
+      };
+      modified: string;
+      myPermissions?: string[];
+    } | null;
+  };
+}
+
+export const UPDATE_DOCUMENT_RELATIONSHIP = gql`
+  mutation UpdateDocumentRelationship(
+    $documentRelationshipId: String!
+    $relationshipType: String
+    $annotationLabelId: String
+    $data: GenericScalar
+  ) {
+    updateDocumentRelationship(
+      documentRelationshipId: $documentRelationshipId
+      relationshipType: $relationshipType
+      annotationLabelId: $annotationLabelId
+      data: $data
+    ) {
+      ok
+      message
+      documentRelationship {
+        id
+        relationshipType
+        data
+        annotationLabel {
+          id
+          text
+          color
+          icon
+        }
+        modified
+        myPermissions
+      }
+    }
+  }
+`;
+
+export interface DeleteDocumentRelationshipInputs {
+  documentRelationshipId: string;
+}
+
+export interface DeleteDocumentRelationshipOutputs {
+  deleteDocumentRelationship: {
+    ok: boolean;
+    message: string;
+  };
+}
+
+export const DELETE_DOCUMENT_RELATIONSHIP = gql`
+  mutation DeleteDocumentRelationship($documentRelationshipId: String!) {
+    deleteDocumentRelationship(
+      documentRelationshipId: $documentRelationshipId
+    ) {
+      ok
+      message
+    }
+  }
+`;
+
+export interface DeleteDocumentRelationshipsInputs {
+  documentRelationshipIds: string[];
+}
+
+export interface DeleteDocumentRelationshipsOutputs {
+  deleteDocumentRelationships: {
+    ok: boolean;
+    message: string;
+    deletedCount: number;
+  };
+}
+
+export const DELETE_DOCUMENT_RELATIONSHIPS = gql`
+  mutation DeleteDocumentRelationships($documentRelationshipIds: [String!]!) {
+    deleteDocumentRelationships(
+      documentRelationshipIds: $documentRelationshipIds
+    ) {
+      ok
+      message
+      deletedCount
+    }
+  }
+`;

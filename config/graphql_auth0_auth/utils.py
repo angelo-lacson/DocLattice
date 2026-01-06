@@ -1,5 +1,7 @@
 import json
 import logging
+import threading
+import time
 import uuid
 
 import jwt
@@ -13,6 +15,57 @@ from config.graphql_auth0_auth.settings import auth0_settings
 
 logger = logging.getLogger(__name__)
 
+# JWKS cache to avoid fetching on every token validation
+# Cache expires after 10 minutes (600 seconds)
+# Thread-safe implementation using a lock for concurrent environments
+_jwks_cache: dict = {"data": None, "expires_at": 0}
+_jwks_cache_lock = threading.Lock()
+_JWKS_CACHE_TTL = 600  # seconds
+
+
+def _get_cached_jwks(domain: str) -> dict:
+    """
+    Fetch JWKS from Auth0 with caching.
+    Returns cached JWKS if still valid, otherwise fetches fresh data.
+
+    Thread-safe implementation using a lock to prevent race conditions
+    in concurrent environments (Gunicorn workers, async requests).
+    """
+    with _jwks_cache_lock:
+        current_time = time.time()
+        if _jwks_cache["data"] is not None and current_time < _jwks_cache["expires_at"]:
+            logger.debug("_get_cached_jwks() - Using cached JWKS")
+            return _jwks_cache["data"]
+
+        logger.debug("_get_cached_jwks() - Fetching fresh JWKS from Auth0")
+        try:
+            response = requests.get(
+                f"https://{domain}/.well-known/jwks.json", timeout=10
+            )
+            response.raise_for_status()
+            jwks = response.json()
+        except requests.RequestException as e:
+            logger.error(f"_get_cached_jwks() - Failed to fetch JWKS from Auth0: {e}")
+            # Return stale cache if available as fallback
+            if _jwks_cache["data"] is not None:
+                logger.warning(
+                    "_get_cached_jwks() - Using stale JWKS cache due to fetch failure"
+                )
+                return _jwks_cache["data"]
+            raise
+        except ValueError as e:
+            logger.error(f"_get_cached_jwks() - Invalid JSON response from Auth0: {e}")
+            if _jwks_cache["data"] is not None:
+                logger.warning(
+                    "_get_cached_jwks() - Using stale JWKS cache due to JSON parse failure"
+                )
+                return _jwks_cache["data"]
+            raise
+
+        _jwks_cache["data"] = jwks
+        _jwks_cache["expires_at"] = current_time + _JWKS_CACHE_TTL
+        return jwks
+
 
 def jwt_auth0_decode(token):
     logger.debug(
@@ -21,9 +74,7 @@ def jwt_auth0_decode(token):
     try:
         header = jwt.get_unverified_header(token)
         logger.debug(f"jwt_auth0_decode() - Header: {header}")
-        jwks = requests.get(
-            f"https://{auth0_settings.AUTH0_DOMAIN}/.well-known/jwks.json"
-        ).json()
+        jwks = _get_cached_jwks(auth0_settings.AUTH0_DOMAIN)
         logger.debug(
             f"jwt_auth0_decode() - Retrieved JWKS with {len(jwks.get('keys', []))} keys"
         )

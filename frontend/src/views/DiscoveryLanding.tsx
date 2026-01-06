@@ -1,26 +1,111 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import styled from "styled-components";
-import { useQuery, useReactiveVar } from "@apollo/client";
+import { gql, useQuery, useReactiveVar } from "@apollo/client";
 import { RefreshCw, X, AlertCircle } from "lucide-react";
 import { authToken } from "../graphql/cache";
-import { color } from "../theme/colors";
 import {
-  HeroSection,
-  StatsBar,
-  TrendingCorpuses,
-  RecentDiscussions,
-  TopContributors,
+  // New components using OS-Legal-Style library
+  NewHeroSection,
+  StatsSection,
+  FeaturedCollections,
+  ActivitySection,
+  GetStarted,
+  CompactLeaderboard,
+  // Legacy components still in use
   CallToAction,
 } from "../components/landing";
 import {
   GET_DISCOVERY_DATA,
   GetDiscoveryDataOutput,
 } from "../graphql/landing-queries";
+
+// Local storage key for anonymous user dismissal
+const GETTING_STARTED_DISMISSED_KEY = "oc_getting_started_dismissed";
+
+// Query to get current user preferences
+const GET_USER_PREFERENCES = gql`
+  query GetUserPreferences {
+    me {
+      id
+      dismissedGettingStarted
+    }
+  }
+`;
+
+interface UserPreferencesData {
+  me: {
+    id: string;
+    dismissedGettingStarted: boolean;
+  } | null;
+}
+
+/**
+ * Discover Page - Clean, minimal design following Storybook reference
+ *
+ * Layout:
+ * - Centered content container (max-width: 900px)
+ * - Clean white/light gray background
+ * - Minimal hero with serif typography
+ * - 2-column stats grid
+ * - Featured collections with section header
+ * - Activity feed
+ */
+
 const PageContainer = styled.div`
   height: 100%;
-  background: ${color.N1};
+  background: #fafafa;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-y: auto;
   overflow-x: hidden;
+`;
+
+const ContentContainer = styled.main`
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+
+  @media (max-width: 768px) {
+    padding: 32px 16px 60px;
+  }
+`;
+
+const SectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+`;
+
+const SectionTitle = styled.h2`
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 24px;
+  font-weight: 400;
+  color: #0f766e;
+  margin: 0;
+`;
+
+const SectionLink = styled.a`
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+
+  &:hover {
+    color: #0f766e;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+const Section = styled.section<{ $marginBottom?: number }>`
+  margin-bottom: ${(props) => props.$marginBottom || 56}px;
 `;
 
 const ErrorBanner = styled.div`
@@ -29,8 +114,8 @@ const ErrorBanner = styled.div`
   justify-content: center;
   gap: 1rem;
   padding: 1rem 2rem;
-  background: linear-gradient(135deg, ${color.R2} 0%, ${color.R1} 100%);
-  border-bottom: 1px solid ${color.R3};
+  background: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
+  border-bottom: 1px solid #fecaca;
   font-size: 0.9375rem;
 
   @media (max-width: 640px) {
@@ -44,7 +129,7 @@ const ErrorContent = styled.div`
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: ${color.R8};
+  color: #991b1b;
 
   svg {
     flex-shrink: 0;
@@ -71,12 +156,12 @@ const ErrorButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   ${(props) =>
     props.$variant === "primary"
       ? `
-    background: ${color.R6};
+    background: #dc2626;
     color: white;
     border: none;
 
     &:hover {
-      background: ${color.R7};
+      background: #b91c1c;
     }
 
     &:disabled {
@@ -86,11 +171,11 @@ const ErrorButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   `
       : `
     background: transparent;
-    color: ${color.R7};
-    border: 1px solid ${color.R4};
+    color: #b91c1c;
+    border: 1px solid #fecaca;
 
     &:hover {
-      background: ${color.R2};
+      background: #fee2e2;
     }
   `}
 
@@ -113,6 +198,12 @@ const ErrorButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   }
 `;
 
+const ChevronIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M6.22 4.22a.75.75 0 011.06 0l3.25 3.25a.75.75 0 010 1.06l-3.25 3.25a.75.75 0 01-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 010-1.06z" />
+  </svg>
+);
+
 interface DiscoveryLandingProps {
   /** Override auth state for testing */
   isAuthenticatedOverride?: boolean;
@@ -130,6 +221,41 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
   // State for error banner dismiss
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // State for category filtering
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // State for Getting Started dismissal (local state for anonymous users)
+  const [localDismissed, setLocalDismissed] = useState(() => {
+    // Check localStorage for anonymous users
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(GETTING_STARTED_DISMISSED_KEY) === "true";
+    }
+    return false;
+  });
+
+  // Query user preferences if authenticated
+  const { data: userPrefsData } = useQuery<UserPreferencesData>(
+    GET_USER_PREFERENCES,
+    {
+      skip: !isAuthenticated,
+      fetchPolicy: "cache-and-network",
+    }
+  );
+
+  // Determine if Getting Started is dismissed
+  const isGettingStartedDismissed = isAuthenticated
+    ? userPrefsData?.me?.dismissedGettingStarted || localDismissed
+    : localDismissed;
+
+  // Handle Getting Started dismiss
+  const handleDismissGettingStarted = useCallback(() => {
+    setLocalDismissed(true);
+    // For anonymous users, store in localStorage
+    if (!isAuthenticated && typeof window !== "undefined") {
+      localStorage.setItem(GETTING_STARTED_DISMISSED_KEY, "true");
+    }
+  }, [isAuthenticated]);
 
   // Fetch all discovery data in a single query
   const { data, loading, error, refetch } = useQuery<GetDiscoveryDataOutput>(
@@ -179,9 +305,6 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
 
   return (
     <PageContainer>
-      {/* Hero Section - Always visible */}
-      <HeroSection isAuthenticated={isAuthenticated} />
-
       {/* Error Banner - Only show if there's an error and not dismissed */}
       {showError && (
         <ErrorBanner>
@@ -210,30 +333,73 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
         </ErrorBanner>
       )}
 
-      {/* Stats Bar - Community metrics */}
-      <StatsBar stats={data?.communityStats || null} loading={loading} />
+      <ContentContainer>
+        {/* Hero Section - Minimal design with search and category tabs */}
+        <NewHeroSection
+          isAuthenticated={isAuthenticated}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+        />
 
-      {/* Trending Collections */}
-      <TrendingCorpuses
-        corpuses={data?.corpuses?.edges || null}
-        loading={loading}
-      />
+        {/* Stats Section - 2-column grid, no icons */}
+        <Section $marginBottom={56}>
+          <StatsSection
+            stats={data?.communityStats || null}
+            loading={loading}
+          />
+        </Section>
 
-      {/* Recent Discussions */}
-      <RecentDiscussions
-        discussions={data?.conversations?.edges || null}
-        loading={loading}
-        totalCount={data?.conversations?.totalCount}
-      />
+        {/* Get Started - Prominent placement for new users */}
+        <Section $marginBottom={56}>
+          <GetStarted
+            isAuthenticated={isAuthenticated}
+            isDismissed={isGettingStartedDismissed}
+            onDismiss={handleDismissGettingStarted}
+          />
+        </Section>
 
-      {/* Top Contributors */}
-      <TopContributors
-        contributors={data?.globalLeaderboard || null}
-        loading={loading}
-      />
+        {/* Featured Collections with Section Header */}
+        <Section $marginBottom={56}>
+          <SectionHeader>
+            <SectionTitle>Featured Collections</SectionTitle>
+            <SectionLink href="/corpuses">
+              View all
+              <ChevronIcon />
+            </SectionLink>
+          </SectionHeader>
+          <FeaturedCollections
+            corpuses={data?.corpuses?.edges || null}
+            loading={loading}
+            selectedCategory={selectedCategory}
+          />
+        </Section>
 
-      {/* Call to Action - Only for anonymous users */}
-      <CallToAction isAuthenticated={isAuthenticated} />
+        {/* Recent Activity with Section Header */}
+        <Section $marginBottom={56}>
+          <SectionHeader>
+            <SectionTitle>Recent Activity</SectionTitle>
+          </SectionHeader>
+          <ActivitySection
+            discussions={data?.conversations?.edges || null}
+            loading={loading}
+            totalCount={data?.conversations?.totalCount}
+          />
+        </Section>
+
+        {/* Top Contributors - Compact leaderboard using OS-Legal-Style */}
+        <Section $marginBottom={56}>
+          <SectionHeader>
+            <SectionTitle>Top Contributors</SectionTitle>
+          </SectionHeader>
+          <CompactLeaderboard
+            contributors={data?.globalLeaderboard || null}
+            loading={loading}
+          />
+        </Section>
+
+        {/* Call to Action - Only for anonymous users */}
+        <CallToAction isAuthenticated={isAuthenticated} />
+      </ContentContainer>
     </PageContainer>
   );
 };
