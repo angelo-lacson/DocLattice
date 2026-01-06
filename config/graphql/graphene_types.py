@@ -4,7 +4,7 @@ from typing import Optional
 import graphene
 import graphene.types.json
 from django.contrib.auth import get_user_model
-from django.db.models import Q, QuerySet
+from django.db.models import QuerySet
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django import DjangoObjectType
@@ -625,10 +625,13 @@ class DocumentRelationshipType(AnnotatePermissionsForReadMixin, DjangoObjectType
 
     @classmethod
     def get_queryset(cls, queryset, info):
+        # DocumentRelationship uses inherited permissions (not PermissionManager)
+        # Permission filtering is done by DocumentRelationshipQueryOptimizer
+        # in the resolver, so just pass through the queryset here
         if issubclass(type(queryset), QuerySet):
-            return queryset.visible_to_user(info.context.user)
+            return queryset
         elif "RelatedManager" in str(type(queryset)):
-            return queryset.all().visible_to_user(info.context.user)
+            return queryset.all()
         else:
             return queryset
 
@@ -969,25 +972,76 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     # New field for document relationships
     all_doc_relationships = graphene.List(
         DocumentRelationshipType,
-        corpus_id=graphene.ID(),
+        corpus_id=graphene.String(),
     )
 
-    def resolve_all_doc_relationships(self, info, corpus_id=None):
-        try:
-            if corpus_id is None:
-                relationships = DocumentRelationship.objects.filter(
-                    (Q(source_document=self) | Q(target_document=self))
-                    & Q(structural=True)
-                ).distinct()
-            else:
-                corpus_pk = from_global_id(corpus_id)[1]
-                # Get relationships where this document is either source or target
-                relationships = DocumentRelationship.objects.filter(
-                    (Q(source_document=self) | Q(target_document=self))
-                    & Q(corpus_id=corpus_pk)
-                ).distinct()
+    # Relationship count field for efficient badge display
+    doc_relationship_count = graphene.Int(
+        corpus_id=graphene.String(),
+        description="Count of document relationships for this document in the given corpus",
+    )
 
-            return relationships
+    def resolve_doc_relationship_count(self, info, corpus_id=None):
+        """
+        Return the count of document relationships for this document.
+
+        Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
+        DocumentRelationship has its own guardian permissions.
+
+        Performance: Passes info.context to the query optimizer for request-level
+        caching of visible document/corpus IDs. This prevents N+1 queries when
+        this field is requested for multiple documents in a single GraphQL query.
+        """
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        try:
+            user = info.context.user
+            corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+
+            # Use the query optimizer for proper permission filtering
+            # Pass info.context for request-level caching to prevent N+1 queries
+            return DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+                user=user,
+                document_id=self.id,
+                corpus_id=int(corpus_pk) if corpus_pk else None,
+                context=info.context,
+            ).count()
+        except Exception as e:
+            logger.warning(
+                f"Failed resolving doc_relationship_count for document {self.id}. "
+                f"Error: {e}"
+            )
+            return 0
+
+    def resolve_all_doc_relationships(self, info, corpus_id=None):
+        """
+        Resolve DocumentRelationship objects for this document.
+
+        Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
+        DocumentRelationship has its own guardian permissions (unlike annotation
+        Relationships which inherit from document/corpus).
+
+        Performance: Passes info.context to the query optimizer for request-level
+        caching of visible document/corpus IDs.
+        """
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        try:
+            user = info.context.user
+            corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+
+            # Use the query optimizer for proper permission filtering
+            # Pass info.context for request-level caching
+            return DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+                user=user,
+                document_id=self.id,
+                corpus_id=int(corpus_pk) if corpus_pk else None,
+                context=info.context,
+            )
         except Exception as e:
             logger.warning(
                 "Failed resolving document relationships query for "

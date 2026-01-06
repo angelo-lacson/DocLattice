@@ -315,10 +315,110 @@ class DocumentRelationshipQueryOptimizer:
     """
     Optimized queries for DocumentRelationship objects.
 
-    DocumentRelationship has its own guardian permissions (unlike annotation
-    Relationships which inherit from document/corpus). This optimizer provides
+    DocumentRelationship inherits permissions from source_document + target_document
+    + corpus (same model as annotation Relationships). This optimizer provides
     centralized, permission-aware queries with proper eager loading.
+
+    Permission Model:
+    - READ: Can read BOTH source and target documents (and corpus if set)
+    - CREATE: Can create on BOTH source and target documents (and corpus if set)
+    - UPDATE: Can update on BOTH source and target documents (and corpus if set)
+    - DELETE: Can delete on BOTH source and target documents (and corpus if set)
+
+    Formula: Effective Permission = MIN(source_doc_perm, target_doc_perm, corpus_perm)
+
+    Performance Note:
+    The _get_visible_document_ids and _get_visible_corpus_ids methods support
+    request-level caching via the info.context parameter to prevent N+1 queries
+    when resolving relationship counts for multiple documents in a single request.
     """
+
+    # Cache key prefixes for request-level caching
+    _VISIBLE_DOC_IDS_CACHE_KEY = "_doc_rel_visible_doc_ids"
+    _VISIBLE_CORPUS_IDS_CACHE_KEY = "_doc_rel_visible_corpus_ids"
+
+    @classmethod
+    def _get_visible_document_ids(cls, user, context=None) -> set:
+        """
+        Get IDs of all documents visible to user.
+
+        Args:
+            user: The requesting user
+            context: Optional GraphQL context for request-level caching.
+                     When provided, results are cached on the context to prevent
+                     N+1 queries when called multiple times in the same request.
+
+        Returns:
+            Set of document IDs visible to the user
+        """
+        from opencontractserver.documents.models import Document
+
+        # Try to use cached value from context
+        if context is not None:
+            cache_key = f"{cls._VISIBLE_DOC_IDS_CACHE_KEY}_{user.id}"
+            if hasattr(context, cache_key):
+                return getattr(context, cache_key)
+
+        # Compute visible document IDs
+        visible_ids = set(
+            Document.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+
+        # Cache on context if available
+        if context is not None:
+            cache_key = f"{cls._VISIBLE_DOC_IDS_CACHE_KEY}_{user.id}"
+            setattr(context, cache_key, visible_ids)
+
+        return visible_ids
+
+    @classmethod
+    def _get_visible_corpus_ids(cls, user, context=None) -> set:
+        """
+        Get IDs of all corpuses visible to user.
+
+        Args:
+            user: The requesting user
+            context: Optional GraphQL context for request-level caching.
+                     When provided, results are cached on the context to prevent
+                     N+1 queries when called multiple times in the same request.
+
+        Returns:
+            Set of corpus IDs visible to the user
+        """
+        from opencontractserver.corpuses.models import Corpus
+
+        # Try to use cached value from context
+        if context is not None:
+            cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user.id}"
+            if hasattr(context, cache_key):
+                return getattr(context, cache_key)
+
+        # Compute visible corpus IDs
+        visible_ids = set(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+
+        # Cache on context if available
+        if context is not None:
+            cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user.id}"
+            setattr(context, cache_key, visible_ids)
+
+        return visible_ids
+
+    @classmethod
+    def _check_corpus_permission(cls, user, corpus) -> bool:
+        """Check if user can read the corpus."""
+        if user.is_superuser:
+            return True
+        if corpus.is_public:
+            return True
+        if corpus.creator_id == user.id:
+            return True
+
+        from guardian.shortcuts import get_perms
+
+        perms = get_perms(user, corpus)
+        return "read_corpus" in perms
 
     @classmethod
     def get_visible_relationships(
@@ -328,9 +428,13 @@ class DocumentRelationshipQueryOptimizer:
         target_document_id: Optional[int] = None,
         corpus_id: Optional[int] = None,
         relationship_type: Optional[str] = None,
+        context=None,
     ) -> QuerySet:
         """
         Get DocumentRelationship objects visible to the user.
+
+        Visibility requires READ permission on BOTH source and target documents,
+        and on corpus if set.
 
         Args:
             user: The requesting user
@@ -338,15 +442,32 @@ class DocumentRelationshipQueryOptimizer:
             target_document_id: Optional filter by target document
             corpus_id: Optional filter by corpus
             relationship_type: Optional filter by type ("RELATIONSHIP" or "NOTES")
+            context: Optional GraphQL context for request-level caching
 
         Returns:
             QuerySet of DocumentRelationship objects with eager loading
         """
+        from django.db.models import Q
+
         from opencontractserver.documents.models import DocumentRelationship
 
-        queryset = DocumentRelationship.objects.visible_to_user(user)
+        # Superusers see everything
+        if user.is_superuser:
+            queryset = DocumentRelationship.objects.all()
+        else:
+            # Get IDs of documents and corpuses user can see
+            # Pass context for request-level caching to prevent N+1 queries
+            visible_doc_ids = cls._get_visible_document_ids(user, context=context)
+            visible_corpus_ids = cls._get_visible_corpus_ids(user, context=context)
 
-        # Apply filters
+            # Filter: user can see BOTH source and target documents
+            # AND (no corpus OR user can see corpus)
+            queryset = DocumentRelationship.objects.filter(
+                source_document_id__in=visible_doc_ids,
+                target_document_id__in=visible_doc_ids,
+            ).filter(Q(corpus__isnull=True) | Q(corpus_id__in=visible_corpus_ids))
+
+        # Apply additional filters
         if source_document_id:
             queryset = queryset.filter(source_document_id=source_document_id)
         if target_document_id:
@@ -373,6 +494,7 @@ class DocumentRelationshipQueryOptimizer:
         corpus_id: Optional[int] = None,
         include_as_source: bool = True,
         include_as_target: bool = True,
+        context=None,
     ) -> QuerySet:
         """
         Get all DocumentRelationship objects where a document is source or target.
@@ -383,6 +505,7 @@ class DocumentRelationshipQueryOptimizer:
             corpus_id: Optional corpus filter
             include_as_source: Include relationships where doc is source
             include_as_target: Include relationships where doc is target
+            context: Optional GraphQL context for request-level caching
 
         Returns:
             QuerySet of DocumentRelationship objects
@@ -410,18 +533,13 @@ class DocumentRelationshipQueryOptimizer:
         if not q_filter:
             return DocumentRelationship.objects.none()
 
-        queryset = DocumentRelationship.objects.visible_to_user(user).filter(q_filter)
+        # Use get_visible_relationships for permission filtering, then apply doc filter
+        # Pass context for request-level caching to prevent N+1 queries
+        queryset = cls.get_visible_relationships(
+            user, corpus_id=corpus_id, context=context
+        ).filter(q_filter)
 
-        if corpus_id:
-            queryset = queryset.filter(corpus_id=corpus_id)
-
-        return queryset.select_related(
-            "source_document",
-            "target_document",
-            "annotation_label",
-            "corpus",
-            "creator",
-        )
+        return queryset
 
     @classmethod
     def get_relationship_by_id(
@@ -439,19 +557,76 @@ class DocumentRelationshipQueryOptimizer:
         Returns:
             DocumentRelationship object or None if not found/not accessible
         """
-        from opencontractserver.documents.models import DocumentRelationship
-
         try:
-            return (
-                DocumentRelationship.objects.visible_to_user(user)
-                .select_related(
-                    "source_document",
-                    "target_document",
-                    "annotation_label",
-                    "corpus",
-                    "creator",
-                )
-                .get(id=relationship_id)
-            )
-        except DocumentRelationship.DoesNotExist:
+            return cls.get_visible_relationships(user).get(id=relationship_id)
+        except Exception:
             return None
+
+    @classmethod
+    def user_has_permission(
+        cls,
+        user,
+        doc_relationship: "DocumentRelationship",
+        permission_type: str,
+    ) -> bool:
+        """
+        Check if user has a specific permission on a DocumentRelationship.
+
+        Permission is inherited from source_document + target_document + corpus.
+        User must have the permission on BOTH documents AND corpus (if set).
+
+        Args:
+            user: The requesting user
+            doc_relationship: The DocumentRelationship object
+            permission_type: One of 'READ', 'CREATE', 'UPDATE', 'DELETE'
+
+        Returns:
+            True if user has permission, False otherwise
+        """
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        # Superusers have all permissions
+        if user.is_superuser:
+            return True
+
+        # Map permission type string to enum
+        perm_map = {
+            "READ": PermissionTypes.READ,
+            "CREATE": PermissionTypes.CREATE,
+            "UPDATE": PermissionTypes.UPDATE,
+            "DELETE": PermissionTypes.DELETE,
+        }
+        perm_enum = perm_map.get(permission_type.upper())
+        if not perm_enum:
+            return False
+
+        # Check permission on source document
+        if not user_has_permission_for_obj(
+            user,
+            doc_relationship.source_document,
+            perm_enum,
+            include_group_permissions=True,
+        ):
+            return False
+
+        # Check permission on target document
+        if not user_has_permission_for_obj(
+            user,
+            doc_relationship.target_document,
+            perm_enum,
+            include_group_permissions=True,
+        ):
+            return False
+
+        # Check permission on corpus (if set)
+        if doc_relationship.corpus:
+            if not user_has_permission_for_obj(
+                user,
+                doc_relationship.corpus,
+                perm_enum,
+                include_group_permissions=True,
+            ):
+                return False
+
+        return True

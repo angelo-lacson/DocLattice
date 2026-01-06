@@ -28,6 +28,7 @@ import {
   Trophy,
   BarChart3,
   MoreVertical,
+  Link2,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -133,6 +134,7 @@ import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptio
 import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
 import { BadgeManagement } from "../components/badges/BadgeManagement";
 import { CorpusEngagementDashboard } from "../components/analytics/CorpusEngagementDashboard";
+import { CorpusDocumentRelationships } from "../components/corpuses/CorpusDocumentRelationships";
 
 // Add these styled components near your other styled components
 const DashboardContainer = styled.div`
@@ -1544,6 +1546,23 @@ export const Corpuses = () => {
   const [documentsViewMode, setDocumentsViewMode] =
     useState<ViewMode>("modern-list");
 
+  // Debug: Log state changes
+  console.log("[Corpuses] Current documentsViewMode:", documentsViewMode);
+
+  // Wrapped setter with logging
+  const handleViewModeChange = useCallback(
+    (mode: ViewMode) => {
+      console.log(
+        "[Corpuses] handleViewModeChange called with:",
+        mode,
+        "from:",
+        documentsViewMode
+      );
+      setDocumentsViewMode(mode);
+    },
+    [documentsViewMode]
+  );
+
   const opened_corpus_id = opened_corpus?.id ? opened_corpus.id : null;
   let raw_permissions = opened_corpus?.myPermissions;
   if (opened_corpus && raw_permissions !== undefined) {
@@ -2104,6 +2123,7 @@ export const Corpuses = () => {
     "annotations",
     "analyses",
     "extracts",
+    "relationships",
     "discussions",
     "chats",
     "analytics",
@@ -2186,7 +2206,7 @@ export const Corpuses = () => {
                 <FolderDocumentBrowser
                   corpusId={opened_corpus_id}
                   viewMode={documentsViewMode}
-                  onViewModeChange={setDocumentsViewMode}
+                  onViewModeChange={handleViewModeChange}
                 >
                   <CorpusDocumentCards
                     opened_corpus_id={opened_corpus_id}
@@ -2273,6 +2293,37 @@ export const Corpuses = () => {
             onOpenMobileMenu={() => setMobileSidebarOpen(true)}
           />
         ),
+      },
+      {
+        id: "relationships",
+        label: "Relationships",
+        icon: <Link2 />,
+        component: opened_corpus?.id ? (
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            <TabNavigationHeader>
+              <BackNavButton
+                onClick={() => setActiveTab(0)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Back to Home"
+              >
+                <ArrowLeft />
+              </BackNavButton>
+              <TabTitle>Document Relationships</TabTitle>
+              <MobileKebabButton
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <MoreVertical />
+              </MobileKebabButton>
+            </TabNavigationHeader>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              <CorpusDocumentRelationships corpusId={opened_corpus.id} />
+            </div>
+          </div>
+        ) : null,
       },
       {
         id: "discussions",
@@ -2447,6 +2498,7 @@ export const Corpuses = () => {
     stats.totalAnalyses,
     stats.totalExtracts,
     canUpdateCorpus,
+    documentsViewMode, // Required for view mode toggle to work
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);

@@ -132,8 +132,8 @@ export const AboutContent = styled.div`
   padding: 2rem;
   padding-bottom: 4rem;
   color: ${CORPUS_COLORS.slate[600]};
-  line-height: 1.75;
-  font-size: 0.9375rem;
+  line-height: 1.8;
+  font-size: 1.0625rem;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -144,8 +144,8 @@ export const AboutContent = styled.div`
   ${mediaQuery.tablet} {
     padding: 1.25rem;
     padding-bottom: 3rem;
-    font-size: 0.875rem;
-    line-height: 1.6;
+    font-size: 0.9375rem;
+    line-height: 1.65;
   }
 
   &::-webkit-scrollbar {
@@ -204,7 +204,7 @@ export const AboutContent = styled.div`
   }
 
   h1 {
-    font-size: 1.75rem;
+    font-size: 2rem;
     color: ${CORPUS_COLORS.slate[800]};
     padding-bottom: 0.75rem;
     border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
@@ -212,19 +212,19 @@ export const AboutContent = styled.div`
   }
 
   h2 {
-    font-size: 1.375rem;
+    font-size: 1.5rem;
     color: ${CORPUS_COLORS.slate[800]};
   }
 
   h3 {
-    font-size: 1.125rem;
+    font-size: 1.25rem;
     color: ${CORPUS_COLORS.teal[700]};
   }
 
   h4,
   h5,
   h6 {
-    font-size: 1rem;
+    font-size: 1.125rem;
     color: ${CORPUS_COLORS.teal[700]};
   }
 

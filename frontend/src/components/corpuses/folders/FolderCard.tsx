@@ -443,7 +443,8 @@ export const FolderCard: React.FC<FolderCardProps> = ({
     setContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
-  const totalDocs = folder.documentCount + folder.descendantDocumentCount;
+  // descendantDocumentCount already includes documents in this folder (include_self=True)
+  const totalDocs = folder.descendantDocumentCount;
   const subfolderCount = folder.children?.length || 0;
 
   if (viewMode === "modern-list") {

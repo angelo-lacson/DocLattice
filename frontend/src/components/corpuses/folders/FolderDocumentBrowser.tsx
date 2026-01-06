@@ -1,4 +1,10 @@
-import React, { useEffect, useCallback, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useCallback,
+  useState,
+  useRef,
+  useMemo,
+} from "react";
 import { useSetAtom, useAtom, useAtomValue } from "jotai";
 import { useReactiveVar, useMutation } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -14,11 +20,16 @@ import {
   useSensors,
   closestCenter,
 } from "@dnd-kit/core";
-import { selectedFolderId as selectedFolderIdReactiveVar } from "../../../graphql/cache";
-import { showUploadNewDocumentsModal } from "../../../graphql/cache";
+import {
+  selectedFolderId as selectedFolderIdReactiveVar,
+  showUploadNewDocumentsModal,
+  selectedDocumentIds as selectedDocumentIdsReactiveVar,
+  linkDocumentsModalState,
+} from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderToolbar } from "./FolderToolbar";
 import { CreateFolderModal } from "./CreateFolderModal";
+import { DocumentRelationshipModal } from "../../documents/DocumentRelationshipModal";
 import { EditFolderModal } from "./EditFolderModal";
 import { MoveFolderModal } from "./MoveFolderModal";
 import { DeleteFolderModal } from "./DeleteFolderModal";
@@ -307,6 +318,28 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     "document" | "folder" | null
   >(null);
 
+  // Document relationship modal state (from reactive var for cross-component access)
+  const linkModalState = useReactiveVar(linkDocumentsModalState);
+  const selectedDocumentIds = useReactiveVar(selectedDocumentIdsReactiveVar);
+
+  // Helper to open the link modal
+  const openLinkModal = (sourceIds: string[], targetIds: string[] = []) => {
+    linkDocumentsModalState({
+      open: true,
+      initialSourceIds: sourceIds,
+      initialTargetIds: targetIds,
+    });
+  };
+
+  // Helper to close the link modal
+  const closeLinkModal = () => {
+    linkDocumentsModalState({
+      open: false,
+      initialSourceIds: [],
+      initialTargetIds: [],
+    });
+  };
+
   // Context menu state for right-clicking in content area
   const [contextMenu, setContextMenu] = React.useState<{
     x: number;
@@ -363,17 +396,13 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     MoveDocumentToFolderOutputs,
     MoveDocumentToFolderInputs
   >(MOVE_DOCUMENT_TO_FOLDER, {
-    // Evict all documents queries from cache to force refetch
+    // Evict documents and folders from cache to force refetch
+    // This ensures both the document list and folder tree (with doc counts) update
     update(cache) {
       cache.evict({ fieldName: "documents" });
+      cache.evict({ fieldName: "corpusFolders" });
       cache.gc();
     },
-    refetchQueries: [
-      {
-        query: GET_CORPUS_FOLDERS,
-        variables: { corpusId },
-      },
-    ],
   });
 
   // Move folder mutation
@@ -390,7 +419,11 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   });
 
   // Get parent folder ID for current folder (for ".." navigation)
-  const currentFolder = folderList.find((f) => f.id === selectedFolderId);
+  // Memoized to prevent unnecessary recalculations
+  const currentFolder = useMemo(
+    () => folderList.find((f) => f.id === selectedFolderId),
+    [folderList, selectedFolderId]
+  );
   const parentFolderId = currentFolder?.parent?.id || null;
 
   // Unified drag-drop handlers
@@ -416,6 +449,17 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       // Determine what was dropped and where
       const isDraggingDocument = dragData?.type === "document";
 
+      // Check for document-to-document drop (for creating relationships)
+      if (
+        isDraggingDocument &&
+        dropData?.type === "document-drop-target" &&
+        dragData.documentId !== dropData.documentId
+      ) {
+        // Open the relationship modal with source and target pre-populated
+        openLinkModal([dragData.documentId], [dropData.documentId]);
+        return;
+      }
+
       // Extract target folder ID from drop target
       let targetFolderId: string | null;
       const overId = over.id as string;
@@ -434,8 +478,9 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
         // Dropped on folder in sidebar tree
         targetFolderId = dropData.folderId || (overId as string);
       } else {
-        // Try to use overId as folder ID (for sidebar tree nodes)
-        targetFolderId = overId;
+        // Invalid drop target - not a folder or recognized drop zone
+        // This can happen when dropping on the container itself or other non-droppable areas
+        return;
       }
 
       if (isDraggingDocument) {
@@ -629,6 +674,8 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
               onGoUp={handleGoUp}
               onNewFolder={handleNewFolder}
               onUpload={handleUpload}
+              selectedDocumentCount={selectedDocumentIds.length}
+              onLinkDocuments={() => openLinkModal(selectedDocumentIds)}
             />
           )}
 
@@ -685,6 +732,20 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       <EditFolderModal />
       <MoveFolderModal />
       <DeleteFolderModal />
+
+      {/* Document Relationship Modal */}
+      <DocumentRelationshipModal
+        open={linkModalState.open}
+        onClose={closeLinkModal}
+        corpusId={corpusId}
+        initialSourceIds={linkModalState.initialSourceIds}
+        initialTargetIds={linkModalState.initialTargetIds}
+        onSuccess={() => {
+          closeLinkModal();
+          // Clear selection after successful link
+          selectedDocumentIdsReactiveVar([]);
+        }}
+      />
 
       {/* Context menu for content area */}
       {contextMenu && (

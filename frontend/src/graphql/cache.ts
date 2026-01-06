@@ -230,6 +230,12 @@ export const cache = new InMemoryCache({
         chatMessages: relayStylePagination(),
       },
     },
+    DocumentRelationshipType: {
+      keyFields: ["id"],
+      fields: {
+        // Define field policies if necessary
+      },
+    },
     ChatMessageType: {
       fields: {
         // CRITICAL: Handle all Connection types properly to prevent infinite loops
@@ -271,6 +277,8 @@ export const cache = new InMemoryCache({
         relationshipLabels: relayStylePagination(),
         extracts: relayStylePagination(),
         columns: relayStylePagination(),
+        // Document relationships - cache by corpus/document context
+        documentRelationships: relayStylePagination(["corpusId", "documentId"]),
         // Slug resolution queries - cache by input parameters
         userBySlug: {
           keyArgs: ["slug"],
@@ -360,6 +368,24 @@ export const openedDocument = makeVar<DocumentType | null>(null);
 export const selectedDocumentIds = makeVar<string[]>([]);
 export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
+
+/**
+ * Document relationship modal state.
+ * Used to trigger the link documents modal from various entry points:
+ * - Right-click context menu on a single document
+ * - Drag and drop one document onto another
+ * - Multi-select + click "Link Documents" button
+ */
+export interface LinkDocumentsModalState {
+  open: boolean;
+  initialSourceIds: string[];
+  initialTargetIds: string[];
+}
+export const linkDocumentsModalState = makeVar<LinkDocumentsModalState>({
+  open: false,
+  initialSourceIds: [],
+  initialTargetIds: [],
+});
 
 /**
  * Extract-related global variables
@@ -521,6 +547,33 @@ export const selectedTab = makeVar<string | null>(null);
  *   /d/user/doc?thread=thread-123&message=msg-456          → selectedMessageId("msg-456")
  */
 export const selectedMessageId = makeVar<string | null>(null);
+
+/**
+ * Corpus home view selection (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Controls which view is shown on the corpus home tab: "about" (summary) or "toc" (table of contents).
+ * Defaults to "about" when not specified in URL.
+ *
+ * URL Examples:
+ *   /c/user/corpus                    → corpusHomeView(null) = default "about"
+ *   /c/user/corpus?homeView=toc       → corpusHomeView("toc")
+ *   /c/user/corpus?homeView=about     → corpusHomeView("about")
+ */
+export type CorpusHomeViewType = "about" | "toc";
+export const corpusHomeView = makeVar<CorpusHomeViewType | null>(null);
+
+/**
+ * TOC expand all state (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * When true, all nodes in the Table of Contents are expanded by default.
+ * Useful for deep-linking to a fully expanded TOC view.
+ * Defaults to false when not specified in URL.
+ *
+ * URL Examples:
+ *   /c/user/corpus?homeView=toc                    → tocExpandAll(false) = default collapsed
+ *   /c/user/corpus?homeView=toc&tocExpanded=true   → tocExpandAll(true) = all nodes expanded
+ */
+export const tocExpandAll = makeVar<boolean>(false);
 
 /**
  * Auth-related global variables

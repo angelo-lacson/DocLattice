@@ -7,6 +7,7 @@ from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
 from config.graphql.graphene_types import AnnotationLabelType, LabelSetType
+from config.graphql.validation_utils import validate_color
 from opencontractserver.annotations.models import AnnotationLabel, LabelSet
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.types.enums import PermissionTypes
@@ -112,6 +113,18 @@ class SmartLabelSearchOrCreateMutation(graphene.Mutation):
         label_created = False
         message = "Success"
         ok = True
+
+        # Validate color format (defense in depth)
+        is_valid_color, color_error = validate_color(color)
+        if not is_valid_color:
+            return SmartLabelSearchOrCreateMutation(
+                ok=False,
+                message=color_error,
+                labels=[],
+                labelset=None,
+                labelset_created=False,
+                label_created=False,
+            )
 
         try:
             # Get corpus

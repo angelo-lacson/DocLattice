@@ -184,6 +184,9 @@ from opencontractserver.utils.permissioning import (
 
 logger = logging.getLogger(__name__)
 
+# Import validate_color from validation_utils to avoid circular imports
+from config.graphql.validation_utils import validate_color  # noqa: E402
+
 
 class MakeAnalysisPublic(graphene.Mutation):
     class Arguments:
@@ -2761,12 +2764,21 @@ class CreateDocumentRelationship(graphene.Mutation):
                     message="You don't have permission to create relationships for the target document",
                 )
 
-            # Efficient single-query validation: both docs must be in the corpus
-            # (Now that we know both docs exist)
-            docs_in_corpus = corpus.documents.filter(
-                id__in=[source_doc_pk, target_doc_pk]
-            ).count()
-            if docs_in_corpus != 2:
+            # Validate both docs are in the corpus via DocumentPath
+            # Use distinct document IDs to handle cases where a document
+            # has multiple paths in the corpus (e.g., different folders)
+            from opencontractserver.documents.models import DocumentPath
+
+            docs_in_corpus = set(
+                DocumentPath.objects.filter(
+                    corpus_id=corpus_pk,
+                    document_id__in=[source_doc_pk, target_doc_pk],
+                    is_current=True,
+                    is_deleted=False,
+                ).values_list("document_id", flat=True)
+            )
+
+            if len(docs_in_corpus) != 2:
                 return CreateDocumentRelationship(
                     ok=False,
                     document_relationship=None,
@@ -2787,6 +2799,12 @@ class CreateDocumentRelationship(graphene.Mutation):
                     )
 
             # Create the document relationship
+            #
+            # PERMISSION MODEL: DocumentRelationship uses inherited permissions
+            # (not guardian object permissions). Access is determined by:
+            #   Effective Permission = MIN(source_doc_perm, target_doc_perm, corpus_perm)
+            # See: docs/permissioning/consolidated_permissioning_guide.md
+            #
             doc_relationship = DocumentRelationship.objects.create(
                 creator=info.context.user,
                 source_document_id=source_doc_pk,
@@ -2795,11 +2813,6 @@ class CreateDocumentRelationship(graphene.Mutation):
                 annotation_label_id=annotation_label_pk,
                 corpus_id=corpus_pk,
                 data=data or {},
-            )
-
-            # Set permissions for the creator
-            set_permissions_for_obj_to_user(
-                info.context.user, doc_relationship, [PermissionTypes.CRUD]
             )
 
             return CreateDocumentRelationship(
@@ -2880,12 +2893,11 @@ class UpdateDocumentRelationship(graphene.Mutation):
                     message="Document relationship not found",
                 )
 
-            # Check UPDATE permission on the relationship itself
-            if not user_has_permission_for_obj(
+            # Check UPDATE permission (inherited from source_doc + target_doc + corpus)
+            if not DocumentRelationshipQueryOptimizer.user_has_permission(
                 info.context.user,
                 doc_relationship,
-                PermissionTypes.UPDATE,
-                include_group_permissions=True,
+                "UPDATE",
             ):
                 return UpdateDocumentRelationship(
                     ok=False,
@@ -3046,12 +3058,11 @@ class DeleteDocumentRelationship(graphene.Mutation):
                     ok=False, message="Document relationship not found"
                 )
 
-            # Check DELETE permission
-            if not user_has_permission_for_obj(
+            # Check DELETE permission (inherited from source_doc + target_doc + corpus)
+            if not DocumentRelationshipQueryOptimizer.user_has_permission(
                 info.context.user,
                 doc_relationship,
-                PermissionTypes.DELETE,
-                include_group_permissions=True,
+                "DELETE",
             ):
                 return DeleteDocumentRelationship(
                     ok=False,
@@ -3120,12 +3131,12 @@ class DeleteDocumentRelationships(graphene.Mutation):
                     )
 
             # Check DELETE permission for each relationship
+            # (inherited from source_doc + target_doc + corpus)
             for pk, doc_relationship in relationship_map.items():
-                if not user_has_permission_for_obj(
+                if not DocumentRelationshipQueryOptimizer.user_has_permission(
                     user,
                     doc_relationship,
-                    PermissionTypes.DELETE,
-                    include_group_permissions=True,
+                    "DELETE",
                 ):
                     return DeleteDocumentRelationships(
                         ok=False,
@@ -3148,7 +3159,7 @@ class DeleteDocumentRelationships(graphene.Mutation):
             return DeleteDocumentRelationships(
                 ok=False,
                 message=f"Error deleting document relationships: {str(e)}",
-                deleted_count=deleted_count,
+                deleted_count=0,
             )
 
 
@@ -3487,6 +3498,13 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
         ok = False
         obj = None
         obj_id = None
+
+        # Validate color format (defense in depth)
+        is_valid_color, color_error = validate_color(color)
+        if not is_valid_color:
+            return CreateLabelForLabelsetMutation(
+                obj=None, obj_id=None, message=color_error, ok=False
+            )
 
         try:
             labelset = LabelSet.objects.get(
