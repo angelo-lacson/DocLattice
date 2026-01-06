@@ -564,6 +564,7 @@ export const DocumentTableOfContents: React.FC<
           }`}
         >
           <ChevronContainer
+            className="chevron"
             $visible={hasChildren}
             onClick={(e) => hasChildren && toggleNode(node.id, e)}
             aria-hidden="true"

@@ -110,11 +110,157 @@ const createTestCache = () =>
   });
 
 interface Props {
-  mockType?: "default" | "empty" | "noParentRelationships";
+  mockType?: "default" | "empty" | "noParentRelationships" | "deepHierarchy";
+  maxDepth?: number;
 }
+
+// Deep hierarchy mock (5 levels: Root -> Level1 -> Level2 -> Level3 -> Level4)
+const mockDeepHierarchy = [
+  // Level1 -> Root
+  {
+    node: {
+      id: "rel-deep-1",
+      relationshipType: "RELATIONSHIP",
+      data: null,
+      sourceDocument: {
+        id: "doc-level1",
+        title: "Level 1 Document",
+        icon: null,
+        slug: "level-1",
+        creator: { slug: "test-user" },
+      },
+      targetDocument: {
+        id: "doc-root",
+        title: "Root Document",
+        icon: null,
+        slug: "root-doc",
+        creator: { slug: "test-user" },
+      },
+      annotationLabel: {
+        id: "label-1",
+        text: "parent",
+        color: "#3b82f6",
+        icon: null,
+      },
+      corpus: { id: TEST_CORPUS_ID },
+      creator: { id: "user-1", username: "testuser" },
+      created: "2025-01-01T00:00:00Z",
+      modified: "2025-01-01T00:00:00Z",
+      myPermissions: ["read"],
+      __typename: "DocumentRelationshipType",
+    },
+    __typename: "DocumentRelationshipTypeEdge",
+  },
+  // Level2 -> Level1
+  {
+    node: {
+      id: "rel-deep-2",
+      relationshipType: "RELATIONSHIP",
+      data: null,
+      sourceDocument: {
+        id: "doc-level2",
+        title: "Level 2 Document",
+        icon: null,
+        slug: "level-2",
+        creator: { slug: "test-user" },
+      },
+      targetDocument: {
+        id: "doc-level1",
+        title: "Level 1 Document",
+        icon: null,
+        slug: "level-1",
+        creator: { slug: "test-user" },
+      },
+      annotationLabel: {
+        id: "label-1",
+        text: "parent",
+        color: "#3b82f6",
+        icon: null,
+      },
+      corpus: { id: TEST_CORPUS_ID },
+      creator: { id: "user-1", username: "testuser" },
+      created: "2025-01-01T00:00:00Z",
+      modified: "2025-01-01T00:00:00Z",
+      myPermissions: ["read"],
+      __typename: "DocumentRelationshipType",
+    },
+    __typename: "DocumentRelationshipTypeEdge",
+  },
+  // Level3 -> Level2
+  {
+    node: {
+      id: "rel-deep-3",
+      relationshipType: "RELATIONSHIP",
+      data: null,
+      sourceDocument: {
+        id: "doc-level3",
+        title: "Level 3 Document",
+        icon: null,
+        slug: "level-3",
+        creator: { slug: "test-user" },
+      },
+      targetDocument: {
+        id: "doc-level2",
+        title: "Level 2 Document",
+        icon: null,
+        slug: "level-2",
+        creator: { slug: "test-user" },
+      },
+      annotationLabel: {
+        id: "label-1",
+        text: "parent",
+        color: "#3b82f6",
+        icon: null,
+      },
+      corpus: { id: TEST_CORPUS_ID },
+      creator: { id: "user-1", username: "testuser" },
+      created: "2025-01-01T00:00:00Z",
+      modified: "2025-01-01T00:00:00Z",
+      myPermissions: ["read"],
+      __typename: "DocumentRelationshipType",
+    },
+    __typename: "DocumentRelationshipTypeEdge",
+  },
+  // Level4 -> Level3
+  {
+    node: {
+      id: "rel-deep-4",
+      relationshipType: "RELATIONSHIP",
+      data: null,
+      sourceDocument: {
+        id: "doc-level4",
+        title: "Level 4 Document",
+        icon: null,
+        slug: "level-4",
+        creator: { slug: "test-user" },
+      },
+      targetDocument: {
+        id: "doc-level3",
+        title: "Level 3 Document",
+        icon: null,
+        slug: "level-3",
+        creator: { slug: "test-user" },
+      },
+      annotationLabel: {
+        id: "label-1",
+        text: "parent",
+        color: "#3b82f6",
+        icon: null,
+      },
+      corpus: { id: TEST_CORPUS_ID },
+      creator: { id: "user-1", username: "testuser" },
+      created: "2025-01-01T00:00:00Z",
+      modified: "2025-01-01T00:00:00Z",
+      myPermissions: ["read"],
+      __typename: "DocumentRelationshipType",
+    },
+    __typename: "DocumentRelationshipTypeEdge",
+  },
+];
 
 export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
   mockType = "default",
+  maxDepth = 4,
 }) => {
   // Set up the opened corpus for navigation
   React.useEffect(() => {
@@ -190,6 +336,12 @@ export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
       ];
     }
 
+    // Select appropriate mock data
+    const mockData =
+      mockType === "deepHierarchy"
+        ? mockDeepHierarchy
+        : mockParentRelationships;
+
     // Return duplicate mocks for cache-and-network fetch policy
     const defaultMock = {
       request: {
@@ -199,8 +351,8 @@ export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
       result: {
         data: {
           documentRelationships: {
-            edges: mockParentRelationships,
-            totalCount: mockParentRelationships.length,
+            edges: mockData,
+            totalCount: mockData.length,
             pageInfo: {
               hasNextPage: false,
               hasPreviousPage: false,
@@ -224,7 +376,10 @@ export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
           cache={createTestCache()}
           addTypename
         >
-          <DocumentTableOfContents corpusId={TEST_CORPUS_ID} maxDepth={4} />
+          <DocumentTableOfContents
+            corpusId={TEST_CORPUS_ID}
+            maxDepth={maxDepth}
+          />
         </MockedProvider>
       </MemoryRouter>
     </Provider>
