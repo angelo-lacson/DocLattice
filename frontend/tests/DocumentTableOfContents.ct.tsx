@@ -195,4 +195,89 @@ test.describe("DocumentTableOfContents", () => {
     // Navigation would happen via React Router - we can't easily test the actual navigation
     // but we can verify the click handler is called (no errors thrown)
   });
+
+  test("max depth limit prevents infinite recursion with deep hierarchies", async ({
+    mount,
+    page,
+  }) => {
+    // Use deep hierarchy with maxDepth=2 (should show Root, Level1, Level2 only)
+    await mount(
+      <DocumentTableOfContentsTestWrapper
+        mockType="deepHierarchy"
+        maxDepth={2}
+      />
+    );
+
+    await page.waitForSelector('text="Root Document"', {
+      timeout: 10000,
+    });
+
+    // Root (depth 0) should be visible
+    await expect(page.getByText("Root Document")).toBeVisible();
+
+    // Expand Root to see Level 1 (depth 1)
+    const rootChevron = page.locator(".chevron").first();
+    await rootChevron.click();
+    await expect(page.getByText("Level 1 Document")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Expand Level 1 to see Level 2 (depth 2)
+    const level1Chevron = page.locator(".chevron").nth(1);
+    await level1Chevron.click();
+    await expect(page.getByText("Level 2 Document")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Level 3 and Level 4 should NOT be rendered (beyond maxDepth=2)
+    // They shouldn't even be in the DOM since the tree building stops at maxDepth
+    await expect(page.getByText("Level 3 Document")).not.toBeVisible();
+    await expect(page.getByText("Level 4 Document")).not.toBeVisible();
+  });
+
+  test("full depth hierarchy shows all levels with default maxDepth=4", async ({
+    mount,
+    page,
+  }) => {
+    // Use deep hierarchy with default maxDepth=4 (should show all levels)
+    await mount(
+      <DocumentTableOfContentsTestWrapper
+        mockType="deepHierarchy"
+        maxDepth={4}
+      />
+    );
+
+    await page.waitForSelector('text="Root Document"', {
+      timeout: 10000,
+    });
+
+    // Expand all nodes to verify all levels are accessible
+    // Root -> Level 1
+    const rootChevron = page.locator(".chevron").first();
+    await rootChevron.click();
+    await expect(page.getByText("Level 1 Document")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Level 1 -> Level 2
+    const level1Chevron = page.locator(".chevron").nth(1);
+    await level1Chevron.click();
+    await expect(page.getByText("Level 2 Document")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Level 2 -> Level 3
+    const level2Chevron = page.locator(".chevron").nth(2);
+    await level2Chevron.click();
+    await expect(page.getByText("Level 3 Document")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Level 3 -> Level 4
+    const level3Chevron = page.locator(".chevron").nth(3);
+    await level3Chevron.click();
+    await expect(page.getByText("Level 4 Document")).toBeVisible({
+      timeout: 5000,
+    });
+  });
 });
