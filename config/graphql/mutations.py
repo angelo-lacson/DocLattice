@@ -2762,16 +2762,20 @@ class CreateDocumentRelationship(graphene.Mutation):
                 )
 
             # Validate both docs are in the corpus via DocumentPath
+            # Use distinct document IDs to handle cases where a document
+            # has multiple paths in the corpus (e.g., different folders)
             from opencontractserver.documents.models import DocumentPath
 
-            docs_in_corpus = DocumentPath.objects.filter(
-                corpus_id=corpus_pk,
-                document_id__in=[source_doc_pk, target_doc_pk],
-                is_current=True,
-                is_deleted=False,
-            ).count()
+            docs_in_corpus = set(
+                DocumentPath.objects.filter(
+                    corpus_id=corpus_pk,
+                    document_id__in=[source_doc_pk, target_doc_pk],
+                    is_current=True,
+                    is_deleted=False,
+                ).values_list("document_id", flat=True)
+            )
 
-            if docs_in_corpus != 2:
+            if len(docs_in_corpus) != 2:
                 return CreateDocumentRelationship(
                     ok=False,
                     document_relationship=None,
@@ -2792,8 +2796,12 @@ class CreateDocumentRelationship(graphene.Mutation):
                     )
 
             # Create the document relationship
-            # Note: DocumentRelationship inherits permissions from source_document,
-            # target_document, and corpus - no direct guardian permissions needed
+            #
+            # PERMISSION MODEL: DocumentRelationship uses inherited permissions
+            # (not guardian object permissions). Access is determined by:
+            #   Effective Permission = MIN(source_doc_perm, target_doc_perm, corpus_perm)
+            # See: docs/permissioning/consolidated_permissioning_guide.md
+            #
             doc_relationship = DocumentRelationship.objects.create(
                 creator=info.context.user,
                 source_document_id=source_doc_pk,
