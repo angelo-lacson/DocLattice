@@ -549,6 +549,20 @@ export const selectedTab = makeVar<string | null>(null);
 export const selectedMessageId = makeVar<string | null>(null);
 
 /**
+ * Corpus home view selection (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Controls which view is shown on the corpus home tab: "about" (summary) or "toc" (table of contents).
+ * Defaults to "about" when not specified in URL.
+ *
+ * URL Examples:
+ *   /c/user/corpus                    → corpusHomeView(null) = default "about"
+ *   /c/user/corpus?homeView=toc       → corpusHomeView("toc")
+ *   /c/user/corpus?homeView=about     → corpusHomeView("about")
+ */
+export type CorpusHomeViewType = "about" | "toc";
+export const corpusHomeView = makeVar<CorpusHomeViewType | null>(null);
+
+/**
  * Auth-related global variables
  */
 export const userObj = makeVar<User | null>(null);

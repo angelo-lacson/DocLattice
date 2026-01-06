@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import styled from "styled-components";
-import { useQuery } from "@apollo/client";
+import { useQuery, useReactiveVar } from "@apollo/client";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, ListTree } from "lucide-react";
+import { corpusHomeView, CorpusHomeViewType } from "../../graphql/cache";
+import { updateHomeViewParam } from "../../utils/navigationUtils";
 
 import {
   GET_CORPUS_WITH_HISTORY,
@@ -178,8 +181,6 @@ interface CorpusHomeProps {
   onOpenMobileMenu?: () => void;
 }
 
-type TabType = "about" | "toc";
-
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
   onEditDescription,
@@ -190,8 +191,18 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   onNavigateToCorpuses,
   onOpenMobileMenu,
 }) => {
-  const [mdContent, setMdContent] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>("about");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [mdContent, setMdContent] = React.useState<string | null>(null);
+
+  // Get active tab from URL-driven reactive var (default to "about")
+  const homeViewFromUrl = useReactiveVar(corpusHomeView);
+  const activeTab: CorpusHomeViewType = homeViewFromUrl ?? "about";
+
+  // Update tab via URL (CentralRouteManager Phase 2 will set the reactive var)
+  const setActiveTab = (tab: CorpusHomeViewType) => {
+    updateHomeViewParam(location, navigate, tab);
+  };
 
   // CRITICAL: Memoize variables object to prevent Apollo refetch on every render
   // Parent passes new corpus object reference on every render (reactive var issue)

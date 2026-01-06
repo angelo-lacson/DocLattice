@@ -29,6 +29,7 @@ import {
   selectedFolderId,
   selectedTab,
   selectedMessageId,
+  corpusHomeView,
   routeLoading,
   routeError,
   authStatusVar,
@@ -37,6 +38,7 @@ import {
   showSelectedAnnotationOnly,
   showAnnotationBoundingBoxes,
   showAnnotationLabels,
+  CorpusHomeViewType,
 } from "../graphql/cache";
 import {
   RESOLVE_CORPUS_BY_SLUGS_FULL,
@@ -778,6 +780,7 @@ export function CentralRouteManager() {
     const folderId = searchParams.get("folder");
     const tab = searchParams.get("tab");
     const messageId = searchParams.get("message");
+    const homeViewParam = searchParams.get("homeView");
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
@@ -793,6 +796,7 @@ export function CentralRouteManager() {
       folderId,
       tab,
       messageId,
+      homeView: homeViewParam,
       structural,
       selectedOnly,
       boundingBoxes,
@@ -808,6 +812,7 @@ export function CentralRouteManager() {
     const currentFolderId = selectedFolderId();
     const currentTab = selectedTab();
     const currentMessageId = selectedMessageId();
+    const currentHomeView = corpusHomeView();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -820,6 +825,12 @@ export function CentralRouteManager() {
         : labelsParam === "HIDE"
         ? "HIDE"
         : "ON_HOVER";
+
+    // Parse homeView param (only valid values are "about" or "toc", null otherwise)
+    const newHomeView: CorpusHomeViewType | null =
+      homeViewParam === "toc" || homeViewParam === "about"
+        ? homeViewParam
+        : null;
 
     // Collect all reactive var updates into a batch
     // This prevents cascading re-renders - all updates happen in one React tick
@@ -845,6 +856,9 @@ export function CentralRouteManager() {
     }
     if (currentMessageId !== messageId) {
       updates.push(() => selectedMessageId(messageId));
+    }
+    if (currentHomeView !== newHomeView) {
+      updates.push(() => corpusHomeView(newHomeView));
     }
     if (currentStructural !== structural) {
       updates.push(() => showStructuralAnnotations(structural));
@@ -999,7 +1013,7 @@ export function CentralRouteManager() {
   // - Phase 4: Reactive Var → URL (on var change)
   //
   // Vars synced: annotationIds, analysisIds, extractIds, threadId,
-  // folderId, tab, messageId, structural, selectedOnly, boundingBoxes, labels
+  // folderId, tab, messageId, homeView, structural, selectedOnly, boundingBoxes, labels
   // ═══════════════════════════════════════════════════════════════
   const annIds = useReactiveVar(selectedAnnotationIds);
   const analysisIds = useReactiveVar(selectedAnalysesIds);
@@ -1008,6 +1022,7 @@ export function CentralRouteManager() {
   const folderId = useReactiveVar(selectedFolderId);
   const tab = useReactiveVar(selectedTab);
   const messageId = useReactiveVar(selectedMessageId);
+  const homeView = useReactiveVar(corpusHomeView);
   const structural = useReactiveVar(showStructuralAnnotations);
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
@@ -1070,6 +1085,7 @@ export function CentralRouteManager() {
         folderId,
         tab,
         messageId,
+        homeView,
         structural,
         selectedOnly,
         boundingBoxes,
@@ -1085,6 +1101,7 @@ export function CentralRouteManager() {
       folderId,
       tab,
       messageId,
+      homeView,
       showStructural: structural,
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
@@ -1116,6 +1133,7 @@ export function CentralRouteManager() {
     folderId,
     tab,
     messageId,
+    homeView,
     structural,
     selectedOnly,
     boundingBoxes,

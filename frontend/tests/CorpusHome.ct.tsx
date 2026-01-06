@@ -150,6 +150,71 @@ function mountCorpusHome(mount: any) {
 
 test.use({ viewport: { width: 1200, height: 800 } });
 
+test("defaults to About tab when no homeView URL param", async ({
+  mount,
+  page,
+}) => {
+  await mountCorpusHome(mount);
+
+  // About tab should be active by default
+  const aboutTab = page.getByRole("tab", { name: "About" });
+  await expect(aboutTab).toHaveAttribute("aria-selected", "true");
+
+  // TOC tab should not be selected
+  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
+  await expect(tocTab).toHaveAttribute("aria-selected", "false");
+
+  // About content should be visible
+  const aboutPanel = page.locator("#about-panel");
+  await expect(aboutPanel).toBeVisible();
+});
+
+test("shows TOC tab when homeView=toc URL param is set", async ({
+  mount,
+  page,
+}) => {
+  // Mount with initialHomeView="toc"
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      initialHomeView="toc"
+    />
+  );
+
+  // TOC tab should be active
+  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
+  await expect(tocTab).toHaveAttribute("aria-selected", "true");
+
+  // About tab should not be selected
+  const aboutTab = page.getByRole("tab", { name: "About" });
+  await expect(aboutTab).toHaveAttribute("aria-selected", "false");
+
+  // TOC panel should be visible
+  const tocPanel = page.locator("#toc-panel");
+  await expect(tocPanel).toBeVisible();
+});
+
+test("switching tabs updates URL (via click)", async ({ mount, page }) => {
+  await mountCorpusHome(mount);
+
+  // Initially on About tab
+  const aboutTab = page.getByRole("tab", { name: "About" });
+  await expect(aboutTab).toHaveAttribute("aria-selected", "true");
+
+  // Click TOC tab
+  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
+  await tocTab.click();
+
+  // TOC tab should now be selected
+  await expect(tocTab).toHaveAttribute("aria-selected", "true");
+  await expect(aboutTab).toHaveAttribute("aria-selected", "false");
+
+  // TOC panel should be visible
+  const tocPanel = page.locator("#toc-panel");
+  await expect(tocPanel).toBeVisible();
+});
+
 test("renders corpus hero, chat bar and description controls", async ({
   mount,
   page,
