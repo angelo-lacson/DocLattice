@@ -370,6 +370,24 @@ export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
 
 /**
+ * Document relationship modal state.
+ * Used to trigger the link documents modal from various entry points:
+ * - Right-click context menu on a single document
+ * - Drag and drop one document onto another
+ * - Multi-select + click "Link Documents" button
+ */
+export interface LinkDocumentsModalState {
+  open: boolean;
+  initialSourceIds: string[];
+  initialTargetIds: string[];
+}
+export const linkDocumentsModalState = makeVar<LinkDocumentsModalState>({
+  open: false,
+  initialSourceIds: [],
+  initialTargetIds: [],
+});
+
+/**
  * Extract-related global variables
  *
  * ENTITY STATE:

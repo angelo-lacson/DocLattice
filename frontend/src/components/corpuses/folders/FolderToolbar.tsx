@@ -412,8 +412,12 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
   // Memoized view mode change handler to prevent unnecessary re-renders
   const handleViewModeChange = useCallback(
     (mode: ViewMode) => {
+      console.log("[FolderToolbar] View mode change requested:", mode);
       if (onViewModeChange) {
+        console.log("[FolderToolbar] Calling onViewModeChange with:", mode);
         onViewModeChange(mode);
+      } else {
+        console.log("[FolderToolbar] onViewModeChange is not defined!");
       }
     },
     [onViewModeChange]
@@ -477,14 +481,16 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
           <ChevronUp />
         </NavButton>
 
-        {/* Link Documents button - visible when 2+ documents selected */}
-        {selectedDocumentCount >= 2 && onLinkDocuments && (
+        {/* Link Documents button - visible when 1+ documents selected */}
+        {selectedDocumentCount >= 1 && onLinkDocuments && (
           <ActionButton
             onClick={onLinkDocuments}
-            title={`Link ${selectedDocumentCount} selected documents`}
+            title={`Link ${selectedDocumentCount} selected document${
+              selectedDocumentCount !== 1 ? "s" : ""
+            }`}
           >
             <Link2 />
-            <span>Link Documents</span>
+            <span>Link Document{selectedDocumentCount !== 1 ? "s" : ""}</span>
           </ActionButton>
         )}
 
@@ -571,7 +577,7 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
           <PanelLeftOpen />
           Show Folders
         </MobileMenuItem>
-        {selectedDocumentCount >= 2 && onLinkDocuments && (
+        {selectedDocumentCount >= 1 && onLinkDocuments && (
           <MobileMenuItem
             role="menuitem"
             onClick={() => {
@@ -580,7 +586,8 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
             }}
           >
             <Link2 />
-            Link Documents ({selectedDocumentCount})
+            Link Document{selectedDocumentCount !== 1 ? "s" : ""} (
+            {selectedDocumentCount})
           </MobileMenuItem>
         )}
         {canCreateFolders && (

@@ -16,7 +16,11 @@ from graphql_relay import to_global_id
 from config.graphql.schema import schema
 from opencontractserver.annotations.models import AnnotationLabel
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document, DocumentRelationship
+from opencontractserver.documents.models import (
+    Document,
+    DocumentPath,
+    DocumentRelationship,
+)
 from opencontractserver.tests.fixtures import SAMPLE_PDF_FILE_TWO_PATH
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -89,7 +93,25 @@ class DocumentRelationshipMutationTestCase(TestCase):
         )
 
         # Add documents to corpus (required for DocumentRelationship)
-        self.corpus.documents.add(self.source_doc, self.target_doc)
+        # Add documents to corpus via DocumentPath
+        DocumentPath.objects.create(
+            document=self.source_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/source_doc_{self.source_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=self.target_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/target_doc_{self.target_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
 
         # Set permissions for owner
         set_permissions_for_obj_to_user(
@@ -437,9 +459,29 @@ class DocumentRelationshipUpdateMutationTestCase(TestCase):
         )
 
         # Add documents to corpus (required for DocumentRelationship)
-        self.corpus.documents.add(self.source_doc, self.target_doc)
+        # Add documents to corpus via DocumentPath
+        DocumentPath.objects.create(
+            document=self.source_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/source_doc_{self.source_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=self.target_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/target_doc_{self.target_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
 
         # Create existing relationship
+        # Note: DocumentRelationship inherits permissions from source_doc,
+        # target_doc, and corpus - no guardian permissions on relationship itself
         self.relationship = DocumentRelationship.objects.create(
             source_document=self.source_doc,
             target_document=self.target_doc,
@@ -449,10 +491,7 @@ class DocumentRelationshipUpdateMutationTestCase(TestCase):
             corpus=self.corpus,
         )
 
-        # Set permissions for owner
-        set_permissions_for_obj_to_user(
-            self.owner, self.relationship, [PermissionTypes.CRUD]
-        )
+        # Set permissions for owner on documents and corpus
         set_permissions_for_obj_to_user(
             self.owner, self.source_doc, [PermissionTypes.CRUD]
         )
@@ -461,9 +500,16 @@ class DocumentRelationshipUpdateMutationTestCase(TestCase):
         )
         set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
-        # Collaborator gets read-only
+        # Collaborator gets read-only on documents and corpus
+        # This means they can READ relationships but not UPDATE/DELETE
         set_permissions_for_obj_to_user(
-            self.collaborator, self.relationship, [PermissionTypes.READ]
+            self.collaborator, self.source_doc, [PermissionTypes.READ]
+        )
+        set_permissions_for_obj_to_user(
+            self.collaborator, self.target_doc, [PermissionTypes.READ]
+        )
+        set_permissions_for_obj_to_user(
+            self.collaborator, self.corpus, [PermissionTypes.READ]
         )
 
     def test_update_document_relationship_as_owner(self):
@@ -502,7 +548,12 @@ class DocumentRelationshipUpdateMutationTestCase(TestCase):
         self.assertEqual(data["documentRelationship"]["data"], {"note": "Updated note"})
 
     def test_update_relationship_without_permission_fails(self):
-        """Test that collaborator with only READ permission cannot update."""
+        """Test that collaborator with only READ permission cannot update.
+
+        Permission Model: DocumentRelationship inherits permissions from source_doc,
+        target_doc, and corpus. Collaborator has READ-only on these, so they can
+        see the relationship but cannot UPDATE it. Returns explicit permission denied.
+        """
         mutation = """
             mutation UpdateDocRel(
                 $documentRelationshipId: String!,
@@ -530,6 +581,7 @@ class DocumentRelationshipUpdateMutationTestCase(TestCase):
 
         data = result["data"]["updateDocumentRelationship"]
         self.assertFalse(data["ok"])
+        # Collaborator can see relationship but lacks UPDATE permission
         self.assertIn("permission", data["message"].lower())
 
     def test_update_relationship_type_validates_label(self):
@@ -604,9 +656,29 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
         )
 
         # Add documents to corpus (required for DocumentRelationship)
-        self.corpus.documents.add(self.source_doc, self.target_doc)
+        # Add documents to corpus via DocumentPath
+        DocumentPath.objects.create(
+            document=self.source_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/source_doc_{self.source_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=self.target_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/target_doc_{self.target_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
 
         # Create existing relationship
+        # Note: DocumentRelationship inherits permissions from source_doc,
+        # target_doc, and corpus - no guardian permissions on relationship itself
         self.relationship = DocumentRelationship.objects.create(
             source_document=self.source_doc,
             target_document=self.target_doc,
@@ -616,9 +688,12 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
             corpus=self.corpus,
         )
 
-        # Set permissions
+        # Set permissions on documents and corpus (relationships inherit from these)
         set_permissions_for_obj_to_user(
-            self.owner, self.relationship, [PermissionTypes.CRUD]
+            self.owner, self.source_doc, [PermissionTypes.CRUD]
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, self.target_doc, [PermissionTypes.CRUD]
         )
         set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
@@ -693,6 +768,7 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
     def test_delete_multiple_document_relationships(self):
         """Test bulk delete of document relationships."""
         # Create additional relationship
+        # Note: No guardian permissions needed - inherits from source_doc, target_doc, corpus
         relationship2 = DocumentRelationship.objects.create(
             source_document=self.source_doc,
             target_document=self.target_doc,
@@ -700,9 +776,6 @@ class DocumentRelationshipDeleteMutationTestCase(TestCase):
             data={"note": "Second note"},
             creator=self.owner,
             corpus=self.corpus,
-        )
-        set_permissions_for_obj_to_user(
-            self.owner, relationship2, [PermissionTypes.CRUD]
         )
 
         mutation = """
@@ -781,7 +854,25 @@ class DocumentRelationshipValidationTestCase(TestCase):
         )
 
         # Add documents to corpus (required for DocumentRelationship)
-        self.corpus.documents.add(self.source_doc, self.target_doc)
+        # Add documents to corpus via DocumentPath
+        DocumentPath.objects.create(
+            document=self.source_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/source_doc_{self.source_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=self.target_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/target_doc_{self.target_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
 
         # Set permissions
         set_permissions_for_obj_to_user(
@@ -945,9 +1036,29 @@ class DocumentRelationshipQueryOptimizerTestCase(TestCase):
         )
 
         # Add documents to corpus
-        self.corpus.documents.add(self.source_doc, self.target_doc)
+        # Add documents to corpus via DocumentPath
+        DocumentPath.objects.create(
+            document=self.source_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/source_doc_{self.source_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=self.target_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            path=f"/target_doc_{self.target_doc.id}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
 
         # Create test relationships
+        # Note: DocumentRelationship inherits permissions from source_doc,
+        # target_doc, and corpus - no guardian permissions on relationship itself
         self.relationship = DocumentRelationship.objects.create(
             source_document=self.source_doc,
             target_document=self.target_doc,
@@ -966,11 +1077,7 @@ class DocumentRelationshipQueryOptimizerTestCase(TestCase):
             corpus=self.corpus,
         )
 
-        # Set permissions
-        set_permissions_for_obj_to_user(
-            self.owner, self.relationship, [PermissionTypes.CRUD]
-        )
-        set_permissions_for_obj_to_user(self.owner, self.note, [PermissionTypes.CRUD])
+        # Set permissions on documents and corpus (relationships inherit from these)
         set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
         set_permissions_for_obj_to_user(
             self.owner, self.source_doc, [PermissionTypes.CRUD]

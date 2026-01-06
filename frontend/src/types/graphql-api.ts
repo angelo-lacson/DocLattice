@@ -386,6 +386,7 @@ export type RawDocumentType = Node & {
   allAnnotations?: RawServerAnnotationType[];
   allRelationships?: RelationshipType[];
   allDocRelationships?: DocumentRelationshipType[];
+  docRelationshipCount?: Maybe<Scalars["Int"]>;
   allStructuralAnnotations?: RawServerAnnotationType[];
   docLabelAnnotations?: Maybe<AnnotationTypeConnection>;
   metadataAnnotations?: Maybe<AnnotationTypeConnection>;

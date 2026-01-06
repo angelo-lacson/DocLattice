@@ -105,14 +105,16 @@ const createTestCache = () =>
 interface Props {
   open?: boolean;
   onClose?: () => void;
-  sourceDocumentIds?: string[];
+  initialSourceIds?: string[];
+  initialTargetIds?: string[];
 }
 
 // Inner component that sets up Jotai atoms
 const ModalWithState: React.FC<Props> = ({
   open = true,
   onClose = () => {},
-  sourceDocumentIds = ["doc-1"],
+  initialSourceIds = ["doc-1"],
+  initialTargetIds = [],
 }) => {
   const setCorpusState = useSetAtom(corpusStateAtom);
 
@@ -137,7 +139,8 @@ const ModalWithState: React.FC<Props> = ({
       open={open}
       onClose={onClose}
       corpusId={TEST_CORPUS_ID}
-      sourceDocumentIds={sourceDocumentIds}
+      initialSourceIds={initialSourceIds}
+      initialTargetIds={initialTargetIds}
       onSuccess={() => {}}
     />
   );
