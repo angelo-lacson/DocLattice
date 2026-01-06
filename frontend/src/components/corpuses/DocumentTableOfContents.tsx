@@ -542,6 +542,9 @@ export const DocumentTableOfContents: React.FC<
   useEffect(() => {
     if (expandAllFromUrl && allNodeIds.length > 0) {
       setExpandedNodes(new Set(allNodeIds));
+    } else if (!expandAllFromUrl) {
+      // Collapse all when URL param is removed/false
+      setExpandedNodes(new Set());
     }
   }, [expandAllFromUrl, allNodeIds]);
 
