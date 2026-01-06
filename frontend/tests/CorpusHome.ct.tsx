@@ -6,7 +6,13 @@ import { CorpusHomeTestWrapper } from "./CorpusHomeTestWrapper";
 import {
   GET_CORPUS_STATS,
   GET_CORPUS_WITH_HISTORY,
+  GET_DOCUMENT_RELATIONSHIPS,
+  GET_CORPUS_DOCUMENTS_FOR_TOC,
 } from "../src/graphql/queries";
+import {
+  DOCUMENT_RELATIONSHIP_TOC_LIMIT,
+  CORPUS_DOCUMENTS_TOC_LIMIT,
+} from "../src/assets/configurations/constants";
 import { PermissionTypes } from "../src/components/types";
 
 /* --------------------------------------------------------------------------
@@ -61,6 +67,119 @@ const dummyCorpus: CorpusType = {
   __typename: "CorpusType",
 };
 
+// Document relationships mock - used for DocumentTableOfContents
+// Must include parent relationships for TOC to render content
+const documentRelationshipsMock: MockedResponse = {
+  request: {
+    query: GET_DOCUMENT_RELATIONSHIPS,
+    variables: {
+      corpusId: dummyCorpus.id,
+      first: DOCUMENT_RELATIONSHIP_TOC_LIMIT,
+    },
+  },
+  result: {
+    data: {
+      documentRelationships: {
+        edges: [
+          {
+            node: {
+              id: "rel-1",
+              relationshipType: "RELATIONSHIP",
+              data: null,
+              sourceDocument: {
+                id: "doc-child",
+                title: "Child Document",
+                icon: null,
+                slug: "child-document",
+                creator: { slug: "test-user" },
+              },
+              targetDocument: {
+                id: "doc-parent",
+                title: "Parent Document",
+                icon: null,
+                slug: "parent-document",
+                creator: { slug: "test-user" },
+              },
+              annotationLabel: {
+                id: "label-1",
+                text: "parent",
+                color: "#3b82f6",
+                icon: null,
+              },
+              corpus: { id: dummyCorpus.id },
+              creator: { id: "USER_1", username: "testuser" },
+              created: "2025-01-01T00:00:00Z",
+              modified: "2025-01-01T00:00:00Z",
+              myPermissions: ["read"],
+              __typename: "DocumentRelationshipType",
+            },
+            __typename: "DocumentRelationshipTypeEdge",
+          },
+        ],
+        totalCount: 1,
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: null,
+          endCursor: null,
+        },
+        __typename: "DocumentRelationshipTypeConnection",
+      },
+    },
+  },
+};
+
+// Documents mock for TOC - corresponds to the relationship mock documents
+const corpusDocumentsMock: MockedResponse = {
+  request: {
+    query: GET_CORPUS_DOCUMENTS_FOR_TOC,
+    variables: {
+      corpusId: dummyCorpus.id,
+      first: CORPUS_DOCUMENTS_TOC_LIMIT,
+    },
+  },
+  result: {
+    data: {
+      documents: {
+        edges: [
+          {
+            node: {
+              id: "doc-parent",
+              title: "Parent Document",
+              slug: "parent-document",
+              icon: null,
+              fileType: "application/pdf",
+              creator: { slug: "test-user" },
+              __typename: "DocumentType",
+            },
+            __typename: "DocumentTypeEdge",
+          },
+          {
+            node: {
+              id: "doc-child",
+              title: "Child Document",
+              slug: "child-document",
+              icon: null,
+              fileType: "application/pdf",
+              creator: { slug: "test-user" },
+              __typename: "DocumentType",
+            },
+            __typename: "DocumentTypeEdge",
+          },
+        ],
+        totalCount: 2,
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: null,
+          endCursor: null,
+        },
+        __typename: "DocumentTypeConnection",
+      },
+    },
+  },
+};
+
 const mocks: MockedResponse[] = [
   {
     request: {
@@ -79,6 +198,12 @@ const mocks: MockedResponse[] = [
       },
     },
   },
+  // Duplicate for cache-and-network fetch policy
+  documentRelationshipsMock,
+  { ...documentRelationshipsMock },
+  // Documents mock for TOC
+  corpusDocumentsMock,
+  { ...corpusDocumentsMock },
   {
     request: {
       query: GET_CORPUS_WITH_HISTORY,
@@ -118,6 +243,71 @@ function mountCorpusHome(mount: any) {
  * -------------------------------------------------------------------------- */
 
 test.use({ viewport: { width: 1200, height: 800 } });
+
+test("defaults to About tab when no homeView URL param", async ({
+  mount,
+  page,
+}) => {
+  await mountCorpusHome(mount);
+
+  // About tab should be active by default
+  const aboutTab = page.getByRole("tab", { name: "About" });
+  await expect(aboutTab).toHaveAttribute("aria-selected", "true");
+
+  // TOC tab should not be selected
+  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
+  await expect(tocTab).toHaveAttribute("aria-selected", "false");
+
+  // About content should be visible
+  const aboutPanel = page.locator("#about-panel");
+  await expect(aboutPanel).toBeVisible();
+});
+
+test("shows TOC tab when homeView=toc URL param is set", async ({
+  mount,
+  page,
+}) => {
+  // Mount with initialHomeView="toc"
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      initialHomeView="toc"
+    />
+  );
+
+  // TOC tab should be active
+  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
+  await expect(tocTab).toHaveAttribute("aria-selected", "true");
+
+  // About tab should not be selected
+  const aboutTab = page.getByRole("tab", { name: "About" });
+  await expect(aboutTab).toHaveAttribute("aria-selected", "false");
+
+  // TOC panel should be visible
+  const tocPanel = page.locator("#toc-panel");
+  await expect(tocPanel).toBeVisible();
+});
+
+test("switching tabs updates URL (via click)", async ({ mount, page }) => {
+  await mountCorpusHome(mount);
+
+  // Initially on About tab
+  const aboutTab = page.getByRole("tab", { name: "About" });
+  await expect(aboutTab).toHaveAttribute("aria-selected", "true");
+
+  // Click TOC tab
+  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
+  await tocTab.click();
+
+  // TOC tab should now be selected
+  await expect(tocTab).toHaveAttribute("aria-selected", "true");
+  await expect(aboutTab).toHaveAttribute("aria-selected", "false");
+
+  // TOC panel should be visible
+  const tocPanel = page.locator("#toc-panel");
+  await expect(tocPanel).toBeVisible();
+});
 
 test("renders corpus hero, chat bar and description controls", async ({
   mount,

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
@@ -220,12 +220,17 @@ export const FolderTreeSidebar: React.FC<FolderTreeSidebarProps> = ({
     GetCorpusFoldersInputs
   >(GET_CORPUS_FOLDERS, {
     variables: { corpusId },
-    onCompleted: (data) => {
-      setFolderList(data.corpusFolders);
-      setFolderCorpusId(corpusId);
-    },
     fetchPolicy: "cache-and-network",
   });
+
+  // Update atom whenever query data changes (more reliable than onCompleted)
+  // This ensures the folder tree updates when cache is evicted and refetched
+  useEffect(() => {
+    if (data?.corpusFolders) {
+      setFolderList(data.corpusFolders);
+      setFolderCorpusId(corpusId);
+    }
+  }, [data, corpusId, setFolderList, setFolderCorpusId]);
 
   // Filter tree based on search query
   const filteredTree = useMemo(() => {

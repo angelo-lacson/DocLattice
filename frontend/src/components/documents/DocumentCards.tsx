@@ -55,6 +55,7 @@ const ModernCardGrid = styled.div`
   padding: 16px;
   align-content: start;
   background: transparent;
+  overflow: visible;
 
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
@@ -252,6 +253,10 @@ interface DocumentCardProps {
   onDrop: (acceptedFiles: File[]) => void;
   viewMode?: "classic" | "modern-card" | "modern-list";
   prefixItems?: React.ReactNode[]; // Items to render before documents (e.g., folders)
+  /** Callback when user wants to link this document to another */
+  onLinkToDocument?: (document: DocumentType) => void;
+  /** Callback when a document is dropped onto another document (for creating relationships) */
+  onDocumentDrop?: (sourceDocId: string, targetDocId: string) => void;
 }
 
 export const DocumentCards = ({
@@ -268,7 +273,10 @@ export const DocumentCards = ({
   onDrop,
   viewMode = "modern-card",
   prefixItems = [],
+  onLinkToDocument,
+  onDocumentDrop,
 }: DocumentCardProps) => {
+  console.log("[DocumentCards] Rendering with viewMode:", viewMode);
   const [contextMenuOpen, setContextMenuOpen] = useState<string | null>(null);
 
   const handleUpdate = () => {
@@ -316,6 +324,8 @@ export const DocumentCards = ({
             onClick={onClick}
             onShiftClick={onShiftClick}
             removeFromCorpus={removeFromCorpus}
+            onLinkToDocument={onLinkToDocument}
+            onDocumentDrop={onDocumentDrop}
           />
         );
       });

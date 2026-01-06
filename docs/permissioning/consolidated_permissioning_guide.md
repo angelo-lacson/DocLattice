@@ -339,7 +339,7 @@ This section provides a comprehensive reference for how permissions work across 
 |-------------|------------------|---------------------------|------------------|---------------|
 | **Corpus** | Direct | Object permissions | `is_public` flag | Creator has full access |
 | **Document** | Direct | Object permissions | `is_public` flag | Creator has full access |
-| **DocumentRelationship** | Direct | Object permissions | `is_public` flag | CREATE requires CREATE on source AND target docs |
+| **DocumentRelationship** | Inherited (Doc+Corpus) | Source + Target doc permissions | Corpus permissions | `Effective = MIN(source_doc, target_doc, corpus)` |
 | **CorpusFolder** | Inherited (Corpus) | Parent corpus permissions | None | No individual permissions; write requires UPDATE on corpus |
 | **Annotation** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
 | **Relationship** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
@@ -358,43 +358,46 @@ This section provides a comprehensive reference for how permissions work across 
 Can Access = is_superuser OR is_creator OR has_object_permission OR (is_public AND READ)
 ```
 
-#### DocumentRelationship (Direct Permissions)
+#### DocumentRelationship (Inherited Permissions)
 
-DocumentRelationship objects have their OWN django-guardian permissions (unlike annotation Relationships which inherit from document/corpus). This allows document-level links to be independently shared.
+DocumentRelationship objects inherit permissions from their source_document, target_document, and corpus (same model as annotation Relationships). User must have permission on BOTH documents AND corpus (if set).
 
 ```
+Permission Formula:
+  Effective Permission = MIN(source_doc_permission, target_doc_permission, corpus_permission)
+
+READ Check:
+  can_read = is_superuser
+             OR (can_read_source_document AND can_read_target_document
+                 AND (no_corpus OR can_read_corpus))
+
 CREATE Check:
   can_create = has_CREATE_permission_on_source_document
                AND has_CREATE_permission_on_target_document
                AND (no corpus OR has_CREATE_permission_on_corpus)
 
 UPDATE Check:
-  can_update = is_superuser
-               OR is_creator
-               OR has_UPDATE_permission_on_relationship
+  can_update = has_UPDATE_permission_on_source_document
+               AND has_UPDATE_permission_on_target_document
+               AND (no corpus OR has_UPDATE_permission_on_corpus)
 
 DELETE Check:
-  can_delete = is_superuser
-               OR is_creator
-               OR has_DELETE_permission_on_relationship
-
-READ Check:
-  can_read = is_superuser
-             OR is_creator
-             OR relationship.is_public
-             OR has_READ_permission_on_relationship
+  can_delete = has_DELETE_permission_on_source_document
+               AND has_DELETE_permission_on_target_document
+               AND (no corpus OR has_DELETE_permission_on_corpus)
 ```
 
-**Key differences from annotation Relationship:**
+**Key characteristics:**
 - DocumentRelationship connects two Document objects (not annotations)
-- Has its own permission records via django-guardian
+- NO individual guardian permissions - inherits from source_doc + target_doc + corpus
 - Types: `RELATIONSHIP` (labeled semantic link) or `NOTES` (free-form notes between docs)
-- Can be independently shared without affecting document/corpus permissions
+- Permission model matches annotation Relationship for consistency
 
 **Query Optimizer**: Use `DocumentRelationshipQueryOptimizer` for:
 - IDOR-safe fetches with `get_relationship_by_id(user, id)`
 - Filtered queries with `get_visible_relationships(user, ...)`
 - Document-specific queries with `get_relationships_for_document(user, doc_id, ...)`
+- Permission checks with `user_has_permission(user, doc_relationship, permission_type)`
 
 #### Annotations & Relationships
 ```
