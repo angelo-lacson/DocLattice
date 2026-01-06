@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { DocumentTableOfContentsTestWrapper } from "./DocumentTableOfContentsTestWrapper";
 
 test.describe("DocumentTableOfContents", () => {
-  test("does not render when no parent relationships exist", async ({
+  test("shows standalone documents when no parent relationships exist", async ({
     mount,
     page,
   }) => {
@@ -10,24 +10,31 @@ test.describe("DocumentTableOfContents", () => {
       <DocumentTableOfContentsTestWrapper mockType="noParentRelationships" />
     );
 
-    // Wait for query to complete
-    await page.waitForTimeout(1000);
+    // Wait for documents to load - they should show as standalone root items
+    await expect(page.getByText("Table of Contents")).toBeVisible({
+      timeout: 10000,
+    });
 
-    // Component should not render (returns null)
-    await expect(page.getByText("Table of Contents")).not.toBeVisible();
+    // Both docs should be visible as root-level items (no hierarchy)
+    await expect(page.getByText("Doc A")).toBeVisible();
+    await expect(page.getByText("Doc B")).toBeVisible();
   });
 
-  test("does not render when relationships are empty", async ({
+  test("shows empty state when corpus has no documents", async ({
     mount,
     page,
   }) => {
     await mount(<DocumentTableOfContentsTestWrapper mockType="empty" />);
 
-    // Wait for query to complete
-    await page.waitForTimeout(1000);
+    // Wait for query to complete and show empty state
+    await expect(page.getByText("No Documents")).toBeVisible({
+      timeout: 10000,
+    });
 
-    // Component should not render
-    await expect(page.getByText("Table of Contents")).not.toBeVisible();
+    // Empty state message should be shown
+    await expect(
+      page.getByText("This corpus doesn't have any documents yet")
+    ).toBeVisible();
   });
 
   test("renders header with parent relationships", async ({ mount, page }) => {

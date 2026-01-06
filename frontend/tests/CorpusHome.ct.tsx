@@ -7,8 +7,12 @@ import {
   GET_CORPUS_STATS,
   GET_CORPUS_WITH_HISTORY,
   GET_DOCUMENT_RELATIONSHIPS,
+  GET_CORPUS_DOCUMENTS_FOR_TOC,
 } from "../src/graphql/queries";
-import { DOCUMENT_RELATIONSHIP_TOC_LIMIT } from "../src/assets/configurations/constants";
+import {
+  DOCUMENT_RELATIONSHIP_TOC_LIMIT,
+  CORPUS_DOCUMENTS_TOC_LIMIT,
+} from "../src/assets/configurations/constants";
 import { PermissionTypes } from "../src/components/types";
 
 /* --------------------------------------------------------------------------
@@ -125,6 +129,57 @@ const documentRelationshipsMock: MockedResponse = {
   },
 };
 
+// Documents mock for TOC - corresponds to the relationship mock documents
+const corpusDocumentsMock: MockedResponse = {
+  request: {
+    query: GET_CORPUS_DOCUMENTS_FOR_TOC,
+    variables: {
+      corpusId: dummyCorpus.id,
+      first: CORPUS_DOCUMENTS_TOC_LIMIT,
+    },
+  },
+  result: {
+    data: {
+      documents: {
+        edges: [
+          {
+            node: {
+              id: "doc-parent",
+              title: "Parent Document",
+              slug: "parent-document",
+              icon: null,
+              fileType: "application/pdf",
+              creator: { slug: "test-user" },
+              __typename: "DocumentType",
+            },
+            __typename: "DocumentTypeEdge",
+          },
+          {
+            node: {
+              id: "doc-child",
+              title: "Child Document",
+              slug: "child-document",
+              icon: null,
+              fileType: "application/pdf",
+              creator: { slug: "test-user" },
+              __typename: "DocumentType",
+            },
+            __typename: "DocumentTypeEdge",
+          },
+        ],
+        totalCount: 2,
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: null,
+          endCursor: null,
+        },
+        __typename: "DocumentTypeConnection",
+      },
+    },
+  },
+};
+
 const mocks: MockedResponse[] = [
   {
     request: {
@@ -146,6 +201,9 @@ const mocks: MockedResponse[] = [
   // Duplicate for cache-and-network fetch policy
   documentRelationshipsMock,
   { ...documentRelationshipsMock },
+  // Documents mock for TOC
+  corpusDocumentsMock,
+  { ...corpusDocumentsMock },
   {
     request: {
       query: GET_CORPUS_WITH_HISTORY,

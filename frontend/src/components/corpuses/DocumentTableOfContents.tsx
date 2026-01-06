@@ -22,6 +22,9 @@ import {
   GetDocumentRelationshipsOutput,
   GetDocumentRelationshipsInput,
   DocumentRelationshipNode,
+  GET_CORPUS_DOCUMENTS_FOR_TOC,
+  GetCorpusDocumentsForTocInput,
+  GetCorpusDocumentsForTocOutput,
 } from "../../graphql/queries";
 import { openedCorpus, tocExpandAll } from "../../graphql/cache";
 import { updateTocExpandedParam } from "../../utils/navigationUtils";
@@ -31,7 +34,10 @@ import {
   OS_LEGAL_SPACING,
   OS_LEGAL_TYPOGRAPHY,
 } from "../../assets/configurations/osLegalStyles";
-import { DOCUMENT_RELATIONSHIP_TOC_LIMIT } from "../../assets/configurations/constants";
+import {
+  DOCUMENT_RELATIONSHIP_TOC_LIMIT,
+  CORPUS_DOCUMENTS_TOC_LIMIT,
+} from "../../assets/configurations/constants";
 
 // ============================================================================
 // TYPES
@@ -366,219 +372,269 @@ export const DocumentTableOfContents: React.FC<
   const expandAllFromUrl = useReactiveVar(tocExpandAll);
 
   // Query for document relationships in this corpus
-  const { data, loading, error } = useQuery<
-    GetDocumentRelationshipsOutput,
-    GetDocumentRelationshipsInput
-  >(GET_DOCUMENT_RELATIONSHIPS, {
-    variables: {
-      corpusId,
-      first: DOCUMENT_RELATIONSHIP_TOC_LIMIT,
-    },
-    skip: !corpusId,
-    fetchPolicy: "cache-and-network",
-  });
-
-  // Check if we've hit the limit (potential truncation)
-  const totalCount = data?.documentRelationships?.totalCount ?? 0;
-  const isLimitExceeded = totalCount > DOCUMENT_RELATIONSHIP_TOC_LIMIT;
-
-  // Build tree from relationships
   const {
-    rootNodes,
-    hasParentRelationships,
-    hasCircularRefs,
-    circularRefDocs,
-    allNodeIds,
-  } = useMemo(() => {
-    const relationships = data?.documentRelationships?.edges || [];
+    data: relationshipsData,
+    loading: relationshipsLoading,
+    error: relationshipsError,
+  } = useQuery<GetDocumentRelationshipsOutput, GetDocumentRelationshipsInput>(
+    GET_DOCUMENT_RELATIONSHIPS,
+    {
+      variables: {
+        corpusId,
+        first: DOCUMENT_RELATIONSHIP_TOC_LIMIT,
+      },
+      skip: !corpusId,
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
-    // Filter to only "parent" labeled relationships
-    const parentRelationships = relationships
-      .map((e) => e.node)
-      .filter(
-        (rel): rel is DocumentRelationshipNode =>
-          rel != null &&
-          rel.relationshipType === "RELATIONSHIP" &&
-          rel.annotationLabel?.text?.toLowerCase() === "parent"
+  // Query for all documents in this corpus (to include standalone docs)
+  const {
+    data: documentsData,
+    loading: documentsLoading,
+    error: documentsError,
+  } = useQuery<GetCorpusDocumentsForTocOutput, GetCorpusDocumentsForTocInput>(
+    GET_CORPUS_DOCUMENTS_FOR_TOC,
+    {
+      variables: {
+        corpusId,
+        first: CORPUS_DOCUMENTS_TOC_LIMIT,
+      },
+      skip: !corpusId,
+      fetchPolicy: "cache-and-network",
+    }
+  );
+
+  // Combined loading and error states
+  const loading = relationshipsLoading || documentsLoading;
+  const error = relationshipsError || documentsError;
+
+  // Check if we've hit the limits (potential truncation)
+  const relationshipTotalCount =
+    relationshipsData?.documentRelationships?.totalCount ?? 0;
+  const documentsTotalCount = documentsData?.documents?.totalCount ?? 0;
+  const isLimitExceeded =
+    relationshipTotalCount > DOCUMENT_RELATIONSHIP_TOC_LIMIT ||
+    documentsTotalCount > CORPUS_DOCUMENTS_TOC_LIMIT;
+
+  // Build tree from relationships AND all corpus documents
+  const { rootNodes, hasCircularRefs, circularRefDocs, allNodeIds } =
+    useMemo(() => {
+      const relationships =
+        relationshipsData?.documentRelationships?.edges || [];
+      const allDocuments = documentsData?.documents?.edges || [];
+
+      // If we don't have documents data yet, return empty (still loading)
+      if (allDocuments.length === 0 && documentsLoading) {
+        return {
+          rootNodes: [],
+          hasCircularRefs: false,
+          circularRefDocs: [],
+          allNodeIds: [],
+        };
+      }
+
+      // Filter to only "parent" labeled relationships
+      const parentRelationships = relationships
+        .map((e) => e.node)
+        .filter(
+          (rel): rel is DocumentRelationshipNode =>
+            rel != null &&
+            rel.relationshipType === "RELATIONSHIP" &&
+            rel.annotationLabel?.text?.toLowerCase() === "parent"
+        );
+
+      // Build a map of document info from ALL corpus documents
+      const documentMap = new Map<
+        string,
+        {
+          id: string;
+          title: string;
+          description?: string;
+          fileType?: string;
+          slug?: string;
+          icon?: string;
+        }
+      >();
+
+      // First, add all documents from the corpus (standalone and related)
+      allDocuments.forEach((edge) => {
+        const doc = edge.node;
+        documentMap.set(doc.id, {
+          id: doc.id,
+          title: doc.title || "Untitled",
+          description: undefined, // Not available in lightweight query
+          fileType: doc.fileType || undefined,
+          slug: doc.slug,
+          icon: doc.icon || undefined,
+        });
+      });
+
+      // Build parent-children map from relationships
+      // In "parent" relationships: source has parent target (i.e., target is parent of source)
+      // So: source.parent = target
+      const parentMap = new Map<string, string>(); // child -> parent
+      const childrenMap = new Map<string, string[]>(); // parent -> children
+
+      parentRelationships.forEach((rel) => {
+        const sourceId = rel.sourceDocument.id;
+        const targetId = rel.targetDocument.id;
+
+        // Update document info with richer data from relationships if available
+        if (rel.sourceDocument.title) {
+          documentMap.set(sourceId, {
+            ...documentMap.get(sourceId),
+            id: sourceId,
+            title: rel.sourceDocument.title || "Untitled",
+            description: rel.sourceDocument.description || undefined,
+            fileType: rel.sourceDocument.fileType || undefined,
+            slug: rel.sourceDocument.slug,
+            icon: rel.sourceDocument.icon,
+          });
+        }
+        if (rel.targetDocument.title) {
+          documentMap.set(targetId, {
+            ...documentMap.get(targetId),
+            id: targetId,
+            title: rel.targetDocument.title || "Untitled",
+            description: rel.targetDocument.description || undefined,
+            fileType: rel.targetDocument.fileType || undefined,
+            slug: rel.targetDocument.slug,
+            icon: rel.targetDocument.icon,
+          });
+        }
+
+        // Source's parent is target (source "has parent" target)
+        parentMap.set(sourceId, targetId);
+
+        // Target has source as a child
+        const existing = childrenMap.get(targetId) || [];
+        childrenMap.set(targetId, [...existing, sourceId]);
+      });
+
+      // Find root documents: ANY document that has no parent
+      // This includes both docs with children AND standalone docs
+      const allDocIds = new Set([...documentMap.keys()]);
+      const rootDocIds = Array.from(allDocIds).filter(
+        (id) => !parentMap.has(id)
       );
 
-    if (parentRelationships.length === 0) {
-      return {
-        rootNodes: [],
-        hasParentRelationships: false,
-        hasCircularRefs: false,
-        circularRefDocs: [],
-        allNodeIds: [],
-      };
-    }
+      // Track circular references for user warning
+      const circularRefs: string[] = [];
 
-    // Build a map of document info
-    const documentMap = new Map<
-      string,
-      {
-        id: string;
-        title: string;
-        description?: string;
-        fileType?: string;
-        slug?: string;
-        icon?: string;
-      }
-    >();
-
-    // Build parent-children map
-    // In "parent" relationships: source has parent target (i.e., target is parent of source)
-    // So: source.parent = target
-    const parentMap = new Map<string, string>(); // child -> parent
-    const childrenMap = new Map<string, string[]>(); // parent -> children
-
-    parentRelationships.forEach((rel) => {
-      const sourceId = rel.sourceDocument.id;
-      const targetId = rel.targetDocument.id;
-
-      // Store document info
-      documentMap.set(sourceId, {
-        id: sourceId,
-        title: rel.sourceDocument.title || "Untitled",
-        description: rel.sourceDocument.description || undefined,
-        fileType: rel.sourceDocument.fileType || undefined,
-        slug: rel.sourceDocument.slug,
-        icon: rel.sourceDocument.icon,
-      });
-      documentMap.set(targetId, {
-        id: targetId,
-        title: rel.targetDocument.title || "Untitled",
-        description: rel.targetDocument.description || undefined,
-        fileType: rel.targetDocument.fileType || undefined,
-        slug: rel.targetDocument.slug,
-        icon: rel.targetDocument.icon,
-      });
-
-      // Source's parent is target (source "has parent" target)
-      parentMap.set(sourceId, targetId);
-
-      // Target has source as a child
-      const existing = childrenMap.get(targetId) || [];
-      childrenMap.set(targetId, [...existing, sourceId]);
-    });
-
-    // Find root documents (those that appear as parents but have no parents themselves)
-    const allDocIds = new Set([...documentMap.keys()]);
-    const rootDocIds = Array.from(allDocIds).filter((id) => !parentMap.has(id));
-
-    // Track circular references for user warning
-    const circularRefs: string[] = [];
-
-    // Build tree recursively with depth limit and cycle detection
-    const buildTree = (
-      docId: string,
-      currentDepth: number,
-      visited: Set<string> = new Set()
-    ): DocumentNode | null => {
-      // Prevent infinite recursion from circular references
-      if (visited.has(docId)) {
-        const docTitle = documentMap.get(docId)?.title || docId;
-        circularRefs.push(docTitle);
-        return null;
-      }
-      if (currentDepth > maxDepth) return null;
-
-      const docInfo = documentMap.get(docId);
-      if (!docInfo) return null;
-
-      // Add current node to visited set for this branch
-      const branchVisited = new Set(visited).add(docId);
-
-      const childIds = childrenMap.get(docId) || [];
-      // Sort children alphabetically by title
-      const sortedChildIds = [...childIds].sort((a, b) => {
-        const titleA = documentMap.get(a)?.title || "";
-        const titleB = documentMap.get(b)?.title || "";
-        return titleA.localeCompare(titleB);
-      });
-
-      const children = sortedChildIds
-        .map((childId) => buildTree(childId, currentDepth + 1, branchVisited))
-        .filter((child): child is DocumentNode => child !== null);
-
-      return {
-        id: docInfo.id,
-        title: docInfo.title,
-        description: docInfo.description,
-        fileType: docInfo.fileType,
-        slug: docInfo.slug,
-        icon: docInfo.icon,
-        children,
-      };
-    };
-
-    // Build trees from root nodes, sorted alphabetically
-    const roots = rootDocIds
-      .map((id) => buildTree(id, 0, new Set()))
-      .filter((node): node is DocumentNode => node !== null)
-      .sort((a, b) => a.title.localeCompare(b.title));
-
-    // Collect all node IDs that have children (for expand all)
-    const collectExpandableIds = (nodes: DocumentNode[]): string[] => {
-      const ids: string[] = [];
-      for (const node of nodes) {
-        if (node.children.length > 0) {
-          ids.push(node.id);
-          ids.push(...collectExpandableIds(node.children));
+      // Build tree recursively with depth limit and cycle detection
+      const buildTree = (
+        docId: string,
+        currentDepth: number,
+        visited: Set<string> = new Set()
+      ): DocumentNode | null => {
+        // Prevent infinite recursion from circular references
+        if (visited.has(docId)) {
+          const docTitle = documentMap.get(docId)?.title || docId;
+          circularRefs.push(docTitle);
+          return null;
         }
-      }
-      return ids;
-    };
+        if (currentDepth > maxDepth) return null;
 
-    return {
-      rootNodes: roots,
-      hasParentRelationships: true,
-      hasCircularRefs: circularRefs.length > 0,
-      circularRefDocs: circularRefs,
-      allNodeIds: collectExpandableIds(roots),
-    };
-  }, [data, maxDepth]);
+        const docInfo = documentMap.get(docId);
+        if (!docInfo) return null;
 
-  // Track if we've handled the initial expand all state
-  const hasHandledExpandAllRef = useRef<boolean>(false);
+        // Add current node to visited set for this branch
+        const branchVisited = new Set(visited).add(docId);
+
+        const childIds = childrenMap.get(docId) || [];
+        // Sort children alphabetically by title
+        const sortedChildIds = [...childIds].sort((a, b) => {
+          const titleA = documentMap.get(a)?.title || "";
+          const titleB = documentMap.get(b)?.title || "";
+          return titleA.localeCompare(titleB);
+        });
+
+        const children = sortedChildIds
+          .map((childId) => buildTree(childId, currentDepth + 1, branchVisited))
+          .filter((child): child is DocumentNode => child !== null);
+
+        return {
+          id: docInfo.id,
+          title: docInfo.title,
+          description: docInfo.description,
+          fileType: docInfo.fileType,
+          slug: docInfo.slug,
+          icon: docInfo.icon,
+          children,
+        };
+      };
+
+      // Build trees from root nodes, sorted alphabetically
+      const roots = rootDocIds
+        .map((id) => buildTree(id, 0, new Set()))
+        .filter((node): node is DocumentNode => node !== null)
+        .sort((a, b) => a.title.localeCompare(b.title));
+
+      // Collect all node IDs that have children (for expand all)
+      const collectExpandableIds = (nodes: DocumentNode[]): string[] => {
+        const ids: string[] = [];
+        for (const node of nodes) {
+          if (node.children.length > 0) {
+            ids.push(node.id);
+            ids.push(...collectExpandableIds(node.children));
+          }
+        }
+        return ids;
+      };
+
+      return {
+        rootNodes: roots,
+        hasCircularRefs: circularRefs.length > 0,
+        circularRefDocs: circularRefs,
+        allNodeIds: collectExpandableIds(roots),
+      };
+    }, [relationshipsData, documentsData, documentsLoading, maxDepth]);
+
+  // Track if we've successfully handled the initial expand all state
+  // (only true once we've actually expanded nodes, not just attempted to)
+  const hasHandledInitialExpandRef = useRef<boolean>(false);
   // Track the last value we acted upon to detect actual user-driven changes
   const lastExpandAllValueRef = useRef<boolean | null>(null);
 
   // Sync expand state from URL parameter
-  // Only responds to actual user-driven URL changes, not initial renders or other updates
+  // Handles both initial load with tocExpanded=true and subsequent user-driven toggles
   useEffect(() => {
-    // Skip if expandAllFromUrl hasn't actually changed from what we last handled
-    if (lastExpandAllValueRef.current === expandAllFromUrl) {
-      return;
-    }
-
-    // On initial mount with expandAllFromUrl=true, expand all
-    if (!hasHandledExpandAllRef.current && expandAllFromUrl) {
-      hasHandledExpandAllRef.current = true;
-      lastExpandAllValueRef.current = expandAllFromUrl;
+    // On initial mount with expandAllFromUrl=true, wait for nodes then expand
+    if (!hasHandledInitialExpandRef.current && expandAllFromUrl) {
       if (allNodeIds.length > 0) {
+        // Now we have nodes - expand them and mark as handled
         setExpandedNodes(new Set(allNodeIds));
+        hasHandledInitialExpandRef.current = true;
+        lastExpandAllValueRef.current = expandAllFromUrl;
       }
+      // If no nodes yet, don't mark as handled - wait for data to load
       return;
     }
 
-    // After initial mount, only respond to explicit changes
-    if (
-      hasHandledExpandAllRef.current ||
-      lastExpandAllValueRef.current !== null
-    ) {
-      const wasExpanded = lastExpandAllValueRef.current;
+    // Mark as handled if expandAllFromUrl is false on initial mount
+    if (!hasHandledInitialExpandRef.current && !expandAllFromUrl) {
+      hasHandledInitialExpandRef.current = true;
       lastExpandAllValueRef.current = expandAllFromUrl;
-
-      if (expandAllFromUrl && !wasExpanded && allNodeIds.length > 0) {
-        // User toggled expand all ON
-        setExpandedNodes(new Set(allNodeIds));
-      } else if (!expandAllFromUrl && wasExpanded) {
-        // User toggled expand all OFF
-        setExpandedNodes(new Set());
-      }
+      return;
     }
 
-    hasHandledExpandAllRef.current = true;
+    // After initial handling, respond to explicit user-driven changes
+    if (lastExpandAllValueRef.current === expandAllFromUrl) {
+      // Value hasn't changed - nothing to do
+      return;
+    }
+
+    const wasExpanded = lastExpandAllValueRef.current;
+    lastExpandAllValueRef.current = expandAllFromUrl;
+
+    if (expandAllFromUrl && !wasExpanded && allNodeIds.length > 0) {
+      // User toggled expand all ON
+      setExpandedNodes(new Set(allNodeIds));
+    } else if (!expandAllFromUrl && wasExpanded) {
+      // User toggled expand all OFF
+      setExpandedNodes(new Set());
+    }
   }, [expandAllFromUrl, allNodeIds]);
 
   // Check if all expandable nodes are currently expanded
@@ -780,10 +836,22 @@ export const DocumentTableOfContents: React.FC<
     );
   }
 
-  if (!hasParentRelationships || rootNodes.length === 0) {
-    // Return null when there are no parent relationships - component should not render
-    // This allows parent components to conditionally show/hide the TOC section
-    return null;
+  if (rootNodes.length === 0) {
+    // Show empty state when there are no documents in the corpus
+    return (
+      <Wrapper>
+        <TreeContainer>
+          <div className="empty-state">
+            <ListTree size={48} className="empty-icon" />
+            <div className="empty-title">No Documents</div>
+            <div className="empty-description">
+              This corpus doesn't have any documents yet. Add documents to see
+              them in the table of contents.
+            </div>
+          </div>
+        </TreeContainer>
+      </Wrapper>
+    );
   }
 
   return (
@@ -792,8 +860,8 @@ export const DocumentTableOfContents: React.FC<
         <WarningBanner role="alert">
           <AlertTriangle size={18} className="warning-icon" />
           <span className="warning-text">
-            Showing first {DOCUMENT_RELATIONSHIP_TOC_LIMIT} of {totalCount}{" "}
-            relationships. Some documents may not appear in the hierarchy.
+            This corpus has many documents. Some may not appear in the table of
+            contents due to display limits.
           </span>
         </WarningBanner>
       )}
