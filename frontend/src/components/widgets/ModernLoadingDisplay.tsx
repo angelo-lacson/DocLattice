@@ -10,6 +10,7 @@ import {
   Archive,
 } from "lucide-react";
 import { color } from "../../theme/colors";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import osLegalLogo from "../../assets/images/os_legal_FullColor.png";
 
 interface ModernLoadingDisplayProps {
@@ -25,6 +26,17 @@ const pulse = keyframes`
   }
   50% {
     opacity: 0.5;
+  }
+`;
+
+const glowPulse = keyframes`
+  0%, 100% {
+    opacity: 0.15;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(1.05);
   }
 `;
 
@@ -51,7 +63,7 @@ const float = keyframes`
     transform: translateY(0px);
   }
   50% {
-    transform: translateY(-10px);
+    transform: translateY(-8px);
   }
 `;
 
@@ -75,7 +87,7 @@ const Container = styled(motion.div)<{ $fullScreen?: boolean; $size?: string }>`
     right: 0;
     bottom: 0;
     transform: none;
-    background: linear-gradient(135deg, ${color.N2} 0%, ${color.B1} 100%);
+    background: linear-gradient(135deg, #fafafa 0%, #f0fdfa 100%);
     backdrop-filter: blur(12px);
   `}
 `;
@@ -86,18 +98,25 @@ const IconContainer = styled(motion.div)<{ $type?: string }>`
   height: 100px;
   margin-bottom: 2rem;
 
+  /* Outer glow - teal radial gradient */
   &::before {
     content: "";
     position: absolute;
-    inset: -30px;
-    background: linear-gradient(135deg, #ff6b6b 0%, #e74c3c 50%, #c0392b 100%);
+    inset: -35px;
+    background: radial-gradient(
+      circle,
+      ${OS_LEGAL_COLORS.accent} 0%,
+      rgba(15, 118, 110, 0.4) 40%,
+      transparent 70%
+    );
     border-radius: 50%;
-    opacity: 0.12;
-    animation: ${pulse} 2.5s ease-in-out infinite;
-    filter: blur(25px);
+    opacity: 0.15;
+    animation: ${glowPulse} 3s ease-in-out infinite;
+    filter: blur(20px);
   }
 `;
 
+/* Squircle shape using clip-path for a more interesting container */
 const IconWrapper = styled(motion.div)<{ $type?: string }>`
   position: relative;
   width: 100px;
@@ -105,24 +124,43 @@ const IconWrapper = styled(motion.div)<{ $type?: string }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${color.white};
-  border-radius: 20px;
-  box-shadow: 0 10px 40px rgba(231, 76, 60, 0.15),
-    0 3px 12px rgba(231, 76, 60, 0.08);
-  animation: ${float} 3s ease-in-out infinite;
-  border: 1px solid rgba(231, 76, 60, 0.1);
+  background: linear-gradient(145deg, ${color.white} 0%, #f0fdfa 100%);
+  /* Squircle-like border radius for more organic feel */
+  border-radius: 28px;
+  box-shadow: 0 12px 40px rgba(15, 118, 110, 0.12),
+    0 4px 12px rgba(15, 118, 110, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  animation: ${float} 3.5s ease-in-out infinite;
+  border: 1px solid rgba(15, 118, 110, 0.12);
   overflow: hidden;
 
+  /* Subtle inner highlight */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 28px;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.5) 0%,
+      transparent 50%
+    );
+    pointer-events: none;
+  }
+
   img {
-    width: 72px;
-    height: 72px;
+    width: 68px;
+    height: 68px;
     object-fit: contain;
+    position: relative;
+    z-index: 1;
   }
 
   svg {
-    width: 36px;
-    height: 36px;
-    color: #e74c3c;
+    width: 40px;
+    height: 40px;
+    color: ${OS_LEGAL_COLORS.accent};
+    position: relative;
+    z-index: 1;
   }
 `;
 
@@ -135,7 +173,7 @@ const LoadingDots = styled.div`
 const Dot = styled(motion.div)<{ $delay: number }>`
   width: 6px;
   height: 6px;
-  background: #e74c3c;
+  background: ${OS_LEGAL_COLORS.accent};
   border-radius: 50%;
   animation: ${pulse} 1.4s ease-in-out infinite;
   animation-delay: ${(props) => props.$delay}s;
@@ -170,7 +208,12 @@ const ProgressBar = styled(motion.div)`
 
 const ProgressFill = styled(motion.div)`
   height: 100%;
-  background: linear-gradient(90deg, transparent, #e74c3c, transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    ${OS_LEGAL_COLORS.accent},
+    transparent
+  );
   background-size: 200% 100%;
   animation: ${shimmer} 1.5s ease-in-out infinite;
 `;
