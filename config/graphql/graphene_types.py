@@ -625,10 +625,13 @@ class DocumentRelationshipType(AnnotatePermissionsForReadMixin, DjangoObjectType
 
     @classmethod
     def get_queryset(cls, queryset, info):
+        # DocumentRelationship uses inherited permissions (not PermissionManager)
+        # Permission filtering is done by DocumentRelationshipQueryOptimizer
+        # in the resolver, so just pass through the queryset here
         if issubclass(type(queryset), QuerySet):
-            return queryset.visible_to_user(info.context.user)
+            return queryset
         elif "RelatedManager" in str(type(queryset)):
-            return queryset.all().visible_to_user(info.context.user)
+            return queryset.all()
         else:
             return queryset
 
