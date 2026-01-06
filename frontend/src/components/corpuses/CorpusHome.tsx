@@ -2,9 +2,21 @@ import React, { useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, ListTree } from "lucide-react";
-import { corpusHomeView, CorpusHomeViewType } from "../../graphql/cache";
-import { updateHomeViewParam } from "../../utils/navigationUtils";
+import {
+  BookOpen,
+  ListTree,
+  ChevronsUpDown,
+  ChevronsDownUp,
+} from "lucide-react";
+import {
+  corpusHomeView,
+  CorpusHomeViewType,
+  tocExpandAll,
+} from "../../graphql/cache";
+import {
+  updateHomeViewParam,
+  updateTocExpandedParam,
+} from "../../utils/navigationUtils";
 
 import {
   GET_CORPUS_WITH_HISTORY,
@@ -85,10 +97,48 @@ const TabContainer = styled.div`
 
 const TabHeader = styled.div`
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusCard}
     ${OS_LEGAL_SPACING.borderRadiusCard} 0 0;
+`;
+
+const TabList = styled.div`
+  display: flex;
+`;
+
+const TabActions = styled.div`
+  display: flex;
+  align-items: center;
+  padding-right: 16px;
+`;
+
+const ExpandToggleButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 6px;
+  background: ${OS_LEGAL_COLORS.surface};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.accent};
+    color: ${OS_LEGAL_COLORS.accent};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${OS_LEGAL_COLORS.accent};
+    outline-offset: 2px;
+  }
 `;
 
 const Tab = styled.button<{ $active: boolean }>`
@@ -199,9 +249,17 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   const homeViewFromUrl = useReactiveVar(corpusHomeView);
   const activeTab: CorpusHomeViewType = homeViewFromUrl ?? "about";
 
+  // Get TOC expand state from URL-driven reactive var
+  const isTocExpanded = useReactiveVar(tocExpandAll);
+
   // Update tab via URL (CentralRouteManager Phase 2 will set the reactive var)
   const setActiveTab = (tab: CorpusHomeViewType) => {
     updateHomeViewParam(location, navigate, tab);
+  };
+
+  // Toggle TOC expand state via URL
+  const handleToggleExpandAll = () => {
+    updateTocExpandedParam(location, navigate, !isTocExpanded);
   };
 
   // CRITICAL: Memoize variables object to prevent Apollo refetch on every render
@@ -262,29 +320,51 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         <StretchWrapper>
           <ContentWrapper id="corpus-home-content">
             <TabContainer>
-              <TabHeader role="tablist" aria-label="Corpus information tabs">
-                <Tab
-                  role="tab"
-                  $active={activeTab === "about"}
-                  onClick={() => setActiveTab("about")}
-                  aria-selected={activeTab === "about"}
-                  aria-controls="about-panel"
-                  id="about-tab"
-                >
-                  <BookOpen size={20} />
-                  About
-                </Tab>
-                <Tab
-                  role="tab"
-                  $active={activeTab === "toc"}
-                  onClick={() => setActiveTab("toc")}
-                  aria-selected={activeTab === "toc"}
-                  aria-controls="toc-panel"
-                  id="toc-tab"
-                >
-                  <ListTree size={20} />
-                  Table of Contents
-                </Tab>
+              <TabHeader>
+                <TabList role="tablist" aria-label="Corpus information tabs">
+                  <Tab
+                    role="tab"
+                    $active={activeTab === "about"}
+                    onClick={() => setActiveTab("about")}
+                    aria-selected={activeTab === "about"}
+                    aria-controls="about-panel"
+                    id="about-tab"
+                  >
+                    <BookOpen size={20} />
+                    About
+                  </Tab>
+                  <Tab
+                    role="tab"
+                    $active={activeTab === "toc"}
+                    onClick={() => setActiveTab("toc")}
+                    aria-selected={activeTab === "toc"}
+                    aria-controls="toc-panel"
+                    id="toc-tab"
+                  >
+                    <ListTree size={20} />
+                    Table of Contents
+                  </Tab>
+                </TabList>
+                {activeTab === "toc" && (
+                  <TabActions>
+                    <ExpandToggleButton
+                      onClick={handleToggleExpandAll}
+                      aria-label={isTocExpanded ? "Collapse all" : "Expand all"}
+                    >
+                      {isTocExpanded ? (
+                        <>
+                          <ChevronsDownUp size={16} />
+                          Collapse All
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsUpDown size={16} />
+                          Expand All
+                        </>
+                      )}
+                    </ExpandToggleButton>
+                  </TabActions>
+                )}
               </TabHeader>
               <TabContent
                 role="tabpanel"
