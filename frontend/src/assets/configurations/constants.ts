@@ -86,6 +86,9 @@ export const EXTRACT_STATUS_COLORS = {
 // Document relationship pagination limits
 export const DOCUMENT_RELATIONSHIP_PAGINATION_LIMIT = 50;
 export const DOCUMENT_RELATIONSHIP_TOC_LIMIT = 500;
+// Limit for fetching corpus documents in TOC (includes standalone docs)
+// Backend enforces max 100 records per page on documents connection
+export const CORPUS_DOCUMENTS_TOC_LIMIT = 100;
 
 // Document search/picker limits
 export const DOCUMENT_PICKER_SEARCH_LIMIT = 20;

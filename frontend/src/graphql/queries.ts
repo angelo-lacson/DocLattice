@@ -4748,3 +4748,61 @@ export const GET_DOCUMENT_RELATIONSHIP_COUNT = gql`
     }
   }
 `;
+
+// Lightweight query for TOC - gets all documents in a corpus with minimal fields
+export interface GetCorpusDocumentsForTocInput {
+  corpusId: string;
+  first?: number;
+}
+
+export interface CorpusDocumentForToc {
+  id: string;
+  title: string;
+  slug: string;
+  icon: string | null;
+  fileType: string | null;
+  creator: {
+    slug: string;
+  };
+}
+
+export interface GetCorpusDocumentsForTocOutput {
+  documents: {
+    edges: Array<{
+      node: CorpusDocumentForToc;
+    }>;
+    totalCount: number;
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+      startCursor: string | null;
+      endCursor: string | null;
+    };
+  };
+}
+
+export const GET_CORPUS_DOCUMENTS_FOR_TOC = gql`
+  query GetCorpusDocumentsForToc($corpusId: String!, $first: Int) {
+    documents(inCorpusWithId: $corpusId, first: $first) {
+      edges {
+        node {
+          id
+          title
+          slug
+          icon
+          fileType
+          creator {
+            slug
+          }
+        }
+      }
+      totalCount
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+    }
+  }
+`;

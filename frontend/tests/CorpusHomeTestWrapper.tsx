@@ -19,7 +19,7 @@ const createTestCache = () =>
       Query: {
         fields: {
           corpuses: relayStylePagination(),
-          documents: relayStylePagination(),
+          documents: relayStylePagination(["inCorpusWithId"]),
           documentRelationships: relayStylePagination([
             "corpusId",
             "documentId",
@@ -34,6 +34,9 @@ const createTestCache = () =>
         },
       },
       DocumentRelationshipType: {
+        keyFields: ["id"],
+      },
+      DocumentType: {
         keyFields: ["id"],
       },
     },
