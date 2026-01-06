@@ -44,6 +44,7 @@ export interface QueryParams {
   tab?: string | null;
   messageId?: string | null;
   homeView?: string | null; // "about" | "toc" - corpus home view selection
+  tocExpanded?: boolean; // true to expand all TOC nodes
   showStructural?: boolean;
   showSelectedOnly?: boolean;
   showBoundingBoxes?: boolean;
@@ -231,6 +232,9 @@ export function buildQueryParams(params: QueryParams): string {
   }
   if (params.homeView) {
     searchParams.set("homeView", params.homeView);
+  }
+  if (params.tocExpanded) {
+    searchParams.set("tocExpanded", "true");
   }
 
   // Visualization state - only add non-default values to keep URLs clean
@@ -834,6 +838,28 @@ export function updateHomeViewParam(
     searchParams.set("homeView", homeView);
   } else {
     searchParams.delete("homeView");
+  }
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Update TOC expand all state in URL
+ * Used for deep-linking to a fully expanded Table of Contents view
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param expanded - Whether all TOC nodes should be expanded
+ *                   Pass false to clear and use default (collapsed)
+ */
+export function updateTocExpandedParam(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  expanded: boolean
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (expanded) {
+    searchParams.set("tocExpanded", "true");
+  } else {
+    searchParams.delete("tocExpanded");
   }
   navigate({ search: searchParams.toString() }, { replace: true });
 }

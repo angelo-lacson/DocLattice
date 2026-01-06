@@ -1,8 +1,8 @@
-import React, { useMemo } from "react";
-import { useQuery } from "@apollo/client";
+import React, { useMemo, useEffect } from "react";
+import { useQuery, useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
 import { Icon } from "semantic-ui-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   FileText,
   ChevronRight,
@@ -13,6 +13,8 @@ import {
   FileSpreadsheet,
   FileImage,
   FileCode,
+  ChevronsUpDown,
+  ChevronsDownUp,
 } from "lucide-react";
 
 import {
@@ -21,7 +23,8 @@ import {
   GetDocumentRelationshipsInput,
   DocumentRelationshipNode,
 } from "../../graphql/queries";
-import { openedCorpus } from "../../graphql/cache";
+import { openedCorpus, tocExpandAll } from "../../graphql/cache";
+import { updateTocExpandedParam } from "../../utils/navigationUtils";
 import { navigateToRelationshipDocument } from "../../utils/navigationUtils";
 import {
   OS_LEGAL_COLORS,
@@ -67,10 +70,43 @@ const Container = styled.div<{ $embedded?: boolean }>`
 const Header = styled.div`
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+`;
+
+const HeaderLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const ExpandToggleButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 6px;
+  background: ${OS_LEGAL_COLORS.surface};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.accent};
+    color: ${OS_LEGAL_COLORS.accent};
+  }
+
+  &:focus {
+    outline: 2px solid ${OS_LEGAL_COLORS.accent};
+    outline-offset: 2px;
+  }
 `;
 
 const Title = styled.h3`
@@ -321,9 +357,13 @@ export const DocumentTableOfContents: React.FC<
   DocumentTableOfContentsProps
 > = ({ corpusId, maxDepth = 4, embedded = false }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(
     new Set()
   );
+
+  // URL-driven expand all state
+  const expandAllFromUrl = useReactiveVar(tocExpandAll);
 
   // Query for document relationships in this corpus
   const { data, loading, error } = useQuery<
@@ -348,6 +388,7 @@ export const DocumentTableOfContents: React.FC<
     hasParentRelationships,
     hasCircularRefs,
     circularRefDocs,
+    allNodeIds,
   } = useMemo(() => {
     const relationships = data?.documentRelationships?.edges || [];
 
@@ -367,6 +408,7 @@ export const DocumentTableOfContents: React.FC<
         hasParentRelationships: false,
         hasCircularRefs: false,
         circularRefDocs: [],
+        allNodeIds: [],
       };
     }
 
@@ -475,13 +517,52 @@ export const DocumentTableOfContents: React.FC<
       .filter((node): node is DocumentNode => node !== null)
       .sort((a, b) => a.title.localeCompare(b.title));
 
+    // Collect all node IDs that have children (for expand all)
+    const collectExpandableIds = (nodes: DocumentNode[]): string[] => {
+      const ids: string[] = [];
+      for (const node of nodes) {
+        if (node.children.length > 0) {
+          ids.push(node.id);
+          ids.push(...collectExpandableIds(node.children));
+        }
+      }
+      return ids;
+    };
+
     return {
       rootNodes: roots,
       hasParentRelationships: true,
       hasCircularRefs: circularRefs.length > 0,
       circularRefDocs: circularRefs,
+      allNodeIds: collectExpandableIds(roots),
     };
   }, [data, maxDepth]);
+
+  // Sync expand state from URL parameter
+  useEffect(() => {
+    if (expandAllFromUrl && allNodeIds.length > 0) {
+      setExpandedNodes(new Set(allNodeIds));
+    }
+  }, [expandAllFromUrl, allNodeIds]);
+
+  // Check if all expandable nodes are currently expanded
+  const allExpanded = useMemo(() => {
+    if (allNodeIds.length === 0) return false;
+    return allNodeIds.every((id) => expandedNodes.has(id));
+  }, [allNodeIds, expandedNodes]);
+
+  // Toggle expand/collapse all via URL
+  const handleToggleExpandAll = () => {
+    if (allExpanded) {
+      // Collapse all - update URL
+      updateTocExpandedParam(location, navigate, false);
+      setExpandedNodes(new Set());
+    } else {
+      // Expand all - update URL
+      updateTocExpandedParam(location, navigate, true);
+      setExpandedNodes(new Set(allNodeIds));
+    }
+  };
 
   // Handle document click - uses shared utility for type safety
   const handleDocumentClick = (doc: {
@@ -603,16 +684,39 @@ export const DocumentTableOfContents: React.FC<
   };
 
   // Wrapper component that conditionally renders container
-  const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+  const Wrapper: React.FC<{
+    children: React.ReactNode;
+    showExpandToggle?: boolean;
+  }> = ({ children, showExpandToggle = false }) =>
     embedded ? (
       <Container $embedded>{children}</Container>
     ) : (
       <Container>
         <Header>
-          <Title>
-            <ListTree size={18} />
-            Table of Contents
-          </Title>
+          <HeaderLeft>
+            <Title>
+              <ListTree size={18} />
+              Table of Contents
+            </Title>
+          </HeaderLeft>
+          {showExpandToggle && allNodeIds.length > 0 && (
+            <ExpandToggleButton
+              onClick={handleToggleExpandAll}
+              aria-label={allExpanded ? "Collapse all" : "Expand all"}
+            >
+              {allExpanded ? (
+                <>
+                  <ChevronsDownUp size={14} />
+                  Collapse All
+                </>
+              ) : (
+                <>
+                  <ChevronsUpDown size={14} />
+                  Expand All
+                </>
+              )}
+            </ExpandToggleButton>
+          )}
         </Header>
         {children}
       </Container>
@@ -658,7 +762,7 @@ export const DocumentTableOfContents: React.FC<
   }
 
   return (
-    <Wrapper>
+    <Wrapper showExpandToggle>
       {isLimitExceeded && (
         <WarningBanner role="alert">
           <AlertTriangle size={18} className="warning-icon" />

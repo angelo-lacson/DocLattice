@@ -30,6 +30,7 @@ import {
   selectedTab,
   selectedMessageId,
   corpusHomeView,
+  tocExpandAll,
   routeLoading,
   routeError,
   authStatusVar,
@@ -781,6 +782,7 @@ export function CentralRouteManager() {
     const tab = searchParams.get("tab");
     const messageId = searchParams.get("message");
     const homeViewParam = searchParams.get("homeView");
+    const tocExpandedParam = searchParams.get("tocExpanded") === "true";
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
@@ -797,6 +799,7 @@ export function CentralRouteManager() {
       tab,
       messageId,
       homeView: homeViewParam,
+      tocExpanded: tocExpandedParam,
       structural,
       selectedOnly,
       boundingBoxes,
@@ -813,6 +816,7 @@ export function CentralRouteManager() {
     const currentTab = selectedTab();
     const currentMessageId = selectedMessageId();
     const currentHomeView = corpusHomeView();
+    const currentTocExpandAll = tocExpandAll();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -859,6 +863,9 @@ export function CentralRouteManager() {
     }
     if (currentHomeView !== newHomeView) {
       updates.push(() => corpusHomeView(newHomeView));
+    }
+    if (currentTocExpandAll !== tocExpandedParam) {
+      updates.push(() => tocExpandAll(tocExpandedParam));
     }
     if (currentStructural !== structural) {
       updates.push(() => showStructuralAnnotations(structural));
@@ -1013,7 +1020,8 @@ export function CentralRouteManager() {
   // - Phase 4: Reactive Var → URL (on var change)
   //
   // Vars synced: annotationIds, analysisIds, extractIds, threadId,
-  // folderId, tab, messageId, homeView, structural, selectedOnly, boundingBoxes, labels
+  // folderId, tab, messageId, homeView, tocExpanded, structural,
+  // selectedOnly, boundingBoxes, labels
   // ═══════════════════════════════════════════════════════════════
   const annIds = useReactiveVar(selectedAnnotationIds);
   const analysisIds = useReactiveVar(selectedAnalysesIds);
@@ -1023,6 +1031,7 @@ export function CentralRouteManager() {
   const tab = useReactiveVar(selectedTab);
   const messageId = useReactiveVar(selectedMessageId);
   const homeView = useReactiveVar(corpusHomeView);
+  const tocExpanded = useReactiveVar(tocExpandAll);
   const structural = useReactiveVar(showStructuralAnnotations);
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
@@ -1086,6 +1095,7 @@ export function CentralRouteManager() {
         tab,
         messageId,
         homeView,
+        tocExpanded,
         structural,
         selectedOnly,
         boundingBoxes,
@@ -1102,6 +1112,7 @@ export function CentralRouteManager() {
       tab,
       messageId,
       homeView,
+      tocExpanded,
       showStructural: structural,
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
@@ -1134,6 +1145,7 @@ export function CentralRouteManager() {
     tab,
     messageId,
     homeView,
+    tocExpanded,
     structural,
     selectedOnly,
     boundingBoxes,

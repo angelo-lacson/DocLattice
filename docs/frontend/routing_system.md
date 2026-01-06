@@ -203,6 +203,7 @@ graph TB
 | `?tab=`      | Select active tab           | `?tab=discussions`                | Phase 2 or 4   |
 | `?message=`  | Highlight message in thread | `?message=msg-456`                | Phase 2 or 4   |
 | `?homeView=` | Corpus home view (about/toc)| `?homeView=toc`                   | Phase 2 or 4   |
+| `?tocExpanded=` | Expand all TOC nodes     | `?tocExpanded=true`               | Phase 2 or 4   |
 
 **Tab Values:**
 - **Corpus tabs**: `home` (default), `documents`, `annotations`, `analyses`, `extracts`, `discussions`, `chats`, `analytics`, `settings`, `badges`
@@ -211,6 +212,11 @@ graph TB
 **Home View Values:**
 - `about` (default): Shows corpus description/summary
 - `toc`: Shows table of contents (document relationships hierarchy)
+
+**TOC Expanded:**
+- When `tocExpanded=true`, all nodes in the Table of Contents are expanded by default
+- Useful for deep-linking to a fully expanded TOC view
+- Defaults to collapsed (false) when not specified
 
 **Corpus Tab Inline Detail Views:**
 
@@ -272,6 +278,9 @@ This pattern keeps users in the corpus context while viewing entity details, wit
 
 # Corpus home with table of contents view
 /c/john/legal-corpus?homeView=toc
+
+# Corpus home with fully expanded table of contents (for deep-linking)
+/c/john/legal-corpus?homeView=toc&tocExpanded=true
 ```
 
 ### Route Configuration
@@ -2044,12 +2053,12 @@ The OpenContracts routing system follows the principle: **One Place to Rule Them
 This includes:
 - Entity state: `openedCorpus`, `openedDocument`
 - Selection state: `selectedAnnotationIds`, `selectedAnalysesIds`, `selectedExtractIds`
-- UI state: `selectedTab`, `selectedFolderId`, `selectedThreadId`, `selectedMessageId`, `corpusHomeView`
+- UI state: `selectedTab`, `selectedFolderId`, `selectedThreadId`, `selectedMessageId`, `corpusHomeView`, `tocExpandAll`
 - Visualization state: `showStructuralAnnotations`, `showSelectedAnnotationOnly`, `showAnnotationBoundingBoxes`, `showAnnotationLabels`
 
 All other components:
 - READ ONLY via `useReactiveVar()`
-- UPDATE STATE via URL utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`, `updateTabParam()`, `updateHomeViewParam()`
+- UPDATE STATE via URL utilities: `updateAnnotationSelectionParams()`, `updateAnnotationDisplayParams()`, `updateTabParam()`, `updateHomeViewParam()`, `updateTocExpandedParam()`
 
 Violations cause race conditions, infinite loops, and unpredictable behavior.
 
