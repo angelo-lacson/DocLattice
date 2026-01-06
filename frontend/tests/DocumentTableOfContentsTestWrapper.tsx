@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { relayStylePagination } from "@apollo/client/utilities";
 import { DocumentTableOfContents } from "../src/components/corpuses/DocumentTableOfContents";
 import { GET_DOCUMENT_RELATIONSHIPS } from "../src/graphql/queries";
-import { openedCorpus } from "../src/graphql/cache";
+import { openedCorpus, tocExpandAll } from "../src/graphql/cache";
 import { DOCUMENT_RELATIONSHIP_TOC_LIMIT } from "../src/assets/configurations/constants";
 
 // Test corpus ID
@@ -262,11 +262,13 @@ export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
   mockType = "default",
   maxDepth = 4,
 }) => {
-  // Set up the opened corpus for navigation
+  // Set up the opened corpus for navigation and reset tocExpandAll
   React.useEffect(() => {
     openedCorpus(mockCorpus as any);
+    tocExpandAll(false); // Ensure clean state for tests
     return () => {
       openedCorpus(null);
+      tocExpandAll(false);
     };
   }, []);
 

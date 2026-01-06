@@ -326,21 +326,84 @@ class DocumentRelationshipQueryOptimizer:
     - DELETE: Can delete on BOTH source and target documents (and corpus if set)
 
     Formula: Effective Permission = MIN(source_doc_perm, target_doc_perm, corpus_perm)
+
+    Performance Note:
+    The _get_visible_document_ids and _get_visible_corpus_ids methods support
+    request-level caching via the info.context parameter to prevent N+1 queries
+    when resolving relationship counts for multiple documents in a single request.
     """
 
+    # Cache key prefixes for request-level caching
+    _VISIBLE_DOC_IDS_CACHE_KEY = "_doc_rel_visible_doc_ids"
+    _VISIBLE_CORPUS_IDS_CACHE_KEY = "_doc_rel_visible_corpus_ids"
+
     @classmethod
-    def _get_visible_document_ids(cls, user) -> set:
-        """Get IDs of all documents visible to user."""
+    def _get_visible_document_ids(cls, user, context=None) -> set:
+        """
+        Get IDs of all documents visible to user.
+
+        Args:
+            user: The requesting user
+            context: Optional GraphQL context for request-level caching.
+                     When provided, results are cached on the context to prevent
+                     N+1 queries when called multiple times in the same request.
+
+        Returns:
+            Set of document IDs visible to the user
+        """
         from opencontractserver.documents.models import Document
 
-        return set(Document.objects.visible_to_user(user).values_list("id", flat=True))
+        # Try to use cached value from context
+        if context is not None:
+            cache_key = f"{cls._VISIBLE_DOC_IDS_CACHE_KEY}_{user.id}"
+            if hasattr(context, cache_key):
+                return getattr(context, cache_key)
+
+        # Compute visible document IDs
+        visible_ids = set(
+            Document.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+
+        # Cache on context if available
+        if context is not None:
+            cache_key = f"{cls._VISIBLE_DOC_IDS_CACHE_KEY}_{user.id}"
+            setattr(context, cache_key, visible_ids)
+
+        return visible_ids
 
     @classmethod
-    def _get_visible_corpus_ids(cls, user) -> set:
-        """Get IDs of all corpuses visible to user."""
+    def _get_visible_corpus_ids(cls, user, context=None) -> set:
+        """
+        Get IDs of all corpuses visible to user.
+
+        Args:
+            user: The requesting user
+            context: Optional GraphQL context for request-level caching.
+                     When provided, results are cached on the context to prevent
+                     N+1 queries when called multiple times in the same request.
+
+        Returns:
+            Set of corpus IDs visible to the user
+        """
         from opencontractserver.corpuses.models import Corpus
 
-        return set(Corpus.objects.visible_to_user(user).values_list("id", flat=True))
+        # Try to use cached value from context
+        if context is not None:
+            cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user.id}"
+            if hasattr(context, cache_key):
+                return getattr(context, cache_key)
+
+        # Compute visible corpus IDs
+        visible_ids = set(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+
+        # Cache on context if available
+        if context is not None:
+            cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user.id}"
+            setattr(context, cache_key, visible_ids)
+
+        return visible_ids
 
     @classmethod
     def _check_corpus_permission(cls, user, corpus) -> bool:
@@ -365,6 +428,7 @@ class DocumentRelationshipQueryOptimizer:
         target_document_id: Optional[int] = None,
         corpus_id: Optional[int] = None,
         relationship_type: Optional[str] = None,
+        context=None,
     ) -> QuerySet:
         """
         Get DocumentRelationship objects visible to the user.
@@ -378,6 +442,7 @@ class DocumentRelationshipQueryOptimizer:
             target_document_id: Optional filter by target document
             corpus_id: Optional filter by corpus
             relationship_type: Optional filter by type ("RELATIONSHIP" or "NOTES")
+            context: Optional GraphQL context for request-level caching
 
         Returns:
             QuerySet of DocumentRelationship objects with eager loading
@@ -391,8 +456,9 @@ class DocumentRelationshipQueryOptimizer:
             queryset = DocumentRelationship.objects.all()
         else:
             # Get IDs of documents and corpuses user can see
-            visible_doc_ids = cls._get_visible_document_ids(user)
-            visible_corpus_ids = cls._get_visible_corpus_ids(user)
+            # Pass context for request-level caching to prevent N+1 queries
+            visible_doc_ids = cls._get_visible_document_ids(user, context=context)
+            visible_corpus_ids = cls._get_visible_corpus_ids(user, context=context)
 
             # Filter: user can see BOTH source and target documents
             # AND (no corpus OR user can see corpus)
@@ -428,6 +494,7 @@ class DocumentRelationshipQueryOptimizer:
         corpus_id: Optional[int] = None,
         include_as_source: bool = True,
         include_as_target: bool = True,
+        context=None,
     ) -> QuerySet:
         """
         Get all DocumentRelationship objects where a document is source or target.
@@ -438,6 +505,7 @@ class DocumentRelationshipQueryOptimizer:
             corpus_id: Optional corpus filter
             include_as_source: Include relationships where doc is source
             include_as_target: Include relationships where doc is target
+            context: Optional GraphQL context for request-level caching
 
         Returns:
             QuerySet of DocumentRelationship objects
@@ -466,9 +534,10 @@ class DocumentRelationshipQueryOptimizer:
             return DocumentRelationship.objects.none()
 
         # Use get_visible_relationships for permission filtering, then apply doc filter
-        queryset = cls.get_visible_relationships(user, corpus_id=corpus_id).filter(
-            q_filter
-        )
+        # Pass context for request-level caching to prevent N+1 queries
+        queryset = cls.get_visible_relationships(
+            user, corpus_id=corpus_id, context=context
+        ).filter(q_filter)
 
         return queryset
 

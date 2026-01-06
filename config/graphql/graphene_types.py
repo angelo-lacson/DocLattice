@@ -987,6 +987,10 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
         DocumentRelationship has its own guardian permissions.
+
+        Performance: Passes info.context to the query optimizer for request-level
+        caching of visible document/corpus IDs. This prevents N+1 queries when
+        this field is requested for multiple documents in a single GraphQL query.
         """
         from opencontractserver.documents.query_optimizer import (
             DocumentRelationshipQueryOptimizer,
@@ -997,10 +1001,12 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
 
             # Use the query optimizer for proper permission filtering
+            # Pass info.context for request-level caching to prevent N+1 queries
             return DocumentRelationshipQueryOptimizer.get_relationships_for_document(
                 user=user,
                 document_id=self.id,
                 corpus_id=int(corpus_pk) if corpus_pk else None,
+                context=info.context,
             ).count()
         except Exception as e:
             logger.warning(
@@ -1016,6 +1022,9 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
         DocumentRelationship has its own guardian permissions (unlike annotation
         Relationships which inherit from document/corpus).
+
+        Performance: Passes info.context to the query optimizer for request-level
+        caching of visible document/corpus IDs.
         """
         from opencontractserver.documents.query_optimizer import (
             DocumentRelationshipQueryOptimizer,
@@ -1026,10 +1035,12 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
 
             # Use the query optimizer for proper permission filtering
+            # Pass info.context for request-level caching
             return DocumentRelationshipQueryOptimizer.get_relationships_for_document(
                 user=user,
                 document_id=self.id,
                 corpus_id=int(corpus_pk) if corpus_pk else None,
+                context=info.context,
             )
         except Exception as e:
             logger.warning(
