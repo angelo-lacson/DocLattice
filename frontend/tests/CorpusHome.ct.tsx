@@ -64,6 +64,7 @@ const dummyCorpus: CorpusType = {
 };
 
 // Document relationships mock - used for DocumentTableOfContents
+// Must include parent relationships for TOC to render content
 const documentRelationshipsMock: MockedResponse = {
   request: {
     query: GET_DOCUMENT_RELATIONSHIPS,
@@ -75,8 +76,43 @@ const documentRelationshipsMock: MockedResponse = {
   result: {
     data: {
       documentRelationships: {
-        edges: [],
-        totalCount: 0,
+        edges: [
+          {
+            node: {
+              id: "rel-1",
+              relationshipType: "RELATIONSHIP",
+              data: null,
+              sourceDocument: {
+                id: "doc-child",
+                title: "Child Document",
+                icon: null,
+                slug: "child-document",
+                creator: { slug: "test-user" },
+              },
+              targetDocument: {
+                id: "doc-parent",
+                title: "Parent Document",
+                icon: null,
+                slug: "parent-document",
+                creator: { slug: "test-user" },
+              },
+              annotationLabel: {
+                id: "label-1",
+                text: "parent",
+                color: "#3b82f6",
+                icon: null,
+              },
+              corpus: { id: dummyCorpus.id },
+              creator: { id: "USER_1", username: "testuser" },
+              created: "2025-01-01T00:00:00Z",
+              modified: "2025-01-01T00:00:00Z",
+              myPermissions: ["read"],
+              __typename: "DocumentRelationshipType",
+            },
+            __typename: "DocumentRelationshipTypeEdge",
+          },
+        ],
+        totalCount: 1,
         pageInfo: {
           hasNextPage: false,
           hasPreviousPage: false,
