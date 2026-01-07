@@ -325,6 +325,7 @@ export const showCookieAcceptModal = makeVar<boolean>(false);
 export const showAddDocsToCorpusModal = makeVar<boolean>(false);
 export const showRemoveDocsFromCorpusModal = makeVar<boolean>(false);
 export const showUploadNewDocumentsModal = makeVar<boolean>(false);
+export const showBulkImportModal = makeVar<boolean>(false);
 export const showDeleteDocumentsModal = makeVar<boolean>(false);
 export const showNewLabelsetModal = makeVar<boolean>(false);
 export const showExportModal = makeVar<boolean>(false);
