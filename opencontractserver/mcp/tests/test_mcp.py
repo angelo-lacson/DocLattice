@@ -1883,3 +1883,540 @@ class MCPASGIRoutingTest(TestCase):
             self.assertEqual(body["error"], "SSE test error")
         finally:
             loop.close()
+
+
+class MCPTelemetryTest(TestCase):
+    """Tests for MCP telemetry functionality."""
+
+    def setUp(self):
+        """Reset telemetry context before each test."""
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+    def tearDown(self):
+        """Clean up telemetry context after each test."""
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+    def test_hash_ip(self):
+        """Test IP hashing for privacy."""
+        from opencontractserver.mcp.telemetry import _hash_ip
+
+        # Same IP should produce same hash
+        hash1 = _hash_ip("192.168.1.1")
+        hash2 = _hash_ip("192.168.1.1")
+        self.assertEqual(hash1, hash2)
+
+        # Different IPs should produce different hashes
+        hash3 = _hash_ip("192.168.1.2")
+        self.assertNotEqual(hash1, hash3)
+
+        # Hash should be 16 characters
+        self.assertEqual(len(hash1), 16)
+
+    def test_set_and_get_request_context(self):
+        """Test setting and getting request context."""
+        from opencontractserver.mcp.telemetry import (
+            _get_request_context,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="10.0.0.1", transport="streamable_http")
+
+        context = _get_request_context()
+        self.assertEqual(context["transport"], "streamable_http")
+        self.assertIsNotNone(context["client_ip_hash"])
+        # Should be hashed, not raw IP
+        self.assertNotEqual(context["client_ip_hash"], "10.0.0.1")
+        self.assertEqual(len(context["client_ip_hash"]), 16)
+
+    def test_set_request_context_no_ip(self):
+        """Test setting request context without IP (stdio transport)."""
+        from opencontractserver.mcp.telemetry import (
+            _get_request_context,
+            set_request_context,
+        )
+
+        set_request_context(client_ip=None, transport="stdio")
+
+        context = _get_request_context()
+        self.assertEqual(context["transport"], "stdio")
+        self.assertIsNone(context["client_ip_hash"])
+
+    def test_clear_request_context(self):
+        """Test clearing request context."""
+        from opencontractserver.mcp.telemetry import (
+            _get_request_context,
+            clear_request_context,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="10.0.0.1", transport="sse")
+        clear_request_context()
+
+        context = _get_request_context()
+        self.assertEqual(context, {})
+
+    def test_get_client_ip_from_scope_direct(self):
+        """Test extracting client IP from direct connection."""
+        from opencontractserver.mcp.telemetry import get_client_ip_from_scope
+
+        scope = {
+            "client": ("192.168.1.100", 54321),
+            "headers": [],
+        }
+
+        ip = get_client_ip_from_scope(scope)
+        self.assertEqual(ip, "192.168.1.100")
+
+    def test_get_client_ip_from_scope_x_forwarded_for(self):
+        """Test extracting client IP from X-Forwarded-For header."""
+        from opencontractserver.mcp.telemetry import get_client_ip_from_scope
+
+        scope = {
+            "client": ("127.0.0.1", 80),  # Proxy address
+            "headers": [
+                (b"x-forwarded-for", b"203.0.113.195, 70.41.3.18, 150.172.238.178"),
+            ],
+        }
+
+        ip = get_client_ip_from_scope(scope)
+        # Should return first IP (original client)
+        self.assertEqual(ip, "203.0.113.195")
+
+    def test_get_client_ip_from_scope_x_real_ip(self):
+        """Test extracting client IP from X-Real-IP header."""
+        from opencontractserver.mcp.telemetry import get_client_ip_from_scope
+
+        scope = {
+            "client": ("127.0.0.1", 80),
+            "headers": [
+                (b"x-real-ip", b"203.0.113.50"),
+            ],
+        }
+
+        ip = get_client_ip_from_scope(scope)
+        self.assertEqual(ip, "203.0.113.50")
+
+    def test_get_client_ip_from_scope_no_client(self):
+        """Test extracting client IP when no client info available."""
+        from opencontractserver.mcp.telemetry import get_client_ip_from_scope
+
+        scope = {
+            "headers": [],
+        }
+
+        ip = get_client_ip_from_scope(scope)
+        self.assertIsNone(ip)
+
+    def test_record_mcp_tool_call_success(self):
+        """Test recording successful MCP tool call."""
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.telemetry import (
+            record_mcp_tool_call,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="10.0.0.1", transport="streamable_http")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.record_event"
+        ) as mock_record_event:
+            mock_record_event.return_value = True
+
+            result = record_mcp_tool_call("list_documents", success=True)
+
+            self.assertTrue(result)
+            mock_record_event.assert_called_once()
+
+            # Check event type and properties
+            call_args = mock_record_event.call_args
+            self.assertEqual(call_args[0][0], "mcp_tool_call")
+
+            properties = call_args[0][1]
+            self.assertEqual(properties["tool_name"], "list_documents")
+            self.assertTrue(properties["success"])
+            self.assertEqual(properties["transport"], "streamable_http")
+            self.assertIn("client_ip_hash", properties)
+            self.assertNotIn("error_type", properties)
+
+    def test_record_mcp_tool_call_failure(self):
+        """Test recording failed MCP tool call."""
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.telemetry import (
+            record_mcp_tool_call,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="10.0.0.2", transport="sse")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.record_event"
+        ) as mock_record_event:
+            mock_record_event.return_value = True
+
+            result = record_mcp_tool_call(
+                "search_corpus", success=False, error_type="ValueError"
+            )
+
+            self.assertTrue(result)
+            mock_record_event.assert_called_once()
+
+            properties = mock_record_event.call_args[0][1]
+            self.assertEqual(properties["tool_name"], "search_corpus")
+            self.assertFalse(properties["success"])
+            self.assertEqual(properties["error_type"], "ValueError")
+
+    def test_record_mcp_tool_call_no_context(self):
+        """Test recording tool call without request context."""
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.telemetry import record_mcp_tool_call
+
+        with patch(
+            "opencontractserver.mcp.telemetry.record_event"
+        ) as mock_record_event:
+            mock_record_event.return_value = True
+
+            result = record_mcp_tool_call("list_public_corpuses", success=True)
+
+            self.assertTrue(result)
+            properties = mock_record_event.call_args[0][1]
+            self.assertEqual(properties["transport"], "unknown")
+            self.assertNotIn("client_ip_hash", properties)
+
+    def test_record_mcp_resource_read_success(self):
+        """Test recording successful MCP resource read."""
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.telemetry import (
+            record_mcp_resource_read,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="172.16.0.1", transport="streamable_http")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.record_event"
+        ) as mock_record_event:
+            mock_record_event.return_value = True
+
+            result = record_mcp_resource_read("document", success=True)
+
+            self.assertTrue(result)
+            mock_record_event.assert_called_once()
+
+            call_args = mock_record_event.call_args
+            self.assertEqual(call_args[0][0], "mcp_resource_read")
+
+            properties = call_args[0][1]
+            self.assertEqual(properties["resource_type"], "document")
+            self.assertTrue(properties["success"])
+            self.assertEqual(properties["transport"], "streamable_http")
+            self.assertIn("client_ip_hash", properties)
+
+    def test_record_mcp_resource_read_failure(self):
+        """Test recording failed MCP resource read."""
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.telemetry import (
+            record_mcp_resource_read,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="10.0.0.3", transport="sse")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.record_event"
+        ) as mock_record_event:
+            mock_record_event.return_value = True
+
+            result = record_mcp_resource_read(
+                "corpus", success=False, error_type="DoesNotExist"
+            )
+
+            self.assertTrue(result)
+            properties = mock_record_event.call_args[0][1]
+            self.assertEqual(properties["resource_type"], "corpus")
+            self.assertFalse(properties["success"])
+            self.assertEqual(properties["error_type"], "DoesNotExist")
+
+    def test_record_mcp_request(self):
+        """Test recording MCP request."""
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.telemetry import (
+            record_mcp_request,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="10.0.0.4", transport="streamable_http")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.record_event"
+        ) as mock_record_event:
+            mock_record_event.return_value = True
+
+            result = record_mcp_request("/mcp", method="POST")
+
+            self.assertTrue(result)
+            mock_record_event.assert_called_once()
+
+            call_args = mock_record_event.call_args
+            self.assertEqual(call_args[0][0], "mcp_request")
+
+            properties = call_args[0][1]
+            self.assertEqual(properties["endpoint"], "/mcp")
+            self.assertEqual(properties["method"], "POST")
+            self.assertEqual(properties["transport"], "streamable_http")
+            self.assertIn("client_ip_hash", properties)
+
+
+class MCPTelemetryIntegrationTest(TestCase):
+    """Integration tests for MCP telemetry in server handlers."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Create test data."""
+        cls.owner = User.objects.create_user(
+            username="telemetryowner",
+            email="telemetry@test.com",
+            password="testpass123",
+        )
+
+        cls.corpus = Corpus.objects.create(
+            title="Telemetry Test Corpus",
+            description="Test corpus for telemetry",
+            creator=cls.owner,
+            is_public=True,
+        )
+
+    def setUp(self):
+        """Reset telemetry context before each test."""
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+    def tearDown(self):
+        """Clean up telemetry context after each test."""
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+    def test_asgi_app_sets_context_for_mcp_path(self):
+        """Test ASGI app sets telemetry context for /mcp path."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+        from opencontractserver.mcp.telemetry import _get_request_context
+
+        async def run_test():
+            captured_context = None
+
+            # Mock the session manager to capture context during request
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock()
+
+            mock_manager = AsyncMock()
+
+            async def capture_context_handler(scope, receive, send):
+                nonlocal captured_context
+                # Import here to get the context set during the request
+                from opencontractserver.mcp.telemetry import _get_request_context
+
+                captured_context = _get_request_context()
+                # Send a minimal response
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 200,
+                        "headers": [],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": b"",
+                    }
+                )
+
+            mock_manager.handle_request = capture_context_handler
+
+            scope = {
+                "type": "http",
+                "path": "/mcp",
+                "method": "POST",
+                "client": ("192.168.1.50", 12345),
+                "headers": [],
+            }
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                pass
+
+            with patch(
+                "opencontractserver.mcp.server.lifespan_manager", mock_lifespan
+            ), patch(
+                "opencontractserver.mcp.server.get_session_manager",
+                return_value=mock_manager,
+            ):
+                app = create_mcp_asgi_app()
+                await app(scope, mock_receive, mock_send)
+
+            return captured_context
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            context = loop.run_until_complete(run_test())
+            self.assertIsNotNone(context)
+            self.assertEqual(context["transport"], "streamable_http")
+            self.assertIsNotNone(context["client_ip_hash"])
+        finally:
+            loop.close()
+
+    def test_call_tool_records_telemetry(self):
+        """Test that call_tool records telemetry events."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import create_mcp_server
+        from opencontractserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.5", transport="streamable_http")
+
+            with patch(
+                "opencontractserver.mcp.server.record_mcp_tool_call"
+            ) as mock_record:
+                mock_record.return_value = True
+
+                server = create_mcp_server()
+                # Get the call_tool handler
+                call_tool = server._call_tool_handler
+
+                # Call list_public_corpuses tool
+                result = await call_tool("list_public_corpuses", {})
+
+                # Verify telemetry was recorded
+                mock_record.assert_called_once_with("list_public_corpuses", success=True)
+
+                return result
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertIsNotNone(result)
+        finally:
+            loop.close()
+
+    def test_call_tool_records_failure_telemetry(self):
+        """Test that call_tool records failure telemetry."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import create_mcp_server
+        from opencontractserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.6", transport="sse")
+
+            with patch(
+                "opencontractserver.mcp.server.record_mcp_tool_call"
+            ) as mock_record:
+                mock_record.return_value = True
+
+                server = create_mcp_server()
+                call_tool = server._call_tool_handler
+
+                # Call with unknown tool
+                try:
+                    await call_tool("unknown_tool", {})
+                except ValueError:
+                    pass
+
+                # Verify failure telemetry was recorded
+                mock_record.assert_called_once_with(
+                    "unknown_tool", success=False, error_type="UnknownTool"
+                )
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_read_resource_records_telemetry(self):
+        """Test that read_resource records telemetry events."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import create_mcp_server
+        from opencontractserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.7", transport="streamable_http")
+
+            with patch(
+                "opencontractserver.mcp.server.record_mcp_resource_read"
+            ) as mock_record:
+                mock_record.return_value = True
+
+                server = create_mcp_server()
+                read_resource = server._read_resource_handler
+
+                # Read corpus resource
+                uri = f"corpus://{self.corpus.slug}"
+                result = await read_resource(uri)
+
+                # Verify telemetry was recorded
+                mock_record.assert_called_once_with("corpus", success=True)
+
+                return result
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertIsNotNone(result)
+        finally:
+            loop.close()
+
+    def test_read_resource_records_failure_telemetry(self):
+        """Test that read_resource records failure telemetry."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import create_mcp_server
+        from opencontractserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.8", transport="sse")
+
+            with patch(
+                "opencontractserver.mcp.server.record_mcp_resource_read"
+            ) as mock_record:
+                mock_record.return_value = True
+
+                server = create_mcp_server()
+                read_resource = server._read_resource_handler
+
+                # Try to read invalid URI
+                try:
+                    await read_resource("invalid://uri")
+                except ValueError:
+                    pass
+
+                # Verify failure telemetry was recorded
+                mock_record.assert_called_once_with(
+                    "unknown", success=False, error_type="ValueError"
+                )
