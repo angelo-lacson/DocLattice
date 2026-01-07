@@ -34,6 +34,13 @@ from .resources import (
     get_document_resource,
     get_thread_resource,
 )
+from .telemetry import (
+    clear_request_context,
+    get_client_ip_from_scope,
+    record_mcp_resource_read,
+    record_mcp_tool_call,
+    set_request_context,
+)
 from .tools import (
     get_document_text,
     get_thread_messages,
@@ -124,34 +131,55 @@ def create_mcp_server() -> Server:
     @mcp_server.read_resource()
     async def read_resource(uri: str) -> str:
         """Resolve resource URI and return content."""
-        # Try corpus URI
-        corpus_slug = URIParser.parse_corpus(uri)
-        if corpus_slug:
-            return await sync_to_async(get_corpus_resource)(corpus_slug)
+        resource_type = "unknown"
+        try:
+            # Try corpus URI
+            corpus_slug = URIParser.parse_corpus(uri)
+            if corpus_slug:
+                resource_type = "corpus"
+                result = await sync_to_async(get_corpus_resource)(corpus_slug)
+                record_mcp_resource_read(resource_type, success=True)
+                return result
 
-        # Try document URI
-        doc_parts = URIParser.parse_document(uri)
-        if doc_parts:
-            corpus_slug, document_slug = doc_parts
-            return await sync_to_async(get_document_resource)(
-                corpus_slug, document_slug
+            # Try document URI
+            doc_parts = URIParser.parse_document(uri)
+            if doc_parts:
+                resource_type = "document"
+                corpus_slug, document_slug = doc_parts
+                result = await sync_to_async(get_document_resource)(
+                    corpus_slug, document_slug
+                )
+                record_mcp_resource_read(resource_type, success=True)
+                return result
+
+            # Try annotation URI
+            ann_parts = URIParser.parse_annotation(uri)
+            if ann_parts:
+                resource_type = "annotation"
+                corpus_slug, document_slug, annotation_id = ann_parts
+                result = await sync_to_async(get_annotation_resource)(
+                    corpus_slug, document_slug, annotation_id
+                )
+                record_mcp_resource_read(resource_type, success=True)
+                return result
+
+            # Try thread URI
+            thread_parts = URIParser.parse_thread(uri)
+            if thread_parts:
+                resource_type = "thread"
+                corpus_slug, thread_id = thread_parts
+                result = await sync_to_async(get_thread_resource)(
+                    corpus_slug, thread_id
+                )
+                record_mcp_resource_read(resource_type, success=True)
+                return result
+
+            raise ValueError(f"Invalid or unrecognized resource URI: {uri}")
+        except Exception as e:
+            record_mcp_resource_read(
+                resource_type, success=False, error_type=type(e).__name__
             )
-
-        # Try annotation URI
-        ann_parts = URIParser.parse_annotation(uri)
-        if ann_parts:
-            corpus_slug, document_slug, annotation_id = ann_parts
-            return await sync_to_async(get_annotation_resource)(
-                corpus_slug, document_slug, annotation_id
-            )
-
-        # Try thread URI
-        thread_parts = URIParser.parse_thread(uri)
-        if thread_parts:
-            corpus_slug, thread_id = thread_parts
-            return await sync_to_async(get_thread_resource)(corpus_slug, thread_id)
-
-        raise ValueError(f"Invalid or unrecognized resource URI: {uri}")
+            raise
 
     @mcp_server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -303,12 +331,17 @@ def create_mcp_server() -> Server:
         """Execute tool and return results."""
         handler = TOOL_HANDLERS.get(name)
         if not handler:
+            record_mcp_tool_call(name, success=False, error_type="UnknownTool")
             raise ValueError(f"Unknown tool: {name}")
 
-        # Run synchronous Django ORM handlers in thread pool
-        result = await sync_to_async(handler)(**arguments)
-
-        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        try:
+            # Run synchronous Django ORM handlers in thread pool
+            result = await sync_to_async(handler)(**arguments)
+            record_mcp_tool_call(name, success=True)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        except Exception as e:
+            record_mcp_tool_call(name, success=False, error_type=type(e).__name__)
+            raise
 
     return mcp_server
 
@@ -405,6 +438,7 @@ def create_mcp_asgi_app():
     - SSE at /sse (deprecated, for backward compatibility)
 
     All requests are delegated to the appropriate transport handler.
+    Telemetry context is set for each request to track client IP and transport.
     """
 
     async def app(scope, receive, send):
@@ -415,6 +449,10 @@ def create_mcp_asgi_app():
 
         # Handle Streamable HTTP endpoint (recommended)
         if path == "/mcp/" or path == "/mcp":
+            # Set telemetry context for this request
+            client_ip = get_client_ip_from_scope(scope)
+            set_request_context(client_ip=client_ip, transport="streamable_http")
+
             # Ensure session manager is running
             await lifespan_manager.ensure_started()
 
@@ -437,9 +475,15 @@ def create_mcp_asgi_app():
                         "body": json.dumps({"error": str(e)}).encode(),
                     }
                 )
+            finally:
+                clear_request_context()
 
         # Handle deprecated SSE transport for backward compatibility
         elif path == "/sse" or path.startswith("/sse/"):
+            # Set telemetry context for this request
+            client_ip = get_client_ip_from_scope(scope)
+            set_request_context(client_ip=client_ip, transport="sse")
+
             try:
                 await sse_starlette_app(scope, receive, send)
             except Exception as e:
@@ -458,6 +502,8 @@ def create_mcp_asgi_app():
                         "body": json.dumps({"error": str(e)}).encode(),
                     }
                 )
+            finally:
+                clear_request_context()
 
         else:
             # Return 404 with helpful information about available endpoints
@@ -500,12 +546,17 @@ mcp_asgi_app = create_mcp_asgi_app()
 
 async def main():
     """Run MCP server with stdio transport (for CLI usage)."""
-    async with stdio_server() as streams:
-        await mcp_server.run(
-            streams[0],  # read_stream
-            streams[1],  # write_stream
-            mcp_server.create_initialization_options(),
-        )
+    # Set telemetry context for stdio transport (no client IP available)
+    set_request_context(client_ip=None, transport="stdio")
+    try:
+        async with stdio_server() as streams:
+            await mcp_server.run(
+                streams[0],  # read_stream
+                streams[1],  # write_stream
+                mcp_server.create_initialization_options(),
+            )
+    finally:
+        clear_request_context()
 
 
 if __name__ == "__main__":
