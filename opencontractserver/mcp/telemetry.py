@@ -35,10 +35,12 @@ def set_request_context(
     request metadata that will be included in telemetry events.
 
     Args:
-        client_ip: The client's IP address (will be hashed for privacy)
+        client_ip: The client's IP address (will be hashed for privacy,
+                   raw IP passed to PostHog for geolocation only)
         transport: The transport type (e.g., 'streamable_http', 'sse', 'stdio')
     """
     _mcp_request_context.set({
+        "client_ip": client_ip,  # Raw IP for PostHog geolocation ($ip property)
         "client_ip_hash": _hash_ip(client_ip) if client_ip else None,
         "transport": transport,
     })
@@ -98,6 +100,11 @@ def record_mcp_tool_call(
     if context.get("client_ip_hash"):
         properties["client_ip_hash"] = context["client_ip_hash"]
 
+    # Include raw IP for PostHog geolocation ($ip is a special PostHog property)
+    # PostHog will resolve this to country/region and discard the raw IP
+    if context.get("client_ip"):
+        properties["$ip"] = context["client_ip"]
+
     # Include error type if call failed
     if not success and error_type:
         properties["error_type"] = error_type
@@ -133,6 +140,10 @@ def record_mcp_resource_read(
     if context.get("client_ip_hash"):
         properties["client_ip_hash"] = context["client_ip_hash"]
 
+    # Include raw IP for PostHog geolocation ($ip is a special PostHog property)
+    if context.get("client_ip"):
+        properties["$ip"] = context["client_ip"]
+
     # Include error type if read failed
     if not success and error_type:
         properties["error_type"] = error_type
@@ -167,6 +178,10 @@ def record_mcp_request(
     # Include hashed client IP if available
     if context.get("client_ip_hash"):
         properties["client_ip_hash"] = context["client_ip_hash"]
+
+    # Include raw IP for PostHog geolocation ($ip is a special PostHog property)
+    if context.get("client_ip"):
+        properties["$ip"] = context["client_ip"]
 
     return record_event("mcp_request", properties)
 

@@ -1927,8 +1927,10 @@ class MCPTelemetryTest(TestCase):
 
         context = _get_request_context()
         self.assertEqual(context["transport"], "streamable_http")
+        # Raw IP is stored for PostHog geolocation
+        self.assertEqual(context["client_ip"], "10.0.0.1")
+        # Hashed IP is also stored for privacy-preserving unique user counting
         self.assertIsNotNone(context["client_ip_hash"])
-        # Should be hashed, not raw IP
         self.assertNotEqual(context["client_ip_hash"], "10.0.0.1")
         self.assertEqual(len(context["client_ip_hash"]), 16)
 
@@ -1943,6 +1945,7 @@ class MCPTelemetryTest(TestCase):
 
         context = _get_request_context()
         self.assertEqual(context["transport"], "stdio")
+        self.assertIsNone(context["client_ip"])
         self.assertIsNone(context["client_ip_hash"])
 
     def test_clear_request_context(self):
@@ -2041,6 +2044,8 @@ class MCPTelemetryTest(TestCase):
             self.assertTrue(properties["success"])
             self.assertEqual(properties["transport"], "streamable_http")
             self.assertIn("client_ip_hash", properties)
+            # $ip is passed for PostHog geolocation
+            self.assertEqual(properties["$ip"], "10.0.0.1")
             self.assertNotIn("error_type", properties)
 
     def test_record_mcp_tool_call_failure(self):
@@ -2088,6 +2093,7 @@ class MCPTelemetryTest(TestCase):
             properties = mock_record_event.call_args[0][1]
             self.assertEqual(properties["transport"], "unknown")
             self.assertNotIn("client_ip_hash", properties)
+            self.assertNotIn("$ip", properties)  # No IP for geolocation either
 
     def test_record_mcp_resource_read_success(self):
         """Test recording successful MCP resource read."""
@@ -2118,6 +2124,8 @@ class MCPTelemetryTest(TestCase):
             self.assertTrue(properties["success"])
             self.assertEqual(properties["transport"], "streamable_http")
             self.assertIn("client_ip_hash", properties)
+            # $ip is passed for PostHog geolocation
+            self.assertEqual(properties["$ip"], "172.16.0.1")
 
     def test_record_mcp_resource_read_failure(self):
         """Test recording failed MCP resource read."""
@@ -2174,6 +2182,8 @@ class MCPTelemetryTest(TestCase):
             self.assertEqual(properties["method"], "POST")
             self.assertEqual(properties["transport"], "streamable_http")
             self.assertIn("client_ip_hash", properties)
+            # $ip is passed for PostHog geolocation
+            self.assertEqual(properties["$ip"], "10.0.0.4")
 
 
 class MCPTelemetryIntegrationTest(TestCase):
