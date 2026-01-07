@@ -3,7 +3,10 @@ import json
 import logging
 import pathlib
 import zipfile
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from opencontractserver.utils.metadata_file_parser import DocumentMetadata
 
 import filetype
 from django.conf import settings
@@ -577,6 +580,115 @@ def process_documents_zip(
     return results
 
 
+def create_relationships_from_parsed(
+    corpus,
+    user,
+    document_path_map: dict[str, "Document"],
+    parsed_relationships: list,
+    logger,
+) -> dict:
+    """
+    Create DocumentRelationship objects from parsed relationship data.
+
+    This function is called after all documents are imported and the
+    document_path_map has been built. It creates relationships between
+    documents based on the paths specified in the relationships CSV.
+
+    Args:
+        corpus: The Corpus object to create relationships in
+        user: The User creating the relationships
+        document_path_map: Mapping of normalized paths to Document objects
+        parsed_relationships: List of ParsedRelationship objects from the parser
+        logger: Logger instance for logging
+
+    Returns:
+        Dictionary with relationship creation statistics:
+        - relationships_created: Number of relationships successfully created
+        - relationships_skipped: Number skipped due to missing documents
+        - relationship_errors: List of error messages
+    """
+    from opencontractserver.annotations.models import AnnotationLabel
+    from opencontractserver.documents.models import DocumentRelationship
+    from opencontractserver.types.enums import LabelType
+
+    results = {
+        "relationships_created": 0,
+        "relationships_skipped": 0,
+        "relationship_errors": [],
+    }
+
+    # Cache for labels to avoid repeated lookups
+    label_cache: dict[str, AnnotationLabel] = {}
+
+    for rel in parsed_relationships:
+        try:
+            # Look up source and target documents by path
+            source_doc = document_path_map.get(rel.source_path)
+            target_doc = document_path_map.get(rel.target_path)
+
+            if source_doc is None:
+                results["relationships_skipped"] += 1
+                results["relationship_errors"].append(
+                    f"Source document not found: {rel.source_path}"
+                )
+                continue
+
+            if target_doc is None:
+                results["relationships_skipped"] += 1
+                results["relationship_errors"].append(
+                    f"Target document not found: {rel.target_path}"
+                )
+                continue
+
+            # Get or create the label for this relationship
+            if rel.label not in label_cache:
+                annotation_label = corpus.ensure_label_and_labelset(
+                    label_text=rel.label,
+                    creator_id=user.id,
+                    label_type=LabelType.RELATIONSHIP_LABEL,
+                )
+                label_cache[rel.label] = annotation_label
+            else:
+                annotation_label = label_cache[rel.label]
+
+            # Build relationship data
+            relationship_data = {}
+            if rel.notes:
+                relationship_data["note"] = rel.notes
+
+            # Create the relationship
+            DocumentRelationship.objects.create(
+                source_document=source_doc,
+                target_document=target_doc,
+                corpus=corpus,
+                annotation_label=annotation_label,
+                relationship_type=rel.relationship_type,
+                data=relationship_data if relationship_data else None,
+                creator=user,
+            )
+
+            results["relationships_created"] += 1
+            logger.debug(
+                f"Created relationship: {rel.source_path} --[{rel.label}]--> "
+                f"{rel.target_path} (type: {rel.relationship_type})"
+            )
+
+        except Exception as e:
+            results["relationship_errors"].append(
+                f"Error creating relationship {rel.source_path} -> {rel.target_path}: {str(e)}"
+            )
+            logger.error(
+                f"Error creating relationship {rel.source_path} -> {rel.target_path}: {e}"
+            )
+
+    logger.info(
+        f"Relationship creation complete: {results['relationships_created']} created, "
+        f"{results['relationships_skipped']} skipped"
+    )
+
+    return results
+
+
 @celery_app.task()
 def import_zip_with_folder_structure(
     temporary_file_handle_id: str | int,
@@ -596,6 +708,13 @@ def import_zip_with_folder_structure(
     1. Validates the zip file for security (path traversal, zip bombs, etc.)
     2. Creates the folder structure from the zip in the corpus
     3. Extracts and creates documents with proper folder assignments
+    4. If a relationships.csv file is present at the zip root, creates
+       document relationships based on its contents
+
+    The relationships.csv file should have the format:
+        source_path,relationship_label,target_path,notes
+        /contracts/master.pdf,Parent,/contracts/amendments/a1.pdf,
+        /contracts/master.pdf,References,/exhibits/exhibit_a.pdf,See section 3
 
     Args:
         temporary_file_handle_id: ID of the temporary file containing the zip
@@ -613,6 +732,7 @@ def import_zip_with_folder_structure(
         - job_id, success, completed flags
         - File statistics (processed, skipped by type/size/path, errored)
         - Folder statistics (created, reused)
+        - Relationship statistics (created, skipped, errors)
         - Document IDs and error messages
     """
     from opencontractserver.constants.zip_import import ZIP_DOCUMENT_BATCH_SIZE
@@ -639,6 +759,14 @@ def import_zip_with_folder_structure(
         # Folder statistics
         "folders_created": 0,
         "folders_reused": 0,
+        # Metadata statistics
+        "metadata_file_found": False,
+        "metadata_applied": 0,
+        # Relationship statistics
+        "relationships_file_found": False,
+        "relationships_created": 0,
+        "relationships_skipped": 0,
+        "relationship_errors": [],
         # Output
         "document_ids": [],
         "errors": [],
@@ -753,7 +881,50 @@ def import_zip_with_folder_structure(
                 f"{results['folders_created']} created, {results['folders_reused']} reused"
             )
 
+            # Track if relationships file was found for Phase 4
+            if manifest.relationship_file:
+                results["relationships_file_found"] = True
+                logger.info(
+                    f"import_zip_with_folder_structure() - Relationships file found: "
+                    f"{manifest.relationship_file}"
+                )
+
+            # Parse metadata file if present (used in Phase 3)
+            metadata_lookup: dict[str, "DocumentMetadata"] = {}
+            if manifest.metadata_file:
+                from opencontractserver.utils.metadata_file_parser import (
+                    parse_metadata_file,
+                )
+
+                results["metadata_file_found"] = True
+                logger.info(
+                    f"import_zip_with_folder_structure() - Metadata file found: "
+                    f"{manifest.metadata_file}"
+                )
+
+                meta_result = parse_metadata_file(import_zip, manifest.metadata_file)
+                if meta_result.is_valid:
+                    metadata_lookup = meta_result.metadata
+                    logger.info(
+                        f"import_zip_with_folder_structure() - Parsed metadata for "
+                        f"{len(metadata_lookup)} documents"
+                    )
+                    for warning in meta_result.warnings:
+                        logger.warning(
+                            f"import_zip_with_folder_structure() - "
+                            f"Metadata warning: {warning}"
+                        )
+                else:
+                    for error in meta_result.errors:
+                        logger.warning(
+                            f"import_zip_with_folder_structure() - "
+                            f"Metadata parsing error: {error}"
+                        )
+                        results["errors"].append(f"Metadata file error: {error}")
+
             # Phase 3: Process documents in batches
+            # Build document_path_map as documents are created for use in Phase 4
+            document_path_map: dict[str, Document] = {}
             batch_count = 0
             for entry in manifest.valid_files:
                 try:
@@ -796,6 +967,19 @@ def import_zip_with_folder_structure(
                     doc_description = (
                         description or f"Imported from zip (job: {job_id})"
                     )
+
+                    # Apply metadata from meta.csv if available
+                    # Lookup key is normalized path with leading slash
+                    metadata_path = f"/{entry.sanitized_path}"
+                    doc_metadata = metadata_lookup.get(metadata_path)
+                    if doc_metadata:
+                        if doc_metadata.title:
+                            doc_title = doc_metadata.title
+                            if title_prefix:
+                                doc_title = f"{title_prefix} - {doc_metadata.title}"
+                        if doc_metadata.description:
+                            doc_description = doc_metadata.description
+                        results["metadata_applied"] += 1
 
                     # Determine target folder for this document
                     doc_folder = None
@@ -881,6 +1065,11 @@ def import_zip_with_folder_structure(
                         results["files_processed"] += 1
                         results["document_ids"].append(str(added_doc.id))
 
+                        # Add to document_path_map for relationship processing
+                        # Key is normalized path with leading slash to match CSV format
+                        normalized_zip_path = f"/{entry.sanitized_path}"
+                        document_path_map[normalized_zip_path] = added_doc
+
                         # Track upversioned documents
                         if doc_path.version_number > 1:
                             results["files_upversioned"] += 1
@@ -903,6 +1092,63 @@ def import_zip_with_folder_structure(
                         f"Error processing {entry.sanitized_path}: {str(e)}"
                     )
 
+            # Phase 4: Process relationships file if present
+            if manifest.relationship_file and document_path_map:
+                from opencontractserver.utils.relationship_file_parser import (
+                    parse_relationship_file,
+                )
+
+                logger.info(
+                    f"import_zip_with_folder_structure() - Processing relationships "
+                    f"file: {manifest.relationship_file}"
+                )
+
+                # Parse the relationships file
+                parse_result = parse_relationship_file(
+                    import_zip, manifest.relationship_file
+                )
+
+                if not parse_result.is_valid:
+                    for error in parse_result.errors:
+                        results["relationship_errors"].append(error)
+                    logger.warning(
+                        f"import_zip_with_folder_structure() - Relationships file "
+                        f"parsing failed: {parse_result.errors}"
+                    )
+                else:
+                    # Log any warnings
+                    for warning in parse_result.warnings:
+                        logger.warning(
+                            f"import_zip_with_folder_structure() - "
+                            f"Relationship warning: {warning}"
+                        )
+
+                    # Create relationships if there are any
+                    if parse_result.relationships:
+                        rel_results = create_relationships_from_parsed(
+                            corpus=corpus_obj,
+                            user=user_obj,
+                            document_path_map=document_path_map,
+                            parsed_relationships=parse_result.relationships,
+                            logger=logger,
+                        )
+
+                        results["relationships_created"] = rel_results[
+                            "relationships_created"
+                        ]
+                        results["relationships_skipped"] = rel_results[
+                            "relationships_skipped"
+                        ]
+                        results["relationship_errors"].extend(
+                            rel_results["relationship_errors"]
+                        )
+
+                        logger.info(
+                            f"import_zip_with_folder_structure() - "
+                            f"Relationships created: {results['relationships_created']}, "
+                            f"skipped: {results['relationships_skipped']}"
+                        )
+
         # Cleanup temporary file
         temporary_file_handle.delete()
 
@@ -917,7 +1163,9 @@ def import_zip_with_folder_structure(
             f"import_zip_with_folder_structure() - Completed job: {job_id}, "
             f"processed: {results['files_processed']}, "
             f"upversioned: {results['files_upversioned']}, "
-            f"folders created: {results['folders_created']}"
+            f"folders created: {results['folders_created']}, "
+            f"metadata applied: {results['metadata_applied']}, "
+            f"relationships created: {results['relationships_created']}"
         )
 
     except Corpus.DoesNotExist:

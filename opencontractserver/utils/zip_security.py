@@ -30,6 +30,8 @@ from opencontractserver.constants.zip_import import (
     ZIP_MAX_SINGLE_FILE_SIZE_BYTES,
     ZIP_MAX_TOTAL_SIZE_BYTES,
 )
+from opencontractserver.utils.metadata_file_parser import METADATA_FILE_NAMES
+from opencontractserver.utils.relationship_file_parser import RELATIONSHIP_FILE_NAMES
 
 if TYPE_CHECKING:
     pass
@@ -66,6 +68,10 @@ class ZipManifest:
 
     # Unique folder paths to create (sorted by depth, parents first)
     folder_paths: list[str] = field(default_factory=list)
+
+    # Special files detected
+    relationship_file: str | None = None  # Path to relationships.csv if found
+    metadata_file: str | None = None  # Path to meta.csv if found
 
     # Statistics
     total_files_in_zip: int = 0
@@ -212,6 +218,48 @@ def is_hidden_or_system_file(path: str) -> bool:
         return True
 
     return False
+
+
+def is_relationship_file(path: str) -> bool:
+    """
+    Check if a path is the relationships metadata file.
+
+    The relationships file must be at the root level of the zip
+    (not in a subdirectory) and match one of the allowed names.
+
+    Args:
+        path: Sanitized path from zip
+
+    Returns:
+        True if this is a relationships file at root level
+    """
+    # Must be at root (no folder separator)
+    if "/" in path:
+        return False
+
+    # Check against allowed relationship file names
+    return path in RELATIONSHIP_FILE_NAMES
+
+
+def is_metadata_file(path: str) -> bool:
+    """
+    Check if a path is a document metadata file.
+
+    The metadata file must be at the root level of the zip
+    (not in a subdirectory) and match one of the allowed names.
+
+    Args:
+        path: Sanitized path from zip
+
+    Returns:
+        True if this is a metadata file at root level
+    """
+    # Must be at root (no folder separator)
+    if "/" in path:
+        return False
+
+    # Check against allowed metadata file names
+    return path in METADATA_FILE_NAMES
 
 
 def get_folder_path(file_path: str) -> str:
@@ -394,6 +442,36 @@ def validate_zip_for_import(
                     skip_reason="Hidden or system file",
                 )
             )
+            continue
+
+        # Check for relationship metadata file (only at root level)
+        if is_relationship_file(sanitized_path):
+            # Track the first relationship file found (lowercase takes priority
+            # based on RELATIONSHIP_FILE_NAMES order)
+            if manifest.relationship_file is None:
+                manifest.relationship_file = info.filename
+                logger.info(f"Found relationships file in zip: {info.filename}")
+            else:
+                logger.warning(
+                    f"Multiple relationship files found in zip. "
+                    f"Using {manifest.relationship_file}, ignoring {info.filename}"
+                )
+            # Don't add to valid_files - will be processed separately
+            continue
+
+        # Check for document metadata file (only at root level)
+        if is_metadata_file(sanitized_path):
+            # Track the first metadata file found (lowercase takes priority
+            # based on METADATA_FILE_NAMES order)
+            if manifest.metadata_file is None:
+                manifest.metadata_file = info.filename
+                logger.info(f"Found metadata file in zip: {info.filename}")
+            else:
+                logger.warning(
+                    f"Multiple metadata files found in zip. "
+                    f"Using {manifest.metadata_file}, ignoring {info.filename}"
+                )
+            # Don't add to valid_files - will be processed separately
             continue
 
         # Get folder path and validate depth

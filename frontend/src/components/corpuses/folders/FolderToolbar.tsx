@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import styled from "styled-components";
 import {
@@ -12,6 +12,8 @@ import {
   ChevronUp,
   MoreVertical,
   Link2,
+  ChevronDown,
+  FileArchive,
 } from "lucide-react";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
 import {
@@ -55,6 +57,8 @@ interface FolderToolbarProps {
   onGoUp: () => void;
   onNewFolder: () => void;
   onUpload: () => void;
+  /** Callback for bulk import action */
+  onBulkImport?: () => void;
   /** Number of currently selected documents (for multi-select actions) */
   selectedDocumentCount?: number;
   /** Callback when user clicks Link Documents button */
@@ -379,6 +383,132 @@ const MobileMenuItem = styled.button`
   }
 `;
 
+// Upload button with dropdown
+const UploadButtonGroup = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+`;
+
+const UploadMainButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: ${OS_LEGAL_COLORS.accent};
+  border: 1px solid ${OS_LEGAL_COLORS.accent};
+  border-right: none;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton} 0 0
+    ${OS_LEGAL_SPACING.borderRadiusButton};
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.accentHover};
+    border-color: ${OS_LEGAL_COLORS.accentHover};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: 8px 10px;
+
+    span {
+      display: none;
+    }
+  }
+`;
+
+const UploadDropdownButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
+  background: ${OS_LEGAL_COLORS.accent};
+  border: 1px solid ${OS_LEGAL_COLORS.accent};
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 0 ${OS_LEGAL_SPACING.borderRadiusButton}
+    ${OS_LEGAL_SPACING.borderRadiusButton} 0;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.accentHover};
+    border-color: ${OS_LEGAL_COLORS.accentHover};
+    border-left-color: rgba(255, 255, 255, 0.3);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: 8px 6px;
+  }
+`;
+
+const UploadDropdownMenu = styled.div<{ $visible: boolean }>`
+  display: ${(props) => (props.$visible ? "block" : "none")};
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+`;
+
+const UploadDropdownItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+    color: ${OS_LEGAL_COLORS.accent};
+  }
+
+  &:not(:last-child) {
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  }
+`;
+
+const UploadDropdownOverlay = styled.div<{ $visible: boolean }>`
+  display: ${(props) => (props.$visible ? "block" : "none")};
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99;
+`;
+
 // ===============================================
 // COMPONENT
 // ===============================================
@@ -394,6 +524,7 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
   onGoUp,
   onNewFolder,
   onUpload,
+  onBulkImport,
   selectedDocumentCount = 0,
   onLinkDocuments,
 }) => {
@@ -401,6 +532,8 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
   const canCreateFolders = useAtomValue(canCreateFoldersAtom);
   const breadcrumbPath = useAtomValue(folderBreadcrumbAtom);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [uploadDropdownOpen, setUploadDropdownOpen] = useState(false);
+  const uploadDropdownRef = useRef<HTMLDivElement>(null);
 
   // Get current folder name for mobile display
   const currentFolderName = selectedFolderId
@@ -428,19 +561,51 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
     setMobileMenuOpen(false);
   }, []);
 
-  // Escape key handler for accessibility - closes mobile menu
+  // Close upload dropdown handler
+  const closeUploadDropdown = useCallback(() => {
+    setUploadDropdownOpen(false);
+  }, []);
+
+  // Toggle upload dropdown
+  const toggleUploadDropdown = useCallback(() => {
+    setUploadDropdownOpen((prev) => !prev);
+  }, []);
+
+  // Handle upload document click
+  const handleUploadDocuments = useCallback(() => {
+    closeUploadDropdown();
+    onUpload();
+  }, [onUpload, closeUploadDropdown]);
+
+  // Handle bulk import click
+  const handleBulkImport = useCallback(() => {
+    closeUploadDropdown();
+    onBulkImport?.();
+  }, [onBulkImport, closeUploadDropdown]);
+
+  // Escape key handler for accessibility - closes mobile menu and upload dropdown
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && mobileMenuOpen) {
-        closeMobileMenu();
+      if (e.key === "Escape") {
+        if (mobileMenuOpen) {
+          closeMobileMenu();
+        }
+        if (uploadDropdownOpen) {
+          closeUploadDropdown();
+        }
       }
     };
 
-    if (mobileMenuOpen) {
+    if (mobileMenuOpen || uploadDropdownOpen) {
       document.addEventListener("keydown", handleKeyDown);
       return () => document.removeEventListener("keydown", handleKeyDown);
     }
-  }, [mobileMenuOpen, closeMobileMenu]);
+  }, [
+    mobileMenuOpen,
+    uploadDropdownOpen,
+    closeMobileMenu,
+    closeUploadDropdown,
+  ]);
 
   return (
     <ToolbarContainer>
@@ -502,11 +667,48 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
           </ActionButton>
         )}
 
-        {/* Upload button */}
-        <PrimaryButton onClick={onUpload} title="Upload documents">
-          <Upload />
-          <span>Upload</span>
-        </PrimaryButton>
+        {/* Upload button with dropdown */}
+        <UploadButtonGroup ref={uploadDropdownRef}>
+          <UploadMainButton onClick={onUpload} title="Upload documents">
+            <Upload />
+            <span>Upload</span>
+          </UploadMainButton>
+          <UploadDropdownButton
+            onClick={toggleUploadDropdown}
+            title="More upload options"
+            aria-label="More upload options"
+            aria-haspopup="true"
+            aria-expanded={uploadDropdownOpen}
+          >
+            <ChevronDown />
+          </UploadDropdownButton>
+
+          {/* Upload dropdown overlay - click to close */}
+          <UploadDropdownOverlay
+            $visible={uploadDropdownOpen}
+            onClick={closeUploadDropdown}
+            role="presentation"
+            aria-hidden="true"
+          />
+
+          {/* Upload dropdown menu */}
+          <UploadDropdownMenu
+            $visible={uploadDropdownOpen}
+            role="menu"
+            aria-label="Upload options menu"
+          >
+            <UploadDropdownItem role="menuitem" onClick={handleUploadDocuments}>
+              <Upload />
+              Upload Documents
+            </UploadDropdownItem>
+            {onBulkImport && (
+              <UploadDropdownItem role="menuitem" onClick={handleBulkImport}>
+                <FileArchive />
+                Bulk Import (ZIP)
+              </UploadDropdownItem>
+            )}
+          </UploadDropdownMenu>
+        </UploadButtonGroup>
 
         {/* View toggle buttons */}
         {onViewModeChange && (
@@ -612,6 +814,18 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
           <Upload />
           Upload Documents
         </MobileMenuItem>
+        {onBulkImport && (
+          <MobileMenuItem
+            role="menuitem"
+            onClick={() => {
+              onBulkImport();
+              closeMobileMenu();
+            }}
+          >
+            <FileArchive />
+            Bulk Import (ZIP)
+          </MobileMenuItem>
+        )}
       </MobileMenu>
     </ToolbarContainer>
   );

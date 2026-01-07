@@ -854,3 +854,859 @@ class TestFolderReuseAcrossImports(TestCase):
 
         self.assertEqual(docs_folder.id, docs_folder_after.id)
         self.assertEqual(contracts_folder.id, contracts_folder_after.id)
+
+
+class TestRelationshipFileImport(TestCase):
+    """Tests for importing ZIP files with relationships.csv."""
+
+    def setUp(self):
+        """Set up test user, corpus, and sample data."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass"
+            )
+
+        with transaction.atomic():
+            self.corpus = Corpus.objects.create(
+                title="Test Corpus",
+                description="Corpus for testing",
+                creator=self.user,
+            )
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
+
+        # Sample PDF bytes
+        self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
+
+    def _create_test_zip(self, files: dict[str, bytes]) -> io.BytesIO:
+        """Create an in-memory zip file for testing."""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        buffer.seek(0)
+        return buffer
+
+    def _create_temp_file_handle(self, zip_buffer: io.BytesIO) -> TemporaryFileHandle:
+        """Create a TemporaryFileHandle from a zip buffer."""
+        zip_content = ContentFile(zip_buffer.read(), name="test_import.zip")
+        handle = TemporaryFileHandle.objects.create(
+            file=zip_content,
+        )
+        return handle
+
+    def test_import_with_simple_relationships(self):
+        """Import a zip with relationships.csv creates document relationships."""
+        from opencontractserver.documents.models import DocumentRelationship
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # CSV content with relationships (using parser's expected column names)
+        csv_content = b"""source_path,relationship_label,target_path,notes
+docs/contract.pdf,AMENDS,docs/amendment.pdf,Amendment to main contract
+docs/amendment.pdf,AMENDED_BY,docs/contract.pdf,
+"""
+        files = {
+            "docs/contract.pdf": self.pdf_bytes,
+            "docs/amendment.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-relationships-1",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"])
+        self.assertTrue(result["success"])
+        self.assertEqual(result["files_processed"], 2)  # CSV is not counted as file
+        self.assertEqual(result["relationships_created"], 2)
+        self.assertEqual(result["relationships_skipped"], 0)
+
+        # Verify relationships exist in database
+        relationships = DocumentRelationship.objects.filter(corpus=self.corpus)
+        self.assertEqual(relationships.count(), 2)
+
+        # Verify relationship details
+        rel_labels = {r.annotation_label.text for r in relationships}
+        self.assertIn("AMENDS", rel_labels)
+        self.assertIn("AMENDED_BY", rel_labels)
+
+    def test_import_with_notes_type_relationship(self):
+        """Import relationships with NOTES type creates annotation notes."""
+        from opencontractserver.documents.models import DocumentRelationship
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,relationship_label,target_path,notes
+file1.pdf,REFERENCES,file2.pdf,This document references the other
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-notes-type",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 1)
+
+        # Verify the relationship was created (notes are stored in data field)
+        rel = DocumentRelationship.objects.get(corpus=self.corpus)
+        self.assertIsNotNone(rel)
+
+    def test_import_with_missing_source_document(self):
+        """Relationships with missing source documents are skipped."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,relationship_label,target_path,notes
+nonexistent.pdf,REFERENCES,file1.pdf,
+file1.pdf,VALID,file2.pdf,
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-missing-source",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 1)  # Only valid one
+        self.assertEqual(result["relationships_skipped"], 1)  # Missing source
+
+    def test_import_with_missing_target_document(self):
+        """Relationships with missing target documents are skipped."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,relationship_label,target_path,notes
+file1.pdf,REFERENCES,nonexistent.pdf,
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-missing-target",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 0)
+        self.assertEqual(result["relationships_skipped"], 1)
+
+    def test_import_relationships_creates_labels(self):
+        """Importing relationships creates necessary labels and labelsets."""
+        from opencontractserver.annotations.models import AnnotationLabel
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,relationship_label,target_path,notes
+file1.pdf,CUSTOM_LABEL,file2.pdf,
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-label-creation",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 1)
+
+        # Verify label was created with correct type
+        label = AnnotationLabel.objects.get(text="CUSTOM_LABEL", creator=self.user)
+        from opencontractserver.types.enums import LabelType
+
+        self.assertEqual(label.label_type, LabelType.RELATIONSHIP_LABEL)
+
+    def test_import_relationships_caches_labels_per_import(self):
+        """Importing relationships caches labels to avoid duplicate creation."""
+        from opencontractserver.annotations.models import AnnotationLabel
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # CSV with same label used multiple times
+        csv_content = b"""source_path,relationship_label,target_path,notes
+file1.pdf,SHARED_LABEL,file2.pdf,
+file2.pdf,SHARED_LABEL,file1.pdf,
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-cache-labels",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 2)
+
+        # Verify only one label was created (not two for repeated uses)
+        labels = AnnotationLabel.objects.filter(text="SHARED_LABEL")
+        self.assertEqual(labels.count(), 1)
+
+    def test_import_with_path_normalization_in_relationships(self):
+        """Relationships work with various path formats."""
+        from opencontractserver.documents.models import DocumentRelationship
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # CSV with various path formats that should all normalize correctly
+        # Tests: leading /, no leading /, ./ prefix
+        csv_content = b"""source_path,relationship_label,target_path,notes
+/docs/contract.pdf,AMENDS,docs/amendment.pdf,
+./docs/contract.pdf,REFERENCES,/docs/amendment.pdf,
+"""
+        files = {
+            "docs/contract.pdf": self.pdf_bytes,
+            "docs/amendment.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-path-normalization",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 2)
+
+        # Verify relationships were created correctly
+        relationships = DocumentRelationship.objects.filter(corpus=self.corpus)
+        self.assertEqual(relationships.count(), 2)
+
+    def test_import_without_relationships_file(self):
+        """Import without relationships.csv has zero relationship stats."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-no-relationships",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 0)
+        self.assertEqual(result["relationships_skipped"], 0)
+
+    def test_import_with_malformed_csv_continues(self):
+        """Malformed relationships.csv doesn't fail the import."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # Malformed CSV (missing required columns)
+        csv_content = b"""source,target,label
+file1.pdf,file2.pdf,LABEL
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-malformed-csv",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        # Import should still succeed for documents
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["files_processed"], 2)
+        # Relationship processing should fail gracefully
+        self.assertEqual(result["relationships_created"], 0)
+
+    def test_import_relationships_with_target_folder(self):
+        """Relationships work correctly when importing to a target folder."""
+        from opencontractserver.documents.models import DocumentRelationship
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # Create target folder
+        target_folder = CorpusFolder.objects.create(
+            name="imports",
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+        csv_content = b"""source_path,relationship_label,target_path,notes
+file1.pdf,RELATED_TO,file2.pdf,
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-target-folder-relationships",
+                "corpus_id": self.corpus.id,
+                "target_folder_id": target_folder.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 1)
+
+        # Verify the relationship points to documents in the target folder
+        rel = DocumentRelationship.objects.get(corpus=self.corpus)
+        self.assertIsNotNone(rel.source_document)
+        self.assertIsNotNone(rel.target_document)
+
+    def test_import_relationships_with_nested_folders(self):
+        """Relationships work with documents in nested folder structures."""
+        from opencontractserver.documents.models import DocumentRelationship
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,relationship_label,target_path,notes
+contracts/legal/agreement.pdf,REFERENCES,contracts/financial/report.pdf,
+"""
+        files = {
+            "contracts/legal/agreement.pdf": self.pdf_bytes,
+            "contracts/financial/report.pdf": self.pdf_bytes,
+            "relationships.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-nested-relationships",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["relationships_created"], 1)
+
+        # Verify the relationship was created
+        rel = DocumentRelationship.objects.get(corpus=self.corpus)
+        self.assertEqual(rel.annotation_label.text, "REFERENCES")
+
+
+class TestMetadataFileImport(TestCase):
+    """Tests for importing ZIP files with meta.csv."""
+
+    def setUp(self):
+        """Set up test user, corpus, and sample data."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass"
+            )
+
+        with transaction.atomic():
+            self.corpus = Corpus.objects.create(
+                title="Test Corpus",
+                description="Corpus for testing",
+                creator=self.user,
+            )
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
+
+        # Sample PDF bytes
+        self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
+
+    def _create_test_zip(self, files: dict[str, bytes]) -> io.BytesIO:
+        """Create an in-memory zip file for testing."""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        buffer.seek(0)
+        return buffer
+
+    def _create_temp_file_handle(self, zip_buffer: io.BytesIO) -> TemporaryFileHandle:
+        """Create a TemporaryFileHandle from a zip buffer."""
+        zip_content = ContentFile(zip_buffer.read(), name="test_import.zip")
+        handle = TemporaryFileHandle.objects.create(
+            file=zip_content,
+        )
+        return handle
+
+    def test_import_with_title_metadata(self):
+        """Import with meta.csv applies custom titles to documents."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,title
+docs/contract.pdf,Master Services Agreement
+docs/amendment.pdf,Amendment #1
+"""
+        files = {
+            "docs/contract.pdf": self.pdf_bytes,
+            "docs/amendment.pdf": self.pdf_bytes,
+            "meta.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-metadata-title",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"])
+        self.assertTrue(result["success"])
+        self.assertTrue(result["metadata_file_found"])
+        self.assertEqual(result["metadata_applied"], 2)
+        self.assertEqual(result["files_processed"], 2)
+
+        # Verify documents have custom titles
+        docs = Document.objects.filter(id__in=result["document_ids"])
+        titles = {d.title for d in docs}
+        self.assertIn("Master Services Agreement", titles)
+        self.assertIn("Amendment #1", titles)
+
+    def test_import_with_description_metadata(self):
+        """Import with meta.csv applies custom descriptions to documents."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,description
+file1.pdf,This is the first document with a custom description.
+file2.pdf,This is the second document with another description.
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "meta.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-metadata-description",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["metadata_applied"], 2)
+
+        # Verify documents have custom descriptions
+        docs = Document.objects.filter(id__in=result["document_ids"])
+        descriptions = {d.description for d in docs}
+        self.assertIn(
+            "This is the first document with a custom description.", descriptions
+        )
+        self.assertIn(
+            "This is the second document with another description.", descriptions
+        )
+
+    def test_import_with_title_and_description_metadata(self):
+        """Import with meta.csv can apply both title and description."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,title,description
+report.pdf,Annual Report 2024,The annual financial report for fiscal year 2024.
+"""
+        files = {
+            "report.pdf": self.pdf_bytes,
+            "meta.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-metadata-both",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["metadata_applied"], 1)
+
+        # Verify document has both custom title and description
+        doc = Document.objects.get(id=result["document_ids"][0])
+        self.assertEqual(doc.title, "Annual Report 2024")
+        self.assertEqual(
+            doc.description, "The annual financial report for fiscal year 2024."
+        )
+
+    def test_import_with_title_prefix_and_metadata(self):
+        """Title prefix is prepended to metadata title."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,title
+file.pdf,Custom Document Title
+"""
+        files = {
+            "file.pdf": self.pdf_bytes,
+            "meta.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-metadata-prefix",
+                "corpus_id": self.corpus.id,
+                "title_prefix": "2024",
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["metadata_applied"], 1)
+
+        doc = Document.objects.get(id=result["document_ids"][0])
+        self.assertEqual(doc.title, "2024 - Custom Document Title")
+
+    def test_import_without_metadata_file(self):
+        """Import without meta.csv has zero metadata_applied."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-no-metadata",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertFalse(result["metadata_file_found"])
+        self.assertEqual(result["metadata_applied"], 0)
+
+    def test_import_with_partial_metadata(self):
+        """Documents without metadata entries use default titles."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # Only one file has metadata
+        csv_content = b"""source_path,title
+file1.pdf,Custom Title
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,  # No metadata for this one
+            "meta.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-partial-metadata",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["files_processed"], 2)
+        self.assertEqual(result["metadata_applied"], 1)
+
+        # Verify the file without metadata has filename as title
+        docs = Document.objects.filter(id__in=result["document_ids"])
+        titles = {d.title for d in docs}
+        self.assertIn("Custom Title", titles)
+        self.assertIn("file2.pdf", titles)
+
+    def test_import_with_malformed_metadata_continues(self):
+        """Malformed meta.csv doesn't fail the import."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # Malformed CSV (missing required source_path column)
+        csv_content = b"""file_name,title
+file1.pdf,Title 1
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "meta.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-malformed-metadata",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        # Import should still succeed for documents
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["files_processed"], 2)
+        self.assertEqual(result["metadata_applied"], 0)
+        # Should have an error about metadata file
+        self.assertTrue(any("Metadata file error" in e for e in result["errors"]))
+
+    def test_import_with_nested_paths_metadata(self):
+        """Metadata works with documents in nested folder structures."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        csv_content = b"""source_path,title,description
+contracts/legal/agreement.pdf,Legal Agreement,Main legal agreement document
+contracts/financial/report.pdf,Financial Report,Q4 financial summary
+"""
+        files = {
+            "contracts/legal/agreement.pdf": self.pdf_bytes,
+            "contracts/financial/report.pdf": self.pdf_bytes,
+            "meta.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-nested-metadata",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["metadata_applied"], 2)
+
+        docs = Document.objects.filter(id__in=result["document_ids"])
+        titles = {d.title for d in docs}
+        self.assertIn("Legal Agreement", titles)
+        self.assertIn("Financial Report", titles)
+
+    def test_import_metadata_path_normalization(self):
+        """Metadata matches documents with various path formats."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # CSV with various path formats that should all normalize correctly
+        csv_content = b"""source_path,title
+/docs/file1.pdf,Title with leading slash
+./docs/file2.pdf,Title with dot slash
+docs/file3.pdf,Title without prefix
+"""
+        files = {
+            "docs/file1.pdf": self.pdf_bytes,
+            "docs/file2.pdf": self.pdf_bytes,
+            "docs/file3.pdf": self.pdf_bytes,
+            "meta.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-metadata-normalization",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["metadata_applied"], 3)
+
+    def test_import_with_both_metadata_and_relationships(self):
+        """Import with both meta.csv and relationships.csv works correctly."""
+        from opencontractserver.documents.models import DocumentRelationship
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        meta_csv = b"""source_path,title,description
+file1.pdf,Source Document,The primary source document
+file2.pdf,Target Document,The referenced document
+"""
+        rel_csv = b"""source_path,relationship_label,target_path,notes
+file1.pdf,REFERENCES,file2.pdf,Source references target
+"""
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "file2.pdf": self.pdf_bytes,
+            "meta.csv": meta_csv,
+            "relationships.csv": rel_csv,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-metadata-and-relationships",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["files_processed"], 2)
+        self.assertTrue(result["metadata_file_found"])
+        self.assertEqual(result["metadata_applied"], 2)
+        self.assertTrue(result["relationships_file_found"])
+        self.assertEqual(result["relationships_created"], 1)
+
+        # Verify metadata was applied
+        docs = Document.objects.filter(id__in=result["document_ids"])
+        titles = {d.title for d in docs}
+        self.assertIn("Source Document", titles)
+        self.assertIn("Target Document", titles)
+
+        # Verify relationship was created
+        relationships = DocumentRelationship.objects.filter(corpus=self.corpus)
+        self.assertEqual(relationships.count(), 1)
+
+    def test_metadata_csv_variants_detected(self):
+        """Different meta.csv filename variants are detected."""
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        # Test with METADATA.csv (uppercase variant)
+        csv_content = b"""source_path,title
+file.pdf,Custom Title
+"""
+        files = {
+            "file.pdf": self.pdf_bytes,
+            "METADATA.csv": csv_content,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-metadata-variant",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["metadata_file_found"])
+        self.assertEqual(result["metadata_applied"], 1)

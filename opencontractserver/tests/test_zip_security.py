@@ -21,6 +21,7 @@ from opencontractserver.utils.zip_security import (
     get_folder_depth,
     get_folder_path,
     is_hidden_or_system_file,
+    is_relationship_file,
     is_zip_entry_symlink,
     sanitize_zip_path,
     validate_zip_for_import,
@@ -494,3 +495,124 @@ class TestZipManifest(TestCase):
         self.assertEqual(manifest.valid_files, [])
         self.assertEqual(manifest.skipped_files, [])
         self.assertEqual(manifest.folder_paths, [])
+        self.assertIsNone(manifest.relationship_file)
+
+
+class TestIsRelationshipFile(TestCase):
+    """Tests for the is_relationship_file function."""
+
+    def test_lowercase_relationships_csv(self):
+        """relationships.csv at root is detected."""
+        self.assertTrue(is_relationship_file("relationships.csv"))
+
+    def test_uppercase_relationships_csv(self):
+        """RELATIONSHIPS.csv at root is detected."""
+        self.assertTrue(is_relationship_file("RELATIONSHIPS.csv"))
+
+    def test_relationships_in_subdirectory_not_detected(self):
+        """relationships.csv in subdirectory is not detected."""
+        self.assertFalse(is_relationship_file("docs/relationships.csv"))
+        self.assertFalse(is_relationship_file("subdir/RELATIONSHIPS.csv"))
+
+    def test_other_csv_not_detected(self):
+        """Other CSV files are not detected as relationship files."""
+        self.assertFalse(is_relationship_file("data.csv"))
+        self.assertFalse(is_relationship_file("documents.csv"))
+        self.assertFalse(is_relationship_file("manifest.csv"))
+
+    def test_similar_names_not_detected(self):
+        """Files with similar names are not detected."""
+        self.assertFalse(is_relationship_file("relationships.txt"))
+        self.assertFalse(is_relationship_file("relationships.json"))
+        self.assertFalse(is_relationship_file("my_relationships.csv"))
+
+
+class TestRelationshipFileInValidation(TestCase):
+    """Tests for relationship file detection in validate_zip_for_import."""
+
+    def _create_test_zip(self, files):
+        """Helper to create an in-memory zip file."""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as zf:
+            for path, content in files.items():
+                zf.writestr(path, content)
+        buffer.seek(0)
+        return zipfile.ZipFile(buffer, "r")
+
+    def test_detect_relationships_csv_at_root(self):
+        """relationships.csv at root is detected and tracked."""
+        files = {
+            "relationships.csv": "source_path,relationship_label,target_path\n",
+            "docs/file1.pdf": b"content",
+            "docs/file2.pdf": b"content",
+        }
+        with self._create_test_zip(files) as zf:
+            manifest = validate_zip_for_import(zf)
+
+        self.assertTrue(manifest.is_valid)
+        self.assertEqual(manifest.relationship_file, "relationships.csv")
+        # Relationship file should not be in valid_files
+        valid_paths = [f.sanitized_path for f in manifest.valid_files]
+        self.assertNotIn("relationships.csv", valid_paths)
+        self.assertEqual(len(manifest.valid_files), 2)
+
+    def test_detect_uppercase_relationships_csv(self):
+        """RELATIONSHIPS.csv at root is detected and tracked."""
+        files = {
+            "RELATIONSHIPS.csv": "source_path,relationship_label,target_path\n",
+            "file.pdf": b"content",
+        }
+        with self._create_test_zip(files) as zf:
+            manifest = validate_zip_for_import(zf)
+
+        self.assertTrue(manifest.is_valid)
+        self.assertEqual(manifest.relationship_file, "RELATIONSHIPS.csv")
+        self.assertEqual(len(manifest.valid_files), 1)
+
+    def test_relationships_in_subdirectory_processed_as_file(self):
+        """relationships.csv in subdirectory is processed as regular file."""
+        files = {
+            "data/relationships.csv": "some,data\n",
+            "file.pdf": b"content",
+        }
+        with self._create_test_zip(files) as zf:
+            manifest = validate_zip_for_import(zf)
+
+        self.assertTrue(manifest.is_valid)
+        self.assertIsNone(manifest.relationship_file)
+        valid_paths = [f.sanitized_path for f in manifest.valid_files]
+        self.assertIn("data/relationships.csv", valid_paths)
+
+    def test_no_relationships_file(self):
+        """Zip without relationships file has None for relationship_file."""
+        files = {
+            "docs/file1.pdf": b"content",
+            "docs/file2.pdf": b"content",
+        }
+        with self._create_test_zip(files) as zf:
+            manifest = validate_zip_for_import(zf)
+
+        self.assertTrue(manifest.is_valid)
+        self.assertIsNone(manifest.relationship_file)
+
+    def test_multiple_relationship_files_first_wins(self):
+        """When multiple relationship files exist, first in RELATIONSHIP_FILE_NAMES wins."""
+        files = {
+            "relationships.csv": "lowercase content\n",
+            "RELATIONSHIPS.csv": "uppercase content\n",
+            "file.pdf": b"content",
+        }
+        with self._create_test_zip(files) as zf:
+            manifest = validate_zip_for_import(zf)
+
+        self.assertTrue(manifest.is_valid)
+        # The order depends on zip file ordering, but one should be picked
+        self.assertIn(
+            manifest.relationship_file,
+            ["relationships.csv", "RELATIONSHIPS.csv"],
+        )
+        # Both should be excluded from valid_files
+        valid_paths = [f.sanitized_path for f in manifest.valid_files]
+        self.assertNotIn("relationships.csv", valid_paths)
+        self.assertNotIn("RELATIONSHIPS.csv", valid_paths)
+        self.assertEqual(len(manifest.valid_files), 1)
