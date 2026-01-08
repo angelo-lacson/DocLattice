@@ -383,32 +383,31 @@ const MobileMenuItem = styled.button`
   }
 `;
 
-// Upload button with dropdown
+// Upload button with dropdown - unified split button design
 const UploadButtonGroup = styled.div`
   position: relative;
-  display: flex;
-  align-items: center;
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 `;
 
 const UploadMainButton = styled.button`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   background: ${OS_LEGAL_COLORS.accent};
-  border: 1px solid ${OS_LEGAL_COLORS.accent};
-  border-right: none;
-  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton} 0 0
-    ${OS_LEGAL_SPACING.borderRadiusButton};
+  border: none;
   font-size: 13px;
   font-weight: 500;
   color: white;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease;
 
   &:hover {
     background: ${OS_LEGAL_COLORS.accentHover};
-    border-color: ${OS_LEGAL_COLORS.accentHover};
   }
 
   svg {
@@ -429,29 +428,21 @@ const UploadDropdownButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 6px;
+  padding: 8px 8px;
   background: ${OS_LEGAL_COLORS.accent};
-  border: 1px solid ${OS_LEGAL_COLORS.accent};
-  border-left: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 0 ${OS_LEGAL_SPACING.borderRadiusButton}
-    ${OS_LEGAL_SPACING.borderRadiusButton} 0;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease;
 
   &:hover {
     background: ${OS_LEGAL_COLORS.accentHover};
-    border-color: ${OS_LEGAL_COLORS.accentHover};
-    border-left-color: rgba(255, 255, 255, 0.3);
   }
 
   svg {
     width: 14px;
     height: 14px;
-  }
-
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    padding: 8px 6px;
   }
 `;
 
