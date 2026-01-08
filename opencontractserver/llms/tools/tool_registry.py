@@ -23,13 +23,20 @@ class ToolCategory(str, Enum):
 
 @dataclass(frozen=True)
 class ToolDefinition:
-    """Definition of an available tool for agents."""
+    """Definition of an available tool for agents.
+
+    Flags:
+        requires_corpus: Tool needs a corpus_id to function
+        requires_approval: Tool requires user confirmation before execution
+        requires_write_permission: Tool performs write operations (filtered for read-only users)
+    """
 
     name: str
     description: str
     category: ToolCategory
     requires_corpus: bool = False
     requires_approval: bool = False
+    requires_write_permission: bool = False
     parameters: tuple[tuple[str, str, bool], ...] = ()  # (name, description, required)
 
     def to_dict(self) -> dict:
@@ -44,6 +51,7 @@ class ToolDefinition:
             "category": self.category.value,
             "requiresCorpus": self.requires_corpus,
             "requiresApproval": self.requires_approval,
+            "requiresWritePermission": self.requires_write_permission,
             "parameters": [
                 {"name": p[0], "description": p[1], "required": p[2]}
                 for p in self.parameters
@@ -165,6 +173,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.DOCUMENT,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(("new_description", "The new description content", True),),
     ),
     # -------------------------------------------------------------------------
@@ -214,6 +223,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.DOCUMENT,
         requires_corpus=True,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(("new_content", "The new summary content", True),),
     ),
     # -------------------------------------------------------------------------
@@ -245,6 +255,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         description="Create a new note attached to a document.",
         category=ToolCategory.NOTES,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("title", "Note title", True),
             ("content", "Note content", True),
@@ -258,6 +269,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.NOTES,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("note_id", "ID of the note to update", True),
             (
@@ -293,6 +305,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.CORPUS,
         requires_corpus=True,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(("new_content", "Full markdown content", True),),
     ),
     # -------------------------------------------------------------------------
@@ -336,6 +349,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.ANNOTATIONS,
         requires_corpus=True,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("annotation_ids", "List of annotation IDs to duplicate", True),
             ("new_label_text", "Text of the label to apply to duplicates", True),
@@ -351,6 +365,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.ANNOTATIONS,
         requires_corpus=True,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             (
                 "items",
@@ -398,6 +413,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("message_id", "ID of the message to delete", True),
             ("reason", "Reason for deletion (for audit log)", True),
@@ -411,6 +427,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to lock", True),
             ("reason", "Reason for locking (for audit log)", True),
@@ -421,6 +438,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         description="Unlock a previously locked thread to allow new messages.",
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to unlock", True),
             ("reason", "Reason for unlocking (for audit log)", True),
@@ -434,6 +452,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to post to", True),
             ("content", "Message content (markdown supported)", True),
@@ -444,6 +463,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         description="Pin a thread to appear at the top of the thread list.",
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to pin", True),
             ("reason", "Reason for pinning (for audit log)", True),
@@ -454,6 +474,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         description="Unpin a previously pinned thread.",
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to unpin", True),
             ("reason", "Reason for unpinning (for audit log)", True),

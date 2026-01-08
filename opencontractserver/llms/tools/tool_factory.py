@@ -30,12 +30,17 @@ class CoreTool:
     ``requires_corpus`` marks tools that need a corpus_id to function.
     These tools will be filtered out when creating agents for documents
     that are not in any corpus.
+
+    ``requires_write_permission`` marks tools that perform write operations.
+    These tools will be filtered out when the calling user lacks WRITE
+    permission on the target resource (corpus or document).
     """
 
     function: Callable
     metadata: ToolMetadata
     requires_approval: bool = False
     requires_corpus: bool = False
+    requires_write_permission: bool = False
 
     @classmethod
     def from_function(
@@ -47,6 +52,7 @@ class CoreTool:
         *,
         requires_approval: bool = False,
         requires_corpus: bool = False,
+        requires_write_permission: bool = False,
     ) -> "CoreTool":
         """Create a CoreTool from a Python function.
 
@@ -57,6 +63,7 @@ class CoreTool:
             parameter_descriptions: Optional parameter descriptions
             requires_approval: Whether the tool requires explicit approval
             requires_corpus: Whether the tool requires a corpus_id to function
+            requires_write_permission: Whether the tool performs write operations
 
         Returns:
             CoreTool instance
@@ -80,6 +87,7 @@ class CoreTool:
             metadata=metadata,
             requires_approval=requires_approval,
             requires_corpus=requires_corpus,
+            requires_write_permission=requires_write_permission,
         )
 
     @property
@@ -180,6 +188,7 @@ class UnifiedToolFactory:
         *,
         requires_approval: bool = False,
         requires_corpus: bool = False,
+        requires_write_permission: bool = False,
     ) -> Any:
         """Create a framework-specific tool directly from a function.
 
@@ -191,6 +200,7 @@ class UnifiedToolFactory:
             parameter_descriptions: Optional parameter descriptions
             requires_approval: Whether the tool requires explicit approval
             requires_corpus: Whether the tool requires a corpus_id to function
+            requires_write_permission: Whether the tool performs write operations
 
         Returns:
             Framework-specific tool instance
@@ -207,6 +217,7 @@ class UnifiedToolFactory:
                 parameter_descriptions=parameter_descriptions,
                 requires_approval=requires_approval,
                 requires_corpus=requires_corpus,
+                requires_write_permission=requires_write_permission,
             )
         else:
             raise ValueError(f"Unsupported framework: {framework}")

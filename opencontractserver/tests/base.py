@@ -437,12 +437,18 @@ class BaseFixtureTestCase(TransactionTestCase):
         # -------------------------------------------------------------- #
         # 2. Create a corpus with a proper description                   #
         # -------------------------------------------------------------- #
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
+
         self.corpus = Corpus.objects.create(
             title="Test Corpus",
             description="A collection of contracts.",
             creator=self.user,
             backend_lock=False,
         )
+
+        # Grant full permissions to the creator (django-guardian requires explicit assignment)
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
 
         # -------------------------------------------------------------- #
         # 3. Add documents to corpus (corpus isolation)                  #
@@ -451,6 +457,8 @@ class BaseFixtureTestCase(TransactionTestCase):
         for i, doc in enumerate(self.docs):
             corpus_doc, _, _ = self.corpus.add_document(document=doc, user=self.user)
             self.docs[i] = corpus_doc
+            # Grant full permissions to the creator on each document
+            set_permissions_for_obj_to_user(self.user, corpus_doc, [PermissionTypes.ALL])
 
         # Update individual doc references
         if self.docs:

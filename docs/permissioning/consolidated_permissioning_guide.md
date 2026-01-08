@@ -48,7 +48,8 @@
 11. [Component Integration](#component-integration)
 12. [Testing](#testing)
 13. [Troubleshooting](#troubleshooting)
-14. [resolve_oc_model_queryset Deprecation](#resolve_oc_model_queryset-deprecation)
+14. [Agent/LLM Permission Model](#agentllm-permission-model)
+15. [resolve_oc_model_queryset Deprecation](#resolve_oc_model_queryset-deprecation)
 
 ## Overview
 
@@ -2210,6 +2211,300 @@ When deploying this feature:
 - [ ] Frontend tests verify rendering behavior
 - [ ] Anonymous user handling tested
 - [ ] Public vs. private resource scenarios tested
+
+---
+
+## Agent/LLM Permission Model
+
+### Overview
+
+The Agent/LLM system implements a defense-in-depth permission model where agents inherit the calling user's permissions and can never escalate beyond them. This ensures that agents operate as proxies for users, not as privileged entities.
+
+**Core Principle**: Agents execute with the **minimum** of the user's permissions, never exceeding what the user themselves could do directly.
+
+### Architecture Layers
+
+The permission system operates at three layers:
+
+1. **WebSocket Consumer Layer** - Initial connection authorization
+2. **Tool Filtering Layer** - Removes unauthorized tools before agent initialization
+3. **Runtime Validation Layer** - Defense-in-depth checks before each tool execution
+
+### 1. WebSocket Consumer Layer
+
+**Location**: `config/websocket/consumers/unified_agent_conversation.py`
+
+The `UnifiedAgentConsumer` validates user permissions **before** accepting the WebSocket connection:
+
+```python
+# Lines 131-187 in unified_agent_conversation.py
+
+# For corpus context
+if self.corpus_id:
+    self.corpus = await Corpus.objects.aget(id=self.corpus_id)
+    if is_authenticated:
+        has_perm = await database_sync_to_async(
+            user_has_permission_for_obj
+        )(user, self.corpus, PermissionTypes.READ)
+        if not has_perm:
+            await self.close(code=4003)
+            return
+    elif not self.corpus.is_public:
+        await self.close(code=4003)
+        return
+
+# For document context
+if self.document_id:
+    self.document = await Document.objects.aget(id=self.document_id)
+    if is_authenticated:
+        has_perm = await database_sync_to_async(
+            user_has_permission_for_obj
+        )(user, self.document, PermissionTypes.READ)
+        if not has_perm:
+            await self.close(code=4003)
+            return
+    elif not self.document.is_public:
+        await self.close(code=4003)
+        return
+```
+
+**Key Rules:**
+- **Authenticated users**: Must have READ permission on corpus/document
+- **Anonymous users**: Only allowed if resource is `is_public=True`
+- **Connection rejection**: Closes with code 4003 (Forbidden) if unauthorized
+- **Early validation**: Prevents agent initialization for unauthorized users
+
+### 2. Tool Filtering Layer
+
+**Location**: `opencontractserver/llms/agents/agent_factory.py`
+
+Before agent initialization, tools are filtered based on user permissions. This happens in `UnifiedAgentFactory.create_document_agent()` and `UnifiedAgentFactory.create_corpus_agent()`.
+
+#### Tool Filtering Logic
+
+```python
+# Lines 178-210 in agent_factory.py
+
+# Check user's write permission on document
+has_write_permission = await _user_has_write_permission(user_id, doc_obj)
+
+filtered_tools = []
+for t in tools:
+    # Filter approval-required tools in public contexts
+    if public_context and isinstance(t, CoreTool) and t.requires_approval:
+        logger.warning("Skipping approval-required tool '%s' for public context", t.name)
+        continue
+
+    # Filter corpus-dependent tools when no corpus provided
+    if corpus is None and isinstance(t, CoreTool) and t.requires_corpus:
+        logger.info("Skipping corpus-required tool '%s' - no corpus provided", t.name)
+        continue
+
+    # Filter write tools if user lacks write permission
+    if (
+        not has_write_permission
+        and isinstance(t, CoreTool)
+        and t.requires_write_permission
+    ):
+        logger.info(
+            "Skipping write tool '%s' - user %s lacks WRITE permission on document %s",
+            t.name, user_id, doc_obj.id
+        )
+        continue
+
+    filtered_tools.append(t)
+```
+
+#### Tool Flags
+
+Each `CoreTool` has three permission-related flags:
+
+| Flag | Purpose | Filter Condition |
+|------|---------|------------------|
+| `requires_approval` | Tool needs user confirmation | Filtered if `public_context=True` |
+| `requires_corpus` | Tool needs corpus context | Filtered if `corpus=None` |
+| `requires_write_permission` | Tool performs write operations | Filtered if user lacks CRUD permission |
+
+**Examples:**
+- **Create Annotation Tool**: `requires_write_permission=True` - Only available to users with CREATE/UPDATE/DELETE on document
+- **Vector Search Tool**: `requires_write_permission=False` - Available to all users with READ access
+- **Corpus Summary Tool**: `requires_corpus=True` - Filtered out for standalone document agents
+
+### 3. Runtime Validation Layer
+
+**Location**: `opencontractserver/llms/tools/pydantic_ai_tools.py`
+
+The `_check_user_permissions()` function runs **before every tool execution** as a defense-in-depth measure:
+
+```python
+# Lines 20-111 in pydantic_ai_tools.py
+
+def _check_user_permissions(ctx: RunContext[PydanticAIDependencies]) -> None:
+    """
+    Validate that the user in context has permission to access the resources.
+
+    This is a defense-in-depth check that runs BEFORE any tool execution to
+    ensure an agent cannot escalate beyond the calling user's permissions.
+    Even if the consumer layer has a bug, tools won't leak data.
+    """
+    deps = ctx.deps
+    user_id = deps.user_id
+    document_id = deps.document_id
+    corpus_id = deps.corpus_id
+
+    if user_id is None:
+        # Anonymous user - only allow if resources are public
+        if document_id:
+            doc = Document.objects.get(pk=document_id)
+            if not doc.is_public:
+                raise PermissionError("Anonymous access denied to private document")
+        if corpus_id:
+            corpus = Corpus.objects.get(pk=corpus_id)
+            if not corpus.is_public:
+                raise PermissionError("Anonymous access denied to private corpus")
+        return
+
+    # Authenticated user - check actual permissions
+    user = User.objects.get(pk=user_id)
+
+    if document_id:
+        doc = Document.objects.get(pk=document_id)
+        if not user_has_permission_for_obj(user, doc, PermissionTypes.READ):
+            raise PermissionError(f"User {user_id} lacks READ permission on document")
+
+    if corpus_id:
+        corpus = Corpus.objects.get(pk=corpus_id)
+        if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
+            raise PermissionError(f"User {user_id} lacks READ permission on corpus")
+```
+
+**Injection Point**: This check is automatically injected into every tool wrapper at lines 264 and 299 in `pydantic_ai_tools.py`:
+
+```python
+async def async_wrapper(ctx: RunContext[PydanticAIDependencies], *args, **kwargs):
+    # Defense-in-depth: validate user permissions BEFORE any tool execution
+    _check_user_permissions(ctx)
+
+    # Then execute tool...
+    return await original_func(*args, **kwargs)
+```
+
+### Permission Inheritance Model
+
+Agents inherit permissions from the **calling user**, not from the agent creator or any other privileged entity.
+
+**Formula**: `Effective Tool Permission = MIN(caller_permission, tool_requirement)`
+
+#### Example Scenarios
+
+**Scenario 1: Read-Only User with Document Agent**
+
+```python
+# Setup
+user = create_user("viewer")
+document = create_document("Contract.pdf", is_public=False)
+set_permissions_for_obj_to_user(user, document, [PermissionTypes.READ])
+
+# Agent initialization
+agent = await create_document_agent(document=document, user_id=user.id)
+
+# Available tools:
+# - vector_search (read-only) ✅
+# - extract_entities (read-only) ✅
+# - create_annotation (write) ❌ FILTERED OUT
+
+# If somehow a write tool wasn't filtered, runtime check would block:
+# _check_user_permissions() → PermissionError
+```
+
+**Scenario 2: Anonymous User with Public Corpus**
+
+```python
+# Setup
+corpus = create_corpus("Public Legal Docs", is_public=True)
+
+# Agent initialization
+agent = await create_corpus_agent(corpus=corpus, user_id=None)  # Anonymous
+
+# Available tools:
+# - vector_search ✅
+# - document_search ✅
+# - create_annotation ❌ FILTERED OUT (anonymous = no write)
+# - export_data ❌ FILTERED OUT (anonymous = no write)
+
+# Runtime validation:
+# _check_user_permissions() checks corpus.is_public → allows read tools
+```
+
+**Scenario 3: Owner with Full Permissions**
+
+```python
+# Setup
+owner = create_user("owner")
+document = create_document("Contract.pdf", creator=owner)
+corpus = create_corpus("Legal Docs", creator=owner)
+
+# Agent initialization (owner has CRUD by default)
+agent = await create_document_agent(
+    document=document,
+    corpus=corpus,
+    user_id=owner.id
+)
+
+# Available tools:
+# - vector_search ✅
+# - create_annotation ✅
+# - update_annotation ✅
+# - delete_annotation ✅
+# - All tools available (owner has full permissions)
+```
+
+### Legacy Consumers (Deprecated)
+
+The following WebSocket consumers have been **removed/deprecated** in favor of `UnifiedAgentConsumer`:
+
+- ❌ `DocumentQueryConsumer` - Use `UnifiedAgentConsumer` with `document_id` param
+- ❌ `CorpusQueryConsumer` - Use `UnifiedAgentConsumer` with `corpus_id` param
+- ❌ `StandaloneDocumentQueryConsumer` - Use `UnifiedAgentConsumer` with `document_id` only
+
+**Migration Example:**
+
+```javascript
+// OLD (deprecated)
+const ws = new WebSocket(`/ws/corpus_query/${corpusId}/`);
+
+// NEW (unified)
+const ws = new WebSocket(`/ws/agent/?corpus_id=${corpusId}`);
+```
+
+### Key Security Properties
+
+1. **No Privilege Escalation**: Agents cannot access resources the user cannot access
+2. **Defense in Depth**: Three layers of permission checks (consumer, factory, runtime)
+3. **Fail-Safe**: Permission checks default to denial on errors
+4. **Audit Trail**: All permission failures are logged with user/resource context
+5. **Anonymous Safety**: Anonymous users limited to public resources, read-only tools
+
+### Cross-Reference: Full LLM Architecture
+
+For complete details on the LLM/Agent system architecture, see:
+- **`docs/architecture/llms/README.md`** - Full LLM framework documentation
+- **`docs/architecture/llms/agent_lifecycle.md`** - Agent lifecycle and conversation management
+- **`docs/architecture/llms/tool_system.md`** - Tool registration and execution
+
+### Testing
+
+Comprehensive tests for the agent permission model are located in:
+- `opencontractserver/tests/llms/test_agent_permissions.py` - Agent factory permission filtering
+- `opencontractserver/tests/websocket/test_unified_agent_consumer_permissions.py` - WebSocket layer validation
+- `opencontractserver/tests/llms/test_tool_permission_enforcement.py` - Runtime permission checks
+
+Key test scenarios:
+- Anonymous users can only access public resources
+- Read-only users cannot execute write tools
+- Write tools are filtered for users without CRUD permissions
+- Runtime checks block tool execution even if filtering fails
+- Permission changes take effect immediately (no caching)
 
 ---
 

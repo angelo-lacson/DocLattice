@@ -3,6 +3,7 @@
 import logging
 from typing import Callable, Optional, Union
 
+from channels.db import database_sync_to_async
 from django.conf import settings
 
 from opencontractserver.conversations.models import ChatMessage, Conversation
@@ -15,8 +16,46 @@ from opencontractserver.llms.agents.core_agents import (
 )
 from opencontractserver.llms.tools.tool_factory import CoreTool, UnifiedToolFactory
 from opencontractserver.llms.types import AgentFramework
+from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
 logger = logging.getLogger(__name__)
+
+
+async def _user_has_write_permission(
+    user_id: Optional[int],
+    resource: Optional[Union[Document, Corpus]],
+) -> bool:
+    """
+    Check if user has WRITE (CRUD) permission on the resource.
+
+    Args:
+        user_id: The user's ID, or None for anonymous users
+        resource: The Document or Corpus to check permissions on
+
+    Returns:
+        True if user has write permission, False otherwise
+    """
+    if resource is None:
+        return False
+
+    if user_id is None:
+        # Anonymous users never have write permission
+        return False
+
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+
+    try:
+        user = await User.objects.aget(pk=user_id)
+    except User.DoesNotExist:
+        return False
+
+    # Use database_sync_to_async since user_has_permission_for_obj is synchronous
+    return await database_sync_to_async(user_has_permission_for_obj)(
+        user, resource, PermissionTypes.CRUD
+    )
 
 
 class UnifiedAgentFactory:
@@ -136,6 +175,9 @@ class UnifiedAgentFactory:
 
         public_context = _is_public(doc_obj) or (corpus_obj and _is_public(corpus_obj))
 
+        # Check user's write permission on document (for filtering write tools)
+        has_write_permission = await _user_has_write_permission(user_id, doc_obj)
+
         filtered_tools: list[Union[CoreTool, Callable, str]] = []
         if tools:
             for t in tools:
@@ -150,6 +192,19 @@ class UnifiedAgentFactory:
                     logger.info(
                         "Skipping corpus-required tool '%s' - no corpus provided for document agent",
                         t.name,
+                    )
+                    continue
+                # Filter out write tools if user lacks write permission
+                if (
+                    not has_write_permission
+                    and isinstance(t, CoreTool)
+                    and t.requires_write_permission
+                ):
+                    logger.info(
+                        "Skipping write tool '%s' - user %s lacks WRITE permission on document %s",
+                        t.name,
+                        user_id,
+                        doc_obj.id if doc_obj else "unknown",
                     )
                     continue
                 filtered_tools.append(t)
@@ -279,6 +334,9 @@ class UnifiedAgentFactory:
 
         public_context = _is_public(corpus_obj)
 
+        # Check user's write permission on corpus (for filtering write tools)
+        has_write_permission = await _user_has_write_permission(user_id, corpus_obj)
+
         filtered_tools: list[Union[CoreTool, Callable, str]] = []
         if tools:
             for t in tools:
@@ -286,6 +344,19 @@ class UnifiedAgentFactory:
                     logger.warning(
                         "Skipping approval-required tool '%s' for public context",
                         t.name,
+                    )
+                    continue
+                # Filter out write tools if user lacks write permission
+                if (
+                    not has_write_permission
+                    and isinstance(t, CoreTool)
+                    and t.requires_write_permission
+                ):
+                    logger.info(
+                        "Skipping write tool '%s' - user %s lacks WRITE permission on corpus %s",
+                        t.name,
+                        user_id,
+                        corpus_obj.id if corpus_obj else "unknown",
                     )
                     continue
                 filtered_tools.append(t)

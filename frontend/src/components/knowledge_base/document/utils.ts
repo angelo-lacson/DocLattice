@@ -1,51 +1,27 @@
-export /*
+import { getUnifiedAgentWebSocket } from "../../chat/get_websockets";
+
+/**
  * Get WebSocket URL for document queries.
+ *
+ * @deprecated This function now delegates to getUnifiedAgentWebSocket() which uses
+ * the secure unified endpoint with proper permission checks. The legacy
+ * DocumentQueryConsumer and StandaloneDocumentQueryConsumer have been deprecated.
+ *
  * @param documentId - Document identifier.
  * @param token - Optional authentication token from the user session.
  * @param conversationId - (Optional) If provided, the conversation id to load from.
+ * @param corpusId - (Optional) If provided, scopes the document to a corpus.
  * @returns WebSocket URL with necessary query parameters.
  */
-const getWebSocketUrl = (
+export const getWebSocketUrl = (
   documentId: string,
   token?: string,
   conversationId?: string,
   corpusId?: string
 ): string => {
-  // Use environment variables or fallback to window.location for production
-  const wsBaseUrl =
-    import.meta.env.VITE_WS_URL ||
-    import.meta.env.VITE_API_URL ||
-    `${window.location.protocol === "https:" ? "wss" : "ws"}://${
-      window.location.host
-    }`;
-
-  const normalizedBaseUrl = wsBaseUrl
-    .replace(/\/+$/, "")
-    .replace(/^http/, "ws")
-    .replace(/^https/, "wss");
-
-  let url: string;
-  if (corpusId) {
-    url = `${normalizedBaseUrl}/ws/document/${documentId}/query/corpus/${corpusId}/`;
-  } else {
-    url = `${normalizedBaseUrl}/ws/standalone/document/${documentId}/query/`;
-  }
-
-  const params: string[] = [];
-
-  if (conversationId) {
-    params.push(
-      `load_from_conversation_id=${encodeURIComponent(conversationId)}`
-    );
-  }
-
-  if (token) {
-    params.push(`token=${encodeURIComponent(token)}`);
-  }
-
-  if (params.length > 0) {
-    url += `?${params.join("&")}`;
-  }
-
-  return url;
+  // Delegate to unified endpoint for proper permission enforcement
+  return getUnifiedAgentWebSocket(
+    { documentId, corpusId, conversationId },
+    token
+  );
 };

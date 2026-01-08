@@ -17,6 +17,99 @@ from opencontractserver.llms.vector_stores.core_vector_stores import (
 logger = logging.getLogger(__name__)
 
 
+def _check_user_permissions(
+    ctx: "RunContext[PydanticAIDependencies]",
+) -> None:
+    """
+    Validate that the user in context has permission to access the resources.
+
+    This is a defense-in-depth check that runs BEFORE any tool execution to
+    ensure an agent cannot escalate beyond the calling user's permissions.
+    Even if the consumer layer has a bug, tools won't leak data.
+
+    Args:
+        ctx: The RunContext containing PydanticAIDependencies with user/resource IDs
+
+    Raises:
+        PermissionError: If user lacks READ permission on document or corpus
+    """
+    deps = ctx.deps
+    if deps is None:
+        return  # No context = no check (shouldn't happen in practice)
+
+    user_id = deps.user_id
+    document_id = deps.document_id
+    corpus_id = deps.corpus_id
+
+    # Import here to avoid circular imports and keep this check optional
+    from django.contrib.auth import get_user_model
+
+    from opencontractserver.corpuses.models import Corpus
+    from opencontractserver.documents.models import Document
+    from opencontractserver.types.enums import PermissionTypes
+    from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+    User = get_user_model()
+
+    if user_id is None:
+        # Anonymous user - only allow if resources are public
+        # (Should already be validated at consumer layer, but double-check)
+        if document_id:
+            try:
+                doc = Document.objects.get(pk=document_id)
+                if not doc.is_public:
+                    logger.warning(
+                        f"Anonymous tool access denied to private document {document_id}"
+                    )
+                    raise PermissionError("Anonymous access denied to private document")
+            except Document.DoesNotExist:
+                raise PermissionError(f"Document {document_id} not found")
+
+        if corpus_id:
+            try:
+                corpus = Corpus.objects.get(pk=corpus_id)
+                if not corpus.is_public:
+                    logger.warning(
+                        f"Anonymous tool access denied to private corpus {corpus_id}"
+                    )
+                    raise PermissionError("Anonymous access denied to private corpus")
+            except Corpus.DoesNotExist:
+                raise PermissionError(f"Corpus {corpus_id} not found")
+        return
+
+    # Authenticated user - check actual permissions
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        raise PermissionError(f"User {user_id} not found")
+
+    if document_id:
+        try:
+            doc = Document.objects.get(pk=document_id)
+            if not user_has_permission_for_obj(user, doc, PermissionTypes.READ):
+                logger.warning(
+                    f"User {user_id} tool access denied - lacks READ on document {document_id}"
+                )
+                raise PermissionError(
+                    f"User {user_id} lacks READ permission on document {document_id}"
+                )
+        except Document.DoesNotExist:
+            raise PermissionError(f"Document {document_id} not found")
+
+    if corpus_id:
+        try:
+            corpus = Corpus.objects.get(pk=corpus_id)
+            if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
+                logger.warning(
+                    f"User {user_id} tool access denied - lacks READ on corpus {corpus_id}"
+                )
+                raise PermissionError(
+                    f"User {user_id} lacks READ permission on corpus {corpus_id}"
+                )
+        except Corpus.DoesNotExist:
+            raise PermissionError(f"Corpus {corpus_id} not found")
+
+
 class PydanticAIToolMetadata(BaseModel):
     """Pydantic model for tool metadata."""
 
@@ -166,6 +259,10 @@ class PydanticAIToolWrapper:
                 ctx: RunContext[PydanticAIDependencies], *args, **kwargs
             ):
                 """Async wrapper for PydanticAI tools."""
+                # Defense-in-depth: validate user permissions BEFORE any tool execution
+                # This prevents permission escalation via agents
+                _check_user_permissions(ctx)
+
                 # Trigger approval gate *before* attempting execution.
                 _maybe_raise(ctx, *args, **kwargs)
 
@@ -197,6 +294,10 @@ class PydanticAIToolWrapper:
                 ctx: RunContext[PydanticAIDependencies], *args, **kwargs
             ):
                 """Sync to async wrapper for PydanticAI tools."""
+                # Defense-in-depth: validate user permissions BEFORE any tool execution
+                # This prevents permission escalation via agents
+                _check_user_permissions(ctx)
+
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
@@ -294,6 +395,7 @@ class PydanticAIToolFactory:
         *,
         requires_approval: bool = False,
         requires_corpus: bool = False,
+        requires_write_permission: bool = False,
     ) -> Callable:
         """Create a PydanticAI-compatible callable tool directly from a Python function.
 
@@ -304,6 +406,7 @@ class PydanticAIToolFactory:
             parameter_descriptions: Optional parameter descriptions
             requires_approval: Whether the tool requires approval
             requires_corpus: Whether the tool requires a corpus_id to function
+            requires_write_permission: Whether the tool performs write operations
 
         Returns:
             PydanticAI-compatible callable function
@@ -315,6 +418,7 @@ class PydanticAIToolFactory:
             parameter_descriptions=parameter_descriptions,
             requires_approval=requires_approval,
             requires_corpus=requires_corpus,
+            requires_write_permission=requires_write_permission,
         )
         return PydanticAIToolWrapper(core_tool).callable_function
 
