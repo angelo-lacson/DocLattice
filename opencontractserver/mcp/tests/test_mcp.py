@@ -2430,3 +2430,116 @@ class MCPTelemetryIntegrationTest(TestCase):
             loop.run_until_complete(run_test())
         finally:
             loop.close()
+
+    def test_read_resource_document_uri(self):
+        """Test that read_resource handles document URIs."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import read_resource_handler
+        from opencontractserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.9", transport="streamable_http")
+
+            with patch(
+                "opencontractserver.mcp.server.record_mcp_resource_read"
+            ) as mock_record, patch(
+                "opencontractserver.mcp.server.get_document_resource"
+            ) as mock_get_doc:
+                mock_record.return_value = True
+                mock_get_doc.return_value = '{"title": "Test Document"}'
+
+                # Read document resource
+                uri = "document://test-corpus/test-document"
+                result = await read_resource_handler(uri)
+
+                # Verify telemetry was recorded with document type
+                mock_record.assert_called_once_with("document", success=True)
+                mock_get_doc.assert_called_once_with("test-corpus", "test-document")
+
+                return result
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertIsNotNone(result)
+        finally:
+            loop.close()
+
+    def test_read_resource_annotation_uri(self):
+        """Test that read_resource handles annotation URIs."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import read_resource_handler
+        from opencontractserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.10", transport="streamable_http")
+
+            with patch(
+                "opencontractserver.mcp.server.record_mcp_resource_read"
+            ) as mock_record, patch(
+                "opencontractserver.mcp.server.get_annotation_resource"
+            ) as mock_get_ann:
+                mock_record.return_value = True
+                mock_get_ann.return_value = '{"id": 123, "text": "Test Annotation"}'
+
+                # Read annotation resource
+                uri = "annotation://test-corpus/test-document/123"
+                result = await read_resource_handler(uri)
+
+                # Verify telemetry was recorded with annotation type
+                mock_record.assert_called_once_with("annotation", success=True)
+                mock_get_ann.assert_called_once_with(
+                    "test-corpus", "test-document", 123
+                )
+
+                return result
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertIsNotNone(result)
+        finally:
+            loop.close()
+
+    def test_read_resource_thread_uri(self):
+        """Test that read_resource handles thread URIs."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import read_resource_handler
+        from opencontractserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.11", transport="streamable_http")
+
+            with patch(
+                "opencontractserver.mcp.server.record_mcp_resource_read"
+            ) as mock_record, patch(
+                "opencontractserver.mcp.server.get_thread_resource"
+            ) as mock_get_thread:
+                mock_record.return_value = True
+                mock_get_thread.return_value = '{"id": 456, "title": "Test Thread"}'
+
+                # Read thread resource
+                uri = "thread://test-corpus/threads/456"
+                result = await read_resource_handler(uri)
+
+                # Verify telemetry was recorded with thread type
+                mock_record.assert_called_once_with("thread", success=True)
+                mock_get_thread.assert_called_once_with("test-corpus", 456)
+
+                return result
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertIsNotNone(result)
+        finally:
+            loop.close()
