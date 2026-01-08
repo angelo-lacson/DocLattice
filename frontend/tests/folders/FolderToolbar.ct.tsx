@@ -135,9 +135,10 @@ test.describe("FolderToolbar", () => {
         </FolderTestWrapper>
       );
 
-      // Upload button has title but text content "Upload"
+      // Main upload button has text "Upload" - use exact match to avoid matching dropdown
       const uploadButton = component.getByRole("button", {
-        name: /Upload/i,
+        name: "Upload",
+        exact: true,
       });
       await expect(uploadButton).toBeVisible();
     });
