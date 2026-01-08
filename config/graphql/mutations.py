@@ -130,6 +130,7 @@ from opencontractserver.annotations.models import (
     Note,
     Relationship,
 )
+from opencontractserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
@@ -2044,6 +2045,16 @@ class ImportZipToCorpus(graphene.Mutation):
                         message="Target folder not found or does not belong to this corpus",
                         job_id=None,
                     )
+
+            # Validate base64 string size before decoding to prevent memory exhaustion
+            # Base64 encoding adds ~33% overhead, so max encoded size is ~1.4x decoded size
+            max_encoded_size = int(ZIP_MAX_TOTAL_SIZE_BYTES * 1.4)
+            if len(base64_file_string) > max_encoded_size:
+                return ImportZipToCorpus(
+                    ok=False,
+                    message=f"File exceeds maximum allowed size of {ZIP_MAX_TOTAL_SIZE_BYTES // (1024 * 1024)}MB",
+                    job_id=None,
+                )
 
             # Decode and store the zip file
             base64_zip_bytes = base64_file_string.encode("utf-8")
