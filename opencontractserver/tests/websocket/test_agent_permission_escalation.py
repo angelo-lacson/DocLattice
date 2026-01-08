@@ -19,10 +19,9 @@ Test Categories:
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
+from urllib.parse import quote
 
 import pytest
 from channels.db import database_sync_to_async
@@ -31,12 +30,7 @@ from django.contrib.auth import get_user_model
 from django.test.utils import override_settings
 from graphql_jwt.shortcuts import get_token
 from graphql_relay import to_global_id
-from urllib.parse import quote
 
-from config.websocket.consumers.unified_agent_conversation import (
-    UnifiedAgentConsumer,
-)
-from config.websocket.middleware import WS_CLOSE_TOKEN_INVALID
 from opencontractserver.agents.models import AgentConfiguration
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -44,7 +38,6 @@ from opencontractserver.llms.agents.core_agents import (
     ContentEvent,
     FinalEvent,
 )
-from opencontractserver.llms.tools.tool_factory import CoreTool
 from opencontractserver.llms.tools.tool_registry import AVAILABLE_TOOLS
 from opencontractserver.tests.base import WebsocketFixtureBaseTestCase
 from opencontractserver.types.enums import PermissionTypes
@@ -63,7 +56,7 @@ async def connect_and_verify(
     application,
     path: str,
     expected_connected: bool,
-    expected_close_code: Optional[int] = None,
+    expected_close_code: int | None = None,
 ) -> WebsocketCommunicator:
     """
     Helper to test WebSocket connection acceptance/rejection.
@@ -80,13 +73,13 @@ async def connect_and_verify(
     communicator = WebsocketCommunicator(application, path)
     connected, code = await communicator.connect()
 
-    assert connected == expected_connected, (
-        f"Expected connected={expected_connected}, got {connected} with code {code}"
-    )
+    assert (
+        connected == expected_connected
+    ), f"Expected connected={expected_connected}, got {connected} with code {code}"
     if expected_close_code is not None:
-        assert code == expected_close_code, (
-            f"Expected close code {expected_close_code}, got {code}"
-        )
+        assert (
+            code == expected_close_code
+        ), f"Expected close code {expected_close_code}, got {code}"
 
     if connected:
         await communicator.disconnect()
@@ -127,9 +120,7 @@ class AgentConfigMixin:
 
     async def _ensure_agent_configs_exist(self) -> None:
         """Ensure default agent configurations exist for tests."""
-        await database_sync_to_async(
-            AgentConfiguration.objects.get_or_create
-        )(
+        await database_sync_to_async(AgentConfiguration.objects.get_or_create)(
             slug="default-corpus-agent",
             defaults={
                 "name": "Default Corpus Agent",
@@ -137,9 +128,7 @@ class AgentConfigMixin:
                 "creator": self.user,
             },
         )
-        await database_sync_to_async(
-            AgentConfiguration.objects.get_or_create
-        )(
+        await database_sync_to_async(AgentConfiguration.objects.get_or_create)(
             slug="default-document-agent",
             defaults={
                 "name": "Default Document Agent",
@@ -181,7 +170,9 @@ class ConsumerCorpusPermissionTestCase(AgentConfigMixin, WebsocketFixtureBaseTes
         """C1.2: Authenticated user WITHOUT READ on private corpus is rejected."""
         # Create another user who doesn't own the corpus
         other_user = await database_sync_to_async(User.objects.create_user)(
-            username="outsider_corpus", password="pw123456!", email="outsider_corpus@example.com"
+            username="outsider_corpus",
+            password="pw123456!",
+            email="outsider_corpus@example.com",
         )
         other_token = await database_sync_to_async(get_token)(user=other_user)
 
@@ -254,7 +245,9 @@ class ConsumerCorpusPermissionTestCase(AgentConfigMixin, WebsocketFixtureBaseTes
 
 @override_settings(USE_AUTH0=False)
 @pytest.mark.django_db(transaction=True)
-class ConsumerDocumentPermissionTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCase):
+class ConsumerDocumentPermissionTestCase(
+    AgentConfigMixin, WebsocketFixtureBaseTestCase
+):
     """
     Category 1.2: Document Permission Tests
 
@@ -282,7 +275,9 @@ class ConsumerDocumentPermissionTestCase(AgentConfigMixin, WebsocketFixtureBaseT
         """D1.2: Authenticated user WITHOUT READ on private document is rejected."""
         # Create another user who doesn't own the document
         other_user = await database_sync_to_async(User.objects.create_user)(
-            username="outsider_doc", password="pw123456!", email="outsider_doc@example.com"
+            username="outsider_doc",
+            password="pw123456!",
+            email="outsider_doc@example.com",
         )
         other_token = await database_sync_to_async(get_token)(user=other_user)
 
@@ -329,7 +324,9 @@ class ConsumerDocumentPermissionTestCase(AgentConfigMixin, WebsocketFixtureBaseT
 
 @override_settings(USE_AUTH0=False)
 @pytest.mark.django_db(transaction=True)
-class ConsumerCombinedPermissionTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCase):
+class ConsumerCombinedPermissionTestCase(
+    AgentConfigMixin, WebsocketFixtureBaseTestCase
+):
     """
     Category 1.3: Document + Corpus Combined Permission Tests
 
@@ -373,7 +370,9 @@ class ConsumerCombinedPermissionTestCase(AgentConfigMixin, WebsocketFixtureBaseT
         """DC1.2: User has READ on corpus, NOT on doc - should be rejected."""
         # Create user with corpus read but no document read
         limited_user = await database_sync_to_async(User.objects.create_user)(
-            username="corpus_only_user", password="pw123456!", email="corpusonly@example.com"
+            username="corpus_only_user",
+            password="pw123456!",
+            email="corpusonly@example.com",
         )
 
         # Grant READ on corpus
@@ -459,7 +458,9 @@ class ToolFilteringCorpusAgentTestCase(WebsocketFixtureBaseTestCase):
 
         # Create user with only READ permission
         read_user = await database_sync_to_async(User.objects.create_user)(
-            username="reader_corpus", password="pw123456!", email="reader_corpus@example.com"
+            username="reader_corpus",
+            password="pw123456!",
+            email="reader_corpus@example.com",
         )
         await database_sync_to_async(set_permissions_for_obj_to_user)(
             read_user, self.corpus, [PermissionTypes.READ]
@@ -485,10 +486,7 @@ class ToolFilteringCorpusAgentTestCase(WebsocketFixtureBaseTestCase):
         """TF2.4: Read tools are available for read-only users."""
         # Get read tools (those without requires_write_permission)
         read_tools = [t for t in AVAILABLE_TOOLS if not t.requires_write_permission]
-        self.assertTrue(
-            len(read_tools) > 0,
-            "Should have read-only tools available"
-        )
+        self.assertTrue(len(read_tools) > 0, "Should have read-only tools available")
 
         # Verify these include expected tools
         read_tool_names = [t.name for t in read_tools]
@@ -566,7 +564,7 @@ class ToolFilteringSpecificToolsTestCase(WebsocketFixtureBaseTestCase):
         self.assertIsNotNone(tool, "add_document_note tool should exist")
         self.assertTrue(
             tool.requires_write_permission,
-            "add_document_note should require write permission"
+            "add_document_note should require write permission",
         )
 
     def test_tf2_9_update_document_summary_requires_write(self) -> None:
@@ -577,7 +575,7 @@ class ToolFilteringSpecificToolsTestCase(WebsocketFixtureBaseTestCase):
         self.assertIsNotNone(tool, "update_document_summary tool should exist")
         self.assertTrue(
             tool.requires_write_permission,
-            "update_document_summary should require write permission"
+            "update_document_summary should require write permission",
         )
 
     def test_tf2_10_update_corpus_description_requires_write(self) -> None:
@@ -588,30 +586,32 @@ class ToolFilteringSpecificToolsTestCase(WebsocketFixtureBaseTestCase):
         self.assertIsNotNone(tool, "update_corpus_description tool should exist")
         self.assertTrue(
             tool.requires_write_permission,
-            "update_corpus_description should require write permission"
+            "update_corpus_description should require write permission",
         )
 
     def test_tf2_11_duplicate_annotations_requires_write(self) -> None:
         """TF2.11: duplicate_annotations_with_label requires write permission."""
         tool = next(
-            (t for t in AVAILABLE_TOOLS if t.name == "duplicate_annotations_with_label"),
-            None
+            (
+                t
+                for t in AVAILABLE_TOOLS
+                if t.name == "duplicate_annotations_with_label"
+            ),
+            None,
         )
         self.assertIsNotNone(tool, "duplicate_annotations_with_label tool should exist")
         self.assertTrue(
             tool.requires_write_permission,
-            "duplicate_annotations_with_label should require write permission"
+            "duplicate_annotations_with_label should require write permission",
         )
 
     def test_tf2_12_similarity_search_does_not_require_write(self) -> None:
         """TF2.12: similarity_search does NOT require write permission."""
-        tool = next(
-            (t for t in AVAILABLE_TOOLS if t.name == "similarity_search"), None
-        )
+        tool = next((t for t in AVAILABLE_TOOLS if t.name == "similarity_search"), None)
         self.assertIsNotNone(tool, "similarity_search tool should exist")
         self.assertFalse(
             tool.requires_write_permission,
-            "similarity_search should NOT require write permission"
+            "similarity_search should NOT require write permission",
         )
 
     def test_tf2_13_load_document_summary_does_not_require_write(self) -> None:
@@ -622,7 +622,7 @@ class ToolFilteringSpecificToolsTestCase(WebsocketFixtureBaseTestCase):
         self.assertIsNotNone(tool, "load_document_summary tool should exist")
         self.assertFalse(
             tool.requires_write_permission,
-            "load_document_summary should NOT require write permission"
+            "load_document_summary should NOT require write permission",
         )
 
 
@@ -641,17 +641,19 @@ class RuntimePermissionValidationTestCase(WebsocketFixtureBaseTestCase):
     execution even if filtering fails.
     """
 
-    def test_rt3_1_runtime_check_blocks_anonymous_on_private_document(self) -> None:
+    async def test_rt3_1_runtime_check_blocks_anonymous_on_private_document(
+        self,
+    ) -> None:
         """RT3.1: Runtime check blocks anonymous user on private document."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Make document private
         self.doc.is_public = False
-        self.doc.save()
+        await database_sync_to_async(self.doc.save)()
 
         # Create mock context with anonymous user (None)
         mock_ctx = MagicMock()
@@ -662,21 +664,21 @@ class RuntimePermissionValidationTestCase(WebsocketFixtureBaseTestCase):
         )
 
         with self.assertRaises(PermissionError) as context:
-            _check_user_permissions(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
         self.assertIn("Anonymous access denied", str(context.exception))
 
-    def test_rt3_2_runtime_check_blocks_anonymous_on_private_corpus(self) -> None:
+    async def test_rt3_2_runtime_check_blocks_anonymous_on_private_corpus(self) -> None:
         """RT3.2: Runtime check blocks anonymous user on private corpus."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Make corpus private
         self.corpus.is_public = False
-        self.corpus.save()
+        await database_sync_to_async(self.corpus.save)()
 
         mock_ctx = MagicMock()
         mock_ctx.deps = PydanticAIDependencies(
@@ -686,28 +688,28 @@ class RuntimePermissionValidationTestCase(WebsocketFixtureBaseTestCase):
         )
 
         with self.assertRaises(PermissionError) as context:
-            _check_user_permissions(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
         self.assertIn("Anonymous access denied", str(context.exception))
 
-    def test_rt3_3_runtime_check_blocks_user_without_document_read(self) -> None:
+    async def test_rt3_3_runtime_check_blocks_user_without_document_read(self) -> None:
         """RT3.3: Runtime check blocks user without READ on document."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Create user without permission
-        outsider = User.objects.create_user(
+        outsider = await database_sync_to_async(User.objects.create_user)(
             username="outsider_runtime_doc",
             password="pw123456!",
-            email="outsider_runtime_doc@example.com"
+            email="outsider_runtime_doc@example.com",
         )
 
         # Make document private
         self.doc.is_public = False
-        self.doc.save()
+        await database_sync_to_async(self.doc.save)()
 
         mock_ctx = MagicMock()
         mock_ctx.deps = PydanticAIDependencies(
@@ -717,28 +719,28 @@ class RuntimePermissionValidationTestCase(WebsocketFixtureBaseTestCase):
         )
 
         with self.assertRaises(PermissionError) as context:
-            _check_user_permissions(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
         self.assertIn("lacks READ permission on document", str(context.exception))
 
-    def test_rt3_4_runtime_check_blocks_user_without_corpus_read(self) -> None:
+    async def test_rt3_4_runtime_check_blocks_user_without_corpus_read(self) -> None:
         """RT3.4: Runtime check blocks user without READ on corpus."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Create user without permission
-        outsider = User.objects.create_user(
+        outsider = await database_sync_to_async(User.objects.create_user)(
             username="outsider_runtime_corpus",
             password="pw123456!",
-            email="outsider_runtime_corpus@example.com"
+            email="outsider_runtime_corpus@example.com",
         )
 
         # Make corpus private
         self.corpus.is_public = False
-        self.corpus.save()
+        await database_sync_to_async(self.corpus.save)()
 
         mock_ctx = MagicMock()
         mock_ctx.deps = PydanticAIDependencies(
@@ -748,17 +750,17 @@ class RuntimePermissionValidationTestCase(WebsocketFixtureBaseTestCase):
         )
 
         with self.assertRaises(PermissionError) as context:
-            _check_user_permissions(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
         self.assertIn("lacks READ permission on corpus", str(context.exception))
 
-    def test_rt3_5_runtime_check_allows_user_with_read_permission(self) -> None:
+    async def test_rt3_5_runtime_check_allows_user_with_read_permission(self) -> None:
         """RT3.5: Runtime check allows user with READ permission."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # User from fixture has permission
         mock_ctx = MagicMock()
@@ -769,21 +771,23 @@ class RuntimePermissionValidationTestCase(WebsocketFixtureBaseTestCase):
         )
 
         # Should not raise
-        _check_user_permissions(mock_ctx)
+        await _check_user_permissions(mock_ctx)
 
-    def test_rt3_6_runtime_check_allows_anonymous_on_public_resource(self) -> None:
+    async def test_rt3_6_runtime_check_allows_anonymous_on_public_resource(
+        self,
+    ) -> None:
         """RT3.6: Runtime check allows anonymous on public resource."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Make both public
         self.doc.is_public = True
-        self.doc.save()
+        await database_sync_to_async(self.doc.save)()
         self.corpus.is_public = True
-        self.corpus.save()
+        await database_sync_to_async(self.corpus.save)()
 
         mock_ctx = MagicMock()
         mock_ctx.deps = PydanticAIDependencies(
@@ -793,7 +797,7 @@ class RuntimePermissionValidationTestCase(WebsocketFixtureBaseTestCase):
         )
 
         # Should not raise
-        _check_user_permissions(mock_ctx)
+        await _check_user_permissions(mock_ctx)
 
 
 # =============================================================================
@@ -820,7 +824,7 @@ class CrossUserEscalationTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCase
         admin_user = await database_sync_to_async(User.objects.create_user)(
             username="admin_agent_creator",
             password="pw123456!",
-            email="admin_agent@example.com"
+            email="admin_agent@example.com",
         )
         admin_user.is_superuser = True
         await database_sync_to_async(admin_user.save)()
@@ -829,7 +833,7 @@ class CrossUserEscalationTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCase
         regular_user = await database_sync_to_async(User.objects.create_user)(
             username="regular_agent_user",
             password="pw123456!",
-            email="regular_agent@example.com"
+            email="regular_agent@example.com",
         )
         await database_sync_to_async(set_permissions_for_obj_to_user)(
             regular_user, self.corpus, [PermissionTypes.READ]
@@ -839,7 +843,7 @@ class CrossUserEscalationTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCase
         has_write = await _user_has_write_permission(regular_user.id, self.corpus)
         self.assertFalse(
             has_write,
-            "Regular user should NOT have write permission regardless of who created agent"
+            "Regular user should NOT have write permission regardless of who created agent",
         )
 
     async def test_pe4_2_shared_corpus_different_user_permissions(self) -> None:
@@ -852,12 +856,12 @@ class CrossUserEscalationTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCase
         read_user = await database_sync_to_async(User.objects.create_user)(
             username="shared_read_user",
             password="pw123456!",
-            email="shared_read@example.com"
+            email="shared_read@example.com",
         )
         crud_user = await database_sync_to_async(User.objects.create_user)(
             username="shared_crud_user",
             password="pw123456!",
-            email="shared_crud@example.com"
+            email="shared_crud@example.com",
         )
 
         # Grant different permissions
@@ -883,9 +887,7 @@ class CrossUserEscalationTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCase
 
         # Create User B with their own private document
         user_b = await database_sync_to_async(User.objects.create_user)(
-            username="user_b_owner",
-            password="pw123456!",
-            email="user_b@example.com"
+            username="user_b_owner", password="pw123456!", email="user_b@example.com"
         )
 
         # Create a private document owned by User B
@@ -918,17 +920,17 @@ class PermissionChangeMidSessionTestCase(WebsocketFixtureBaseTestCase):
         self,
     ) -> None:
         """PE4.4: User connects, permission revoked, sends message - tool execution blocked."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Create user with initial permission
         temp_user = await database_sync_to_async(User.objects.create_user)(
             username="temp_perm_user",
             password="pw123456!",
-            email="temp_perm@example.com"
+            email="temp_perm@example.com",
         )
         await database_sync_to_async(set_permissions_for_obj_to_user)(
             temp_user, self.corpus, [PermissionTypes.READ]
@@ -944,7 +946,7 @@ class PermissionChangeMidSessionTestCase(WebsocketFixtureBaseTestCase):
             corpus_id=self.corpus.id,
         )
         # Wrap sync function for async context
-        await database_sync_to_async(_check_user_permissions)(mock_ctx)  # Should not raise
+        await _check_user_permissions(mock_ctx)  # Should not raise
 
         # Revoke permission
         await database_sync_to_async(set_permissions_for_obj_to_user)(
@@ -953,15 +955,15 @@ class PermissionChangeMidSessionTestCase(WebsocketFixtureBaseTestCase):
 
         # Next check should fail (runtime check catches revoked permission)
         with self.assertRaises(PermissionError):
-            await database_sync_to_async(_check_user_permissions)(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
     async def test_pe4_5_document_made_private_mid_session(self) -> None:
         """PE4.5: Anonymous on public doc, doc made private - next tool call blocked."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Start with public document
         self.doc.is_public = True
@@ -975,7 +977,7 @@ class PermissionChangeMidSessionTestCase(WebsocketFixtureBaseTestCase):
         )
 
         # First check should pass (wrap sync function for async context)
-        await database_sync_to_async(_check_user_permissions)(mock_ctx)
+        await _check_user_permissions(mock_ctx)
 
         # Make document private
         self.doc.is_public = False
@@ -983,7 +985,7 @@ class PermissionChangeMidSessionTestCase(WebsocketFixtureBaseTestCase):
 
         # Next check should fail
         with self.assertRaises(PermissionError):
-            await database_sync_to_async(_check_user_permissions)(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
     async def test_pe4_6_permission_granted_mid_session_allows_next_call(
         self,
@@ -995,9 +997,7 @@ class PermissionChangeMidSessionTestCase(WebsocketFixtureBaseTestCase):
 
         # Create user with initial READ-only permission
         upgrade_user = await database_sync_to_async(User.objects.create_user)(
-            username="upgrade_user",
-            password="pw123456!",
-            email="upgrade@example.com"
+            username="upgrade_user", password="pw123456!", email="upgrade@example.com"
         )
         await database_sync_to_async(set_permissions_for_obj_to_user)(
             upgrade_user, self.corpus, [PermissionTypes.READ]
@@ -1031,17 +1031,17 @@ class ResourceSubstitutionAttackTestCase(WebsocketFixtureBaseTestCase):
         self,
     ) -> None:
         """PE4.7: Tool called with different document_id - blocked by context validation."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Create user B with their own private document
         user_b = await database_sync_to_async(User.objects.create_user)(
             username="user_b_doc_attack",
             password="pw123456!",
-            email="user_b_attack@example.com"
+            email="user_b_attack@example.com",
         )
         user_b_doc = await database_sync_to_async(Document.objects.create)(
             title="User B's Secret Document",
@@ -1059,23 +1059,23 @@ class ResourceSubstitutionAttackTestCase(WebsocketFixtureBaseTestCase):
 
         # Runtime check should block this (wrap sync function for async context)
         with self.assertRaises(PermissionError):
-            await database_sync_to_async(_check_user_permissions)(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
     async def test_pe4_8_cannot_access_different_corpus_via_tool_params(
         self,
     ) -> None:
         """PE4.8: Tool called with different corpus_id - blocked by context validation."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Create user B with their own private corpus
         user_b = await database_sync_to_async(User.objects.create_user)(
             username="user_b_corpus_attack",
             password="pw123456!",
-            email="user_b_corpus@example.com"
+            email="user_b_corpus@example.com",
         )
         user_b_corpus = await database_sync_to_async(Corpus.objects.create)(
             title="User B's Secret Corpus",
@@ -1093,7 +1093,7 @@ class ResourceSubstitutionAttackTestCase(WebsocketFixtureBaseTestCase):
 
         # Runtime check should block this (wrap sync function for async context)
         with self.assertRaises(PermissionError):
-            await database_sync_to_async(_check_user_permissions)(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
     async def test_pe4_9_tool_params_cannot_override_context_ids(self) -> None:
         """PE4.9: Malicious tool args try to change target - context IDs take precedence."""
@@ -1174,7 +1174,7 @@ class FullConversationFlowTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCas
         read_user = await database_sync_to_async(User.objects.create_user)(
             username="integration_read_user",
             password="pw123456!",
-            email="integration_read@example.com"
+            email="integration_read@example.com",
         )
         await database_sync_to_async(set_permissions_for_obj_to_user)(
             read_user, self.corpus, [PermissionTypes.READ]
@@ -1239,7 +1239,9 @@ class FullConversationFlowTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCas
 
         communicator = WebsocketCommunicator(self.application, ws_path)
         connected, _ = await communicator.connect()
-        self.assertTrue(connected, "Anonymous should be able to connect to public corpus")
+        self.assertTrue(
+            connected, "Anonymous should be able to connect to public corpus"
+        )
         await communicator.disconnect()
 
     async def test_it5_4_permission_denied_error_message_flow(self) -> None:
@@ -1248,7 +1250,7 @@ class FullConversationFlowTestCase(AgentConfigMixin, WebsocketFixtureBaseTestCas
         outsider = await database_sync_to_async(User.objects.create_user)(
             username="integration_outsider",
             password="pw123456!",
-            email="integration_outsider@example.com"
+            email="integration_outsider@example.com",
         )
         outsider_token = await database_sync_to_async(get_token)(user=outsider)
 
@@ -1279,17 +1281,17 @@ class MultiTurnConversationTestCase(WebsocketFixtureBaseTestCase):
 
     async def test_it5_5_multi_turn_maintains_permission_context(self) -> None:
         """IT5.5: Multiple messages in session - each turn respects original permissions."""
+
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # Create user with READ permission
         multi_turn_user = await database_sync_to_async(User.objects.create_user)(
             username="multi_turn_user",
             password="pw123456!",
-            email="multi_turn@example.com"
+            email="multi_turn@example.com",
         )
         await database_sync_to_async(set_permissions_for_obj_to_user)(
             multi_turn_user, self.corpus, [PermissionTypes.READ]
@@ -1305,7 +1307,7 @@ class MultiTurnConversationTestCase(WebsocketFixtureBaseTestCase):
             )
 
             # Each turn should pass permission check (wrap sync function for async context)
-            await database_sync_to_async(_check_user_permissions)(mock_ctx)  # Should not raise
+            await _check_user_permissions(mock_ctx)  # Should not raise
 
         self.assertTrue(True, "All turns respected permissions")
 
@@ -1313,24 +1315,25 @@ class MultiTurnConversationTestCase(WebsocketFixtureBaseTestCase):
         self,
     ) -> None:
         """IT5.6: Load existing conversation - current user's permissions, not creator's."""
+
         from opencontractserver.conversations.models import Conversation
         from opencontractserver.llms.tools.pydantic_ai_tools import (
             PydanticAIDependencies,
             _check_user_permissions,
         )
-        from unittest.mock import MagicMock
 
         # User A creates a conversation
         user_a = await database_sync_to_async(User.objects.create_user)(
             username="convo_creator",
             password="pw123456!",
-            email="convo_creator@example.com"
+            email="convo_creator@example.com",
         )
         await database_sync_to_async(set_permissions_for_obj_to_user)(
             user_a, self.corpus, [PermissionTypes.CRUD]
         )
 
-        conversation = await Conversation.objects.acreate(
+        # Conversation exists but user B's permissions are what matters for tool execution
+        await Conversation.objects.acreate(
             title="Test Conversation",
             creator=user_a,
             chat_with_corpus=self.corpus,
@@ -1340,7 +1343,7 @@ class MultiTurnConversationTestCase(WebsocketFixtureBaseTestCase):
         user_b = await database_sync_to_async(User.objects.create_user)(
             username="convo_resumer",
             password="pw123456!",
-            email="convo_resumer@example.com"
+            email="convo_resumer@example.com",
         )
         # User B has NO permission on the corpus
         self.corpus.is_public = False
@@ -1357,7 +1360,7 @@ class MultiTurnConversationTestCase(WebsocketFixtureBaseTestCase):
         # Should fail because User B doesn't have permission
         # even though User A created the conversation (wrap sync function for async context)
         with self.assertRaises(PermissionError):
-            await database_sync_to_async(_check_user_permissions)(mock_ctx)
+            await _check_user_permissions(mock_ctx)
 
 
 # =============================================================================
@@ -1391,7 +1394,7 @@ class ToolRegistryPermissionFlagsTestCase(WebsocketFixtureBaseTestCase):
         self.assertEqual(
             len(tools_needing_attention),
             0,
-            f"These approval-required tools are missing requires_write_permission flag: {tools_needing_attention}"
+            f"These approval-required tools are missing requires_write_permission flag: {tools_needing_attention}",
         )
 
     def test_known_write_tools_all_flagged(self) -> None:
@@ -1421,7 +1424,7 @@ class ToolRegistryPermissionFlagsTestCase(WebsocketFixtureBaseTestCase):
         self.assertEqual(
             len(missing_flag),
             0,
-            f"These known write tools are missing requires_write_permission flag: {missing_flag}"
+            f"These known write tools are missing requires_write_permission flag: {missing_flag}",
         )
 
     def test_known_read_tools_not_flagged(self) -> None:
@@ -1458,5 +1461,5 @@ class ToolRegistryPermissionFlagsTestCase(WebsocketFixtureBaseTestCase):
         self.assertEqual(
             len(incorrectly_flagged),
             0,
-            f"These read-only tools should NOT have requires_write_permission flag: {incorrectly_flagged}"
+            f"These read-only tools should NOT have requires_write_permission flag: {incorrectly_flagged}",
         )

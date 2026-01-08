@@ -5,6 +5,53 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-08
+
+### Security
+
+#### WebSocket Agent Permission Vulnerability Fixed (PR #792)
+- **CRITICAL**: Fixed permission bypass in legacy WebSocket consumers
+  - `config/websocket/consumers/corpus_conversation.py` - No permission checks
+  - `config/websocket/consumers/document_conversation.py` - No permission checks
+  - `config/websocket/consumers/standalone_document_conversation.py` - No permission checks
+  - **Impact**: Any authenticated user could access ANY document/corpus via WebSocket
+- **Solution**: Migrated to `UnifiedAgentConsumer` with three-layer permission model:
+  - Consumer layer validates READ permission at WebSocket connect time (`config/websocket/consumers/unified_agent_conversation.py:93-187`)
+  - Tool filtering layer removes write tools for read-only users (`opencontractserver/llms/agents/agent_factory.py:178-210`)
+  - Runtime layer validates permissions before every tool execution (`opencontractserver/llms/tools/pydantic_ai_tools.py:20-111`)
+- **Defense-in-depth**: Added `_check_user_permissions()` function that validates user has READ permission on document/corpus before any tool execution
+- **Tool permission flags**: Added `requires_write_permission` flag to `CoreTool` (`opencontractserver/llms/tools/tool_factory.py:45-50`)
+- **Write tools protected**: `add_document_note`, `update_document_summary`, `update_corpus_description`, `duplicate_annotations`
+
+### Added
+
+#### WebSocket Permission Escalation Tests (49 tests)
+- **Test file**: `opencontractserver/tests/websocket/test_agent_permission_escalation.py`
+- **Consumer-level permission tests** (13 tests): Validates connection-time permission checks for corpus, document, and combined contexts
+- **Tool filtering tests** (13 tests): Verifies write tools filtered for read-only users and anonymous access
+- **Runtime permission validation tests** (6 tests): Defense-in-depth `_check_user_permissions()` function
+- **Permission escalation scenarios** (9 tests): Cross-user access, mid-session permission changes, resource substitution attacks
+- **Integration tests** (8 tests): Full conversation flows with permission verification
+
+### Removed
+
+#### Legacy WebSocket Consumers (Security Cleanup)
+- **Deleted**: `config/websocket/consumers/corpus_conversation.py` (~330 lines)
+- **Deleted**: `config/websocket/consumers/document_conversation.py` (~610 lines)
+- **Deleted**: `config/websocket/consumers/standalone_document_conversation.py` (~530 lines)
+- **Deleted**: `opencontractserver/tests/test_websocket_corpus_consumer.py` - Obsolete tests for deleted consumer
+- **Deleted**: `opencontractserver/tests/test_websocket_document_consumer.py` - Obsolete tests for deleted consumer
+- **Deleted**: `opencontractserver/tests/websocket/test_standalone_document_consumer.py` - Obsolete tests for deleted consumer
+- **Updated**: `config/asgi.py` - Removed legacy WebSocket routes
+
+### Changed
+
+#### Frontend WebSocket Migration
+- **Updated**: `frontend/src/components/chat/get_websockets.ts` - All WebSocket URLs now use unified endpoint
+- **Updated**: `frontend/src/components/knowledge_base/document/utils.ts` - Document chat uses unified endpoint
+
+---
+
 ## [Unreleased] - 2026-01-04
 
 ### Changed

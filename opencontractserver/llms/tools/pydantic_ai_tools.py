@@ -17,7 +17,7 @@ from opencontractserver.llms.vector_stores.core_vector_stores import (
 logger = logging.getLogger(__name__)
 
 
-def _check_user_permissions(
+async def _check_user_permissions(
     ctx: "RunContext[PydanticAIDependencies]",
 ) -> None:
     """
@@ -33,6 +33,8 @@ def _check_user_permissions(
     Raises:
         PermissionError: If user lacks READ permission on document or corpus
     """
+    from channels.db import database_sync_to_async
+
     deps = ctx.deps
     if deps is None:
         return  # No context = no check (shouldn't happen in practice)
@@ -56,7 +58,7 @@ def _check_user_permissions(
         # (Should already be validated at consumer layer, but double-check)
         if document_id:
             try:
-                doc = Document.objects.get(pk=document_id)
+                doc = await database_sync_to_async(Document.objects.get)(pk=document_id)
                 if not doc.is_public:
                     logger.warning(
                         f"Anonymous tool access denied to private document {document_id}"
@@ -67,7 +69,7 @@ def _check_user_permissions(
 
         if corpus_id:
             try:
-                corpus = Corpus.objects.get(pk=corpus_id)
+                corpus = await database_sync_to_async(Corpus.objects.get)(pk=corpus_id)
                 if not corpus.is_public:
                     logger.warning(
                         f"Anonymous tool access denied to private corpus {corpus_id}"
@@ -79,14 +81,17 @@ def _check_user_permissions(
 
     # Authenticated user - check actual permissions
     try:
-        user = User.objects.get(pk=user_id)
+        user = await database_sync_to_async(User.objects.get)(pk=user_id)
     except User.DoesNotExist:
         raise PermissionError(f"User {user_id} not found")
 
     if document_id:
         try:
-            doc = Document.objects.get(pk=document_id)
-            if not user_has_permission_for_obj(user, doc, PermissionTypes.READ):
+            doc = await database_sync_to_async(Document.objects.get)(pk=document_id)
+            has_perm = await database_sync_to_async(user_has_permission_for_obj)(
+                user, doc, PermissionTypes.READ
+            )
+            if not has_perm:
                 logger.warning(
                     f"User {user_id} tool access denied - lacks READ on document {document_id}"
                 )
@@ -98,8 +103,11 @@ def _check_user_permissions(
 
     if corpus_id:
         try:
-            corpus = Corpus.objects.get(pk=corpus_id)
-            if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
+            corpus = await database_sync_to_async(Corpus.objects.get)(pk=corpus_id)
+            has_perm = await database_sync_to_async(user_has_permission_for_obj)(
+                user, corpus, PermissionTypes.READ
+            )
+            if not has_perm:
                 logger.warning(
                     f"User {user_id} tool access denied - lacks READ on corpus {corpus_id}"
                 )
@@ -261,7 +269,7 @@ class PydanticAIToolWrapper:
                 """Async wrapper for PydanticAI tools."""
                 # Defense-in-depth: validate user permissions BEFORE any tool execution
                 # This prevents permission escalation via agents
-                _check_user_permissions(ctx)
+                await _check_user_permissions(ctx)
 
                 # Trigger approval gate *before* attempting execution.
                 _maybe_raise(ctx, *args, **kwargs)
@@ -296,7 +304,7 @@ class PydanticAIToolWrapper:
                 """Sync to async wrapper for PydanticAI tools."""
                 # Defense-in-depth: validate user permissions BEFORE any tool execution
                 # This prevents permission escalation via agents
-                _check_user_permissions(ctx)
+                await _check_user_permissions(ctx)
 
                 _maybe_raise(ctx, *args, **kwargs)
 

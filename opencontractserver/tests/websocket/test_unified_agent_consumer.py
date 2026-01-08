@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from urllib.parse import quote
 
 import pytest
@@ -88,9 +88,12 @@ class UnifiedAgentConsumerPermissionTestCase(WebsocketFixtureBaseTestCase):
         # Create another user who doesn't own the corpus
         OtherUser = get_user_model()
         other_user = await database_sync_to_async(OtherUser.objects.create_user)(
-            username="otheruser_corpus", password="pw123456!", email="other_corpus@example.com"
+            username="otheruser_corpus",
+            password="pw123456!",
+            email="other_corpus@example.com",
         )
         from graphql_jwt.shortcuts import get_token
+
         other_token = await database_sync_to_async(get_token)(user=other_user)
 
         # Make corpus private
@@ -156,9 +159,12 @@ class UnifiedAgentConsumerPermissionTestCase(WebsocketFixtureBaseTestCase):
         # Create another user and a private document they don't own
         OtherUser = get_user_model()
         other_user = await database_sync_to_async(OtherUser.objects.create_user)(
-            username="otheruser_doc", password="pw123456!", email="other_doc@example.com"
+            username="otheruser_doc",
+            password="pw123456!",
+            email="other_doc@example.com",
         )
         from graphql_jwt.shortcuts import get_token
+
         other_token = await database_sync_to_async(get_token)(user=other_user)
 
         # Make doc private (owned by self.user, not other_user)
@@ -217,9 +223,7 @@ class UnifiedAgentConsumerContextTestCase(WebsocketFixtureBaseTestCase):
     async def test_corpus_only_context_uses_corpus_agent(self) -> None:
         """Corpus-only context should use default-corpus-agent."""
         # Ensure agent config exists
-        await database_sync_to_async(
-            AgentConfiguration.objects.get_or_create
-        )(
+        await database_sync_to_async(AgentConfiguration.objects.get_or_create)(
             slug="default-corpus-agent",
             defaults={
                 "name": "Default Corpus Agent",
@@ -239,9 +243,7 @@ class UnifiedAgentConsumerContextTestCase(WebsocketFixtureBaseTestCase):
     async def test_document_only_context_uses_document_agent(self) -> None:
         """Document-only context should use default-document-agent."""
         # Ensure agent config exists
-        await database_sync_to_async(
-            AgentConfiguration.objects.get_or_create
-        )(
+        await database_sync_to_async(AgentConfiguration.objects.get_or_create)(
             slug="default-document-agent",
             defaults={
                 "name": "Default Document Agent",
@@ -264,9 +266,7 @@ class UnifiedAgentConsumerContextTestCase(WebsocketFixtureBaseTestCase):
     async def test_document_with_corpus_context(self) -> None:
         """Document with corpus context should connect and use document agent."""
         # Ensure agent config exists
-        await database_sync_to_async(
-            AgentConfiguration.objects.get_or_create
-        )(
+        await database_sync_to_async(AgentConfiguration.objects.get_or_create)(
             slug="default-document-agent",
             defaults={
                 "name": "Default Document Agent",
@@ -293,9 +293,7 @@ class UnifiedAgentConsumerContextTestCase(WebsocketFixtureBaseTestCase):
     async def test_explicit_agent_id_overrides_default(self) -> None:
         """Explicit agent_id should use that specific agent."""
         # Create a custom agent
-        custom_agent = await database_sync_to_async(
-            AgentConfiguration.objects.create
-        )(
+        custom_agent = await database_sync_to_async(AgentConfiguration.objects.create)(
             slug="custom-test-agent",
             name="Custom Test Agent",
             is_active=True,
@@ -436,9 +434,7 @@ class UnifiedAgentConsumerStreamingTestCase(WebsocketFixtureBaseTestCase):
     async def test_streaming_contract(self) -> None:
         """Streaming should follow the expected message contract."""
         # Ensure agent config exists
-        await database_sync_to_async(
-            AgentConfiguration.objects.get_or_create
-        )(
+        await database_sync_to_async(AgentConfiguration.objects.get_or_create)(
             slug="default-corpus-agent",
             defaults={
                 "name": "Default Corpus Agent",
@@ -478,9 +474,7 @@ class UnifiedAgentConsumerStreamingTestCase(WebsocketFixtureBaseTestCase):
     async def test_stream_includes_thought_and_sources(self) -> None:
         """Stream should surface THOUGHT and SOURCES events."""
         # Ensure agent config exists
-        await database_sync_to_async(
-            AgentConfiguration.objects.get_or_create
-        )(
+        await database_sync_to_async(AgentConfiguration.objects.get_or_create)(
             slug="default-corpus-agent",
             defaults={
                 "name": "Default Corpus Agent",
@@ -528,9 +522,7 @@ class UnifiedAgentConsumerStreamingTestCase(WebsocketFixtureBaseTestCase):
     async def test_load_existing_conversation(self) -> None:
         """Loading an existing conversation should pass conversation_id to agent."""
         # Ensure agent config exists
-        await database_sync_to_async(
-            AgentConfiguration.objects.get_or_create
-        )(
+        await database_sync_to_async(AgentConfiguration.objects.get_or_create)(
             slug="default-corpus-agent",
             defaults={
                 "name": "Default Corpus Agent",
@@ -604,7 +596,9 @@ class UnifiedAgentConsumerTitleGenerationTestCase(WebsocketFixtureBaseTestCase):
 
             consumer = UnifiedAgentConsumer()
             consumer.session_id = "test-session"
-            title = await consumer._generate_conversation_title("What is this corpus about?")
+            title = await consumer._generate_conversation_title(
+                "What is this corpus about?"
+            )
             self.assertEqual(title, "Corpus Analysis")
 
     @override_settings(
