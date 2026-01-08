@@ -3,18 +3,29 @@ MCP Telemetry module.
 
 Provides telemetry tracking for MCP (Model Context Protocol) tool and resource usage.
 Tracks usage statistics without capturing query content or outputs for privacy.
+
+Privacy notes:
+- IP addresses are hashed with a secret salt before being stored
+- Raw IP addresses are never sent to PostHog or stored
+- Only the truncated hash is used as a client identifier
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Generator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
 from config.telemetry import record_event
 
 logger = logging.getLogger(__name__)
+
+# Length of the truncated IP hash (16 hex chars = 64 bits of entropy)
+# Sufficient for unique client identification without storing full hash
+IP_HASH_LENGTH = 16
 
 # Context variable to store request metadata (client IP, transport type)
 # This allows the telemetry functions to access request context without
@@ -35,13 +46,11 @@ def set_request_context(
     request metadata that will be included in telemetry events.
 
     Args:
-        client_ip: The client's IP address (will be hashed for privacy,
-                   raw IP passed to PostHog for geolocation only)
+        client_ip: The client's IP address (will be hashed for privacy)
         transport: The transport type (e.g., 'streamable_http', 'sse', 'stdio')
     """
     _mcp_request_context.set(
         {
-            "client_ip": client_ip,  # Raw IP for PostHog geolocation ($ip property)
             "client_ip_hash": _hash_ip(client_ip) if client_ip else None,
             "transport": transport,
         }
@@ -51,6 +60,29 @@ def set_request_context(
 def clear_request_context() -> None:
     """Clear the request context after handling a request."""
     _mcp_request_context.set({})
+
+
+@contextmanager
+def isolated_telemetry_context() -> Generator[None]:
+    """
+    Context manager that ensures telemetry context is isolated.
+
+    Clears context on entry and exit, guaranteeing cleanup even if
+    the test crashes. Use this in tests to prevent context leakage
+    between test cases.
+
+    Example:
+        def test_something(self):
+            with isolated_telemetry_context():
+                set_request_context(client_ip="1.2.3.4", transport="test")
+                # test code here
+            # context is automatically cleared
+    """
+    clear_request_context()
+    try:
+        yield
+    finally:
+        clear_request_context()
 
 
 def _hash_ip(ip: str) -> str:
@@ -65,12 +97,12 @@ def _hash_ip(ip: str) -> str:
         ip: The IP address to hash
 
     Returns:
-        First 16 characters of the hex-encoded SHA-256 hash
+        First IP_HASH_LENGTH characters of the hex-encoded SHA-256 hash
     """
     from django.conf import settings
 
     salt = getattr(settings, "TELEMETRY_IP_SALT", "default-salt")
-    return hashlib.sha256(f"{salt}:{ip}".encode()).hexdigest()[:16]
+    return hashlib.sha256(f"{salt}:{ip}".encode()).hexdigest()[:IP_HASH_LENGTH]
 
 
 def _get_request_context() -> dict[str, Any]:
@@ -102,14 +134,9 @@ def record_mcp_tool_call(
         "transport": context.get("transport", "unknown"),
     }
 
-    # Include hashed client IP if available
+    # Include hashed client IP if available (privacy-preserving)
     if context.get("client_ip_hash"):
         properties["client_ip_hash"] = context["client_ip_hash"]
-
-    # Include raw IP for PostHog geolocation ($ip is a special PostHog property)
-    # PostHog will resolve this to country/region and discard the raw IP
-    if context.get("client_ip"):
-        properties["$ip"] = context["client_ip"]
 
     # Include error type if call failed
     if not success and error_type:
@@ -142,13 +169,9 @@ def record_mcp_resource_read(
         "transport": context.get("transport", "unknown"),
     }
 
-    # Include hashed client IP if available
+    # Include hashed client IP if available (privacy-preserving)
     if context.get("client_ip_hash"):
         properties["client_ip_hash"] = context["client_ip_hash"]
-
-    # Include raw IP for PostHog geolocation ($ip is a special PostHog property)
-    if context.get("client_ip"):
-        properties["$ip"] = context["client_ip"]
 
     # Include error type if read failed
     if not success and error_type:
@@ -160,15 +183,21 @@ def record_mcp_resource_read(
 def record_mcp_request(
     endpoint: str,
     method: str = "POST",
+    success: bool = True,
+    error_type: str | None = None,
 ) -> bool:
     """
     Record a telemetry event for an MCP endpoint request.
 
     This tracks overall MCP traffic without tool/resource specifics.
+    Should be called for both successful and failed requests to enable
+    error rate calculations.
 
     Args:
         endpoint: The MCP endpoint path (e.g., '/mcp', '/sse')
         method: HTTP method used
+        success: Whether the request succeeded
+        error_type: Type of error if the request failed
 
     Returns:
         True if event was successfully queued, False otherwise
@@ -178,16 +207,17 @@ def record_mcp_request(
     properties = {
         "endpoint": endpoint,
         "method": method,
+        "success": success,
         "transport": context.get("transport", "unknown"),
     }
 
-    # Include hashed client IP if available
+    # Include hashed client IP if available (privacy-preserving)
     if context.get("client_ip_hash"):
         properties["client_ip_hash"] = context["client_ip_hash"]
 
-    # Include raw IP for PostHog geolocation ($ip is a special PostHog property)
-    if context.get("client_ip"):
-        properties["$ip"] = context["client_ip"]
+    # Include error type if request failed
+    if not success and error_type:
+        properties["error_type"] = error_type
 
     return record_event("mcp_request", properties)
 

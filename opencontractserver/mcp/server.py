@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import re
+from typing import Any, Callable
 
 from asgiref.sync import sync_to_async
 from mcp.server import Server
@@ -55,7 +56,7 @@ from .tools import (
 logger = logging.getLogger(__name__)
 
 # Map tool names to implementations - at module level for testability
-TOOL_HANDLERS = {
+TOOL_HANDLERS: dict[str, Callable[..., Any]] = {
     "list_public_corpuses": list_public_corpuses,
     "list_documents": list_documents,
     "get_document_text": get_document_text,
@@ -474,10 +475,19 @@ def create_mcp_asgi_app():
             manager = get_session_manager()
             try:
                 await manager.handle_request(scope, receive, send)
+                # Record successful request telemetry
+                record_mcp_request(
+                    "/mcp", method=scope.get("method", "POST"), success=True
+                )
             except Exception as e:
                 logger.error(f"MCP Streamable HTTP request error: {e}")
                 # Record error telemetry before clearing context
-                record_mcp_request("/mcp", method=scope.get("method", "POST"))
+                record_mcp_request(
+                    "/mcp",
+                    method=scope.get("method", "POST"),
+                    success=False,
+                    error_type=type(e).__name__,
+                )
                 # Return error response
                 await send(
                     {
@@ -503,10 +513,19 @@ def create_mcp_asgi_app():
 
             try:
                 await sse_starlette_app(scope, receive, send)
+                # Record successful request telemetry
+                record_mcp_request(
+                    "/sse", method=scope.get("method", "GET"), success=True
+                )
             except Exception as e:
                 logger.error(f"MCP SSE request error: {e}")
                 # Record error telemetry before clearing context
-                record_mcp_request("/sse", method=scope.get("method", "GET"))
+                record_mcp_request(
+                    "/sse",
+                    method=scope.get("method", "GET"),
+                    success=False,
+                    error_type=type(e).__name__,
+                )
                 # Return error response
                 await send(
                     {
@@ -526,35 +545,39 @@ def create_mcp_asgi_app():
 
         else:
             # Return 404 with helpful information about available endpoints
-            await send(
-                {
-                    "type": "http.response.start",
-                    "status": 404,
-                    "headers": [[b"content-type", b"application/json"]],
-                }
-            )
-            await send(
-                {
-                    "type": "http.response.body",
-                    "body": json.dumps(
-                        {
-                            "error": "Not found",
-                            "endpoints": {
-                                "streamable_http": {
-                                    "path": "/mcp",
-                                    "methods": ["POST", "GET"],
-                                    "description": "MCP Streamable HTTP endpoint (recommended)",
+            try:
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 404,
+                        "headers": [[b"content-type", b"application/json"]],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": json.dumps(
+                            {
+                                "error": "Not found",
+                                "endpoints": {
+                                    "streamable_http": {
+                                        "path": "/mcp",
+                                        "methods": ["POST", "GET"],
+                                        "description": "MCP Streamable HTTP endpoint (recommended)",
+                                    },
+                                    "sse": {
+                                        "path": "/sse",
+                                        "methods": ["GET"],
+                                        "description": "MCP SSE endpoint (deprecated, for backward compatibility)",
+                                    },
                                 },
-                                "sse": {
-                                    "path": "/sse",
-                                    "methods": ["GET"],
-                                    "description": "MCP SSE endpoint (deprecated, for backward compatibility)",
-                                },
-                            },
-                        }
-                    ).encode(),
-                }
-            )
+                            }
+                        ).encode(),
+                    }
+                )
+            finally:
+                # Ensure context is cleared even for 404 responses
+                clear_request_context()
 
     return app
 
