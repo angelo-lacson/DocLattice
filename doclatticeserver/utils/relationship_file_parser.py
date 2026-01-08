@@ -25,6 +25,7 @@ Notes:
 
 import csv
 import logging
+import re
 from dataclasses import dataclass, field
 from io import StringIO
 from typing import Optional
@@ -98,27 +99,24 @@ def normalize_path(path: str) -> str:
     if not path:
         return ""
 
-    path = path.strip()
+    normalized = path.strip()
 
-    # Normalize separators
-    path = path.replace("\\", "/")
+    # Normalize separators (backslash to forward slash)
+    normalized = normalized.replace("\\", "/")
 
-    # Remove leading ./ (current directory reference)
-    while path.startswith("./"):
-        path = path[2:]
+    # Remove leading ./ (current directory references) using regex for efficiency
+    normalized = re.sub(r"^(\./)+", "", normalized)
 
-    # Remove duplicate slashes
-    while "//" in path:
-        path = path.replace("//", "/")
+    # Remove duplicate slashes using regex (O(n) instead of O(n*m) with while loop)
+    normalized = re.sub(r"/+", "/", normalized)
 
-    # Remove leading slash for consistent processing
-    while path.startswith("/"):
-        path = path[1:]
+    # Remove leading slashes
+    normalized = normalized.lstrip("/")
 
     # Ensure leading /
-    path = "/" + path
+    normalized = "/" + normalized
 
-    return path
+    return normalized
 
 
 def parse_relationship_file(
