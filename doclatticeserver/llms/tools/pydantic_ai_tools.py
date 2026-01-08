@@ -27,6 +27,17 @@ async def _check_user_permissions(
     ensure an agent cannot escalate beyond the calling user's permissions.
     Even if the consumer layer has a bug, tools won't leak data.
 
+    Performance Note:
+        This function intentionally does NOT cache permission results. Each tool
+        call triggers fresh DB queries to ensure we catch permission revocations
+        that occur mid-session (e.g., admin removes user's access while they're
+        chatting). The security benefit of detecting revoked permissions in
+        real-time outweighs the ~2-4 DB queries per tool call overhead.
+
+        Tests verify this behavior:
+        - test_pe4_4_permission_revoked_mid_session_blocks_next_call
+        - test_pe4_5_document_made_private_mid_session
+
     Args:
         ctx: The RunContext containing PydanticAIDependencies with user/resource IDs
 
