@@ -2430,3 +2430,10 @@ class MCPTelemetryIntegrationTest(TestCase):
                 mock_record.assert_called_once_with(
                     "unknown", success=False, error_type="ValueError"
                 )
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
