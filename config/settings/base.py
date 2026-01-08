@@ -1020,7 +1020,9 @@ POSTHOG_API_KEY = env.str(
 POSTHOG_HOST = env.str("POSTHOG_HOST", default="https://us.i.posthog.com")
 # Secret salt for IP hashing - prevents rainbow table attacks on hashed IPs
 # Generate a unique salt for your deployment: python -c "import secrets; print(secrets.token_hex(32))"
-TELEMETRY_IP_SALT = env.str("TELEMETRY_IP_SALT", default="opencontracts-default-ip-salt-change-in-production")
+TELEMETRY_IP_SALT = env.str(
+    "TELEMETRY_IP_SALT", default="opencontracts-default-ip-salt-change-in-production"
+)
 MODE = "LOCAL"
 
 # MCP Server Configuration

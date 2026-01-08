@@ -2223,7 +2223,6 @@ class MCPTelemetryIntegrationTest(TestCase):
         from unittest.mock import AsyncMock, patch
 
         from opencontractserver.mcp.server import create_mcp_asgi_app
-        from opencontractserver.mcp.telemetry import _get_request_context
 
         async def run_test():
             captured_context = None
@@ -2297,7 +2296,7 @@ class MCPTelemetryIntegrationTest(TestCase):
         import asyncio
         from unittest.mock import patch
 
-        from opencontractserver.mcp.server import create_mcp_server
+        from opencontractserver.mcp.server import call_tool_handler
         from opencontractserver.mcp.telemetry import set_request_context
 
         async def run_test():
@@ -2308,15 +2307,13 @@ class MCPTelemetryIntegrationTest(TestCase):
             ) as mock_record:
                 mock_record.return_value = True
 
-                server = create_mcp_server()
-                # Get the call_tool handler
-                call_tool = server._call_tool_handler
-
-                # Call list_public_corpuses tool
-                result = await call_tool("list_public_corpuses", {})
+                # Call list_public_corpuses tool using module-level handler
+                result = await call_tool_handler("list_public_corpuses", {})
 
                 # Verify telemetry was recorded
-                mock_record.assert_called_once_with("list_public_corpuses", success=True)
+                mock_record.assert_called_once_with(
+                    "list_public_corpuses", success=True
+                )
 
                 return result
 
@@ -2333,7 +2330,7 @@ class MCPTelemetryIntegrationTest(TestCase):
         import asyncio
         from unittest.mock import patch
 
-        from opencontractserver.mcp.server import create_mcp_server
+        from opencontractserver.mcp.server import call_tool_handler
         from opencontractserver.mcp.telemetry import set_request_context
 
         async def run_test():
@@ -2344,12 +2341,9 @@ class MCPTelemetryIntegrationTest(TestCase):
             ) as mock_record:
                 mock_record.return_value = True
 
-                server = create_mcp_server()
-                call_tool = server._call_tool_handler
-
-                # Call with unknown tool
+                # Call with unknown tool using module-level handler
                 try:
-                    await call_tool("unknown_tool", {})
+                    await call_tool_handler("unknown_tool", {})
                 except ValueError:
                     pass
 
@@ -2370,7 +2364,7 @@ class MCPTelemetryIntegrationTest(TestCase):
         import asyncio
         from unittest.mock import patch
 
-        from opencontractserver.mcp.server import create_mcp_server
+        from opencontractserver.mcp.server import read_resource_handler
         from opencontractserver.mcp.telemetry import set_request_context
 
         async def run_test():
@@ -2378,15 +2372,15 @@ class MCPTelemetryIntegrationTest(TestCase):
 
             with patch(
                 "opencontractserver.mcp.server.record_mcp_resource_read"
-            ) as mock_record:
+            ) as mock_record, patch(
+                "opencontractserver.mcp.server.get_corpus_resource"
+            ) as mock_get_corpus:
                 mock_record.return_value = True
+                mock_get_corpus.return_value = '{"title": "Test Corpus"}'
 
-                server = create_mcp_server()
-                read_resource = server._read_resource_handler
-
-                # Read corpus resource
-                uri = f"corpus://{self.corpus.slug}"
-                result = await read_resource(uri)
+                # Read corpus resource using module-level handler
+                uri = "corpus://test-corpus-slug"
+                result = await read_resource_handler(uri)
 
                 # Verify telemetry was recorded
                 mock_record.assert_called_once_with("corpus", success=True)
@@ -2406,7 +2400,7 @@ class MCPTelemetryIntegrationTest(TestCase):
         import asyncio
         from unittest.mock import patch
 
-        from opencontractserver.mcp.server import create_mcp_server
+        from opencontractserver.mcp.server import read_resource_handler
         from opencontractserver.mcp.telemetry import set_request_context
 
         async def run_test():
@@ -2417,12 +2411,9 @@ class MCPTelemetryIntegrationTest(TestCase):
             ) as mock_record:
                 mock_record.return_value = True
 
-                server = create_mcp_server()
-                read_resource = server._read_resource_handler
-
-                # Try to read invalid URI
+                # Try to read invalid URI using module-level handler
                 try:
-                    await read_resource("invalid://uri")
+                    await read_resource_handler("invalid://uri")
                 except ValueError:
                     pass
 

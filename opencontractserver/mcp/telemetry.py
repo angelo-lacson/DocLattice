@@ -39,11 +39,13 @@ def set_request_context(
                    raw IP passed to PostHog for geolocation only)
         transport: The transport type (e.g., 'streamable_http', 'sse', 'stdio')
     """
-    _mcp_request_context.set({
-        "client_ip": client_ip,  # Raw IP for PostHog geolocation ($ip property)
-        "client_ip_hash": _hash_ip(client_ip) if client_ip else None,
-        "transport": transport,
-    })
+    _mcp_request_context.set(
+        {
+            "client_ip": client_ip,  # Raw IP for PostHog geolocation ($ip property)
+            "client_ip_hash": _hash_ip(client_ip) if client_ip else None,
+            "transport": transport,
+        }
+    )
 
 
 def clear_request_context() -> None:
