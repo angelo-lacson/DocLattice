@@ -1927,9 +1927,9 @@ class MCPTelemetryTest(TestCase):
 
         context = _get_request_context()
         self.assertEqual(context["transport"], "streamable_http")
-        # Raw IP is stored for PostHog geolocation
-        self.assertEqual(context["client_ip"], "10.0.0.1")
-        # Hashed IP is also stored for privacy-preserving unique user counting
+        # Only hashed IP is stored for privacy-preserving unique user counting
+        # Raw IP is never stored (GDPR compliance)
+        self.assertNotIn("client_ip", context)
         self.assertIsNotNone(context["client_ip_hash"])
         self.assertNotEqual(context["client_ip_hash"], "10.0.0.1")
         self.assertEqual(len(context["client_ip_hash"]), 16)
@@ -1945,7 +1945,8 @@ class MCPTelemetryTest(TestCase):
 
         context = _get_request_context()
         self.assertEqual(context["transport"], "stdio")
-        self.assertIsNone(context["client_ip"])
+        # Raw IP is never stored (GDPR compliance)
+        self.assertNotIn("client_ip", context)
         self.assertIsNone(context["client_ip_hash"])
 
     def test_clear_request_context(self):
@@ -2044,8 +2045,8 @@ class MCPTelemetryTest(TestCase):
             self.assertTrue(properties["success"])
             self.assertEqual(properties["transport"], "streamable_http")
             self.assertIn("client_ip_hash", properties)
-            # $ip is passed for PostHog geolocation
-            self.assertEqual(properties["$ip"], "10.0.0.1")
+            # Raw IP is never sent to PostHog (GDPR compliance)
+            self.assertNotIn("$ip", properties)
             self.assertNotIn("error_type", properties)
 
     def test_record_mcp_tool_call_failure(self):
@@ -2124,8 +2125,8 @@ class MCPTelemetryTest(TestCase):
             self.assertTrue(properties["success"])
             self.assertEqual(properties["transport"], "streamable_http")
             self.assertIn("client_ip_hash", properties)
-            # $ip is passed for PostHog geolocation
-            self.assertEqual(properties["$ip"], "172.16.0.1")
+            # Raw IP is never sent to PostHog (GDPR compliance)
+            self.assertNotIn("$ip", properties)
 
     def test_record_mcp_resource_read_failure(self):
         """Test recording failed MCP resource read."""
@@ -2169,7 +2170,7 @@ class MCPTelemetryTest(TestCase):
         ) as mock_record_event:
             mock_record_event.return_value = True
 
-            result = record_mcp_request("/mcp", method="POST")
+            result = record_mcp_request("/mcp", method="POST", success=True)
 
             self.assertTrue(result)
             mock_record_event.assert_called_once()
@@ -2180,10 +2181,11 @@ class MCPTelemetryTest(TestCase):
             properties = call_args[0][1]
             self.assertEqual(properties["endpoint"], "/mcp")
             self.assertEqual(properties["method"], "POST")
+            self.assertTrue(properties["success"])
             self.assertEqual(properties["transport"], "streamable_http")
             self.assertIn("client_ip_hash", properties)
-            # $ip is passed for PostHog geolocation
-            self.assertEqual(properties["$ip"], "10.0.0.4")
+            # Raw IP is never sent to PostHog (GDPR compliance)
+            self.assertNotIn("$ip", properties)
 
 
 class MCPTelemetryIntegrationTest(TestCase):
@@ -2223,7 +2225,6 @@ class MCPTelemetryIntegrationTest(TestCase):
         from unittest.mock import AsyncMock, patch
 
         from doclatticeserver.mcp.server import create_mcp_asgi_app
-        from doclatticeserver.mcp.telemetry import _get_request_context
 
         async def run_test():
             captured_context = None
@@ -2297,7 +2298,7 @@ class MCPTelemetryIntegrationTest(TestCase):
         import asyncio
         from unittest.mock import patch
 
-        from doclatticeserver.mcp.server import create_mcp_server
+        from doclatticeserver.mcp.server import call_tool_handler
         from doclatticeserver.mcp.telemetry import set_request_context
 
         async def run_test():
@@ -2308,15 +2309,13 @@ class MCPTelemetryIntegrationTest(TestCase):
             ) as mock_record:
                 mock_record.return_value = True
 
-                server = create_mcp_server()
-                # Get the call_tool handler
-                call_tool = server._call_tool_handler
-
-                # Call list_public_corpuses tool
-                result = await call_tool("list_public_corpuses", {})
+                # Call list_public_corpuses tool using module-level handler
+                result = await call_tool_handler("list_public_corpuses", {})
 
                 # Verify telemetry was recorded
-                mock_record.assert_called_once_with("list_public_corpuses", success=True)
+                mock_record.assert_called_once_with(
+                    "list_public_corpuses", success=True
+                )
 
                 return result
 
@@ -2333,7 +2332,7 @@ class MCPTelemetryIntegrationTest(TestCase):
         import asyncio
         from unittest.mock import patch
 
-        from doclatticeserver.mcp.server import create_mcp_server
+        from doclatticeserver.mcp.server import call_tool_handler
         from doclatticeserver.mcp.telemetry import set_request_context
 
         async def run_test():
@@ -2344,12 +2343,9 @@ class MCPTelemetryIntegrationTest(TestCase):
             ) as mock_record:
                 mock_record.return_value = True
 
-                server = create_mcp_server()
-                call_tool = server._call_tool_handler
-
-                # Call with unknown tool
+                # Call with unknown tool using module-level handler
                 try:
-                    await call_tool("unknown_tool", {})
+                    await call_tool_handler("unknown_tool", {})
                 except ValueError:
                     pass
 
@@ -2370,7 +2366,7 @@ class MCPTelemetryIntegrationTest(TestCase):
         import asyncio
         from unittest.mock import patch
 
-        from doclatticeserver.mcp.server import create_mcp_server
+        from doclatticeserver.mcp.server import read_resource_handler
         from doclatticeserver.mcp.telemetry import set_request_context
 
         async def run_test():
@@ -2378,15 +2374,15 @@ class MCPTelemetryIntegrationTest(TestCase):
 
             with patch(
                 "doclatticeserver.mcp.server.record_mcp_resource_read"
-            ) as mock_record:
+            ) as mock_record, patch(
+                "doclatticeserver.mcp.server.get_corpus_resource"
+            ) as mock_get_corpus:
                 mock_record.return_value = True
+                mock_get_corpus.return_value = '{"title": "Test Corpus"}'
 
-                server = create_mcp_server()
-                read_resource = server._read_resource_handler
-
-                # Read corpus resource
-                uri = f"corpus://{self.corpus.slug}"
-                result = await read_resource(uri)
+                # Read corpus resource using module-level handler
+                uri = "corpus://test-corpus-slug"
+                result = await read_resource_handler(uri)
 
                 # Verify telemetry was recorded
                 mock_record.assert_called_once_with("corpus", success=True)
@@ -2406,7 +2402,7 @@ class MCPTelemetryIntegrationTest(TestCase):
         import asyncio
         from unittest.mock import patch
 
-        from doclatticeserver.mcp.server import create_mcp_server
+        from doclatticeserver.mcp.server import read_resource_handler
         from doclatticeserver.mcp.telemetry import set_request_context
 
         async def run_test():
@@ -2417,12 +2413,9 @@ class MCPTelemetryIntegrationTest(TestCase):
             ) as mock_record:
                 mock_record.return_value = True
 
-                server = create_mcp_server()
-                read_resource = server._read_resource_handler
-
-                # Try to read invalid URI
+                # Try to read invalid URI using module-level handler
                 try:
-                    await read_resource("invalid://uri")
+                    await read_resource_handler("invalid://uri")
                 except ValueError:
                     pass
 
@@ -2430,3 +2423,123 @@ class MCPTelemetryIntegrationTest(TestCase):
                 mock_record.assert_called_once_with(
                     "unknown", success=False, error_type="ValueError"
                 )
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_read_resource_document_uri(self):
+        """Test that read_resource handles document URIs."""
+        import asyncio
+        from unittest.mock import patch
+
+        from doclatticeserver.mcp.server import read_resource_handler
+        from doclatticeserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.9", transport="streamable_http")
+
+            with patch(
+                "doclatticeserver.mcp.server.record_mcp_resource_read"
+            ) as mock_record, patch(
+                "doclatticeserver.mcp.server.get_document_resource"
+            ) as mock_get_doc:
+                mock_record.return_value = True
+                mock_get_doc.return_value = '{"title": "Test Document"}'
+
+                # Read document resource
+                uri = "document://test-corpus/test-document"
+                result = await read_resource_handler(uri)
+
+                # Verify telemetry was recorded with document type
+                mock_record.assert_called_once_with("document", success=True)
+                mock_get_doc.assert_called_once_with("test-corpus", "test-document")
+
+                return result
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertIsNotNone(result)
+        finally:
+            loop.close()
+
+    def test_read_resource_annotation_uri(self):
+        """Test that read_resource handles annotation URIs."""
+        import asyncio
+        from unittest.mock import patch
+
+        from doclatticeserver.mcp.server import read_resource_handler
+        from doclatticeserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.10", transport="streamable_http")
+
+            with patch(
+                "doclatticeserver.mcp.server.record_mcp_resource_read"
+            ) as mock_record, patch(
+                "doclatticeserver.mcp.server.get_annotation_resource"
+            ) as mock_get_ann:
+                mock_record.return_value = True
+                mock_get_ann.return_value = '{"id": 123, "text": "Test Annotation"}'
+
+                # Read annotation resource
+                uri = "annotation://test-corpus/test-document/123"
+                result = await read_resource_handler(uri)
+
+                # Verify telemetry was recorded with annotation type
+                mock_record.assert_called_once_with("annotation", success=True)
+                mock_get_ann.assert_called_once_with(
+                    "test-corpus", "test-document", 123
+                )
+
+                return result
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertIsNotNone(result)
+        finally:
+            loop.close()
+
+    def test_read_resource_thread_uri(self):
+        """Test that read_resource handles thread URIs."""
+        import asyncio
+        from unittest.mock import patch
+
+        from doclatticeserver.mcp.server import read_resource_handler
+        from doclatticeserver.mcp.telemetry import set_request_context
+
+        async def run_test():
+            set_request_context(client_ip="10.0.0.11", transport="streamable_http")
+
+            with patch(
+                "doclatticeserver.mcp.server.record_mcp_resource_read"
+            ) as mock_record, patch(
+                "doclatticeserver.mcp.server.get_thread_resource"
+            ) as mock_get_thread:
+                mock_record.return_value = True
+                mock_get_thread.return_value = '{"id": 456, "title": "Test Thread"}'
+
+                # Read thread resource
+                uri = "thread://test-corpus/threads/456"
+                result = await read_resource_handler(uri)
+
+                # Verify telemetry was recorded with thread type
+                mock_record.assert_called_once_with("thread", success=True)
+                mock_get_thread.assert_called_once_with("test-corpus", 456)
+
+                return result
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertIsNotNone(result)
+        finally:
+            loop.close()
