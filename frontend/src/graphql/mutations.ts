@@ -3693,3 +3693,51 @@ export const DELETE_DOCUMENT_RELATIONSHIPS = gql`
     }
   }
 `;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// ZIP IMPORT MUTATION - Imports zip file with folder structure preserved
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export interface ImportZipToCorpusInputs {
+  base64FileString: string;
+  corpusId: string;
+  targetFolderId?: string;
+  titlePrefix?: string;
+  description?: string;
+  customMeta?: Record<string, any>;
+  makePublic: boolean;
+}
+
+export interface ImportZipToCorpusOutputs {
+  importZipToCorpus: {
+    ok: boolean;
+    message: string;
+    jobId?: string;
+  };
+}
+
+export const IMPORT_ZIP_TO_CORPUS = gql`
+  mutation ImportZipToCorpus(
+    $base64FileString: String!
+    $corpusId: ID!
+    $targetFolderId: ID
+    $titlePrefix: String
+    $description: String
+    $customMeta: GenericScalar
+    $makePublic: Boolean!
+  ) {
+    importZipToCorpus(
+      base64FileString: $base64FileString
+      corpusId: $corpusId
+      targetFolderId: $targetFolderId
+      titlePrefix: $titlePrefix
+      description: $description
+      customMeta: $customMeta
+      makePublic: $makePublic
+    ) {
+      ok
+      message
+      jobId
+    }
+  }
+`;
