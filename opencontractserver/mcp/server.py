@@ -37,6 +37,7 @@ from .resources import (
 from .telemetry import (
     clear_request_context,
     get_client_ip_from_scope,
+    record_mcp_request,
     record_mcp_resource_read,
     record_mcp_tool_call,
     set_request_context,
@@ -461,6 +462,8 @@ def create_mcp_asgi_app():
                 await manager.handle_request(scope, receive, send)
             except Exception as e:
                 logger.error(f"MCP Streamable HTTP request error: {e}")
+                # Record error telemetry before clearing context
+                record_mcp_request("/mcp", method=scope.get("method", "POST"))
                 # Return error response
                 await send(
                     {
@@ -488,6 +491,8 @@ def create_mcp_asgi_app():
                 await sse_starlette_app(scope, receive, send)
             except Exception as e:
                 logger.error(f"MCP SSE request error: {e}")
+                # Record error telemetry before clearing context
+                record_mcp_request("/sse", method=scope.get("method", "GET"))
                 # Return error response
                 await send(
                     {

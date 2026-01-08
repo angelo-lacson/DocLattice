@@ -5,6 +5,36 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-08
+
+### Added
+
+#### MCP Telemetry Tracking
+- **PostHog telemetry for MCP usage** (`opencontractserver/mcp/telemetry.py`): Track MCP tool calls and resource reads when telemetry is enabled
+  - Records tool usage (`mcp_tool_call`): tool name, success/failure, error type
+  - Records resource access (`mcp_resource_read`): resource type (corpus, document, annotation, thread), success/failure
+  - Records general requests (`mcp_request`): endpoint, method, transport type
+  - Privacy-preserving: Uses salted SHA-256 IP hashing for unique user counting
+  - Geolocation support via PostHog's `$ip` property (country/region resolution)
+  - Support for all MCP transports: streamable_http, sse, stdio
+  - No query content or outputs are captured - only usage metadata
+- **Telemetry integration in MCP server** (`opencontractserver/mcp/server.py:301-316, 124-175, 418-462`):
+  - Context-based telemetry with per-request isolation via ContextVar
+  - Automatic client IP extraction from ASGI scope (supports X-Forwarded-For, X-Real-IP)
+  - Error telemetry for failed requests with error type classification
+- **Comprehensive test coverage** (`opencontractserver/mcp/tests/test_mcp.py:1888-2432`):
+  - Unit tests for IP hashing, context management, event recording
+  - Integration tests for telemetry recording in tool/resource handlers
+  - Tests for geolocation `$ip` property inclusion
+
+### Technical Details
+- Uses existing PostHog infrastructure from `config/telemetry.py`
+- Respects `TELEMETRY_ENABLED` setting and TEST mode disable
+- IP hashing uses `TELEMETRY_IP_SALT` setting to prevent rainbow table attacks
+- ContextVar ensures proper isolation in concurrent async requests
+
+---
+
 ## [Unreleased] - 2026-01-04
 
 ### Changed

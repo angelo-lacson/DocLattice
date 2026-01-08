@@ -53,10 +53,11 @@ def clear_request_context() -> None:
 
 def _hash_ip(ip: str) -> str:
     """
-    Hash an IP address for privacy.
+    Hash an IP address for privacy using a secret salt.
 
-    Uses SHA-256 to create a one-way hash that allows tracking unique clients
-    without storing actual IP addresses.
+    Uses SHA-256 with a secret salt to create a one-way hash that allows
+    tracking unique clients without storing actual IP addresses. The salt
+    prevents rainbow table attacks (IPv4 only has ~4 billion addresses).
 
     Args:
         ip: The IP address to hash
@@ -64,7 +65,10 @@ def _hash_ip(ip: str) -> str:
     Returns:
         First 16 characters of the hex-encoded SHA-256 hash
     """
-    return hashlib.sha256(ip.encode()).hexdigest()[:16]
+    from django.conf import settings
+
+    salt = getattr(settings, "TELEMETRY_IP_SALT", "default-salt")
+    return hashlib.sha256(f"{salt}:{ip}".encode()).hexdigest()[:16]
 
 
 def _get_request_context() -> dict[str, Any]:
@@ -186,7 +190,7 @@ def record_mcp_request(
     return record_event("mcp_request", properties)
 
 
-def get_client_ip_from_scope(scope: dict) -> str | None:
+def get_client_ip_from_scope(scope: dict[str, Any]) -> str | None:
     """
     Extract client IP address from an ASGI scope.
 
