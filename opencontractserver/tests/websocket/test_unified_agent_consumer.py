@@ -35,6 +35,7 @@ from opencontractserver.llms.agents.core_agents import (
     ContentEvent,
     FinalEvent,
     SourceEvent,
+    SourceNode,
     ThoughtEvent,
 )
 from opencontractserver.tests.base import WebsocketFixtureBaseTestCase
@@ -413,7 +414,14 @@ class UnifiedAgentConsumerStreamingTestCase(WebsocketFixtureBaseTestCase):
         yield SourceEvent(
             llm_message_id=42,
             user_message_id=1,
-            sources=[],
+            sources=[
+                SourceNode(
+                    annotation_id=1,
+                    content="Test source content",
+                    metadata={},
+                    similarity_score=0.95,
+                )
+            ],
             metadata={},
         )
         yield ContentEvent(

@@ -484,11 +484,40 @@ class WebsocketFixtureBaseTestCase(BaseFixtureTestCase):
         """
         Hooks into the BaseFixtureTestCase setUp, which loads a user (self.user)
         and any documents (self.doc, self.docs, etc.) from the fixture.
-        We then create a token for the fixture user.
+        We then create a token for the fixture user and agent configurations.
         """
         super().setUp()
         self.token = get_token(user=self.user)
         self.application = application
+
+        # Create required agent configurations for UnifiedAgentConsumer
+        # These are needed for WebSocket connections to be accepted
+        from opencontractserver.agents.models import AgentConfiguration
+
+        AgentConfiguration.objects.get_or_create(
+            slug="default-corpus-agent",
+            defaults={
+                "name": "Default Corpus Agent",
+                "description": "Default agent for corpus-level queries",
+                "system_instructions": "You are a helpful assistant.",
+                "available_tools": [],
+                "is_active": True,
+                "scope": "GLOBAL",
+                "creator": self.user,
+            },
+        )
+        AgentConfiguration.objects.get_or_create(
+            slug="default-document-agent",
+            defaults={
+                "name": "Default Document Agent",
+                "description": "Default agent for document-level queries",
+                "system_instructions": "You are a helpful assistant.",
+                "available_tools": [],
+                "is_active": True,
+                "scope": "GLOBAL",
+                "creator": self.user,
+            },
+        )
 
 
 class CeleryEagerModeTestCase(TransactionTestCase):
