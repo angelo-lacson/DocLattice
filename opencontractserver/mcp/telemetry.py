@@ -1,0 +1,257 @@
+"""
+MCP Telemetry module.
+
+Provides telemetry tracking for MCP (Model Context Protocol) tool and resource usage.
+Tracks usage statistics without capturing query content or outputs for privacy.
+
+Privacy notes:
+- IP addresses are hashed with a secret salt before being stored
+- Raw IP addresses are never sent to PostHog or stored
+- Only the truncated hash is used as a client identifier
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Any
+
+from config.telemetry import record_event
+
+logger = logging.getLogger(__name__)
+
+# Length of the truncated IP hash (16 hex chars = 64 bits of entropy)
+# Sufficient for unique client identification without storing full hash
+IP_HASH_LENGTH = 16
+
+# Context variable to store request metadata (client IP, transport type)
+# This allows the telemetry functions to access request context without
+# needing to pass it through all function calls
+_mcp_request_context: ContextVar[dict[str, Any]] = ContextVar(
+    "mcp_request_context", default={}
+)
+
+
+def set_request_context(
+    client_ip: str | None = None,
+    transport: str = "unknown",
+) -> None:
+    """
+    Set the request context for MCP telemetry.
+
+    Should be called at the start of each MCP request handler to capture
+    request metadata that will be included in telemetry events.
+
+    Args:
+        client_ip: The client's IP address (will be hashed for privacy)
+        transport: The transport type (e.g., 'streamable_http', 'sse', 'stdio')
+    """
+    _mcp_request_context.set(
+        {
+            "client_ip_hash": _hash_ip(client_ip) if client_ip else None,
+            "transport": transport,
+        }
+    )
+
+
+def clear_request_context() -> None:
+    """Clear the request context after handling a request."""
+    _mcp_request_context.set({})
+
+
+@contextmanager
+def isolated_telemetry_context() -> Generator[None]:
+    """
+    Context manager that ensures telemetry context is isolated.
+
+    Clears context on entry and exit, guaranteeing cleanup even if
+    the test crashes. Use this in tests to prevent context leakage
+    between test cases.
+
+    Example:
+        def test_something(self):
+            with isolated_telemetry_context():
+                set_request_context(client_ip="1.2.3.4", transport="test")
+                # test code here
+            # context is automatically cleared
+    """
+    clear_request_context()
+    try:
+        yield
+    finally:
+        clear_request_context()
+
+
+def _hash_ip(ip: str) -> str:
+    """
+    Hash an IP address for privacy using a secret salt.
+
+    Uses SHA-256 with a secret salt to create a one-way hash that allows
+    tracking unique clients without storing actual IP addresses. The salt
+    prevents rainbow table attacks (IPv4 only has ~4 billion addresses).
+
+    Args:
+        ip: The IP address to hash
+
+    Returns:
+        First IP_HASH_LENGTH characters of the hex-encoded SHA-256 hash
+    """
+    from django.conf import settings
+
+    salt = getattr(settings, "TELEMETRY_IP_SALT", "default-salt")
+    return hashlib.sha256(f"{salt}:{ip}".encode()).hexdigest()[:IP_HASH_LENGTH]
+
+
+def _get_request_context() -> dict[str, Any]:
+    """Get the current request context."""
+    return _mcp_request_context.get()
+
+
+def record_mcp_tool_call(
+    tool_name: str,
+    success: bool = True,
+    error_type: str | None = None,
+) -> bool:
+    """
+    Record a telemetry event for an MCP tool call.
+
+    Args:
+        tool_name: Name of the tool that was called
+        success: Whether the tool call succeeded
+        error_type: Type of error if the call failed (e.g., 'ValueError', 'PermissionError')
+
+    Returns:
+        True if event was successfully queued, False otherwise
+    """
+    context = _get_request_context()
+
+    properties = {
+        "tool_name": tool_name,
+        "success": success,
+        "transport": context.get("transport", "unknown"),
+    }
+
+    # Include hashed client IP if available (privacy-preserving)
+    if context.get("client_ip_hash"):
+        properties["client_ip_hash"] = context["client_ip_hash"]
+
+    # Include error type if call failed
+    if not success and error_type:
+        properties["error_type"] = error_type
+
+    return record_event("mcp_tool_call", properties)
+
+
+def record_mcp_resource_read(
+    resource_type: str,
+    success: bool = True,
+    error_type: str | None = None,
+) -> bool:
+    """
+    Record a telemetry event for an MCP resource read.
+
+    Args:
+        resource_type: Type of resource that was read (e.g., 'corpus', 'document')
+        success: Whether the resource read succeeded
+        error_type: Type of error if the read failed
+
+    Returns:
+        True if event was successfully queued, False otherwise
+    """
+    context = _get_request_context()
+
+    properties = {
+        "resource_type": resource_type,
+        "success": success,
+        "transport": context.get("transport", "unknown"),
+    }
+
+    # Include hashed client IP if available (privacy-preserving)
+    if context.get("client_ip_hash"):
+        properties["client_ip_hash"] = context["client_ip_hash"]
+
+    # Include error type if read failed
+    if not success and error_type:
+        properties["error_type"] = error_type
+
+    return record_event("mcp_resource_read", properties)
+
+
+def record_mcp_request(
+    endpoint: str,
+    method: str = "POST",
+    success: bool = True,
+    error_type: str | None = None,
+) -> bool:
+    """
+    Record a telemetry event for an MCP endpoint request.
+
+    This tracks overall MCP traffic without tool/resource specifics.
+    Should be called for both successful and failed requests to enable
+    error rate calculations.
+
+    Args:
+        endpoint: The MCP endpoint path (e.g., '/mcp', '/sse')
+        method: HTTP method used
+        success: Whether the request succeeded
+        error_type: Type of error if the request failed
+
+    Returns:
+        True if event was successfully queued, False otherwise
+    """
+    context = _get_request_context()
+
+    properties = {
+        "endpoint": endpoint,
+        "method": method,
+        "success": success,
+        "transport": context.get("transport", "unknown"),
+    }
+
+    # Include hashed client IP if available (privacy-preserving)
+    if context.get("client_ip_hash"):
+        properties["client_ip_hash"] = context["client_ip_hash"]
+
+    # Include error type if request failed
+    if not success and error_type:
+        properties["error_type"] = error_type
+
+    return record_event("mcp_request", properties)
+
+
+def get_client_ip_from_scope(scope: dict[str, Any]) -> str | None:
+    """
+    Extract client IP address from an ASGI scope.
+
+    Checks X-Forwarded-For header first (for reverse proxy setups),
+    then falls back to the direct client connection.
+
+    Args:
+        scope: ASGI scope dictionary
+
+    Returns:
+        Client IP address string, or None if not available
+    """
+    # Check headers for X-Forwarded-For (reverse proxy)
+    headers = dict(scope.get("headers", []))
+
+    # Headers are bytes in ASGI
+    xff = headers.get(b"x-forwarded-for")
+    if xff:
+        # X-Forwarded-For can contain multiple IPs, take the first (original client)
+        return xff.decode().split(",")[0].strip()
+
+    # Check X-Real-IP header (common in nginx setups)
+    x_real_ip = headers.get(b"x-real-ip")
+    if x_real_ip:
+        return x_real_ip.decode().strip()
+
+    # Fall back to direct client connection
+    client = scope.get("client")
+    if client and len(client) >= 1:
+        return client[0]
+
+    return None
