@@ -1,16 +1,20 @@
 """
 PDF Token Extraction Utility.
 
-This module provides functions to extract word-level tokens from PDFs
+This module provides functions to extract word-level tokens and images from PDFs
 and calculate which tokens fall within annotation bounding boxes.
 
 Based on the Docsling microservice implementation:
 https://github.com/JSv4/Docsling/blob/main/app/core/parser.py
+
+Image extraction capabilities added for LLM image annotation support.
 """
 
+import base64
+import hashlib
 import io
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 import numpy as np
 from shapely.geometry import box
@@ -18,6 +22,7 @@ from shapely.strtree import STRtree
 
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
+    PawlsImageTokenPythonType,
     PawlsPagePythonType,
     PawlsTokenPythonType,
     TokenIdPythonType,
@@ -370,3 +375,379 @@ def find_tokens_in_bbox(
     except Exception as e:
         logger.error(f"Error during spatial query for page {page_idx}: {e}")
         return []
+
+
+# =============================================================================
+# Image Extraction Functions
+# =============================================================================
+
+
+def extract_images_from_pdf(
+    pdf_bytes: bytes,
+    min_width: int = 50,
+    min_height: int = 50,
+    max_images_per_page: int = 20,
+    image_format: Literal["jpeg", "png"] = "jpeg",
+    jpeg_quality: int = 85,
+) -> dict[int, list[PawlsImageTokenPythonType]]:
+    """
+    Extract embedded images from a PDF.
+
+    Uses pdfplumber to detect embedded images and extracts them as base64-encoded
+    data that can be included in the PAWLs format for LLM consumption.
+
+    Args:
+        pdf_bytes: The raw bytes of the PDF file.
+        min_width: Minimum image width in pixels to include (default: 50).
+        min_height: Minimum image height in pixels to include (default: 50).
+        max_images_per_page: Maximum number of images to extract per page (default: 20).
+        image_format: Output format for extracted images ("jpeg" or "png").
+        jpeg_quality: JPEG quality if using jpeg format (1-100, default: 85).
+
+    Returns:
+        Dict mapping 0-based page index to list of PawlsImageTokenPythonType.
+    """
+    try:
+        import pdfplumber
+        from PIL import Image
+    except ImportError as e:
+        logger.error(f"Required library not installed: {e}")
+        return {}
+
+    images_by_page: dict[int, list[PawlsImageTokenPythonType]] = {}
+
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            for page_idx, page in enumerate(pdf.pages):
+                page_images: list[PawlsImageTokenPythonType] = []
+                page_width = float(page.width)
+                page_height = float(page.height)
+
+                # Get embedded images from the page
+                if not hasattr(page, "images") or not page.images:
+                    images_by_page[page_idx] = []
+                    continue
+
+                for img_idx, img_info in enumerate(page.images[: max_images_per_page]):
+                    try:
+                        # pdfplumber image info contains: x0, top, x1, bottom, etc.
+                        x0 = float(img_info.get("x0", 0))
+                        top = float(img_info.get("top", 0))
+                        x1 = float(img_info.get("x1", page_width))
+                        bottom = float(img_info.get("bottom", page_height))
+
+                        # Calculate dimensions
+                        width = x1 - x0
+                        height = bottom - top
+
+                        # Skip images that are too small
+                        if width < min_width or height < min_height:
+                            logger.debug(
+                                f"Skipping small image on page {page_idx}: "
+                                f"{width}x{height}"
+                            )
+                            continue
+
+                        # Try to extract the actual image data
+                        # pdfplumber may provide a 'stream' or we need to crop
+                        image_data = None
+                        pil_image = None
+
+                        # Method 1: Try to get image stream directly
+                        if "stream" in img_info:
+                            stream = img_info["stream"]
+                            if hasattr(stream, "get_data"):
+                                try:
+                                    raw_data = stream.get_data()
+                                    pil_image = Image.open(io.BytesIO(raw_data))
+                                except Exception:
+                                    pass
+
+                        # Method 2: Crop the region from rendered page
+                        if pil_image is None:
+                            pil_image = _crop_pdf_region(
+                                pdf_bytes,
+                                page_idx,
+                                x0,
+                                top,
+                                x1,
+                                bottom,
+                                page_width,
+                                page_height,
+                            )
+
+                        if pil_image is None:
+                            logger.debug(
+                                f"Could not extract image {img_idx} on page {page_idx}"
+                            )
+                            continue
+
+                        # Convert to target format and base64 encode
+                        img_bytes_io = io.BytesIO()
+                        if image_format == "jpeg":
+                            # Convert to RGB for JPEG (no alpha channel)
+                            if pil_image.mode in ("RGBA", "LA", "P"):
+                                pil_image = pil_image.convert("RGB")
+                            pil_image.save(
+                                img_bytes_io, format="JPEG", quality=jpeg_quality
+                            )
+                        else:
+                            pil_image.save(img_bytes_io, format="PNG")
+
+                        image_bytes = img_bytes_io.getvalue()
+                        base64_data = base64.b64encode(image_bytes).decode("utf-8")
+
+                        # Calculate content hash for deduplication
+                        content_hash = hashlib.sha256(image_bytes).hexdigest()
+
+                        # Create image token
+                        image_token: PawlsImageTokenPythonType = {
+                            "x": x0,
+                            "y": top,
+                            "width": width,
+                            "height": height,
+                            "base64_data": base64_data,
+                            "format": image_format,
+                            "original_width": pil_image.width,
+                            "original_height": pil_image.height,
+                            "content_hash": content_hash,
+                            "image_type": "embedded",
+                        }
+
+                        page_images.append(image_token)
+                        logger.debug(
+                            f"Extracted image {img_idx} on page {page_idx}: "
+                            f"{pil_image.width}x{pil_image.height}"
+                        )
+
+                    except Exception as img_error:
+                        logger.warning(
+                            f"Error extracting image {img_idx} on page {page_idx}: "
+                            f"{img_error}"
+                        )
+                        continue
+
+                images_by_page[page_idx] = page_images
+
+        logger.info(
+            f"Extracted images from {len(pdf.pages)} pages: "
+            f"{sum(len(imgs) for imgs in images_by_page.values())} total images"
+        )
+
+    except Exception as e:
+        logger.error(f"Error extracting images from PDF: {e}")
+
+    return images_by_page
+
+
+def _crop_pdf_region(
+    pdf_bytes: bytes,
+    page_idx: int,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    page_width: float,
+    page_height: float,
+    dpi: int = 150,
+) -> Optional["Image.Image"]:
+    """
+    Crop a specific region from a PDF page by rendering it first.
+
+    This is a fallback method when embedded image streams cannot be extracted
+    directly from the PDF.
+
+    Args:
+        pdf_bytes: The raw bytes of the PDF file.
+        page_idx: 0-based page index.
+        x0, y0, x1, y1: Bounding box coordinates in PDF points.
+        page_width, page_height: Full page dimensions in PDF points.
+        dpi: Resolution for rendering (default: 150).
+
+    Returns:
+        PIL Image of the cropped region, or None on failure.
+    """
+    try:
+        from pdf2image import convert_from_bytes
+        from PIL import Image
+    except ImportError:
+        logger.warning("pdf2image not installed for region cropping")
+        return None
+
+    try:
+        # Render the specific page
+        images = convert_from_bytes(
+            pdf_bytes,
+            first_page=page_idx + 1,  # pdf2image uses 1-based indexing
+            last_page=page_idx + 1,
+            dpi=dpi,
+        )
+
+        if not images:
+            return None
+
+        page_image = images[0]
+        img_width, img_height = page_image.size
+
+        # Calculate scale factors
+        scale_x = img_width / page_width
+        scale_y = img_height / page_height
+
+        # Convert PDF coordinates to pixel coordinates
+        px_x0 = int(x0 * scale_x)
+        px_y0 = int(y0 * scale_y)
+        px_x1 = int(x1 * scale_x)
+        px_y1 = int(y1 * scale_y)
+
+        # Ensure valid crop bounds
+        px_x0 = max(0, min(px_x0, img_width - 1))
+        px_y0 = max(0, min(px_y0, img_height - 1))
+        px_x1 = max(px_x0 + 1, min(px_x1, img_width))
+        px_y1 = max(px_y0 + 1, min(px_y1, img_height))
+
+        # Crop the region
+        cropped = page_image.crop((px_x0, px_y0, px_x1, px_y1))
+        return cropped
+
+    except Exception as e:
+        logger.warning(f"Error cropping PDF region: {e}")
+        return None
+
+
+def crop_image_from_pdf(
+    pdf_bytes: bytes,
+    page_idx: int,
+    bbox: BoundingBoxPythonType,
+    page_width: float,
+    page_height: float,
+    image_format: Literal["jpeg", "png"] = "jpeg",
+    jpeg_quality: int = 85,
+    dpi: int = 150,
+) -> Optional[PawlsImageTokenPythonType]:
+    """
+    Crop a specific bounding box region from a PDF page as an image token.
+
+    This is useful for extracting figure/image regions identified by parsers
+    like LlamaParse or Docling that provide bounding boxes for visual elements.
+
+    Args:
+        pdf_bytes: The raw bytes of the PDF file.
+        page_idx: 0-based page index.
+        bbox: Bounding box in PDF coordinates {left, top, right, bottom}.
+        page_width: Page width in PDF points.
+        page_height: Page height in PDF points.
+        image_format: Output format ("jpeg" or "png").
+        jpeg_quality: JPEG quality (1-100).
+        dpi: Resolution for rendering (default: 150).
+
+    Returns:
+        PawlsImageTokenPythonType with the cropped image data, or None on failure.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        logger.error("PIL not installed")
+        return None
+
+    try:
+        left = float(bbox["left"])
+        top = float(bbox["top"])
+        right = float(bbox["right"])
+        bottom = float(bbox["bottom"])
+
+        # Ensure valid bounds
+        if left > right:
+            left, right = right, left
+        if top > bottom:
+            top, bottom = bottom, top
+
+        width = right - left
+        height = bottom - top
+
+        # Crop the region
+        pil_image = _crop_pdf_region(
+            pdf_bytes, page_idx, left, top, right, bottom, page_width, page_height, dpi
+        )
+
+        if pil_image is None:
+            return None
+
+        # Convert to target format and base64 encode
+        img_bytes_io = io.BytesIO()
+        if image_format == "jpeg":
+            if pil_image.mode in ("RGBA", "LA", "P"):
+                pil_image = pil_image.convert("RGB")
+            pil_image.save(img_bytes_io, format="JPEG", quality=jpeg_quality)
+        else:
+            pil_image.save(img_bytes_io, format="PNG")
+
+        image_bytes = img_bytes_io.getvalue()
+        base64_data = base64.b64encode(image_bytes).decode("utf-8")
+        content_hash = hashlib.sha256(image_bytes).hexdigest()
+
+        image_token: PawlsImageTokenPythonType = {
+            "x": left,
+            "y": top,
+            "width": width,
+            "height": height,
+            "base64_data": base64_data,
+            "format": image_format,
+            "original_width": pil_image.width,
+            "original_height": pil_image.height,
+            "content_hash": content_hash,
+            "image_type": "cropped",
+        }
+
+        return image_token
+
+    except Exception as e:
+        logger.error(f"Error cropping image from PDF: {e}")
+        return None
+
+
+def get_image_as_base64(
+    image_token: PawlsImageTokenPythonType,
+) -> Optional[str]:
+    """
+    Get the base64-encoded image data from an image token.
+
+    This is a convenience function for retrieving image data for LLM consumption.
+    Returns the data URL format suitable for inclusion in LLM prompts.
+
+    Args:
+        image_token: The image token containing base64_data or image_path.
+
+    Returns:
+        Base64-encoded image data string, or None if not available.
+    """
+    if "base64_data" in image_token and image_token["base64_data"]:
+        return image_token["base64_data"]
+
+    # If we have an image_path, load from storage (not implemented yet)
+    if "image_path" in image_token and image_token["image_path"]:
+        logger.warning("Loading images from storage path not yet implemented")
+        return None
+
+    return None
+
+
+def get_image_data_url(
+    image_token: PawlsImageTokenPythonType,
+) -> Optional[str]:
+    """
+    Get the image as a data URL suitable for embedding in HTML or LLM prompts.
+
+    Args:
+        image_token: The image token containing base64_data.
+
+    Returns:
+        Data URL string (e.g., "data:image/jpeg;base64,..."), or None if not available.
+    """
+    base64_data = get_image_as_base64(image_token)
+    if not base64_data:
+        return None
+
+    img_format = image_token.get("format", "jpeg")
+    mime_type = f"image/{img_format}"
+
+    return f"data:{mime_type};base64,{base64_data}"

@@ -23,14 +23,18 @@ from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
+    ImageIdPythonType,
     OpenContractDocExport,
     OpenContractsAnnotationPythonType,
     OpenContractsSinglePageAnnotationType,
+    PawlsImageTokenPythonType,
     PawlsPagePythonType,
     PawlsTokenPythonType,
     TokenIdPythonType,
 )
 from opencontractserver.utils.pdf_token_extraction import (
+    crop_image_from_pdf,
+    extract_images_from_pdf,
     extract_pawls_tokens_from_pdf,
     find_tokens_in_bbox,
 )
@@ -99,9 +103,17 @@ class LlamaParseParser(BaseParser):
         self.language = getattr(settings, "LLAMAPARSE_LANGUAGE", "en")
         self.verbose = getattr(settings, "LLAMAPARSE_VERBOSE", False)
 
+        # Image extraction configuration
+        self.extract_images = getattr(settings, "LLAMAPARSE_EXTRACT_IMAGES", True)
+        self.image_format = getattr(settings, "LLAMAPARSE_IMAGE_FORMAT", "jpeg")
+        self.image_quality = getattr(settings, "LLAMAPARSE_IMAGE_QUALITY", 85)
+        self.image_dpi = getattr(settings, "LLAMAPARSE_IMAGE_DPI", 150)
+        self.min_image_width = getattr(settings, "LLAMAPARSE_MIN_IMAGE_WIDTH", 50)
+        self.min_image_height = getattr(settings, "LLAMAPARSE_MIN_IMAGE_HEIGHT", 50)
+
         logger.info(
             f"LlamaParseParser initialized with extract_layout={self.extract_layout}, "
-            f"language={self.language}"
+            f"extract_images={self.extract_images}, language={self.language}"
         )
 
     def _parse_document_impl(
@@ -208,9 +220,16 @@ class LlamaParseParser(BaseParser):
                         return None
 
                     # Convert to OpenContracts format
-                    # Pass doc_bytes for token extraction
+                    # Pass doc_bytes for token and image extraction
+                    extract_images_flag = all_kwargs.get(
+                        "extract_images", self.extract_images
+                    )
                     return self._convert_json_to_opencontracts(
-                        document, json_results, extract_layout, doc_bytes
+                        document,
+                        json_results,
+                        extract_layout,
+                        doc_bytes,
+                        extract_images=extract_images_flag,
                     )
                 else:
                     # For markdown/text output, use load_data
@@ -247,6 +266,7 @@ class LlamaParseParser(BaseParser):
         json_results: list[dict[str, Any]],
         extract_layout: bool = True,
         pdf_bytes: Optional[bytes] = None,
+        extract_images: bool = True,
     ) -> OpenContractDocExport:
         """
         Convert LlamaParse JSON results to OpenContracts format.
@@ -257,6 +277,8 @@ class LlamaParseParser(BaseParser):
             extract_layout: Whether layout data with bounding boxes is included.
             pdf_bytes: Raw PDF bytes for token extraction. If provided, tokens
                       will be extracted and mapped to annotation bounding boxes.
+            extract_images: Whether to extract images from the PDF and include
+                          them in the PAWLs output for LLM consumption.
 
         Returns:
             OpenContractDocExport with parsed data.
@@ -351,6 +373,31 @@ class LlamaParseParser(BaseParser):
                 }
                 pawls_pages.append(pawls_page)
 
+        # Extract images from PDF if enabled
+        images_by_page: dict[int, list[PawlsImageTokenPythonType]] = {}
+        if pdf_bytes and extract_images:
+            try:
+                logger.info("Extracting images from PDF for LLM consumption...")
+                images_by_page = extract_images_from_pdf(
+                    pdf_bytes,
+                    min_width=self.min_image_width,
+                    min_height=self.min_image_height,
+                    image_format=self.image_format,
+                    jpeg_quality=self.image_quality,
+                )
+                total_images = sum(len(imgs) for imgs in images_by_page.values())
+                logger.info(
+                    f"Extracted {total_images} images from {len(images_by_page)} pages"
+                )
+
+                # Add images to PAWLS pages
+                for page_idx, page_images in images_by_page.items():
+                    if page_idx < len(pawls_pages) and page_images:
+                        pawls_pages[page_idx]["images"] = page_images
+            except Exception as e:
+                logger.warning(f"Failed to extract images from PDF: {e}")
+                images_by_page = {}
+
         # Track annotation IDs
         annotation_id_counter = 0
 
@@ -384,13 +431,15 @@ class LlamaParseParser(BaseParser):
                 item_text = item.get("text", "") or item.get("value", "")
                 item_type = item.get("type", "text").lower()
                 bbox = item.get("bBox", item.get("bbox", item.get("bounding_box", {})))
+                is_image_type = item_type in ["figure", "image", "chart", "diagram"]
 
-                if not item_text.strip():
+                # For non-image types, require text content
+                if not item_text.strip() and not is_image_type:
                     continue
 
                 # Parse bbox to get bounds
                 _, bounds = self._create_pawls_tokens_from_bbox(
-                    item_text,
+                    item_text or f"[{item_type}]",
                     bbox,
                     page_width,
                     page_height,
@@ -406,15 +455,49 @@ class LlamaParseParser(BaseParser):
                     tokens_by_page.get(page_idx),
                 )
 
-                # Create annotation with token references
+                # For figure/image types, find matching images or crop the region
+                image_refs: list[ImageIdPythonType] = []
+                if is_image_type and pdf_bytes and extract_images:
+                    image_refs = self._find_images_in_bounds(
+                        bounds, page_idx, images_by_page.get(page_idx, [])
+                    )
+                    # If no embedded image found, crop the region
+                    if not image_refs:
+                        cropped_image = crop_image_from_pdf(
+                            pdf_bytes,
+                            page_idx,
+                            bounds,
+                            page_width,
+                            page_height,
+                            image_format=self.image_format,
+                            jpeg_quality=self.image_quality,
+                            dpi=self.image_dpi,
+                        )
+                        if cropped_image:
+                            # Add cropped image to the page
+                            if page_idx < len(pawls_pages):
+                                if "images" not in pawls_pages[page_idx]:
+                                    pawls_pages[page_idx]["images"] = []
+                                img_idx = len(pawls_pages[page_idx]["images"])
+                                pawls_pages[page_idx]["images"].append(cropped_image)
+                                image_refs = [
+                                    {"pageIndex": page_idx, "imageIndex": img_idx}
+                                ]
+                                logger.debug(
+                                    f"Cropped image for {item_type} annotation "
+                                    f"on page {page_idx}"
+                                )
+
+                # Create annotation with token and image references
                 label = self.ELEMENT_TYPE_MAPPING.get(item_type, "Text Block")
                 annotation = self._create_annotation(
                     annotation_id=str(annotation_id_counter),
                     label=label,
-                    raw_text=item_text,
+                    raw_text=item_text or f"[{item_type}]",
                     page_idx=page_idx,
                     bounds=bounds,
                     token_refs=token_refs,
+                    image_refs=image_refs,
                 )
                 annotations.append(annotation)
                 annotation_id_counter += 1
@@ -427,8 +510,14 @@ class LlamaParseParser(BaseParser):
                         "bBox", element.get("bbox", element.get("bounding_box", {}))
                     )
                     element_text = element.get("text", "")
+                    is_image_type = element_type in [
+                        "figure",
+                        "image",
+                        "chart",
+                        "diagram",
+                    ]
 
-                    if not element_text and element_type not in ["figure", "image"]:
+                    if not element_text and not is_image_type:
                         continue
 
                     _, bounds = self._create_pawls_tokens_from_bbox(
@@ -448,6 +537,34 @@ class LlamaParseParser(BaseParser):
                         tokens_by_page.get(page_idx),
                     )
 
+                    # For figure/image types, find matching images or crop the region
+                    image_refs: list[ImageIdPythonType] = []
+                    if is_image_type and pdf_bytes and extract_images:
+                        image_refs = self._find_images_in_bounds(
+                            bounds, page_idx, images_by_page.get(page_idx, [])
+                        )
+                        # If no embedded image found, crop the region
+                        if not image_refs:
+                            cropped_image = crop_image_from_pdf(
+                                pdf_bytes,
+                                page_idx,
+                                bounds,
+                                page_width,
+                                page_height,
+                                image_format=self.image_format,
+                                jpeg_quality=self.image_quality,
+                                dpi=self.image_dpi,
+                            )
+                            if cropped_image:
+                                if page_idx < len(pawls_pages):
+                                    if "images" not in pawls_pages[page_idx]:
+                                        pawls_pages[page_idx]["images"] = []
+                                    img_idx = len(pawls_pages[page_idx]["images"])
+                                    pawls_pages[page_idx]["images"].append(cropped_image)
+                                    image_refs = [
+                                        {"pageIndex": page_idx, "imageIndex": img_idx}
+                                    ]
+
                     label = self.ELEMENT_TYPE_MAPPING.get(element_type, "Text Block")
                     annotation = self._create_annotation(
                         annotation_id=str(annotation_id_counter),
@@ -456,6 +573,7 @@ class LlamaParseParser(BaseParser):
                         page_idx=page_idx,
                         bounds=bounds,
                         token_refs=token_refs,
+                        image_refs=image_refs,
                     )
                     annotations.append(annotation)
                     annotation_id_counter += 1
@@ -477,6 +595,7 @@ class LlamaParseParser(BaseParser):
 
         # Log summary
         total_tokens = sum(len(p.get("tokens", [])) for p in pawls_pages)
+        total_images = sum(len(p.get("images", [])) for p in pawls_pages)
         annotations_with_tokens = sum(
             1
             for a in annotations
@@ -484,10 +603,19 @@ class LlamaParseParser(BaseParser):
             .get(str(a.get("page", 0)), {})
             .get("tokensJsons")
         )
+        annotations_with_images = sum(
+            1
+            for a in annotations
+            if a.get("annotation_json", {})
+            .get(str(a.get("page", 0)), {})
+            .get("imagesJsons")
+        )
         logger.info(
             f"Converted LlamaParse output: {len(pages)} pages, "
             f"{len(annotations)} annotations, {total_tokens} tokens, "
-            f"{annotations_with_tokens} annotations with token references"
+            f"{total_images} images, "
+            f"{annotations_with_tokens} annotations with token refs, "
+            f"{annotations_with_images} annotations with image refs"
         )
 
         return export
@@ -700,6 +828,49 @@ class LlamaParseParser(BaseParser):
         # Return empty tokens list - we don't have real token data from LlamaParse
         return tokens, bounds
 
+    def _find_images_in_bounds(
+        self,
+        bounds: BoundingBoxPythonType,
+        page_idx: int,
+        page_images: list[PawlsImageTokenPythonType],
+    ) -> list[ImageIdPythonType]:
+        """
+        Find images that overlap with the given bounding box.
+
+        Args:
+            bounds: The annotation bounding box.
+            page_idx: Page index (0-based).
+            page_images: List of image tokens on this page.
+
+        Returns:
+            List of ImageIdPythonType references for overlapping images.
+        """
+        if not page_images:
+            return []
+
+        image_refs: list[ImageIdPythonType] = []
+        ann_left = float(bounds["left"])
+        ann_top = float(bounds["top"])
+        ann_right = float(bounds["right"])
+        ann_bottom = float(bounds["bottom"])
+
+        for img_idx, img_token in enumerate(page_images):
+            img_left = float(img_token["x"])
+            img_top = float(img_token["y"])
+            img_right = img_left + float(img_token["width"])
+            img_bottom = img_top + float(img_token["height"])
+
+            # Check for overlap
+            if (
+                ann_left < img_right
+                and ann_right > img_left
+                and ann_top < img_bottom
+                and ann_bottom > img_top
+            ):
+                image_refs.append({"pageIndex": page_idx, "imageIndex": img_idx})
+
+        return image_refs
+
     def _create_annotation(
         self,
         annotation_id: str,
@@ -708,6 +879,7 @@ class LlamaParseParser(BaseParser):
         page_idx: int,
         bounds: BoundingBoxPythonType,
         token_refs: Optional[list[TokenIdPythonType]] = None,
+        image_refs: Optional[list[ImageIdPythonType]] = None,
     ) -> OpenContractsAnnotationPythonType:
         """
         Create an OpenContracts annotation.
@@ -721,19 +893,27 @@ class LlamaParseParser(BaseParser):
             token_refs: Optional list of token references ({pageIndex, tokenIndex})
                        that fall within the annotation's bounding box. If None or
                        empty, the annotation will have an empty tokensJsons array.
+            image_refs: Optional list of image references ({pageIndex, imageIndex})
+                       that fall within the annotation's bounding box. If None or
+                       empty, the annotation will have an empty imagesJsons array.
 
         Returns:
             OpenContractsAnnotationPythonType annotation.
         """
         # Use provided token references, or empty list if none provided
         tokens_jsons = token_refs if token_refs else []
+        images_jsons = image_refs if image_refs else []
 
-        # Create page annotation with token references
+        # Create page annotation with token and image references
         page_annotation: OpenContractsSinglePageAnnotationType = {
             "bounds": bounds,
             "tokensJsons": tokens_jsons,
             "rawText": raw_text,
         }
+
+        # Add image references if present
+        if images_jsons:
+            page_annotation["imagesJsons"] = images_jsons
 
         annotation: OpenContractsAnnotationPythonType = {
             "id": annotation_id,

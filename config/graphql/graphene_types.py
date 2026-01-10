@@ -2719,6 +2719,17 @@ class PipelineComponentType(graphene.ObjectType):
     input_schema = GenericScalar(
         description="JSONSchema schema for inputs supported from user (experimental - not fully implemented)."
     )
+    # Multimodal support flags (for embedders)
+    is_multimodal = graphene.Boolean(
+        description="Whether this embedder supports multiple modalities (text + images).",
+        required=False,
+    )
+    supports_text = graphene.Boolean(
+        description="Whether this embedder supports text input.", required=False
+    )
+    supports_images = graphene.Boolean(
+        description="Whether this embedder supports image input.", required=False
+    )
 
 
 class PipelineComponentsType(graphene.ObjectType):

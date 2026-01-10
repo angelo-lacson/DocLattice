@@ -10,8 +10,17 @@ from requests.exceptions import ConnectionError, RequestException, Timeout
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
-from opencontractserver.types.dicts import OpenContractDocExport
+from opencontractserver.types.dicts import (
+    BoundingBoxPythonType,
+    ImageIdPythonType,
+    OpenContractDocExport,
+    PawlsImageTokenPythonType,
+)
 from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
+from opencontractserver.utils.pdf_token_extraction import (
+    crop_image_from_pdf,
+    extract_images_from_pdf,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +57,18 @@ class DoclingParser(BaseParser):
             getattr(settings, "use_cloud_run_iam_auth", False)
         )
 
-        logger.info(f"DoclingParser initialized with service URL: {self.service_url}")
+        # Image extraction configuration
+        self.extract_images = getattr(settings, "DOCLING_EXTRACT_IMAGES", True)
+        self.image_format = getattr(settings, "DOCLING_IMAGE_FORMAT", "jpeg")
+        self.image_quality = getattr(settings, "DOCLING_IMAGE_QUALITY", 85)
+        self.image_dpi = getattr(settings, "DOCLING_IMAGE_DPI", 150)
+        self.min_image_width = getattr(settings, "DOCLING_MIN_IMAGE_WIDTH", 50)
+        self.min_image_height = getattr(settings, "DOCLING_MIN_IMAGE_HEIGHT", 50)
+
+        logger.info(
+            f"DoclingParser initialized with service URL: {self.service_url}, "
+            f"extract_images: {self.extract_images}"
+        )
 
     @staticmethod
     def _maybe_add_cloud_run_auth(
@@ -193,6 +213,13 @@ class DoclingParser(BaseParser):
             # Handle potential differences in field names (snake_case vs camelCase)
             normalized_result = self._normalize_response(result)
 
+            # Extract images if enabled
+            extract_images_flag = all_kwargs.get("extract_images", self.extract_images)
+            if extract_images_flag:
+                normalized_result = self._add_images_to_result(
+                    normalized_result, pdf_bytes
+                )
+
             logger.info(
                 f"Successfully processed document {doc_id} through Docling parser service"
             )
@@ -236,3 +263,182 @@ class DoclingParser(BaseParser):
                 normalized_data[key] = value
 
         return normalized_data
+
+    def _add_images_to_result(
+        self,
+        result: dict[str, Any],
+        pdf_bytes: bytes,
+    ) -> dict[str, Any]:
+        """
+        Extract images from the PDF and add them to the parsed result.
+
+        This post-processes the Docling microservice response to add image tokens
+        to the PAWLs data and image references to figure/image annotations.
+
+        Args:
+            result: The normalized response from the Docling microservice.
+            pdf_bytes: The raw PDF bytes for image extraction.
+
+        Returns:
+            The result dict with images added to pawls_file_content.
+        """
+        try:
+            logger.info("Extracting images from PDF for LLM consumption...")
+
+            # Extract embedded images from PDF
+            images_by_page = extract_images_from_pdf(
+                pdf_bytes,
+                min_width=self.min_image_width,
+                min_height=self.min_image_height,
+                image_format=self.image_format,
+                jpeg_quality=self.image_quality,
+            )
+
+            total_images = sum(len(imgs) for imgs in images_by_page.values())
+            logger.info(
+                f"Extracted {total_images} images from {len(images_by_page)} pages"
+            )
+
+            # Add images to PAWLs pages
+            pawls_pages = result.get("pawls_file_content", [])
+            for page_idx, page_images in images_by_page.items():
+                if page_idx < len(pawls_pages) and page_images:
+                    pawls_pages[page_idx]["images"] = page_images
+
+            # Get page dimensions for cropping
+            page_dims: dict[int, tuple[float, float]] = {}
+            for page_idx, page in enumerate(pawls_pages):
+                page_info = page.get("page", {})
+                width = float(page_info.get("width", 612))
+                height = float(page_info.get("height", 792))
+                page_dims[page_idx] = (width, height)
+
+            # Process annotations to add image references for figure/image types
+            annotations = result.get("labelled_text", [])
+            for annotation in annotations:
+                label = annotation.get("annotationLabel", "").lower()
+                if label in ["figure", "image", "chart", "diagram"]:
+                    self._add_image_refs_to_annotation(
+                        annotation,
+                        pdf_bytes,
+                        images_by_page,
+                        page_dims,
+                        pawls_pages,
+                    )
+
+            # Log summary
+            annotations_with_images = sum(
+                1
+                for a in annotations
+                if a.get("annotation_json", {})
+                .get(str(a.get("page", 0)), {})
+                .get("imagesJsons")
+            )
+            logger.info(
+                f"Added images to result: {total_images} total images, "
+                f"{annotations_with_images} annotations with image refs"
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to extract images from PDF: {e}")
+
+        return result
+
+    def _add_image_refs_to_annotation(
+        self,
+        annotation: dict[str, Any],
+        pdf_bytes: bytes,
+        images_by_page: dict[int, list[PawlsImageTokenPythonType]],
+        page_dims: dict[int, tuple[float, float]],
+        pawls_pages: list[dict[str, Any]],
+    ) -> None:
+        """
+        Add image references to an annotation that represents a figure/image.
+
+        Args:
+            annotation: The annotation dict to modify.
+            pdf_bytes: PDF bytes for cropping if needed.
+            images_by_page: Pre-extracted images by page.
+            page_dims: Page dimensions dict.
+            pawls_pages: PAWLs pages list (may be modified to add cropped images).
+        """
+        page_idx = annotation.get("page", 0)
+        annotation_json = annotation.get("annotation_json", {})
+        page_data = annotation_json.get(str(page_idx), {})
+
+        bounds = page_data.get("bounds", {})
+        if not bounds:
+            return
+
+        page_images = images_by_page.get(page_idx, [])
+        image_refs = self._find_images_in_bounds(bounds, page_idx, page_images)
+
+        # If no embedded image found, crop the region
+        if not image_refs:
+            page_width, page_height = page_dims.get(page_idx, (612, 792))
+            cropped_image = crop_image_from_pdf(
+                pdf_bytes,
+                page_idx,
+                bounds,
+                page_width,
+                page_height,
+                image_format=self.image_format,
+                jpeg_quality=self.image_quality,
+                dpi=self.image_dpi,
+            )
+            if cropped_image and page_idx < len(pawls_pages):
+                if "images" not in pawls_pages[page_idx]:
+                    pawls_pages[page_idx]["images"] = []
+                img_idx = len(pawls_pages[page_idx]["images"])
+                pawls_pages[page_idx]["images"].append(cropped_image)
+                image_refs = [{"pageIndex": page_idx, "imageIndex": img_idx}]
+                logger.debug(f"Cropped image for annotation on page {page_idx}")
+
+        # Add image refs to the annotation
+        if image_refs:
+            page_data["imagesJsons"] = image_refs
+            annotation_json[str(page_idx)] = page_data
+            annotation["annotation_json"] = annotation_json
+
+    def _find_images_in_bounds(
+        self,
+        bounds: BoundingBoxPythonType,
+        page_idx: int,
+        page_images: list[PawlsImageTokenPythonType],
+    ) -> list[ImageIdPythonType]:
+        """
+        Find images that overlap with the given bounding box.
+
+        Args:
+            bounds: The annotation bounding box.
+            page_idx: Page index (0-based).
+            page_images: List of image tokens on this page.
+
+        Returns:
+            List of ImageIdPythonType references for overlapping images.
+        """
+        if not page_images:
+            return []
+
+        image_refs: list[ImageIdPythonType] = []
+        ann_left = float(bounds.get("left", 0))
+        ann_top = float(bounds.get("top", 0))
+        ann_right = float(bounds.get("right", 0))
+        ann_bottom = float(bounds.get("bottom", 0))
+
+        for img_idx, img_token in enumerate(page_images):
+            img_left = float(img_token["x"])
+            img_top = float(img_token["y"])
+            img_right = img_left + float(img_token["width"])
+            img_bottom = img_top + float(img_token["height"])
+
+            # Check for overlap
+            if (
+                ann_left < img_right
+                and ann_right > img_left
+                and ann_top < img_bottom
+                and ann_bottom > img_top
+            ):
+                image_refs.append({"pageIndex": page_idx, "imageIndex": img_idx})
+
+        return image_refs

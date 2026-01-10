@@ -59,6 +59,10 @@ class PipelineComponentDefinition:
     supported_file_types: tuple[str, ...]  # FileTypeEnum values as strings
     input_schema: dict = field(default_factory=dict)
     vector_size: Optional[int] = None  # Only for embedders
+    # Multimodal support flags (only for embedders)
+    is_multimodal: bool = False
+    supports_text: bool = True
+    supports_images: bool = False
     component_class: Optional[type] = field(
         default=None, compare=False, hash=False
     )  # Reference to actual class
@@ -79,6 +83,11 @@ class PipelineComponentDefinition:
         }
         if self.vector_size is not None:
             result["vector_size"] = self.vector_size
+        # Include multimodal flags for embedders
+        if self.component_type == ComponentType.EMBEDDER:
+            result["is_multimodal"] = self.is_multimodal
+            result["supports_text"] = self.supports_text
+            result["supports_images"] = self.supports_images
         return result
 
 
@@ -166,6 +175,11 @@ class PipelineComponentRegistry:
                     # Store the enum value ("pdf", "txt", "docx")
                     supported_file_types.append(ft.value)
 
+        # Get multimodal support flags (for embedders)
+        is_multimodal = getattr(component_class, "is_multimodal", False)
+        supports_text = getattr(component_class, "supports_text", True)
+        supports_images = getattr(component_class, "supports_images", False)
+
         # Build definition
         definition = PipelineComponentDefinition(
             name=component_class.__name__,
@@ -179,6 +193,9 @@ class PipelineComponentRegistry:
             supported_file_types=tuple(supported_file_types),
             input_schema=dict(getattr(component_class, "input_schema", {})),
             vector_size=getattr(component_class, "vector_size", None),
+            is_multimodal=is_multimodal,
+            supports_text=supports_text,
+            supports_images=supports_images,
             component_class=component_class,
         )
 

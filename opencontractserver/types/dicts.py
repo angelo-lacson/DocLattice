@@ -84,15 +84,55 @@ class PawlsTokenPythonType(TypedDict):
     text: str
 
 
+class PawlsImageTokenPythonType(TypedDict):
+    """
+    Image token within a PAWLs page. Represents an embedded image or figure
+    that can be annotated and provided to LLMs as image data.
+
+    The image can be stored either as:
+    - base64_data: Inline base64-encoded image data (for smaller images)
+    - image_path: Reference to a stored image file (for larger images)
+
+    At least one of base64_data or image_path should be present.
+    """
+
+    # Position and dimensions (in PDF points, same coordinate system as text tokens)
+    x: float
+    y: float
+    width: float
+    height: float
+
+    # Image data - at least one should be present
+    base64_data: NotRequired[str]  # Base64-encoded image data (JPEG/PNG)
+    image_path: NotRequired[str]  # Storage path reference for larger images
+
+    # Image metadata
+    format: str  # Image format: "jpeg", "png", "webp"
+    original_width: NotRequired[int]  # Original image width in pixels
+    original_height: NotRequired[int]  # Original image height in pixels
+
+    # Optional semantic information
+    alt_text: NotRequired[str]  # Alternative text / caption if available
+    image_type: NotRequired[str]  # "figure", "chart", "diagram", "photo", etc.
+
+    # Hash for deduplication across documents
+    content_hash: NotRequired[str]  # SHA-256 hash of image bytes
+
+
 class PawlsPagePythonType(TypedDict):
     """
     Pawls files are comprised of lists of jsons that correspond to the
     necessary tokens and page information for a given page. This describes
     the data shape for each of those page objs.
+
+    The optional `images` field contains extracted images from the page,
+    enabling image annotation and LLM image analysis capabilities.
     """
 
     page: PawlsPageBoundaryPythonType
     tokens: list[PawlsTokenPythonType]
+    # Optional list of image tokens extracted from this page
+    images: NotRequired[list[PawlsImageTokenPythonType]]
 
 
 class BoundingBoxPythonType(TypedDict):
@@ -115,19 +155,33 @@ class TokenIdPythonType(TypedDict):
     tokenIndex: int
 
 
+class ImageIdPythonType(TypedDict):
+    """
+    Reference to an image token within the PAWLs data structure.
+    Used in annotations to reference specific images on a page.
+    """
+
+    pageIndex: int
+    imageIndex: int
+
+
 class OpenContractsSinglePageAnnotationType(TypedDict):
     """
-    This is the data shapee for our actual annotations on a given page of a pdf.
+    This is the data shape for our actual annotations on a given page of a pdf.
     In practice, annotations are always assumed to be multi-page, and this means
     our annotation jsons are stored as a dict map of page #s to the annotation data:
 
     Dict[int, OpenContractsSinglePageAnnotationType]
 
+    Annotations can reference both text tokens (tokensJsons) and image tokens
+    (imagesJsons). An annotation may contain text, images, or both.
     """
 
     bounds: BoundingBoxPythonType
     tokensJsons: list[TokenIdPythonType]
     rawText: str
+    # Optional list of image references within this annotation's bounds
+    imagesJsons: NotRequired[list[ImageIdPythonType]]
 
 
 class TextSpanData(TypedDict):
