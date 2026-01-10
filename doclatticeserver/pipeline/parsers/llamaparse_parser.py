@@ -467,7 +467,14 @@ class LlamaParseParser(BaseParser):
                     # If no embedded image found, crop the region
                     if not image_refs:
                         # Get the next image index for storage filename
-                        current_img_count = len(pawls_pages[page_idx].get("images", [])) if page_idx < len(pawls_pages) else 0
+                        # Defensive check: ensure page exists and is a dict
+                        current_img_count = 0
+                        if page_idx < len(pawls_pages) and isinstance(
+                            pawls_pages[page_idx], dict
+                        ):
+                            current_img_count = len(
+                                pawls_pages[page_idx].get("images", [])
+                            )
                         cropped_image = crop_image_from_pdf(
                             pdf_bytes,
                             page_idx,
@@ -482,7 +489,9 @@ class LlamaParseParser(BaseParser):
                         )
                         if cropped_image:
                             # Add cropped image to the page
-                            if page_idx < len(pawls_pages):
+                            if page_idx < len(pawls_pages) and isinstance(
+                                pawls_pages[page_idx], dict
+                            ):
                                 if "images" not in pawls_pages[page_idx]:
                                     pawls_pages[page_idx]["images"] = []
                                 img_idx = len(pawls_pages[page_idx]["images"])
@@ -553,7 +562,14 @@ class LlamaParseParser(BaseParser):
                         # If no embedded image found, crop the region
                         if not image_refs:
                             # Get the next image index for storage filename
-                            current_img_count = len(pawls_pages[page_idx].get("images", [])) if page_idx < len(pawls_pages) else 0
+                            # Defensive check: ensure page exists and is a dict
+                            current_img_count = 0
+                            if page_idx < len(pawls_pages) and isinstance(
+                                pawls_pages[page_idx], dict
+                            ):
+                                current_img_count = len(
+                                    pawls_pages[page_idx].get("images", [])
+                                )
                             cropped_image = crop_image_from_pdf(
                                 pdf_bytes,
                                 page_idx,
@@ -567,11 +583,15 @@ class LlamaParseParser(BaseParser):
                                 img_idx=current_img_count,
                             )
                             if cropped_image:
-                                if page_idx < len(pawls_pages):
+                                if page_idx < len(pawls_pages) and isinstance(
+                                    pawls_pages[page_idx], dict
+                                ):
                                     if "images" not in pawls_pages[page_idx]:
                                         pawls_pages[page_idx]["images"] = []
                                     img_idx = len(pawls_pages[page_idx]["images"])
-                                    pawls_pages[page_idx]["images"].append(cropped_image)
+                                    pawls_pages[page_idx]["images"].append(
+                                        cropped_image
+                                    )
                                     image_refs = [
                                         {"pageIndex": page_idx, "imageIndex": img_idx}
                                     ]
