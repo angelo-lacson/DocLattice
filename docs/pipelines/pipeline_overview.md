@@ -31,6 +31,7 @@ graph TD
         D --> D1[MicroserviceEmbedder]
         D --> D2[ModernBERTEmbedder]
         D --> D3[MinnModernBERTEmbedder]
+        D --> D4[MultimodalMicroserviceEmbedder]
 
         PP --> PP1[PDFRedactor]
     end
@@ -40,6 +41,7 @@ graph TD
     D1 --> F[Vector Database]
     D2 --> F
     D3 --> F
+    D4 --> F
     PP1 --> G[Processed Document]
 ```
 
@@ -122,7 +124,7 @@ Current implementations:
 
 ### Embedders
 
-Embedders inherit from `BaseEmbedder` and implement the `embed_text` method:
+Embedders inherit from `BaseEmbedder` and implement the `_embed_text_impl` method. Embedders can optionally support multiple modalities (text and images).
 
 ```python
 class BaseEmbedder(ABC):
@@ -133,16 +135,53 @@ class BaseEmbedder(ABC):
     vector_size: int = 0
     supported_file_types: list[FileTypeEnum] = []
 
+    # Multimodal support flags
+    is_multimodal: bool = False  # Whether this embedder supports multiple modalities
+    supports_text: bool = True   # Whether this embedder supports text input
+    supports_images: bool = False  # Whether this embedder supports image input
+
     @abstractmethod
-    def embed_text(self, text: str) -> Optional[list[float]]:
+    def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
+        pass
+
+    def _embed_image_impl(
+        self, image_base64: str, image_format: str = "jpeg", **all_kwargs
+    ) -> Optional[list[float]]:
+        # Override in multimodal embedders
         pass
 ```
 
 Current implementations:
-- **MicroserviceEmbedder**: Generates embeddings using a remote service
+
+**Text-only Embedders:**
+- **MicroserviceEmbedder**: Generates 384-dim embeddings using a sentence-transformer microservice
 - **ModernBERTEmbedder**: Local ModernBERT embeddings generation
 - **MinnModernBERTEmbedder**: Minnesota Case Law specialized ModernBERT embedder
 - **CloudMinnModernBERTEmbedder**: Cloud-based Minnesota ModernBERT embedder
+
+**Multimodal Embedders:**
+- **MultimodalMicroserviceEmbedder**: CLIP ViT-L-14 based embedder (768-dim) supporting both text and images. Text and image embeddings are in the same vector space, enabling cross-modal similarity search.
+
+#### Multimodal Embedder Configuration
+
+The multimodal embedder requires the `multimodal-embedder` service to be running:
+
+```yaml
+# In docker-compose
+multimodal-embedder:
+  image: ghcr.io/jsv4/vectorembeddermicroservice-multimodal:latest
+  container_name: multimodal-embedder
+  environment:
+    PORT: 8000
+```
+
+Environment variable: `MULTIMODAL_EMBEDDER_URL=http://multimodal-embedder:8000`
+
+**API Endpoints:**
+- `POST /embeddings` - Text embeddings: `{"text": "..."}`
+- `POST /embeddings/image` - Image embeddings: `{"image": "<base64>"}`
+- `POST /embeddings/batch` - Batch text (max 100): `{"texts": [...]}`
+- `POST /embeddings/image/batch` - Batch images (max 20): `{"images": [...]}`
 
 ## Creating New Components
 
