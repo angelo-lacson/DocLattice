@@ -10,6 +10,10 @@ These tests exercise:
 
 The heavy Pydantic-AI runtime is patched with an in-process stub so no network
 traffic is generated; therefore the entire suite completes in <2 s.
+
+NOTE: These tests use TransactionTestCase and @pytest.mark.serial because
+async Django ORM calls require fresh database connections that don't work
+well with TestCase's transaction-based isolation.
 """
 
 import json
@@ -18,8 +22,9 @@ from dataclasses import asdict
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TransactionTestCase, override_settings
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -105,22 +110,36 @@ class _IterCtx:
 # ---------------------------------------------------------------------------
 
 
-class TestApprovalFlow(TestCase):
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
+class TestApprovalFlow(TransactionTestCase):
+    """Approval gate tests.
 
-    @classmethod
-    def setUpClass(cls):  # noqa: D401 – Django hook
-        super().setUpClass()
-        cls.user: User = User.objects.create_user("gate-user")
+    Uses TransactionTestCase because async test methods with Django ORM calls
+    don't work well with TestCase's transaction-based isolation. The async code
+    runs in a different thread context that can't share the test transaction.
 
-        cls.corpus: Corpus = Corpus.objects.create(
-            title="Gate Corpus", description="", creator=cls.user, is_public=False
+    Marked as serial because PydanticAI's async operations require an active
+    event loop, which pytest-xdist workers may close between test batches.
+    """
+
+    def setUp(self):  # noqa: D401 – Django hook
+        """Create test data - using setUp instead of setUpClass for TransactionTestCase."""
+        super().setUp()
+        self.user: User = User.objects.create_user("gate-user")
+
+        self.corpus: Corpus = Corpus.objects.create(
+            title="Gate Corpus", description="", creator=self.user, is_public=False
         )
-        cls.document: Document = Document.objects.create(
-            title="Gate Doc", description="", creator=cls.user, is_public=False
+        self.document: Document = Document.objects.create(
+            title="Gate Doc", description="", creator=self.user, is_public=False
         )
-        cls.document, _, _ = cls.corpus.add_document(
-            document=cls.document, user=cls.user
+        self.document, _, _ = self.corpus.add_document(
+            document=self.document, user=self.user
         )
+
+        # Set up mocks after creating test data
+        self._setup_mocks()
 
     # ------------------------------------------------------------------
     # Utilities
@@ -150,14 +169,8 @@ class TestApprovalFlow(TestCase):
     # Global patch applied to every test method
     # ------------------------------------------------------------------
 
-    def setUp(self):  # noqa: D401 – Django hook
-        super().setUp()
-
-        # Instance aliases for convenience
-        self.document = self.__class__.document
-        self.corpus = self.__class__.corpus
-        self.user = self.__class__.user
-
+    def _setup_mocks(self):  # noqa: D401 – Django hook
+        """Set up mocks for the test - called at the end of setUp."""
         patcher = patch(
             "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
         )

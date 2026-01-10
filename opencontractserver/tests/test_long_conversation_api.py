@@ -7,12 +7,17 @@ This tests:
 3. Session restoration for persistent conversations
 4. Message storage behavior differences
 5. Conversation metadata access
+
+NOTE: These tests use TransactionTestCase and @pytest.mark.serial because
+async Django ORM calls require fresh database connections that don't work
+well with TestCase's transaction-based isolation.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TransactionTestCase, override_settings
 
 from opencontractserver.conversations.models import (
     ChatMessage,
@@ -26,38 +31,42 @@ from opencontractserver.llms.api import agents
 User = get_user_model()
 
 
-class TestLongConversationAPI(TestCase):
-    """Test suite for long conversation functionality."""
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
+class TestLongConversationAPI(TransactionTestCase):
+    """Test suite for long conversation functionality.
 
-    @classmethod
-    def setUpTestData(cls):
-        """Create test data."""
-        cls.user = User.objects.create_user(
+    Uses TransactionTestCase because async test methods with Django ORM calls
+    don't work well with TestCase's transaction-based isolation. The async code
+    runs in a different thread context that can't share the test transaction.
+
+    Marked as serial because PydanticAI's async operations require an active
+    event loop, which pytest-xdist workers may close between test batches.
+    """
+
+    def setUp(self):
+        """Create test data - using setUp instead of setUpTestData for TransactionTestCase."""
+        self.user = User.objects.create_user(
             username="conversation_testuser",
             password="testpass123",
             email="conversation@test.com",
         )
 
-        cls.corpus = Corpus.objects.create(
+        self.corpus = Corpus.objects.create(
             title="Test Conversation Corpus",
             description="A corpus for testing conversations",
-            creator=cls.user,
+            creator=self.user,
             is_public=True,
         )
 
-        cls.document = Document.objects.create(
+        self.document = Document.objects.create(
             title="Test Conversation Document",
             description="A document for testing conversations",
-            creator=cls.user,
+            creator=self.user,
             is_public=True,
         )
 
-        cls.corpus.add_document(document=cls.document, user=cls.user)
-
-        # Ensure fixture-derived corpus is public for anonymous-agent tests.
-        if hasattr(cls, "corpus"):
-            cls.corpus.is_public = True
-            cls.corpus.save(update_fields=["is_public"])
+        self.corpus.add_document(document=self.document, user=self.user)
 
     async def test_anonymous_conversation_creation(self):
         """Test that anonymous conversations are created but not stored."""

@@ -149,7 +149,8 @@ class TestPydanticAIToolsAsync(TestCase):
         wrapper = PydanticAIToolWrapper(core_tool)
         callable_tool = wrapper.callable_function
 
-        ctx = MagicMock()  # RunContext is not used inside the wrapper
+        # Use deps=None to skip permission checks during unit tests
+        ctx = MagicMock(deps=None)
         result = await callable_tool(ctx, 3, 4)
         self.assertEqual(result, 12)
 
@@ -158,14 +159,14 @@ class TestPydanticAIToolsAsync(TestCase):
         core_tool = CoreTool.from_function(async_add)
         callable_tool = PydanticAIToolWrapper(core_tool).callable_function
 
-        ctx = MagicMock()
+        ctx = MagicMock(deps=None)
         result = await callable_tool(ctx, 5, 6)
         self.assertEqual(result, 11)
 
     async def test_factory_from_function_execution(self):
         """Test from_function returns executable callable tool."""
         callable_tool = PydanticAIToolFactory.from_function(sync_multiply)
-        ctx = MagicMock()
+        ctx = MagicMock(deps=None)
         result = await callable_tool(ctx, 7, 8)
         self.assertEqual(result, 56)
 
@@ -177,14 +178,14 @@ class TestPydanticAIToolsAsync(TestCase):
             """Return x squared."""
             return x * x
 
-        ctx = MagicMock()
+        ctx = MagicMock(deps=None)
         result = await square(ctx, 9)  # type: ignore[arg-type]
         self.assertEqual(result, 81)
 
     async def test_typed_tool_execution(self):
         """Test typed tool executes correctly."""
         typed_tool = create_typed_pydantic_ai_tool(subtract)
-        ctx = MagicMock()
+        ctx = MagicMock(deps=None)
         result = await typed_tool(ctx, 10, 4)
         self.assertEqual(result, 6)
 
@@ -204,7 +205,7 @@ class TestPydanticAIToolsAsync(TestCase):
             description="Divide two numbers and handle division by zero.",
         )
 
-        ctx = MagicMock()
+        ctx = MagicMock(deps=None)
         result_ok = await callable_tool(ctx, 8, 2)
         result_fail = await callable_tool(ctx, 8, 0)
 
