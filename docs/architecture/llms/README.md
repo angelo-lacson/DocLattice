@@ -1,10 +1,12 @@
 # OpenContracts LLM Framework
 
+Last Updated: 2026-01-09
+
 OpenContract's API for creating document and corpus agents.
 
 ## Philosophy
 
-- **Framework Agnostic**: Support multiple LLM frameworks (LlamaIndex, PydanticAI) through unified interfaces
+- **Extensible Framework Design**: Built on PydanticAI with a pluggable architecture for future framework adapters
 - **Rich Responses**: Every interaction returns structured data with sources, metadata, and conversation tracking
 - **Conversation Management**: Persistent conversations with automatic message storage and retrieval
 - **Tool Integration**: Extensible tool system for document analysis and data retrieval
@@ -112,7 +114,7 @@ Agents are the primary interface for interacting with documents and corpora. The
 
 - **Document Agents**: Work with individual documents (corpus optional; pass None for standalone documents).
 - **Corpus Agents**: Work with collections of documents.
-- **Framework Flexibility**: Choose between LlamaIndex, PydanticAI, or future frameworks.
+- **Framework Flexibility**: Built on PydanticAI with extensible architecture for custom framework adapters.
 - **Conversation Persistence**: Automatic conversation management and message storage.
 - **Structured Data Extraction**: One-shot typed data extraction without conversation persistence.
 - **Nested Streaming**: Real-time visibility into child agent execution through stream observers.
@@ -127,7 +129,7 @@ from opencontractserver.llms.types import AgentFramework
 # corpus_obj = Corpus.objects.get(id=1) # Example corpus
 # document_obj = Document.objects.get(id=123) # Example document
 
-# Document agent with default framework (LlamaIndex)
+# Document agent with default framework (PydanticAI)
 # The `corpus` parameter is optional - can be None for standalone documents
 agent = await agents.for_document(document=123, corpus=1) # Use actual document/corpus IDs or objects
 
@@ -230,8 +232,8 @@ response.metadata             # Additional response metadata (framework-specific
 # Legacy (pre-v0.9) – UnifiedStreamResponse
 # ----------------------------------------
 #
-# Older adapters (e.g. LlamaIndex) still emit the former ``UnifiedStreamResponse``
-# object.  Your code can support both by simply checking ``hasattr(chunk, "type")``
+# Legacy code using ``UnifiedStreamResponse`` can be updated to use the new event-based
+# streaming. Your code can support both by simply checking ``hasattr(chunk, "type")``
 # and falling back to the old attributes when the discriminator is absent.
 
 # SourceNode structure (individual source)
@@ -325,7 +327,7 @@ if result:
   - Uses pydantic_ai's native capabilities to choose the best extraction method
   - Automatically selects between tool calling, JSON mode, or prompted extraction based on the model
   - Simplified system prompts for better reliability and efficiency
-- ⚠️ **LlamaIndex**: Returns `None` (not yet implemented)
+- Note: Custom framework adapters can implement `_structured_response_raw()` to support structured extraction
 
 **Best Practices:**
 
@@ -601,23 +603,16 @@ agent = await agents.for_document(
 The framework automatically converts tools to the appropriate format:
 
 ```python
-# LlamaIndex: CoreTool → FunctionTool
+# CoreTool objects are automatically converted to framework-specific formats
 # PydanticAI: CoreTool → PydanticAIToolWrapper
 
-# Tools work seamlessly across frameworks
+# Tools work seamlessly with the framework
 # The `corpus` parameter is optional for document agents.
-llama_agent = await agents.for_document(
-    document=123, # Use actual document ID or object
-    corpus=None,  # Or pass a corpus ID/object when available
-    framework=AgentFramework.LLAMA_INDEX,  # LLAMA_INDEX OOTB wrapper removed but example retained to show how you could switch
-    tools=["load_md_summary"]
-)
-
-pydantic_agent = await agents.for_document(
+agent = await agents.for_document(
     document=123, # Use actual document ID or object
     corpus=None,  # Or pass a corpus ID/object when available
     framework=AgentFramework.PYDANTIC_AI,
-    tools=["load_md_summary"]  # Same tool, different framework
+    tools=["load_md_summary"]
 )
 
 #### Tool Approval & Human-in-the-Loop
@@ -923,7 +918,7 @@ return  # No further execution
 **Implementation Notes:**
 - Approval state persists across server restarts (stored in database)
 - Only PydanticAI agents support approval gating currently
-- LlamaIndex agents ignore the `requires_approval` flag
+- Custom framework adapters should implement approval handling in their `_stream_raw()` method
 - Code paths: `tools/pydantic_ai_tools.py` (veto-gate), `agents/pydantic_ai_agents.py` (pause/resume)
 - All events include `user_message_id` and `llm_message_id` for tracking
 - The method always returns an async generator (even for rejection) for consistent API
@@ -1093,9 +1088,9 @@ Based on the contract analysis, the key terms include...
 ✅ Complete! Usage: {'requests': 2, 'total_tokens': 1247}
 ```
 
-#### Legacy Streaming (LlamaIndex & Backward Compatibility)
+#### Legacy Streaming (Backward Compatibility)
 
-**LlamaIndex agents** and older code use the traditional streaming approach:
+Legacy code using the traditional streaming approach can be updated to use event-based streaming:
 
 ```python
 # Traditional streaming - still supported
@@ -1197,7 +1192,7 @@ The framework follows a layered architecture that separates concerns and enables
 │           API Layer                     │  ← api.py (agents, embeddings, vector_stores, tools)
 ├─────────────────────────────────────────┤
 │        Framework Adapter Layer          │  ← agents/pydantic_ai_agents.py
-│ (Implements CoreAgent for specific SDK) │     (llama_index adapter removed)
+│ (Implements CoreAgent for specific SDK) │     agents/pydantic_ai_agents.py
 ├─────────────────────────────────────────┤
 │         Core Agent Protocol             │  ← agents/core_agents.py (Defines .chat, .stream)
 │         & Unified Tool System           │  ← tools/ (CoreTool, UnifiedToolFactory)
@@ -1225,11 +1220,11 @@ The framework follows a layered architecture that separates concerns and enables
 
 3. **Framework Adapters** (e.g., `agents/pydantic_ai_agents.py`):
    - E.g., `PydanticAIDocumentAgent.create()` builds the actual LLM integration.
-   - Creates vector stores, configures embeddings, sets up the underlying LlamaIndex agent.
+   - Creates vector stores, configures embeddings, sets up the underlying PydanticAI agent.
    - Returns a framework-specific agent that implements the `CoreAgent` protocol.
 
 4. **CoreAgent Protocol (`agents/core_agents.py`)**:
-   - The returned agent object (e.g., an instance of `LlamaIndexDocumentAgent`) inherits from `CoreAgentBase`, which provides universal `chat()`, `stream()`, and `structured_response()` wrappers that handle all database persistence, approval gating, and message lifecycle management.
+   - The returned agent object (e.g., an instance of `PydanticAIDocumentAgent`) inherits from `CoreAgentBase`, which provides universal `chat()`, `stream()`, and `structured_response()` wrappers that handle all database persistence, approval gating, and message lifecycle management.
    - Framework adapters only implement low-level `_chat_raw()`, `_stream_raw()`, and `_structured_response_raw()` methods that return pure content without any database side-effects.
    - When you call `await agent.chat("Your query")`, the `CoreAgentBase` wrapper automatically handles user message storage, LLM placeholder creation, calling the adapter's `_chat_raw()` method, and completing the stored message with results.
    - The `structured_response()` method provides ephemeral, typed data extraction without any database persistence—perfect for one-shot extractions.
@@ -1321,19 +1316,14 @@ Choose your framework based on your needs:
 
 | Framework | Best For | Streaming Type | Structured Response | Visibility |
 |-----------|----------|----------------|---------------------|------------|
-| **LlamaIndex** | *Removed - implement custom adapter* | Traditional (START/CONTENT/FINISH) | ❌ Not implemented | Basic content streaming |
 | **PydanticAI** | Production use, all features | Event-based (thought/content/sources/final) | ✅ Optimized with automatic strategy selection | Full execution graph visibility |
+| **Custom Adapters** | Specialized requirements | Implement in `_stream_raw()` | Implement in `_structured_response_raw()` | Depends on implementation |
 
 ```python
-# Specify framework explicitly
-llama_agent = await agents.for_document(
+# Specify framework explicitly (PydanticAI is the default and recommended framework)
+agent = await agents.for_document(
     document=123, corpus=1,
-    framework=AgentFramework.LLAMA_INDEX
-)
-
-pydantic_agent = await agents.for_document(
-    document=123, corpus=1,
-    framework=AgentFramework.PYDANTIC_AI  # Recommended for new projects
+    framework=AgentFramework.PYDANTIC_AI
 )
 
 # Or set globally via Django settings
@@ -1544,10 +1534,8 @@ query = VectorSearchQuery(
 #### Framework-Specific Vector Stores
 
 ```python
-# LlamaIndex vector store
-# Note: The LlamaIndex vector store adapter has been removed.
-# For LlamaIndex integration, implement your own adapter following
-# the CoreAnnotationVectorStore interface.
+# Custom vector stores can be implemented by extending CoreAnnotationVectorStore
+# See opencontractserver/llms/vector_stores/core_vector_stores.py for the interface
 
 # PydanticAI vector store
 from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import PydanticAIAnnotationVectorStore
@@ -1762,7 +1750,7 @@ The framework is designed for production use with several performance optimizati
 ### Caching Strategy
 
 - **Embedding Caching**: Vector embeddings can be cached to avoid recomputation (implementation specific, may depend on embedder).
-- **Model Caching**: LLM models are cached and reused across requests (often handled by underlying SDKs like LlamaIndex).
+- **Model Caching**: LLM models are cached and reused across requests (handled by the underlying framework).
 - **Vector Store Caching**: Search results can be cached for repeated queries (application-level or via custom store decorators).
 
 ### Memory Management

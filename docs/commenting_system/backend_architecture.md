@@ -14,7 +14,7 @@ All models are defined in `opencontractserver/conversations/models.py`.
 
 **Purpose**: Stores discussion threads or agent-based chats.
 
-**Location**: `opencontractserver/conversations/models.py:141-432`
+**Location**: `opencontractserver/conversations/models.py:402-776`
 
 **Key Fields**:
 
@@ -95,7 +95,7 @@ def can_moderate(self, user: User) -> bool:
 
 **Purpose**: Individual messages within conversations (both chat and thread types).
 
-**Location**: `opencontractserver/conversations/models.py:434-598`
+**Location**: `opencontractserver/conversations/models.py:778-970`
 
 **Key Fields**:
 
@@ -147,6 +147,13 @@ class ChatMessage(BaseOCModel):
     # Soft deletion
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by = models.ForeignKey(User, null=True, blank=True)
+
+    # Agent mentions (for @agent syntax)
+    mentioned_agents = models.ManyToManyField(
+        'agents.AgentConfiguration',
+        related_name='mentioned_in_messages',
+        help_text='Agents mentioned in this message that should respond'
+    )
 ```
 
 **Message Types**:
@@ -181,7 +188,7 @@ def restore_message(self, user: User):
 
 **Purpose**: Tracks individual votes on messages.
 
-**Location**: `opencontractserver/conversations/models.py:634-685`
+**Location**: `opencontractserver/conversations/models.py:1004-1055`
 
 **Key Fields**:
 
@@ -226,7 +233,7 @@ This ensures:
 
 **Purpose**: Caches reputation scores for users (globally and per-corpus).
 
-**Location**: `opencontractserver/conversations/models.py:703-777`
+**Location**: `opencontractserver/conversations/models.py:1144-1203`
 
 **Key Fields**:
 
@@ -281,7 +288,7 @@ class Meta:
 
 **Purpose**: Designates users as moderators with specific permissions.
 
-**Location**: `opencontractserver/conversations/models.py:794-854`
+**Location**: `opencontractserver/conversations/models.py:1235-1295`
 
 **Key Fields**:
 
@@ -353,7 +360,7 @@ moderator.permissions = ["lock_threads"]
 
 **Purpose**: Immutable audit log of all moderation actions.
 
-**Location**: `opencontractserver/conversations/models.py:885-951`
+**Location**: `opencontractserver/conversations/models.py:1326-1392`
 
 **Key Fields**:
 
@@ -424,7 +431,7 @@ The soft delete pattern allows "deleting" records without actually removing them
 
 ### Custom QuerySet
 
-**Location**: `opencontractserver/conversations/models.py:46-91`
+**Location**: `opencontractserver/conversations/models.py:60-106`
 
 ```python
 class SoftDeleteQuerySet(models.QuerySet):
@@ -447,7 +454,7 @@ class SoftDeleteQuerySet(models.QuerySet):
 
 ### Custom Manager
 
-**Location**: `opencontractserver/conversations/models.py:95-118`
+**Location**: `opencontractserver/conversations/models.py:305-329`
 
 ```python
 class SoftDeleteManager(models.Manager):
@@ -1050,3 +1057,7 @@ query GetGlobalLeaders {
 - **GraphQL tests**: `opencontractserver/tests/test_engagement_metrics_graphql.py` (9 tests)
 
 **Total**: 31 tests covering model creation, metrics calculation, task execution, GraphQL queries, and permission checks.
+
+---
+
+*Last Updated: 2026-01-09*

@@ -26,15 +26,20 @@ The folder system allows users to organize documents within corpuses using a tre
 - Unique constraint: folder name must be unique per parent within corpus
 - Validation: parent must be in same corpus
 
-**CorpusDocumentFolder Model:**
-- Junction table enforcing one folder per document per corpus
-- Fields: document FK, corpus FK, folder FK (nullable for root)
-- Unique constraint: (document, corpus)
-- Validation: folder must belong to same corpus, document must be in corpus
+**DocumentPath.folder Field (Source of Truth):**
+- Document folder assignment is stored in `DocumentPath.folder` field
+- Each `DocumentPath` record links a document to a corpus with optional folder
+- `DocumentPath.folder` can be `NULL` for documents at corpus root
+- One active folder per document per corpus (enforced via DocumentPath constraints)
+- Validation: folder must belong to same corpus as the DocumentPath
+
+> **Note:** The `CorpusDocumentFolder` model was removed in migration `0026_remove_corpusdocumentfolder.py`.
+> `DocumentPath.folder` is the single source of truth for folder assignments.
 
 **Migrations:**
-- `0024_corpusfolder_corpusdocumentfolder_and_more.py`: Initial models and constraints
+- `0024_corpusfolder_corpusdocumentfolder_and_more.py`: Initial CorpusFolder model
 - `0025_corpusfolder_is_public.py`: Added is_public field for permission queries
+- `0026_remove_corpusdocumentfolder.py`: Removed CorpusDocumentFolder (DocumentPath.folder is source of truth)
 
 ### 2. GraphQL Schema
 
@@ -189,9 +194,10 @@ All mutations check permissions: creator OR is_public OR explicit corpus permiss
 - Helper actions for common operations
 
 **Routing Integration:** 🚧 TODO
-- Update routing system per `docs/frontend/routing_system.md`
-- URL pattern: `/corpus/:corpusId/folder/:folderId?`
-- Folder state should drive URL and vice versa
+- Update routing system per [`docs/frontend/routing_system.md`](../frontend/routing_system.md)
+- The routing system uses `CentralRouteManager` as single source of truth
+- Folder state managed via `?folder=` query param (already supported in routing)
+- See [Route Patterns](../frontend/routing_system.md#route-patterns) for query parameter documentation
 
 ### Components Implemented
 
@@ -519,9 +525,9 @@ export const expandedFolderIdsAtom = atomWithStorage<Set<string>>(
 
 ## Migration Path for Existing Data
 
-- All existing corpus documents are implicitly in "root" (no CorpusDocumentFolder record)
+- All existing corpus documents are implicitly in "root" (`DocumentPath.folder = NULL`)
 - Users can create folders and move documents as needed
-- No data migration required
+- No data migration required - existing DocumentPath records work with folder=NULL
 
 ## Future Enhancements (Not in Scope)
 
@@ -551,7 +557,7 @@ A: No. Folders inherit corpus permissions to keep the model simple. Users who ca
 A: No. ONE folder per document per corpus. This simplifies UI and prevents ambiguity. Document can be in different folders in different corpuses.
 
 **Q: How to handle documents not in any folder?**
-A: They're in the "corpus root". No CorpusDocumentFolder record = root. UI shows "Root" as top-level tree item.
+A: They're in the "corpus root". `DocumentPath.folder = NULL` means document is at root. UI shows "Root" as top-level tree item.
 
 **Q: Should we paginate folder list?**
 A: No. Folders are lightweight metadata. Load all folders eagerly (flat list), build tree on client. Paginate documents per folder.
@@ -561,6 +567,6 @@ A: No artificial depth limit. UI handles with breadcrumb ellipsis and tree virtu
 
 ---
 
-**Last Updated**: 2025-11-10
-**Status**: Backend complete (35/35 tests passing), Frontend pending
-**Next Step**: Create GraphQL fragments and queries for frontend
+**Last Updated**: 2026-01-09
+**Status**: Backend complete (35/35 tests passing), Frontend UI Components complete
+**Architecture Note**: DocumentPath.folder is the single source of truth for folder assignments (CorpusDocumentFolder model removed)

@@ -17,11 +17,10 @@ This will bring up a dialog to load documents:
 ![](../assets/images/screenshots/Import_Documents_Modal.png)
 
 ### Select Documents to Upload
-Open Contracts works with PDFs only (as this helps us have a single file type with predictable
-data structures, formats, etc.). In the future, we'll add functionality to convert other files to PDF,
-but, for now, please use PDFs. It doesn't matter if they are OCRed or not as OpenContracts performs its own
-OCR on every PDF anyway to ensure consistent OCR quality and outputs. Once you've added documents for upload,
-you'll see a list of documents:
+OpenContracts works with PDFs and several other document formats including Word documents (.docx),
+PowerPoint presentations (.pptx), and plain text files. It doesn't matter if PDFs are OCRed or not as
+OpenContracts can perform its own OCR to ensure consistent quality and outputs. Once you've added documents
+for upload, you'll see a list of documents:
 
 ![](../assets/images/screenshots/Import_Documents_Modal.png)
 
@@ -30,13 +29,15 @@ Click on a document to change the description or title:
 ![](../assets/images/screenshots/Edit_Document_Details.png)
 
 ### Upload Your Documents
-Click upload to upload the documents to OpenContracts. **Note** Once the documents are
-uploaded, they are automatically processed with Tesseract amd PAWLs to create a layer of
-tokens - each one representing a word / symbol in the PDF an its X,Y coordinates on the page. This is what
-powers OpenContracts annotator and allows us to create both layout-aware and text-only annotations. **While
-the PAWLs processing script is running, the document you uploaded will not be available for viewing and cannot be
-added to a corpus. You'll see a loading bar on the document until the pre-processing is complete. This
-is only one once and can take a long time (a couple of minutes to a max of 10) depending on the document length,
-quality, etc.**
+Click upload to upload the documents to OpenContracts. **Note:** Once the documents are
+uploaded, they are automatically processed by the document parser (Docling by default) to extract text,
+structure, and create a layer of tokens - each one representing a word or symbol with its X,Y coordinates
+on the page. This is what powers the OpenContracts annotator and allows us to create both layout-aware
+and text-only annotations. **While the document is being processed, it will not be available for viewing
+and cannot be added to a corpus. You'll see a loading indicator on the document until processing is complete.
+This only happens once and can take a few minutes depending on the document length and complexity.**
+
+For more details on the document processing pipeline, see the
+[Pipeline Overview](../pipelines/pipeline_overview.md).
 
 ![](../assets/images/screenshots/Document_Processing.png)

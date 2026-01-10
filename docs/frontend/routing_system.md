@@ -61,7 +61,6 @@ This is non-negotiable. Violations cause infinite loops, route jittering, compet
 - `NavMenu.tsx` / `MobileNavMenu.tsx` (clearing on menu clicks)
 - `CorpusBreadcrumbs.tsx` (manual clearing)
 - `Corpuses.tsx` (3 violations)
-- Deleted obsolete `RouteStateSync.ts` hook (14 violations)
 
 **If you find yourself writing `openedCorpus(someValue)`, `openedDocument(someValue)`, or `openedExtract(someValue)` anywhere except `CentralRouteManager.tsx`, STOP. You are introducing a bug.**
 
@@ -2199,3 +2198,7 @@ It's the single source of truth. If routing behavior seems wrong, the fix goes t
 ---
 
 **This architecture doesn't suck because it's simple, testable, and maintainable. Keep it that way.**
+
+---
+
+*Last Updated: 2026-01-09*

@@ -81,6 +81,7 @@ OpenContracts implements a sophisticated hierarchical permission system with dif
    - **Performance benefit**: Eliminates N+1 permission queries
    - **CRITICAL**: Structural annotations and relationships are ALWAYS read-only except for superusers
    - Relationships use the same permission inheritance model as annotations (implemented at `permissioning.py:376-433`)
+   - **Privacy fields**: Both Annotation and Relationship models have `created_by_analysis`, `created_by_extract`, `structural`, and `is_public` fields (see `opencontractserver/annotations/models.py`)
 
 4. **Analyses and Extracts - HYBRID MODEL**
    - Have their own individual permissions (can be shared independently)
@@ -399,12 +400,14 @@ DELETE Check:
 - Document-specific queries with `get_relationships_for_document(user, doc_id, ...)`
 - Permission checks with `user_has_permission(user, doc_relationship, permission_type)`
 
-#### Annotations & Relationships
+#### Annotations & Relationships (including DocumentRelationship)
 ```
 Effective Permission = MIN(document_permission, corpus_permission)
 Structural Override = IF structural THEN READ-ONLY (except superuser)
 Privacy Filter = IF created_by_analysis/extract THEN require source permission
 ```
+
+**Note**: The Relationship model (for annotation-to-annotation relationships) has the same privacy fields as Annotation: `created_by_analysis`, `created_by_extract`, `structural`, and `is_public`. See model definition at `opencontractserver/annotations/models.py:155-376`.
 
 #### Analyses & Extracts (Hybrid Model)
 ```

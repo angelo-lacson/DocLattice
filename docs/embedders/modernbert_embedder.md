@@ -11,7 +11,7 @@ The ModernBERT embedder is a sentence transformer model that generates 768-dimen
 - 768-dimensional embeddings
 - Support for long documents (up to 8192 tokens)
 - Optimized for semantic similarity and search
-- Supports PDF, TXT, DOCX, and HTML file types
+- Supports PDF, TXT, and DOCX file types
 
 ## Installation
 
@@ -20,6 +20,13 @@ The ModernBERT embedder requires the `sentence-transformers` library:
 ```bash
 pip install sentence-transformers>=2.2.2
 ```
+
+## Source Code
+
+The embedder implementation is located at:
+- [`opencontractserver/pipeline/embedders/modern_bert_embedder.py`](../../opencontractserver/pipeline/embedders/modern_bert_embedder.py)
+
+The class name is `ModernBERTEmbedder`.
 
 ## Usage
 
@@ -55,24 +62,14 @@ docker-compose -f docker-compose.modernbert.yml up -d
 
 ## Configuration
 
-The ModernBERT embedder is configured in `config/settings/base.py`:
+Embedder configuration is defined in [`config/settings/base.py`](../../config/settings/base.py).
 
-```python
-# Preferred embedders for each MIME type
-PREFERRED_EMBEDDERS = {
-    "text/html": "opencontractserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
-    # ...
-}
-
-# Default embedders by filetype and dimension
-DEFAULT_EMBEDDERS_BY_FILETYPE_AND_DIMENSION = {
-    "application/pdf": {
-        768: "opencontractserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder768",
-        # ...
-    },
-    # ...
-}
+The full module path for the ModernBERT embedder is:
 ```
+opencontractserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder
+```
+
+By default, OpenContracts uses the `MicroserviceEmbedder` for production deployments. To use the ModernBERT embedder directly, update the `PREFERRED_EMBEDDERS` or `DEFAULT_EMBEDDERS_BY_FILETYPE` settings.
 
 ## Model Details
 
@@ -87,3 +84,6 @@ DEFAULT_EMBEDDERS_BY_FILETYPE_AND_DIMENSION = {
 - For faster startup, use the Docker setup which preloads the model.
 - The model requires approximately 500MB of disk space.
 - Using GPU acceleration is recommended for processing large volumes of text.
+
+---
+*Last Updated: 2026-01-09*

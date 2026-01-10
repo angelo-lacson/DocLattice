@@ -1,6 +1,10 @@
 # CorpusAction System in OpenContracts
 
+Last Updated: 2026-01-09
+
 The CorpusAction system in OpenContracts automates document processing when documents are added to or edited in a corpus. This system is designed to be flexible, allowing for different types of actions to be triggered based on configuration.
+
+> **Note on Document-Corpus Relationships**: The `DocumentPath` model (defined in [`opencontractserver/documents/models.py`](../../opencontractserver/documents/models.py)) is the **source of truth** for tracking where documents live within corpuses. It implements the Path Tree from the dual-tree versioning architecture and tracks lifecycle events (import, update, move, delete, restore). See [`docs/architecture/document_versioning.md`](./document_versioning.md) for the full architecture.
 
 ## Action Types
 

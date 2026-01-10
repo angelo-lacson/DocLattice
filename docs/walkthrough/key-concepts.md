@@ -42,7 +42,7 @@ API docs.
 ### GraphQL-only features
 
 Some of our features are currently not accessible via the frontend. Sharing analyses and corpuses to the public, for
-example, can only be achieved via `makeCorpusPublic` and `makeAnalysisPublic` mutations, and *only* admins have this
+example, can only be achieved via `SetCorpusVisibility` and `makeAnalysisPublic` mutations, and *only* admins have this
 power at the moment. For our current release, we've done this to prevent large numbers of public corpuses being shared
 to cut down on server usage. We'd like to make a fully free and open, collaborative platform with more features to share
 anonymously, but this will require additional effort and compute power.

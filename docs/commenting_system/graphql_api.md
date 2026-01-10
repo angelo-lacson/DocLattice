@@ -1105,22 +1105,22 @@ function CreateThreadForm({ corpusId }) {
 
 The agent mentions feature allows users to reference AI agents in chat messages using `@agent:slug` syntax. When a message containing agent mentions is created, the system automatically parses the content and links the mentioned agents to the message.
 
-### Query: searchAgentsForMention
+### Query: search_agents_for_mention
 
 **Search for agents to autocomplete in mention UI**
+
+**Location**: `config/graphql/queries.py:3031-3074`
 
 **Rate Limit**: 100/minute (READ_LIGHT)
 
 ```graphql
 query SearchAgentsForMention(
-  $searchText: String!
+  $textSearch: String
   $corpusId: ID
-  $limit: Int
 ) {
   searchAgentsForMention(
-    searchText: $searchText
+    textSearch: $textSearch
     corpusId: $corpusId
-    limit: $limit
   ) {
     edges {
       node {
@@ -1136,18 +1136,18 @@ query SearchAgentsForMention(
 }
 ```
 
-**Implementation** (`queries.py:1245-1310`):
+**Implementation**: See `config/graphql/queries.py:3067-3114`
+
 1. Filters agents using `visible_to_user()` for permission enforcement
-2. Searches by name or slug using case-insensitive `icontains`
+2. Searches by name, slug, or description using case-insensitive `icontains`
 3. Returns global agents (GLOBAL scope) always
 4. Returns corpus-scoped agents (CORPUS scope) only if `corpusId` is provided
-5. Orders results with exact matches first, then partial matches
-6. Limits results (default: 10, max: 50)
+5. Prioritizes exact matches, then partial matches
+6. Uses Django relay connection for pagination
 
 **Parameters**:
-- `searchText` (required): Text to search for in agent name/slug
+- `textSearch` (optional): Text to search for in agent name, slug, or description
 - `corpusId` (optional): If provided, also returns corpus-scoped agents for this corpus
-- `limit` (optional): Maximum results to return (default: 10)
 
 **Example**:
 
@@ -1370,3 +1370,114 @@ The extension renders mentions as Markdown links:
 
 Agent mention tests are in:
 - `opencontractserver/tests/test_agents.py` - Backend tests for search query and mention parsing
+
+## Leaderboard Queries
+
+**Location**: `config/graphql/queries.py:3208-3278` (basic), `config/graphql/queries.py:3280-3515` (advanced)
+
+### corpus_leaderboard
+
+**Get top contributors for a corpus by reputation**
+
+```graphql
+query GetCorpusLeaderboard($corpusId: ID!, $limit: Int) {
+  corpusLeaderboard(corpusId: $corpusId, limit: $limit) {
+    id
+    username
+    reputationForCorpus(corpusId: $corpusId)
+  }
+}
+```
+
+### global_leaderboard
+
+**Get top contributors globally by reputation**
+
+```graphql
+query GetGlobalLeaderboard($limit: Int) {
+  globalLeaderboard(limit: $limit) {
+    id
+    username
+    reputationGlobal
+  }
+}
+```
+
+### leaderboard (Advanced)
+
+**Get leaderboard with multiple metrics and time scopes**
+
+**Location**: `config/graphql/queries.py:3281-3510`
+
+```graphql
+query GetLeaderboard(
+  $metric: LeaderboardMetricEnum!
+  $scope: LeaderboardScopeEnum
+  $corpusId: ID
+  $limit: Int
+) {
+  leaderboard(
+    metric: $metric
+    scope: $scope
+    corpusId: $corpusId
+    limit: $limit
+  ) {
+    metric
+    scope
+    corpusId
+    entries {
+      user {
+        id
+        username
+      }
+      rank
+      score
+      breakdown {
+        key
+        value
+      }
+    }
+    generatedAt
+  }
+}
+```
+
+**Supported Metrics** (LeaderboardMetricEnum):
+- `BADGES` - Rank by badge count
+- `MESSAGES` - Rank by message count
+- `THREADS` - Rank by thread creation count
+- `ANNOTATIONS` - Rank by annotation count
+- `REPUTATION` - Rank by reputation score
+
+**Supported Scopes** (LeaderboardScopeEnum):
+- `ALL_TIME` - All-time statistics (default)
+- `MONTHLY` - Last 30 days
+- `WEEKLY` - Last 7 days
+
+### community_stats
+
+**Get overall community engagement statistics**
+
+```graphql
+query GetCommunityStats($corpusId: ID) {
+  communityStats(corpusId: $corpusId) {
+    totalUsers
+    activeUsersLast30Days
+    totalMessages
+    totalThreads
+    totalAnnotations
+    totalBadgesAwarded
+    topContributors {
+      user {
+        id
+        username
+      }
+      score
+    }
+  }
+}
+```
+
+---
+
+*Last Updated: 2026-01-09*

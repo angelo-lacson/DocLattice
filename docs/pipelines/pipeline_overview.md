@@ -1,5 +1,7 @@
 # OpenContracts Pipeline Architecture
 
+*Last Updated: 2026-01-09*
+
 The OpenContracts pipeline system is a modular and extensible architecture for processing documents through various stages: parsing, thumbnail generation, and embedding. This document provides an overview of the system architecture and guides you through creating new pipeline components.
 
 ## Architecture Overview
@@ -31,6 +33,7 @@ graph TD
         D --> D1[MicroserviceEmbedder]
         D --> D2[ModernBERTEmbedder]
         D --> D3[MinnModernBERTEmbedder]
+        D --> D4[CloudMinnModernBERTEmbedder]
 
         PP --> PP1[PDFRedactor]
     end
@@ -40,6 +43,7 @@ graph TD
     D1 --> F[Vector Database]
     D2 --> F
     D3 --> F
+    D4 --> F
     PP1 --> G[Processed Document]
 ```
 
@@ -70,79 +74,40 @@ PREFERRED_EMBEDDERS = {
 
 ### Parsers
 
-Parsers inherit from `BaseParser` and implement the `parse_document` method:
-
-```python
-class BaseParser(ABC):
-    title: str = ""
-    description: str = ""
-    author: str = ""
-    dependencies: list[str] = []
-    supported_file_types: list[FileTypeEnum] = []
-
-    @abstractmethod
-    def parse_document(
-        self, user_id: int, doc_id: int, **kwargs
-    ) -> Optional[OpenContractDocExport]:
-        pass
-```
+Parsers inherit from [`BaseParser`](../../opencontractserver/pipeline/base/parser.py) and implement the `parse_document` method. See the base class for the full interface.
 
 Current implementations:
-- **DoclingParser**: Advanced PDF parser using machine learning (REST microservice)
-- **LlamaParseParser**: Cloud-based parser using LlamaParse API with layout extraction
-- **NLMIngestParser**: Alternative PDF parser using NLM Ingest library
-- **TxtParser**: Simple text file parser
+
+| Class | Description | Source |
+|-------|-------------|--------|
+| **DoclingParser** | Advanced PDF parser using machine learning (REST microservice) | [`docling_parser_rest.py`](../../opencontractserver/pipeline/parsers/docling_parser_rest.py) |
+| **LlamaParseParser** | Cloud-based parser using LlamaParse API with layout extraction | [`llamaparse_parser.py`](../../opencontractserver/pipeline/parsers/llamaparse_parser.py) |
+| **NLMIngestParser** | Alternative PDF parser using NLM Ingest library | [`nlm_ingest_parser.py`](../../opencontractserver/pipeline/parsers/nlm_ingest_parser.py) |
+| **TxtParser** | Simple text file parser | [`oc_text_parser.py`](../../opencontractserver/pipeline/parsers/oc_text_parser.py) |
 
 ### Thumbnailers
 
-Thumbnailers inherit from `BaseThumbnailGenerator` and implement the `_generate_thumbnail` method:
-
-```python
-class BaseThumbnailGenerator(ABC):
-    title: str = ""
-    description: str = ""
-    author: str = ""
-    dependencies: list[str] = []
-    supported_file_types: list[FileTypeEnum] = []
-
-    @abstractmethod
-    def _generate_thumbnail(
-        self,
-        txt_content: Optional[str],
-        pdf_bytes: Optional[bytes],
-        height: int = 300,
-        width: int = 300,
-    ) -> Optional[tuple[bytes, str]]:
-        pass
-```
+Thumbnailers inherit from [`BaseThumbnailGenerator`](../../opencontractserver/pipeline/base/thumbnailer.py) and implement the `_generate_thumbnail` method. See the base class for the full interface.
 
 Current implementations:
-- **PdfThumbnailGenerator**: Generates thumbnails from PDF first pages
-- **TextThumbnailGenerator**: Creates text-based preview images
+
+| Class | Description | Source |
+|-------|-------------|--------|
+| **PdfThumbnailGenerator** | Generates thumbnails from PDF first pages | [`pdf_thumbnailer.py`](../../opencontractserver/pipeline/thumbnailers/pdf_thumbnailer.py) |
+| **TextThumbnailGenerator** | Creates text-based preview images | [`text_thumbnailer.py`](../../opencontractserver/pipeline/thumbnailers/text_thumbnailer.py) |
 
 ### Embedders
 
-Embedders inherit from `BaseEmbedder` and implement the `embed_text` method:
-
-```python
-class BaseEmbedder(ABC):
-    title: str = ""
-    description: str = ""
-    author: str = ""
-    dependencies: list[str] = []
-    vector_size: int = 0
-    supported_file_types: list[FileTypeEnum] = []
-
-    @abstractmethod
-    def embed_text(self, text: str) -> Optional[list[float]]:
-        pass
-```
+Embedders inherit from [`BaseEmbedder`](../../opencontractserver/pipeline/base/embedder.py) and implement the `_embed_text_impl` method. See the base class for the full interface.
 
 Current implementations:
-- **MicroserviceEmbedder**: Generates embeddings using a remote service
-- **ModernBERTEmbedder**: Local ModernBERT embeddings generation
-- **MinnModernBERTEmbedder**: Minnesota Case Law specialized ModernBERT embedder
-- **CloudMinnModernBERTEmbedder**: Cloud-based Minnesota ModernBERT embedder
+
+| Class | Description | Vector Size | Source |
+|-------|-------------|-------------|--------|
+| **MicroserviceEmbedder** | Generates embeddings by calling an external microservice endpoint. Supports configurable URL and API key via settings. | 384 | [`sent_transformer_microservice.py`](../../opencontractserver/pipeline/embedders/sent_transformer_microservice.py) |
+| **ModernBERTEmbedder** | Local embeddings using the `answerdotai/ModernBERT-base` sentence transformer model. Supports model caching. | 768 | [`modern_bert_embedder.py`](../../opencontractserver/pipeline/embedders/modern_bert_embedder.py) |
+| **MinnModernBERTEmbedder** | Local embeddings using the Minnesota Case Law ModernBERT model (`conceptofmind/teraflop-minn-caselaw`). Specialized for legal text. | 768 | [`minn_modern_bert_embedder.py`](../../opencontractserver/pipeline/embedders/minn_modern_bert_embedder.py) |
+| **CloudMinnModernBERTEmbedder** | Cloud-based Minnesota ModernBERT embedder that calls a Hugging Face Inference Endpoint instead of loading a local model. | 768 | [`minn_modern_bert_embedder.py`](../../opencontractserver/pipeline/embedders/minn_modern_bert_embedder.py) |
 
 ## Creating New Components
 
