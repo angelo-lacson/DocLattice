@@ -24,6 +24,7 @@ Agent Selection Logic:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import urllib.parse
@@ -365,8 +366,13 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             )
 
             # Initialize agent if needed
+            is_new_conversation = self.agent is None and not self.conversation_id
             if self.agent is None:
                 await self._initialize_agent()
+
+            # Generate title for new conversations (authenticated users only) in background
+            if is_new_conversation and self.user_id:
+                asyncio.create_task(self._async_set_conversation_title(user_query))
 
             # Stream the response
             await self._stream_agent_response(user_query)
@@ -478,6 +484,67 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                 f"[Session {self.session_id}] No existing embedder found, using default"
             )
             return settings.DEFAULT_EMBEDDER
+
+    # -------------------------------------------------------------------------
+    #  Conversation title generation
+    # -------------------------------------------------------------------------
+
+    async def _generate_conversation_title(self, user_query: str) -> str:
+        """
+        Generate a concise conversation title based on the initial user query.
+        """
+        try:
+            from opencontractserver.llms.client import ChatMessage, create_client
+
+            system_prompt = (
+                "You are a helpful assistant that creates very concise chat titles. "
+                "Create a brief (maximum 5 words) title that captures the essence "
+                "of what the user is asking about."
+            )
+
+            user_prompt = (
+                f"Create a brief title for a conversation starting with this query: "
+                f"{user_query}"
+            )
+
+            client = create_client()  # Uses settings defaults
+
+            messages = [
+                ChatMessage(role="system", content=system_prompt),
+                ChatMessage(role="user", content=user_prompt),
+            ]
+
+            response = client.chat(messages)
+            return response.content.strip()
+        except Exception as e:
+            logger.error(
+                f"[Session {self.session_id}] Error generating conversation title: {e}"
+            )
+            return f"Conversation {uuid.uuid4()}"
+
+    async def _async_set_conversation_title(self, user_query: str) -> None:
+        """
+        Generate and persist a title for the current conversation without
+        blocking the stream.
+        """
+        try:
+            if self.agent is None:
+                return
+
+            convo_id = self.agent.get_conversation_id()
+            if convo_id:
+                from opencontractserver.conversations.models import Conversation
+
+                conversation = await Conversation.objects.aget(id=convo_id)
+                if conversation and not getattr(conversation, "title", None):
+                    title = await self._generate_conversation_title(user_query)
+                    conversation.title = title
+                    await conversation.asave(update_fields=["title"])
+        except Exception as e:
+            logger.error(
+                f"[Session {self.session_id}] Async title generation failed: {e}",
+                exc_info=True,
+            )
 
     # -------------------------------------------------------------------------
     #  Response streaming

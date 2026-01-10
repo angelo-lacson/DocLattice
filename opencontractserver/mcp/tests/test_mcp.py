@@ -703,10 +703,15 @@ class MCPToolsSearchTest(TestCase):
 
     def test_search_corpus_text_fallback(self):
         """Test search falls back to text search without embeddings."""
+        from unittest.mock import patch
+
         from opencontractserver.mcp.tools import search_corpus
 
-        # Without embeddings, should use text fallback
-        result = search_corpus(self.corpus.slug, "Contract")
+        # Mock embed_text to raise exception, forcing text search fallback
+        with patch.object(
+            self.corpus.__class__, "embed_text", side_effect=Exception("No embeddings")
+        ):
+            result = search_corpus(self.corpus.slug, "Contract")
 
         self.assertIn("query", result)
         self.assertIn("results", result)

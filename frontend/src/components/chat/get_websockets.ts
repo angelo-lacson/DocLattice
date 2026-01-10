@@ -41,9 +41,15 @@ function resolveWsBaseUrl(): string {
 
 /**
  * Get WebSocket URL for document queries.
+ *
+ * @deprecated This function now delegates to getUnifiedAgentWebSocket() which uses
+ * the secure unified endpoint with proper permission checks. The legacy
+ * DocumentQueryConsumer and StandaloneDocumentQueryConsumer have been deprecated.
+ *
  * @param documentId - Document identifier.
  * @param token - Authentication token from the user session.
  * @param conversationId - (Optional) If provided, the conversation id to load from.
+ * @param corpusId - (Optional) If provided, scopes the document to a corpus.
  * @returns WebSocket URL with necessary query parameters.
  */
 export function getDocumentQueryWebSocket(
@@ -52,41 +58,20 @@ export function getDocumentQueryWebSocket(
   conversationId?: string,
   corpusId?: string
 ): string {
-  const wsBaseUrl = resolveWsBaseUrl();
-
-  const normalizedBaseUrl = wsBaseUrl
-    .replace(/\/+$/, "")
-    .replace(/^http/, "ws")
-    .replace(/^https/, "wss");
-
-  let url: string;
-  if (corpusId) {
-    url = `${normalizedBaseUrl}/ws/document/${documentId}/query/corpus/${corpusId}/`;
-  } else {
-    url = `${normalizedBaseUrl}/ws/standalone/document/${documentId}/query/`;
-  }
-
-  const params: string[] = [];
-
-  if (conversationId) {
-    params.push(
-      `load_from_conversation_id=${encodeURIComponent(conversationId)}`
-    );
-  }
-
-  if (token) {
-    params.push(`token=${encodeURIComponent(token)}`);
-  }
-
-  if (params.length > 0) {
-    url += `?${params.join("&")}`;
-  }
-
-  return url;
+  // Delegate to unified endpoint for proper permission enforcement
+  return getUnifiedAgentWebSocket(
+    { documentId, corpusId, conversationId },
+    token
+  );
 }
 
 /**
  * Get WebSocket URL for corpus queries.
+ *
+ * @deprecated This function now delegates to getUnifiedAgentWebSocket() which uses
+ * the secure unified endpoint with proper permission checks. The legacy
+ * CorpusQueryConsumer has been deprecated.
+ *
  * @param corpusId - Corpus identifier.
  * @param token - Authentication token from the user session.
  * @param conversationId - (Optional) If provided, the conversation id to load from.
@@ -97,32 +82,8 @@ export function getCorpusQueryWebSocket(
   token: string,
   conversationId?: string
 ): string {
-  const wsBaseUrl = resolveWsBaseUrl();
-
-  const normalizedBaseUrl = wsBaseUrl
-    .replace(/\/+$/, "")
-    .replace(/^http/, "ws")
-    .replace(/^https/, "wss");
-
-  let url = `${normalizedBaseUrl}/ws/corpus/${corpusId}/query/`;
-
-  const params: string[] = [];
-
-  if (conversationId) {
-    params.push(
-      `load_from_conversation_id=${encodeURIComponent(conversationId)}`
-    );
-  }
-
-  if (token) {
-    params.push(`token=${encodeURIComponent(token)}`);
-  }
-
-  if (params.length > 0) {
-    url += `?${params.join("&")}`;
-  }
-
-  return url;
+  // Delegate to unified endpoint for proper permission enforcement
+  return getUnifiedAgentWebSocket({ corpusId, conversationId }, token);
 }
 
 /**

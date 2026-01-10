@@ -1116,16 +1116,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     break
 
             # Helper stub ctx carrying call-id for wrappers that expect it.
+            # _EmptyDeps must have user_id, document_id, corpus_id for _check_user_permissions
             class _EmptyDeps:  # noqa: D401 – simple placeholder for deps
                 skip_approval_gate = True
+                user_id = None
+                document_id = None
+                corpus_id = None
 
             class _EmptyCtx:  # noqa: D401 – simple placeholder
                 tool_call_id = pending.get("tool_call_id")
                 skip_approval_gate = True
                 deps = _EmptyDeps()
-
-                class deps:  # noqa: F811,D401 – nested stub for PydanticAIDependencies
-                    skip_approval_gate = True
 
             import inspect
 
