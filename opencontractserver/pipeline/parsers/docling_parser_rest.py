@@ -12,9 +12,9 @@ from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
-    ImageIdPythonType,
     OpenContractDocExport,
-    PawlsImageTokenPythonType,
+    PawlsTokenPythonType,
+    TokenIdPythonType,
 )
 from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 from opencontractserver.utils.pdf_token_extraction import (
@@ -276,7 +276,8 @@ class DoclingParser(BaseParser):
         Extract images from the PDF and add them to the parsed result.
 
         This post-processes the Docling microservice response to add image tokens
-        to the PAWLs data and image references to figure/image annotations.
+        to the PAWLs tokens array (unified token model) and image references to
+        figure/image annotations.
 
         Args:
             result: The normalized response from the Docling microservice.
@@ -286,7 +287,7 @@ class DoclingParser(BaseParser):
                          If None, images are embedded as base64 (not recommended).
 
         Returns:
-            The result dict with images added to pawls_file_content.
+            The result dict with image tokens added to pawls_file_content tokens[].
         """
         try:
             logger.info("Extracting images from PDF for LLM consumption...")
@@ -303,14 +304,46 @@ class DoclingParser(BaseParser):
 
             total_images = sum(len(imgs) for imgs in images_by_page.values())
             logger.info(
-                f"Extracted {total_images} images from {len(images_by_page)} pages"
+                f"Extracted {total_images} image tokens from {len(images_by_page)} pages"
             )
 
-            # Add images to PAWLs pages
+            # Add images as tokens to PAWLs pages (unified token model)
             pawls_pages = result.get("pawls_file_content", [])
+
+            # Track token offsets per page for image token indices
+            image_token_offsets: dict[int, int] = {}
+
             for page_idx, page_images in images_by_page.items():
                 if page_idx < len(pawls_pages) and page_images:
-                    pawls_pages[page_idx]["images"] = page_images
+                    # Get existing token count as offset for image indices
+                    if "tokens" not in pawls_pages[page_idx]:
+                        pawls_pages[page_idx]["tokens"] = []
+
+                    token_offset = len(pawls_pages[page_idx]["tokens"])
+                    image_token_offsets[page_idx] = token_offset
+
+                    # Add image tokens to the tokens array
+                    for img_token in page_images:
+                        # Convert to unified token format with required fields
+                        unified_token: PawlsTokenPythonType = {
+                            "x": img_token["x"],
+                            "y": img_token["y"],
+                            "width": img_token["width"],
+                            "height": img_token["height"],
+                            "text": "",  # Required field, empty for images
+                            "is_image": True,
+                            "format": img_token.get("format", "jpeg"),
+                            "content_hash": img_token.get("content_hash"),
+                            "original_width": img_token.get("original_width"),
+                            "original_height": img_token.get("original_height"),
+                            "image_type": img_token.get("image_type"),
+                        }
+
+                        # Copy image path if present
+                        if "image_path" in img_token:
+                            unified_token["image_path"] = img_token["image_path"]
+
+                        pawls_pages[page_idx]["tokens"].append(unified_token)
 
             # Get page dimensions for cropping
             page_dims: dict[int, tuple[float, float]] = {}
@@ -328,7 +361,7 @@ class DoclingParser(BaseParser):
                     self._add_image_refs_to_annotation(
                         annotation,
                         pdf_bytes,
-                        images_by_page,
+                        image_token_offsets,
                         page_dims,
                         pawls_pages,
                         storage_path=storage_path,
@@ -340,11 +373,11 @@ class DoclingParser(BaseParser):
                 for a in annotations
                 if a.get("annotation_json", {})
                 .get(str(a.get("page", 0)), {})
-                .get("imagesJsons")
+                .get("tokensJsons")
             )
             logger.info(
-                f"Added images to result: {total_images} total images, "
-                f"{annotations_with_images} annotations with image refs"
+                f"Added image tokens to result: {total_images} total image tokens, "
+                f"{annotations_with_images} annotations with image token refs"
             )
 
         except Exception as e:
@@ -356,20 +389,25 @@ class DoclingParser(BaseParser):
         self,
         annotation: dict[str, Any],
         pdf_bytes: bytes,
-        images_by_page: dict[int, list[PawlsImageTokenPythonType]],
+        image_token_offsets: dict[int, int],
         page_dims: dict[int, tuple[float, float]],
         pawls_pages: list[dict[str, Any]],
         storage_path: Optional[str] = None,
     ) -> None:
         """
-        Add image references to an annotation that represents a figure/image.
+        Add image token references to an annotation that represents a figure/image.
+
+        In the unified token model, images are stored in the tokens[] array with
+        is_image=True. This method adds tokensJsons references to image tokens
+        and sets content_modalities=["IMAGE"] on annotations with image content.
 
         Args:
             annotation: The annotation dict to modify.
             pdf_bytes: PDF bytes for cropping if needed.
-            images_by_page: Pre-extracted images by page.
+            image_token_offsets: Dict mapping page_idx to the token index where
+                                 image tokens start on that page.
             page_dims: Page dimensions dict.
-            pawls_pages: PAWLs pages list (may be modified to add cropped images).
+            pawls_pages: PAWLs pages list (may be modified to add cropped image tokens).
             storage_path: Base path for storing cropped images.
         """
         page_idx = annotation.get("page", 0)
@@ -380,17 +418,23 @@ class DoclingParser(BaseParser):
         if not bounds:
             return
 
-        page_images = images_by_page.get(page_idx, [])
-        image_refs = self._find_images_in_bounds(bounds, page_idx, page_images)
+        # Find image tokens in the tokens array that overlap with this annotation
+        token_offset = image_token_offsets.get(page_idx, 0)
+        image_token_refs = self._find_images_in_bounds(
+            bounds, page_idx, pawls_pages, token_offset
+        )
 
-        # If no embedded image found, crop the region
-        if not image_refs:
+        # If no embedded image found, crop the region and add as new token
+        if not image_token_refs:
             page_width, page_height = page_dims.get(page_idx, (612, 792))
-            # Get the next image index for this page to use in storage filename
-            # Defensive check: ensure page exists and is a dict before accessing
-            current_img_count = 0
+
+            # Count image tokens for storage filename indexing
+            img_idx = 0
             if page_idx < len(pawls_pages) and isinstance(pawls_pages[page_idx], dict):
-                current_img_count = len(pawls_pages[page_idx].get("images", []))
+                for token in pawls_pages[page_idx].get("tokens", []):
+                    if token.get("is_image"):
+                        img_idx += 1
+
             cropped_image = crop_image_from_pdf(
                 pdf_bytes,
                 page_idx,
@@ -401,53 +445,101 @@ class DoclingParser(BaseParser):
                 jpeg_quality=self.image_quality,
                 dpi=self.image_dpi,
                 storage_path=storage_path,
-                img_idx=current_img_count,
+                img_idx=img_idx,
             )
             if cropped_image and page_idx < len(pawls_pages):
-                if "images" not in pawls_pages[page_idx]:
-                    pawls_pages[page_idx]["images"] = []
-                img_idx = len(pawls_pages[page_idx]["images"])
-                pawls_pages[page_idx]["images"].append(cropped_image)
-                image_refs = [{"pageIndex": page_idx, "imageIndex": img_idx}]
-                logger.debug(f"Cropped image for annotation on page {page_idx}")
+                if "tokens" not in pawls_pages[page_idx]:
+                    pawls_pages[page_idx]["tokens"] = []
 
-        # Add image refs to the annotation
-        if image_refs:
-            page_data["imagesJsons"] = image_refs
+                # Convert cropped image to unified token format
+                unified_token: PawlsTokenPythonType = {
+                    "x": cropped_image["x"],
+                    "y": cropped_image["y"],
+                    "width": cropped_image["width"],
+                    "height": cropped_image["height"],
+                    "text": "",  # Required field, empty for images
+                    "is_image": True,
+                    "format": cropped_image.get("format", "jpeg"),
+                    "content_hash": cropped_image.get("content_hash"),
+                    "original_width": cropped_image.get("original_width"),
+                    "original_height": cropped_image.get("original_height"),
+                    "image_type": cropped_image.get("image_type", "cropped"),
+                }
+
+                # Copy image path if present
+                if "image_path" in cropped_image:
+                    unified_token["image_path"] = cropped_image["image_path"]
+
+                new_token_idx = len(pawls_pages[page_idx]["tokens"])
+                pawls_pages[page_idx]["tokens"].append(unified_token)
+                image_token_refs = [
+                    {"pageIndex": page_idx, "tokenIndex": new_token_idx}
+                ]
+                logger.debug(
+                    f"Cropped image token for annotation on page {page_idx} "
+                    f"at token index {new_token_idx}"
+                )
+
+        # Add image token refs to the annotation's tokensJsons
+        if image_token_refs:
+            # Get existing tokensJsons or create empty list
+            existing_tokens = page_data.get("tokensJsons", [])
+            # Add image token references
+            existing_tokens.extend(image_token_refs)
+            page_data["tokensJsons"] = existing_tokens
             annotation_json[str(page_idx)] = page_data
             annotation["annotation_json"] = annotation_json
+            # Mark annotation as containing image content
+            annotation["content_modalities"] = ["IMAGE"]
 
     def _find_images_in_bounds(
         self,
         bounds: BoundingBoxPythonType,
         page_idx: int,
-        page_images: list[PawlsImageTokenPythonType],
-    ) -> list[ImageIdPythonType]:
+        pawls_pages: list[dict[str, Any]],
+        token_offset: int,
+    ) -> list[TokenIdPythonType]:
         """
-        Find images that overlap with the given bounding box.
+        Find image tokens that overlap with the given bounding box.
+
+        In the unified token model, images are stored in the tokens[] array
+        with is_image=True. This method searches through tokens starting from
+        token_offset (where image tokens begin) to find overlapping images.
 
         Args:
             bounds: The annotation bounding box.
             page_idx: Page index (0-based).
-            page_images: List of image tokens on this page.
+            pawls_pages: The PAWLs pages list containing tokens.
+            token_offset: The token index where image tokens start on this page.
 
         Returns:
-            List of ImageIdPythonType references for overlapping images.
+            List of TokenIdPythonType references for overlapping image tokens.
         """
-        if not page_images:
+        if page_idx >= len(pawls_pages):
             return []
 
-        image_refs: list[ImageIdPythonType] = []
+        page_tokens = pawls_pages[page_idx].get("tokens", [])
+        if not page_tokens or token_offset >= len(page_tokens):
+            return []
+
+        token_refs: list[TokenIdPythonType] = []
         ann_left = float(bounds.get("left", 0))
         ann_top = float(bounds.get("top", 0))
         ann_right = float(bounds.get("right", 0))
         ann_bottom = float(bounds.get("bottom", 0))
 
-        for img_idx, img_token in enumerate(page_images):
-            img_left = float(img_token["x"])
-            img_top = float(img_token["y"])
-            img_right = img_left + float(img_token["width"])
-            img_bottom = img_top + float(img_token["height"])
+        # Search through tokens starting from token_offset
+        for token_idx in range(token_offset, len(page_tokens)):
+            token = page_tokens[token_idx]
+
+            # Only consider image tokens
+            if not token.get("is_image"):
+                continue
+
+            img_left = float(token["x"])
+            img_top = float(token["y"])
+            img_right = img_left + float(token["width"])
+            img_bottom = img_top + float(token["height"])
 
             # Check for overlap
             if (
@@ -456,6 +548,6 @@ class DoclingParser(BaseParser):
                 and ann_top < img_bottom
                 and ann_bottom > img_top
             ):
-                image_refs.append({"pageIndex": page_idx, "imageIndex": img_idx})
+                token_refs.append({"pageIndex": page_idx, "tokenIndex": token_idx})
 
-        return image_refs
+        return token_refs

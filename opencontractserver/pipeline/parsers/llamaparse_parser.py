@@ -23,11 +23,9 @@ from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
-    ImageIdPythonType,
     OpenContractDocExport,
     OpenContractsAnnotationPythonType,
     OpenContractsSinglePageAnnotationType,
-    PawlsImageTokenPythonType,
     PawlsPagePythonType,
     PawlsTokenPythonType,
     TokenIdPythonType,
@@ -374,13 +372,16 @@ class LlamaParseParser(BaseParser):
                 pawls_pages.append(pawls_page)
 
         # Extract images from PDF if enabled
-        images_by_page: dict[int, list[PawlsImageTokenPythonType]] = {}
+        # images_by_page maps page_idx -> list of raw image token dicts from extraction
+        images_by_page: dict[int, list[dict]] = {}
+        # image_token_offsets tracks where image tokens start in each page's tokens array
+        image_token_offsets: dict[int, int] = {}
         # Construct storage path for images based on document ID
         image_storage_path = f"documents/{document.pk}/images"
         if pdf_bytes and extract_images:
             try:
                 logger.info("Extracting images from PDF for LLM consumption...")
-                images_by_page = extract_images_from_pdf(
+                raw_images_by_page = extract_images_from_pdf(
                     pdf_bytes,
                     min_width=self.min_image_width,
                     min_height=self.min_image_height,
@@ -388,15 +389,38 @@ class LlamaParseParser(BaseParser):
                     jpeg_quality=self.image_quality,
                     storage_path=image_storage_path,
                 )
-                total_images = sum(len(imgs) for imgs in images_by_page.values())
+                total_images = sum(len(imgs) for imgs in raw_images_by_page.values())
                 logger.info(
-                    f"Extracted {total_images} images from {len(images_by_page)} pages"
+                    f"Extracted {total_images} images from {len(raw_images_by_page)} pages"
                 )
 
-                # Add images to PAWLS pages
-                for page_idx, page_images in images_by_page.items():
+                # Add images as unified tokens to PAWLS pages
+                for page_idx, page_images in raw_images_by_page.items():
                     if page_idx < len(pawls_pages) and page_images:
-                        pawls_pages[page_idx]["images"] = page_images
+                        # Track token offset for image token indexing
+                        token_offset = len(pawls_pages[page_idx].get("tokens", []))
+                        image_token_offsets[page_idx] = token_offset
+
+                        # Convert image dicts to unified token format and add to tokens
+                        for img_data in page_images:
+                            unified_token: PawlsTokenPythonType = {
+                                "x": img_data["x"],
+                                "y": img_data["y"],
+                                "width": img_data["width"],
+                                "height": img_data["height"],
+                                "text": "",  # Required, empty for images
+                                "is_image": True,
+                                "image_path": img_data.get("image_path"),
+                                "format": img_data.get("format", "jpeg"),
+                                "content_hash": img_data.get("content_hash"),
+                                "original_width": img_data.get("original_width"),
+                                "original_height": img_data.get("original_height"),
+                                "image_type": img_data.get("image_type"),
+                            }
+                            pawls_pages[page_idx]["tokens"].append(unified_token)
+
+                        # Store raw image data for overlap detection
+                        images_by_page[page_idx] = page_images
             except Exception as e:
                 logger.warning(f"Failed to extract images from PDF: {e}")
                 images_by_page = {}
@@ -458,22 +482,25 @@ class LlamaParseParser(BaseParser):
                     tokens_by_page.get(page_idx),
                 )
 
-                # For figure/image types, find matching images or crop the region
-                image_refs: list[ImageIdPythonType] = []
+                # For figure/image types, find matching image tokens or crop the region
+                image_token_refs: list[TokenIdPythonType] = []
                 if is_image_type and pdf_bytes and extract_images:
-                    image_refs = self._find_images_in_bounds(
-                        bounds, page_idx, images_by_page.get(page_idx, [])
+                    # Find image tokens in the tokens array that overlap with bounds
+                    image_token_refs = self._find_images_in_bounds(
+                        bounds,
+                        page_idx,
+                        images_by_page.get(page_idx, []),
+                        image_token_offsets.get(page_idx, 0),
                     )
                     # If no embedded image found, crop the region
-                    if not image_refs:
-                        # Get the next image index for storage filename
-                        # Defensive check: ensure page exists and is a dict
-                        current_img_count = 0
+                    if not image_token_refs:
+                        # Get the current token count for the new image token index
+                        current_token_count = 0
                         if page_idx < len(pawls_pages) and isinstance(
                             pawls_pages[page_idx], dict
                         ):
-                            current_img_count = len(
-                                pawls_pages[page_idx].get("images", [])
+                            current_token_count = len(
+                                pawls_pages[page_idx].get("tokens", [])
                             )
                         cropped_image = crop_image_from_pdf(
                             pdf_bytes,
@@ -485,35 +512,56 @@ class LlamaParseParser(BaseParser):
                             jpeg_quality=self.image_quality,
                             dpi=self.image_dpi,
                             storage_path=image_storage_path,
-                            img_idx=current_img_count,
+                            img_idx=current_token_count,
                         )
                         if cropped_image:
-                            # Add cropped image to the page
+                            # Add cropped image as unified token to the page
                             if page_idx < len(pawls_pages) and isinstance(
                                 pawls_pages[page_idx], dict
                             ):
-                                if "images" not in pawls_pages[page_idx]:
-                                    pawls_pages[page_idx]["images"] = []
-                                img_idx = len(pawls_pages[page_idx]["images"])
-                                pawls_pages[page_idx]["images"].append(cropped_image)
-                                image_refs = [
-                                    {"pageIndex": page_idx, "imageIndex": img_idx}
+                                new_token_idx = len(
+                                    pawls_pages[page_idx].get("tokens", [])
+                                )
+                                unified_token: PawlsTokenPythonType = {
+                                    "x": cropped_image["x"],
+                                    "y": cropped_image["y"],
+                                    "width": cropped_image["width"],
+                                    "height": cropped_image["height"],
+                                    "text": "",
+                                    "is_image": True,
+                                    "image_path": cropped_image.get("image_path"),
+                                    "format": cropped_image.get("format", "jpeg"),
+                                    "content_hash": cropped_image.get("content_hash"),
+                                    "original_width": cropped_image.get(
+                                        "original_width"
+                                    ),
+                                    "original_height": cropped_image.get(
+                                        "original_height"
+                                    ),
+                                    "image_type": cropped_image.get("image_type"),
+                                }
+                                pawls_pages[page_idx]["tokens"].append(unified_token)
+                                image_token_refs = [
+                                    {"pageIndex": page_idx, "tokenIndex": new_token_idx}
                                 ]
                                 logger.debug(
                                     f"Cropped image for {item_type} annotation "
                                     f"on page {page_idx}"
                                 )
 
-                # Create annotation with token and image references
+                # Create annotation with combined token refs (text + image)
                 label = self.ELEMENT_TYPE_MAPPING.get(item_type, "Text Block")
+                # Combine text token refs and image token refs
+                all_token_refs = token_refs + image_token_refs
                 annotation = self._create_annotation(
                     annotation_id=str(annotation_id_counter),
                     label=label,
                     raw_text=item_text or f"[{item_type}]",
                     page_idx=page_idx,
                     bounds=bounds,
-                    token_refs=token_refs,
-                    image_refs=image_refs,
+                    token_refs=all_token_refs,
+                    has_text_tokens=bool(token_refs),
+                    has_image_tokens=bool(image_token_refs),
                 )
                 annotations.append(annotation)
                 annotation_id_counter += 1
@@ -553,22 +601,25 @@ class LlamaParseParser(BaseParser):
                         tokens_by_page.get(page_idx),
                     )
 
-                    # For figure/image types, find matching images or crop the region
-                    image_refs: list[ImageIdPythonType] = []
+                    # For figure/image types, find matching image tokens or crop region
+                    image_token_refs: list[TokenIdPythonType] = []
                     if is_image_type and pdf_bytes and extract_images:
-                        image_refs = self._find_images_in_bounds(
-                            bounds, page_idx, images_by_page.get(page_idx, [])
+                        # Find image tokens in the tokens array that overlap with bounds
+                        image_token_refs = self._find_images_in_bounds(
+                            bounds,
+                            page_idx,
+                            images_by_page.get(page_idx, []),
+                            image_token_offsets.get(page_idx, 0),
                         )
                         # If no embedded image found, crop the region
-                        if not image_refs:
-                            # Get the next image index for storage filename
-                            # Defensive check: ensure page exists and is a dict
-                            current_img_count = 0
+                        if not image_token_refs:
+                            # Get the current token count for the new image token index
+                            current_token_count = 0
                             if page_idx < len(pawls_pages) and isinstance(
                                 pawls_pages[page_idx], dict
                             ):
-                                current_img_count = len(
-                                    pawls_pages[page_idx].get("images", [])
+                                current_token_count = len(
+                                    pawls_pages[page_idx].get("tokens", [])
                                 )
                             cropped_image = crop_image_from_pdf(
                                 pdf_bytes,
@@ -580,31 +631,58 @@ class LlamaParseParser(BaseParser):
                                 jpeg_quality=self.image_quality,
                                 dpi=self.image_dpi,
                                 storage_path=image_storage_path,
-                                img_idx=current_img_count,
+                                img_idx=current_token_count,
                             )
                             if cropped_image:
+                                # Add cropped image as unified token to the page
                                 if page_idx < len(pawls_pages) and isinstance(
                                     pawls_pages[page_idx], dict
                                 ):
-                                    if "images" not in pawls_pages[page_idx]:
-                                        pawls_pages[page_idx]["images"] = []
-                                    img_idx = len(pawls_pages[page_idx]["images"])
-                                    pawls_pages[page_idx]["images"].append(
-                                        cropped_image
+                                    new_token_idx = len(
+                                        pawls_pages[page_idx].get("tokens", [])
                                     )
-                                    image_refs = [
-                                        {"pageIndex": page_idx, "imageIndex": img_idx}
+                                    unified_token: PawlsTokenPythonType = {
+                                        "x": cropped_image["x"],
+                                        "y": cropped_image["y"],
+                                        "width": cropped_image["width"],
+                                        "height": cropped_image["height"],
+                                        "text": "",
+                                        "is_image": True,
+                                        "image_path": cropped_image.get("image_path"),
+                                        "format": cropped_image.get("format", "jpeg"),
+                                        "content_hash": cropped_image.get(
+                                            "content_hash"
+                                        ),
+                                        "original_width": cropped_image.get(
+                                            "original_width"
+                                        ),
+                                        "original_height": cropped_image.get(
+                                            "original_height"
+                                        ),
+                                        "image_type": cropped_image.get("image_type"),
+                                    }
+                                    pawls_pages[page_idx]["tokens"].append(
+                                        unified_token
+                                    )
+                                    image_token_refs = [
+                                        {
+                                            "pageIndex": page_idx,
+                                            "tokenIndex": new_token_idx,
+                                        }
                                     ]
 
                     label = self.ELEMENT_TYPE_MAPPING.get(element_type, "Text Block")
+                    # Combine text token refs and image token refs
+                    all_token_refs = token_refs + image_token_refs
                     annotation = self._create_annotation(
                         annotation_id=str(annotation_id_counter),
                         label=label,
                         raw_text=element_text or f"[{element_type}]",
                         page_idx=page_idx,
                         bounds=bounds,
-                        token_refs=token_refs,
-                        image_refs=image_refs,
+                        token_refs=all_token_refs,
+                        has_text_tokens=bool(token_refs),
+                        has_image_tokens=bool(image_token_refs),
                     )
                     annotations.append(annotation)
                     annotation_id_counter += 1
@@ -624,9 +702,13 @@ class LlamaParseParser(BaseParser):
             "relationships": [],
         }
 
-        # Log summary
+        # Log summary - count text tokens and image tokens separately
         total_tokens = sum(len(p.get("tokens", [])) for p in pawls_pages)
-        total_images = sum(len(p.get("images", [])) for p in pawls_pages)
+        total_image_tokens = sum(
+            sum(1 for t in p.get("tokens", []) if t.get("is_image"))
+            for p in pawls_pages
+        )
+        total_text_tokens = total_tokens - total_image_tokens
         annotations_with_tokens = sum(
             1
             for a in annotations
@@ -637,16 +719,15 @@ class LlamaParseParser(BaseParser):
         annotations_with_images = sum(
             1
             for a in annotations
-            if a.get("annotation_json", {})
-            .get(str(a.get("page", 0)), {})
-            .get("imagesJsons")
+            if a.get("content_modalities")
+            and "IMAGE" in a.get("content_modalities", [])
         )
         logger.info(
             f"Converted LlamaParse output: {len(pages)} pages, "
-            f"{len(annotations)} annotations, {total_tokens} tokens, "
-            f"{total_images} images, "
+            f"{len(annotations)} annotations, {total_text_tokens} text tokens, "
+            f"{total_image_tokens} image tokens, "
             f"{annotations_with_tokens} annotations with token refs, "
-            f"{annotations_with_images} annotations with image refs"
+            f"{annotations_with_images} annotations with image content"
         )
 
         return export
@@ -863,33 +944,40 @@ class LlamaParseParser(BaseParser):
         self,
         bounds: BoundingBoxPythonType,
         page_idx: int,
-        page_images: list[PawlsImageTokenPythonType],
-    ) -> list[ImageIdPythonType]:
+        page_images: list[dict],
+        token_offset: int = 0,
+    ) -> list[TokenIdPythonType]:
         """
-        Find images that overlap with the given bounding box.
+        Find image tokens that overlap with the given bounding box.
+
+        In the unified token model, images are stored in the tokens[] array
+        with is_image=True. This method finds overlapping images and returns
+        their token indices.
 
         Args:
             bounds: The annotation bounding box.
             page_idx: Page index (0-based).
-            page_images: List of image tokens on this page.
+            page_images: List of raw image data dicts (from extract_images_from_pdf).
+            token_offset: The starting token index where images begin in the
+                         unified tokens array. Images are appended after text tokens.
 
         Returns:
-            List of ImageIdPythonType references for overlapping images.
+            List of TokenIdPythonType references for overlapping image tokens.
         """
         if not page_images:
             return []
 
-        image_refs: list[ImageIdPythonType] = []
+        token_refs: list[TokenIdPythonType] = []
         ann_left = float(bounds["left"])
         ann_top = float(bounds["top"])
         ann_right = float(bounds["right"])
         ann_bottom = float(bounds["bottom"])
 
-        for img_idx, img_token in enumerate(page_images):
-            img_left = float(img_token["x"])
-            img_top = float(img_token["y"])
-            img_right = img_left + float(img_token["width"])
-            img_bottom = img_top + float(img_token["height"])
+        for img_idx, img_data in enumerate(page_images):
+            img_left = float(img_data["x"])
+            img_top = float(img_data["y"])
+            img_right = img_left + float(img_data["width"])
+            img_bottom = img_top + float(img_data["height"])
 
             # Check for overlap
             if (
@@ -898,9 +986,11 @@ class LlamaParseParser(BaseParser):
                 and ann_top < img_bottom
                 and ann_bottom > img_top
             ):
-                image_refs.append({"pageIndex": page_idx, "imageIndex": img_idx})
+                # Calculate the token index for this image
+                token_index = token_offset + img_idx
+                token_refs.append({"pageIndex": page_idx, "tokenIndex": token_index})
 
-        return image_refs
+        return token_refs
 
     def _create_annotation(
         self,
@@ -910,10 +1000,15 @@ class LlamaParseParser(BaseParser):
         page_idx: int,
         bounds: BoundingBoxPythonType,
         token_refs: Optional[list[TokenIdPythonType]] = None,
-        image_refs: Optional[list[ImageIdPythonType]] = None,
+        has_text_tokens: bool = False,
+        has_image_tokens: bool = False,
     ) -> OpenContractsAnnotationPythonType:
         """
         Create an OpenContracts annotation.
+
+        In the unified token model, both text and image tokens are stored in
+        the tokens[] array. Image tokens have is_image=True. The token_refs
+        parameter contains references to both text and image tokens.
 
         Args:
             annotation_id: Unique ID for the annotation.
@@ -922,29 +1017,32 @@ class LlamaParseParser(BaseParser):
             page_idx: Page index (0-based).
             bounds: Bounding box.
             token_refs: Optional list of token references ({pageIndex, tokenIndex})
-                       that fall within the annotation's bounding box. If None or
-                       empty, the annotation will have an empty tokensJsons array.
-            image_refs: Optional list of image references ({pageIndex, imageIndex})
-                       that fall within the annotation's bounding box. If None or
-                       empty, the annotation will have an empty imagesJsons array.
+                       that fall within the annotation's bounding box. This can
+                       include both text tokens and image tokens (is_image=True).
+                       If None or empty, the annotation will have an empty
+                       tokensJsons array.
+            has_text_tokens: True if any of the token_refs are text tokens.
+            has_image_tokens: True if any of the token_refs are image tokens.
 
         Returns:
             OpenContractsAnnotationPythonType annotation.
         """
         # Use provided token references, or empty list if none provided
         tokens_jsons = token_refs if token_refs else []
-        images_jsons = image_refs if image_refs else []
 
-        # Create page annotation with token and image references
+        # Create page annotation with unified token references
         page_annotation: OpenContractsSinglePageAnnotationType = {
             "bounds": bounds,
             "tokensJsons": tokens_jsons,
             "rawText": raw_text,
         }
 
-        # Add image references if present
-        if images_jsons:
-            page_annotation["imagesJsons"] = images_jsons
+        # Determine content modalities based on token types
+        content_modalities: list[str] = []
+        if has_text_tokens:
+            content_modalities.append("TEXT")
+        if has_image_tokens:
+            content_modalities.append("IMAGE")
 
         annotation: OpenContractsAnnotationPythonType = {
             "id": annotation_id,
@@ -956,5 +1054,9 @@ class LlamaParseParser(BaseParser):
             "annotation_type": TOKEN_LABEL,
             "structural": True,
         }
+
+        # Add content_modalities if there are any
+        if content_modalities:
+            annotation["content_modalities"] = content_modalities
 
         return annotation

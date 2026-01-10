@@ -74,57 +74,45 @@ class PageFundsAnnotationsExportType(TypedDict):
 
 class PawlsTokenPythonType(TypedDict):
     """
-    This is what an actual PAWLS token looks like.
+    Unified token type for PAWLs data. Represents either a text token or an
+    image token within a PDF page.
+
+    Text tokens have:
+    - x, y, width, height: Position and dimensions in PDF points
+    - text: The text content
+
+    Image tokens have:
+    - x, y, width, height: Position and dimensions in PDF points
+    - text: Empty string for images
+    - is_image: True to indicate this is an image token
+    - image_path: Storage path reference to the image file
+    - format: Image format ("jpeg" or "png")
+    - content_hash: SHA-256 hash for deduplication
+    - original_width, original_height: Original pixel dimensions
+    - image_type: "embedded" (extracted from PDF) or "cropped" (region crop)
+
+    This unified approach allows images to be referenced using the same
+    TokenIdPythonType as text tokens, simplifying annotation handling.
     """
 
+    # Position and dimensions (in PDF points)
     x: float
     y: float
     width: float
     height: float
     text: str
 
-
-class PawlsImageTokenPythonType(TypedDict):
-    """
-    Image token within a PAWLs page. Represents an embedded image or figure
-    that can be annotated and provided to LLMs as image data.
-
-    IMPORTANT: To avoid bloating PAWLs files, image data should be stored
-    separately in file storage (S3, GCS, local filesystem) and referenced
-    by `image_path`. The `base64_data` field should only be used for small
-    thumbnails or when storage is not available.
-
-    Storage strategy:
-    - image_path: Primary method - reference to stored image file
-    - base64_data: Optional - only for small thumbnails (<10KB) or fallback
-
-    Use `get_image_as_base64()` utility to retrieve image data on-demand,
-    which will load from storage if image_path is provided.
-    """
-
-    # Position and dimensions (in PDF points, same coordinate system as text tokens)
-    x: float
-    y: float
-    width: float
-    height: float
-
-    # Image storage reference (PRIMARY - preferred over inline data)
-    image_path: NotRequired[str]  # Storage path reference (e.g., "images/doc_123/page_0_img_1.jpeg")
-
-    # Inline image data (SECONDARY - use sparingly to avoid bloat)
-    base64_data: NotRequired[str]  # Only for small thumbnails or when storage unavailable
-
-    # Image metadata
-    format: str  # Image format: "jpeg", "png", "webp"
+    # Image-specific fields (only present when is_image=True)
+    is_image: NotRequired[bool]  # True for image tokens
+    image_path: NotRequired[str]  # Storage path to image file
+    base64_data: NotRequired[
+        str
+    ]  # Base64-encoded image data (fallback if storage fails)
+    format: NotRequired[str]  # Image format: "jpeg" or "png"
+    content_hash: NotRequired[str]  # SHA-256 hash for deduplication
     original_width: NotRequired[int]  # Original image width in pixels
     original_height: NotRequired[int]  # Original image height in pixels
-
-    # Optional semantic information
-    alt_text: NotRequired[str]  # Alternative text / caption if available
-    image_type: NotRequired[str]  # "figure", "chart", "diagram", "photo", "embedded", "cropped"
-
-    # Hash for deduplication across documents
-    content_hash: NotRequired[str]  # SHA-256 hash of image bytes
+    image_type: NotRequired[str]  # "embedded" or "cropped"
 
 
 class PawlsPagePythonType(TypedDict):
@@ -133,14 +121,13 @@ class PawlsPagePythonType(TypedDict):
     necessary tokens and page information for a given page. This describes
     the data shape for each of those page objs.
 
-    The optional `images` field contains extracted images from the page,
-    enabling image annotation and LLM image analysis capabilities.
+    The tokens array contains both text tokens and image tokens. Image tokens
+    are identified by having is_image=True and can be referenced using the
+    same TokenIdPythonType as text tokens.
     """
 
     page: PawlsPageBoundaryPythonType
     tokens: list[PawlsTokenPythonType]
-    # Optional list of image tokens extracted from this page
-    images: NotRequired[list[PawlsImageTokenPythonType]]
 
 
 class BoundingBoxPythonType(TypedDict):
@@ -156,21 +143,16 @@ class BoundingBoxPythonType(TypedDict):
 
 class TokenIdPythonType(TypedDict):
     """
-    These are how tokens are referenced in annotation jsons.
+    Reference to a token (text or image) within the PAWLs data structure.
+    Used in annotations to reference specific tokens on a page.
+
+    Since images are now stored as tokens with is_image=True in the unified
+    tokens[] array, both text and image tokens are referenced using this
+    same type.
     """
 
     pageIndex: int
     tokenIndex: int
-
-
-class ImageIdPythonType(TypedDict):
-    """
-    Reference to an image token within the PAWLs data structure.
-    Used in annotations to reference specific images on a page.
-    """
-
-    pageIndex: int
-    imageIndex: int
 
 
 class OpenContractsSinglePageAnnotationType(TypedDict):
@@ -181,15 +163,13 @@ class OpenContractsSinglePageAnnotationType(TypedDict):
 
     Dict[int, OpenContractsSinglePageAnnotationType]
 
-    Annotations can reference both text tokens (tokensJsons) and image tokens
-    (imagesJsons). An annotation may contain text, images, or both.
+    The tokensJsons array can reference both text tokens and image tokens,
+    as images are now stored in the unified tokens[] array with is_image=True.
     """
 
     bounds: BoundingBoxPythonType
     tokensJsons: list[TokenIdPythonType]
     rawText: str
-    # Optional list of image references within this annotation's bounds
-    imagesJsons: NotRequired[list[ImageIdPythonType]]
 
 
 class TextSpanData(TypedDict):
@@ -215,6 +195,9 @@ class OpenContractsAnnotationPythonType(TypedDict):
     Data type for individual Open Contract annotation data type converted
     into JSON. Note the models have a number of additional fields that are not
     relevant for import/export purposes.
+
+    The content_modalities field indicates what types of content are referenced
+    by this annotation's tokens. Possible values: "TEXT", "IMAGE".
     """
 
     id: Optional[Union[str, int]]  # noqa  # fmt: off
@@ -227,6 +210,9 @@ class OpenContractsAnnotationPythonType(TypedDict):
     parent_id: Optional[Union[str, int]]
     annotation_type: Optional[str]
     structural: bool
+    content_modalities: NotRequired[
+        list[str]
+    ]  # ["TEXT"], ["IMAGE"], or ["TEXT", "IMAGE"]
 
 
 class SpanAnnotation(TypedDict):

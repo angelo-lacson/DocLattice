@@ -59,21 +59,31 @@ class ImageToolsTestCase(TestCase):
     def _create_pawls_with_images(
         self, num_pages: int = 2, images_per_page: int = 2
     ) -> list[dict]:
-        """Create PAWLS data with embedded images."""
+        """Create PAWLS data with embedded images using unified token format.
+
+        Images are added to the tokens[] array with is_image=True.
+        """
         pages = []
         for page_idx in range(num_pages):
-            page_images = []
+            # Start with a text token
+            page_tokens = [
+                {"x": 100, "y": 100, "width": 50, "height": 12, "text": "Test"}
+            ]
+
+            # Add image tokens after text tokens
             for img_idx in range(images_per_page):
                 # Create a unique sample image for each position
                 base64_data = self._create_sample_image_base64(
                     width=100 + img_idx * 10, height=100 + img_idx * 10
                 )
-                page_images.append(
+                page_tokens.append(
                     {
                         "x": 50 + img_idx * 100,
                         "y": 50 + img_idx * 100,
                         "width": 80,
                         "height": 60,
+                        "text": "",  # Required for unified token format
+                        "is_image": True,  # Identifies this as an image token
                         "format": "jpeg",
                         "original_width": 100 + img_idx * 10,
                         "original_height": 100 + img_idx * 10,
@@ -90,10 +100,7 @@ class ImageToolsTestCase(TestCase):
                         "height": 792,
                         "index": page_idx,
                     },
-                    "tokens": [
-                        {"x": 100, "y": 100, "width": 50, "height": 12, "text": "Test"}
-                    ],
-                    "images": page_images,
+                    "tokens": page_tokens,
                 }
             )
         return pages
@@ -185,7 +192,8 @@ class ImageToolsTestCase(TestCase):
         assert len(images) == 1
         img = images[0]
         assert img.page_index == 0
-        assert img.image_index == 0
+        # Token index 1 because index 0 is the text token "Test"
+        assert img.token_index == 1
         assert img.width == 80
         assert img.height == 60
         assert img.format == "jpeg"
@@ -226,12 +234,13 @@ class ImageToolsTestCase(TestCase):
         """Test that get_document_image returns valid ImageData."""
         doc = self._create_document_with_images(num_pages=1, images_per_page=1)
 
-        result = get_document_image(doc.id, page_index=0, image_index=0)
+        # Token index 1 because index 0 is the text token "Test"
+        result = get_document_image(doc.id, page_index=0, token_index=1)
 
         assert result is not None
         assert isinstance(result, ImageData)
         assert result.page_index == 0
-        assert result.image_index == 0
+        assert result.token_index == 1
         assert result.format == "jpeg"
         assert len(result.base64_data) > 0
         assert result.data_url.startswith("data:image/jpeg;base64,")
@@ -240,7 +249,8 @@ class ImageToolsTestCase(TestCase):
         """Test that returned base64 data is valid and can be decoded."""
         doc = self._create_document_with_images(num_pages=1, images_per_page=1)
 
-        result = get_document_image(doc.id, page_index=0, image_index=0)
+        # Token index 1 because index 0 is the text token "Test"
+        result = get_document_image(doc.id, page_index=0, token_index=1)
 
         # Verify base64 decodes without error
         decoded = base64.b64decode(result.base64_data)
@@ -258,15 +268,15 @@ class ImageToolsTestCase(TestCase):
         """Test that invalid page index returns None."""
         doc = self._create_document_with_images(num_pages=2, images_per_page=1)
 
-        result = get_document_image(doc.id, page_index=99, image_index=0)
+        result = get_document_image(doc.id, page_index=99, token_index=0)
 
         assert result is None
 
-    def test_get_document_image_invalid_image_index(self):
+    def test_get_document_image_invalid_token_index(self):
         """Test that invalid image index returns None."""
         doc = self._create_document_with_images(num_pages=1, images_per_page=2)
 
-        result = get_document_image(doc.id, page_index=0, image_index=99)
+        result = get_document_image(doc.id, page_index=0, token_index=99)
 
         assert result is None
 
@@ -274,12 +284,12 @@ class ImageToolsTestCase(TestCase):
         """Test that negative indices return None."""
         doc = self._create_document_with_images(num_pages=1, images_per_page=1)
 
-        assert get_document_image(doc.id, page_index=-1, image_index=0) is None
-        assert get_document_image(doc.id, page_index=0, image_index=-1) is None
+        assert get_document_image(doc.id, page_index=-1, token_index=0) is None
+        assert get_document_image(doc.id, page_index=0, token_index=-1) is None
 
     def test_get_document_image_nonexistent_document(self):
         """Test that non-existent document returns None."""
-        result = get_document_image(99999, page_index=0, image_index=0)
+        result = get_document_image(99999, page_index=0, token_index=0)
 
         assert result is None
 
@@ -307,7 +317,8 @@ class ImageToolsTestCase(TestCase):
         )
         label_set.annotation_labels.add(label)
 
-        # Create annotation with imagesJsons reference
+        # Create annotation with tokensJsons reference
+        # Token index 1 and 2 are image tokens (index 0 is the text token "Test")
         annotation = Annotation.objects.create(
             document=doc,
             corpus=corpus,
@@ -317,10 +328,10 @@ class ImageToolsTestCase(TestCase):
             creator=self.user,
             json={
                 "0": {
-                    "bounds": {"left": 50, "top": 50, "right": 130, "bottom": 110},
-                    "imagesJsons": [
-                        {"pageIndex": 0, "imageIndex": 0},
-                        {"pageIndex": 0, "imageIndex": 1},
+                    "bounds": {"left": 50, "top": 50, "right": 230, "bottom": 210},
+                    "tokensJsons": [
+                        {"pageIndex": 0, "tokenIndex": 1},
+                        {"pageIndex": 0, "tokenIndex": 2},
                     ],
                 }
             },
@@ -394,8 +405,9 @@ class ImageToolsTestCase(TestCase):
         """Test permission-checked image retrieval with permitted user."""
         doc = self._create_document_with_images(num_pages=1, images_per_page=1)
 
+        # Token index 1 is the first image token (index 0 is the text token "Test")
         result = get_document_image_with_permission(
-            self.user, doc.id, page_index=0, image_index=0
+            self.user, doc.id, page_index=0, token_index=1
         )
 
         assert result is not None
@@ -405,8 +417,9 @@ class ImageToolsTestCase(TestCase):
         """Test permission-checked image retrieval with non-permitted user."""
         doc = self._create_document_with_images(num_pages=1, images_per_page=1)
 
+        # Token index 1 is the first image token (index 0 is the text token "Test")
         result = get_document_image_with_permission(
-            self.other_user, doc.id, page_index=0, image_index=0
+            self.other_user, doc.id, page_index=0, token_index=1
         )
 
         assert result is None
@@ -416,7 +429,7 @@ class ImageToolsTestCase(TestCase):
         # This tests IDOR protection - non-existent and unauthorized should
         # return the same response to prevent enumeration
         result = get_document_image_with_permission(
-            self.user, 99999, page_index=0, image_index=0
+            self.user, 99999, page_index=0, token_index=0
         )
 
         assert result is None
@@ -437,6 +450,7 @@ class ImageToolsTestCase(TestCase):
         )
         label_set.annotation_labels.add(label)
 
+        # Token index 1 is the first image token (index 0 is the text token "Test")
         annotation = Annotation.objects.create(
             document=doc,
             corpus=corpus,
@@ -447,7 +461,7 @@ class ImageToolsTestCase(TestCase):
             json={
                 "0": {
                     "bounds": {"left": 50, "top": 50, "right": 130, "bottom": 110},
-                    "imagesJsons": [{"pageIndex": 0, "imageIndex": 0}],
+                    "tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}],
                 }
             },
         )
@@ -472,6 +486,7 @@ class ImageToolsTestCase(TestCase):
         )
         label_set.annotation_labels.add(label)
 
+        # Token index 1 is the first image token (index 0 is the text token "Test")
         annotation = Annotation.objects.create(
             document=doc,
             corpus=corpus,
@@ -482,7 +497,7 @@ class ImageToolsTestCase(TestCase):
             json={
                 "0": {
                     "bounds": {"left": 50, "top": 50, "right": 130, "bottom": 110},
-                    "imagesJsons": [{"pageIndex": 0, "imageIndex": 0}],
+                    "tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}],
                 }
             },
         )
@@ -527,16 +542,18 @@ class ImageToolsStoragePathTestCase(TestCase):
             page_count=1,
         )
 
+        # Use unified token format - images are tokens with is_image=True
         pawls_data = [
             {
                 "page": {"width": 612, "height": 792, "index": 0},
-                "tokens": [],
-                "images": [
+                "tokens": [
                     {
                         "x": 50,
                         "y": 50,
                         "width": 100,
                         "height": 100,
+                        "text": "",  # Required for unified token format
+                        "is_image": True,  # Identifies this as an image token
                         "format": "jpeg",
                         "original_width": 100,
                         "original_height": 100,
@@ -553,7 +570,7 @@ class ImageToolsStoragePathTestCase(TestCase):
         set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
 
         # Test retrieval
-        result = get_document_image(doc.id, page_index=0, image_index=0)
+        result = get_document_image(doc.id, page_index=0, token_index=0)
 
         assert result is not None
         assert isinstance(result, ImageData)

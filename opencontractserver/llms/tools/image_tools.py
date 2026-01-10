@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 
 from opencontractserver.annotations.models import Annotation
 from opencontractserver.documents.models import Document
-from opencontractserver.types.dicts import PawlsImageTokenPythonType
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.pdf_token_extraction import (
     get_image_as_base64,
@@ -36,10 +35,12 @@ except ModuleNotFoundError:
 
 
 class ImageReference(BaseModel):
-    """Reference to an image in a document."""
+    """Reference to an image token in a document."""
 
     page_index: int = Field(description="0-based page index")
-    image_index: int = Field(description="0-based image index on the page")
+    token_index: int = Field(
+        description="0-based token index within the page's tokens array"
+    )
     width: float = Field(description="Image width in PDF points")
     height: float = Field(description="Image height in PDF points")
     x: float = Field(description="X coordinate of image in PDF points")
@@ -59,7 +60,9 @@ class ImageData(BaseModel):
     format: str = Field(description="Image format (jpeg, png)")
     data_url: str = Field(description="Data URL for embedding in prompts")
     page_index: int = Field(description="0-based page index")
-    image_index: int = Field(description="0-based image index on the page")
+    token_index: int = Field(
+        description="0-based token index within the page's tokens array"
+    )
 
 
 def _load_pawls_data(document: Document) -> Optional[list[dict[str, Any]]]:
@@ -97,10 +100,12 @@ def list_document_images(
     page_index: Optional[int] = None,
 ) -> list[ImageReference]:
     """
-    List all images in a document, optionally filtered by page.
+    List all image tokens in a document, optionally filtered by page.
 
-    This function returns metadata about images without loading the actual
+    This function returns metadata about image tokens without loading the actual
     image data. Use get_document_image to retrieve specific images.
+
+    Images are stored as tokens with is_image=True in the unified tokens[] array.
 
     Args:
         document_id: The document ID.
@@ -124,23 +129,28 @@ def list_document_images(
             if not isinstance(page, dict):
                 continue
 
-            page_images = page.get("images", [])
-            for img_idx, img_token in enumerate(page_images):
-                if not isinstance(img_token, dict):
+            # Iterate through tokens and filter for image tokens
+            page_tokens = page.get("tokens", [])
+            for token_idx, token in enumerate(page_tokens):
+                if not isinstance(token, dict):
+                    continue
+
+                # Only process image tokens
+                if not token.get("is_image"):
                     continue
 
                 images.append(
                     ImageReference(
                         page_index=page_idx,
-                        image_index=img_idx,
-                        width=float(img_token.get("width", 0)),
-                        height=float(img_token.get("height", 0)),
-                        x=float(img_token.get("x", 0)),
-                        y=float(img_token.get("y", 0)),
-                        format=img_token.get("format", "jpeg"),
-                        image_type=img_token.get("image_type"),
-                        alt_text=img_token.get("alt_text"),
-                        content_hash=img_token.get("content_hash"),
+                        token_index=token_idx,
+                        width=float(token.get("width", 0)),
+                        height=float(token.get("height", 0)),
+                        x=float(token.get("x", 0)),
+                        y=float(token.get("y", 0)),
+                        format=token.get("format", "jpeg"),
+                        image_type=token.get("image_type"),
+                        alt_text=token.get("alt_text"),
+                        content_hash=token.get("content_hash"),
                     )
                 )
 
@@ -156,21 +166,23 @@ def list_document_images(
 def get_document_image(
     document_id: int,
     page_index: int,
-    image_index: int,
+    token_index: int,
 ) -> Optional[ImageData]:
     """
-    Get image data for a specific image in a document.
+    Get image data for a specific image token in a document.
 
-    Retrieves the actual image data (base64 encoded) for the specified image.
+    Retrieves the actual image data (base64 encoded) for the specified image token.
     The returned ImageData includes a data_url suitable for LLM vision input.
+
+    Images are stored as tokens with is_image=True in the unified tokens[] array.
 
     Args:
         document_id: The document ID.
         page_index: 0-based page index.
-        image_index: 0-based image index on the page.
+        token_index: 0-based token index within the page's tokens array.
 
     Returns:
-        ImageData with base64 content and data URL, or None if not found.
+        ImageData with base64 content and data URL, or None if not found or not an image token.
     """
     try:
         document = Document.objects.get(pk=document_id)
@@ -189,32 +201,39 @@ def get_document_image(
         if not isinstance(page, dict):
             return None
 
-        page_images = page.get("images", [])
+        page_tokens = page.get("tokens", [])
 
-        if image_index < 0 or image_index >= len(page_images):
+        if token_index < 0 or token_index >= len(page_tokens):
             logger.warning(
-                f"Image index {image_index} out of bounds for page {page_index}"
+                f"Token index {token_index} out of bounds for page {page_index}"
             )
             return None
 
-        img_token: PawlsImageTokenPythonType = page_images[image_index]
+        token = page_tokens[token_index]
 
-        base64_data = get_image_as_base64(img_token)
+        # Verify this is an image token
+        if not token.get("is_image"):
+            logger.warning(
+                f"Token at index {token_index} on page {page_index} is not an image token"
+            )
+            return None
+
+        base64_data = get_image_as_base64(token)
         if not base64_data:
             logger.warning(
-                f"Could not get base64 data for image {image_index} on page {page_index}"
+                f"Could not get base64 data for image token {token_index} on page {page_index}"
             )
             return None
 
-        data_url = get_image_data_url(img_token)
-        img_format = img_token.get("format", "jpeg")
+        data_url = get_image_data_url(token)
+        img_format = token.get("format", "jpeg")
 
         return ImageData(
             base64_data=base64_data,
             format=img_format,
             data_url=data_url or f"data:image/{img_format};base64,{base64_data}",
             page_index=page_index,
-            image_index=image_index,
+            token_index=token_index,
         )
     except Document.DoesNotExist:
         logger.warning(f"Document {document_id} not found")
@@ -226,17 +245,17 @@ def get_document_image(
 
 def get_annotation_images(annotation_id: int) -> list[ImageData]:
     """
-    Get all images referenced by an annotation.
+    Get all image tokens referenced by an annotation.
 
-    Annotations for figures/images may have imagesJsons references in their
-    annotation_json field. This function retrieves the actual image data for
-    all referenced images.
+    Annotations reference tokens via tokensJsons in their annotation_json field.
+    This function filters for image tokens (is_image=True) and retrieves their
+    actual image data.
 
     Args:
         annotation_id: The annotation ID.
 
     Returns:
-        List of ImageData for images referenced by this annotation.
+        List of ImageData for image tokens referenced by this annotation.
     """
     try:
         annotation = Annotation.objects.select_related("document").get(pk=annotation_id)
@@ -246,7 +265,7 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
             logger.warning(f"Annotation {annotation_id} has no document")
             return []
 
-        # Get imagesJsons from annotation's json field
+        # Get tokensJsons from annotation's json field
         annotation_json = annotation.json or {}
 
         images: list[ImageData] = []
@@ -254,15 +273,17 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
             if not isinstance(page_data, dict):
                 continue
 
-            image_refs = page_data.get("imagesJsons", [])
-            for ref in image_refs:
+            # Get token references from the annotation
+            token_refs = page_data.get("tokensJsons", [])
+            for ref in token_refs:
                 if not isinstance(ref, dict):
                     continue
 
                 page_idx = ref.get("pageIndex")
-                img_idx = ref.get("imageIndex")
-                if page_idx is not None and img_idx is not None:
-                    img_data = get_document_image(document.pk, page_idx, img_idx)
+                token_idx = ref.get("tokenIndex")
+                if page_idx is not None and token_idx is not None:
+                    # get_document_image will verify the token is an image token
+                    img_data = get_document_image(document.pk, page_idx, token_idx)
                     if img_data:
                         images.append(img_data)
 
@@ -314,7 +335,7 @@ def get_document_image_with_permission(
     user,
     document_id: int,
     page_index: int,
-    image_index: int,
+    token_index: int,
 ) -> Optional[ImageData]:
     """
     Permission-checked version of get_document_image.
@@ -326,7 +347,7 @@ def get_document_image_with_permission(
         user: The user requesting access.
         document_id: The document ID.
         page_index: 0-based page index.
-        image_index: 0-based image index on the page.
+        token_index: 0-based token index within the page's tokens array.
 
     Returns:
         ImageData if permitted and found, None otherwise.
@@ -338,7 +359,7 @@ def get_document_image_with_permission(
         ):
             logger.warning(f"User {user} lacks permission for document {document_id}")
             return None
-        return get_document_image(document_id, page_index, image_index)
+        return get_document_image(document_id, page_index, token_index)
     except Document.DoesNotExist:
         return None  # Same response for missing or unauthorized (IDOR protection)
 
@@ -399,13 +420,13 @@ async def alist_document_images(
 async def aget_document_image(
     document_id: int,
     page_index: int,
-    image_index: int,
+    token_index: int,
 ) -> Optional[ImageData]:
     """Async version of get_document_image."""
     return await _db_sync_to_async(get_document_image)(
         document_id=document_id,
         page_index=page_index,
-        image_index=image_index,
+        token_index=token_index,
     )
 
 
@@ -433,14 +454,14 @@ async def aget_document_image_with_permission(
     user,
     document_id: int,
     page_index: int,
-    image_index: int,
+    token_index: int,
 ) -> Optional[ImageData]:
     """Async version of get_document_image_with_permission."""
     return await _db_sync_to_async(get_document_image_with_permission)(
         user=user,
         document_id=document_id,
         page_index=page_index,
-        image_index=image_index,
+        token_index=token_index,
     )
 
 

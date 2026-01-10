@@ -25,7 +25,6 @@ if TYPE_CHECKING:
 
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
-    PawlsImageTokenPythonType,
     PawlsPagePythonType,
     PawlsTokenPythonType,
     TokenIdPythonType,
@@ -468,13 +467,17 @@ def extract_images_from_pdf(
     image_format: Literal["jpeg", "png"] = "jpeg",
     jpeg_quality: int = 85,
     storage_path: Optional[str] = None,
-) -> dict[int, list[PawlsImageTokenPythonType]]:
+) -> dict[int, list[PawlsTokenPythonType]]:
     """
-    Extract embedded images from a PDF.
+    Extract embedded images from a PDF as unified image tokens.
 
     Uses pdfplumber to detect embedded images and extracts them. If a storage_path
     is provided, images are saved to storage and referenced by path (recommended
     to avoid PAWLs file bloat). Otherwise, images are embedded as base64.
+
+    Image tokens are returned as unified PawlsTokenPythonType with is_image=True,
+    allowing them to be stored alongside text tokens in the PAWLs format and
+    referenced using the same TokenIdPythonType.
 
     Args:
         pdf_bytes: The raw bytes of the PDF file.
@@ -488,7 +491,8 @@ def extract_images_from_pdf(
                      If None, images are embedded as base64 (not recommended for large docs).
 
     Returns:
-        Dict mapping 0-based page index to list of PawlsImageTokenPythonType.
+        Dict mapping 0-based page index to list of PawlsTokenPythonType (image tokens).
+        Each image token has is_image=True and text="" to identify it as an image.
     """
     try:
         import pdfplumber
@@ -497,7 +501,7 @@ def extract_images_from_pdf(
         logger.error(f"Required library not installed: {e}")
         return {}
 
-    images_by_page: dict[int, list[PawlsImageTokenPythonType]] = {}
+    images_by_page: dict[int, list[PawlsTokenPythonType]] = {}
 
     # Track total size across all images for document-level limit
     total_images_size = 0
@@ -510,7 +514,7 @@ def extract_images_from_pdf(
                 if size_limit_reached:
                     images_by_page[page_idx] = []
                     continue
-                page_images: list[PawlsImageTokenPythonType] = []
+                page_images: list[PawlsTokenPythonType] = []
                 page_width = float(page.width)
                 page_height = float(page.height)
 
@@ -610,12 +614,16 @@ def extract_images_from_pdf(
                         # Calculate content hash for deduplication
                         content_hash = hashlib.sha256(image_bytes).hexdigest()
 
-                        # Create image token with either storage path or base64 data
-                        image_token: PawlsImageTokenPythonType = {
+                        # Create unified image token with is_image=True and text=""
+                        # This allows image tokens to be stored alongside text tokens
+                        # in the PAWLs format and referenced using TokenIdPythonType
+                        image_token: PawlsTokenPythonType = {
                             "x": x0,
                             "y": top,
                             "width": width,
                             "height": height,
+                            "text": "",  # Required field, empty for images
+                            "is_image": True,  # Identifies this as an image token
                             "format": image_format,
                             "original_width": pil_image.width,
                             "original_height": pil_image.height,
@@ -756,12 +764,16 @@ def crop_image_from_pdf(
     dpi: int = 150,
     storage_path: Optional[str] = None,
     img_idx: int = 0,
-) -> Optional[PawlsImageTokenPythonType]:
+) -> Optional[PawlsTokenPythonType]:
     """
-    Crop a specific bounding box region from a PDF page as an image token.
+    Crop a specific bounding box region from a PDF page as a unified image token.
 
     This is useful for extracting figure/image regions identified by parsers
     like LlamaParse or Docling that provide bounding boxes for visual elements.
+
+    The returned image token is a unified PawlsTokenPythonType with is_image=True,
+    allowing it to be stored alongside text tokens and referenced using
+    TokenIdPythonType.
 
     Args:
         pdf_bytes: The raw bytes of the PDF file.
@@ -778,7 +790,8 @@ def crop_image_from_pdf(
         img_idx: Image index for filename generation when using storage_path.
 
     Returns:
-        PawlsImageTokenPythonType with the cropped image data, or None on failure.
+        PawlsTokenPythonType with is_image=True and cropped image data,
+        or None on failure.
     """
     # Note: PIL availability is checked in _crop_pdf_region
     try:
@@ -825,12 +838,16 @@ def crop_image_from_pdf(
 
         content_hash = hashlib.sha256(image_bytes).hexdigest()
 
-        # Create image token with position and metadata
-        image_token: PawlsImageTokenPythonType = {
+        # Create unified image token with is_image=True and text=""
+        # This allows the cropped image to be stored alongside text tokens
+        # and referenced using TokenIdPythonType
+        image_token: PawlsTokenPythonType = {
             "x": left,
             "y": top,
             "width": width,
             "height": height,
+            "text": "",  # Required field, empty for images
+            "is_image": True,  # Identifies this as an image token
             "format": image_format,
             "original_width": pil_image.width,
             "original_height": pil_image.height,
@@ -867,17 +884,21 @@ def crop_image_from_pdf(
 
 
 def get_image_as_base64(
-    image_token: PawlsImageTokenPythonType,
+    image_token: PawlsTokenPythonType,
 ) -> Optional[str]:
     """
-    Get the base64-encoded image data from an image token.
+    Get the base64-encoded image data from a unified image token.
 
     This function retrieves image data for LLM consumption. It first checks for
     inline base64 data, then falls back to loading from storage if an image_path
     is provided.
 
+    Image tokens are unified PawlsTokenPythonType with is_image=True. They may
+    contain either base64_data (inline) or image_path (storage reference).
+
     Args:
-        image_token: The image token containing base64_data or image_path.
+        image_token: A unified PawlsTokenPythonType with is_image=True,
+                    containing either base64_data or image_path.
 
     Returns:
         Base64-encoded image data string, or None if not available.
@@ -901,13 +922,16 @@ def get_image_as_base64(
 
 
 def get_image_data_url(
-    image_token: PawlsImageTokenPythonType,
+    image_token: PawlsTokenPythonType,
 ) -> Optional[str]:
     """
     Get the image as a data URL suitable for embedding in HTML or LLM prompts.
 
+    Image tokens are unified PawlsTokenPythonType with is_image=True.
+
     Args:
-        image_token: The image token containing base64_data.
+        image_token: A unified PawlsTokenPythonType with is_image=True,
+                    containing either base64_data or image_path.
 
     Returns:
         Data URL string (e.g., "data:image/jpeg;base64,..."), or None if not available.

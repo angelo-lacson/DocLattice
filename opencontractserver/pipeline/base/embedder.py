@@ -39,6 +39,44 @@ class BaseEmbedder(PipelineComponentBase, ABC):
     supports_text: bool = True  # Whether this embedder supports text input
     supports_images: bool = False  # Whether this embedder supports image input
 
+    @property
+    def supported_modalities(self) -> list[str]:
+        """
+        Returns a list of content modalities this embedder supports.
+
+        Based on the embedder's capability flags (supports_text, supports_images),
+        returns the corresponding modality strings that match the ContentModality enum.
+
+        Returns:
+            List of supported modality strings (e.g., ["TEXT"], ["TEXT", "IMAGE"]).
+        """
+        modalities = []
+        if self.supports_text:
+            modalities.append("TEXT")
+        if self.supports_images:
+            modalities.append("IMAGE")
+        return modalities
+
+    def supports_modalities(self, modalities: list[str]) -> bool:
+        """
+        Check if this embedder supports all the given content modalities.
+
+        This is useful for filtering annotations before embedding - if an annotation
+        contains modalities the embedder doesn't support, it should be skipped.
+
+        Args:
+            modalities: List of modality strings to check (e.g., ["TEXT", "IMAGE"]).
+
+        Returns:
+            True if the embedder supports ALL given modalities, False otherwise.
+        """
+        if not modalities:
+            return True  # Empty modality list is always supported
+
+        supported = set(self.supported_modalities)
+        required = set(modalities)
+        return required.issubset(supported)
+
     def __init__(self, **kwargs):
         """
         Initializes the Embedder.
