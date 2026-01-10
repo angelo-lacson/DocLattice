@@ -3,16 +3,23 @@ from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from opencontractserver.corpuses.models import Corpus
+from opencontractserver.documents.models import Document
 from opencontractserver.llms.tools.pydantic_ai_tools import (
+    PydanticAIDependencies,
     PydanticAIToolFactory,
     PydanticAIToolWrapper,
+    _check_user_permissions,
     create_pydantic_ai_tool_from_func,
     create_typed_pydantic_ai_tool,
     pydantic_ai_tool,
 )
 from opencontractserver.llms.tools.tool_factory import CoreTool
+
+User = get_user_model()
 
 # ---------------------------------------------------------------------------
 # Helper functions for the tests
@@ -211,3 +218,105 @@ class TestPydanticAIToolsAsync(TestCase):
 
         self.assertEqual(result_ok, 4.0)
         self.assertIsNone(result_fail)
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestCheckUserPermissions(TestCase):
+    """Tests for _check_user_permissions defense-in-depth function.
+
+    These tests cover edge cases for permission checking that validates
+    user access before any tool execution.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="perm_check_user", password="password", email="permcheck@test.com"
+        )
+        cls.corpus = Corpus.objects.create(
+            title="Perm Check Corpus", creator=cls.user, is_public=False
+        )
+        cls.doc = Document.objects.create(
+            title="Perm Check Doc", corpus=cls.corpus, creator=cls.user, is_public=False
+        )
+
+    async def test_anonymous_user_nonexistent_document_raises_error(self):
+        """Test that anonymous user accessing non-existent document raises PermissionError.
+
+        Line 79 coverage: Document.DoesNotExist for anonymous user.
+        """
+        deps = PydanticAIDependencies(
+            user_id=None,  # Anonymous
+            document_id=99999999,  # Non-existent
+            corpus_id=None,
+        )
+        ctx = MagicMock(deps=deps)
+
+        with self.assertRaises(PermissionError) as context:
+            await _check_user_permissions(ctx)
+        self.assertIn("not found", str(context.exception))
+
+    async def test_anonymous_user_nonexistent_corpus_raises_error(self):
+        """Test that anonymous user accessing non-existent corpus raises PermissionError.
+
+        Line 90 coverage: Corpus.DoesNotExist for anonymous user.
+        """
+        deps = PydanticAIDependencies(
+            user_id=None,  # Anonymous
+            document_id=None,
+            corpus_id=99999999,  # Non-existent
+        )
+        ctx = MagicMock(deps=deps)
+
+        with self.assertRaises(PermissionError) as context:
+            await _check_user_permissions(ctx)
+        self.assertIn("not found", str(context.exception))
+
+    async def test_nonexistent_user_raises_error(self):
+        """Test that non-existent user ID raises PermissionError.
+
+        Lines 96-97 coverage: User.DoesNotExist for authenticated user.
+        """
+        deps = PydanticAIDependencies(
+            user_id=99999999,  # Non-existent user
+            document_id=self.doc.id,
+            corpus_id=None,
+        )
+        ctx = MagicMock(deps=deps)
+
+        with self.assertRaises(PermissionError) as context:
+            await _check_user_permissions(ctx)
+        self.assertIn("not found", str(context.exception))
+
+    async def test_authenticated_user_nonexistent_document_raises_error(self):
+        """Test that authenticated user accessing non-existent document raises PermissionError.
+
+        Line 113 coverage: Document.DoesNotExist for authenticated user.
+        """
+        deps = PydanticAIDependencies(
+            user_id=self.user.id,
+            document_id=99999999,  # Non-existent
+            corpus_id=None,
+        )
+        ctx = MagicMock(deps=deps)
+
+        with self.assertRaises(PermissionError) as context:
+            await _check_user_permissions(ctx)
+        self.assertIn("not found", str(context.exception))
+
+    async def test_authenticated_user_nonexistent_corpus_raises_error(self):
+        """Test that authenticated user accessing non-existent corpus raises PermissionError.
+
+        Line 129 coverage: Corpus.DoesNotExist for authenticated user.
+        """
+        deps = PydanticAIDependencies(
+            user_id=self.user.id,
+            document_id=None,
+            corpus_id=99999999,  # Non-existent
+        )
+        ctx = MagicMock(deps=deps)
+
+        with self.assertRaises(PermissionError) as context:
+            await _check_user_permissions(ctx)
+        self.assertIn("not found", str(context.exception))
