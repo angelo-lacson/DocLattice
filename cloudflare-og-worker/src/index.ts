@@ -61,11 +61,17 @@ export default {
       return fetch(request);
     }
 
-    // Log crawler detection (helpful for debugging)
+    // Log ALL requests for debugging (helps identify unknown crawlers)
     const crawlerName = getCrawlerName(userAgent);
-    if (crawlerName) {
-      console.log(`Detected crawler: ${crawlerName} requesting ${url.pathname}`);
-    }
+    const isCrawler = isSocialMediaCrawler(userAgent);
+    console.log(JSON.stringify({
+      event: "request",
+      path: url.pathname,
+      userAgent: userAgent.substring(0, 200),
+      isCrawler,
+      crawlerName,
+      timestamp: new Date().toISOString(),
+    }));
 
     // Only intercept for social media crawlers
     if (!isSocialMediaCrawler(userAgent)) {
