@@ -1024,7 +1024,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
         socketRef.current = null;
       }
     };
-  }, [auth_token, documentId, selectedConversationId, isNewChat]);
+  }, [auth_token, documentId, selectedConversationId, isNewChat, corpusId]);
 
   /**
    * Load existing conversation by ID, clearing local state, then showing chat UI.

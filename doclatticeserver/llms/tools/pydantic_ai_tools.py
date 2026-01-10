@@ -69,7 +69,7 @@ async def _check_user_permissions(
         # (Should already be validated at consumer layer, but double-check)
         if document_id:
             try:
-                doc = await database_sync_to_async(Document.objects.get)(pk=document_id)
+                doc = await Document.objects.aget(pk=document_id)
                 if not doc.is_public:
                     logger.warning(
                         f"Anonymous tool access denied to private document {document_id}"
@@ -80,7 +80,7 @@ async def _check_user_permissions(
 
         if corpus_id:
             try:
-                corpus = await database_sync_to_async(Corpus.objects.get)(pk=corpus_id)
+                corpus = await Corpus.objects.aget(pk=corpus_id)
                 if not corpus.is_public:
                     logger.warning(
                         f"Anonymous tool access denied to private corpus {corpus_id}"
@@ -92,13 +92,13 @@ async def _check_user_permissions(
 
     # Authenticated user - check actual permissions
     try:
-        user = await database_sync_to_async(User.objects.get)(pk=user_id)
+        user = await User.objects.aget(pk=user_id)
     except User.DoesNotExist:
         raise PermissionError(f"User {user_id} not found")
 
     if document_id:
         try:
-            doc = await database_sync_to_async(Document.objects.get)(pk=document_id)
+            doc = await Document.objects.aget(pk=document_id)
             has_perm = await database_sync_to_async(user_has_permission_for_obj)(
                 user, doc, PermissionTypes.READ
             )
@@ -114,7 +114,7 @@ async def _check_user_permissions(
 
     if corpus_id:
         try:
-            corpus = await database_sync_to_async(Corpus.objects.get)(pk=corpus_id)
+            corpus = await Corpus.objects.aget(pk=corpus_id)
             has_perm = await database_sync_to_async(user_has_permission_for_obj)(
                 user, corpus, PermissionTypes.READ
             )
