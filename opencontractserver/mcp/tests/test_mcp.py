@@ -2301,28 +2301,44 @@ class MCPTelemetryIntegrationTest(TestCase):
     def test_call_tool_records_telemetry(self):
         """Test that call_tool records telemetry events."""
         import asyncio
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
 
-        from opencontractserver.mcp.server import call_tool_handler
+        from opencontractserver.mcp.server import TOOL_HANDLERS, call_tool_handler
         from opencontractserver.mcp.telemetry import set_request_context
 
         async def run_test():
             set_request_context(client_ip="10.0.0.5", transport="streamable_http")
 
-            with patch(
-                "opencontractserver.mcp.server.record_mcp_tool_call"
-            ) as mock_record:
-                mock_record.return_value = True
+            # Mock the tool handler to avoid database operations during parallel tests
+            # This prevents OperationalError from connection termination under load
+            mock_tool_result = {"total_count": 0, "corpuses": []}
+            mock_handler = MagicMock(return_value=mock_tool_result)
 
-                # Call list_public_corpuses tool using module-level handler
-                result = await call_tool_handler("list_public_corpuses", {})
+            # Patch TOOL_HANDLERS dict directly since it holds function references
+            original_handler = TOOL_HANDLERS["list_public_corpuses"]
+            TOOL_HANDLERS["list_public_corpuses"] = mock_handler
 
-                # Verify telemetry was recorded
-                mock_record.assert_called_once_with(
-                    "list_public_corpuses", success=True
-                )
+            try:
+                with patch(
+                    "opencontractserver.mcp.server.record_mcp_tool_call"
+                ) as mock_record:
+                    mock_record.return_value = True
 
-                return result
+                    # Call list_public_corpuses tool using module-level handler
+                    result = await call_tool_handler("list_public_corpuses", {})
+
+                    # Verify telemetry was recorded
+                    mock_record.assert_called_once_with(
+                        "list_public_corpuses", success=True
+                    )
+
+                    # Verify the mock handler was actually called
+                    mock_handler.assert_called_once()
+
+                    return result
+            finally:
+                # Restore the original handler
+                TOOL_HANDLERS["list_public_corpuses"] = original_handler
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
