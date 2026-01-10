@@ -33,6 +33,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Permission escalation scenarios** (9 tests): Cross-user access, mid-session permission changes, resource substitution attacks
 - **Integration tests** (8 tests): Full conversation flows with permission verification
 
+#### MCP Telemetry Tracking
+- **PostHog telemetry for MCP usage** (`opencontractserver/mcp/telemetry.py`): Track MCP tool calls and resource reads when telemetry is enabled
+  - Records tool usage (`mcp_tool_call`): tool name, success/failure, error type
+  - Records resource access (`mcp_resource_read`): resource type (corpus, document, annotation, thread), success/failure
+  - Records general requests (`mcp_request`): endpoint, method, transport type, success/failure
+  - Privacy-preserving: Uses salted SHA-256 IP hashing for unique user counting (raw IPs are never sent to PostHog)
+  - Support for all MCP transports: streamable_http, sse, stdio
+  - No query content or outputs are captured - only usage metadata
+- **Telemetry integration in MCP server** (`opencontractserver/mcp/server.py`):
+  - Context-based telemetry with per-request isolation via ContextVar
+  - Automatic client IP extraction from ASGI scope (supports X-Forwarded-For, X-Real-IP)
+  - Error telemetry for failed requests with error type classification
+  - Records both successful and failed requests for error rate calculations
+- **Comprehensive test coverage** (`opencontractserver/mcp/tests/test_mcp.py`):
+  - Unit tests for IP hashing, context management, event recording
+  - Integration tests for telemetry recording in tool/resource handlers
+  - Context manager for test isolation (`isolated_telemetry_context`)
+
 ### Removed
 
 #### Legacy WebSocket Consumers (Security Cleanup)
@@ -49,6 +67,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Frontend WebSocket Migration
 - **Updated**: `frontend/src/components/chat/get_websockets.ts` - All WebSocket URLs now use unified endpoint
 - **Updated**: `frontend/src/components/knowledge_base/document/utils.ts` - Document chat uses unified endpoint
+
+### Technical Details
+- Uses existing PostHog infrastructure from `config/telemetry.py`
+- Respects `TELEMETRY_ENABLED` setting and TEST mode disable
+- IP hashing uses `TELEMETRY_IP_SALT` setting to prevent rainbow table attacks
+- ContextVar ensures proper isolation in concurrent async requests
 
 ---
 
@@ -206,6 +230,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 2025-12-31
 
 ### Added
+
+#### Secure Zip Import with Folder Structure Preservation
+- **Zip security utilities** (`opencontractserver/utils/zip_security.py`): Comprehensive security validation for zip file imports
+  - Path traversal protection: Sanitizes all paths, rejects `..` sequences, drive letters, absolute paths
+  - Zip bomb detection: Monitors compression ratios, enforces size limits (500MB total, 100MB per file)
+  - Symlink rejection: Detects and skips symbolic links in zip entries
+  - Resource limits: Max 1000 files, 500 folders, 20 levels deep (all configurable)
+  - Hidden file filtering: Skips `.DS_Store`, `__MACOSX`, `Thumbs.db`, etc.
+- **Security constants** (`opencontractserver/constants/zip_import.py`): Configurable limits via Django settings
+- **Folder structure creation** (`opencontractserver/corpuses/folder_service.py:1268-1411`): `create_folder_structure_from_paths()` efficiently creates folder hierarchies, reusing existing folders
+- **Import Celery task** (`opencontractserver/tasks/import_tasks.py:580-912`): `import_zip_with_folder_structure` task with three-phase processing:
+  - Phase 1: Security validation without extraction
+  - Phase 2: Atomic folder structure creation
+  - Phase 3: Batched document processing with per-file error handling
+- **GraphQL mutation** (`config/graphql/mutations.py:1890-2040`): `importZipToCorpus` mutation with rate limiting
+  - Accepts base64-encoded zip file
+  - Optional target folder placement
+  - Returns job_id for async tracking
+  - Requires corpus EDIT permission
+- **Document upversioning on collision**: When importing a document to a path that already has a document, the new document becomes version 2 (or higher), with the previous version preserved in history
+- **Comprehensive test suites**:
+  - Security tests (`opencontractserver/tests/test_zip_security.py`): 49 tests for path sanitization, validation, edge cases
+  - Integration tests (`opencontractserver/tests/test_zip_import_integration.py`): 17 tests for task and folder service
+- **Design documentation** (`docs/features/zip_import_with_folders_design.md`): Complete specification including security model, API, error handling
 
 #### Corpus Categories and Landing Page Redesign
 - **CorpusCategory model** (`opencontractserver/corpuses/models.py`): New model for organizing corpuses by type (Legislation, Contracts, Case Law, Knowledge)

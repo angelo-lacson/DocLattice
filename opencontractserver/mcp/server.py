@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import re
+from typing import Any, Callable
 
 from asgiref.sync import sync_to_async
 from mcp.server import Server
@@ -34,6 +35,14 @@ from .resources import (
     get_document_resource,
     get_thread_resource,
 )
+from .telemetry import (
+    clear_request_context,
+    get_client_ip_from_scope,
+    record_mcp_request,
+    record_mcp_resource_read,
+    record_mcp_tool_call,
+    set_request_context,
+)
 from .tools import (
     get_document_text,
     get_thread_messages,
@@ -45,6 +54,17 @@ from .tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Map tool names to implementations - at module level for testability
+TOOL_HANDLERS: dict[str, Callable[..., Any]] = {
+    "list_public_corpuses": list_public_corpuses,
+    "list_documents": list_documents,
+    "get_document_text": get_document_text,
+    "list_annotations": list_annotations,
+    "search_corpus": search_corpus,
+    "list_threads": list_threads,
+    "get_thread_messages": get_thread_messages,
+}
 
 
 class URIParser:
@@ -87,6 +107,84 @@ class URIParser:
         return (match.group(1), int(match.group(2))) if match else None
 
 
+async def read_resource_handler(uri: str) -> str:
+    """
+    Resolve resource URI and return content.
+
+    This is the handler function for MCP resource reads.
+    Exposed at module level for testability.
+    """
+    resource_type = "unknown"
+    try:
+        # Try corpus URI
+        corpus_slug = URIParser.parse_corpus(uri)
+        if corpus_slug:
+            resource_type = "corpus"
+            result = await sync_to_async(get_corpus_resource)(corpus_slug)
+            record_mcp_resource_read(resource_type, success=True)
+            return result
+
+        # Try document URI
+        doc_parts = URIParser.parse_document(uri)
+        if doc_parts:
+            resource_type = "document"
+            corpus_slug, document_slug = doc_parts
+            result = await sync_to_async(get_document_resource)(
+                corpus_slug, document_slug
+            )
+            record_mcp_resource_read(resource_type, success=True)
+            return result
+
+        # Try annotation URI
+        ann_parts = URIParser.parse_annotation(uri)
+        if ann_parts:
+            resource_type = "annotation"
+            corpus_slug, document_slug, annotation_id = ann_parts
+            result = await sync_to_async(get_annotation_resource)(
+                corpus_slug, document_slug, annotation_id
+            )
+            record_mcp_resource_read(resource_type, success=True)
+            return result
+
+        # Try thread URI
+        thread_parts = URIParser.parse_thread(uri)
+        if thread_parts:
+            resource_type = "thread"
+            corpus_slug, thread_id = thread_parts
+            result = await sync_to_async(get_thread_resource)(corpus_slug, thread_id)
+            record_mcp_resource_read(resource_type, success=True)
+            return result
+
+        raise ValueError(f"Invalid or unrecognized resource URI: {uri}")
+    except Exception as e:
+        record_mcp_resource_read(
+            resource_type, success=False, error_type=type(e).__name__
+        )
+        raise
+
+
+async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
+    """
+    Execute tool and return results.
+
+    This is the handler function for MCP tool calls.
+    Exposed at module level for testability.
+    """
+    handler = TOOL_HANDLERS.get(name)
+    if not handler:
+        record_mcp_tool_call(name, success=False, error_type="UnknownTool")
+        raise ValueError(f"Unknown tool: {name}")
+
+    try:
+        # Run synchronous Django ORM handlers in thread pool
+        result = await sync_to_async(handler)(**arguments)
+        record_mcp_tool_call(name, success=True)
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    except Exception as e:
+        record_mcp_tool_call(name, success=False, error_type=type(e).__name__)
+        raise
+
+
 def create_mcp_server() -> Server:
     """Create and configure the MCP server instance."""
     mcp_server = Server("opencontracts")
@@ -121,37 +219,8 @@ def create_mcp_server() -> Server:
             ),
         ]
 
-    @mcp_server.read_resource()
-    async def read_resource(uri: str) -> str:
-        """Resolve resource URI and return content."""
-        # Try corpus URI
-        corpus_slug = URIParser.parse_corpus(uri)
-        if corpus_slug:
-            return await sync_to_async(get_corpus_resource)(corpus_slug)
-
-        # Try document URI
-        doc_parts = URIParser.parse_document(uri)
-        if doc_parts:
-            corpus_slug, document_slug = doc_parts
-            return await sync_to_async(get_document_resource)(
-                corpus_slug, document_slug
-            )
-
-        # Try annotation URI
-        ann_parts = URIParser.parse_annotation(uri)
-        if ann_parts:
-            corpus_slug, document_slug, annotation_id = ann_parts
-            return await sync_to_async(get_annotation_resource)(
-                corpus_slug, document_slug, annotation_id
-            )
-
-        # Try thread URI
-        thread_parts = URIParser.parse_thread(uri)
-        if thread_parts:
-            corpus_slug, thread_id = thread_parts
-            return await sync_to_async(get_thread_resource)(corpus_slug, thread_id)
-
-        raise ValueError(f"Invalid or unrecognized resource URI: {uri}")
+    # Register the module-level handler with the MCP server
+    mcp_server.read_resource()(read_resource_handler)
 
     @mcp_server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -287,28 +356,8 @@ def create_mcp_server() -> Server:
             ),
         ]
 
-    # Map tool names to implementations
-    TOOL_HANDLERS = {
-        "list_public_corpuses": list_public_corpuses,
-        "list_documents": list_documents,
-        "get_document_text": get_document_text,
-        "list_annotations": list_annotations,
-        "search_corpus": search_corpus,
-        "list_threads": list_threads,
-        "get_thread_messages": get_thread_messages,
-    }
-
-    @mcp_server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-        """Execute tool and return results."""
-        handler = TOOL_HANDLERS.get(name)
-        if not handler:
-            raise ValueError(f"Unknown tool: {name}")
-
-        # Run synchronous Django ORM handlers in thread pool
-        result = await sync_to_async(handler)(**arguments)
-
-        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    # Register the module-level handler with the MCP server
+    mcp_server.call_tool()(call_tool_handler)
 
     return mcp_server
 
@@ -405,6 +454,7 @@ def create_mcp_asgi_app():
     - SSE at /sse (deprecated, for backward compatibility)
 
     All requests are delegated to the appropriate transport handler.
+    Telemetry context is set for each request to track client IP and transport.
     """
 
     async def app(scope, receive, send):
@@ -415,14 +465,29 @@ def create_mcp_asgi_app():
 
         # Handle Streamable HTTP endpoint (recommended)
         if path == "/mcp/" or path == "/mcp":
+            # Set telemetry context for this request
+            client_ip = get_client_ip_from_scope(scope)
+            set_request_context(client_ip=client_ip, transport="streamable_http")
+
             # Ensure session manager is running
             await lifespan_manager.ensure_started()
 
             manager = get_session_manager()
             try:
                 await manager.handle_request(scope, receive, send)
+                # Record successful request telemetry
+                record_mcp_request(
+                    "/mcp", method=scope.get("method", "POST"), success=True
+                )
             except Exception as e:
                 logger.error(f"MCP Streamable HTTP request error: {e}")
+                # Record error telemetry before clearing context
+                record_mcp_request(
+                    "/mcp",
+                    method=scope.get("method", "POST"),
+                    success=False,
+                    error_type=type(e).__name__,
+                )
                 # Return error response
                 await send(
                     {
@@ -437,13 +502,30 @@ def create_mcp_asgi_app():
                         "body": json.dumps({"error": str(e)}).encode(),
                     }
                 )
+            finally:
+                clear_request_context()
 
         # Handle deprecated SSE transport for backward compatibility
         elif path == "/sse" or path.startswith("/sse/"):
+            # Set telemetry context for this request
+            client_ip = get_client_ip_from_scope(scope)
+            set_request_context(client_ip=client_ip, transport="sse")
+
             try:
                 await sse_starlette_app(scope, receive, send)
+                # Record successful request telemetry
+                record_mcp_request(
+                    "/sse", method=scope.get("method", "GET"), success=True
+                )
             except Exception as e:
                 logger.error(f"MCP SSE request error: {e}")
+                # Record error telemetry before clearing context
+                record_mcp_request(
+                    "/sse",
+                    method=scope.get("method", "GET"),
+                    success=False,
+                    error_type=type(e).__name__,
+                )
                 # Return error response
                 await send(
                     {
@@ -458,38 +540,44 @@ def create_mcp_asgi_app():
                         "body": json.dumps({"error": str(e)}).encode(),
                     }
                 )
+            finally:
+                clear_request_context()
 
         else:
             # Return 404 with helpful information about available endpoints
-            await send(
-                {
-                    "type": "http.response.start",
-                    "status": 404,
-                    "headers": [[b"content-type", b"application/json"]],
-                }
-            )
-            await send(
-                {
-                    "type": "http.response.body",
-                    "body": json.dumps(
-                        {
-                            "error": "Not found",
-                            "endpoints": {
-                                "streamable_http": {
-                                    "path": "/mcp",
-                                    "methods": ["POST", "GET"],
-                                    "description": "MCP Streamable HTTP endpoint (recommended)",
+            try:
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 404,
+                        "headers": [[b"content-type", b"application/json"]],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": json.dumps(
+                            {
+                                "error": "Not found",
+                                "endpoints": {
+                                    "streamable_http": {
+                                        "path": "/mcp",
+                                        "methods": ["POST", "GET"],
+                                        "description": "MCP Streamable HTTP endpoint (recommended)",
+                                    },
+                                    "sse": {
+                                        "path": "/sse",
+                                        "methods": ["GET"],
+                                        "description": "MCP SSE endpoint (deprecated, for backward compatibility)",
+                                    },
                                 },
-                                "sse": {
-                                    "path": "/sse",
-                                    "methods": ["GET"],
-                                    "description": "MCP SSE endpoint (deprecated, for backward compatibility)",
-                                },
-                            },
-                        }
-                    ).encode(),
-                }
-            )
+                            }
+                        ).encode(),
+                    }
+                )
+            finally:
+                # Ensure context is cleared even for 404 responses
+                clear_request_context()
 
     return app
 
@@ -500,12 +588,17 @@ mcp_asgi_app = create_mcp_asgi_app()
 
 async def main():
     """Run MCP server with stdio transport (for CLI usage)."""
-    async with stdio_server() as streams:
-        await mcp_server.run(
-            streams[0],  # read_stream
-            streams[1],  # write_stream
-            mcp_server.create_initialization_options(),
-        )
+    # Set telemetry context for stdio transport (no client IP available)
+    set_request_context(client_ip=None, transport="stdio")
+    try:
+        async with stdio_server() as streams:
+            await mcp_server.run(
+                streams[0],  # read_stream
+                streams[1],  # write_stream
+                mcp_server.create_initialization_options(),
+            )
+    finally:
+        clear_request_context()
 
 
 if __name__ == "__main__":

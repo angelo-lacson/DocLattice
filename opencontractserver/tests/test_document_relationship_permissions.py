@@ -148,7 +148,8 @@ class DocumentRelationshipPermissionTestCase(TestCase):
         # Outsider gets nothing
 
     def test_owner_has_all_permissions(self):
-        """Test that owner has full CRUD permissions on relationship."""
+        """Test that owner has full CRUD permissions on underlying documents."""
+        # Owner has CRUD on source document
         self.assertTrue(
             DocumentRelationshipQueryOptimizer.user_has_permission(
                 self.owner,
@@ -447,7 +448,7 @@ class DocumentRelationshipPermissionEscalationTestCase(TestCase):
         )
 
     def test_attacker_cannot_see_private_relationship(self):
-        """Test that attacker cannot see private relationship."""
+        """Test that attacker cannot see private relationship (not creator, not public)."""
         visible = DocumentRelationship.objects.visible_to_user(self.attacker)
         self.assertNotIn(self.relationship, visible)
 

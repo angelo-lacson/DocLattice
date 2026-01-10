@@ -23,6 +23,7 @@ import {
 import {
   selectedFolderId as selectedFolderIdReactiveVar,
   showUploadNewDocumentsModal,
+  showBulkImportModal,
   selectedDocumentIds as selectedDocumentIdsReactiveVar,
   linkDocumentsModalState,
 } from "../../../graphql/cache";
@@ -30,6 +31,7 @@ import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderToolbar } from "./FolderToolbar";
 import { CreateFolderModal } from "./CreateFolderModal";
 import { DocumentRelationshipModal } from "../../documents/DocumentRelationshipModal";
+import { BulkImportModal } from "../../widgets/modals/BulkImportModal";
 import { EditFolderModal } from "./EditFolderModal";
 import { MoveFolderModal } from "./MoveFolderModal";
 import { DeleteFolderModal } from "./DeleteFolderModal";
@@ -632,6 +634,11 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     showUploadNewDocumentsModal(true);
   }, []);
 
+  // Handle "Bulk Import" toolbar button
+  const handleBulkImport = React.useCallback(() => {
+    showBulkImportModal(true);
+  }, []);
+
   // Navigate back/up functionality
   const canGoBack = selectedFolderId !== null && selectedFolderId !== "trash";
   const handleGoBack = React.useCallback(() => {
@@ -674,6 +681,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
               onGoUp={handleGoUp}
               onNewFolder={handleNewFolder}
               onUpload={handleUpload}
+              onBulkImport={handleBulkImport}
               selectedDocumentCount={selectedDocumentIds.length}
               onLinkDocuments={() => openLinkModal(selectedDocumentIds)}
             />
@@ -732,6 +740,9 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       <EditFolderModal />
       <MoveFolderModal />
       <DeleteFolderModal />
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal />
 
       {/* Document Relationship Modal */}
       <DocumentRelationshipModal
