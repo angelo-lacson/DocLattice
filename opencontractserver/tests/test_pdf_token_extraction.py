@@ -427,11 +427,8 @@ class TestFindTokensInBbox(TestCase):
 class TestExtractImagesFromPdf(TestCase):
     """Tests for the extract_images_from_pdf function."""
 
-    @patch("opencontractserver.utils.pdf_token_extraction.Image")
     @patch("pdfplumber.open")
-    def test_extract_images_returns_dict_by_page(
-        self, mock_pdfplumber_open, mock_image_class
-    ):
+    def test_extract_images_returns_dict_by_page(self, mock_pdfplumber_open):
         """Test that extract_images_from_pdf returns dict mapping page to images."""
         # Mock pdfplumber page with images
         mock_image_info = {
@@ -503,9 +500,7 @@ class TestExtractImagesFromPdf(TestCase):
         mock_pdf.pages = [mock_page]
         mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-        images_by_page = extract_images_from_pdf(
-            b"pdf", min_width=50, min_height=50
-        )
+        images_by_page = extract_images_from_pdf(b"pdf", min_width=50, min_height=50)
 
         # Small image should be skipped
         self.assertEqual(len(images_by_page.get(0, [])), 0)
@@ -577,9 +572,7 @@ class TestCropImageFromPdf(TestCase):
         self.assertEqual(image_token["x"], 100)  # Swapped back
         self.assertEqual(image_token["y"], 100)
 
-    @patch(
-        "opencontractserver.utils.pdf_token_extraction._save_image_to_storage"
-    )
+    @patch("opencontractserver.utils.pdf_token_extraction._save_image_to_storage")
     @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
     def test_crop_image_saves_to_storage(self, mock_crop_region, mock_save):
         """Test that crop_image_from_pdf saves to storage when storage_path is provided."""
@@ -606,12 +599,12 @@ class TestCropImageFromPdf(TestCase):
         # Should call storage saver
         mock_save.assert_called_once()
         # Should have image_path instead of base64_data
-        self.assertEqual(image_token["image_path"], "documents/123/images/page_0_img_0.jpg")
+        self.assertEqual(
+            image_token["image_path"], "documents/123/images/page_0_img_0.jpg"
+        )
         self.assertNotIn("base64_data", image_token)
 
-    @patch(
-        "opencontractserver.utils.pdf_token_extraction._save_image_to_storage"
-    )
+    @patch("opencontractserver.utils.pdf_token_extraction._save_image_to_storage")
     @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
     def test_crop_image_falls_back_to_base64_on_storage_failure(
         self, mock_crop_region, mock_save
@@ -660,9 +653,7 @@ class TestImageHelperFunctions(TestCase):
 
         self.assertEqual(result, "SGVsbG8gV29ybGQ=")
 
-    @patch(
-        "opencontractserver.utils.pdf_token_extraction._load_image_from_storage"
-    )
+    @patch("opencontractserver.utils.pdf_token_extraction._load_image_from_storage")
     def test_get_image_as_base64_loads_from_storage(self, mock_load):
         """Test that get_image_as_base64 loads from storage when image_path is present."""
         # Mock storage to return image bytes
@@ -684,9 +675,7 @@ class TestImageHelperFunctions(TestCase):
         # Should return base64 encoded bytes
         self.assertEqual(result, "SGVsbG8gV29ybGQ=")
 
-    @patch(
-        "opencontractserver.utils.pdf_token_extraction._load_image_from_storage"
-    )
+    @patch("opencontractserver.utils.pdf_token_extraction._load_image_from_storage")
     def test_get_image_as_base64_returns_none_when_storage_fails(self, mock_load):
         """Test that get_image_as_base64 returns None when storage load fails."""
         mock_load.return_value = None

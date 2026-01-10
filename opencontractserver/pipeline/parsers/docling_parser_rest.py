@@ -387,7 +387,10 @@ class DoclingParser(BaseParser):
         if not image_refs:
             page_width, page_height = page_dims.get(page_idx, (612, 792))
             # Get the next image index for this page to use in storage filename
-            current_img_count = len(pawls_pages[page_idx].get("images", [])) if page_idx < len(pawls_pages) else 0
+            # Defensive check: ensure page exists and is a dict before accessing
+            current_img_count = 0
+            if page_idx < len(pawls_pages) and isinstance(pawls_pages[page_idx], dict):
+                current_img_count = len(pawls_pages[page_idx].get("images", []))
             cropped_image = crop_image_from_pdf(
                 pdf_bytes,
                 page_idx,

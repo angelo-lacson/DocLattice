@@ -14,11 +14,14 @@ import base64
 import hashlib
 import io
 import logging
-from typing import Literal, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
 import numpy as np
 from shapely.geometry import box
 from shapely.strtree import STRtree
+
+if TYPE_CHECKING:
+    from PIL import Image as PILImage
 
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
@@ -29,6 +32,10 @@ from opencontractserver.types.dicts import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Image size limits to prevent storage abuse and memory issues
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB per individual image
+MAX_TOTAL_IMAGES_SIZE_BYTES = 100 * 1024 * 1024  # 100MB total per document
 
 
 def has_extractable_text(pdf_bytes: bytes, min_chars: int = 10) -> bool:
@@ -392,15 +399,21 @@ def _save_image_to_storage(
     """
     Save image bytes to Django storage (S3, GCS, local filesystem).
 
+    Uses Django's default_storage backend, which may be local filesystem,
+    S3, GCS, or any other configured storage backend.
+
     Args:
         image_bytes: The raw image bytes to save.
-        storage_path: Base path for storing images (e.g., "user_123/doc_456/images").
+        storage_path: Base path for storing images (e.g., "documents/123/images").
         page_idx: 0-based page index.
         img_idx: 0-based image index within the page.
         image_format: Image format ("jpeg" or "png").
 
     Returns:
-        The storage path where the image was saved, or None on failure.
+        The full storage path where the image was saved (e.g.,
+        "documents/123/images/page_0_img_1.jpg"), or None on failure.
+        This path can be used with `_load_image_from_storage()` to retrieve
+        the image later.
     """
     try:
         from django.core.files.base import ContentFile
@@ -486,9 +499,17 @@ def extract_images_from_pdf(
 
     images_by_page: dict[int, list[PawlsImageTokenPythonType]] = {}
 
+    # Track total size across all images for document-level limit
+    total_images_size = 0
+    size_limit_reached = False
+
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             for page_idx, page in enumerate(pdf.pages):
+                # Check if we've hit the document-level size limit
+                if size_limit_reached:
+                    images_by_page[page_idx] = []
+                    continue
                 page_images: list[PawlsImageTokenPythonType] = []
                 page_width = float(page.width)
                 page_height = float(page.height)
@@ -498,7 +519,7 @@ def extract_images_from_pdf(
                     images_by_page[page_idx] = []
                     continue
 
-                for img_idx, img_info in enumerate(page.images[: max_images_per_page]):
+                for img_idx, img_info in enumerate(page.images[:max_images_per_page]):
                     try:
                         # pdfplumber image info contains: x0, top, x1, bottom, etc.
                         x0 = float(img_info.get("x0", 0))
@@ -520,7 +541,6 @@ def extract_images_from_pdf(
 
                         # Try to extract the actual image data
                         # pdfplumber may provide a 'stream' or we need to crop
-                        image_data = None
                         pil_image = None
 
                         # Method 1: Try to get image stream directly
@@ -565,6 +585,27 @@ def extract_images_from_pdf(
                             pil_image.save(img_bytes_io, format="PNG")
 
                         image_bytes = img_bytes_io.getvalue()
+                        image_size = len(image_bytes)
+
+                        # Check individual image size limit
+                        if image_size > MAX_IMAGE_SIZE_BYTES:
+                            logger.warning(
+                                f"Skipping oversized image on page {page_idx}: "
+                                f"{image_size} bytes exceeds {MAX_IMAGE_SIZE_BYTES} limit"
+                            )
+                            continue
+
+                        # Check document-level total size limit
+                        if total_images_size + image_size > MAX_TOTAL_IMAGES_SIZE_BYTES:
+                            logger.warning(
+                                f"Document image size limit reached "
+                                f"({MAX_TOTAL_IMAGES_SIZE_BYTES} bytes), "
+                                f"stopping extraction at page {page_idx}"
+                            )
+                            size_limit_reached = True
+                            break
+
+                        total_images_size += image_size
 
                         # Calculate content hash for deduplication
                         content_hash = hashlib.sha256(image_bytes).hexdigest()
@@ -640,7 +681,7 @@ def _crop_pdf_region(
     page_width: float,
     page_height: float,
     dpi: int = 150,
-) -> Optional["Image.Image"]:
+) -> Optional["PILImage.Image"]:
     """
     Crop a specific region from a PDF page by rendering it first.
 
@@ -659,9 +700,9 @@ def _crop_pdf_region(
     """
     try:
         from pdf2image import convert_from_bytes
-        from PIL import Image
+        from PIL import Image  # noqa: F401 - imported to verify PIL is installed
     except ImportError:
-        logger.warning("pdf2image not installed for region cropping")
+        logger.warning("pdf2image or PIL not installed for region cropping")
         return None
 
     try:
@@ -739,12 +780,7 @@ def crop_image_from_pdf(
     Returns:
         PawlsImageTokenPythonType with the cropped image data, or None on failure.
     """
-    try:
-        from PIL import Image
-    except ImportError:
-        logger.error("PIL not installed")
-        return None
-
+    # Note: PIL availability is checked in _crop_pdf_region
     try:
         left = float(bbox["left"])
         top = float(bbox["top"])
@@ -778,6 +814,15 @@ def crop_image_from_pdf(
             pil_image.save(img_bytes_io, format="PNG")
 
         image_bytes = img_bytes_io.getvalue()
+
+        # Check image size limit
+        if len(image_bytes) > MAX_IMAGE_SIZE_BYTES:
+            logger.warning(
+                f"Cropped image on page {page_idx} exceeds size limit: "
+                f"{len(image_bytes)} bytes > {MAX_IMAGE_SIZE_BYTES}"
+            )
+            return None
+
         content_hash = hashlib.sha256(image_bytes).hexdigest()
 
         # Create image token with position and metadata
