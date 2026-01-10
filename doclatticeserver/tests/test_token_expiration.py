@@ -9,14 +9,12 @@ These tests verify that:
 
 import logging
 from unittest import mock
-from urllib.parse import quote
 
 import pytest
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from graphql_jwt.exceptions import JSONWebTokenError, JSONWebTokenExpired
-from graphql_relay import to_global_id
 
 from config.graphql_auth0_auth.backends import Auth0RemoteUserJSONWebTokenBackend
 from config.websocket.middleware import (
@@ -129,12 +127,10 @@ class WebSocketTokenExpirationTestCase(WebsocketFixtureBaseTestCase):
         mock_create_document_agent.return_value = mock.MagicMock()
         mock_get_user_from_token.side_effect = JSONWebTokenExpired()
 
-        valid_graphql_doc_id = to_global_id("DocumentType", self.doc.id)
-        valid_graphql_doc_id = quote(valid_graphql_doc_id)
-
+        # Use unified agent-chat endpoint
         communicator = WebsocketCommunicator(
             self.application,
-            f"ws/document/{valid_graphql_doc_id}/query/?token=expired_token",
+            f"ws/agent-chat/?document_id={self.doc.id}&token=expired_token",
         )
 
         # The connection may fail, but we want to verify the scope was set correctly
@@ -162,12 +158,10 @@ class WebSocketTokenExpirationTestCase(WebsocketFixtureBaseTestCase):
         mock_create_document_agent.return_value = mock.MagicMock()
         mock_get_user_from_token.side_effect = JSONWebTokenError("Invalid token format")
 
-        valid_graphql_doc_id = to_global_id("DocumentType", self.doc.id)
-        valid_graphql_doc_id = quote(valid_graphql_doc_id)
-
+        # Use unified agent-chat endpoint
         communicator = WebsocketCommunicator(
             self.application,
-            f"ws/document/{valid_graphql_doc_id}/query/?token=invalid_token",
+            f"ws/agent-chat/?document_id={self.doc.id}&token=invalid_token",
         )
 
         connected, close_code = await communicator.connect()
