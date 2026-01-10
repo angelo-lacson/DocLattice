@@ -50,3 +50,22 @@ class AnnotationFilterMode(Enum):
     CORPUS_LABELSET_ONLY = "CORPUS_LABELSET_ONLY"
     CORPUS_LABELSET_PLUS_ANALYSES = "CORPUS_LABELSET_PLUS_ANALYSES"
     ANALYSES_ONLY = "ANALYSES_ONLY"
+
+
+class ContentModality(str, enum.Enum):
+    """
+    Content modalities that can be present in an annotation.
+
+    Used to track what types of content an annotation contains,
+    enabling embedders to filter annotations they can process.
+    """
+
+    TEXT = "TEXT"
+    IMAGE = "IMAGE"
+    AUDIO = "AUDIO"  # Future
+    TABLE = "TABLE"  # Future
+    VIDEO = "VIDEO"  # Future
+
+    @classmethod
+    def choices(cls):
+        return [(key.value, key.name) for key in cls]

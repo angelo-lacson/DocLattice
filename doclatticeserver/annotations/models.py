@@ -8,6 +8,7 @@ from typing import Union, cast
 
 import django
 from django.contrib.auth import get_user_model
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -695,6 +696,14 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
 
     # Mark structural / layout annotations explicitly.
     structural = django.db.models.BooleanField(default=False)
+
+    # Content modalities present in this annotation (TEXT, IMAGE, etc.)
+    content_modalities = ArrayField(
+        django.db.models.CharField(max_length=20),
+        default=list,
+        blank=True,
+        help_text="Content modalities present in this annotation: TEXT, IMAGE, etc.",
+    )
 
     # Sharing
     is_public = django.db.models.BooleanField(default=False)
