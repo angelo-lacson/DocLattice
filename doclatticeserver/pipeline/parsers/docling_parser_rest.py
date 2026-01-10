@@ -216,8 +216,10 @@ class DoclingParser(BaseParser):
             # Extract images if enabled
             extract_images_flag = all_kwargs.get("extract_images", self.extract_images)
             if extract_images_flag:
+                # Construct storage path for images based on document ID
+                image_storage_path = f"documents/{doc_id}/images"
                 normalized_result = self._add_images_to_result(
-                    normalized_result, pdf_bytes
+                    normalized_result, pdf_bytes, storage_path=image_storage_path
                 )
 
             logger.info(
@@ -268,6 +270,7 @@ class DoclingParser(BaseParser):
         self,
         result: dict[str, Any],
         pdf_bytes: bytes,
+        storage_path: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Extract images from the PDF and add them to the parsed result.
@@ -278,6 +281,9 @@ class DoclingParser(BaseParser):
         Args:
             result: The normalized response from the Docling microservice.
             pdf_bytes: The raw PDF bytes for image extraction.
+            storage_path: Base path for storing images (e.g., "documents/123/images").
+                         If provided, images are saved to storage and referenced by path.
+                         If None, images are embedded as base64 (not recommended).
 
         Returns:
             The result dict with images added to pawls_file_content.
@@ -292,6 +298,7 @@ class DoclingParser(BaseParser):
                 min_height=self.min_image_height,
                 image_format=self.image_format,
                 jpeg_quality=self.image_quality,
+                storage_path=storage_path,
             )
 
             total_images = sum(len(imgs) for imgs in images_by_page.values())
@@ -324,6 +331,7 @@ class DoclingParser(BaseParser):
                         images_by_page,
                         page_dims,
                         pawls_pages,
+                        storage_path=storage_path,
                     )
 
             # Log summary
@@ -351,6 +359,7 @@ class DoclingParser(BaseParser):
         images_by_page: dict[int, list[PawlsImageTokenPythonType]],
         page_dims: dict[int, tuple[float, float]],
         pawls_pages: list[dict[str, Any]],
+        storage_path: Optional[str] = None,
     ) -> None:
         """
         Add image references to an annotation that represents a figure/image.
@@ -361,6 +370,7 @@ class DoclingParser(BaseParser):
             images_by_page: Pre-extracted images by page.
             page_dims: Page dimensions dict.
             pawls_pages: PAWLs pages list (may be modified to add cropped images).
+            storage_path: Base path for storing cropped images.
         """
         page_idx = annotation.get("page", 0)
         annotation_json = annotation.get("annotation_json", {})
@@ -376,6 +386,8 @@ class DoclingParser(BaseParser):
         # If no embedded image found, crop the region
         if not image_refs:
             page_width, page_height = page_dims.get(page_idx, (612, 792))
+            # Get the next image index for this page to use in storage filename
+            current_img_count = len(pawls_pages[page_idx].get("images", [])) if page_idx < len(pawls_pages) else 0
             cropped_image = crop_image_from_pdf(
                 pdf_bytes,
                 page_idx,
@@ -385,6 +397,8 @@ class DoclingParser(BaseParser):
                 image_format=self.image_format,
                 jpeg_quality=self.image_quality,
                 dpi=self.image_dpi,
+                storage_path=storage_path,
+                img_idx=current_img_count,
             )
             if cropped_image and page_idx < len(pawls_pages):
                 if "images" not in pawls_pages[page_idx]:

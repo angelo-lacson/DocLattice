@@ -375,6 +375,8 @@ class LlamaParseParser(BaseParser):
 
         # Extract images from PDF if enabled
         images_by_page: dict[int, list[PawlsImageTokenPythonType]] = {}
+        # Construct storage path for images based on document ID
+        image_storage_path = f"documents/{document.pk}/images"
         if pdf_bytes and extract_images:
             try:
                 logger.info("Extracting images from PDF for LLM consumption...")
@@ -384,6 +386,7 @@ class LlamaParseParser(BaseParser):
                     min_height=self.min_image_height,
                     image_format=self.image_format,
                     jpeg_quality=self.image_quality,
+                    storage_path=image_storage_path,
                 )
                 total_images = sum(len(imgs) for imgs in images_by_page.values())
                 logger.info(
@@ -463,6 +466,8 @@ class LlamaParseParser(BaseParser):
                     )
                     # If no embedded image found, crop the region
                     if not image_refs:
+                        # Get the next image index for storage filename
+                        current_img_count = len(pawls_pages[page_idx].get("images", [])) if page_idx < len(pawls_pages) else 0
                         cropped_image = crop_image_from_pdf(
                             pdf_bytes,
                             page_idx,
@@ -472,6 +477,8 @@ class LlamaParseParser(BaseParser):
                             image_format=self.image_format,
                             jpeg_quality=self.image_quality,
                             dpi=self.image_dpi,
+                            storage_path=image_storage_path,
+                            img_idx=current_img_count,
                         )
                         if cropped_image:
                             # Add cropped image to the page
@@ -545,6 +552,8 @@ class LlamaParseParser(BaseParser):
                         )
                         # If no embedded image found, crop the region
                         if not image_refs:
+                            # Get the next image index for storage filename
+                            current_img_count = len(pawls_pages[page_idx].get("images", [])) if page_idx < len(pawls_pages) else 0
                             cropped_image = crop_image_from_pdf(
                                 pdf_bytes,
                                 page_idx,
@@ -554,6 +563,8 @@ class LlamaParseParser(BaseParser):
                                 image_format=self.image_format,
                                 jpeg_quality=self.image_quality,
                                 dpi=self.image_dpi,
+                                storage_path=image_storage_path,
+                                img_idx=current_img_count,
                             )
                             if cropped_image:
                                 if page_idx < len(pawls_pages):

@@ -378,6 +378,71 @@ def find_tokens_in_bbox(
 
 
 # =============================================================================
+# Image Storage Functions
+# =============================================================================
+
+
+def _save_image_to_storage(
+    image_bytes: bytes,
+    storage_path: str,
+    page_idx: int,
+    img_idx: int,
+    image_format: str,
+) -> Optional[str]:
+    """
+    Save image bytes to Django storage (S3, GCS, local filesystem).
+
+    Args:
+        image_bytes: The raw image bytes to save.
+        storage_path: Base path for storing images (e.g., "user_123/doc_456/images").
+        page_idx: 0-based page index.
+        img_idx: 0-based image index within the page.
+        image_format: Image format ("jpeg" or "png").
+
+    Returns:
+        The storage path where the image was saved, or None on failure.
+    """
+    try:
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
+
+        # Build the filename
+        extension = "jpg" if image_format == "jpeg" else image_format
+        filename = f"page_{page_idx}_img_{img_idx}.{extension}"
+        full_path = f"{storage_path}/{filename}"
+
+        # Save to storage
+        saved_path = default_storage.save(full_path, ContentFile(image_bytes))
+        logger.debug(f"Saved image to storage: {saved_path}")
+        return saved_path
+
+    except Exception as e:
+        logger.warning(f"Failed to save image to storage: {e}")
+        return None
+
+
+def _load_image_from_storage(image_path: str) -> Optional[bytes]:
+    """
+    Load image bytes from Django storage.
+
+    Args:
+        image_path: The storage path to the image.
+
+    Returns:
+        The raw image bytes, or None if loading fails.
+    """
+    try:
+        from django.core.files.storage import default_storage
+
+        with default_storage.open(image_path, "rb") as f:
+            return f.read()
+
+    except Exception as e:
+        logger.warning(f"Failed to load image from storage '{image_path}': {e}")
+        return None
+
+
+# =============================================================================
 # Image Extraction Functions
 # =============================================================================
 
@@ -389,12 +454,14 @@ def extract_images_from_pdf(
     max_images_per_page: int = 20,
     image_format: Literal["jpeg", "png"] = "jpeg",
     jpeg_quality: int = 85,
+    storage_path: Optional[str] = None,
 ) -> dict[int, list[PawlsImageTokenPythonType]]:
     """
     Extract embedded images from a PDF.
 
-    Uses pdfplumber to detect embedded images and extracts them as base64-encoded
-    data that can be included in the PAWLs format for LLM consumption.
+    Uses pdfplumber to detect embedded images and extracts them. If a storage_path
+    is provided, images are saved to storage and referenced by path (recommended
+    to avoid PAWLs file bloat). Otherwise, images are embedded as base64.
 
     Args:
         pdf_bytes: The raw bytes of the PDF file.
@@ -403,6 +470,9 @@ def extract_images_from_pdf(
         max_images_per_page: Maximum number of images to extract per page (default: 20).
         image_format: Output format for extracted images ("jpeg" or "png").
         jpeg_quality: JPEG quality if using jpeg format (1-100, default: 85).
+        storage_path: Base path for storing images (e.g., "user_123/doc_456/images").
+                     If provided, images are saved to storage and referenced by path.
+                     If None, images are embedded as base64 (not recommended for large docs).
 
     Returns:
         Dict mapping 0-based page index to list of PawlsImageTokenPythonType.
@@ -482,7 +552,7 @@ def extract_images_from_pdf(
                             )
                             continue
 
-                        # Convert to target format and base64 encode
+                        # Convert to target format
                         img_bytes_io = io.BytesIO()
                         if image_format == "jpeg":
                             # Convert to RGB for JPEG (no alpha channel)
@@ -495,24 +565,44 @@ def extract_images_from_pdf(
                             pil_image.save(img_bytes_io, format="PNG")
 
                         image_bytes = img_bytes_io.getvalue()
-                        base64_data = base64.b64encode(image_bytes).decode("utf-8")
 
                         # Calculate content hash for deduplication
                         content_hash = hashlib.sha256(image_bytes).hexdigest()
 
-                        # Create image token
+                        # Create image token with either storage path or base64 data
                         image_token: PawlsImageTokenPythonType = {
                             "x": x0,
                             "y": top,
                             "width": width,
                             "height": height,
-                            "base64_data": base64_data,
                             "format": image_format,
                             "original_width": pil_image.width,
                             "original_height": pil_image.height,
                             "content_hash": content_hash,
                             "image_type": "embedded",
                         }
+
+                        # Save to storage if path provided, otherwise embed base64
+                        if storage_path:
+                            saved_path = _save_image_to_storage(
+                                image_bytes,
+                                storage_path,
+                                page_idx,
+                                img_idx,
+                                image_format,
+                            )
+                            if saved_path:
+                                image_token["image_path"] = saved_path
+                            else:
+                                # Fallback to base64 if storage fails
+                                image_token["base64_data"] = base64.b64encode(
+                                    image_bytes
+                                ).decode("utf-8")
+                        else:
+                            # No storage path - embed as base64 (not recommended)
+                            image_token["base64_data"] = base64.b64encode(
+                                image_bytes
+                            ).decode("utf-8")
 
                         page_images.append(image_token)
                         logger.debug(
@@ -623,6 +713,8 @@ def crop_image_from_pdf(
     image_format: Literal["jpeg", "png"] = "jpeg",
     jpeg_quality: int = 85,
     dpi: int = 150,
+    storage_path: Optional[str] = None,
+    img_idx: int = 0,
 ) -> Optional[PawlsImageTokenPythonType]:
     """
     Crop a specific bounding box region from a PDF page as an image token.
@@ -639,6 +731,10 @@ def crop_image_from_pdf(
         image_format: Output format ("jpeg" or "png").
         jpeg_quality: JPEG quality (1-100).
         dpi: Resolution for rendering (default: 150).
+        storage_path: Base path for storing images. If provided, cropped images
+                     are saved to storage and referenced by path (recommended).
+                     If None, images are embedded as base64.
+        img_idx: Image index for filename generation when using storage_path.
 
     Returns:
         PawlsImageTokenPythonType with the cropped image data, or None on failure.
@@ -672,7 +768,7 @@ def crop_image_from_pdf(
         if pil_image is None:
             return None
 
-        # Convert to target format and base64 encode
+        # Convert to target format
         img_bytes_io = io.BytesIO()
         if image_format == "jpeg":
             if pil_image.mode in ("RGBA", "LA", "P"):
@@ -682,21 +778,41 @@ def crop_image_from_pdf(
             pil_image.save(img_bytes_io, format="PNG")
 
         image_bytes = img_bytes_io.getvalue()
-        base64_data = base64.b64encode(image_bytes).decode("utf-8")
         content_hash = hashlib.sha256(image_bytes).hexdigest()
 
+        # Create image token with position and metadata
         image_token: PawlsImageTokenPythonType = {
             "x": left,
             "y": top,
             "width": width,
             "height": height,
-            "base64_data": base64_data,
             "format": image_format,
             "original_width": pil_image.width,
             "original_height": pil_image.height,
             "content_hash": content_hash,
             "image_type": "cropped",
         }
+
+        # Save to storage if path provided, otherwise embed base64
+        if storage_path:
+            # Use "cropped" prefix to distinguish from embedded images
+            saved_path = _save_image_to_storage(
+                image_bytes,
+                storage_path,
+                page_idx,
+                img_idx,
+                image_format,
+            )
+            if saved_path:
+                image_token["image_path"] = saved_path
+            else:
+                # Fallback to base64 if storage fails
+                image_token["base64_data"] = base64.b64encode(image_bytes).decode(
+                    "utf-8"
+                )
+        else:
+            # No storage path - embed as base64 (not recommended for large images)
+            image_token["base64_data"] = base64.b64encode(image_bytes).decode("utf-8")
 
         return image_token
 
@@ -711,8 +827,9 @@ def get_image_as_base64(
     """
     Get the base64-encoded image data from an image token.
 
-    This is a convenience function for retrieving image data for LLM consumption.
-    Returns the data URL format suitable for inclusion in LLM prompts.
+    This function retrieves image data for LLM consumption. It first checks for
+    inline base64 data, then falls back to loading from storage if an image_path
+    is provided.
 
     Args:
         image_token: The image token containing base64_data or image_path.
@@ -720,13 +837,20 @@ def get_image_as_base64(
     Returns:
         Base64-encoded image data string, or None if not available.
     """
+    # First check for inline base64 data (small thumbnails, legacy)
     if "base64_data" in image_token and image_token["base64_data"]:
         return image_token["base64_data"]
 
-    # If we have an image_path, load from storage (not implemented yet)
+    # Load from storage if image_path is provided (preferred method)
     if "image_path" in image_token and image_token["image_path"]:
-        logger.warning("Loading images from storage path not yet implemented")
-        return None
+        image_bytes = _load_image_from_storage(image_token["image_path"])
+        if image_bytes:
+            return base64.b64encode(image_bytes).decode("utf-8")
+        else:
+            logger.warning(
+                f"Failed to load image from storage: {image_token['image_path']}"
+            )
+            return None
 
     return None
 
