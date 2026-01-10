@@ -11,6 +11,7 @@
  * Sources:
  * - https://developers.cloudflare.com/bots/concepts/bot/verified-bots/
  * - https://radar.cloudflare.com/bots/directory
+ * - https://developers.google.com/business-communications/rcs-business-messaging/guides/release-notes
  */
 const SOCIAL_CRAWLERS = [
   // Social Media
@@ -24,11 +25,25 @@ const SOCIAL_CRAWLERS = [
   "whatsapp", // WhatsApp
   "telegrambot", // Telegram
 
-  // Messaging/Preview Services
+  // Google/Android RCS - Critical for Android messaging
+  "googlemessages", // Google Messages app (Android default SMS/RCS)
+  "google-pagerenderer", // Google's page rendering service for RCS previews
+  "developers.google.com/+/web/snippet", // Google snippet fetcher (legacy, still used)
+
+  // Apple/iOS
+  "applebot", // Apple (iMessage, Siri, Safari)
+
+  // Other Messaging/Preview Services
   "pinterest", // Pinterest
-  "applebot", // Apple (iMessage, Siri)
   "redditbot", // Reddit
   "embedly", // Embed.ly
+  "bluesky", // BlueSky social
+  "cardyb", // BlueSky's preview bot
+
+  // Generic preview patterns (catch edge cases)
+  "link preview", // Generic link preview services
+  "url preview", // URL preview services
+  "snippet", // Snippet fetchers
 
   // Optional: Search engines (uncomment for SEO benefits)
   // 'googlebot',  // Google
@@ -87,6 +102,14 @@ export function getCrawlerName(userAgent: string): string | null {
   if (ua.includes("redditbot")) return "Reddit";
   if (ua.includes("googlebot")) return "Google";
   if (ua.includes("bingbot")) return "Bing";
+
+  // Google/Android RCS
+  if (ua.includes("googlemessages")) return "Google Messages";
+  if (ua.includes("google-pagerenderer")) return "Google RCS";
+  if (ua.includes("developers.google.com/+/web/snippet")) return "Google Snippet";
+
+  // BlueSky
+  if (ua.includes("bluesky") || ua.includes("cardyb")) return "BlueSky";
 
   // Generic bot detection
   if (isKnownBot(userAgent)) return "Unknown Bot";
