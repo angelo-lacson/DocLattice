@@ -577,6 +577,70 @@ class TestCropImageFromPdf(TestCase):
         self.assertEqual(image_token["x"], 100)  # Swapped back
         self.assertEqual(image_token["y"], 100)
 
+    @patch(
+        "opencontractserver.utils.pdf_token_extraction._save_image_to_storage"
+    )
+    @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
+    def test_crop_image_saves_to_storage(self, mock_crop_region, mock_save):
+        """Test that crop_image_from_pdf saves to storage when storage_path is provided."""
+        mock_pil_image = MagicMock()
+        mock_pil_image.mode = "RGB"
+        mock_pil_image.width = 150
+        mock_pil_image.height = 100
+        mock_pil_image.save = lambda buf, format, quality=85: buf.write(b"fake")
+        mock_crop_region.return_value = mock_pil_image
+        mock_save.return_value = "documents/123/images/page_0_img_0.jpg"
+
+        bbox = {"left": 100, "top": 100, "right": 250, "bottom": 200}
+
+        image_token = crop_image_from_pdf(
+            b"fake pdf",
+            0,
+            bbox,
+            612,
+            792,
+            storage_path="documents/123/images",
+            img_idx=0,
+        )
+
+        # Should call storage saver
+        mock_save.assert_called_once()
+        # Should have image_path instead of base64_data
+        self.assertEqual(image_token["image_path"], "documents/123/images/page_0_img_0.jpg")
+        self.assertNotIn("base64_data", image_token)
+
+    @patch(
+        "opencontractserver.utils.pdf_token_extraction._save_image_to_storage"
+    )
+    @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
+    def test_crop_image_falls_back_to_base64_on_storage_failure(
+        self, mock_crop_region, mock_save
+    ):
+        """Test that crop_image_from_pdf falls back to base64 when storage save fails."""
+        mock_pil_image = MagicMock()
+        mock_pil_image.mode = "RGB"
+        mock_pil_image.width = 150
+        mock_pil_image.height = 100
+        mock_pil_image.save = lambda buf, format, quality=85: buf.write(b"fake")
+        mock_crop_region.return_value = mock_pil_image
+        mock_save.return_value = None  # Simulate storage failure
+
+        bbox = {"left": 100, "top": 100, "right": 250, "bottom": 200}
+
+        image_token = crop_image_from_pdf(
+            b"fake pdf",
+            0,
+            bbox,
+            612,
+            792,
+            storage_path="documents/123/images",
+            img_idx=0,
+        )
+
+        # Should fall back to base64_data
+        self.assertIn("base64_data", image_token)
+        self.assertNotIn("image_path", image_token)
+
 
 class TestImageHelperFunctions(TestCase):
     """Tests for image helper functions."""
@@ -595,6 +659,67 @@ class TestImageHelperFunctions(TestCase):
         result = get_image_as_base64(image_token)
 
         self.assertEqual(result, "SGVsbG8gV29ybGQ=")
+
+    @patch(
+        "opencontractserver.utils.pdf_token_extraction._load_image_from_storage"
+    )
+    def test_get_image_as_base64_loads_from_storage(self, mock_load):
+        """Test that get_image_as_base64 loads from storage when image_path is present."""
+        # Mock storage to return image bytes
+        mock_load.return_value = b"Hello World"
+
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "image_path": "documents/123/images/page_0_img_0.jpg",
+            "format": "jpeg",
+        }
+
+        result = get_image_as_base64(image_token)
+
+        # Should call storage loader
+        mock_load.assert_called_once_with("documents/123/images/page_0_img_0.jpg")
+        # Should return base64 encoded bytes
+        self.assertEqual(result, "SGVsbG8gV29ybGQ=")
+
+    @patch(
+        "opencontractserver.utils.pdf_token_extraction._load_image_from_storage"
+    )
+    def test_get_image_as_base64_returns_none_when_storage_fails(self, mock_load):
+        """Test that get_image_as_base64 returns None when storage load fails."""
+        mock_load.return_value = None
+
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "image_path": "documents/123/images/missing.jpg",
+            "format": "jpeg",
+        }
+
+        result = get_image_as_base64(image_token)
+
+        self.assertIsNone(result)
+
+    def test_get_image_as_base64_prefers_inline_base64(self):
+        """Test that base64_data is preferred over image_path when both exist."""
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "base64_data": "aW5saW5lZGF0YQ==",  # "inlinedata" in base64
+            "image_path": "documents/123/images/page_0_img_0.jpg",
+            "format": "jpeg",
+        }
+
+        result = get_image_as_base64(image_token)
+
+        # Should return inline data, not load from storage
+        self.assertEqual(result, "aW5saW5lZGF0YQ==")
 
     def test_get_image_as_base64_returns_none_for_missing_data(self):
         """Test that get_image_as_base64 returns None when no image data."""

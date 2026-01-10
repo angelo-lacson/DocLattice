@@ -89,11 +89,17 @@ class PawlsImageTokenPythonType(TypedDict):
     Image token within a PAWLs page. Represents an embedded image or figure
     that can be annotated and provided to LLMs as image data.
 
-    The image can be stored either as:
-    - base64_data: Inline base64-encoded image data (for smaller images)
-    - image_path: Reference to a stored image file (for larger images)
+    IMPORTANT: To avoid bloating PAWLs files, image data should be stored
+    separately in file storage (S3, GCS, local filesystem) and referenced
+    by `image_path`. The `base64_data` field should only be used for small
+    thumbnails or when storage is not available.
 
-    At least one of base64_data or image_path should be present.
+    Storage strategy:
+    - image_path: Primary method - reference to stored image file
+    - base64_data: Optional - only for small thumbnails (<10KB) or fallback
+
+    Use `get_image_as_base64()` utility to retrieve image data on-demand,
+    which will load from storage if image_path is provided.
     """
 
     # Position and dimensions (in PDF points, same coordinate system as text tokens)
@@ -102,9 +108,11 @@ class PawlsImageTokenPythonType(TypedDict):
     width: float
     height: float
 
-    # Image data - at least one should be present
-    base64_data: NotRequired[str]  # Base64-encoded image data (JPEG/PNG)
-    image_path: NotRequired[str]  # Storage path reference for larger images
+    # Image storage reference (PRIMARY - preferred over inline data)
+    image_path: NotRequired[str]  # Storage path reference (e.g., "images/doc_123/page_0_img_1.jpeg")
+
+    # Inline image data (SECONDARY - use sparingly to avoid bloat)
+    base64_data: NotRequired[str]  # Only for small thumbnails or when storage unavailable
 
     # Image metadata
     format: str  # Image format: "jpeg", "png", "webp"
@@ -113,7 +121,7 @@ class PawlsImageTokenPythonType(TypedDict):
 
     # Optional semantic information
     alt_text: NotRequired[str]  # Alternative text / caption if available
-    image_type: NotRequired[str]  # "figure", "chart", "diagram", "photo", etc.
+    image_type: NotRequired[str]  # "figure", "chart", "diagram", "photo", "embedded", "cropped"
 
     # Hash for deduplication across documents
     content_hash: NotRequired[str]  # SHA-256 hash of image bytes
