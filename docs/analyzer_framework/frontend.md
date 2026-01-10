@@ -64,31 +64,24 @@ The `getPermissions()` function in `/frontend/src/utils/transform.tsx` converts 
 
 ## Modal Components
 
-### 1. SelectAnalyzerOrFieldsetModal
+### SelectAnalyzerOrFieldsetModal
 
-**File**: `/frontend/src/components/widgets/modals/SelectCorpusAnalyzerOrFieldsetAnalyzer.tsx`
+**Source**: [/frontend/src/components/widgets/modals/SelectCorpusAnalyzerOrFieldsetAnalyzer.tsx](/frontend/src/components/widgets/modals/SelectCorpusAnalyzerOrFieldsetAnalyzer.tsx)
 
-**Features:**
+This is the primary modal for starting analyses and extracts. It provides a unified interface for both analyzer and fieldset selection.
+
+**Core Features:**
 - **Tabbed Interface**: Choose between "Analyzer" and "Fieldset" tabs
-- **Analyzer Tab**: Dropdown selection from available analyzers with descriptions
+- **Analyzer Tab**: Searchable grid of available analyzers with descriptions and configurability indicators
 - **Fieldset Tab**: Unified fieldset selector with extract naming (for corpus-level operations)
 - **Info Boxes**: Shows detailed analyzer/fieldset information when selected
 - **Responsive Design**: Modern animated interface with loading states
 
-**Use Cases:**
-- Corpus-level analysis (analyze all documents in a corpus)
-- Document-level analysis when triggered from document view
-- Extract creation using fieldsets
-
-### 2. SelectDocumentAnalyzerModal
-
-**File**: `/frontend/src/components/knowledge_base/document/SelectDocumentAnalyzerModal.tsx`
-
-**Features:**
-- **Advanced Grid Layout**: Visual cards showing analyzer details
-- **Search & Filter**: Real-time search by analyzer name, description, or title
-- **Configurability Indicators**: Visual indicators showing which analyzers support custom inputs
-- **Two-Stage Process**:
+**Advanced Configuration Support:**
+- **JSON Schema Forms**: Uses React JSON Schema Form (RJSF) for dynamic configuration
+- **Schema Validation**: Built-in validation using AJV8
+- **Custom Input Data**: Supports passing `analysisInputData` to analyzers
+- **Two-Stage Process for Configurable Analyzers**:
   1. **Selection Stage**: Choose analyzer from searchable grid
   2. **Configuration Stage**: JSON schema-based form for analyzers supporting custom inputs
 - **Rich UI Elements**:
@@ -97,11 +90,21 @@ The `getPermissions()` function in `/frontend/src/utils/transform.tsx` converts 
   - Animated transitions and hover effects
   - Configuration badges ("Configurable" vs "Ready to Run")
 
-**Advanced Configuration Support:**
-- **JSON Schema Forms**: Uses React JSON Schema Form (RJSF) for dynamic configuration
-- **Schema Validation**: Built-in validation using AJV8
-- **Custom Input Data**: Supports passing `analysisInputData` to analyzers
-- **Responsive Layout**: Adapts to different screen sizes with scrollable content
+**Use Cases:**
+- Corpus-level analysis (analyze all documents in a corpus)
+- Document-level analysis when triggered from document view
+- Extract creation using fieldsets
+
+### SelectDocumentFieldsetModal
+
+**Source**: [/frontend/src/components/knowledge_base/document/SelectDocumentFieldsetModal.tsx](/frontend/src/components/knowledge_base/document/SelectDocumentFieldsetModal.tsx)
+
+A specialized modal for fieldset-only selection at the document level.
+
+**Features:**
+- Searchable list of available fieldsets
+- Displays field type indicators (text, number, boolean, date, list)
+- Initiates document-level extracts via `START_DOCUMENT_EXTRACT` mutation
 
 ## GraphQL Mutations
 
@@ -146,8 +149,8 @@ const handleStartAnalysis = async () => {
 
 1. **Entry Point**: User clicks "Start New Analysis" button (corpus view) or Plus button (document view)
 2. **Modal Selection**: `SelectAnalyzerOrFieldsetModal` opens with tabbed interface
-3. **Analyzer Choice**: User selects analyzer from dropdown with descriptions
-4. **Configuration** (if supported): Advanced analyzers may redirect to `SelectDocumentAnalyzerModal` for custom configuration
+3. **Analyzer Choice**: User selects analyzer from searchable grid with descriptions
+4. **Configuration** (if supported): For configurable analyzers, the modal transitions to show a JSON schema-based form
 5. **Execution**: GraphQL mutation fired with appropriate parameters
 6. **Feedback**: Toast notifications confirm success/failure
 7. **Navigation**: Modal closes and analysis begins processing
@@ -155,9 +158,9 @@ const handleStartAnalysis = async () => {
 ### Advanced Configuration Flow:
 
 1. **Analyzer Selection**: User chooses configurable analyzer (indicated by "Configurable" badge)
-2. **Configuration Screen**: Two-panel layout showing selected analyzer info and configuration form
+2. **Configuration Screen**: Modal transitions to show selected analyzer info alongside configuration form
 3. **Schema-based Form**: Dynamic form generated from analyzer's `inputSchema`
-4. **Validation**: Real-time validation of user inputs
+4. **Validation**: Real-time validation of user inputs via AJV8
 5. **Execution**: Custom configuration passed as `analysisInputData` to mutation
 
 ## Technical Implementation Notes
@@ -190,3 +193,7 @@ const handleStartAnalysis = async () => {
 - **Access Control**: Users can only analyze documents/corpuses they have access to
 
 This frontend framework provides a comprehensive, user-friendly interface for triggering document analyses while maintaining security and providing rich configuration options for advanced use cases.
+
+---
+
+*Last Updated: 2026-01-09*

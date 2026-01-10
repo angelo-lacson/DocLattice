@@ -8,23 +8,31 @@ DocLattice uses a modern, pluggable document processing pipeline that has evolve
 
 ### Parser Pipeline System
 
-DocLattice implements a modular pipeline architecture with three main parser options:
+DocLattice implements a modular pipeline architecture with four main parser options:
 
 1. **Docling Parser (Primary)** - IBM's advanced ML-based parser running as a REST microservice
+   - Source: [`doclatticeserver/pipeline/parsers/docling_parser_rest.py`](../../doclatticeserver/pipeline/parsers/docling_parser_rest.py)
    - Superior layout understanding and table extraction
    - Intelligent OCR with automatic detection
    - Hierarchical document structure extraction
    - Group relationship detection for contract clauses
 
 2. **NLM Ingest Parser** - Alternative parser using NLM Ingest library
+   - Source: [`doclatticeserver/pipeline/parsers/nlm_ingest_parser.py`](../../doclatticeserver/pipeline/parsers/nlm_ingest_parser.py)
    - Faster processing for standard PDFs
    - Good layout analysis without ML overhead
    - Suitable for documents not requiring OCR
 
 3. **Text Parser** - Simple parser for plain text and markdown files
+   - Source: [`doclatticeserver/pipeline/parsers/oc_text_parser.py`](../../doclatticeserver/pipeline/parsers/oc_text_parser.py)
    - Direct text extraction
    - Minimal processing overhead
    - Preserves original formatting
+
+4. **LlamaParse Parser** - Cloud-based parsing via LlamaIndex
+   - Source: [`doclatticeserver/pipeline/parsers/llamaparse_parser.py`](../../doclatticeserver/pipeline/parsers/llamaparse_parser.py)
+   - Leverages LlamaIndex's cloud parsing API
+   - Good for complex document layouts
 
 ### Data Layers
 
@@ -82,10 +90,12 @@ graph LR
     B --> C[Docling REST API]
     B --> D[NLM Ingest]
     B --> E[Text Parser]
+    B --> P[LlamaParse API]
 
     C --> F[PAWLs Generation]
     D --> F
     E --> F
+    P --> F
 
     F --> G[Text Extraction]
     F --> H[Annotation Creation]
@@ -128,8 +138,15 @@ Despite the architectural evolution, DocLattice maintains full compatibility:
 
 ## Configuration
 
-Parsers are configured in Django settings:
+Parsers are configured in Django settings. See the base settings file for current defaults.
 
+**Available Parser Classes:**
+- `doclatticeserver.pipeline.parsers.docling_parser_rest.DoclingParser` - Primary ML-based parser
+- `doclatticeserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser` - NLM Ingest library parser
+- `doclatticeserver.pipeline.parsers.oc_text_parser.TxtParser` - Plain text parser
+- `doclatticeserver.pipeline.parsers.llamaparse_parser.LlamaParseParser` - LlamaIndex cloud parser
+
+**Example Configuration:**
 ```python
 PREFERRED_PARSERS = {
     "application/pdf": "doclatticeserver.pipeline.parsers.docling_parser_rest.DoclingParser",
