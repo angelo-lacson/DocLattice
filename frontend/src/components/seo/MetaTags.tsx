@@ -2,6 +2,7 @@ import React from "react";
 import { Helmet } from "react-helmet-async";
 import { useLocation } from "react-router-dom";
 import { CorpusType, DocumentType, ExtractType } from "../../types/graphql-api";
+import { buildCanonicalPath } from "../../utils/navigationUtils";
 
 // Note: You'll need to install react-helmet-async:
 // yarn add react-helmet-async
@@ -45,22 +46,29 @@ export const MetaTags: React.FC<MetaTagsProps> = ({
     pageDescription = entity.description || pageDescription;
   }
 
-  // Build canonical URL with proper entity type prefix
+  // Build canonical URL using shared utility for consistency
+  // Uses buildCanonicalPath from navigationUtils which handles /c/, /d/, /e/ prefixes
   let canonical = canonicalPath;
-  if (!canonical && entity && "creator" in entity && "slug" in entity) {
-    const userSlug = entity.creator?.slug;
-    const entitySlug = entity.slug;
-    if (userSlug && entitySlug && entityType) {
-      // Map entity type to URL prefix
-      const prefixMap: Record<string, string> = {
-        corpus: "c",
-        document: "d",
-        extract: "e",
-      };
-      const prefix = prefixMap[entityType];
-      if (prefix) {
-        canonical = `/${prefix}/${userSlug}/${entitySlug}`;
-      }
+  if (!canonical && entity && entityType) {
+    // Pass entity to buildCanonicalPath based on type
+    switch (entityType) {
+      case "corpus":
+        canonical = buildCanonicalPath(null, entity as CorpusType, null);
+        break;
+      case "document":
+        canonical = buildCanonicalPath(entity as DocumentType, null, null);
+        break;
+      case "extract":
+        canonical = buildCanonicalPath(null, null, entity as ExtractType);
+        break;
+      default:
+        // Warn in development if entityType is unexpected
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            `MetaTags: Unexpected entityType "${entityType}". ` +
+              `Expected "corpus", "document", or "extract".`
+          );
+        }
     }
   }
   const canonicalUrl = canonical

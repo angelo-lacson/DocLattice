@@ -5,7 +5,18 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-08
+## [Unreleased] - 2026-01-10
+
+### Fixed
+
+#### Android Share URL Missing Entity Prefix (PR #795)
+- **Bug**: Android native share was dropping entity type prefixes (`/c/`, `/d/`, `/e/`) from shared URLs
+- **Root Cause**: `frontend/src/components/seo/MetaTags.tsx:50-56` was generating canonical URLs as `/{userSlug}/{entitySlug}` instead of `/{prefix}/{userSlug}/{entitySlug}`
+- **Impact**: Links shared via Android browser resulted in 404s (e.g., `/john/my-corpus` instead of `/c/john/my-corpus`)
+- **Fix**: Refactored `MetaTags.tsx` to use existing `buildCanonicalPath()` utility from `navigationUtils.ts`
+- **Added**: Unit tests for MetaTags canonical URL generation (`frontend/src/components/seo/__tests__/MetaTags.test.tsx`)
+- **Added**: Development warning for unexpected `entityType` values
+- **Added**: Enhanced Cloudflare worker request logging for crawler debugging (`cloudflare-og-worker/src/index.ts`)
 
 ### Security
 
