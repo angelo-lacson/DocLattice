@@ -45,13 +45,22 @@ export const MetaTags: React.FC<MetaTagsProps> = ({
     pageDescription = entity.description || pageDescription;
   }
 
-  // Build canonical URL
+  // Build canonical URL with proper entity type prefix
   let canonical = canonicalPath;
   if (!canonical && entity && "creator" in entity && "slug" in entity) {
     const userSlug = entity.creator?.slug;
     const entitySlug = entity.slug;
-    if (userSlug && entitySlug) {
-      canonical = `/${userSlug}/${entitySlug}`;
+    if (userSlug && entitySlug && entityType) {
+      // Map entity type to URL prefix
+      const prefixMap: Record<string, string> = {
+        corpus: "c",
+        document: "d",
+        extract: "e",
+      };
+      const prefix = prefixMap[entityType];
+      if (prefix) {
+        canonical = `/${prefix}/${userSlug}/${entitySlug}`;
+      }
     }
   }
   const canonicalUrl = canonical
