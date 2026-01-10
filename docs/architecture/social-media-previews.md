@@ -109,10 +109,26 @@ const SOCIAL_CRAWLERS = [
   'discordbot',            // Discord
   'whatsapp',              // WhatsApp
   'telegrambot',           // Telegram
+
+  // Google/Android RCS - Critical for Android messaging
+  'googlemessages',        // Google Messages app (Android default SMS/RCS)
+  'google-pagerenderer',   // Google's page rendering service for RCS previews
+  'developers.google.com/+/web/snippet', // Google snippet fetcher
+
+  // Apple/iOS
+  'applebot',              // Apple (iMessage, Siri, Safari)
+
+  // Other Messaging/Preview Services
   'pinterest',             // Pinterest
-  'applebot',              // Apple (iMessage, Siri)
   'redditbot',             // Reddit
   'embedly',               // Embed.ly
+  'bluesky',               // BlueSky social
+  'cardyb',                // BlueSky's preview bot
+
+  // Generic preview patterns (catch edge cases)
+  'link preview',          // Generic link preview services
+  'url preview',           // URL preview services
+  'snippet',               // Snippet fetchers
 
   // Optional: search engines (only enable intentionally)
   // 'googlebot',
