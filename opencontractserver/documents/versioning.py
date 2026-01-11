@@ -323,7 +323,14 @@ def import_document(
                     is_current=True,
                     parent=None,  # Root of NEW content tree
                     source_document=existing_doc_with_hash,  # Rule I2: provenance
-                    structural_annotation_set=existing_doc_with_hash.structural_annotation_set,
+                    # Duplicate structural annotations for corpus isolation (per-corpus embeddings)
+                    structural_annotation_set=(
+                        existing_doc_with_hash.structural_annotation_set.duplicate(
+                            corpus_id=corpus.pk
+                        )
+                        if existing_doc_with_hash.structural_annotation_set
+                        else None
+                    ),
                     creator=user,
                     **{
                         k: v

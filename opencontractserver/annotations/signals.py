@@ -91,10 +91,10 @@ def process_structural_annotation_for_corpuses(annotation):
     Annotation = apps.get_model("annotations", "Annotation")
 
     # Get all corpuses that contain this annotation's document with their preferred embedders
-    # in a single efficient query
-    corpus_embedders = Corpus.objects.filter(documents=annotation.document).values_list(
-        "id", "preferred_embedder"
-    )
+    # in a single efficient query (using DocumentPath, not direct M2M)
+    corpus_embedders = Corpus.objects.filter(
+        document_paths__document=annotation.document
+    ).values_list("id", "preferred_embedder")
 
     logger.info(f"Corpus embedders: {corpus_embedders}")
 
