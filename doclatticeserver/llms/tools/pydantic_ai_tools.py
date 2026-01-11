@@ -129,6 +129,56 @@ async def _check_user_permissions(
             raise PermissionError(f"Corpus {corpus_id} not found")
 
 
+def _validate_resource_id_params(
+    ctx: "RunContext[PydanticAIDependencies]",
+    **kwargs,
+) -> None:
+    """
+    Validate that any document_id or corpus_id parameters match the context.
+
+    This is a defense-in-depth check that prevents tools from being called
+    with different resource IDs than what the agent has permission for.
+    The LLM could potentially be prompted to access a different document
+    via prompt injection; this check prevents such escalation.
+
+    Args:
+        ctx: The RunContext containing PydanticAIDependencies
+        **kwargs: Tool keyword arguments to validate
+
+    Raises:
+        PermissionError: If document_id or corpus_id params don't match context
+    """
+    deps = ctx.deps
+    if deps is None:
+        return
+
+    # Check document_id parameter
+    param_doc_id = kwargs.get("document_id")
+    if param_doc_id is not None and deps.document_id is not None:
+        if int(param_doc_id) != int(deps.document_id):
+            logger.warning(
+                f"Tool called with document_id={param_doc_id} but context has "
+                f"document_id={deps.document_id} - potential permission bypass attempt"
+            )
+            raise PermissionError(
+                f"document_id parameter ({param_doc_id}) does not match "
+                f"context document ({deps.document_id})"
+            )
+
+    # Check corpus_id parameter
+    param_corpus_id = kwargs.get("corpus_id")
+    if param_corpus_id is not None and deps.corpus_id is not None:
+        if int(param_corpus_id) != int(deps.corpus_id):
+            logger.warning(
+                f"Tool called with corpus_id={param_corpus_id} but context has "
+                f"corpus_id={deps.corpus_id} - potential permission bypass attempt"
+            )
+            raise PermissionError(
+                f"corpus_id parameter ({param_corpus_id}) does not match "
+                f"context corpus ({deps.corpus_id})"
+            )
+
+
 class PydanticAIToolMetadata(BaseModel):
     """Pydantic model for tool metadata."""
 
@@ -282,6 +332,10 @@ class PydanticAIToolWrapper:
                 # This prevents permission escalation via agents
                 await _check_user_permissions(ctx)
 
+                # Defense-in-depth: validate resource ID params match context
+                # This prevents prompt injection attacks that try to access other resources
+                _validate_resource_id_params(ctx, **kwargs)
+
                 # Trigger approval gate *before* attempting execution.
                 _maybe_raise(ctx, *args, **kwargs)
 
@@ -316,6 +370,10 @@ class PydanticAIToolWrapper:
                 # Defense-in-depth: validate user permissions BEFORE any tool execution
                 # This prevents permission escalation via agents
                 await _check_user_permissions(ctx)
+
+                # Defense-in-depth: validate resource ID params match context
+                # This prevents prompt injection attacks that try to access other resources
+                _validate_resource_id_params(ctx, **kwargs)
 
                 _maybe_raise(ctx, *args, **kwargs)
 
