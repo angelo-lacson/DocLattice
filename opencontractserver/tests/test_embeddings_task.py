@@ -335,7 +335,9 @@ class TestAnnotationSignals(unittest.TestCase):
             process_structural_annotation_for_corpuses(mock_annot)
 
             # Verify corpus was queried correctly
-            mock_corpus_objects.filter.assert_called_with(document_paths__document=mock_annot.document)
+            mock_corpus_objects.filter.assert_called_with(
+                document_paths__document=mock_annot.document
+            )
 
             # Verify annotation embedding check
             self.assertEqual(

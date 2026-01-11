@@ -86,6 +86,7 @@ from config.graphql.graphene_types import (
     PipelineComponentsType,
     PipelineComponentType,
     RelationshipType,
+    SemanticSearchResultType,
     UserBadgeType,
     UserExportType,
     UserImportType,
@@ -1925,6 +1926,177 @@ class Query(graphene.ObjectType):
 
         # Extract messages from results
         return [result.message for result in results]
+
+    # SEMANTIC SEARCH QUERIES #############################################
+    semantic_search = graphene.List(
+        SemanticSearchResultType,
+        query=graphene.String(required=True, description="Search query text"),
+        corpus_id=graphene.ID(
+            required=False, description="Optional corpus ID to search within"
+        ),
+        document_id=graphene.ID(
+            required=False, description="Optional document ID to search within"
+        ),
+        modalities=graphene.List(
+            graphene.String,
+            required=False,
+            description="Filter by content modalities (TEXT, IMAGE)",
+        ),
+        label_text=graphene.String(
+            required=False,
+            description="Filter by annotation label text (case-insensitive substring match)",
+        ),
+        raw_text_contains=graphene.String(
+            required=False,
+            description="Filter by raw_text content (case-insensitive substring match)",
+        ),
+        limit=graphene.Int(
+            default_value=50,
+            description="Maximum number of results to return (default: 50, max: 200)",
+        ),
+        offset=graphene.Int(
+            default_value=0,
+            description="Number of results to skip for pagination",
+        ),
+        description=(
+            "Hybrid search combining vector similarity with text filters. "
+            "Uses DEFAULT_EMBEDDER for global cross-corpus search. "
+            "Results are first filtered by text criteria, then ranked by similarity."
+        ),
+    )
+
+    @login_required
+    def resolve_semantic_search(
+        self,
+        info,
+        query,
+        corpus_id=None,
+        document_id=None,
+        modalities=None,
+        label_text=None,
+        raw_text_contains=None,
+        limit=50,
+        offset=0,
+    ):
+        """
+        Hybrid search combining vector similarity with text filters.
+
+        This query enables semantic (meaning-based) search across all annotations
+        the user has access to, using the DEFAULT_EMBEDDER embeddings that are
+        created for every annotation as part of the dual embedding strategy.
+
+        HYBRID SEARCH:
+        - Vector similarity search ranks results by semantic relevance
+        - Text filters (label_text, raw_text_contains) narrow down results
+        - Filters are applied BEFORE vector search for efficiency
+
+        PERMISSION MODEL (follows consolidated_permissioning_guide.md):
+        - Uses Document.objects.visible_to_user() for document access control
+        - Structural annotations are always visible if document is accessible
+        - Non-structural annotations follow: visible if public OR owned by user
+        - Corpus permissions are respected via document visibility
+
+        Args:
+            info: GraphQL execution info
+            query: Search query text for vector similarity
+            corpus_id: Optional corpus ID to limit search to (global ID)
+            document_id: Optional document ID to limit search to (global ID)
+            modalities: Optional list of modalities to filter by (TEXT, IMAGE)
+            label_text: Optional filter by annotation label text (case-insensitive)
+            raw_text_contains: Optional filter by raw_text substring (case-insensitive)
+            limit: Maximum number of results (capped at 200)
+            offset: Pagination offset
+
+        Returns:
+            List[SemanticSearchResultType]: List of matching annotations with scores
+        """
+        from opencontractserver.llms.vector_stores.core_vector_stores import (
+            CoreAnnotationVectorStore,
+        )
+
+        # Cap limit to prevent abuse
+        limit = min(limit, 200)
+
+        # Convert global IDs to database IDs
+        corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
+        document_pk = int(from_global_id(document_id)[1]) if document_id else None
+
+        user = info.context.user
+
+        # Build metadata filters for hybrid search
+        metadata_filters = {}
+        if label_text:
+            metadata_filters["annotation_label"] = label_text
+        if raw_text_contains:
+            metadata_filters["raw_text"] = raw_text_contains
+
+        # If document_id or corpus_id provided, use the instance-based search
+        # which respects corpus-specific embedders
+        if document_pk or corpus_pk:
+            # Use instance-based CoreAnnotationVectorStore for scoped search
+            vector_store = CoreAnnotationVectorStore(
+                user_id=user.id,
+                corpus_id=corpus_pk,
+                document_id=document_pk,
+                modalities=modalities,
+                must_have_text=raw_text_contains,  # Additional text filter
+                # Use DEFAULT_EMBEDDER for consistent global search
+                embedder_path=settings.DEFAULT_EMBEDDER,
+            )
+
+            from opencontractserver.llms.vector_stores.core_vector_stores import (
+                VectorSearchQuery,
+            )
+
+            search_query = VectorSearchQuery(
+                query_text=query,
+                similarity_top_k=limit + offset,  # Fetch extra for pagination
+                filters={"annotation_label": label_text} if label_text else None,
+            )
+
+            results = vector_store.search(search_query)
+
+            # Apply pagination
+            paginated_results = results[offset : offset + limit]
+        else:
+            # Use global_search for cross-corpus search
+            # Then apply additional filters post-search
+            results = CoreAnnotationVectorStore.global_search(
+                user_id=user.id,
+                query_text=query,
+                top_k=(limit + offset) * 3,  # Fetch more for post-filtering
+                modalities=modalities,
+            )
+
+            # Apply hybrid text filters post-search
+            if label_text or raw_text_contains:
+                filtered_results = []
+                for result in results:
+                    annotation = result.annotation
+                    # Check label_text filter
+                    if label_text:
+                        label = getattr(annotation.annotation_label, "text", None)
+                        if not label or label_text.lower() not in label.lower():
+                            continue
+                    # Check raw_text filter
+                    if raw_text_contains:
+                        raw_text = annotation.raw_text or ""
+                        if raw_text_contains.lower() not in raw_text.lower():
+                            continue
+                    filtered_results.append(result)
+                results = filtered_results
+
+            # Apply pagination
+            paginated_results = results[offset : offset + limit]
+
+        # Convert to GraphQL result types
+        return [
+            SemanticSearchResultType(
+                annotation=result.annotation,
+                similarity_score=result.similarity_score,
+            )
+            for result in paginated_results
+        ]
 
     # MODERATION QUERIES ##################################################
     moderation_actions = DjangoFilterConnectionField(

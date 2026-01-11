@@ -3265,3 +3265,48 @@ class ModerationMetricsType(graphene.ObjectType):
     time_range_hours = graphene.Int()
     start_time = graphene.DateTime()
     end_time = graphene.DateTime()
+
+
+# ---------------- Semantic Search Types ----------------
+class SemanticSearchResultType(graphene.ObjectType):
+    """
+    Result type for semantic (vector) search across annotations.
+
+    Returns annotation matches with their similarity scores, enabling
+    relevance-ranked search results from the global embeddings.
+
+    PERMISSION MODEL:
+    - Uses Document.objects.visible_to_user() for document access control
+    - Structural annotations visible if document is accessible
+    - Non-structural annotations visible if public OR owned by user
+    """
+
+    annotation = graphene.Field(
+        AnnotationType,
+        required=True,
+        description="The matched annotation",
+    )
+    similarity_score = graphene.Float(
+        required=True,
+        description="Similarity score (0.0-1.0, higher is more similar)",
+    )
+    document = graphene.Field(
+        lambda: DocumentType,
+        description="The document containing this annotation (for convenience)",
+    )
+    corpus = graphene.Field(
+        lambda: CorpusType,
+        description="The corpus containing this annotation, if any",
+    )
+
+    def resolve_document(self, info):
+        """Resolve the document from the annotation."""
+        if self.annotation and self.annotation.document:
+            return self.annotation.document
+        return None
+
+    def resolve_corpus(self, info):
+        """Resolve the corpus from the annotation."""
+        if self.annotation:
+            return self.annotation.corpus
+        return None
