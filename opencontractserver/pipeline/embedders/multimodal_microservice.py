@@ -155,8 +155,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                 # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(
                     f"Multimodal text embedding service returned client error "
-                    f"{response.status_code}: {response.text[:200] if response.text else 'No response body'}. "
-                    f"Input text length: {len(text)}"
+                    f"{response.status_code}. Input text length: {len(text)}"
                 )
                 return None
             else:
@@ -235,8 +234,8 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                 # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(
                     f"Multimodal image embedding service returned client error "
-                    f"{response.status_code}: {response.text[:200] if response.text else 'No response body'}. "
-                    f"Image format: {image_format}, base64 length: {len(image_base64)}"
+                    f"{response.status_code}. Image format: {image_format}, "
+                    f"base64 length: {len(image_base64)}"
                 )
                 return None
             else:
@@ -306,8 +305,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             elif 400 <= response.status_code < 500:
                 logger.error(
                     f"Batch text embedding service returned client error "
-                    f"{response.status_code}: {response.text[:200] if response.text else 'No response body'}. "
-                    f"Batch size: {len(texts)}"
+                    f"{response.status_code}. Batch size: {len(texts)}"
                 )
                 return None
             else:
@@ -372,8 +370,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             elif 400 <= response.status_code < 500:
                 logger.error(
                     f"Batch image embedding service returned client error "
-                    f"{response.status_code}: {response.text[:200] if response.text else 'No response body'}. "
-                    f"Batch size: {len(images_base64)}"
+                    f"{response.status_code}. Batch size: {len(images_base64)}"
                 )
                 return None
             else:
