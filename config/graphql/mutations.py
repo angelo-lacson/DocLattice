@@ -2173,27 +2173,35 @@ class RemoveAnnotation(graphene.Mutation):
     @login_required
     def mutate(root, info, annotation_id):
         try:
+            user = info.context.user
             annotation_pk = from_global_id(annotation_id)[1]
-            annotation_obj = Annotation.objects.get(pk=annotation_pk)
+
+            # Use visible_to_user for IDOR protection - unified error for not found/no permission
+            try:
+                annotation_obj = Annotation.objects.visible_to_user(user).get(
+                    pk=annotation_pk
+                )
+            except Annotation.DoesNotExist:
+                return RemoveAnnotation(
+                    ok=False,
+                    message="Annotation not found or you do not have permission to access it",
+                )
 
             # Check if user has permission to delete this annotation
             # This now handles privacy-aware permissions for annotations with created_by_* fields
             if not user_has_permission_for_obj(
-                info.context.user,
+                user,
                 annotation_obj,
                 PermissionTypes.DELETE,
                 include_group_permissions=True,
             ):
                 return RemoveAnnotation(
                     ok=False,
-                    message="You don't have permission to delete this annotation",
+                    message="Annotation not found or you do not have permission to access it",
                 )
 
             annotation_obj.delete()
             return RemoveAnnotation(ok=True, message="Annotation deleted successfully")
-
-        except Annotation.DoesNotExist:
-            return RemoveAnnotation(ok=False, message="Annotation not found")
         except Exception as e:
             logger.error(f"Error deleting annotation {annotation_id}: {e}")
             return RemoveAnnotation(
@@ -2218,11 +2226,14 @@ class RejectAnnotation(graphene.Mutation):
         user = info.context.user
         annotation_pk = from_global_id(annotation_id)[1]
 
+        # Use visible_to_user for IDOR protection - unified error for not found/no permission
         try:
-            annotation = Annotation.objects.get(pk=annotation_pk)
-        except ObjectDoesNotExist:
+            annotation = Annotation.objects.visible_to_user(user).get(pk=annotation_pk)
+        except (ObjectDoesNotExist, Annotation.DoesNotExist):
             return RejectAnnotation(
-                ok=False, user_feedback=None, message="Annotation not found"
+                ok=False,
+                user_feedback=None,
+                message="Annotation not found or you do not have permission to access it",
             )
 
         # Check if user has COMMENT permission on this annotation
@@ -2235,7 +2246,7 @@ class RejectAnnotation(graphene.Mutation):
             return RejectAnnotation(
                 ok=False,
                 user_feedback=None,
-                message="You don't have permission to comment on this annotation",
+                message="Annotation not found or you do not have permission to access it",
             )
 
         user_feedback, created = UserFeedback.objects.get_or_create(
@@ -2278,11 +2289,14 @@ class ApproveAnnotation(graphene.Mutation):
         user = info.context.user
         annotation_pk = from_global_id(annotation_id)[1]
 
+        # Use visible_to_user for IDOR protection - unified error for not found/no permission
         try:
-            annotation = Annotation.objects.get(pk=annotation_pk)
-        except ObjectDoesNotExist:
+            annotation = Annotation.objects.visible_to_user(user).get(pk=annotation_pk)
+        except (ObjectDoesNotExist, Annotation.DoesNotExist):
             return ApproveAnnotation(
-                ok=False, user_feedback=None, message="Annotation not found"
+                ok=False,
+                user_feedback=None,
+                message="Annotation not found or you do not have permission to access it",
             )
 
         # Check if user has COMMENT permission on this annotation
@@ -2295,7 +2309,7 @@ class ApproveAnnotation(graphene.Mutation):
             return ApproveAnnotation(
                 ok=False,
                 user_feedback=None,
-                message="You don't have permission to comment on this annotation",
+                message="Annotation not found or you do not have permission to access it",
             )
 
         user_feedback, created = UserFeedback.objects.get_or_create(
@@ -2436,28 +2450,36 @@ class RemoveRelationship(graphene.Mutation):
     @login_required
     def mutate(root, info, relationship_id):
         try:
+            user = info.context.user
             relationship_pk = from_global_id(relationship_id)[1]
-            relationship_obj = Relationship.objects.get(pk=relationship_pk)
+
+            # Use visible_to_user for IDOR protection - unified error for not found/no permission
+            try:
+                relationship_obj = Relationship.objects.visible_to_user(user).get(
+                    pk=relationship_pk
+                )
+            except Relationship.DoesNotExist:
+                return RemoveRelationship(
+                    ok=False,
+                    message="Relationship not found or you do not have permission to access it",
+                )
 
             # Check if user has permission to delete this relationship
             if not user_has_permission_for_obj(
-                info.context.user,
+                user,
                 relationship_obj,
                 PermissionTypes.DELETE,
                 include_group_permissions=True,
             ):
                 return RemoveRelationship(
                     ok=False,
-                    message="You don't have permission to delete this relationship",
+                    message="Relationship not found or you do not have permission to access it",
                 )
 
             relationship_obj.delete()
             return RemoveRelationship(
                 ok=True, message="Relationship deleted successfully"
             )
-
-        except Relationship.DoesNotExist:
-            return RemoveRelationship(ok=False, message="Relationship not found")
         except Exception as e:
             logger.error(f"Error deleting relationship {relationship_id}: {e}")
             return RemoveRelationship(
