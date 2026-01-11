@@ -25,8 +25,9 @@ def isolate_structural_annotation_sets(apps, schema_editor):
     Annotation = apps.get_model("annotations", "Annotation")
 
     # Find structural sets used by more than one document
+    # Note: related_name from Document.structural_annotation_set is "documents"
     shared_sets = (
-        StructuralAnnotationSet.objects.annotate(doc_count=Count("document")).filter(
+        StructuralAnnotationSet.objects.annotate(doc_count=Count("documents")).filter(
             doc_count__gt=1
         )
     )
@@ -104,7 +105,7 @@ def reverse_migration(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ("annotations", "0054_add_content_modalities_gin_index"),
-        ("documents", "0048_document_structural_annotation_set"),
+        ("documents", "0026_add_structural_annotation_set"),
     ]
 
     operations = [
