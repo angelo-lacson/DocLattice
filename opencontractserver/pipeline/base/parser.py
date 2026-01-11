@@ -8,7 +8,12 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from plasmapdf.models.PdfDataLayer import build_translation_layer
 
-from opencontractserver.annotations.models import RELATIONSHIP_LABEL
+from opencontractserver.annotations.models import (
+    RELATIONSHIP_LABEL,
+    Annotation,
+    Relationship,
+    StructuralAnnotationSet,
+)
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.types.dicts import OpenContractDocExport
@@ -248,8 +253,93 @@ class BaseParser(PipelineComponentBase, ABC):
                 annotation_id_map=annotation_id_map,
             )
 
+        # 5) Create StructuralAnnotationSet and migrate structural annotations to it
+        self._create_structural_annotation_set(document, user)
+
         logger.info(
             f"Document {doc_id} parsed (with annotations & relationships) and saved successfully."
+        )
+
+    def _create_structural_annotation_set(self, document: Document, user) -> None:
+        """
+        Create a StructuralAnnotationSet for the document and migrate structural
+        annotations and relationships to it.
+
+        This ensures structural annotations are properly isolated per document and
+        can be embedded using corpus-specific embedders.
+
+        Args:
+            document: The Document object
+            user: The user creating the set
+        """
+        # Check if document already has a structural annotation set
+        if document.structural_annotation_set:
+            logger.info(
+                f"Document {document.pk} already has StructuralAnnotationSet "
+                f"{document.structural_annotation_set.pk}"
+            )
+            return
+
+        # Find structural annotations on this document
+        structural_annotations = Annotation.objects.filter(
+            document=document, structural=True, structural_set__isnull=True
+        )
+
+        if not structural_annotations.exists():
+            logger.info(
+                f"Document {document.pk} has no structural annotations to migrate"
+            )
+            return
+
+        # Generate content hash for the set
+        content_hash = document.pdf_file_hash or f"doc_{document.pk}"
+
+        # Create the StructuralAnnotationSet
+        struct_set = StructuralAnnotationSet.objects.create(
+            content_hash=content_hash,
+            creator=user,
+            parser_name=self.title or self.__class__.__name__,
+            parser_version="1.0",
+            page_count=document.page_count,
+            pawls_parse_file=document.pawls_parse_file,
+            txt_extract_file=document.txt_extract_file,
+        )
+
+        logger.info(
+            f"Created StructuralAnnotationSet {struct_set.pk} for document {document.pk}"
+        )
+
+        # Migrate structural annotations to the set
+        structural_annotation_ids = set(
+            structural_annotations.values_list("id", flat=True)
+        )
+
+        for annot in structural_annotations:
+            annot.structural_set = struct_set
+            annot.document = None  # XOR constraint: either document or structural_set
+            annot.save()
+
+        # Migrate structural relationships to the set
+        structural_relationships = Relationship.objects.filter(
+            document=document, structural=True, structural_set__isnull=True
+        ).filter(
+            source_annotations__id__in=structural_annotation_ids,
+            target_annotations__id__in=structural_annotation_ids,
+        )
+
+        for rel in structural_relationships:
+            rel.structural_set = struct_set
+            rel.document = None  # XOR constraint
+            rel.save()
+
+        # Link document to the structural set
+        document.structural_annotation_set = struct_set
+        document.save()
+
+        logger.info(
+            f"Migrated {structural_annotations.count()} annotations and "
+            f"{structural_relationships.count()} relationships to StructuralAnnotationSet "
+            f"{struct_set.pk}"
         )
 
     def process_document(
