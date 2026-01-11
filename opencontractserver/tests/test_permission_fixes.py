@@ -680,3 +680,263 @@ class TestBadgeMutationIDORProtection(TestCase):
         self.assertEqual(error_msg_1, "Corpus not found")
         self.assertEqual(error_msg_2, "Corpus not found")
         self.assertEqual(error_msg_1, error_msg_2)
+
+
+class TestAnnotationMutationIDORProtection(TestCase):
+    """Tests for IDOR protection in annotation mutations."""
+
+    def setUp(self):
+        """Create test users and annotations."""
+        from opencontractserver.annotations.models import Annotation, AnnotationLabel
+        from opencontractserver.documents.models import Document
+
+        self.owner = User.objects.create_user(
+            username="annot_owner", password="test", email="annot_owner@test.com"
+        )
+        self.unauthorized_user = User.objects.create_user(
+            username="annot_unauth", password="test", email="annot_unauth@test.com"
+        )
+
+        # Create corpus
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
+
+        # Create document
+        self.document = Document.objects.create(
+            title="Test Document",
+            creator=self.owner,
+            is_public=False,
+            backend_lock=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, self.document, [PermissionTypes.CRUD]
+        )
+
+        # Create label
+        self.label = AnnotationLabel.objects.create(text="Test Label", creator=self.owner)
+
+        # Create annotation
+        self.annotation = Annotation.objects.create(
+            document=self.document,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            creator=self.owner,
+            raw_text="Test annotation",
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, self.annotation, [PermissionTypes.CRUD]
+        )
+
+    def test_remove_annotation_idor_protection(self):
+        """
+        IDOR Protection: RemoveAnnotation should return the same error message
+        for non-existent and inaccessible annotations.
+        """
+        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+
+        mutation = """
+            mutation RemoveAnnotation($annotationId: String!) {
+                removeAnnotation(annotationId: $annotationId) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Test 1: Inaccessible annotation
+        result_no_perm = client.execute(
+            mutation,
+            variables={"annotationId": to_global_id("AnnotationType", self.annotation.id)},
+        )
+        self.assertIsNone(result_no_perm.get("errors"))
+        error_msg_no_perm = result_no_perm["data"]["removeAnnotation"]["message"]
+
+        # Test 2: Non-existent annotation
+        result_not_found = client.execute(
+            mutation,
+            variables={"annotationId": to_global_id("AnnotationType", 999999)},
+        )
+        self.assertIsNone(result_not_found.get("errors"))
+        error_msg_not_found = result_not_found["data"]["removeAnnotation"]["message"]
+
+        # Both should return the same error message
+        self.assertEqual(
+            error_msg_no_perm,
+            error_msg_not_found,
+            "IDOR vulnerability: Different error messages allow ID enumeration",
+        )
+        self.assertFalse(result_no_perm["data"]["removeAnnotation"]["ok"])
+        self.assertFalse(result_not_found["data"]["removeAnnotation"]["ok"])
+
+    def test_reject_annotation_idor_protection(self):
+        """
+        IDOR Protection: RejectAnnotation should return the same error message
+        for non-existent and inaccessible annotations.
+        """
+        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+
+        mutation = """
+            mutation RejectAnnotation($annotationId: ID!) {
+                rejectAnnotation(annotationId: $annotationId) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Test 1: Inaccessible annotation
+        result_no_perm = client.execute(
+            mutation,
+            variables={"annotationId": to_global_id("AnnotationType", self.annotation.id)},
+        )
+        self.assertIsNone(result_no_perm.get("errors"))
+        error_msg_no_perm = result_no_perm["data"]["rejectAnnotation"]["message"]
+
+        # Test 2: Non-existent annotation
+        result_not_found = client.execute(
+            mutation,
+            variables={"annotationId": to_global_id("AnnotationType", 999999)},
+        )
+        self.assertIsNone(result_not_found.get("errors"))
+        error_msg_not_found = result_not_found["data"]["rejectAnnotation"]["message"]
+
+        # Both should return the same error message
+        self.assertEqual(
+            error_msg_no_perm,
+            error_msg_not_found,
+            "IDOR vulnerability: Different error messages allow ID enumeration",
+        )
+        self.assertFalse(result_no_perm["data"]["rejectAnnotation"]["ok"])
+        self.assertFalse(result_not_found["data"]["rejectAnnotation"]["ok"])
+
+    def test_approve_annotation_idor_protection(self):
+        """
+        IDOR Protection: ApproveAnnotation should return the same error message
+        for non-existent and inaccessible annotations.
+        """
+        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+
+        mutation = """
+            mutation ApproveAnnotation($annotationId: ID!) {
+                approveAnnotation(annotationId: $annotationId) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Test 1: Inaccessible annotation
+        result_no_perm = client.execute(
+            mutation,
+            variables={"annotationId": to_global_id("AnnotationType", self.annotation.id)},
+        )
+        self.assertIsNone(result_no_perm.get("errors"))
+        error_msg_no_perm = result_no_perm["data"]["approveAnnotation"]["message"]
+
+        # Test 2: Non-existent annotation
+        result_not_found = client.execute(
+            mutation,
+            variables={"annotationId": to_global_id("AnnotationType", 999999)},
+        )
+        self.assertIsNone(result_not_found.get("errors"))
+        error_msg_not_found = result_not_found["data"]["approveAnnotation"]["message"]
+
+        # Both should return the same error message
+        self.assertEqual(
+            error_msg_no_perm,
+            error_msg_not_found,
+            "IDOR vulnerability: Different error messages allow ID enumeration",
+        )
+        self.assertFalse(result_no_perm["data"]["approveAnnotation"]["ok"])
+        self.assertFalse(result_not_found["data"]["approveAnnotation"]["ok"])
+
+
+class TestRemoveRelationshipIDORProtection(TestCase):
+    """Tests for IDOR protection in RemoveRelationship mutation."""
+
+    def setUp(self):
+        """Create test users and relationships."""
+        from opencontractserver.annotations.models import AnnotationLabel, Relationship
+        from opencontractserver.documents.models import Document
+
+        self.owner = User.objects.create_user(
+            username="rel_owner", password="test", email="rel_owner@test.com"
+        )
+        self.unauthorized_user = User.objects.create_user(
+            username="rel_unauth", password="test", email="rel_unauth@test.com"
+        )
+
+        # Create corpus
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
+
+        # Create document
+        self.document = Document.objects.create(
+            title="Test Document",
+            creator=self.owner,
+            is_public=False,
+            backend_lock=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, self.document, [PermissionTypes.CRUD]
+        )
+
+        # Create relationship label
+        self.rel_label = AnnotationLabel.objects.create(
+            text="Test Relation", creator=self.owner
+        )
+
+        # Create relationship
+        self.relationship = Relationship.objects.create(
+            relationship_label=self.rel_label,
+            document=self.document,
+            corpus=self.corpus,
+            creator=self.owner,
+        )
+
+    def test_remove_relationship_idor_protection(self):
+        """
+        IDOR Protection: RemoveRelationship should return the same error message
+        for non-existent and inaccessible relationships.
+        """
+        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+
+        mutation = """
+            mutation RemoveRelationship($relationshipId: String!) {
+                removeRelationship(relationshipId: $relationshipId) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Test 1: Inaccessible relationship
+        result_no_perm = client.execute(
+            mutation,
+            variables={
+                "relationshipId": to_global_id("RelationshipType", self.relationship.id)
+            },
+        )
+        self.assertIsNone(result_no_perm.get("errors"))
+        error_msg_no_perm = result_no_perm["data"]["removeRelationship"]["message"]
+
+        # Test 2: Non-existent relationship
+        result_not_found = client.execute(
+            mutation,
+            variables={"relationshipId": to_global_id("RelationshipType", 999999)},
+        )
+        self.assertIsNone(result_not_found.get("errors"))
+        error_msg_not_found = result_not_found["data"]["removeRelationship"]["message"]
+
+        # Both should return the same error message
+        self.assertEqual(
+            error_msg_no_perm,
+            error_msg_not_found,
+            "IDOR vulnerability: Different error messages allow ID enumeration",
+        )
+        self.assertFalse(result_no_perm["data"]["removeRelationship"]["ok"])
+        self.assertFalse(result_not_found["data"]["removeRelationship"]["ok"])

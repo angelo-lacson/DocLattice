@@ -554,3 +554,117 @@ class VotingMutationsTestCase(TestCase):
 
         # Verify userVote is now null after removal
         self.assertIsNone(data["obj"]["userVote"])
+
+    def test_idor_protection_vote_message_same_error_for_not_found_and_no_permission(
+        self,
+    ):
+        """
+        IDOR Protection Test: Verify that the same error message is returned
+        whether a message doesn't exist or the user doesn't have permission.
+        This prevents attackers from enumerating valid message IDs.
+        """
+        # Create a third user without any permissions
+        no_access_user = User.objects.create_user(
+            username="no_access_user",
+            email="noaccess@example.com",
+            password="testpass123",
+        )
+
+        mutation = """
+            mutation VoteMessage($messageId: String!, $voteType: String!) {
+                voteMessage(messageId: $messageId, voteType: $voteType) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        # Test 1: User without permission trying to vote on existing message
+        existing_message_id = to_global_id("MessageType", self.message.id)
+        result_no_permission = self._execute_with_user(
+            mutation,
+            no_access_user,
+            {"messageId": existing_message_id, "voteType": "upvote"},
+        )
+
+        self.assertIsNone(result_no_permission.get("errors"))
+        error_msg_no_permission = result_no_permission["data"]["voteMessage"]["message"]
+
+        # Test 2: Same user trying to vote on non-existent message
+        nonexistent_message_id = to_global_id("MessageType", 999999)
+        result_not_found = self._execute_with_user(
+            mutation,
+            no_access_user,
+            {"messageId": nonexistent_message_id, "voteType": "upvote"},
+        )
+
+        self.assertIsNone(result_not_found.get("errors"))
+        error_msg_not_found = result_not_found["data"]["voteMessage"]["message"]
+
+        # IDOR Protection: Both error messages should be identical
+        self.assertEqual(
+            error_msg_no_permission,
+            error_msg_not_found,
+            "IDOR vulnerability: Different error messages for 'no permission' vs 'not found' "
+            "allows attackers to enumerate valid message IDs",
+        )
+
+        # Also verify both failed
+        self.assertFalse(result_no_permission["data"]["voteMessage"]["ok"])
+        self.assertFalse(result_not_found["data"]["voteMessage"]["ok"])
+
+    def test_idor_protection_remove_vote_same_error_for_not_found_and_no_permission(
+        self,
+    ):
+        """
+        IDOR Protection Test: Verify that RemoveVote returns the same error message
+        whether a message doesn't exist or the user doesn't have permission.
+        """
+        # Create a user without any permissions
+        no_access_user = User.objects.create_user(
+            username="no_access_remove",
+            email="noaccess_remove@example.com",
+            password="testpass123",
+        )
+
+        mutation = """
+            mutation RemoveVote($messageId: String!) {
+                removeVote(messageId: $messageId) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        from graphql_relay import to_global_id
+
+        # Test 1: User without permission on existing message
+        existing_message_id = to_global_id("MessageType", self.message.id)
+        result_no_permission = self._execute_with_user(
+            mutation, no_access_user, {"messageId": existing_message_id}
+        )
+
+        self.assertIsNone(result_no_permission.get("errors"))
+        error_msg_no_permission = result_no_permission["data"]["removeVote"]["message"]
+
+        # Test 2: Non-existent message
+        nonexistent_message_id = to_global_id("MessageType", 999999)
+        result_not_found = self._execute_with_user(
+            mutation, no_access_user, {"messageId": nonexistent_message_id}
+        )
+
+        self.assertIsNone(result_not_found.get("errors"))
+        error_msg_not_found = result_not_found["data"]["removeVote"]["message"]
+
+        # IDOR Protection: Both error messages should be identical
+        self.assertEqual(
+            error_msg_no_permission,
+            error_msg_not_found,
+            "IDOR vulnerability: Different error messages allow enumeration of valid message IDs",
+        )
+
+        # Both should fail
+        self.assertFalse(result_no_permission["data"]["removeVote"]["ok"])
+        self.assertFalse(result_not_found["data"]["removeVote"]["ok"])
