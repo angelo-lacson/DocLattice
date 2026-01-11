@@ -19,6 +19,7 @@ class ToolCategory(str, Enum):
     ANNOTATIONS = "annotations"
     COORDINATION = "coordination"
     MODERATION = "moderation"
+    IMAGE = "image"
 
 
 @dataclass(frozen=True)
@@ -71,12 +72,19 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         name="similarity_search",
         description=(
             "Search for semantically similar content using vector embeddings. "
-            "Returns relevant passages from annotations with similarity scores."
+            "With multimodal embedder (CLIP), searches across both text and image "
+            "content in a unified vector space. Use modalities filter to restrict results "
+            "to specific content types."
         ),
         category=ToolCategory.SEARCH,
         parameters=(
             ("query", "The search query text", True),
             ("k", "Number of results to return (default 5)", False),
+            (
+                "modalities",
+                "Filter by content type: ['TEXT'], ['IMAGE'], or ['TEXT', 'IMAGE']",
+                False,
+            ),
         ),
     ),
     ToolDefinition(
@@ -372,6 +380,48 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
                 "List of (label_text, exact_string, document_id, corpus_id) tuples",
                 True,
             ),
+        ),
+    ),
+    ToolDefinition(
+        name="get_annotation_images",
+        description=(
+            "Get all images contained within an annotation's bounding box. "
+            "Returns image metadata and base64-encoded data for each image. "
+            "Use this to inspect visual content within annotated regions."
+        ),
+        category=ToolCategory.ANNOTATIONS,
+        parameters=(("annotation_id", "ID of the annotation", True),),
+    ),
+    # -------------------------------------------------------------------------
+    # IMAGE TOOLS (for multimodal document processing)
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="list_document_images",
+        description=(
+            "List all images in a document with metadata (page number, position, "
+            "dimensions, format). Use this to discover images before retrieving them. "
+            "For PDFs, images are extracted during parsing with docling."
+        ),
+        category=ToolCategory.IMAGE,
+        parameters=(
+            (
+                "page_index",
+                "Optional 0-based page filter to list images from specific page",
+                False,
+            ),
+        ),
+    ),
+    ToolDefinition(
+        name="get_document_image",
+        description=(
+            "Get base64-encoded image data for a specific image token. "
+            "Use list_document_images first to find page_index and token_index. "
+            "Returns the image in its original format (PNG, JPEG, etc.)."
+        ),
+        category=ToolCategory.IMAGE,
+        parameters=(
+            ("page_index", "0-based page index where the image is located", True),
+            ("token_index", "0-based token index of the image on the page", True),
         ),
     ),
     # -------------------------------------------------------------------------

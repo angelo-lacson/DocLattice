@@ -655,6 +655,12 @@ EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
 VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
 MULTIMODAL_EMBEDDER_URL = env("MULTIMODAL_EMBEDDER_URL", default="")
 MULTIMODAL_EMBEDDER_API_KEY = env("MULTIMODAL_EMBEDDER_API_KEY", default="")
+# Weights for combining text and image embeddings in multimodal annotations
+# Images weighted higher by default since multimodal annotations are often predominantly visual
+MULTIMODAL_EMBEDDING_WEIGHTS = {
+    "text_weight": env.float("MULTIMODAL_TEXT_WEIGHT", default=0.3),
+    "image_weight": env.float("MULTIMODAL_IMAGE_WEIGHT", default=0.7),
+}
 DOCLING_PARSER_SERVICE_URL = env("DOCLING_PARSER_SERVICE_URL")
 DOCLING_PARSER_TIMEOUT = env.int(
     "DOCLING_PARSER_TIMEOUT", default=300  # 5 minutes default
