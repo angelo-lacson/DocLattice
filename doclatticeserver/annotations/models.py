@@ -519,8 +519,10 @@ class StructuralAnnotationSet(BaseOCModel):
     """
 
     # Unique identifier based on content
+    # Max length is 128 to accommodate corpus-isolated duplicates:
+    # Format: {sha256_hash}_{corpus_id} = 64 chars + 1 underscore + up to 20 digits
     content_hash = django.db.models.CharField(
-        max_length=64,
+        max_length=128,
         unique=True,
         db_index=True,
         help_text="SHA-256 hash of the document content this set belongs to",

@@ -94,8 +94,9 @@ class ContentTreeRulesTestCase(TestCase):
             doc2.id,
             "New upload should create new document, not link to existing",
         )
-        # Provenance is tracked
-        self.assertEqual(doc2.source_document_id, doc1.id)
+        # source_document is NOT set during import_document()
+        # (provenance is only tracked via add_document() when dragging existing docs)
+        self.assertIsNone(doc2.source_document_id)
 
         # Now we have 2 documents with this hash (each upload creates new doc)
         docs_with_hash = Document.objects.filter(pdf_file_hash=content_hash).count()
@@ -1071,7 +1072,7 @@ class InteractionRulesTestCase(TestCase):
         )
         self.assertEqual(status1, "created")
 
-        # Import to corpus2 (creates isolated document with provenance)
+        # Import to corpus2 (creates isolated document - no provenance via import)
         doc2, status2, path1_c2 = import_document(
             corpus=self.corpus2, path="/different.pdf", content=content, user=self.user
         )
@@ -1079,7 +1080,9 @@ class InteractionRulesTestCase(TestCase):
 
         # Verify different documents (corpus isolation)
         self.assertNotEqual(doc1.id, doc2.id)
-        self.assertEqual(doc2.source_document, doc1)  # Provenance tracked
+        # source_document is NOT set during import_document()
+        # (provenance is only tracked via add_document() when dragging existing docs)
+        self.assertIsNone(doc2.source_document)
 
         # Verify independent version trees
         self.assertNotEqual(doc1.version_tree_id, doc2.version_tree_id)
@@ -1306,10 +1309,12 @@ class ComplexWorkflowTestCase(TestCase):
             title="Shared Doc B",
         )
 
-        # Verify different documents with provenance (corpus isolation - Rule I1 NEW)
+        # Verify different documents (corpus isolation - Rule I1 NEW)
         self.assertNotEqual(doc_a1.id, doc_b1.id)
         self.assertEqual(status_b1, "created")
-        self.assertEqual(doc_b1.source_document, doc_a1)
+        # source_document is NOT set during import_document()
+        # (provenance is only tracked via add_document() when dragging existing docs)
+        self.assertIsNone(doc_b1.source_document)
         self.assertNotEqual(doc_a1.version_tree_id, doc_b1.version_tree_id)
 
         # Update in corpus A
@@ -1384,8 +1389,9 @@ class ComplexWorkflowTestCase(TestCase):
         # Creates new document (each upload at new path creates new doc)
         self.assertNotEqual(doc_v1_again.id, doc_v1.id)
         self.assertEqual(status, "created")
-        # Provenance tracked to original v1
-        self.assertEqual(doc_v1_again.source_document_id, doc_v1.id)
+        # source_document is NOT set during import_document()
+        # (provenance is only tracked via add_document() when dragging existing docs)
+        self.assertIsNone(doc_v1_again.source_document_id)
 
         # Verify version tree for the update chain (v1->v2->v3)
         history = get_content_history(doc_v3)
@@ -1703,7 +1709,8 @@ class PdfFileCreationTestCase(TestCase):
         doc.pdf_file.seek(0)
         saved_content = doc.pdf_file.read()
         self.assertEqual(saved_content, content, "Saved content doesn't match")
-        # Verify provenance tracking still works
-        self.assertEqual(doc.source_document_id, global_doc.id)
+        # source_document is NOT set during import_document()
+        # (provenance is only tracked via add_document() when dragging existing docs)
+        self.assertIsNone(doc.source_document_id)
         # Verify it's a NEW document, not the existing one
         self.assertNotEqual(doc.id, global_doc.id)
