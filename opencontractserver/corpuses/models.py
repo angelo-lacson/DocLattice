@@ -410,8 +410,11 @@ class Corpus(TreeNode):
         Returns:
             Tuple of (document, status, document_path) where:
             - document: The NEW corpus-isolated document (NOT the original)
-            - status: 'added' (new copy created) or 'already_exists' (content already in corpus)
-            - document_path: The DocumentPath record created or existing
+            - status: 'added' (always - no content-based deduplication)
+            - document_path: The DocumentPath record created
+
+        Note: No content-based deduplication is performed. Each call creates
+        a new corpus-isolated document regardless of content hash.
 
         Raises:
             ValueError: If user or document is not provided
@@ -445,33 +448,8 @@ class Corpus(TreeNode):
                 path = f"/documents/doc_{document.pk}"
 
         with transaction.atomic():
-            # Check if this content already exists in THIS corpus (by hash)
-            # This implements corpus isolation - we check within corpus, not globally
-            # IMPORTANT: Only deduplicate if hash is not None (avoid treating all NULL hashes as same)
-            corpus_doc_with_hash = None
-            if document.pdf_file_hash is not None:
-                corpus_doc_with_hash = (
-                    DocumentPath.objects.filter(
-                        corpus=self,
-                        document__pdf_file_hash=document.pdf_file_hash,
-                        is_current=True,
-                        is_deleted=False,
-                    )
-                    .select_related("document")
-                    .first()
-                )
-
-            if corpus_doc_with_hash:
-                # Content already exists in THIS corpus
-                existing_doc = corpus_doc_with_hash.document
-                logger.info(
-                    f"Content from doc {document.pk} already exists in corpus {self.pk} "
-                    f"as doc {existing_doc.pk}"
-                )
-                # Return the existing corpus-isolated document
-                return existing_doc, "already_exists", corpus_doc_with_hash
-
-            # Create corpus-isolated copy with new version tree
+            # Always create corpus-isolated copy (no content-based deduplication)
+            # Each add_document() call creates a new document regardless of content hash
             tree_id = uuid.uuid4()
             corpus_copy = Document.objects.create(
                 title=doc_kwargs.get("title", document.title),

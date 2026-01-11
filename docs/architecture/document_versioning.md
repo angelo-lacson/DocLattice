@@ -8,7 +8,7 @@ OpenContracts implements a **dual-tree versioning architecture** for document ma
 - Time-travel capabilities (reconstruct any past filesystem state)
 - Soft delete/restore operations
 - Corpus-isolated documents with independent version trees
-- Storage-efficient structural annotation sharing
+- No content-based deduplication (each upload is independent)
 
 **Implementation Status**: COMPLETE (Phases 1, 2, and 2.5)
 
@@ -30,12 +30,13 @@ OpenContracts implements a **dual-tree versioning architecture** for document ma
 3. **Corpus Isolation**: Documents isolated within each corpus
    - Each corpus has independent version trees
    - No cross-corpus version conflicts
-   - Provenance tracked via `source_document` field
+   - Provenance tracked via `source_document` field (when dragging existing documents)
 
-4. **Storage Efficiency**: File blobs can be shared
-   - Same content hash = same file storage (Rule I3)
-   - Document records are corpus-isolated
-   - Structural annotations shared across copies (Phase 2.5)
+4. **No Content-Based Deduplication**
+   - Every file upload creates a new document regardless of content hash
+   - Uploading same content at different paths creates separate documents
+   - Uploading same content at same path creates a new version
+   - Hash stored for integrity checks but never used for deduplication
 
 ---
 
@@ -45,8 +46,8 @@ OpenContracts implements a **dual-tree versioning architecture** for document ma
 
 | Rule | Description |
 |------|-------------|
-| **C1** | New Document only when hash first seen in THIS corpus |
-| **C2** | Updates create child nodes of previous version |
+| **C1** | Every upload creates a new Document (no content-based deduplication) |
+| **C2** | Updates at same path create child nodes of previous version |
 | **C3** | Only one current Document per version tree |
 
 ### Path Tree Rules (DocumentPath Model)
@@ -65,31 +66,27 @@ OpenContracts implements a **dual-tree versioning architecture** for document ma
 | Rule | Description |
 |------|-------------|
 | **I1** | Corpuses have completely isolated Documents with independent version trees |
-| **I2** | Provenance tracked via `source_document` field (optional metadata) |
-| **I3** | File storage deduplicated at blob level (same hash = same file blob) |
+| **I2** | Provenance tracked via `source_document` field (set when dragging existing docs) |
+| **I3** | Each upload creates independent Document records (no dedup at document level) |
 | **Q1** | Content "truly deleted" when no active paths point to it |
 
 ---
 
 ## Why Corpus Isolation Matters
 
-**Problem with shared documents (deprecated approach)**:
-```
-User A uploads PDF → Document #1 (tree T1)
-User B uploads same PDF → REUSES Document #1 (tree T1) ← SHARED!
+Each upload creates a completely independent document. There is no content-based deduplication:
 
-User A updates → Document #2 (parent=#1, tree T1, is_current=true)
-User B updates → Document #3 (parent=#1, tree T1) ← VERSION CONFLICT!
 ```
-
-**Solution with corpus isolation**:
-```
-User A uploads to Corpus X → Document #1 (tree TX1)
-User B uploads to Corpus Y → Document #2 (tree TY2) ← ISOLATED!
+User A uploads PDF to Corpus X → Document #1 (tree TX1)
+User B uploads same PDF to Corpus Y → Document #2 (tree TY2) ← INDEPENDENT!
 
 User A updates → Document #3 (parent=#1, tree TX1) ✓
 User B updates → Document #4 (parent=#2, tree TY2) ✓ NO CONFLICT!
+
+User A uploads same PDF again to Corpus X → Document #5 (tree TX5) ← ALSO INDEPENDENT!
 ```
+
+This eliminates version conflicts and deduplication complexity entirely.
 
 ---
 
@@ -160,16 +157,17 @@ class DocumentPath(TreeNode, BaseOCModel):
 ```python
 class StructuralAnnotationSet(BaseOCModel):
     """
-    Immutable set of structural annotations shared across document copies.
-    Multiple Documents with same content share one set (storage efficient).
+    Set of structural annotations for a document.
+    Each corpus copy gets its own StructuralAnnotationSet (duplicated) to allow
+    corpus-specific embeddings (different corpuses may use different embedders).
     """
     content_hash = CharField(max_length=64, unique=True, db_index=True)
     parser_name = CharField(max_length=255, null=True)
     parser_version = CharField(max_length=50, null=True)
     page_count = IntegerField(null=True)
     token_count = IntegerField(null=True)
-    pawls_parse_file = FileField(null=True)  # Shared PAWLS data
-    txt_extract_file = FileField(null=True)  # Shared text extraction
+    pawls_parse_file = FileField(null=True)
+    txt_extract_file = FileField(null=True)
 ```
 
 **Annotation/Relationship XOR Constraint**: Annotations and Relationships can belong to EITHER a `document` OR a `structural_set`, never both (enforced at database level).
@@ -185,12 +183,10 @@ All operations in `opencontractserver/documents/versioning.py`:
 Handles new imports and updates within corpus scope.
 
 **Returns**: `(document, status, path_record)` where status is:
-- `'created'`: Brand new document (content first seen globally)
-- `'updated'`: Content changed at existing path (version increment)
-- `'unchanged'`: No change detected
-- `'linked'`: Same content already exists in THIS corpus at different path
+- `'created'`: New document at new path
+- `'updated'`: New document version at existing path
 
-**Implements**: Rules C1, C2, C3, P1, P2, P4, P5, I1, I2, I3
+**Implements**: Rules C1, C2, C3, P1, P2, P4, P5, I1, I3
 
 ### `move_document(corpus, old_path, new_path, user, new_folder='UNSET')`
 
@@ -271,7 +267,7 @@ doc, status, path = import_document(
     user=request.user,
     title="Service Agreement"
 )
-# status: 'created', 'updated', 'unchanged', or 'linked'
+# status: 'created' (new path) or 'updated' (existing path, new version)
 ```
 
 ### Move a document
@@ -335,7 +331,7 @@ for path_record in past_filesystem:
 - **Time Travel** - Reconstruct any historical state
 - **Undelete** - Soft deletes enable recovery
 - **Corpus Independence** - No cross-corpus version conflicts
-- **Storage Efficiency** - File blobs and structural annotations shared
+- **Simplicity** - No deduplication complexity, each upload is independent
 - **Clean Separation** - Content independent from location
 - **Immutability** - Historical data never lost
 
@@ -345,18 +341,19 @@ for path_record in past_filesystem:
 
 **Location**: `opencontractserver/tests/test_document_versioning.py`
 
-39 tests covering:
+Tests covering:
 - Content Tree Rules (C1, C2, C3)
 - Path Tree Rules (P1, P2, P3, P4, P5, P6)
 - Import/Move/Delete/Restore Operations
 - Query Functions (filesystem, history, time-travel)
 - Interaction Rules (I1, Q1)
 - Complex Workflows (multi-corpus, branching)
+- No-deduplication behavior (each upload creates independent document)
 - Performance Benchmarks
 
 **Structural Annotation Tests**:
 - `test_structural_annotation_sets.py` - Model behavior and constraints
-- `test_structural_annotation_portability.py` - Cross-corpus sharing
+- `test_structural_annotation_portability.py` - Corpus isolation and duplication
 - `test_query_optimizer_structural_sets.py` - Query optimizer integration
 
 ---
