@@ -124,9 +124,11 @@ Current implementations:
 
 ### Embedders
 
-Embedders inherit from `BaseEmbedder` and implement the `_embed_text_impl` method. Embedders can optionally support multiple modalities (text and images).
+Embedders inherit from `BaseEmbedder` and implement the `_embed_text_impl` method. Embedders can optionally support multiple modalities (text and images) via the `supported_modalities` set.
 
 ```python
+from opencontractserver.types.enums import ContentModality
+
 class BaseEmbedder(ABC):
     title: str = ""
     description: str = ""
@@ -135,10 +137,23 @@ class BaseEmbedder(ABC):
     vector_size: int = 0
     supported_file_types: list[FileTypeEnum] = []
 
-    # Multimodal support flags
-    is_multimodal: bool = False  # Whether this embedder supports multiple modalities
-    supports_text: bool = True   # Whether this embedder supports text input
-    supports_images: bool = False  # Whether this embedder supports image input
+    # Single source of truth for modality support
+    # Override in subclasses to add multimodal support
+    supported_modalities: set[ContentModality] = {ContentModality.TEXT}
+
+    # Convenience properties derived from supported_modalities
+    @property
+    def is_multimodal(self) -> bool:
+        """Whether this embedder supports multiple modalities."""
+        return len(self.supported_modalities) > 1
+
+    @property
+    def supports_text(self) -> bool:
+        return ContentModality.TEXT in self.supported_modalities
+
+    @property
+    def supports_images(self) -> bool:
+        return ContentModality.IMAGE in self.supported_modalities
 
     @abstractmethod
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
@@ -182,6 +197,68 @@ Environment variable: `MULTIMODAL_EMBEDDER_URL=http://multimodal-embedder:8000`
 - `POST /embeddings/image` - Image embeddings: `{"image": "<base64>"}`
 - `POST /embeddings/batch` - Batch text (max 100): `{"texts": [...]}`
 - `POST /embeddings/image/batch` - Batch images (max 20): `{"images": [...]}`
+
+### Multimodal Annotation Embedding Pipeline
+
+When annotations are embedded, the pipeline automatically detects and handles multimodal content:
+
+```mermaid
+graph TD
+    A[Annotation] --> B{Check content_modalities}
+    B -->|TEXT only| C[embed_text]
+    B -->|IMAGE only| D[embed_images → average]
+    B -->|TEXT + IMAGE| E[Weighted Average]
+
+    C --> F[768d Vector]
+    D --> F
+    E --> F
+
+    E --> G[embed_text → 768d]
+    E --> H[embed_images → avg 768d]
+    G --> I["weighted_avg(text, images)"]
+    H --> I
+    I --> F
+
+    F --> J[Store in vector_768 field]
+```
+
+**Key Concepts:**
+
+1. **ContentModality Enum**: Type-safe modality tracking (`TEXT`, `IMAGE`)
+   - Stored in `Annotation.content_modalities` ArrayField
+   - Automatically set during parsing based on token types
+
+2. **Unified Vector Space**: CLIP ViT-L-14 produces 768d vectors where text and images share the same embedding space, enabling cross-modal similarity search
+
+3. **Weighted Averaging**: For mixed-modality annotations (text + images):
+   ```python
+   # Default weights (configurable in settings)
+   MULTIMODAL_EMBEDDING_WEIGHTS = {
+       "text_weight": 0.3,   # 30% text
+       "image_weight": 0.7,  # 70% image
+   }
+   ```
+
+4. **Image Token Format** (PAWLs): Images are stored as tokens with `is_image=True`:
+   ```json
+   {
+     "is_image": true,
+     "image_path": "documents/{doc_id}/images/page_0_img_1.jpeg",
+     "format": "jpeg",
+     "x": 100, "y": 200, "width": 300, "height": 400,
+     "content_hash": "sha256..."
+   }
+   ```
+
+5. **Graceful Degradation**: If multimodal embedding fails, falls back to text-only embedding
+
+**Embedding Task Flow** (`calculate_embedding_for_annotation_text`):
+1. Load annotation with `select_related("document")` to avoid N+1
+2. Get embedder based on corpus preference or explicit path
+3. Check if embedder `is_multimodal` and annotation has `IMAGE` modality
+4. If multimodal: use `generate_multimodal_embedding()` from `utils/multimodal_embeddings.py`
+5. If text-only or fallback: use `embedder.embed_text()`
+6. Store embedding via `annotation.add_embedding()`
 
 ## Creating New Components
 

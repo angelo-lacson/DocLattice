@@ -6,45 +6,51 @@ This document describes the architecture for extracting, storing, and serving im
 
 1. **Image Annotation**: Images embedded in PDFs can be annotated like text tokens
 2. **LLM Image Analysis**: Images can be retrieved and provided to multimodal LLMs for analysis
-3. **Multimodal Embeddings**: Embedders can generate embeddings from both text and images
+3. **Multimodal Embeddings**: Embedders can generate embeddings from both text and images in a unified vector space
 
 ## Architecture Components
 
-### 1. PAWLs Data Structure Extensions
+### 1. Unified PAWLs Token Structure
 
-The PAWLs (Portable Anchored Words and Lines) format has been extended to support image tokens alongside text tokens.
+The PAWLs (Portable Anchored Words and Lines) format uses a **unified token array** where both text and image tokens share the same data structure. Image tokens are identified by `is_image=True`.
 
-#### PawlsImageTokenPythonType
+#### PawlsTokenPythonType (Unified)
 
 ```python
-class PawlsImageTokenPythonType(TypedDict):
-    # Position in PDF coordinates (same as text tokens)
+class PawlsTokenPythonType(TypedDict):
+    """
+    Unified token type for PAWLs data. Represents either a text token or an
+    image token within a PDF page.
+    """
+    # Position and dimensions (in PDF points)
     x: float
     y: float
     width: float
     height: float
+    text: str  # Empty string for images
 
-    # Storage reference (PRIMARY - preferred)
-    image_path: NotRequired[str]  # e.g., "documents/123/images/page_0_img_1.jpeg"
-
-    # Inline data (SECONDARY - small thumbnails only)
-    base64_data: NotRequired[str]
-
-    # Metadata
-    format: str  # "jpeg", "png", "webp"
-    original_width: NotRequired[int]
-    original_height: NotRequired[int]
-    alt_text: NotRequired[str]
-    image_type: NotRequired[str]  # "embedded", "cropped", "figure", etc.
+    # Image-specific fields (only present when is_image=True)
+    is_image: NotRequired[bool]  # True for image tokens
+    image_path: NotRequired[str]  # Storage path to image file
+    base64_data: NotRequired[str]  # Fallback if storage fails
+    format: NotRequired[str]  # "jpeg" or "png"
     content_hash: NotRequired[str]  # SHA-256 for deduplication
+    original_width: NotRequired[int]  # Original pixel dimensions
+    original_height: NotRequired[int]
+    image_type: NotRequired[str]  # "embedded" or "cropped"
 ```
 
-#### ImageIdPythonType
+#### TokenIdPythonType (Unified Reference)
 
 ```python
-class ImageIdPythonType(TypedDict):
+class TokenIdPythonType(TypedDict):
+    """
+    Reference to a token (text or image) within the PAWLs data structure.
+    Since images are stored as tokens with is_image=True in the unified
+    tokens[] array, both text and image tokens use this same type.
+    """
     pageIndex: int
-    imageIndex: int
+    tokenIndex: int
 ```
 
 ### 2. Storage Strategy
@@ -76,8 +82,12 @@ If storage save fails, the system falls back to inline base64 encoding. This ens
                                │           PAWLs JSON                 │
                                │  ┌─────────────────────────────────┐ │
                                │  │ page: { width, height, index }  │ │
-                               │  │ tokens: [ text tokens... ]      │ │
-                               │  │ images: [ image tokens... ]     │ │
+                               │  │ tokens: [                       │ │
+                               │  │   { text: "Hello", x, y, ... }, │ │
+                               │  │   { is_image: true, image_path, │ │
+                               │  │     format: "jpeg", ... },      │ │
+                               │  │   { text: "World", x, y, ... }  │ │
+                               │  │ ]                               │ │
                                │  └─────────────────────────────────┘ │
                                └──────────────────────────────────────┘
 ```
@@ -89,12 +99,12 @@ If storage save fails, the system falls back to inline base64 encoding. This ens
 
 ### 4. Parser Integration
 
-Both Docling and LlamaParse parsers have been updated to:
+Both Docling and LlamaParse parsers:
 
 1. Extract images during document parsing
 2. Store images to Django storage with appropriate paths
-3. Create image references in PAWLs pages
-4. Link figure/image annotations to their corresponding image tokens
+3. Create unified image tokens in PAWLs pages (in the `tokens[]` array)
+4. Set `content_modalities` on annotations based on token types
 
 #### Docling Parser Flow
 
@@ -141,14 +151,27 @@ The `get_image_as_base64()` function:
 
 ### 6. Multimodal Embedder Support
 
-The `BaseEmbedder` class has been extended to support multimodal embedding:
+The `BaseEmbedder` class uses a **single source of truth** pattern for modality support via the `supported_modalities` set:
 
 ```python
+from opencontractserver.types.enums import ContentModality
+
 class BaseEmbedder(PipelineComponentBase, ABC):
-    # Multimodal flags
-    is_multimodal: bool = False
-    supports_text: bool = True
-    supports_images: bool = False
+    # Single source of truth for modality support
+    supported_modalities: set[ContentModality] = {ContentModality.TEXT}
+
+    # Convenience properties derived from supported_modalities
+    @property
+    def is_multimodal(self) -> bool:
+        return len(self.supported_modalities) > 1
+
+    @property
+    def supports_text(self) -> bool:
+        return ContentModality.TEXT in self.supported_modalities
+
+    @property
+    def supports_images(self) -> bool:
+        return ContentModality.IMAGE in self.supported_modalities
 
     def embed_text(self, text: str, **kwargs) -> Optional[list[float]]:
         """Embed text content."""
@@ -160,34 +183,58 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         """Joint text-image embedding for multimodal models."""
 ```
 
-The pipeline registry exposes these flags via GraphQL:
-
-```graphql
-type PipelineComponentType {
-    name: String!
-    # ... other fields ...
-    is_multimodal: Boolean
-    supports_text: Boolean
-    supports_images: Boolean
-}
-```
+The `MultimodalMicroserviceEmbedder` uses CLIP ViT-L-14 which produces 768d vectors in a **unified vector space** - both text and images share the same embedding space, enabling cross-modal similarity search.
 
 ### 7. Annotation Integration
 
-Image references are linked to annotations via the `imagesJsons` field:
+Annotations reference tokens via the `tokensJsons` field, which can include both text and image tokens:
 
 ```python
 class OpenContractsSinglePageAnnotationType(TypedDict):
     bounds: BoundingBoxPythonType
-    tokensJsons: list[TokenIdPythonType]
+    tokensJsons: list[TokenIdPythonType]  # Can reference text OR image tokens
     rawText: str
-    imagesJsons: NotRequired[list[ImageIdPythonType]]  # Image references
 ```
 
-For figure/image annotations, the parser:
-1. Checks if any embedded images overlap with the annotation bounds
-2. If not, crops the bounding box region as an image
-3. Adds the image reference to `imagesJsons`
+The `content_modalities` field on annotations tracks what types of content are referenced:
+
+```python
+class OpenContractsAnnotationPythonType(TypedDict):
+    # ... other fields ...
+    content_modalities: NotRequired[list[str]]  # ["TEXT"], ["IMAGE"], or ["TEXT", "IMAGE"]
+```
+
+This field is:
+- Stored in an ArrayField on the Annotation model
+- Indexed with a GIN index for efficient containment queries
+- Used by the embedding pipeline to determine modality handling
+
+### 8. Multimodal Embedding Pipeline
+
+When annotations are embedded, the pipeline automatically handles multimodal content:
+
+```
+Annotation → Check content_modalities
+           ├─ TEXT only → embed_text() → 768d vector
+           ├─ IMAGE only → embed_images() → average → 768d vector
+           └─ TEXT + IMAGE → weighted_average(text_emb, img_avg, [0.3, 0.7]) → 768d vector
+```
+
+**Weighted Averaging Configuration:**
+
+```python
+# settings/base.py
+MULTIMODAL_EMBEDDING_WEIGHTS = {
+    "text_weight": 0.3,   # 30% weight for text
+    "image_weight": 0.7,  # 70% weight for images (multimodal annotations tend to be image-heavy)
+}
+```
+
+**Key Utilities** (`opencontractserver/utils/multimodal_embeddings.py`):
+- `get_annotation_image_tokens()` - Extract image tokens from annotation
+- `embed_images_average()` - Embed all images and return average
+- `generate_multimodal_embedding()` - Main function combining text + images
+- `weighted_average_embeddings()` - Combine with configurable weights
 
 ## Configuration
 
@@ -213,16 +260,27 @@ LLAMAPARSE_MIN_IMAGE_WIDTH = 50
 LLAMAPARSE_MIN_IMAGE_HEIGHT = 50
 ```
 
+### Multimodal Embedding Settings
+
+```python
+MULTIMODAL_EMBEDDER_URL = "http://multimodal-embedder:8000"
+MULTIMODAL_EMBEDDING_WEIGHTS = {
+    "text_weight": env.float("MULTIMODAL_TEXT_WEIGHT", default=0.3),
+    "image_weight": env.float("MULTIMODAL_IMAGE_WEIGHT", default=0.7),
+}
+```
+
 ## Security Considerations
 
 1. **Storage Access**: Images are stored within document-specific paths, inheriting document permissions
 2. **Size Limits**: Minimum dimension filters prevent extraction of tiny/decorative images
 3. **Content Hashing**: SHA-256 hashes enable deduplication and integrity verification
+4. **Permission Checking**: Agent image tools use `_validate_resource_id_params()` to prevent unauthorized access
 
 ## Future Enhancements
 
 1. **Image Annotation UI**: Frontend support for selecting and annotating images
-2. **Image Search**: Vector similarity search across document images
+2. **Modality Filtering in Search**: Filter similarity search by `content_modalities`
 3. **OCR on Images**: Extract text from images for full-text search
 4. **Thumbnail Generation**: Auto-generate thumbnails for faster preview
 5. **Image Deduplication**: Use content hashes to avoid storing duplicate images
@@ -232,9 +290,14 @@ LLAMAPARSE_MIN_IMAGE_HEIGHT = 50
 | Component | Path |
 |-----------|------|
 | Type definitions | `opencontractserver/types/dicts.py` |
+| ContentModality enum | `opencontractserver/types/enums.py` |
 | Extraction utilities | `opencontractserver/utils/pdf_token_extraction.py` |
+| Multimodal embedding utils | `opencontractserver/utils/multimodal_embeddings.py` |
 | Docling parser | `opencontractserver/pipeline/parsers/docling_parser_rest.py` |
 | LlamaParse parser | `opencontractserver/pipeline/parsers/llamaparse_parser.py` |
 | Base embedder | `opencontractserver/pipeline/base/embedder.py` |
-| Pipeline registry | `opencontractserver/pipeline/registry.py` |
+| Multimodal embedder | `opencontractserver/pipeline/embedders/multimodal_microservice.py` |
+| Embedding task | `opencontractserver/tasks/embeddings_task.py` |
+| Image tools for agents | `opencontractserver/llms/tools/image_tools.py` |
+| GIN index migration | `opencontractserver/annotations/migrations/0054_add_content_modalities_gin_index.py` |
 | Tests | `opencontractserver/tests/test_pdf_token_extraction.py` |

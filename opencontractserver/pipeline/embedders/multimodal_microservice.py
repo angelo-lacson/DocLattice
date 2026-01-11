@@ -149,8 +149,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                 return embeddings_array[0].tolist()
             else:
                 logger.error(
-                    f"Multimodal service returned status {response.status_code}: "
-                    f"{response.text[:200]}"
+                    f"Multimodal text embedding service returned status {response.status_code}"
                 )
                 return None
 
@@ -216,8 +215,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                 return embeddings_array[0].tolist()
             else:
                 logger.error(
-                    f"Multimodal image service returned status {response.status_code}: "
-                    f"{response.text[:200]}"
+                    f"Multimodal image embedding service returned status {response.status_code}"
                 )
                 return None
 
@@ -275,8 +273,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                 return embeddings_array.tolist()
             else:
                 logger.error(
-                    f"Batch text embedding failed with status {response.status_code}: "
-                    f"{response.text[:200]}"
+                    f"Batch text embedding service returned status {response.status_code}"
                 )
                 return None
 
@@ -330,8 +327,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                 return embeddings_array.tolist()
             else:
                 logger.error(
-                    f"Batch image embedding failed with status {response.status_code}: "
-                    f"{response.text[:200]}"
+                    f"Batch image embedding service returned status {response.status_code}"
                 )
                 return None
 

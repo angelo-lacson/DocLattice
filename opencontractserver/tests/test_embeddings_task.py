@@ -491,10 +491,10 @@ class TestEmbeddingTask(unittest.TestCase):
     Tests for the embedding task functions that calculate embeddings for annotations.
     """
 
+    @patch("opencontractserver.utils.embeddings.get_embedder")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
-    @patch("opencontractserver.tasks.embeddings_task.generate_embeddings_from_text")
     def test_calculate_embedding_for_annotation_text_with_explicit_embedder(
-        self, mock_generate_embeddings, mock_annotation_model
+        self, mock_annotation_model, mock_get_embedder
     ):
         """
         Test that calculate_embedding_for_annotation_text uses an explicitly provided embedder_path.
@@ -506,16 +506,26 @@ class TestEmbeddingTask(unittest.TestCase):
         # Create mock annotation with a corpus_id
         mock_annot = MagicMock()
         mock_annot.id = 1
+        mock_annot.pk = 1
         mock_annot.raw_text = "This is test text"
-        mock_annot.corpus_id = (
-            123  # This will be passed to generate_embeddings_from_text
+        mock_annot.corpus_id = 123
+        mock_annot.content_modalities = ["TEXT"]  # Text-only annotation
+        mock_annotation_model.objects.select_related.return_value.get.return_value = (
+            mock_annot
         )
-        mock_annotation_model.objects.get.return_value = mock_annot
 
-        # Mock generate_embeddings_from_text to return a path and vector
-        default_path = "default.embedder.path"
+        # Create mock embedder class and instance
+        mock_embedder_instance = MagicMock()
+        mock_embedder_instance.is_multimodal = False
+        mock_embedder_instance.supports_images = False
         test_vector = [0.1, 0.2, 0.3]
-        mock_generate_embeddings.return_value = (default_path, test_vector)
+        mock_embedder_instance.embed_text.return_value = test_vector
+
+        mock_embedder_class = MagicMock(return_value=mock_embedder_instance)
+
+        # Mock get_embedder to return our mock class
+        returned_path = "returned.embedder.path"
+        mock_get_embedder.return_value = (mock_embedder_class, returned_path)
 
         # Define the explicit embedder path we'll provide
         explicit_embedder_path = "path.to.TestEmbedder"
@@ -526,21 +536,26 @@ class TestEmbeddingTask(unittest.TestCase):
         )
 
         # Verify annotation was retrieved correctly
-        mock_annotation_model.objects.get.assert_called_with(pk=1)
-
-        # Verify generate_embeddings_from_text was called with correct parameters
-        mock_generate_embeddings.assert_called_with(
-            "This is test text", corpus_id=123, embedder_path="path.to.TestEmbedder"
+        mock_annotation_model.objects.select_related.assert_called_with("document")
+        mock_annotation_model.objects.select_related.return_value.get.assert_called_with(
+            pk=1
         )
 
-        # The key test: verify that the explicit embedder_path was used instead of the one
-        # returned by generate_embeddings_from_text
+        # Verify get_embedder was called with correct parameters
+        mock_get_embedder.assert_called_with(
+            corpus_id=123, embedder_path=explicit_embedder_path
+        )
+
+        # Verify embed_text was called
+        mock_embedder_instance.embed_text.assert_called_with("This is test text")
+
+        # The key test: verify that the explicit embedder_path was used
         mock_annot.add_embedding.assert_called_with(explicit_embedder_path, test_vector)
 
+    @patch("opencontractserver.utils.embeddings.get_embedder")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
-    @patch("opencontractserver.tasks.embeddings_task.generate_embeddings_from_text")
     def test_calculate_embedding_for_annotation_text_fallback_to_annotation_corpus(
-        self, mock_generate_embeddings, mock_annotation_model
+        self, mock_annotation_model, mock_get_embedder
     ):
         """
         Test that calculate_embedding_for_annotation_text falls back to the annotation's corpus embedder
@@ -553,37 +568,45 @@ class TestEmbeddingTask(unittest.TestCase):
         # Create mock annotation with corpus reference
         mock_annot = MagicMock()
         mock_annot.id = 1
+        mock_annot.pk = 1
         mock_annot.raw_text = "This is test text"
-        mock_annot.embedding = None
-        mock_annot.corpus_id = (
-            123  # This is what gets passed to generate_embeddings_from_text
+        mock_annot.corpus_id = 123
+        mock_annot.content_modalities = ["TEXT"]  # Text-only annotation
+        mock_annotation_model.objects.select_related.return_value.get.return_value = (
+            mock_annot
         )
-        mock_annotation_model.objects.get.return_value = mock_annot
 
-        # Mock generate_embeddings_from_text to simulate corpus-based embedding
-        corpus_embedder_path = "corpus.embedder.path"
+        # Create mock embedder class and instance
+        mock_embedder_instance = MagicMock()
+        mock_embedder_instance.is_multimodal = False
+        mock_embedder_instance.supports_images = False
         test_vector = [0.4, 0.5, 0.6]
-        mock_generate_embeddings.return_value = (corpus_embedder_path, test_vector)
+        mock_embedder_instance.embed_text.return_value = test_vector
+
+        mock_embedder_class = MagicMock(return_value=mock_embedder_instance)
+
+        # Mock get_embedder to return our mock class with corpus embedder path
+        corpus_embedder_path = "corpus.embedder.path"
+        mock_get_embedder.return_value = (mock_embedder_class, corpus_embedder_path)
 
         # Call the function without embedder_path
         calculate_embedding_for_annotation_text(annotation_id=1)
 
         # Verify annotation was retrieved correctly
-        mock_annotation_model.objects.get.assert_called_with(pk=1)
-
-        # Verify generate_embeddings_from_text was called with corpus_id
-        mock_generate_embeddings.assert_called_with(
-            "This is test text", corpus_id=123, embedder_path=None
+        mock_annotation_model.objects.select_related.return_value.get.assert_called_with(
+            pk=1
         )
+
+        # Verify get_embedder was called with corpus_id but no embedder_path
+        mock_get_embedder.assert_called_with(corpus_id=123, embedder_path=None)
 
         # Verify embedding was stored with the corpus embedder path
         mock_annot.add_embedding.assert_called_with(corpus_embedder_path, test_vector)
 
+    @patch("opencontractserver.utils.embeddings.get_embedder")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
-    @patch("opencontractserver.tasks.embeddings_task.generate_embeddings_from_text")
-    @patch("opencontractserver.tasks.embeddings_task.settings")
     def test_calculate_embedding_for_annotation_text_fallback_to_default(
-        self, mock_settings, mock_generate_embeddings, mock_annotation_model
+        self, mock_annotation_model, mock_get_embedder
     ):
         """
         Test that calculate_embedding_for_annotation_text falls back to the default embedder
@@ -596,29 +619,37 @@ class TestEmbeddingTask(unittest.TestCase):
         # Create mock annotation with no corpus
         mock_annot = MagicMock()
         mock_annot.id = 1
+        mock_annot.pk = 1
         mock_annot.raw_text = "This is test text"
         mock_annot.corpus_id = None  # No corpus
-        mock_annotation_model.objects.get.return_value = mock_annot
+        mock_annot.content_modalities = ["TEXT"]  # Text-only annotation
+        mock_annotation_model.objects.select_related.return_value.get.return_value = (
+            mock_annot
+        )
 
-        # Mock default embedder settings
-        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
-
-        # Mock generate_embeddings_from_text to return default path
-        # When corpus_id is None, it should use the default embedder
-        default_path = "default.embedder.path"
+        # Create mock embedder class and instance
+        mock_embedder_instance = MagicMock()
+        mock_embedder_instance.is_multimodal = False
+        mock_embedder_instance.supports_images = False
         test_vector = [0.7, 0.8, 0.9]
-        mock_generate_embeddings.return_value = (default_path, test_vector)
+        mock_embedder_instance.embed_text.return_value = test_vector
+
+        mock_embedder_class = MagicMock(return_value=mock_embedder_instance)
+
+        # Mock get_embedder to return the default embedder path
+        default_path = "default.embedder.path"
+        mock_get_embedder.return_value = (mock_embedder_class, default_path)
 
         # Call the function without embedder_path
         calculate_embedding_for_annotation_text(annotation_id=1)
 
         # Verify annotation was retrieved correctly
-        mock_annotation_model.objects.get.assert_called_with(pk=1)
-
-        # Verify generate_embeddings_from_text was called with corpus_id=None
-        mock_generate_embeddings.assert_called_with(
-            "This is test text", corpus_id=None, embedder_path=None
+        mock_annotation_model.objects.select_related.return_value.get.assert_called_with(
+            pk=1
         )
+
+        # Verify get_embedder was called with corpus_id=None
+        mock_get_embedder.assert_called_with(corpus_id=None, embedder_path=None)
 
         # Verify embedding was stored with the default path
         mock_annot.add_embedding.assert_called_with(default_path, test_vector)
