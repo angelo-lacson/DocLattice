@@ -642,7 +642,7 @@ class CoreAnnotationVectorStore:
             Q(document_id__in=accessible_doc_ids)
             | Q(
                 structural=True,
-                structural_annotation_set__documents__in=accessible_doc_ids,
+                structural_set__documents__in=accessible_doc_ids,
             )
         )
 
