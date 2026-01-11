@@ -26,6 +26,7 @@ from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.pipeline.base.post_processor import BasePostProcessor
 from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
+from opencontractserver.types.enums import ContentModality
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +60,27 @@ class PipelineComponentDefinition:
     supported_file_types: tuple[str, ...]  # FileTypeEnum values as strings
     input_schema: dict = field(default_factory=dict)
     vector_size: Optional[int] = None  # Only for embedders
-    # Multimodal support flags (only for embedders)
-    is_multimodal: bool = False
-    supports_text: bool = True
-    supports_images: bool = False
+    # Modality support (only for embedders) - stored as tuple of strings for serializability
+    supported_modalities: tuple[str, ...] = ("TEXT",)
     component_class: Optional[type] = field(
         default=None, compare=False, hash=False
     )  # Reference to actual class
+
+    # Convenience properties derived from supported_modalities
+    @property
+    def is_multimodal(self) -> bool:
+        """Whether this embedder supports multiple modalities."""
+        return len(self.supported_modalities) > 1
+
+    @property
+    def supports_text(self) -> bool:
+        """Whether this embedder supports text input."""
+        return "TEXT" in self.supported_modalities
+
+    @property
+    def supports_images(self) -> bool:
+        """Whether this embedder supports image input."""
+        return "IMAGE" in self.supported_modalities
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for GraphQL response."""
@@ -83,8 +98,10 @@ class PipelineComponentDefinition:
         }
         if self.vector_size is not None:
             result["vector_size"] = self.vector_size
-        # Include multimodal flags for embedders
+        # Include modality info for embedders
         if self.component_type == ComponentType.EMBEDDER:
+            result["supported_modalities"] = list(self.supported_modalities)
+            # Convenience fields derived from supported_modalities
             result["is_multimodal"] = self.is_multimodal
             result["supports_text"] = self.supports_text
             result["supports_images"] = self.supports_images
@@ -175,10 +192,17 @@ class PipelineComponentRegistry:
                     # Store the enum value ("pdf", "txt", "docx")
                     supported_file_types.append(ft.value)
 
-        # Get multimodal support flags (for embedders)
-        is_multimodal = getattr(component_class, "is_multimodal", False)
-        supports_text = getattr(component_class, "supports_text", True)
-        supports_images = getattr(component_class, "supports_images", False)
+        # Get supported modalities (for embedders)
+        # Convert from set of ContentModality enums to tuple of strings
+        raw_modalities = getattr(
+            component_class, "supported_modalities", {ContentModality.TEXT}
+        )
+        if isinstance(raw_modalities, set):
+            # New format: set of ContentModality enums
+            supported_modalities = tuple(m.value for m in raw_modalities)
+        else:
+            # Fallback for any unexpected format
+            supported_modalities = ("TEXT",)
 
         # Build definition
         definition = PipelineComponentDefinition(
@@ -193,9 +217,7 @@ class PipelineComponentRegistry:
             supported_file_types=tuple(supported_file_types),
             input_schema=dict(getattr(component_class, "input_schema", {})),
             vector_size=getattr(component_class, "vector_size", None),
-            is_multimodal=is_multimodal,
-            supports_text=supports_text,
-            supports_images=supports_images,
+            supported_modalities=supported_modalities,
             component_class=component_class,
         )
 

@@ -122,6 +122,9 @@ class CoreAnnotationVectorStore:
         must_have_text: Filter by text content
         embedder_path: Path to embedder model to use
         embed_dim: Embedding dimension (384, 768, 1536, or 3072)
+        modalities: Filter by content modalities (e.g., ["TEXT"], ["IMAGE"],
+                   ["TEXT", "IMAGE"]). If provided, only annotations containing
+                   ANY of the specified modalities will be returned.
     """
 
     def __init__(
@@ -134,6 +137,7 @@ class CoreAnnotationVectorStore:
         embed_dim: int = 384,
         only_current_versions: bool = True,  # NEW: Default to current versions only
         check_corpus_deletion: bool = True,  # NEW: Check DocumentPath for deletion status
+        modalities: Optional[list[str]] = None,
     ):
         # ------------------------------------------------------------------ #
         # Validation – we need a corpus context unless the caller overrides
@@ -151,6 +155,7 @@ class CoreAnnotationVectorStore:
         self.embed_dim = embed_dim
         self.only_current_versions = only_current_versions
         self.check_corpus_deletion = check_corpus_deletion
+        self.modalities = modalities
 
         # Auto-detect embedder configuration
         embedder_class, detected_embedder_path = get_embedder(
@@ -371,6 +376,29 @@ class CoreAnnotationVectorStore:
                 queryset, "Annotations after visibility filtering"
             )
         )
+
+        # ------------------------------------------------------------------ #
+        # Content modality filtering
+        # ------------------------------------------------------------------ #
+        # Filter annotations by content_modalities if specified.
+        # This enables filtering for specific content types:
+        #   - ["TEXT"] - only text annotations
+        #   - ["IMAGE"] - only image annotations
+        #   - ["TEXT", "IMAGE"] - annotations with either text OR images
+        #
+        # The filter uses ArrayField contains lookup to find annotations
+        # that contain ANY of the specified modalities.
+        if self.modalities:
+            modality_q = Q()
+            for modality in self.modalities:
+                # content_modalities__contains checks if array contains the value
+                modality_q |= Q(content_modalities__contains=[modality])
+            queryset = queryset.filter(modality_q)
+            _logger.info(
+                await _safe_queryset_info(
+                    queryset, f"After modalities={self.modalities} filter"
+                )
+            )
 
         # Print the SQL query for inspection
         print("-------------------- GENERATED SQL QUERY --------------------")

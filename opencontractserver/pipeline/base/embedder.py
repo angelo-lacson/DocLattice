@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Optional
 
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.types.enums import ContentModality
 
 from .base_component import PipelineComponentBase
 
@@ -15,13 +16,16 @@ class BaseEmbedder(PipelineComponentBase, ABC):
     Abstract base class for embedders. Embedders should inherit from this class.
     Handles automatic loading of settings from Django settings.PIPELINE_SETTINGS.
 
-    Embedders can support different modalities:
-    - Text-only (default): Only supports text embedding via embed_text()
-    - Multimodal: Supports both text and image embedding
+    Embedders can support different modalities via the `supported_modalities` attribute:
+    - Text-only (default): `supported_modalities = {ContentModality.TEXT}`
+    - Multimodal: `supported_modalities = {ContentModality.TEXT, ContentModality.IMAGE}`
 
     To create a multimodal embedder:
-    1. Set `is_multimodal = True` and `supports_images = True`
+    1. Set `supported_modalities = {ContentModality.TEXT, ContentModality.IMAGE}`
     2. Implement `_embed_image_impl()` in addition to `_embed_text_impl()`
+
+    Convenience properties `is_multimodal`, `supports_text`, and `supports_images`
+    are derived from `supported_modalities`.
     """
 
     title: str = ""
@@ -34,28 +38,34 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         {}
     )  # If you want user to provide inputs, define a jsonschema here
 
-    # Multimodal support flags
-    is_multimodal: bool = False  # Whether this embedder supports multiple modalities
-    supports_text: bool = True  # Whether this embedder supports text input
-    supports_images: bool = False  # Whether this embedder supports image input
+    # Single source of truth for modality support
+    # Override in subclasses to add multimodal support
+    supported_modalities: set[ContentModality] = {ContentModality.TEXT}
+
+    # Convenience properties derived from supported_modalities
+    @property
+    def is_multimodal(self) -> bool:
+        """Whether this embedder supports multiple modalities."""
+        return len(self.supported_modalities) > 1
 
     @property
-    def supported_modalities(self) -> list[str]:
-        """
-        Returns a list of content modalities this embedder supports.
+    def supports_text(self) -> bool:
+        """Whether this embedder supports text input."""
+        return ContentModality.TEXT in self.supported_modalities
 
-        Based on the embedder's capability flags (supports_text, supports_images),
-        returns the corresponding modality strings that match the ContentModality enum.
+    @property
+    def supports_images(self) -> bool:
+        """Whether this embedder supports image input."""
+        return ContentModality.IMAGE in self.supported_modalities
+
+    def get_supported_modalities_as_strings(self) -> list[str]:
+        """
+        Returns a list of content modalities this embedder supports as strings.
 
         Returns:
             List of supported modality strings (e.g., ["TEXT"], ["TEXT", "IMAGE"]).
         """
-        modalities = []
-        if self.supports_text:
-            modalities.append("TEXT")
-        if self.supports_images:
-            modalities.append("IMAGE")
-        return modalities
+        return ContentModality.to_strings(self.supported_modalities)
 
     def supports_modalities(self, modalities: list[str]) -> bool:
         """
@@ -73,9 +83,11 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         if not modalities:
             return True  # Empty modality list is always supported
 
-        supported = set(self.supported_modalities)
-        required = set(modalities)
-        return required.issubset(supported)
+        try:
+            required = ContentModality.from_strings(modalities)
+            return required.issubset(self.supported_modalities)
+        except ValueError:
+            return False  # Unknown modality requested
 
     def __init__(self, **kwargs):
         """
@@ -120,12 +132,13 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         if not self.supports_images:
             logger.warning(
                 f"{self.__class__.__name__} does not support image embeddings. "
-                "Override _embed_image_impl() and set supports_images=True."
+                "Add ContentModality.IMAGE to supported_modalities and implement "
+                "_embed_image_impl()."
             )
             return None
         raise NotImplementedError(
-            f"{self.__class__.__name__} claims to support images but "
-            "_embed_image_impl() is not implemented."
+            f"{self.__class__.__name__} has ContentModality.IMAGE in "
+            "supported_modalities but _embed_image_impl() is not implemented."
         )
 
     def embed_text(self, text: str, **direct_kwargs) -> Optional[list[float]]:
@@ -170,7 +183,7 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         if not self.supports_images:
             logger.warning(
                 f"{self.__class__.__name__} does not support image embeddings. "
-                f"is_multimodal={self.is_multimodal}, supports_images={self.supports_images}"
+                f"supported_modalities={self.supported_modalities}"
             )
             return None
         merged_kwargs = {**self.get_component_settings(), **direct_kwargs}

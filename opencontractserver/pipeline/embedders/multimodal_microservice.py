@@ -14,6 +14,7 @@ from django.conf import settings
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.types.enums import ContentModality
 from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,8 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
         FileTypeEnum.DOCX,
     ]
 
-    # Multimodal support flags
-    is_multimodal = True
-    supports_text = True
-    supports_images = True
+    # Multimodal support - text and images in same vector space
+    supported_modalities = {ContentModality.TEXT, ContentModality.IMAGE}
 
     def __init__(self, **kwargs):
         """Initialize the MultimodalMicroserviceEmbedder."""

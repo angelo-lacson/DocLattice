@@ -160,6 +160,72 @@ The system automatically handles embedding generation and retrieval:
 - **Multi-dimensional Support**: Supports 384, 768, 1536, and 3072 dimensional embeddings
 - **Embedder Detection**: Automatic detection of corpus-specific embedder configurations
 
+### Multimodal Embedding Support
+
+When a multimodal embedder (e.g., CLIP ViT-L-14) is configured, the vector store supports cross-modal similarity search across both text and image content.
+
+**Unified Vector Space**
+
+CLIP produces 768-dimensional vectors in a shared embedding space for both text and images. This enables:
+- Text queries finding visually similar images
+- Image annotations found alongside relevant text
+- Combined text+image annotations with weighted embeddings
+
+**Content Modalities Filter**
+
+Use the `modalities` parameter to filter search results by content type:
+
+```python
+# Search only text annotations
+results = await vector_store.similarity_search(
+    query="contract terms",
+    modalities=["TEXT"]
+)
+
+# Search only image annotations
+results = await vector_store.similarity_search(
+    query="bar chart",
+    modalities=["IMAGE"]
+)
+
+# Search both (default behavior)
+results = await vector_store.similarity_search(
+    query="revenue figures",
+    modalities=["TEXT", "IMAGE"]
+)
+```
+
+**Configuration**
+
+Configure multimodal embedder at corpus level:
+
+```python
+corpus.preferred_embedder = (
+    "opencontractserver.pipeline.embedders."
+    "multimodal_microservice.MultimodalMicroserviceEmbedder"
+)
+corpus.save()
+```
+
+Configure text/image weighting for mixed-modality annotations:
+
+```python
+# settings.py or environment variables
+MULTIMODAL_EMBEDDING_WEIGHTS = {
+    "text_weight": 0.3,   # Weight for text embedding
+    "image_weight": 0.7,  # Weight for image embedding (higher by default)
+}
+```
+
+**How Mixed-Modality Embeddings Work**
+
+For annotations containing both text and images:
+1. Text content is embedded via CLIP's text encoder
+2. Each image is embedded via CLIP's image encoder
+3. Image embeddings are averaged if multiple images
+4. Text and image embeddings are combined via weighted average
+5. Final embedding is stored in the same vector space as text-only and image-only annotations
+
 ## Benefits of the Layered Architecture
 
 ### 1. Framework Flexibility

@@ -32,6 +32,7 @@ from opencontractserver.tests.fixtures.pdf_generator import (
     create_pdf_with_chart_figure,
     create_pdf_with_image,
 )
+from opencontractserver.types.enums import ContentModality
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -103,10 +104,10 @@ class TestMultimodalEmbedderService(TestCase):
         )
 
     def test_supported_modalities(self):
-        """Verify supported_modalities property returns correct values."""
+        """Verify supported_modalities returns correct ContentModality enum values."""
         modalities = self.embedder.supported_modalities
-        self.assertIn("TEXT", modalities)
-        self.assertIn("IMAGE", modalities)
+        self.assertIn(ContentModality.TEXT, modalities)
+        self.assertIn(ContentModality.IMAGE, modalities)
         self.assertEqual(len(modalities), 2)
 
     def test_supports_modalities_check(self):

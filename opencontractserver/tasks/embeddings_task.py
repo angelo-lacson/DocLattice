@@ -11,7 +11,6 @@ from opencontractserver.annotations.models import Annotation, Note
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.utils import get_default_embedder
-from opencontractserver.utils.embeddings import generate_embeddings_from_text
 
 User = get_user_model()
 
@@ -65,13 +64,23 @@ def calculate_embedding_for_annotation_text(
     self, annotation_id: Union[str, int], embedder_path: str = None
 ) -> None:
     """
-    Calculate embeddings for an annotation's text.
+    Calculate embeddings for an annotation's content (text, images, or both).
+
+    For multimodal embedders (e.g., CLIP ViT-L-14), this will:
+    - Embed text content via embed_text()
+    - Embed images via embed_image()
+    - Combine mixed-modality content via weighted average
+
+    All embeddings are stored in the same vector space, enabling cross-modal
+    similarity search.
 
     Args:
         self: (Celery task instance, passed automatically when bind=True)
         annotation_id (str | int): ID of the annotation
         embedder_path (str, optional): Optional explicit embedder path to use (highest precedence)
     """
+    from opencontractserver.utils.embeddings import get_embedder
+
     try:
         logger.info(f"Retrieving annotation with ID {annotation_id}")
         annotation = Annotation.objects.get(pk=annotation_id)
@@ -79,25 +88,50 @@ def calculate_embedding_for_annotation_text(
         logger.warning(f"Annotation {annotation_id} not found.")
         return
 
-    corpus_id = annotation.corpus_id  # if your annotation references a corpus
+    corpus_id = annotation.corpus_id
     logger.info(f"Processing annotation {annotation_id} with corpus_id {corpus_id}")
 
-    text = annotation.raw_text or ""
-    if not text.strip():
-        logger.info(f"Annotation {annotation_id} has no raw_text to embed.")
+    # Get the embedder for this corpus/path
+    embedder_class, returned_path = get_embedder(
+        corpus_id=corpus_id, embedder_path=embedder_path
+    )
+
+    if not embedder_class:
+        logger.error(f"No embedder found for annotation {annotation_id}")
         return
 
-    logger.info(
-        f"Generating embeddings for annotation {annotation_id} with text length {len(text)}"
-    )
-    # If we want to override the embedder path, do so. If not, generate_embeddings_from_text
-    # will figure out from the corpus or fallback to default microservice or embedder.
-    returned_path, vector = generate_embeddings_from_text(
-        text, corpus_id=corpus_id, embedder_path=embedder_path
-    )
-    logger.info(
-        f"Generated embeddings for annotation {annotation_id} using {returned_path}"
-    )
+    embedder = embedder_class()
+    final_path = embedder_path if embedder_path else returned_path
+
+    # Check if embedder supports multimodal and annotation has image content
+    modalities = annotation.content_modalities or ["TEXT"]
+    has_images = "IMAGE" in modalities
+    # Use the embedder's properties (derived from supported_modalities set)
+    can_embed_images = embedder.is_multimodal and embedder.supports_images
+
+    if can_embed_images and has_images:
+        # Use multimodal embedding for annotations with images
+        from opencontractserver.utils.multimodal_embeddings import (
+            generate_multimodal_embedding,
+        )
+
+        logger.info(
+            f"Using multimodal embedding for annotation {annotation_id} "
+            f"(modalities={modalities})"
+        )
+        vector = generate_multimodal_embedding(annotation, embedder)
+    else:
+        # Standard text-only embedding
+        text = annotation.raw_text or ""
+        if not text.strip():
+            logger.info(f"Annotation {annotation_id} has no raw_text to embed.")
+            return
+
+        logger.info(
+            f"Generating text embedding for annotation {annotation_id} "
+            f"(text length={len(text)})"
+        )
+        vector = embedder.embed_text(text)
 
     if vector is None:
         logger.error(
@@ -105,11 +139,12 @@ def calculate_embedding_for_annotation_text(
         )
         return
 
-    # If user explicitly requested an embedder path override, replace
-    # the path from the function's defaults:
-    final_path = embedder_path if embedder_path else returned_path
+    logger.info(
+        f"Generated embeddings for annotation {annotation_id} using {final_path} "
+        f"(dimension={len(vector)}, modalities={modalities})"
+    )
 
-    # Now store the embedding
+    # Store the embedding
     embedding = annotation.add_embedding(final_path or "unknown-embedder", vector)
 
     # Set the reverse FK so annotation.embeddings points to the embedding
@@ -118,7 +153,8 @@ def calculate_embedding_for_annotation_text(
         annotation.save(update_fields=["embeddings"])
 
     logger.info(
-        f"Embedding for Annotation {annotation_id} stored using path: {final_path}, dimension={len(vector)}."
+        f"Embedding for Annotation {annotation_id} stored using path: {final_path}, "
+        f"dimension={len(vector)}."
     )
 
 
