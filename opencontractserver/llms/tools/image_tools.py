@@ -137,6 +137,7 @@ def get_document_image(
     document_id: int,
     page_index: int,
     token_index: int,
+    pawls_data: Optional[list] = None,
 ) -> Optional[ImageData]:
     """
     Get image data for a specific image token in a document.
@@ -150,13 +151,16 @@ def get_document_image(
         document_id: The document ID.
         page_index: 0-based page index.
         token_index: 0-based token index within the page's tokens array.
+        pawls_data: Optional pre-loaded PAWLs data to avoid re-loading.
 
     Returns:
         ImageData with base64 content and data URL, or None if not found or not an image token.
     """
     try:
-        document = Document.objects.get(pk=document_id)
-        pawls_data = load_pawls_data(document)
+        # Load PAWLs data if not provided
+        if pawls_data is None:
+            document = Document.objects.get(pk=document_id)
+            pawls_data = load_pawls_data(document)
 
         if not pawls_data:
             return None
@@ -235,6 +239,11 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
             logger.warning(f"Annotation {annotation_id} has no document")
             return []
 
+        # Load PAWLs data once for all token lookups (avoids N+1 queries)
+        pawls_data = load_pawls_data(document)
+        if not pawls_data:
+            return []
+
         # Get tokensJsons from annotation's json field
         annotation_json = annotation.json or {}
 
@@ -252,8 +261,10 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
                 page_idx = ref.get("pageIndex")
                 token_idx = ref.get("tokenIndex")
                 if page_idx is not None and token_idx is not None:
-                    # get_document_image will verify the token is an image token
-                    img_data = get_document_image(document.pk, page_idx, token_idx)
+                    # Pass pre-loaded pawls_data to avoid re-loading for each token
+                    img_data = get_document_image(
+                        document.pk, page_idx, token_idx, pawls_data=pawls_data
+                    )
                     if img_data:
                         images.append(img_data)
 

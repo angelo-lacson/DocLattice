@@ -120,7 +120,22 @@ def calculate_embedding_for_annotation_text(
             f"Using multimodal embedding for annotation {annotation_id} "
             f"(modalities={modalities})"
         )
-        vector = generate_multimodal_embedding(annotation, embedder)
+        try:
+            vector = generate_multimodal_embedding(annotation, embedder)
+        except Exception as e:
+            # Graceful degradation: fall back to text-only if multimodal fails
+            logger.warning(
+                f"Multimodal embedding failed for annotation {annotation_id}: {e}. "
+                f"Falling back to text-only embedding."
+            )
+            text = annotation.raw_text or ""
+            if text.strip():
+                vector = embedder.embed_text(text)
+            else:
+                logger.info(
+                    f"Annotation {annotation_id} has no text for fallback embedding."
+                )
+                return
     else:
         # Standard text-only embedding
         text = annotation.raw_text or ""
