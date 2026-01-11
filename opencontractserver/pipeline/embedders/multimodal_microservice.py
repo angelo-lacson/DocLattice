@@ -5,6 +5,7 @@ This embedder supports both text and image embeddings using the CLIP model,
 which produces 768-dimensional vectors suitable for cross-modal similarity search.
 """
 
+import base64
 import logging
 from typing import Optional
 
@@ -182,6 +183,13 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             f"MultimodalMicroserviceEmbedder generating image embedding. "
             f"Format: {image_format}, Data length: {len(image_base64)}"
         )
+
+        # Validate base64 format before sending to microservice
+        try:
+            base64.b64decode(image_base64, validate=True)
+        except Exception as e:
+            logger.error(f"Invalid base64 image data: {e}")
+            return None
 
         try:
             service_url, _, headers = self._get_service_config(all_kwargs)

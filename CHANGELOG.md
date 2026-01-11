@@ -5,7 +5,41 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-08
+## [Unreleased] - 2026-01-11
+
+### Added
+
+#### Multimodal Embedding Support
+- **Image token extraction from PDFs**: Extract images from PDFs via Docling parser and store as unified tokens in PAWLs format
+  - Storage path convention: `document_images/{doc_id}/page_{page}_img_{idx}.{format}`
+  - Image tokens include position, dimensions, format, and storage path
+  - Files: `opencontractserver/utils/pdf_token_extraction.py`
+- **CLIP ViT-L-14 multimodal embedder**: 768-dimensional vectors in shared text/image embedding space
+  - Enables cross-modal similarity search (text queries find relevant images)
+  - Files: `opencontractserver/pipeline/embedders/multimodal_microservice.py`
+- **ContentModality enum**: Type-safe modality tracking for embedders and annotations
+  - Single source of truth: `supported_modalities: set[ContentModality]`
+  - Convenience properties: `is_multimodal`, `supports_text`, `supports_images`
+  - Files: `opencontractserver/types/enums.py`, `opencontractserver/pipeline/base/embedder.py`
+- **Multimodal embedding utilities**: Weighted averaging for mixed text+image content
+  - Default weights: 30% text, 70% image (configurable via `MULTIMODAL_EMBEDDING_WEIGHTS`)
+  - Files: `opencontractserver/utils/multimodal_embeddings.py`
+- **content_modalities field on Annotation model**: ArrayField tracking `["TEXT"]`, `["IMAGE"]`, or `["TEXT", "IMAGE"]`
+  - Computed from PAWLs token analysis during annotation creation
+  - Files: `opencontractserver/annotations/models.py`, `opencontractserver/annotations/utils.py`
+- **LLM image tools for agents**: `list_document_images`, `get_document_image`, `get_annotation_images`
+  - Permission-checked variants prevent IDOR vulnerabilities
+  - Files: `opencontractserver/llms/tools/image_tools.py`, `opencontractserver/llms/tools/tool_registry.py`
+- **Modality filtering in vector search**: Filter annotations by content type in similarity search
+  - Files: `opencontractserver/llms/vector_stores/core_vector_stores.py`
+- **Comprehensive documentation**: Architecture docs for multimodal embeddings and PAWLs format
+  - Files: `docs/architecture/multimodal-embeddings.md`, `docs/architecture/pawls-format.md`
+
+### Changed
+- Extended PAWLs token format to support unified image tokens (`is_image=True`)
+- Updated `BaseEmbedder` to use `ContentModality` enum instead of boolean flags
+- Updated `PipelineComponentDefinition` in registry to store `supported_modalities`
+- Enhanced embedding task to detect multimodal content and generate appropriate embeddings
 
 ### Security
 

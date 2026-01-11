@@ -5,10 +5,9 @@ Provides tools to access document images for multimodal analysis, with
 permission-checked variants for secure access.
 """
 
-import json
 import logging
 from functools import partial
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +17,7 @@ from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.pdf_token_extraction import (
     get_image_as_base64,
     get_image_data_url,
+    load_pawls_data,
 )
 from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
@@ -65,36 +65,6 @@ class ImageData(BaseModel):
     )
 
 
-def _load_pawls_data(document: Document) -> Optional[list[dict[str, Any]]]:
-    """
-    Load PAWLs data from a document.
-
-    Args:
-        document: The Document instance.
-
-    Returns:
-        Parsed PAWLs data as list of page dicts, or None if unavailable.
-    """
-    pawls_content = document.pawls_parse_file
-    if not pawls_content:
-        return None
-
-    try:
-        if hasattr(pawls_content, "read"):
-            pawls_content.open("r")
-            try:
-                pawls_data = json.load(pawls_content)
-            finally:
-                pawls_content.close()
-        else:
-            pawls_data = pawls_content
-
-        return pawls_data
-    except Exception as e:
-        logger.error(f"Failed to parse PAWLs data for document {document.pk}: {e}")
-        return None
-
-
 def list_document_images(
     document_id: int,
     page_index: Optional[int] = None,
@@ -116,7 +86,7 @@ def list_document_images(
     """
     try:
         document = Document.objects.get(pk=document_id)
-        pawls_data = _load_pawls_data(document)
+        pawls_data = load_pawls_data(document)
 
         if not pawls_data:
             return []
@@ -186,7 +156,7 @@ def get_document_image(
     """
     try:
         document = Document.objects.get(pk=document_id)
-        pawls_data = _load_pawls_data(document)
+        pawls_data = load_pawls_data(document)
 
         if not pawls_data:
             return None

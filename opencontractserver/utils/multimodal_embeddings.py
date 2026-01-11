@@ -10,7 +10,6 @@ combined via weighted average with configurable weights (default: 30% text,
 70% image - since image-containing annotations are often image-heavy).
 """
 
-import json
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -19,10 +18,12 @@ from django.conf import settings
 
 if TYPE_CHECKING:
     from opencontractserver.annotations.models import Annotation
-    from opencontractserver.documents.models import Document
     from opencontractserver.pipeline.base.embedder import BaseEmbedder
 
-from opencontractserver.utils.pdf_token_extraction import get_image_as_base64
+from opencontractserver.utils.pdf_token_extraction import (
+    get_image_as_base64,
+    load_pawls_data,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,32 +87,6 @@ def weighted_average_embeddings(
     return normalize_vector(combined.tolist())
 
 
-def _load_pawls_data(document: "Document") -> Optional[list[dict]]:
-    """
-    Load PAWLs data from a document.
-
-    Args:
-        document: The Document instance.
-
-    Returns:
-        Parsed PAWLs data as list of page dicts, or None if unavailable.
-    """
-    pawls_file = document.pawls_parse_file
-    if not pawls_file:
-        return None
-
-    try:
-        pawls_file.open("r")
-        try:
-            pawls_data = json.load(pawls_file)
-        finally:
-            pawls_file.close()
-        return pawls_data
-    except Exception as e:
-        logger.error(f"Failed to load PAWLs data for document {document.pk}: {e}")
-        return None
-
-
 def get_annotation_image_tokens(
     annotation: "Annotation",
     pawls_data: Optional[list[dict]] = None,
@@ -130,50 +105,56 @@ def get_annotation_image_tokens(
     Returns:
         List of image token dicts from the PAWLs data.
     """
-    document = annotation.document
-    if not document:
-        logger.warning(f"Annotation {annotation.pk} has no document")
-        return []
+    try:
+        document = annotation.document
+        if not document:
+            logger.warning(f"Annotation {annotation.pk} has no document")
+            return []
 
-    # Load PAWLs data if not provided
-    if pawls_data is None:
-        pawls_data = _load_pawls_data(document)
+        # Load PAWLs data if not provided
+        if pawls_data is None:
+            pawls_data = load_pawls_data(document)
 
-    if not pawls_data:
-        return []
+        if not pawls_data:
+            return []
 
-    # Get token references from annotation json
-    annotation_json = annotation.json or {}
-    image_tokens = []
+        # Get token references from annotation json
+        annotation_json = annotation.json or {}
+        image_tokens = []
 
-    for page_key, page_data in annotation_json.items():
-        if not isinstance(page_data, dict):
-            continue
-
-        token_refs = page_data.get("tokensJsons", [])
-        for ref in token_refs:
-            if not isinstance(ref, dict):
+        for page_key, page_data in annotation_json.items():
+            if not isinstance(page_data, dict):
                 continue
 
-            page_idx = ref.get("pageIndex")
-            token_idx = ref.get("tokenIndex")
-
-            if page_idx is None or token_idx is None:
-                continue
-
-            # Get actual token from PAWLs data
-            if page_idx < len(pawls_data):
-                page = pawls_data[page_idx]
-                if not isinstance(page, dict):
+            token_refs = page_data.get("tokensJsons", [])
+            for ref in token_refs:
+                if not isinstance(ref, dict):
                     continue
 
-                tokens = page.get("tokens", [])
-                if token_idx < len(tokens):
-                    token = tokens[token_idx]
-                    if isinstance(token, dict) and token.get("is_image"):
-                        image_tokens.append(token)
+                page_idx = ref.get("pageIndex")
+                token_idx = ref.get("tokenIndex")
 
-    return image_tokens
+                if page_idx is None or token_idx is None:
+                    continue
+
+                # Get actual token from PAWLs data
+                if page_idx < len(pawls_data):
+                    page = pawls_data[page_idx]
+                    if not isinstance(page, dict):
+                        continue
+
+                    tokens = page.get("tokens", [])
+                    if token_idx < len(tokens):
+                        token = tokens[token_idx]
+                        if isinstance(token, dict) and token.get("is_image"):
+                            image_tokens.append(token)
+
+        return image_tokens
+    except Exception as e:
+        logger.error(
+            f"Error extracting image tokens from annotation {annotation.pk}: {e}"
+        )
+        return []
 
 
 def embed_images_average(

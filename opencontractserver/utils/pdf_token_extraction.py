@@ -13,14 +13,16 @@ Image extraction capabilities added for LLM image annotation support.
 import base64
 import hashlib
 import io
+import json
 import logging
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
 from shapely.geometry import box
 from shapely.strtree import STRtree
 
 if TYPE_CHECKING:
+    from opencontractserver.documents.models import Document
     from PIL import Image as PILImage
 
 from opencontractserver.types.dicts import (
@@ -35,6 +37,35 @@ logger = logging.getLogger(__name__)
 # Image size limits to prevent storage abuse and memory issues
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB per individual image
 MAX_TOTAL_IMAGES_SIZE_BYTES = 100 * 1024 * 1024  # 100MB total per document
+
+
+def load_pawls_data(document: "Document") -> Optional[list[dict[str, Any]]]:
+    """
+    Load PAWLs data from a document.
+
+    This is a shared utility for loading PAWLs JSON from a document's
+    pawls_parse_file field.
+
+    Args:
+        document: The Document instance.
+
+    Returns:
+        Parsed PAWLs data as list of page dicts, or None if unavailable.
+    """
+    pawls_file = document.pawls_parse_file
+    if not pawls_file:
+        return None
+
+    try:
+        pawls_file.open("r")
+        try:
+            pawls_data = json.load(pawls_file)
+        finally:
+            pawls_file.close()
+        return pawls_data
+    except Exception as e:
+        logger.error(f"Failed to load PAWLs data for document {document.pk}: {e}")
+        return None
 
 
 def has_extractable_text(pdf_bytes: bytes, min_chars: int = 10) -> bool:
