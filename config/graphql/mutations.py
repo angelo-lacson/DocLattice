@@ -1698,16 +1698,6 @@ class UploadDocument(graphene.Mutation):
                         logger.info(
                             f"[UPLOAD] Created new document {document.id} in corpus {corpus.id}"
                         )
-                    elif status == "created_from_existing":
-                        logger.info(
-                            f"[UPLOAD] Created corpus-isolated document {document.id} "
-                            f"with provenance from {document.source_document_id} in corpus {corpus.id}"
-                        )
-                    elif status == "linked":
-                        logger.info(
-                            f"[UPLOAD] Linked to existing document {document.id} "
-                            f"(same content already in corpus) in corpus {corpus.id}"
-                        )
                     elif status == "updated":
                         logger.info(
                             f"[UPLOAD] Updated document at path {doc_path} in corpus {corpus.id}"
