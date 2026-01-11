@@ -583,3 +583,251 @@ class ImageToolsStoragePathTestCase(TestCase):
 
         # Cleanup
         default_storage.delete(storage_path)
+
+
+class AsyncImageToolsTestCase(TestCase):
+    """Tests for async versions of image tools."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="async_imagetools_test_user", password="testpass123"
+        )
+        cls.other_user = User.objects.create_user(
+            username="async_imagetools_other_user", password="otherpass123"
+        )
+
+    def _create_sample_image_base64(self, width: int = 100, height: int = 100) -> str:
+        """Create a sample base64-encoded image for testing."""
+        from io import BytesIO
+
+        from PIL import Image
+
+        img = Image.new("RGB", (width, height), color="green")
+        buffer = BytesIO()
+        img.save(buffer, format="JPEG", quality=85)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    def _create_document_with_images(
+        self, num_pages: int = 1, images_per_page: int = 1
+    ):
+        """Create a document with PAWLs data containing images."""
+        doc = Document.objects.create(
+            title="Async Test Document",
+            description="Test document for async tests",
+            creator=self.user,
+            file_type="application/pdf",
+            page_count=num_pages,
+        )
+
+        pages = []
+        for page_idx in range(num_pages):
+            page_tokens = [
+                {"x": 100, "y": 100, "width": 50, "height": 12, "text": "Test"}
+            ]
+
+            for img_idx in range(images_per_page):
+                base64_data = self._create_sample_image_base64()
+                page_tokens.append(
+                    {
+                        "x": 50 + img_idx * 100,
+                        "y": 50 + img_idx * 100,
+                        "width": 80,
+                        "height": 60,
+                        "text": "",
+                        "is_image": True,
+                        "format": "jpeg",
+                        "original_width": 100,
+                        "original_height": 100,
+                        "content_hash": f"async_hash_{page_idx}_{img_idx}",
+                        "image_type": "embedded",
+                        "base64_data": base64_data,
+                    }
+                )
+
+            pages.append(
+                {
+                    "page": {"width": 612, "height": 792, "index": page_idx},
+                    "tokens": page_tokens,
+                }
+            )
+
+        pawls_json = json.dumps(pages)
+        doc.pawls_parse_file.save("async_pawls.json", ContentFile(pawls_json))
+        doc.save()
+
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        return doc
+
+    @pytest.mark.asyncio
+    async def test_alist_document_images(self):
+        """Test async list_document_images."""
+        from opencontractserver.llms.tools.image_tools import alist_document_images
+
+        doc = self._create_document_with_images(num_pages=2, images_per_page=2)
+
+        images = await alist_document_images(doc.id)
+
+        assert len(images) == 4
+        assert all(isinstance(img, ImageReference) for img in images)
+
+    @pytest.mark.asyncio
+    async def test_alist_document_images_with_page_filter(self):
+        """Test async list_document_images with page filter."""
+        from opencontractserver.llms.tools.image_tools import alist_document_images
+
+        doc = self._create_document_with_images(num_pages=2, images_per_page=2)
+
+        images = await alist_document_images(doc.id, page_index=0)
+
+        assert len(images) == 2
+        assert all(img.page_index == 0 for img in images)
+
+    @pytest.mark.asyncio
+    async def test_aget_document_image(self):
+        """Test async get_document_image."""
+        from opencontractserver.llms.tools.image_tools import aget_document_image
+
+        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
+
+        result = await aget_document_image(doc.id, page_index=0, token_index=1)
+
+        assert result is not None
+        assert isinstance(result, ImageData)
+        assert result.page_index == 0
+        assert result.token_index == 1
+
+    @pytest.mark.asyncio
+    async def test_aget_document_image_invalid(self):
+        """Test async get_document_image with invalid indices."""
+        from opencontractserver.llms.tools.image_tools import aget_document_image
+
+        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
+
+        result = await aget_document_image(doc.id, page_index=99, token_index=0)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_aget_annotation_images(self):
+        """Test async get_annotation_images."""
+        from opencontractserver.llms.tools.image_tools import aget_annotation_images
+
+        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
+
+        corpus = Corpus.objects.create(title="Async Test Corpus", creator=self.user)
+        label_set = LabelSet.objects.create(title="Async Test LS", creator=self.user)
+        corpus.label_set = label_set
+        corpus.save()
+
+        label = AnnotationLabel.objects.create(
+            text="Figure",
+            label_type="TOKEN_LABEL",
+            creator=self.user,
+        )
+        label_set.annotation_labels.add(label)
+
+        annotation = Annotation.objects.create(
+            document=doc,
+            corpus=corpus,
+            annotation_label=label,
+            raw_text="Figure",
+            page=0,
+            creator=self.user,
+            json={
+                "0": {
+                    "bounds": {"left": 50, "top": 50, "right": 130, "bottom": 110},
+                    "tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}],
+                }
+            },
+        )
+
+        images = await aget_annotation_images(annotation.id)
+
+        assert len(images) == 1
+        assert isinstance(images[0], ImageData)
+
+    @pytest.mark.asyncio
+    async def test_alist_document_images_with_permission(self):
+        """Test async list_document_images_with_permission."""
+        from opencontractserver.llms.tools.image_tools import (
+            alist_document_images_with_permission,
+        )
+
+        doc = self._create_document_with_images(num_pages=1, images_per_page=2)
+
+        # Permitted user
+        images = await alist_document_images_with_permission(self.user, doc.id)
+        assert len(images) == 2
+
+        # Non-permitted user
+        images = await alist_document_images_with_permission(self.other_user, doc.id)
+        assert images == []
+
+    @pytest.mark.asyncio
+    async def test_aget_document_image_with_permission(self):
+        """Test async get_document_image_with_permission."""
+        from opencontractserver.llms.tools.image_tools import (
+            aget_document_image_with_permission,
+        )
+
+        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
+
+        # Permitted user
+        result = await aget_document_image_with_permission(
+            self.user, doc.id, page_index=0, token_index=1
+        )
+        assert result is not None
+        assert isinstance(result, ImageData)
+
+        # Non-permitted user
+        result = await aget_document_image_with_permission(
+            self.other_user, doc.id, page_index=0, token_index=1
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_aget_annotation_images_with_permission(self):
+        """Test async get_annotation_images_with_permission."""
+        from opencontractserver.llms.tools.image_tools import (
+            aget_annotation_images_with_permission,
+        )
+
+        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
+
+        corpus = Corpus.objects.create(title="Async Perm Corpus", creator=self.user)
+        label_set = LabelSet.objects.create(title="Async Perm LS", creator=self.user)
+        corpus.label_set = label_set
+        corpus.save()
+
+        label = AnnotationLabel.objects.create(
+            text="Figure",
+            label_type="TOKEN_LABEL",
+            creator=self.user,
+        )
+        label_set.annotation_labels.add(label)
+
+        annotation = Annotation.objects.create(
+            document=doc,
+            corpus=corpus,
+            annotation_label=label,
+            raw_text="Figure",
+            page=0,
+            creator=self.user,
+            json={
+                "0": {
+                    "bounds": {"left": 50, "top": 50, "right": 130, "bottom": 110},
+                    "tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}],
+                }
+            },
+        )
+
+        # Permitted user
+        images = await aget_annotation_images_with_permission(self.user, annotation.id)
+        assert len(images) == 1
+
+        # Non-permitted user
+        images = await aget_annotation_images_with_permission(
+            self.other_user, annotation.id
+        )
+        assert images == []

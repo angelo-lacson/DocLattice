@@ -657,5 +657,218 @@ class TestEmbeddingTask(unittest.TestCase):
         mock_annot.add_embedding.assert_called_with(default_path, test_vector)
 
 
+class TestMultimodalEmbeddingTask(unittest.TestCase):
+    """Tests for multimodal embedding paths in embedding tasks."""
+
+    @patch(
+        "opencontractserver.utils.multimodal_embeddings.generate_multimodal_embedding"
+    )
+    def test_annotation_with_images_uses_multimodal_embedding(
+        self, mock_multimodal_embed
+    ):
+        """Test that annotations with IMAGE modality use multimodal embedding."""
+        from opencontractserver.tasks.embeddings_task import (
+            _create_embedding_for_annotation,
+        )
+
+        # Create mock annotation with IMAGE modality
+        mock_annot = MagicMock()
+        mock_annot.id = 1
+        mock_annot.raw_text = "Figure 1 caption"
+        mock_annot.content_modalities = ["TEXT", "IMAGE"]
+
+        # Create mock multimodal embedder
+        mock_embedder = MagicMock()
+        mock_embedder.is_multimodal = True
+        mock_embedder.supports_images = True
+
+        test_vector = [0.5] * 768
+        mock_multimodal_embed.return_value = test_vector
+
+        result = _create_embedding_for_annotation(
+            mock_annot, mock_embedder, "multimodal.embedder.path"
+        )
+
+        # Should have called multimodal embedding
+        mock_multimodal_embed.assert_called_once_with(mock_annot, mock_embedder)
+
+        # Should have stored embedding
+        mock_annot.add_embedding.assert_called_once_with(
+            "multimodal.embedder.path", test_vector
+        )
+
+        self.assertTrue(result)
+
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_annotation_with_images_non_multimodal_embedder_falls_back_to_text(
+        self, mock_annotation_model
+    ):
+        """Test that text-only embedder falls back to text even for IMAGE annotations."""
+        from opencontractserver.tasks.embeddings_task import (
+            _create_embedding_for_annotation,
+        )
+
+        # Create mock annotation with IMAGE modality
+        mock_annot = MagicMock()
+        mock_annot.id = 1
+        mock_annot.raw_text = "Figure 1 caption"
+        mock_annot.content_modalities = ["TEXT", "IMAGE"]
+
+        # Create mock text-only embedder
+        mock_embedder = MagicMock()
+        mock_embedder.is_multimodal = False
+        mock_embedder.supports_images = False
+
+        test_vector = [0.1] * 768
+        mock_embedder.embed_text.return_value = test_vector
+
+        result = _create_embedding_for_annotation(
+            mock_annot, mock_embedder, "text.only.embedder"
+        )
+
+        # Should have called text embedding (fallback)
+        mock_embedder.embed_text.assert_called_once_with("Figure 1 caption")
+
+        # Should have stored embedding
+        mock_annot.add_embedding.assert_called_once_with(
+            "text.only.embedder", test_vector
+        )
+
+        self.assertTrue(result)
+
+    @patch(
+        "opencontractserver.utils.multimodal_embeddings.generate_multimodal_embedding"
+    )
+    def test_annotation_multimodal_failure_falls_back_to_text(
+        self, mock_multimodal_embed
+    ):
+        """Test graceful degradation: multimodal failure falls back to text."""
+        from opencontractserver.tasks.embeddings_task import (
+            _create_embedding_for_annotation,
+        )
+
+        # Create mock annotation with IMAGE modality
+        mock_annot = MagicMock()
+        mock_annot.id = 1
+        mock_annot.raw_text = "Figure with error"
+        mock_annot.content_modalities = ["TEXT", "IMAGE"]
+
+        # Create mock multimodal embedder
+        mock_embedder = MagicMock()
+        mock_embedder.is_multimodal = True
+        mock_embedder.supports_images = True
+
+        test_vector = [0.2] * 768
+        mock_embedder.embed_text.return_value = test_vector
+
+        # Make multimodal embedding fail
+        mock_multimodal_embed.side_effect = Exception("Multimodal failed")
+
+        result = _create_embedding_for_annotation(
+            mock_annot, mock_embedder, "multimodal.embedder.path"
+        )
+
+        # Should have fallen back to text embedding
+        mock_embedder.embed_text.assert_called_once_with("Figure with error")
+
+        # Should have stored embedding
+        mock_annot.add_embedding.assert_called_once_with(
+            "multimodal.embedder.path", test_vector
+        )
+
+        self.assertTrue(result)
+
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_annotation_text_only_modality_uses_text_embedding(
+        self, mock_annotation_model
+    ):
+        """Test that text-only annotations use text embedding even with multimodal embedder."""
+        from opencontractserver.tasks.embeddings_task import (
+            _create_embedding_for_annotation,
+        )
+
+        # Create mock annotation with TEXT only modality
+        mock_annot = MagicMock()
+        mock_annot.id = 1
+        mock_annot.raw_text = "Just plain text"
+        mock_annot.content_modalities = ["TEXT"]
+
+        # Create mock multimodal embedder
+        mock_embedder = MagicMock()
+        mock_embedder.is_multimodal = True
+        mock_embedder.supports_images = True
+
+        test_vector = [0.3] * 768
+        mock_embedder.embed_text.return_value = test_vector
+
+        result = _create_embedding_for_annotation(
+            mock_annot, mock_embedder, "multimodal.embedder.path"
+        )
+
+        # Should have called text embedding (no images to embed)
+        mock_embedder.embed_text.assert_called_once_with("Just plain text")
+
+        self.assertTrue(result)
+
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_annotation_no_modalities_defaults_to_text(self, mock_annotation_model):
+        """Test that annotations with no content_modalities default to TEXT."""
+        from opencontractserver.tasks.embeddings_task import (
+            _create_embedding_for_annotation,
+        )
+
+        # Create mock annotation with no modalities
+        mock_annot = MagicMock()
+        mock_annot.id = 1
+        mock_annot.raw_text = "No modalities set"
+        mock_annot.content_modalities = None
+
+        mock_embedder = MagicMock()
+        mock_embedder.is_multimodal = True
+        mock_embedder.supports_images = True
+
+        test_vector = [0.4] * 768
+        mock_embedder.embed_text.return_value = test_vector
+
+        result = _create_embedding_for_annotation(
+            mock_annot, mock_embedder, "multimodal.embedder.path"
+        )
+
+        # Should default to text embedding
+        mock_embedder.embed_text.assert_called_once_with("No modalities set")
+
+        self.assertTrue(result)
+
+    def test_create_text_embedding_empty_text(self):
+        """Test that empty text returns False and doesn't embed."""
+        from opencontractserver.tasks.embeddings_task import _create_text_embedding
+
+        mock_obj = MagicMock()
+        mock_embedder = MagicMock()
+
+        result = _create_text_embedding(
+            mock_obj, mock_embedder, "embedder.path", "", "test", 1
+        )
+
+        self.assertFalse(result)
+        mock_embedder.embed_text.assert_not_called()
+        mock_obj.add_embedding.assert_not_called()
+
+    def test_create_text_embedding_embed_returns_none(self):
+        """Test that embedding failure returns False."""
+        from opencontractserver.tasks.embeddings_task import _create_text_embedding
+
+        mock_obj = MagicMock()
+        mock_embedder = MagicMock()
+        mock_embedder.embed_text.return_value = None
+
+        result = _create_text_embedding(
+            mock_obj, mock_embedder, "embedder.path", "test text", "test", 1
+        )
+
+        self.assertFalse(result)
+        mock_obj.add_embedding.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

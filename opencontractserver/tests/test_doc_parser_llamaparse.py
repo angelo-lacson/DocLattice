@@ -1005,3 +1005,473 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         self.assertIn("Section Header", labels)
         self.assertNotIn("Paragraph", labels)
         self.assertNotIn("Heading", labels)
+
+
+class TestLlamaParseParserImageExtraction(TestCase):
+    """Tests for image extraction and multimodal annotation features."""
+
+    def setUp(self):
+        """Set up test environment."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="imagetestuser", password="testpass123"
+            )
+
+        self.doc = Document.objects.create(
+            title="Image Test Document",
+            description="Test Description",
+            file_type="pdf",
+            creator=self.user,
+        )
+
+        pdf_content = b"%PDF-1.7\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n2 0 obj\n<</Type/Pages/Count 1/Kids[3 0 R]>>\nendobj\n3 0 obj\n<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>\nendobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer\n<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF\n"  # noqa: E501
+        self.doc.pdf_file.save("test_image.pdf", ContentFile(pdf_content))
+
+        self.parser = LlamaParseParser()
+
+    def test_find_images_in_bounds_overlapping(self):
+        """Test that _find_images_in_bounds finds overlapping images."""
+        bounds = {"left": 100, "top": 100, "right": 300, "bottom": 300}
+
+        # Image that overlaps with the bounds
+        page_images = [
+            {"x": 150, "y": 150, "width": 100, "height": 100},  # Overlaps
+            {"x": 400, "y": 400, "width": 50, "height": 50},  # No overlap
+        ]
+
+        result = self.parser._find_images_in_bounds(
+            bounds=bounds,
+            page_idx=0,
+            page_images=page_images,
+            token_offset=10,  # Images start at token index 10
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["pageIndex"], 0)
+        self.assertEqual(result[0]["tokenIndex"], 10)  # First image at offset 10
+
+    def test_find_images_in_bounds_no_overlap(self):
+        """Test that _find_images_in_bounds returns empty when no overlap."""
+        bounds = {"left": 100, "top": 100, "right": 200, "bottom": 200}
+
+        page_images = [
+            {"x": 300, "y": 300, "width": 50, "height": 50},  # No overlap
+            {"x": 400, "y": 400, "width": 50, "height": 50},  # No overlap
+        ]
+
+        result = self.parser._find_images_in_bounds(
+            bounds=bounds,
+            page_idx=0,
+            page_images=page_images,
+            token_offset=5,
+        )
+
+        self.assertEqual(len(result), 0)
+
+    def test_find_images_in_bounds_empty_images(self):
+        """Test that _find_images_in_bounds handles empty image list."""
+        bounds = {"left": 100, "top": 100, "right": 200, "bottom": 200}
+
+        result = self.parser._find_images_in_bounds(
+            bounds=bounds,
+            page_idx=0,
+            page_images=[],
+            token_offset=0,
+        )
+
+        self.assertEqual(result, [])
+
+    def test_find_images_in_bounds_multiple_overlaps(self):
+        """Test that _find_images_in_bounds finds all overlapping images."""
+        bounds = {"left": 50, "top": 50, "right": 400, "bottom": 400}
+
+        page_images = [
+            {"x": 100, "y": 100, "width": 100, "height": 100},  # Overlaps
+            {"x": 250, "y": 250, "width": 100, "height": 100},  # Overlaps
+            {"x": 500, "y": 500, "width": 50, "height": 50},  # No overlap
+        ]
+
+        result = self.parser._find_images_in_bounds(
+            bounds=bounds,
+            page_idx=1,
+            page_images=page_images,
+            token_offset=20,
+        )
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["pageIndex"], 1)
+        self.assertEqual(result[0]["tokenIndex"], 20)
+        self.assertEqual(result[1]["tokenIndex"], 21)
+
+    def test_create_annotation_with_image_tokens(self):
+        """Test annotation creation with image token references."""
+        bounds = {"left": 100, "top": 100, "right": 300, "bottom": 300}
+        token_refs = [
+            {"pageIndex": 0, "tokenIndex": 5},  # Image token
+        ]
+
+        annotation = self.parser._create_annotation(
+            annotation_id="figure-1",
+            label="Figure",
+            raw_text="[figure]",
+            page_idx=0,
+            bounds=bounds,
+            token_refs=token_refs,
+            has_text_tokens=False,
+            has_image_tokens=True,
+        )
+
+        # Should have IMAGE in content_modalities
+        self.assertIn("content_modalities", annotation)
+        self.assertIn("IMAGE", annotation["content_modalities"])
+        self.assertNotIn("TEXT", annotation["content_modalities"])
+
+    def test_create_annotation_with_text_and_image_tokens(self):
+        """Test annotation creation with both text and image tokens."""
+        bounds = {"left": 100, "top": 100, "right": 300, "bottom": 300}
+        token_refs = [
+            {"pageIndex": 0, "tokenIndex": 0},  # Text token
+            {"pageIndex": 0, "tokenIndex": 1},  # Text token
+            {"pageIndex": 0, "tokenIndex": 10},  # Image token
+        ]
+
+        annotation = self.parser._create_annotation(
+            annotation_id="mixed-1",
+            label="Figure",
+            raw_text="Figure with caption",
+            page_idx=0,
+            bounds=bounds,
+            token_refs=token_refs,
+            has_text_tokens=True,
+            has_image_tokens=True,
+        )
+
+        # Should have both TEXT and IMAGE in content_modalities
+        self.assertIn("content_modalities", annotation)
+        self.assertIn("TEXT", annotation["content_modalities"])
+        self.assertIn("IMAGE", annotation["content_modalities"])
+
+    def test_create_annotation_without_modalities(self):
+        """Test annotation creation without modalities flag."""
+        bounds = {"left": 100, "top": 100, "right": 300, "bottom": 150}
+
+        annotation = self.parser._create_annotation(
+            annotation_id="text-1",
+            label="Paragraph",
+            raw_text="Just text",
+            page_idx=0,
+            bounds=bounds,
+            token_refs=[],
+            has_text_tokens=False,
+            has_image_tokens=False,
+        )
+
+        # Should not have content_modalities when neither flag is set
+        self.assertNotIn("content_modalities", annotation)
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
+    )
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_with_image_extraction(
+        self,
+        mock_open,
+        mock_llama_parse_class,
+        mock_extract_tokens,
+        mock_find_tokens,
+        mock_extract_images,
+        mock_crop_image,
+    ):
+        """Test document parsing with image extraction enabled."""
+        # Mock file reading
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        # JSON response with a figure element
+        json_response = [
+            {
+                "pages": [
+                    {
+                        "text": "Page with figure",
+                        "width": 612,
+                        "height": 792,
+                        "items": [
+                            {
+                                "type": "figure",
+                                "text": "Figure 1: Test Chart",
+                                "bBox": {"x": 100, "y": 200, "w": 400, "h": 300},
+                            },
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = json_response
+        mock_llama_parse_class.return_value = mock_parser
+
+        # Mock token extraction
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=3
+        )
+        mock_find_tokens.return_value = []
+
+        # Mock image extraction - return an image on page 0
+        mock_extract_images.return_value = {
+            0: [
+                {
+                    "x": 120,
+                    "y": 220,
+                    "width": 360,
+                    "height": 260,
+                    "format": "jpeg",
+                    "image_path": "documents/1/images/page_0_img_0.jpg",
+                    "content_hash": "abc123",
+                }
+            ]
+        }
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(
+            user_id=self.user.id,
+            doc_id=self.doc.id,
+            extract_images=True,
+        )
+
+        # Verify result
+        self.assertIsNotNone(result)
+
+        # Verify image extraction was called
+        mock_extract_images.assert_called_once()
+
+        # Verify the figure annotation was created
+        self.assertGreater(len(result["labelled_text"]), 0)
+        figure_anno = next(
+            (a for a in result["labelled_text"] if a["annotationLabel"] == "Figure"),
+            None,
+        )
+        self.assertIsNotNone(figure_anno)
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
+    )
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_crops_figure_when_no_embedded_image(
+        self,
+        mock_open,
+        mock_llama_parse_class,
+        mock_extract_tokens,
+        mock_find_tokens,
+        mock_extract_images,
+        mock_crop_image,
+    ):
+        """Test that figures without embedded images trigger cropping."""
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        json_response = [
+            {
+                "pages": [
+                    {
+                        "text": "Page with figure",
+                        "width": 612,
+                        "height": 792,
+                        "items": [
+                            {
+                                "type": "figure",
+                                "text": "",  # Empty text for figure
+                                "bBox": {"x": 100, "y": 200, "w": 400, "h": 300},
+                            },
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = json_response
+        mock_llama_parse_class.return_value = mock_parser
+
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=3
+        )
+        mock_find_tokens.return_value = []
+
+        # No embedded images found
+        mock_extract_images.return_value = {}
+
+        # Mock crop_image_from_pdf to return a cropped image
+        mock_crop_image.return_value = {
+            "x": 100,
+            "y": 200,
+            "width": 400,
+            "height": 300,
+            "text": "",
+            "is_image": True,
+            "format": "jpeg",
+            "image_path": "documents/1/images/page_0_img_0.jpg",
+            "content_hash": "cropped123",
+            "original_width": 800,
+            "original_height": 600,
+            "image_type": "cropped",
+        }
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(
+            user_id=self.user.id,
+            doc_id=self.doc.id,
+            extract_images=True,
+        )
+
+        # Verify crop_image_from_pdf was called
+        mock_crop_image.assert_called()
+
+        # Verify result has the figure annotation with image modality
+        self.assertIsNotNone(result)
+        figure_annos = [
+            a for a in result["labelled_text"] if a["annotationLabel"] == "Figure"
+        ]
+        self.assertEqual(len(figure_annos), 1)
+
+        # The annotation should have IMAGE modality
+        self.assertIn("content_modalities", figure_annos[0])
+        self.assertIn("IMAGE", figure_annos[0]["content_modalities"])
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
+    )
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_image_extraction_failure_graceful(
+        self,
+        mock_open,
+        mock_llama_parse_class,
+        mock_extract_tokens,
+        mock_find_tokens,
+        mock_extract_images,
+    ):
+        """Test that image extraction failures are handled gracefully."""
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        json_response = [
+            {
+                "pages": [
+                    {
+                        "text": "Page content",
+                        "width": 612,
+                        "height": 792,
+                        "items": [
+                            {
+                                "type": "paragraph",
+                                "text": "Some text",
+                                "bBox": {"x": 100, "y": 100, "w": 400, "h": 50},
+                            },
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = json_response
+        mock_llama_parse_class.return_value = mock_parser
+
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=3
+        )
+        mock_find_tokens.return_value = []
+
+        # Image extraction raises an exception
+        mock_extract_images.side_effect = Exception("Image extraction failed")
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(
+            user_id=self.user.id,
+            doc_id=self.doc.id,
+            extract_images=True,
+        )
+
+        # Should still succeed, just without images
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["labelled_text"]), 1)
+
+
+class TestLlamaParseParserTextConversion(TestCase):
+    """Tests for text/markdown conversion path."""
+
+    def setUp(self):
+        """Set up test environment."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="texttestuser", password="testpass123"
+            )
+
+        self.doc = Document.objects.create(
+            title="Text Test Document",
+            description="Test Description",
+            file_type="pdf",
+            creator=self.user,
+        )
+
+        pdf_content = (
+            b"%PDF-1.7\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n%%EOF\n"
+        )
+        self.doc.pdf_file.save("test_text.pdf", ContentFile(pdf_content))
+
+    def test_convert_text_to_opencontracts(self):
+        """Test _convert_text_to_opencontracts method."""
+        parser = LlamaParseParser()
+
+        # Create mock LlamaIndex documents
+        mock_docs = [
+            MockLlamaDocument("First page content"),
+            MockLlamaDocument("Second page content"),
+        ]
+
+        result = parser._convert_text_to_opencontracts(self.doc, mock_docs)
+
+        self.assertEqual(result["title"], "Text Test Document")
+        self.assertEqual(result["content"], "First page content\n\nSecond page content")
+        self.assertEqual(result["page_count"], 2)
+        self.assertEqual(result["pawls_file_content"], [])
+        self.assertEqual(result["labelled_text"], [])
+        self.assertEqual(result["relationships"], [])
+
+    def test_convert_text_to_opencontracts_empty_docs(self):
+        """Test _convert_text_to_opencontracts with empty documents."""
+        parser = LlamaParseParser()
+
+        # Create mock LlamaIndex documents with empty text
+        mock_docs = [
+            MockLlamaDocument(""),
+            MockLlamaDocument("Only second page has content"),
+        ]
+
+        result = parser._convert_text_to_opencontracts(self.doc, mock_docs)
+
+        self.assertEqual(result["content"], "\n\nOnly second page has content")
+        self.assertEqual(result["page_count"], 2)
