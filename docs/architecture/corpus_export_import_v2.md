@@ -17,7 +17,7 @@ The original export/import system was designed early in OpenContracts developmen
 - LabelSets
 
 Since then, numerous critical features were added:
-- **Structural annotations** - Shared across document copies
+- **Structural annotations** - Corpus-isolated (each corpus gets its own copy)
 - **Vector embeddings** - For semantic search
 - **Conversations/messages** - Discussion threads
 - **Corpus folders** - Hierarchical organization
@@ -58,7 +58,7 @@ interface OpenContractsExportDataJsonV2Type {
 
   // ===== V2 FIELDS =====
 
-  // Structural annotations (shared across document copies)
+  // Structural annotations (corpus-isolated, duplicated per corpus)
   structural_annotation_sets: Record<string, StructuralAnnotationSetExport>;
 
   // Corpus folder hierarchy

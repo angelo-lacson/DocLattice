@@ -7,28 +7,34 @@ OpenContracts distinguishes between two fundamentally different types of annotat
 1. **Structural Annotations**: Immutable document structure elements extracted during parsing (headers, sections, paragraphs, tables, figures)
 2. **Non-Structural Annotations**: User-created or analysis-generated annotations that add semantic meaning to documents
 
-This distinction enables efficient storage and sharing of structural data across corpus-isolated document copies.
+Both annotation types are **corpus-isolated** - each corpus maintains its own complete copy of all annotations for documents within it.
 
-## The Problem
+## The Design: Corpus Isolation
 
-With corpus isolation (each corpus gets its own Document copy), duplicating thousands of structural annotations per copy is wasteful and conceptually incorrect. Structural annotations represent the document's inherent structure and should be identical across all copies.
+With corpus isolation, each corpus gets its own Document copy AND its own StructuralAnnotationSet. This ensures:
+
+- Complete data isolation between corpuses
+- Independent lifecycle management per corpus
+- No cross-corpus data leakage
+- Simplified permission model (corpus boundaries are hard boundaries)
 
 ## The Solution: StructuralAnnotationSet
 
-Structural annotations are separated from Document instances and stored in shared `StructuralAnnotationSet` objects that multiple Documents can reference.
+Structural annotations are separated from Document instances and stored in `StructuralAnnotationSet` objects. When a document is added to a corpus, its structural annotation set is **duplicated** for that corpus.
 
 ### Core Architecture
 
 ```python
 class StructuralAnnotationSet(models.Model):
-    """Immutable set of structural annotations shared across document copies"""
-    content_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    """Immutable set of structural annotations for a corpus-specific document copy"""
+    # Format: {sha256_hash}_{corpus_id} for corpus-specific sets
+    content_hash = models.CharField(max_length=128, unique=True, db_index=True)
     parser_name = models.CharField(max_length=255, null=True)
     parser_version = models.CharField(max_length=50, null=True)
     page_count = models.IntegerField(null=True)
     token_count = models.IntegerField(null=True)
 
-    # Shared parsing artifacts
+    # Corpus-specific parsing artifacts
     pawls_parse_file = models.FileField(upload_to="pawls/", ...)
     txt_extract_file = models.FileField(upload_to="txt_extracts/", ...)
 ```
@@ -37,7 +43,7 @@ class StructuralAnnotationSet(models.Model):
 
 ```python
 class Document(BaseOCModel):
-    # Points to shared structural annotations
+    # Points to corpus-specific structural annotations
     structural_annotation_set = models.ForeignKey(
         StructuralAnnotationSet,
         on_delete=models.PROTECT,  # Cannot delete while documents reference it
@@ -84,21 +90,21 @@ class Relationship(models.Model):
 
 ## How It Works
 
-### Document Parsing Flow
+### Document Upload Flow
+
+When a document is uploaded directly to a corpus:
 
 ```python
-# 1. Document parsed (e.g., via Docling)
+# 1. Document uploaded to corpus
 document = Document.objects.create(pdf_file_hash="abc123", ...)
 
-# 2. Create or retrieve StructuralAnnotationSet by content hash
-struct_set, created = StructuralAnnotationSet.objects.get_or_create(
-    content_hash="abc123",
-    defaults={
-        'parser_name': 'docling',
-        'parser_version': '1.0.0',
-        'pawls_parse_file': pawls_file,
-        'txt_extract_file': text_file,
-    }
+# 2. Create corpus-specific StructuralAnnotationSet
+struct_set = StructuralAnnotationSet.objects.create(
+    content_hash=f"abc123_{corpus.id}",  # Corpus-specific hash
+    parser_name='docling',
+    parser_version='1.0.0',
+    pawls_parse_file=pawls_file,
+    txt_extract_file=text_file,
 )
 
 # 3. Link document to structural set
@@ -115,46 +121,78 @@ for annotation_data in parsed_annotations:
     )
 ```
 
-### Cross-Corpus Sharing
+### Adding Document to Corpus (Duplication)
+
+When an existing document is added to a new corpus, both the document and its structural annotation set are duplicated:
 
 ```python
-# Original document with 5000 structural annotations
-doc1 = Document.objects.create(pdf_file_hash="abc123")
-struct_set = StructuralAnnotationSet.objects.create(content_hash="abc123")
-doc1.structural_annotation_set = struct_set
-# 5000 annotations created with structural_set=struct_set
+# Original document with 5000 structural annotations in Corpus A
+doc1 = Document.objects.get(pk=original_id)
+struct_set_a = doc1.structural_annotation_set
+# struct_set_a has content_hash="abc123_corpus_a_id"
 
-# Add to Corpus X - creates corpus-isolated copy
-corpus_x.add_document(doc1, user_x)
-# Creates doc_copy_x with structural_annotation_set=struct_set (SHARED!)
+# Add to Corpus B - creates corpus-isolated copies
+corpus_b.add_document(doc1, user)
 
-# Add to Corpus Y - creates another corpus-isolated copy
-corpus_y.add_document(doc1, user_y)
-# Creates doc_copy_y with structural_annotation_set=struct_set (SHARED!)
+# Result:
+# - New Document copy (doc_copy_b) created for Corpus B
+# - New StructuralAnnotationSet (struct_set_b) created with content_hash="abc123_corpus_b_id"
+# - All 5000 structural annotations DUPLICATED to struct_set_b
+# - doc_copy_b.structural_annotation_set = struct_set_b
 
-# Result: 3 Document objects, 1 StructuralAnnotationSet, 5000 annotations
-# NOT 15000 annotations!
+# Add to Corpus C - creates another set of corpus-isolated copies
+corpus_c.add_document(doc1, user)
+
+# Final result: 3 Document objects, 3 StructuralAnnotationSets, 15000 annotations
+# Each corpus has complete isolation
+```
+
+### No Source Document Provenance
+
+When documents are copied between corpuses, **no provenance tracking** is maintained:
+
+```python
+# After adding doc1 to corpus_b:
+doc_copy_b = corpus_b.documents.get(pdf_file_hash="abc123")
+doc_copy_b.source_document_id  # None - no provenance link
+
+# This is intentional: corpus copies are independent entities
+# with no cross-corpus references
 ```
 
 ## Query Integration
 
-The architecture is transparent to application code. Queries automatically fetch annotations from both sources.
+Queries fetch annotations from the document's corpus-specific structural annotation set.
 
-### AnnotationQueryOptimizer Integration
+### Accessing Structural Annotations
+
+```python
+# Recommended: Query through the document's structural_annotation_set
+document = Document.objects.select_related('structural_annotation_set').get(pk=document_id)
+structural_annotations = document.structural_annotation_set.structural_annotations.all()
+
+# Alternative: Direct query with structural_set FK
+annotations = Annotation.objects.filter(
+    structural_set=document.structural_annotation_set,
+    structural=True
+)
+```
+
+### Combined Query (All Annotations)
 
 ```python
 # In opencontractserver/annotations/query_optimizer.py
 def get_document_annotations(self, document_id):
     document = Document.objects.select_related('structural_annotation_set').get(pk=document_id)
 
-    # Build OR filter to query BOTH sources
+    # Query both non-structural (document FK) and structural (structural_set FK)
     annotation_filter = (
         Q(document_id=document_id) |  # Non-structural annotations
-        Q(structural_set_id=document.structural_annotation_set_id, structural=True)  # Structural
+        Q(structural_set_id=document.structural_annotation_set_id, structural=True)
     )
 
     annotations = Annotation.objects.filter(annotation_filter)
-    # Application sees all annotations seamlessly
+    # Returns all annotations for this document within its corpus context
 ```
 
 ### Vector Store Integration
@@ -162,14 +200,14 @@ def get_document_annotations(self, document_id):
 ```python
 # In opencontractserver/llms/vector_stores/core_vector_stores.py
 def search_by_embedding(self, ...):
-    # Version filter preserves structural annotations
+    # Version filter for current documents
     if only_current_versions:
         active_filters &= (
             Q(document__is_current=True) |  # Non-structural from current versions
             Q(document_id__isnull=True, structural=True)  # Structural (no document FK)
         )
 
-    # Scoping by document includes structural annotations
+    # Scoping by document includes its structural annotations
     if document:
         annotation_filter |= Q(
             structural_set_id=document.structural_annotation_set_id,
@@ -179,30 +217,36 @@ def search_by_embedding(self, ...):
 
 ## Key Design Decisions
 
-### 1. Content-Based Deduplication
+### 1. Corpus Isolation Over Deduplication
 
-Structural annotations are tied to content hash, not document ID. Same content = same structural annotations.
+Each corpus gets its own complete copy of structural annotations. This prioritizes:
+- Data isolation and security
+- Independent corpus lifecycle management
+- Simplified permission boundaries
+- Predictable query behavior
+- **Multi-embedder support**: Each corpus can use different embedding models, requiring consistent per-corpus vector spaces. Shared annotations would require managing multiple embedding sets per annotation, significantly complicating vector search operations.
+
+Trade-off: O(n) storage where n = number of corpus copies containing the document.
 
 ### 2. XOR Constraints
 
 Database-level enforcement ensures annotations belong to either a document OR a structural set, never both or neither.
 
-### 3. Storage Efficiency
+### 3. Extended Content Hash
 
-- **Before**: O(n) storage where n = number of corpus copies
-- **After**: O(1) storage - structural annotations stored once
+The `content_hash` field uses format `{sha256_hash}_{corpus_id}` (up to 128 chars) to ensure uniqueness per corpus while maintaining content identification.
 
 ### 4. Immutability Guarantee
 
-`PROTECT` on delete prevents deletion of StructuralAnnotationSet while documents reference it. Structural annotations cannot be modified.
+`PROTECT` on delete prevents deletion of StructuralAnnotationSet while documents reference it. Structural annotations cannot be modified after creation.
 
-### 5. Seamless Query Integration
+### 5. No Cross-Corpus References
 
-Application code doesn't need to know about the distinction. Query optimizers handle dual-source fetching transparently.
+Document copies do not maintain `source_document` provenance links. Each corpus copy is an independent entity.
 
 ## Non-Structural Annotations
 
-Non-structural annotations remain attached to specific Document instances:
+Non-structural annotations are attached to specific Document instances within a corpus:
 
 ```python
 # User highlights a section and adds a comment
@@ -216,33 +260,46 @@ Annotation.objects.create(
 )
 ```
 
-These are NOT shared across corpus copies because they represent user-specific or analysis-specific interpretations.
+These represent user-specific or analysis-specific interpretations and are naturally corpus-isolated.
 
 ## Benefits
 
-### Storage Efficiency
-- Structural annotations stored once regardless of corpus copies
-- Parsing artifacts (PAWLS, text extracts) shared across documents
-- Significant reduction in database size for multi-corpus deployments
+### Complete Corpus Isolation
+- Each corpus is a self-contained unit
+- No data leakage between corpuses
+- Deletion of one corpus doesn't affect others
+- Clear permission boundaries
 
-### Conceptual Correctness
+### Conceptual Clarity
 - Structural annotations represent inherent document structure (immutable)
 - Non-structural annotations represent interpretations (corpus-specific)
 - Clear separation of concerns
+- Predictable behavior
 
-### Performance
-- Faster corpus copy operations (no annotation duplication)
-- Efficient queries with dual-source fetching
-- Reduced memory footprint in application
+### Simplified Operations
+- Corpus deletion is straightforward (cascade all related data)
+- No complex reference counting for shared data
+- Export/import operations are self-contained per corpus
 
 ### Maintainability
-- Parser updates affect only StructuralAnnotationSet
-- Clear ownership model (structural vs non-structural)
+- Clear ownership model (everything belongs to exactly one corpus)
 - Database constraints prevent invalid states
+- Straightforward debugging (no cross-corpus dependencies)
+
+## Trade-offs
+
+### Storage
+- O(n) storage for structural annotations where n = corpus copies
+- Parsing artifacts (PAWLS, text extracts) duplicated per corpus
+- Acceptable trade-off for isolation benefits
+
+### Processing
+- Document parsing may occur multiple times for same content
+- Mitigated by caching at upload layer when appropriate
 
 ## Migrations
 
-Two migrations implement this architecture:
+Key migrations implementing this architecture:
 
 1. **annotations/0048_add_structural_annotation_set.py**
    - Creates StructuralAnnotationSet model
@@ -251,27 +308,18 @@ Two migrations implement this architecture:
 2. **documents/0026_add_structural_annotation_set.py**
    - Adds structural_annotation_set FK to Document
 
-Both migrations are backward compatible (new fields nullable).
+3. **annotations/0056_alter_structuralannotationset_content_hash.py**
+   - Extends content_hash to 128 chars for corpus-specific format
 
 ## Test Coverage
 
 Three test suites validate the architecture:
 
-- **test_structural_annotation_sets.py** (22 tests): Model behavior, constraints, CRUD operations
-- **test_structural_annotation_portability.py** (10 tests): Cross-corpus sharing, corpus isolation
-- **test_query_optimizer_structural_sets.py** (10 tests): Query optimizer integration
-
-**All 42 tests passing**
-
-## Future Enhancements
-
-1. **Parser Versioning**: Track structural annotation set versions when parser algorithms improve
-2. **Lazy Migration**: Migrate existing documents to structural sets on first parse after upgrade
-3. **Analytics**: Track structural set reuse rates across corpuses
-4. **Export**: Include structural annotation sets in corpus export/import operations
+- **test_structural_annotation_sets.py**: Model behavior, constraints, CRUD operations
+- **test_structural_annotation_portability.py**: Corpus isolation, duplication behavior
+- **test_query_optimizer_structural_sets.py**: Query optimizer integration with isolated sets
 
 ---
 
 **Implementation**: Phase 2.5 of dual-tree versioning architecture
 **Status**: Complete and production-ready
-**Related**: Issue #654, DUAL_TREE_IMPLEMENTATION_SUMMARY.md

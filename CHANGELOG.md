@@ -5,9 +5,17 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-11
+## [3.0.0b4] - 2026-01-11
 
 ### Added
+
+#### Corpus-Isolated Structural Annotations
+- **StructuralAnnotationSet duplication per corpus**: Each corpus now gets its own copy of structural annotations when documents are added
+  - Enables multi-embedder support (each corpus can use different embedding models)
+  - Maintains consistent per-corpus vector spaces for similarity search
+  - Files: `opencontractserver/annotations/models.py`, `opencontractserver/corpuses/models.py`
+- **Extended content_hash format**: Changed from `{sha256}` to `{sha256}_{corpus_id}` (max 128 chars)
+  - Migration: `opencontractserver/annotations/migrations/0056_alter_structuralannotationset_content_hash.py`
 
 #### Multimodal Embedding Support
 - **Image token extraction from PDFs**: Extract images from PDFs via Docling parser and store as unified tokens in PAWLs format
@@ -36,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Files: `docs/architecture/multimodal-embeddings.md`, `docs/architecture/pawls-format.md`
 
 ### Changed
+
+#### Corpus Isolation Architecture
+- **Removed content-based deduplication**: Each upload creates independent documents regardless of content hash
+- **Removed source_document provenance**: `source_document_id` no longer set when adding documents to corpus
+- **Structural annotations no longer shared**: Each corpus gets duplicated structural annotation sets
+- **Updated documentation**: Rewrote `structural_vs_non_structural_annotations.md`, updated `document_versioning.md`, `documents_and_annotations.md`
+
+#### Multimodal Support
 - Extended PAWLs token format to support unified image tokens (`is_image=True`)
 - Updated `BaseEmbedder` to use `ContentModality` enum instead of boolean flags
 - Updated `PipelineComponentDefinition` in registry to store `supported_modalities`

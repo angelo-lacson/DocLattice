@@ -15,14 +15,14 @@ v3.0.0.b3 introduces a sophisticated document versioning system:
 - **Time travel**: Query the filesystem state at any point in history
 - **Soft delete/restore**: Documents can be deleted and restored without data loss
 
-### Structural Annotation Sets (Optional)
+### Structural Annotation Sets
 
-A storage optimization for deployments with documents in multiple corpuses:
+Corpus-isolated containers for structural annotations:
 
-- **StructuralAnnotationSet**: Shared container for structural annotations (headers, sections, paragraphs)
-- **Content-based deduplication**: Documents with the same content share structural annotations
-- **Storage efficiency**: O(1) storage for structural annotations instead of O(n) per corpus copy
-- **Optional migration**: Existing installations can choose to migrate for storage savings
+- **StructuralAnnotationSet**: Corpus-specific container for structural annotations (headers, sections, paragraphs)
+- **Corpus isolation**: Each corpus gets its own copy of structural annotations when documents are added
+- **Complete separation**: No data sharing across corpus boundaries
+- **Automatic duplication**: When adding documents to a corpus, structural annotation sets are duplicated
 
 ## Pre-Upgrade Checklist
 

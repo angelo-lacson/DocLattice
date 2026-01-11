@@ -36,7 +36,7 @@ This document provides a high-level overview of OpenContracts' core Django model
 │                                                                                     │
 │  ┌──────────────┐         ┌──────────────┐         ┌──────────────────────────┐    │
 │  │  Annotation  │◄───────►│ Relationship │         │ StructuralAnnotationSet  │    │
-│  │              │  M:N    │ (annotation) │         │   (shared across docs)   │    │
+│  │              │  M:N    │ (annotation) │         │   (corpus-isolated)      │    │
 │  └──────┬───────┘         └──────────────┘         └──────────────────────────┘    │
 │         │                                                                           │
 │         │ 1:N                                                                       │
@@ -268,16 +268,16 @@ Links annotations together (not to be confused with DocumentRelationship).
 #### StructuralAnnotationSet
 **Location:** `opencontractserver/annotations/models.py`
 
-Immutable, shared structural annotations for document content.
+Immutable, corpus-isolated structural annotations for a document.
 
 | Field | Description |
 |-------|-------------|
-| `content_hash` | SHA-256 of document content |
+| `content_hash` | Format: `{sha256_hash}_{corpus_id}` (max 128 chars) |
 | `parser_name` | Parser that created annotations |
 | `parser_version` | Parser version |
-| `pawls_parse_file` | Shared PAWLS data |
+| `pawls_parse_file` | Corpus-specific PAWLS data |
 
-**Uses:** Deduplicates structural annotations across corpus-isolated copies of the same document content.
+**Uses:** Each corpus gets its own copy of structural annotations when a document is added. This ensures complete corpus isolation - no data is shared across corpus boundaries. When a document is added to a new corpus, its structural annotation set is duplicated.
 
 ---
 

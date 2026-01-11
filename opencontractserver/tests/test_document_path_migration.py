@@ -182,15 +182,19 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         self.assertEqual(status, "added")
         self.assertEqual(self.corpus.document_count(), initial_count + 1)
 
-        # Add same source document again - no content-based dedup, creates another copy
+        # Add same source document again without explicit path - since no path is
+        # provided, both additions auto-generate the same path from the title,
+        # which triggers upversioning/replacement behavior. The new document
+        # replaces the old one at the same path, so count stays the same.
         corpus_doc2, status2, path2 = self.corpus.add_document(
             document=self.document, user=self.user
         )
         self.assertEqual(status2, "added")
-        self.assertEqual(self.corpus.document_count(), initial_count + 2)
+        # Count stays the same because the second add replaced the first at the
+        # same auto-generated path (upversioning behavior)
+        self.assertEqual(self.corpus.document_count(), initial_count + 1)
 
-        # Remove both corpus-isolated documents
-        self.corpus.remove_document(document=corpus_doc, user=self.user)
+        # Remove the current document at that path
         self.corpus.remove_document(document=corpus_doc2, user=self.user)
         self.assertEqual(self.corpus.document_count(), initial_count)
 

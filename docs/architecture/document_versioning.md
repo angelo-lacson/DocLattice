@@ -30,7 +30,7 @@ OpenContracts implements a **dual-tree versioning architecture** for document ma
 3. **Corpus Isolation**: Documents isolated within each corpus
    - Each corpus has independent version trees
    - No cross-corpus version conflicts
-   - Provenance tracked via `source_document` field (when dragging existing documents)
+   - No provenance tracking (`source_document` not set when adding documents to corpus)
 
 4. **No Content-Based Deduplication**
    - Every file upload creates a new document regardless of content hash
@@ -88,6 +88,15 @@ User A uploads same PDF again to Corpus X → Document #5 (tree TX5) ← ALSO IN
 
 This eliminates version conflicts and deduplication complexity entirely.
 
+### Multi-Embedder Support
+
+A key reason for corpus isolation is **multi-embedder support**. Each corpus can use different embedding models for vector search. This requires consistent per-corpus vector spaces where all annotations use the same embedder. Sharing structural annotations across corpuses would require:
+- Managing multiple embedding vectors per annotation (one per embedder type)
+- Complex queries to select the right embedding for each corpus's embedder
+- Re-embedding shared annotations whenever a corpus changes its embedder
+
+By duplicating structural annotations per corpus, each corpus maintains a clean, independent vector space with consistent embeddings.
+
 ---
 
 ## Data Models
@@ -110,7 +119,7 @@ class Document(TreeNode, BaseOCModel, HasEmbeddingMixin):
     # Provenance tracking (Phase 2)
     source_document = ForeignKey('self', null=True, related_name='corpus_copies')
 
-    # Shared structural annotations (Phase 2.5)
+    # Corpus-isolated structural annotations (Phase 2.5)
     structural_annotation_set = ForeignKey('StructuralAnnotationSet', null=True)
 
     class Meta:
