@@ -4,7 +4,7 @@ import hashlib
 import uuid
 
 # Typed representations for the `json` payload
-from typing import Union, cast
+from typing import Optional, Union, cast
 
 import django
 from django.contrib.auth import get_user_model
@@ -589,6 +589,58 @@ class StructuralAnnotationSet(BaseOCModel):
     def relationship_count(self):
         """Get the count of structural relationships in this set."""
         return self.structural_relationships.count()
+
+    def duplicate(self, corpus_id: Optional[int] = None) -> "StructuralAnnotationSet":
+        """
+        Create a copy of this set with all its annotations for corpus isolation.
+
+        Each corpus copy of a document gets its own StructuralAnnotationSet to enable
+        per-corpus embeddings (different corpuses may use different embedders with
+        incompatible vector dimensions).
+
+        Args:
+            corpus_id: Optional corpus ID to include in content_hash suffix
+
+        Returns:
+            New StructuralAnnotationSet with copied structural annotations
+        """
+        import uuid
+
+        suffix = f"_{corpus_id}" if corpus_id else f"_{uuid.uuid4().hex[:8]}"
+
+        new_set = StructuralAnnotationSet.objects.create(
+            content_hash=f"{self.content_hash}{suffix}",
+            parser_name=self.parser_name,
+            parser_version=self.parser_version,
+            page_count=self.page_count,
+            token_count=self.token_count,
+            pawls_parse_file=self.pawls_parse_file,  # Same file reference is OK
+            txt_extract_file=self.txt_extract_file,  # Same file reference is OK
+            is_public=self.is_public,
+            creator=self.creator,
+        )
+
+        # Bulk copy structural annotations (without embeddings - will be generated fresh)
+        new_annotations = [
+            Annotation(
+                structural_set=new_set,
+                page=a.page,
+                raw_text=a.raw_text,
+                tokens_jsons=a.tokens_jsons,
+                bounding_box=a.bounding_box,
+                json=a.json,
+                annotation_type=a.annotation_type,
+                annotation_label=a.annotation_label,
+                structural=True,
+                content_modalities=a.content_modalities,
+                is_public=a.is_public,
+                creator=a.creator,
+            )
+            for a in self.structural_annotations.all()
+        ]
+        Annotation.objects.bulk_create(new_annotations)
+
+        return new_set
 
 
 class Annotation(BaseOCModel, HasEmbeddingMixin):

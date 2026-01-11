@@ -490,7 +490,12 @@ class Corpus(TreeNode):
                 is_current=True,
                 parent=None,  # Root of NEW content tree
                 source_document=document,  # Provenance tracking (Rule I2)
-                structural_annotation_set=document.structural_annotation_set,  # Share structural annotations
+                # Duplicate structural annotations for corpus isolation (per-corpus embeddings)
+                structural_annotation_set=(
+                    document.structural_annotation_set.duplicate(corpus_id=self.pk)
+                    if document.structural_annotation_set
+                    else None
+                ),
                 creator=user,
                 **{
                     k: v
@@ -501,7 +506,7 @@ class Corpus(TreeNode):
 
             logger.info(
                 f"Created corpus-isolated copy {corpus_copy.pk} from doc {document.pk} "
-                f"in corpus {self.pk} (structural_set={document.structural_annotation_set_id})"
+                f"in corpus {self.pk} (structural_set={corpus_copy.structural_annotation_set_id})"
             )
 
             # Check if path is occupied
