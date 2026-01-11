@@ -144,12 +144,26 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             if response.status_code == 200:
                 embeddings_array = np.array(response.json()["embeddings"])
                 if np.isnan(embeddings_array).any():
-                    logger.error("Text embedding contains NaN values")
+                    logger.error(
+                        f"Text embedding contains NaN values. "
+                        f"Input text length: {len(text)}, "
+                        f"first 100 chars: {text[:100]!r}"
+                    )
                     return None
                 return embeddings_array[0].tolist()
-            else:
+            elif 400 <= response.status_code < 500:
+                # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(
-                    f"Multimodal text embedding service returned status {response.status_code}"
+                    f"Multimodal text embedding service returned client error "
+                    f"{response.status_code}: {response.text[:200] if response.text else 'No response body'}. "
+                    f"Input text length: {len(text)}"
+                )
+                return None
+            else:
+                # Server errors (5xx) or unexpected status - worth retrying
+                logger.error(
+                    f"Multimodal text embedding service returned status {response.status_code}. "
+                    f"This may be a transient error."
                 )
                 return None
 
@@ -210,12 +224,26 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             if response.status_code == 200:
                 embeddings_array = np.array(response.json()["embeddings"])
                 if np.isnan(embeddings_array).any():
-                    logger.error("Image embedding contains NaN values")
+                    logger.error(
+                        f"Image embedding contains NaN values. "
+                        f"Image format: {image_format}, "
+                        f"base64 data length: {len(image_base64)}"
+                    )
                     return None
                 return embeddings_array[0].tolist()
-            else:
+            elif 400 <= response.status_code < 500:
+                # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(
-                    f"Multimodal image embedding service returned status {response.status_code}"
+                    f"Multimodal image embedding service returned client error "
+                    f"{response.status_code}: {response.text[:200] if response.text else 'No response body'}. "
+                    f"Image format: {image_format}, base64 length: {len(image_base64)}"
+                )
+                return None
+            else:
+                # Server errors (5xx) or unexpected status - worth retrying
+                logger.error(
+                    f"Multimodal image embedding service returned status {response.status_code}. "
+                    f"This may be a transient error."
                 )
                 return None
 
@@ -268,12 +296,24 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                 if embeddings_array.ndim == 3:
                     embeddings_array = embeddings_array.squeeze(axis=1)
                 if np.isnan(embeddings_array).any():
-                    logger.error("Batch text embeddings contain NaN values")
+                    nan_indices = np.where(np.isnan(embeddings_array).any(axis=1))[0]
+                    logger.error(
+                        f"Batch text embeddings contain NaN values at indices: {nan_indices.tolist()}. "
+                        f"Batch size: {len(texts)}"
+                    )
                     return None
                 return embeddings_array.tolist()
+            elif 400 <= response.status_code < 500:
+                logger.error(
+                    f"Batch text embedding service returned client error "
+                    f"{response.status_code}: {response.text[:200] if response.text else 'No response body'}. "
+                    f"Batch size: {len(texts)}"
+                )
+                return None
             else:
                 logger.error(
-                    f"Batch text embedding service returned status {response.status_code}"
+                    f"Batch text embedding service returned status {response.status_code}. "
+                    f"This may be a transient error."
                 )
                 return None
 
@@ -322,12 +362,24 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                 if embeddings_array.ndim == 3:
                     embeddings_array = embeddings_array.squeeze(axis=1)
                 if np.isnan(embeddings_array).any():
-                    logger.error("Batch image embeddings contain NaN values")
+                    nan_indices = np.where(np.isnan(embeddings_array).any(axis=1))[0]
+                    logger.error(
+                        f"Batch image embeddings contain NaN values at indices: {nan_indices.tolist()}. "
+                        f"Batch size: {len(images_base64)}"
+                    )
                     return None
                 return embeddings_array.tolist()
+            elif 400 <= response.status_code < 500:
+                logger.error(
+                    f"Batch image embedding service returned client error "
+                    f"{response.status_code}: {response.text[:200] if response.text else 'No response body'}. "
+                    f"Batch size: {len(images_base64)}"
+                )
+                return None
             else:
                 logger.error(
-                    f"Batch image embedding service returned status {response.status_code}"
+                    f"Batch image embedding service returned status {response.status_code}. "
+                    f"This may be a transient error."
                 )
                 return None
 
