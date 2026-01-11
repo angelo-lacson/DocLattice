@@ -357,7 +357,7 @@ class DoclingParser(BaseParser):
             annotations = result.get("labelled_text", [])
             for annotation in annotations:
                 label = annotation.get("annotationLabel", "").lower()
-                if label in ["figure", "image", "chart", "diagram"]:
+                if label in ["figure", "image", "chart", "diagram", "picture"]:
                     self._add_image_refs_to_annotation(
                         annotation,
                         pdf_bytes,
