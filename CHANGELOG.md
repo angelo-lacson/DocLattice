@@ -41,6 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `PipelineComponentDefinition` in registry to store `supported_modalities`
 - Enhanced embedding task to detect multimodal content and generate appropriate embeddings
 
+### Fixed
+
+#### Android Share URL Missing Entity Prefix (PR #795)
+- **Bug**: Android native share was dropping entity type prefixes (`/c/`, `/d/`, `/e/`) from shared URLs
+- **Root Cause**: `frontend/src/components/seo/MetaTags.tsx:50-56` was generating canonical URLs as `/{userSlug}/{entitySlug}` instead of `/{prefix}/{userSlug}/{entitySlug}`
+- **Impact**: Links shared via Android browser resulted in 404s (e.g., `/john/my-corpus` instead of `/c/john/my-corpus`)
+- **Fix**: Refactored `MetaTags.tsx` to use existing `buildCanonicalPath()` utility from `navigationUtils.ts`
+- **Added**: Unit tests for MetaTags canonical URL generation (`frontend/src/components/seo/__tests__/MetaTags.test.tsx`)
+- **Added**: Development warning for unexpected `entityType` values
+- **Added**: Enhanced Cloudflare worker request logging for crawler debugging (`cloudflare-og-worker/src/index.ts`)
+
 ### Security
 
 #### WebSocket Agent Permission Vulnerability Fixed (PR #792)
