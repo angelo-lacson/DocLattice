@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any, Optional, Union
 
 from asgiref.sync import async_to_sync, sync_to_async
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db.models import Q, QuerySet
 
 from opencontractserver.annotations.models import Annotation
@@ -14,6 +16,8 @@ from opencontractserver.utils.embeddings import (
     generate_embeddings_from_text,
     get_embedder,
 )
+
+User = get_user_model()
 
 _logger = logging.getLogger(__name__)
 
@@ -554,6 +558,166 @@ class CoreAnnotationVectorStore:
             )
 
         return results
+
+    @classmethod
+    def global_search(
+        cls,
+        user_id: Union[str, int],
+        query_text: str,
+        top_k: int = 100,
+        modalities: Optional[list[str]] = None,
+    ) -> list["VectorSearchResult"]:
+        """
+        Search across ALL documents the user has access to using DEFAULT_EMBEDDER.
+
+        This method enables global cross-corpus search by using the default embedder
+        embeddings that are created for every annotation (as part of the dual embedding
+        strategy).
+
+        PERMISSION MODEL (follows consolidated_permissioning_guide.md):
+        - Uses Document.objects.visible_to_user(user) for document access control
+        - Structural annotations are always visible if document is accessible
+        - Non-structural annotations follow: visible if public OR owned by user
+        - Corpus permissions are respected via document visibility
+
+        Args:
+            user_id: ID of the user performing the search
+            query_text: The text query to search for
+            top_k: Maximum number of results to return
+            modalities: Optional filter by content modalities (e.g., ["TEXT"], ["IMAGE"])
+
+        Returns:
+            List of VectorSearchResult with annotations and similarity scores
+        """
+        from opencontractserver.documents.models import Document
+        from opencontractserver.pipeline.utils import get_default_embedder
+
+        _logger.info(f"Global search for user {user_id}: '{query_text[:50]}...'")
+
+        # Get default embedder configuration
+        default_embedder_path = settings.DEFAULT_EMBEDDER
+        default_embedder_class = get_default_embedder()
+
+        if not default_embedder_class:
+            _logger.error("Could not get default embedder for global search")
+            return []
+
+        # Generate query embedding using default embedder
+        default_embedder = default_embedder_class()
+        query_vector = default_embedder.embed_text(query_text)
+
+        if query_vector is None:
+            _logger.warning("Failed to generate query embedding for global search")
+            return []
+
+        embed_dim = len(query_vector)
+        _logger.debug(
+            f"Generated query embedding with dimension {embed_dim} "
+            f"using {default_embedder_path}"
+        )
+
+        # Get all documents visible to user using the canonical visible_to_user pattern
+        # This respects document permissions, is_public flag, and corpus membership
+        user = User.objects.get(id=user_id)
+        accessible_doc_ids = list(
+            Document.objects.visible_to_user(user)
+            .filter(is_current=True)
+            .values_list("id", flat=True)
+        )
+
+        if not accessible_doc_ids:
+            _logger.info("User has no accessible documents for global search")
+            return []
+
+        _logger.debug(
+            f"User {user_id} has access to {len(accessible_doc_ids)} documents"
+        )
+
+        # Build annotation queryset - filter to accessible documents
+        # This implicitly respects corpus permissions since Document.visible_to_user
+        # already considers corpus membership and permissions
+        queryset = Annotation.objects.select_related(
+            "annotation_label", "document", "corpus"
+        ).filter(
+            Q(document_id__in=accessible_doc_ids)
+            | Q(
+                structural=True,
+                structural_annotation_set__documents__in=accessible_doc_ids,
+            )
+        )
+
+        # Apply visibility rules per consolidated_permissioning_guide.md:
+        # - Structural annotations: ALWAYS visible if document is readable (READ-ONLY)
+        # - Non-structural annotations: visible if public OR owned by user
+        visibility_q = (
+            Q(structural=True)
+            | Q(structural=False, creator_id=user_id)
+            | Q(structural=False, is_public=True)
+        )
+        queryset = queryset.filter(visibility_q)
+
+        # Apply modality filter if specified
+        if modalities:
+            modality_q = Q()
+            for modality in modalities:
+                modality_q |= Q(content_modalities__contains=[modality])
+            queryset = queryset.filter(modality_q)
+
+        _logger.debug("Global search queryset built, searching by embedding")
+
+        # Perform vector search using DEFAULT_EMBEDDER embeddings
+        queryset = queryset.search_by_embedding(
+            query_vector=query_vector,
+            embedder_path=default_embedder_path,
+            top_k=top_k,
+        )
+
+        # Execute and convert to results
+        annotations = list(queryset)
+        _logger.info(f"Global search returned {len(annotations)} annotations")
+
+        results = []
+        for annotation in annotations:
+            similarity_score = getattr(annotation, "similarity_score", 1.0)
+            if similarity_score != similarity_score:  # NaN check
+                similarity_score = 1.0
+            results.append(
+                VectorSearchResult(
+                    annotation=annotation, similarity_score=similarity_score
+                )
+            )
+
+        return results
+
+    @classmethod
+    async def async_global_search(
+        cls,
+        user_id: Union[str, int],
+        query_text: str,
+        top_k: int = 100,
+        modalities: Optional[list[str]] = None,
+    ) -> list["VectorSearchResult"]:
+        """
+        Async version of global_search.
+
+        Search across ALL documents the user has access to using DEFAULT_EMBEDDER.
+
+        Args:
+            user_id: ID of the user performing the search
+            query_text: The text query to search for
+            top_k: Maximum number of results to return
+            modalities: Optional filter by content modalities
+
+        Returns:
+            List of VectorSearchResult with annotations and similarity scores
+        """
+        # Wrap sync method for async context
+        return await sync_to_async(cls.global_search)(
+            user_id=user_id,
+            query_text=query_text,
+            top_k=top_k,
+            modalities=modalities,
+        )
 
     async def async_search(self, query: VectorSearchQuery) -> list[VectorSearchResult]:
         """Async version of search that properly handles Django ORM in async context.
