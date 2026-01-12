@@ -274,10 +274,12 @@ class TestAnnotationEmbeddingTask(TestCase):
 
         # Create a document
         with open(SAMPLE_PDF_FILE_ONE_PATH, "rb") as f:
+            from django.core.files.base import ContentFile
+
             self.document = Document.objects.create(
                 title="Test Document",
                 creator=self.user,
-                pdf_file=f.read(),
+                pdf_file=ContentFile(f.read(), name="test.pdf"),
             )
 
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
@@ -352,13 +354,19 @@ class TestAnnotationEmbeddingTask(TestCase):
 
         explicit_path = "explicit.embedder.path"
 
-        # Create annotation
+        # Create annotation with dummy embedding to prevent signal from firing
         annotation = Annotation.objects.create(
             document=self.document,
             creator=self.user,
             raw_text="Test annotation text",
             page=1,
+            embedding=[0.1] * 384,  # Dummy embedding to skip signal handler
         )
+
+        # Clear the dummy embedding so the task will actually run
+        annotation.embedding = None
+        annotation.save(update_fields=["embedding"])
+        annotation.embedding_set.all().delete()
 
         # Run embedding task with explicit embedder_path
         calculate_embedding_for_annotation_text(
@@ -402,10 +410,12 @@ class TestIdempotentEmbedding(TestCase):
         )
 
         with open(SAMPLE_PDF_FILE_ONE_PATH, "rb") as f:
+            from django.core.files.base import ContentFile
+
             self.document = Document.objects.create(
                 title="Test Document",
                 creator=self.user,
-                pdf_file=f.read(),
+                pdf_file=ContentFile(f.read(), name="test.pdf"),
             )
 
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")

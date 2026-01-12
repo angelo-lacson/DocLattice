@@ -1473,5 +1473,6 @@ class TestLlamaParseParserTextConversion(TestCase):
 
         result = parser._convert_text_to_opencontracts(self.doc, mock_docs)
 
-        self.assertEqual(result["content"], "\n\nOnly second page has content")
+        # Empty pages are filtered out, so only non-empty page content is included
+        self.assertEqual(result["content"], "Only second page has content")
         self.assertEqual(result["page_count"], 2)
