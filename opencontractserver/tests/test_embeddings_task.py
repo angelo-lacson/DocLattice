@@ -272,116 +272,28 @@ class TestEmbeddingsTask(unittest.TestCase):
 
 class TestAnnotationSignals(unittest.TestCase):
     """
-    Tests for the annotation signal handlers that process embeddings for structural annotations
-    when they're created or when documents are added to corpuses.
+    Tests for the annotation signal handlers that process embeddings when annotations
+    are created. With the corpus-isolated structural annotation architecture, each
+    annotation belongs to exactly one corpus context, and embeddings are handled via
+    the dual embedding strategy in the task.
     """
 
     @patch(
-        "opencontractserver.annotations.signals.calculate_embedding_for_annotation_text.delay"
-    )
-    @patch("opencontractserver.annotations.signals.transaction")
-    @patch("opencontractserver.annotations.signals.apps.get_model")
-    def test_process_structural_annotation_for_corpuses(
-        self, mock_get_model, mock_transaction, mock_calc_embedding_delay
-    ):
-        """
-        Test that process_structural_annotation_for_corpuses correctly identifies corpuses
-        and schedules embedding tasks for annotations.
-        """
-        from opencontractserver.annotations.signals import (
-            process_structural_annotation_for_corpuses,
-        )
-
-        # Create mock classes with their objects managers
-        mock_corpus_class = MagicMock()
-        mock_corpus_objects = MagicMock()
-        mock_corpus_class.objects = mock_corpus_objects
-
-        mock_annotation_class = MagicMock()
-        mock_annotation_objects = MagicMock()
-        mock_annotation_class.objects = mock_annotation_objects
-
-        # Set up mock for apps.get_model to return our mock classes
-        def get_model_side_effect(app_label, model_name):
-            if app_label == "corpuses" and model_name == "Corpus":
-                return mock_corpus_class
-            elif app_label == "annotations" and model_name == "Annotation":
-                return mock_annotation_class
-            return MagicMock()
-
-        mock_get_model.side_effect = get_model_side_effect
-
-        # Create mock annotation
-        mock_annot = MagicMock()
-        mock_annot.id = 1
-        mock_annot.document_id = 100
-        mock_annot.document = MagicMock()
-        mock_annot.structural = True
-
-        # Set up corpus query results - simulate two corpuses
-        mock_corpus_objects.filter.return_value.values_list.return_value = [
-            (201, "path.to.Embedder1"),  # corpus_id, preferred_embedder
-            (202, None),  # corpus with no preferred embedder
-        ]
-
-        # Mock the annotation filter to indicate no embeddings exist
-        mock_annotation_objects.filter.return_value.exists.return_value = False
-
-        # Mock settings.DEFAULT_EMBEDDER
-        with patch("opencontractserver.annotations.signals.settings") as mock_settings:
-            mock_settings.DEFAULT_EMBEDDER = "path.to.DefaultEmbedder"
-
-            # Call the function
-            process_structural_annotation_for_corpuses(mock_annot)
-
-            # Verify corpus was queried correctly
-            mock_corpus_objects.filter.assert_called_with(
-                document_paths__document=mock_annot.document
-            )
-
-            # Verify annotation embedding check
-            self.assertEqual(
-                mock_annotation_objects.filter.call_count, 2
-            )  # Once per corpus
-
-            # Should have called transaction.on_commit twice (once per corpus)
-            self.assertEqual(mock_transaction.on_commit.call_count, 2)
-
-            # Simulate the transaction commit by invoking each lambda and verify that the
-            # scheduled task uses the expected embedder path
-            for idx, commit_call in enumerate(
-                mock_transaction.on_commit.call_args_list
-            ):
-                lambda_func = commit_call[0][0]
-                mock_calc_embedding_delay.reset_mock()
-                lambda_func()
-                expected_path = (
-                    "path.to.Embedder1" if idx == 0 else "path.to.DefaultEmbedder"
-                )
-                mock_calc_embedding_delay.assert_called_once_with(
-                    annotation_id=1, embedder_path=expected_path
-                )
-
-    @patch(
-        "opencontractserver.annotations.signals.process_structural_annotation_for_corpuses"
-    )
-    @patch(
         "opencontractserver.annotations.signals.calculate_embedding_for_annotation_text"
     )
-    def test_process_annot_on_create_structural(
-        self, mock_calc_embedding, mock_process_structural
-    ):
+    def test_process_annot_on_create_structural(self, mock_calc_embedding):
         """
         Test that process_annot_on_create_atomic correctly processes structural annotations.
+        Structural annotations in a structural_set don't have a corpus_id, so corpus_id=None.
         """
         from opencontractserver.annotations.signals import (
             process_annot_on_create_atomic,
         )
 
-        # Create mock annotation that's structural
+        # Create mock annotation that's structural (in a structural_set, no corpus)
         mock_annotation = MagicMock()
         mock_annotation.id = 1
-        mock_annotation.document_id = 1
+        mock_annotation.corpus_id = None  # Structural annotations have no corpus
         mock_annotation.embedding = None
         mock_annotation.structural = True
 
@@ -390,35 +302,26 @@ class TestAnnotationSignals(unittest.TestCase):
             sender=None, instance=mock_annotation, created=True
         )
 
-        # Verify embedding calculation was scheduled
-        mock_calc_embedding.si.assert_called_with(annotation_id=1)
+        # Verify embedding calculation was scheduled with corpus_id=None
+        mock_calc_embedding.si.assert_called_with(annotation_id=1, corpus_id=None)
         mock_calc_embedding.si.return_value.apply_async.assert_called_once()
 
-        # Verify process_structural_annotation_for_corpuses was called
-        mock_process_structural.assert_called_with(mock_annotation)
-
-    @patch(
-        "opencontractserver.annotations.signals.process_structural_annotation_for_corpuses"
-    )
     @patch(
         "opencontractserver.annotations.signals.calculate_embedding_for_annotation_text"
     )
-    def test_process_annot_on_create_non_structural(
-        self,
-        mock_calc_embedding,
-        mock_process_structural,
-    ):
+    def test_process_annot_on_create_non_structural(self, mock_calc_embedding):
         """
         Test that process_annot_on_create_atomic correctly handles non-structural annotations.
+        Non-structural annotations have a corpus_id.
         """
         from opencontractserver.annotations.signals import (
             process_annot_on_create_atomic,
         )
 
-        # Create mock annotation that's NOT structural
+        # Create mock annotation that's NOT structural (has corpus)
         mock_annotation = MagicMock()
         mock_annotation.id = 1
-        mock_annotation.document_id = 1
+        mock_annotation.corpus_id = 100  # Regular annotation in a corpus
         mock_annotation.embedding = None
         mock_annotation.structural = False
 
@@ -427,22 +330,14 @@ class TestAnnotationSignals(unittest.TestCase):
             sender=None, instance=mock_annotation, created=True
         )
 
-        # Verify embedding calculation was scheduled
-        mock_calc_embedding.si.assert_called_with(annotation_id=1)
+        # Verify embedding calculation was scheduled with the corpus_id
+        mock_calc_embedding.si.assert_called_with(annotation_id=1, corpus_id=100)
         mock_calc_embedding.si.return_value.apply_async.assert_called_once()
 
-        # Verify process_structural_annotation_for_corpuses was NOT called
-        mock_process_structural.assert_not_called()
-
-    @patch(
-        "opencontractserver.annotations.signals.process_structural_annotation_for_corpuses"
-    )
     @patch(
         "opencontractserver.annotations.signals.calculate_embedding_for_annotation_text"
     )
-    def test_process_annot_on_create_existing_embedding(
-        self, mock_calc_embedding, mock_process_structural
-    ):
+    def test_process_annot_on_create_existing_embedding(self, mock_calc_embedding):
         """
         Test that process_annot_on_create_atomic skips annotations with existing embeddings.
         """
@@ -453,7 +348,7 @@ class TestAnnotationSignals(unittest.TestCase):
         # Create mock annotation with an existing embedding
         mock_annotation = MagicMock()
         mock_annotation.id = 1
-        mock_annotation.document_id = 1
+        mock_annotation.corpus_id = 100
         mock_annotation.embedding = [0.1, 0.2, 0.3]  # Non-None embedding
         mock_annotation.structural = True
 
@@ -465,9 +360,6 @@ class TestAnnotationSignals(unittest.TestCase):
         # Verify embedding calculation was NOT scheduled
         mock_calc_embedding.si.assert_not_called()
 
-        # Verify process_structural_annotation_for_corpuses was NOT called
-        mock_process_structural.assert_not_called()
-
     @patch("opencontractserver.annotations.signals.calculate_embedding_for_note_text")
     def test_process_note_on_create(self, mock_calc_embedding):
         """
@@ -475,31 +367,68 @@ class TestAnnotationSignals(unittest.TestCase):
         """
         from opencontractserver.annotations.signals import process_note_on_create_atomic
 
-        # Create mock note
+        # Create mock note with a corpus
         mock_note = MagicMock()
         mock_note.id = 1
+        mock_note.corpus_id = 100
+        mock_note.corpus = MagicMock()
         mock_note.embedding = None
 
         # Call the signal handler
         process_note_on_create_atomic(sender=None, instance=mock_note, created=True)
 
-        # Verify embedding calculation was scheduled
-        mock_calc_embedding.si.assert_called_with(note_id=1)
+        # Verify embedding calculation was scheduled with corpus_id
+        mock_calc_embedding.si.assert_called_with(note_id=1, corpus_id=100)
+        mock_calc_embedding.si.return_value.apply_async.assert_called_once()
+
+    @patch(
+        "opencontractserver.annotations.signals.calculate_embedding_for_annotation_text"
+    )
+    def test_process_structural_annotation_for_corpuses(self, mock_calc_embedding):
+        """
+        Test that structural annotations without corpus_id still get embeddings.
+        With corpus-isolated StructuralAnnotationSets, the embedding task handles
+        the dual embedding strategy automatically.
+        """
+        from opencontractserver.annotations.signals import (
+            process_annot_on_create_atomic,
+        )
+
+        # Structural annotation linked via structural_set (no direct corpus)
+        mock_annotation = MagicMock()
+        mock_annotation.id = 42
+        mock_annotation.corpus_id = None
+        mock_annotation.embedding = None
+
+        process_annot_on_create_atomic(
+            sender=None, instance=mock_annotation, created=True
+        )
+
+        # Should schedule embedding with corpus_id=None
+        mock_calc_embedding.si.assert_called_with(annotation_id=42, corpus_id=None)
         mock_calc_embedding.si.return_value.apply_async.assert_called_once()
 
 
 class TestEmbeddingTask(unittest.TestCase):
     """
     Tests for the embedding task functions that calculate embeddings for annotations.
+
+    The embedding task uses the dual embedding strategy:
+    - ALWAYS creates a DEFAULT_EMBEDDER embedding (for global search)
+    - ADDITIONALLY creates corpus-specific embedding if corpus uses different embedder
+
+    When an explicit embedder_path is provided, it bypasses the dual embedding strategy
+    and uses only that embedder.
     """
 
-    @patch("opencontractserver.utils.embeddings.get_embedder")
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
     def test_calculate_embedding_for_annotation_text_with_explicit_embedder(
-        self, mock_annotation_model, mock_get_embedder
+        self, mock_annotation_model, mock_get_component
     ):
         """
         Test that calculate_embedding_for_annotation_text uses an explicitly provided embedder_path.
+        When explicit embedder_path is provided, it bypasses the dual embedding strategy.
         """
         from opencontractserver.tasks.embeddings_task import (
             calculate_embedding_for_annotation_text,
@@ -524,10 +453,7 @@ class TestEmbeddingTask(unittest.TestCase):
         mock_embedder_instance.embed_text.return_value = test_vector
 
         mock_embedder_class = MagicMock(return_value=mock_embedder_instance)
-
-        # Mock get_embedder to return our mock class
-        returned_path = "returned.embedder.path"
-        mock_get_embedder.return_value = (mock_embedder_class, returned_path)
+        mock_get_component.return_value = mock_embedder_class
 
         # Define the explicit embedder path we'll provide
         explicit_embedder_path = "path.to.TestEmbedder"
@@ -543,10 +469,8 @@ class TestEmbeddingTask(unittest.TestCase):
             pk=1
         )
 
-        # Verify get_embedder was called with correct parameters
-        mock_get_embedder.assert_called_with(
-            corpus_id=123, embedder_path=explicit_embedder_path
-        )
+        # Verify get_component_by_name was called with explicit embedder path
+        mock_get_component.assert_called_with(explicit_embedder_path)
 
         # Verify embed_text was called
         mock_embedder_instance.embed_text.assert_called_with("This is test text")
@@ -554,18 +478,29 @@ class TestEmbeddingTask(unittest.TestCase):
         # The key test: verify that the explicit embedder_path was used
         mock_annot.add_embedding.assert_called_with(explicit_embedder_path, test_vector)
 
-    @patch("opencontractserver.utils.embeddings.get_embedder")
+    @patch("opencontractserver.tasks.embeddings_task.Corpus")
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    @patch("opencontractserver.tasks.embeddings_task.settings")
     def test_calculate_embedding_for_annotation_text_fallback_to_annotation_corpus(
-        self, mock_annotation_model, mock_get_embedder
+        self,
+        mock_settings,
+        mock_annotation_model,
+        mock_get_default,
+        mock_get_component,
+        mock_corpus_model,
     ):
         """
-        Test that calculate_embedding_for_annotation_text falls back to the annotation's corpus embedder
-        when no explicit embedder_path is provided.
+        Test that calculate_embedding_for_annotation_text creates both default and
+        corpus-specific embeddings when the corpus has a different preferred embedder.
         """
         from opencontractserver.tasks.embeddings_task import (
             calculate_embedding_for_annotation_text,
         )
+
+        # Set up settings mock
+        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
 
         # Create mock annotation with corpus reference
         mock_annot = MagicMock()
@@ -578,18 +513,33 @@ class TestEmbeddingTask(unittest.TestCase):
             mock_annot
         )
 
-        # Create mock embedder class and instance
-        mock_embedder_instance = MagicMock()
-        mock_embedder_instance.is_multimodal = False
-        mock_embedder_instance.supports_images = False
-        test_vector = [0.4, 0.5, 0.6]
-        mock_embedder_instance.embed_text.return_value = test_vector
+        # Create mock default embedder
+        mock_default_embedder_instance = MagicMock()
+        mock_default_embedder_instance.is_multimodal = False
+        mock_default_embedder_instance.supports_images = False
+        default_vector = [0.1, 0.2, 0.3]
+        mock_default_embedder_instance.embed_text.return_value = default_vector
+        mock_default_embedder_class = MagicMock(
+            return_value=mock_default_embedder_instance
+        )
+        mock_get_default.return_value = mock_default_embedder_class
 
-        mock_embedder_class = MagicMock(return_value=mock_embedder_instance)
+        # Create mock corpus-specific embedder
+        mock_corpus_embedder_instance = MagicMock()
+        mock_corpus_embedder_instance.is_multimodal = False
+        mock_corpus_embedder_instance.supports_images = False
+        corpus_vector = [0.4, 0.5, 0.6]
+        mock_corpus_embedder_instance.embed_text.return_value = corpus_vector
+        mock_corpus_embedder_class = MagicMock(
+            return_value=mock_corpus_embedder_instance
+        )
+        mock_get_component.return_value = mock_corpus_embedder_class
 
-        # Mock get_embedder to return our mock class with corpus embedder path
-        corpus_embedder_path = "corpus.embedder.path"
-        mock_get_embedder.return_value = (mock_embedder_class, corpus_embedder_path)
+        # Create mock corpus with different preferred embedder
+        mock_corpus = MagicMock()
+        mock_corpus.id = 123
+        mock_corpus.preferred_embedder = "corpus.embedder.path"
+        mock_corpus_model.objects.get.return_value = mock_corpus
 
         # Call the function without embedder_path
         calculate_embedding_for_annotation_text(annotation_id=1)
@@ -599,24 +549,43 @@ class TestEmbeddingTask(unittest.TestCase):
             pk=1
         )
 
-        # Verify get_embedder was called with corpus_id but no embedder_path
-        mock_get_embedder.assert_called_with(corpus_id=123, embedder_path=None)
+        # Verify default embedder was called
+        mock_get_default.assert_called_once()
+        mock_default_embedder_instance.embed_text.assert_called_with(
+            "This is test text"
+        )
 
-        # Verify embedding was stored with the corpus embedder path
-        mock_annot.add_embedding.assert_called_with(corpus_embedder_path, test_vector)
+        # Verify corpus was retrieved for dual embedding
+        mock_corpus_model.objects.get.assert_called_with(id=123)
 
-    @patch("opencontractserver.utils.embeddings.get_embedder")
+        # Verify corpus embedder was called for dual embedding
+        mock_get_component.assert_called_with("corpus.embedder.path")
+        mock_corpus_embedder_instance.embed_text.assert_called_with("This is test text")
+
+        # Verify both embeddings were stored (default + corpus-specific)
+        calls = mock_annot.add_embedding.call_args_list
+        self.assertEqual(len(calls), 2)
+        # First call: default embedder
+        self.assertEqual(calls[0][0], ("default.embedder.path", default_vector))
+        # Second call: corpus embedder
+        self.assertEqual(calls[1][0], ("corpus.embedder.path", corpus_vector))
+
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    @patch("opencontractserver.tasks.embeddings_task.settings")
     def test_calculate_embedding_for_annotation_text_fallback_to_default(
-        self, mock_annotation_model, mock_get_embedder
+        self, mock_settings, mock_annotation_model, mock_get_default
     ):
         """
-        Test that calculate_embedding_for_annotation_text falls back to the default embedder
-        when no explicit embedder_path is provided and the annotation has no corpus.
+        Test that calculate_embedding_for_annotation_text creates only the default embedding
+        when no corpus is associated (no dual embedding needed).
         """
         from opencontractserver.tasks.embeddings_task import (
             calculate_embedding_for_annotation_text,
         )
+
+        # Set up settings mock
+        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
 
         # Create mock annotation with no corpus
         mock_annot = MagicMock()
@@ -637,10 +606,7 @@ class TestEmbeddingTask(unittest.TestCase):
         mock_embedder_instance.embed_text.return_value = test_vector
 
         mock_embedder_class = MagicMock(return_value=mock_embedder_instance)
-
-        # Mock get_embedder to return the default embedder path
-        default_path = "default.embedder.path"
-        mock_get_embedder.return_value = (mock_embedder_class, default_path)
+        mock_get_default.return_value = mock_embedder_class
 
         # Call the function without embedder_path
         calculate_embedding_for_annotation_text(annotation_id=1)
@@ -650,11 +616,13 @@ class TestEmbeddingTask(unittest.TestCase):
             pk=1
         )
 
-        # Verify get_embedder was called with corpus_id=None
-        mock_get_embedder.assert_called_with(corpus_id=None, embedder_path=None)
+        # Verify only default embedder was called
+        mock_get_default.assert_called_once()
 
         # Verify embedding was stored with the default path
-        mock_annot.add_embedding.assert_called_with(default_path, test_vector)
+        mock_annot.add_embedding.assert_called_once_with(
+            "default.embedder.path", test_vector
+        )
 
 
 class TestMultimodalEmbeddingTask(unittest.TestCase):

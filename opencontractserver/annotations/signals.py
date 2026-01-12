@@ -41,14 +41,9 @@ def process_annot_on_create_atomic(sender, instance, created, **kwargs):
     # When a new annotation is created *AND* no embeddings are present at creation,
     # hit the embeddings microservice. Since embeddings can be an array, need to test for None
     if created and instance.embedding is None:
-        # Get corpus_id from annotation's corpus or structural_annotation_set's corpus
-        corpus_id = None
-        if instance.corpus_id:
-            corpus_id = instance.corpus_id
-        elif instance.structural_annotation_set_id and hasattr(
-            instance.structural_annotation_set, "corpus_id"
-        ):
-            corpus_id = instance.structural_annotation_set.corpus_id
+        # Get corpus_id from annotation's corpus
+        # Note: structural_set doesn't have a corpus field, so we only use direct corpus_id
+        corpus_id = instance.corpus_id if instance.corpus_id else None
 
         logger.debug(
             f"Calculating embeddings for newly created annotation {instance.id} "
