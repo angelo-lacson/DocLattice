@@ -294,20 +294,30 @@ class BaseParser(PipelineComponentBase, ABC):
         # Generate content hash for the set
         content_hash = document.pdf_file_hash or f"doc_{document.pk}"
 
-        # Create the StructuralAnnotationSet
-        struct_set = StructuralAnnotationSet.objects.create(
+        # Use get_or_create to handle retry scenarios where the set was created
+        # but the document link wasn't saved (e.g., task failed after line 298
+        # but before document.save() at line 337)
+        struct_set, created = StructuralAnnotationSet.objects.get_or_create(
             content_hash=content_hash,
-            creator=user,
-            parser_name=self.title or self.__class__.__name__,
-            parser_version="1.0",
-            page_count=document.page_count,
-            pawls_parse_file=document.pawls_parse_file,
-            txt_extract_file=document.txt_extract_file,
+            defaults={
+                "creator": user,
+                "parser_name": self.title or self.__class__.__name__,
+                "parser_version": "1.0",
+                "page_count": document.page_count,
+                "pawls_parse_file": document.pawls_parse_file,
+                "txt_extract_file": document.txt_extract_file,
+            },
         )
 
-        logger.info(
-            f"Created StructuralAnnotationSet {struct_set.pk} for document {document.pk}"
-        )
+        if created:
+            logger.info(
+                f"Created StructuralAnnotationSet {struct_set.pk} for document {document.pk}"
+            )
+        else:
+            logger.info(
+                f"Reusing existing StructuralAnnotationSet {struct_set.pk} "
+                f"for document {document.pk} (retry scenario)"
+            )
 
         # Migrate structural annotations to the set
         structural_annotation_ids = set(
