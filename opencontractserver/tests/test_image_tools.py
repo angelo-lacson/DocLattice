@@ -7,7 +7,7 @@ import pathlib
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
 from opencontractserver.annotations.models import Annotation, AnnotationLabel, LabelSet
 from opencontractserver.corpuses.models import Corpus
@@ -585,15 +585,18 @@ class ImageToolsStoragePathTestCase(TestCase):
         default_storage.delete(storage_path)
 
 
-class AsyncImageToolsTestCase(TestCase):
-    """Tests for async versions of image tools."""
+class AsyncImageToolsTestCase(TransactionTestCase):
+    """Tests for async versions of image tools.
 
-    @classmethod
-    def setUpTestData(cls):
-        cls.user = User.objects.create_user(
+    Uses TransactionTestCase because async functions access the database from
+    different connections and need to see committed data.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
             username="async_imagetools_test_user", password="testpass123"
         )
-        cls.other_user = User.objects.create_user(
+        self.other_user = User.objects.create_user(
             username="async_imagetools_other_user", password="otherpass123"
         )
 
@@ -608,10 +611,10 @@ class AsyncImageToolsTestCase(TestCase):
         img.save(buffer, format="JPEG", quality=85)
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    def _create_document_with_images(
+    def _create_document_with_images_sync(
         self, num_pages: int = 1, images_per_page: int = 1
     ):
-        """Create a document with PAWLs data containing images."""
+        """Create a document with PAWLs data containing images (sync version)."""
         doc = Document.objects.create(
             title="Async Test Document",
             description="Test document for async tests",
@@ -659,12 +662,22 @@ class AsyncImageToolsTestCase(TestCase):
         set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
         return doc
 
+    async def _create_document_with_images(
+        self, num_pages: int = 1, images_per_page: int = 1
+    ):
+        """Create a document with PAWLs data containing images (async wrapper)."""
+        from asgiref.sync import sync_to_async
+
+        return await sync_to_async(self._create_document_with_images_sync)(
+            num_pages, images_per_page
+        )
+
     @pytest.mark.asyncio
     async def test_alist_document_images(self):
         """Test async list_document_images."""
         from opencontractserver.llms.tools.image_tools import alist_document_images
 
-        doc = self._create_document_with_images(num_pages=2, images_per_page=2)
+        doc = await self._create_document_with_images(num_pages=2, images_per_page=2)
 
         images = await alist_document_images(doc.id)
 
@@ -676,7 +689,7 @@ class AsyncImageToolsTestCase(TestCase):
         """Test async list_document_images with page filter."""
         from opencontractserver.llms.tools.image_tools import alist_document_images
 
-        doc = self._create_document_with_images(num_pages=2, images_per_page=2)
+        doc = await self._create_document_with_images(num_pages=2, images_per_page=2)
 
         images = await alist_document_images(doc.id, page_index=0)
 
@@ -688,7 +701,7 @@ class AsyncImageToolsTestCase(TestCase):
         """Test async get_document_image."""
         from opencontractserver.llms.tools.image_tools import aget_document_image
 
-        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
+        doc = await self._create_document_with_images(num_pages=1, images_per_page=1)
 
         result = await aget_document_image(doc.id, page_index=0, token_index=1)
 
@@ -702,19 +715,14 @@ class AsyncImageToolsTestCase(TestCase):
         """Test async get_document_image with invalid indices."""
         from opencontractserver.llms.tools.image_tools import aget_document_image
 
-        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
+        doc = await self._create_document_with_images(num_pages=1, images_per_page=1)
 
         result = await aget_document_image(doc.id, page_index=99, token_index=0)
 
         assert result is None
 
-    @pytest.mark.asyncio
-    async def test_aget_annotation_images(self):
-        """Test async get_annotation_images."""
-        from opencontractserver.llms.tools.image_tools import aget_annotation_images
-
-        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
-
+    def _create_annotation_sync(self, doc):
+        """Helper to create annotation synchronously."""
         corpus = Corpus.objects.create(title="Async Test Corpus", creator=self.user)
         label_set = LabelSet.objects.create(title="Async Test LS", creator=self.user)
         corpus.label_set = label_set
@@ -741,6 +749,17 @@ class AsyncImageToolsTestCase(TestCase):
                 }
             },
         )
+        return annotation
+
+    @pytest.mark.asyncio
+    async def test_aget_annotation_images(self):
+        """Test async get_annotation_images."""
+        from asgiref.sync import sync_to_async
+
+        from opencontractserver.llms.tools.image_tools import aget_annotation_images
+
+        doc = await self._create_document_with_images(num_pages=1, images_per_page=1)
+        annotation = await sync_to_async(self._create_annotation_sync)(doc)
 
         images = await aget_annotation_images(annotation.id)
 
@@ -754,7 +773,7 @@ class AsyncImageToolsTestCase(TestCase):
             alist_document_images_with_permission,
         )
 
-        doc = self._create_document_with_images(num_pages=1, images_per_page=2)
+        doc = await self._create_document_with_images(num_pages=1, images_per_page=2)
 
         # Permitted user
         images = await alist_document_images_with_permission(self.user, doc.id)
@@ -771,7 +790,7 @@ class AsyncImageToolsTestCase(TestCase):
             aget_document_image_with_permission,
         )
 
-        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
+        doc = await self._create_document_with_images(num_pages=1, images_per_page=1)
 
         # Permitted user
         result = await aget_document_image_with_permission(
@@ -789,38 +808,14 @@ class AsyncImageToolsTestCase(TestCase):
     @pytest.mark.asyncio
     async def test_aget_annotation_images_with_permission(self):
         """Test async get_annotation_images_with_permission."""
+        from asgiref.sync import sync_to_async
+
         from opencontractserver.llms.tools.image_tools import (
             aget_annotation_images_with_permission,
         )
 
-        doc = self._create_document_with_images(num_pages=1, images_per_page=1)
-
-        corpus = Corpus.objects.create(title="Async Perm Corpus", creator=self.user)
-        label_set = LabelSet.objects.create(title="Async Perm LS", creator=self.user)
-        corpus.label_set = label_set
-        corpus.save()
-
-        label = AnnotationLabel.objects.create(
-            text="Figure",
-            label_type="TOKEN_LABEL",
-            creator=self.user,
-        )
-        label_set.annotation_labels.add(label)
-
-        annotation = Annotation.objects.create(
-            document=doc,
-            corpus=corpus,
-            annotation_label=label,
-            raw_text="Figure",
-            page=0,
-            creator=self.user,
-            json={
-                "0": {
-                    "bounds": {"left": 50, "top": 50, "right": 130, "bottom": 110},
-                    "tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}],
-                }
-            },
-        )
+        doc = await self._create_document_with_images(num_pages=1, images_per_page=1)
+        annotation = await sync_to_async(self._create_annotation_sync)(doc)
 
         # Permitted user
         images = await aget_annotation_images_with_permission(self.user, annotation.id)

@@ -420,10 +420,12 @@ class TestDoclingParserImageExtraction(TestCase):
             },  # no overlap
         ]
 
+        pawls_pages = [{"page": {"width": 612, "height": 792}, "tokens": page_tokens}]
+
         result = self.parser._find_images_in_bounds(
             bounds=bounds,
             page_idx=0,
-            page_tokens=page_tokens,
+            pawls_pages=pawls_pages,
             token_offset=1,  # Image tokens start at index 1
         )
 
@@ -446,11 +448,12 @@ class TestDoclingParserImageExtraction(TestCase):
                 "is_image": True,
             },
         ]
+        pawls_pages = [{"page": {"width": 612, "height": 792}, "tokens": page_tokens}]
 
         result = self.parser._find_images_in_bounds(
             bounds=bounds,
             page_idx=0,
-            page_tokens=page_tokens,
+            pawls_pages=pawls_pages,
             token_offset=1,
         )
 
@@ -459,54 +462,24 @@ class TestDoclingParserImageExtraction(TestCase):
     def test_find_images_in_bounds_empty_tokens(self):
         """Test that _find_images_in_bounds handles empty token list."""
         bounds = {"left": 100, "top": 100, "right": 200, "bottom": 200}
+        pawls_pages = [{"page": {"width": 612, "height": 792}, "tokens": []}]
 
         result = self.parser._find_images_in_bounds(
             bounds=bounds,
             page_idx=0,
-            page_tokens=[],
+            pawls_pages=pawls_pages,
             token_offset=0,
         )
 
         self.assertEqual(result, [])
 
-    def test_add_images_to_result_with_images(self):
+    @patch(
+        "opencontractserver.pipeline.parsers.docling_parser_rest.extract_images_from_pdf"
+    )
+    def test_add_images_to_result_with_images(self, mock_extract):
         """Test _add_images_to_result adds image tokens to PAWLs."""
-        # Base result from docling service
-        base_result = {
-            "title": "Test",
-            "content": "Test content",
-            "pawls_file_content": [
-                {
-                    "page": {"width": 612, "height": 792, "index": 0},
-                    "tokens": [
-                        {"x": 100, "y": 100, "width": 50, "height": 12, "text": "Text"}
-                    ],
-                }
-            ],
-            "labelled_text": [
-                {
-                    "id": "figure-1",
-                    "annotationLabel": "Figure",
-                    "rawText": "Figure caption",
-                    "page": 0,
-                    "annotationJson": {
-                        "0": {
-                            "bounds": {
-                                "left": 50,
-                                "top": 200,
-                                "right": 300,
-                                "bottom": 400,
-                            },
-                            "tokensJsons": [],
-                        }
-                    },
-                    "structural": True,
-                }
-            ],
-        }
-
-        # Images extracted by pdf_token_extraction
-        images_by_page = {
+        # Mock extract_images_from_pdf to return test images
+        mock_extract.return_value = {
             0: [
                 {
                     "x": 100,
@@ -525,21 +498,7 @@ class TestDoclingParserImageExtraction(TestCase):
             ]
         }
 
-        result = self.parser._add_images_to_result(
-            result=base_result,
-            images_by_page=images_by_page,
-            pdf_bytes=b"fake pdf",
-            storage_path="documents/1/images",
-        )
-
-        # Check image token was added
-        self.assertEqual(len(result["pawls_file_content"][0]["tokens"]), 2)
-        image_token = result["pawls_file_content"][0]["tokens"][1]
-        self.assertTrue(image_token.get("is_image"))
-        self.assertEqual(image_token["format"], "jpeg")
-
-    def test_add_images_to_result_empty_images(self):
-        """Test _add_images_to_result handles empty images gracefully."""
+        # Base result from docling service
         base_result = {
             "title": "Test",
             "content": "Test content",
@@ -556,7 +515,40 @@ class TestDoclingParserImageExtraction(TestCase):
 
         result = self.parser._add_images_to_result(
             result=base_result,
-            images_by_page={},
+            pdf_bytes=b"fake pdf",
+            storage_path="documents/1/images",
+        )
+
+        # Check image token was added
+        self.assertEqual(len(result["pawls_file_content"][0]["tokens"]), 2)
+        image_token = result["pawls_file_content"][0]["tokens"][1]
+        self.assertTrue(image_token.get("is_image"))
+        self.assertEqual(image_token["format"], "jpeg")
+
+    @patch(
+        "opencontractserver.pipeline.parsers.docling_parser_rest.extract_images_from_pdf"
+    )
+    def test_add_images_to_result_empty_images(self, mock_extract):
+        """Test _add_images_to_result handles empty images gracefully."""
+        # Mock extract_images_from_pdf to return empty dict
+        mock_extract.return_value = {}
+
+        base_result = {
+            "title": "Test",
+            "content": "Test content",
+            "pawls_file_content": [
+                {
+                    "page": {"width": 612, "height": 792, "index": 0},
+                    "tokens": [
+                        {"x": 100, "y": 100, "width": 50, "height": 12, "text": "Text"}
+                    ],
+                }
+            ],
+            "labelled_text": [],
+        }
+
+        result = self.parser._add_images_to_result(
+            result=base_result,
             pdf_bytes=b"fake pdf",
             storage_path=None,
         )
@@ -588,7 +580,7 @@ class TestDoclingParserImageExtraction(TestCase):
             "id": "figure-1",
             "annotationLabel": "Figure",
             "page": 0,
-            "annotationJson": {
+            "annotation_json": {
                 "0": {
                     "bounds": {"left": 100, "top": 200, "right": 300, "bottom": 350},
                     "tokensJsons": [],
@@ -607,14 +599,14 @@ class TestDoclingParserImageExtraction(TestCase):
 
         # No existing image tokens, so crop should be triggered
         image_token_offsets = {0: 1}  # Image tokens would start at index 1
+        page_dims = {0: (612.0, 792.0)}
 
         self.parser._add_image_refs_to_annotation(
             annotation=annotation,
-            page_idx=0,
-            image_token_offsets=image_token_offsets,
-            images_by_page={0: []},  # No embedded images
-            pawls_pages=pawls_pages,
             pdf_bytes=b"fake pdf",
+            image_token_offsets=image_token_offsets,
+            page_dims=page_dims,
+            pawls_pages=pawls_pages,
             storage_path="documents/1/images",
         )
 
@@ -622,7 +614,7 @@ class TestDoclingParserImageExtraction(TestCase):
         mock_crop.assert_called_once()
 
         # Annotation should have image token reference
-        token_refs = annotation["annotationJson"]["0"]["tokensJsons"]
+        token_refs = annotation["annotation_json"]["0"]["tokensJsons"]
         self.assertGreater(len(token_refs), 0)
 
     def test_add_image_refs_with_existing_image(self):
@@ -631,7 +623,7 @@ class TestDoclingParserImageExtraction(TestCase):
             "id": "figure-1",
             "annotationLabel": "Figure",
             "page": 0,
-            "annotationJson": {
+            "annotation_json": {
                 "0": {
                     "bounds": {"left": 100, "top": 200, "right": 300, "bottom": 350},
                     "tokensJsons": [],
@@ -660,19 +652,19 @@ class TestDoclingParserImageExtraction(TestCase):
 
         # Image token starts at index 1
         image_token_offsets = {0: 1}
+        page_dims = {0: (612.0, 792.0)}
 
         self.parser._add_image_refs_to_annotation(
             annotation=annotation,
-            page_idx=0,
-            image_token_offsets=image_token_offsets,
-            images_by_page={0: [pawls_pages[0]["tokens"][1]]},
-            pawls_pages=pawls_pages,
             pdf_bytes=b"fake pdf",
+            image_token_offsets=image_token_offsets,
+            page_dims=page_dims,
+            pawls_pages=pawls_pages,
             storage_path=None,
         )
 
         # Annotation should have reference to existing image token
-        token_refs = annotation["annotationJson"]["0"]["tokensJsons"]
+        token_refs = annotation["annotation_json"]["0"]["tokensJsons"]
         self.assertEqual(len(token_refs), 1)
         self.assertEqual(token_refs[0]["tokenIndex"], 1)
 
