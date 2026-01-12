@@ -558,11 +558,11 @@ class Corpus(TreeNode):
         **doc_kwargs,
     ):
         """
-        Import content into this corpus with corpus-isolated deduplication.
+        Import content into this corpus.
 
-        This uses SHA-256 hashing to detect duplicate content within THIS corpus.
-        Documents are isolated within the corpus with independent version trees.
-        Provenance is tracked via source_document field when content exists elsewhere.
+        Each upload creates a new document or document version. No content-based
+        deduplication is performed - duplicate files at different paths create
+        separate documents.
 
         Args:
             content: PDF content bytes (required)
@@ -573,11 +573,8 @@ class Corpus(TreeNode):
 
         Returns:
             Tuple of (document, status, document_path) where status is one of:
-            - 'created': Brand new document (content hash first seen globally)
-            - 'updated': Content changed at existing path (version increment)
-            - 'unchanged': No change detected at path
-            - 'linked': Same content already exists in THIS corpus at different path
-            - 'created_from_existing': New corpus-isolated doc, content exists elsewhere
+            - 'created': New document at new path
+            - 'updated': New version at existing path
 
         Raises:
             ValueError: If user or content is not provided
