@@ -114,7 +114,9 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_skips_annotations_with_default_embedding(self, mock_calc_embedding):
+    def test_command_skips_annotations_with_default_embedding(
+        self, mock_calc_embedding
+    ):
         """Command should skip annotations that already have default embeddings."""
         mock_calc_embedding.delay = MagicMock()
 
@@ -316,7 +318,9 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             corpus_id=self.corpus.id,
         )
         # delay() should not be called
-        self.assertFalse(hasattr(mock_calc_embedding, "delay") and mock_calc_embedding.delay.called)
+        self.assertFalse(
+            hasattr(mock_calc_embedding, "delay") and mock_calc_embedding.delay.called
+        )
 
     @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
     @patch(

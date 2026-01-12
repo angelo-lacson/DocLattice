@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from opencontractserver.annotations.models import Annotation
     from opencontractserver.pipeline.base.embedder import BaseEmbedder
 
+from opencontractserver.types.enums import ContentModality
 from opencontractserver.utils.pdf_token_extraction import (
     get_image_as_base64,
     load_pawls_data,
@@ -73,9 +74,19 @@ def weighted_average_embeddings(
 
     Returns:
         Weighted average embedding, normalized to unit length.
+
+    Raises:
+        ValueError: If vectors have different dimensions.
     """
     if not vectors:
         return []
+
+    # Validate that all vectors have the same dimension
+    dimensions = {len(v) for v in vectors}
+    if len(dimensions) > 1:
+        raise ValueError(
+            f"Cannot average vectors of different dimensions: {sorted(dimensions)}"
+        )
 
     arr = np.array(vectors, dtype=np.float64)
     weights_arr = np.array(weights, dtype=np.float64)
@@ -236,9 +247,9 @@ def generate_multimodal_embedding(
         text_weight = text_weight if text_weight is not None else default_text
         image_weight = image_weight if image_weight is not None else default_image
 
-    modalities = annotation.content_modalities or ["TEXT"]
-    has_text = "TEXT" in modalities
-    has_image = "IMAGE" in modalities
+    modalities = annotation.content_modalities or [ContentModality.TEXT.value]
+    has_text = ContentModality.TEXT.value in modalities
+    has_image = ContentModality.IMAGE.value in modalities
 
     logger.debug(
         f"Generating multimodal embedding for annotation {annotation.pk}: "

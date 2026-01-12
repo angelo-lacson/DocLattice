@@ -9,7 +9,7 @@ import json
 import math
 from io import BytesIO
 from typing import Optional
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -78,7 +78,9 @@ class TestGetMultimodalWeights(TestCase):
         self.assertEqual(text_weight, 0.3)
         self.assertEqual(image_weight, 0.7)
 
-    @override_settings(MULTIMODAL_EMBEDDING_WEIGHTS={"text_weight": 0.5, "image_weight": 0.5})
+    @override_settings(
+        MULTIMODAL_EMBEDDING_WEIGHTS={"text_weight": 0.5, "image_weight": 0.5}
+    )
     def test_weights_from_settings(self):
         """Should return weights from settings."""
         text_weight, image_weight = get_multimodal_weights()
@@ -191,6 +193,16 @@ class TestWeightedAverageEmbeddings(TestCase):
         # Should still give same result as [0.5, 0.5]
         length = math.sqrt(sum(x * x for x in result))
         self.assertAlmostEqual(length, 1.0, places=10)
+
+    def test_different_dimensions_raises_error(self):
+        """Vectors with different dimensions should raise ValueError."""
+        vectors = [[1.0, 0.0], [0.0, 1.0, 0.0]]  # 2D and 3D
+        weights = [0.5, 0.5]
+
+        with self.assertRaises(ValueError) as context:
+            weighted_average_embeddings(vectors, weights)
+
+        self.assertIn("different dimensions", str(context.exception))
 
 
 class TestGetAnnotationImageTokens(TestCase):

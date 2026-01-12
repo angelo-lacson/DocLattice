@@ -24,6 +24,7 @@ from django.test import TestCase, override_settings
 
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.parsers.llamaparse_parser import LlamaParseParser
+from opencontractserver.utils.pdf_token_extraction import find_image_tokens_in_bounds
 
 User = get_user_model()
 
@@ -1030,7 +1031,7 @@ class TestLlamaParseParserImageExtraction(TestCase):
         self.parser = LlamaParseParser()
 
     def test_find_images_in_bounds_overlapping(self):
-        """Test that _find_images_in_bounds finds overlapping images."""
+        """Test that find_image_tokens_in_bounds finds overlapping images."""
         bounds = {"left": 100, "top": 100, "right": 300, "bottom": 300}
 
         # Image that overlaps with the bounds
@@ -1039,10 +1040,10 @@ class TestLlamaParseParserImageExtraction(TestCase):
             {"x": 400, "y": 400, "width": 50, "height": 50},  # No overlap
         ]
 
-        result = self.parser._find_images_in_bounds(
+        result = find_image_tokens_in_bounds(
             bounds=bounds,
             page_idx=0,
-            page_images=page_images,
+            image_tokens=page_images,
             token_offset=10,  # Images start at token index 10
         )
 
@@ -1051,7 +1052,7 @@ class TestLlamaParseParserImageExtraction(TestCase):
         self.assertEqual(result[0]["tokenIndex"], 10)  # First image at offset 10
 
     def test_find_images_in_bounds_no_overlap(self):
-        """Test that _find_images_in_bounds returns empty when no overlap."""
+        """Test that find_image_tokens_in_bounds returns empty when no overlap."""
         bounds = {"left": 100, "top": 100, "right": 200, "bottom": 200}
 
         page_images = [
@@ -1059,30 +1060,30 @@ class TestLlamaParseParserImageExtraction(TestCase):
             {"x": 400, "y": 400, "width": 50, "height": 50},  # No overlap
         ]
 
-        result = self.parser._find_images_in_bounds(
+        result = find_image_tokens_in_bounds(
             bounds=bounds,
             page_idx=0,
-            page_images=page_images,
+            image_tokens=page_images,
             token_offset=5,
         )
 
         self.assertEqual(len(result), 0)
 
     def test_find_images_in_bounds_empty_images(self):
-        """Test that _find_images_in_bounds handles empty image list."""
+        """Test that find_image_tokens_in_bounds handles empty image list."""
         bounds = {"left": 100, "top": 100, "right": 200, "bottom": 200}
 
-        result = self.parser._find_images_in_bounds(
+        result = find_image_tokens_in_bounds(
             bounds=bounds,
             page_idx=0,
-            page_images=[],
+            image_tokens=[],
             token_offset=0,
         )
 
         self.assertEqual(result, [])
 
     def test_find_images_in_bounds_multiple_overlaps(self):
-        """Test that _find_images_in_bounds finds all overlapping images."""
+        """Test that find_image_tokens_in_bounds finds all overlapping images."""
         bounds = {"left": 50, "top": 50, "right": 400, "bottom": 400}
 
         page_images = [
@@ -1091,10 +1092,10 @@ class TestLlamaParseParserImageExtraction(TestCase):
             {"x": 500, "y": 500, "width": 50, "height": 50},  # No overlap
         ]
 
-        result = self.parser._find_images_in_bounds(
+        result = find_image_tokens_in_bounds(
             bounds=bounds,
             page_idx=1,
-            page_images=page_images,
+            image_tokens=page_images,
             token_offset=20,
         )
 

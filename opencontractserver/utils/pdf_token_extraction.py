@@ -975,3 +975,58 @@ def get_image_data_url(
     mime_type = f"image/{img_format}"
 
     return f"data:{mime_type};base64,{base64_data}"
+
+
+def find_image_tokens_in_bounds(
+    bounds: BoundingBoxPythonType,
+    page_idx: int,
+    image_tokens: list[dict[str, Any]],
+    token_offset: int = 0,
+) -> list[TokenIdPythonType]:
+    """
+    Find image tokens that overlap with a bounding box.
+
+    This is a shared utility for finding image tokens that intersect with an
+    annotation's bounding box. Used by parsers to link figure/image annotations
+    to their corresponding image tokens in the unified PAWLs format.
+
+    Args:
+        bounds: The annotation bounding box {left, top, right, bottom}.
+        page_idx: 0-based page index.
+        image_tokens: List of image token dicts with x, y, width, height fields.
+                     These can be either raw image dicts from extract_images_from_pdf
+                     or PawlsTokenPythonType with is_image=True.
+        token_offset: The starting token index for image tokens in the unified
+                     tokens array. Images are typically appended after text tokens,
+                     so this offset accounts for the text token count.
+
+    Returns:
+        List of TokenIdPythonType references for overlapping image tokens.
+    """
+    if not image_tokens:
+        return []
+
+    token_refs: list[TokenIdPythonType] = []
+    ann_left = float(bounds["left"])
+    ann_top = float(bounds["top"])
+    ann_right = float(bounds["right"])
+    ann_bottom = float(bounds["bottom"])
+
+    for img_idx, img_data in enumerate(image_tokens):
+        img_left = float(img_data["x"])
+        img_top = float(img_data["y"])
+        img_right = img_left + float(img_data["width"])
+        img_bottom = img_top + float(img_data["height"])
+
+        # Check for overlap (standard AABB intersection test)
+        if (
+            ann_left < img_right
+            and ann_right > img_left
+            and ann_top < img_bottom
+            and ann_bottom > img_top
+        ):
+            # Calculate the token index for this image
+            token_index = token_offset + img_idx
+            token_refs.append({"pageIndex": page_idx, "tokenIndex": token_index})
+
+    return token_refs

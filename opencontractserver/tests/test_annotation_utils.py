@@ -5,7 +5,6 @@ Tests the content modality detection functions used for multimodal annotations.
 """
 
 import json
-from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -447,9 +446,9 @@ class TestUpdateAnnotationModalities(TestCase):
             content_modalities=[],  # Start empty
         )
 
-        result = update_annotation_modalities(annotation, pawls_data=pawls_data, save=False)
+        update_annotation_modalities(annotation, pawls_data=pawls_data, save=False)
 
-        # The annotation object is updated
+        # The annotation object is updated in memory
         self.assertEqual(annotation.content_modalities, [ContentModality.TEXT.value])
 
         # But the database is not updated

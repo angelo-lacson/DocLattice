@@ -34,6 +34,7 @@ from opencontractserver.utils.pdf_token_extraction import (
     crop_image_from_pdf,
     extract_images_from_pdf,
     extract_pawls_tokens_from_pdf,
+    find_image_tokens_in_bounds,
     find_tokens_in_bbox,
 )
 
@@ -486,7 +487,7 @@ class LlamaParseParser(BaseParser):
                 image_token_refs: list[TokenIdPythonType] = []
                 if is_image_type and pdf_bytes and extract_images:
                     # Find image tokens in the tokens array that overlap with bounds
-                    image_token_refs = self._find_images_in_bounds(
+                    image_token_refs = find_image_tokens_in_bounds(
                         bounds,
                         page_idx,
                         images_by_page.get(page_idx, []),
@@ -605,7 +606,7 @@ class LlamaParseParser(BaseParser):
                     image_token_refs: list[TokenIdPythonType] = []
                     if is_image_type and pdf_bytes and extract_images:
                         # Find image tokens in the tokens array that overlap with bounds
-                        image_token_refs = self._find_images_in_bounds(
+                        image_token_refs = find_image_tokens_in_bounds(
                             bounds,
                             page_idx,
                             images_by_page.get(page_idx, []),
@@ -939,58 +940,6 @@ class LlamaParseParser(BaseParser):
 
         # Return empty tokens list - we don't have real token data from LlamaParse
         return tokens, bounds
-
-    def _find_images_in_bounds(
-        self,
-        bounds: BoundingBoxPythonType,
-        page_idx: int,
-        page_images: list[dict],
-        token_offset: int = 0,
-    ) -> list[TokenIdPythonType]:
-        """
-        Find image tokens that overlap with the given bounding box.
-
-        In the unified token model, images are stored in the tokens[] array
-        with is_image=True. This method finds overlapping images and returns
-        their token indices.
-
-        Args:
-            bounds: The annotation bounding box.
-            page_idx: Page index (0-based).
-            page_images: List of raw image data dicts (from extract_images_from_pdf).
-            token_offset: The starting token index where images begin in the
-                         unified tokens array. Images are appended after text tokens.
-
-        Returns:
-            List of TokenIdPythonType references for overlapping image tokens.
-        """
-        if not page_images:
-            return []
-
-        token_refs: list[TokenIdPythonType] = []
-        ann_left = float(bounds["left"])
-        ann_top = float(bounds["top"])
-        ann_right = float(bounds["right"])
-        ann_bottom = float(bounds["bottom"])
-
-        for img_idx, img_data in enumerate(page_images):
-            img_left = float(img_data["x"])
-            img_top = float(img_data["y"])
-            img_right = img_left + float(img_data["width"])
-            img_bottom = img_top + float(img_data["height"])
-
-            # Check for overlap
-            if (
-                ann_left < img_right
-                and ann_right > img_left
-                and ann_top < img_bottom
-                and ann_bottom > img_top
-            ):
-                # Calculate the token index for this image
-                token_index = token_offset + img_idx
-                token_refs.append({"pageIndex": page_idx, "tokenIndex": token_index})
-
-        return token_refs
 
     def _create_annotation(
         self,
