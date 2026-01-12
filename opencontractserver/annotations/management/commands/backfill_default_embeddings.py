@@ -101,16 +101,18 @@ class Command(BaseCommand):
 
         if corpus_id:
             self.stdout.write(f"Filtering to corpus_id={corpus_id}")
+            # Filter to annotations in this corpus (non-structural annotations have corpus_id)
+            # For structural annotations, filter by those belonging to documents in this corpus
             queryset = queryset.filter(
                 Q(corpus_id=corpus_id)
-                | Q(structural_annotation_set__corpus_id=corpus_id)
+                | Q(structural=True, structural_set__documents__corpus__id=corpus_id)
             )
 
         if document_id:
             self.stdout.write(f"Filtering to document_id={document_id}")
             queryset = queryset.filter(
                 Q(document_id=document_id)
-                | Q(structural_annotation_set__documents__id=document_id)
+                | Q(structural=True, structural_set__documents__id=document_id)
             )
 
         # Find annotations missing default embeddings
@@ -158,9 +160,9 @@ class Command(BaseCommand):
             try:
                 # Get corpus_id for this annotation
                 annotation_corpus_id = annotation.corpus_id
-                if not annotation_corpus_id and annotation.structural_annotation_set_id:
+                if not annotation_corpus_id and annotation.structural_set_id:
                     annotation_corpus_id = getattr(
-                        annotation.structural_annotation_set, "corpus_id", None
+                        annotation.structural_set, "corpus_id", None
                     )
 
                 if sync_mode:

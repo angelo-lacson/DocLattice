@@ -314,12 +314,22 @@ class DoclingParser(BaseParser):
             image_token_offsets: dict[int, int] = {}
 
             for page_idx, page_images in images_by_page.items():
-                if page_idx < len(pawls_pages) and page_images:
-                    # Get existing token count as offset for image indices
-                    if "tokens" not in pawls_pages[page_idx]:
-                        pawls_pages[page_idx]["tokens"] = []
+                # Defensive checks for malformed microservice data
+                if not isinstance(pawls_pages, list) or page_idx >= len(pawls_pages):
+                    logger.warning(f"Invalid page index {page_idx} for pawls_pages")
+                    continue
 
-                    token_offset = len(pawls_pages[page_idx]["tokens"])
+                page = pawls_pages[page_idx]
+                if not isinstance(page, dict):
+                    logger.warning(f"Invalid page data at index {page_idx}")
+                    continue
+
+                if page_images:
+                    # Get existing token count as offset for image indices
+                    if "tokens" not in page:
+                        page["tokens"] = []
+
+                    token_offset = len(page["tokens"])
                     image_token_offsets[page_idx] = token_offset
 
                     # Add image tokens to the tokens array
@@ -343,7 +353,7 @@ class DoclingParser(BaseParser):
                         if "image_path" in img_token:
                             unified_token["image_path"] = img_token["image_path"]
 
-                        pawls_pages[page_idx]["tokens"].append(unified_token)
+                        page["tokens"].append(unified_token)
 
             # Get page dimensions for cropping
             page_dims: dict[int, tuple[float, float]] = {}
@@ -515,10 +525,14 @@ class DoclingParser(BaseParser):
         Returns:
             List of TokenIdPythonType references for overlapping image tokens.
         """
-        if page_idx >= len(pawls_pages):
+        if not isinstance(pawls_pages, list) or page_idx >= len(pawls_pages):
             return []
 
-        page_tokens = pawls_pages[page_idx].get("tokens", [])
+        page = pawls_pages[page_idx]
+        if not isinstance(page, dict):
+            return []
+
+        page_tokens = page.get("tokens", [])
         if not page_tokens or token_offset >= len(page_tokens):
             return []
 

@@ -826,3 +826,134 @@ class AsyncImageToolsTestCase(TransactionTestCase):
             self.other_user, annotation.id
         )
         assert images == []
+
+
+class ImageToolsEdgeCasesTest(TestCase):
+    """Tests for edge cases and error handling in image tools."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data."""
+        cls.user = User.objects.create_user(
+            username="edge_case_test_user", password="testpass123"
+        )
+        cls.corpus = Corpus.objects.create(
+            title="Test Corpus Edge Cases",
+            creator=cls.user,
+        )
+        cls.label = AnnotationLabel.objects.create(
+            text="Test Label",
+            creator=cls.user,
+        )
+
+    def test_list_document_images_malformed_pawls_page(self):
+        """Should handle malformed PAWLS page data gracefully."""
+        from opencontractserver.llms.tools.image_tools import list_document_images
+
+        # Create document with malformed PAWLS data (pages that aren't dicts)
+        malformed_pawls = [
+            "not a dict",  # String instead of dict
+            None,  # None
+            {
+                "page": {"width": 612, "height": 792},
+                "tokens": [],
+            },  # Valid but no images
+        ]
+        document = Document.objects.create(
+            title="Test Doc Malformed",
+            creator=self.user,
+            pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
+            pawls_parse_file=ContentFile(
+                json.dumps(malformed_pawls).encode(), name="test.pawls"
+            ),
+        )
+        self.corpus.documents.add(document)
+
+        # Should not raise an exception
+        result = list_document_images(document.id)
+        self.assertEqual(result, [])
+
+    def test_list_document_images_malformed_tokens(self):
+        """Should handle malformed token data gracefully."""
+        from opencontractserver.llms.tools.image_tools import list_document_images
+
+        # Create document with malformed tokens
+        pawls_data = [
+            {
+                "page": {"width": 612, "height": 792, "index": 0},
+                "tokens": [
+                    "not a dict",  # String instead of dict
+                    None,  # None
+                    {"x": 100, "y": 100, "is_image": True},  # Missing some fields
+                ],
+            }
+        ]
+        document = Document.objects.create(
+            title="Test Doc Malformed Tokens",
+            creator=self.user,
+            pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
+            pawls_parse_file=ContentFile(
+                json.dumps(pawls_data).encode(), name="test.pawls"
+            ),
+        )
+        self.corpus.documents.add(document)
+
+        result = list_document_images(document.id)
+        # Should find the one valid image token (even with missing fields)
+        self.assertEqual(len(result), 1)
+
+    def test_get_document_image_not_an_image_token(self):
+        """Should return None when token is not an image token."""
+        from opencontractserver.llms.tools.image_tools import get_document_image
+
+        pawls_data = [
+            {
+                "page": {"width": 612, "height": 792, "index": 0},
+                "tokens": [
+                    {"x": 100, "y": 100, "width": 50, "height": 12, "text": "Hello"},
+                ],
+            }
+        ]
+        document = Document.objects.create(
+            title="Test Doc Text Only",
+            creator=self.user,
+            pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
+            pawls_parse_file=ContentFile(
+                json.dumps(pawls_data).encode(), name="test.pawls"
+            ),
+        )
+        self.corpus.documents.add(document)
+
+        # Token at index 0 is text, not image
+        result = get_document_image(document.id, page_index=0, token_index=0)
+        self.assertIsNone(result)
+
+    def test_get_annotation_images_missing_annotation(self):
+        """Should return empty list when annotation doesn't exist."""
+        from opencontractserver.llms.tools.image_tools import get_annotation_images
+
+        # Use a non-existent ID
+        result = get_annotation_images(999999)
+        self.assertEqual(result, [])
+
+    def test_get_annotation_images_empty_json(self):
+        """Should return empty list when annotation has empty json."""
+        from opencontractserver.llms.tools.image_tools import get_annotation_images
+
+        document = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+            pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
+        )
+        self.corpus.documents.add(document)
+
+        annotation = Annotation.objects.create(
+            document=document,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            creator=self.user,
+            json={},  # Empty json
+        )
+
+        result = get_annotation_images(annotation.id)
+        self.assertEqual(result, [])

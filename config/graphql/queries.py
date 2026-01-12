@@ -2014,6 +2014,12 @@ class Query(graphene.ObjectType):
             CoreAnnotationVectorStore,
         )
 
+        # N+1 OPTIMIZATION NOTE: The CoreAnnotationVectorStore already applies
+        # select_related("annotation_label", "document", "corpus") to the base
+        # queryset (see core_vector_stores.py:200-202 and :639-641). This means
+        # all related objects are eagerly loaded and no additional queries are
+        # made when accessing annotation.document, annotation.corpus, or
+        # annotation.annotation_label in the filter loops or result types below.
         # Cap limit to prevent abuse
         limit = min(limit, 200)
 
