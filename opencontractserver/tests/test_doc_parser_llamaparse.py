@@ -1421,6 +1421,397 @@ class TestLlamaParseParserImageExtraction(TestCase):
         self.assertEqual(len(result["labelled_text"]), 1)
 
 
+class TestLlamaParseParserPageLevelImages(TestCase):
+    """Tests for LlamaParse page-level image processing (page['images'] array)."""
+
+    def setUp(self):
+        """Set up test environment."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="pagelevelimguser", password="testpass123"
+            )
+
+        self.doc = Document.objects.create(
+            title="Page Level Image Test Document",
+            description="Test Description",
+            file_type="pdf",
+            creator=self.user,
+        )
+
+        pdf_content = b"%PDF-1.7\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n2 0 obj\n<</Type/Pages/Count 1/Kids[3 0 R]>>\nendobj\n3 0 obj\n<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>\nendobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer\n<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF\n"  # noqa: E501
+        self.doc.pdf_file.save("test_page_images.pdf", ContentFile(pdf_content))
+
+        self.parser = LlamaParseParser()
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
+    )
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_with_page_level_images(
+        self,
+        mock_open,
+        mock_llama_parse_class,
+        mock_extract_tokens,
+        mock_find_tokens,
+        mock_extract_images,
+        mock_crop_image,
+    ):
+        """Test that page-level images from LlamaParse are processed correctly.
+
+        LlamaParse provides images in page["images"] array, separate from items.
+        This tests that these images are detected and annotations created.
+        """
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        # JSON response with page-level images (actual LlamaParse format)
+        json_response = [
+            {
+                "pages": [
+                    {
+                        "text": "Page with header image",
+                        "width": 612,
+                        "height": 792,
+                        "items": [
+                            {
+                                "type": "heading",
+                                "text": "Document Title",
+                                "bBox": {"x": 100, "y": 100, "w": 400, "h": 30},
+                            },
+                        ],
+                        # LlamaParse page-level images array
+                        "images": [
+                            {
+                                "name": "img_p0_1.jpg",
+                                "x": 40.3,
+                                "y": 27.2,
+                                "width": 282.4,
+                                "height": 72,
+                                "original_width": 863,
+                                "original_height": 220,
+                                "rotation": 0,
+                                "ocr": [
+                                    {"text": "STATE OF NEW YORK", "x": 150, "y": 41},
+                                    {
+                                        "text": "Division of Corporations",
+                                        "x": 359,
+                                        "y": 35,
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = json_response
+        mock_llama_parse_class.return_value = mock_parser
+
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=3
+        )
+        mock_find_tokens.return_value = []
+
+        # No embedded images found
+        mock_extract_images.return_value = {}
+
+        # Mock crop to return image data
+        mock_crop_image.return_value = {
+            "x": 40.3,
+            "y": 27.2,
+            "width": 282.4,
+            "height": 72,
+            "format": "jpeg",
+            "image_path": "documents/1/images/page_0_img_0.jpg",
+            "content_hash": "abc123",
+            "original_width": 282,
+            "original_height": 72,
+            "image_type": "cropped",
+        }
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(
+            user_id=self.user.id,
+            doc_id=self.doc.id,
+            extract_images=True,
+        )
+
+        self.assertIsNotNone(result)
+
+        # Should have annotation for the LlamaParse-detected image
+        image_annos = [
+            a for a in result["labelled_text"] if a["annotationLabel"] == "Image"
+        ]
+        self.assertEqual(len(image_annos), 1)
+
+        # Image annotation should have IMAGE modality
+        self.assertIn("content_modalities", image_annos[0])
+        self.assertIn("IMAGE", image_annos[0]["content_modalities"])
+
+        # Should contain OCR text from LlamaParse
+        self.assertIn("STATE OF NEW YORK", image_annos[0]["rawText"])
+        self.assertIn("Division of Corporations", image_annos[0]["rawText"])
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
+    )
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_page_level_images_uses_existing_embedded(
+        self,
+        mock_open,
+        mock_llama_parse_class,
+        mock_extract_tokens,
+        mock_find_tokens,
+        mock_extract_images,
+        mock_crop_image,
+    ):
+        """Test that page-level images reuse existing embedded images when available."""
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        json_response = [
+            {
+                "pages": [
+                    {
+                        "text": "Page with image",
+                        "width": 612,
+                        "height": 792,
+                        "items": [],
+                        "images": [
+                            {
+                                "name": "img_p0_1.jpg",
+                                "x": 100,
+                                "y": 100,
+                                "width": 200,
+                                "height": 150,
+                                "ocr": [],
+                            }
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = json_response
+        mock_llama_parse_class.return_value = mock_parser
+
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=3
+        )
+        mock_find_tokens.return_value = []
+
+        # Embedded image found at same location
+        mock_extract_images.return_value = {
+            0: [
+                {
+                    "x": 110,
+                    "y": 110,
+                    "width": 180,
+                    "height": 130,
+                    "format": "jpeg",
+                    "image_path": "documents/1/images/embedded_0.jpg",
+                }
+            ]
+        }
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(
+            user_id=self.user.id,
+            doc_id=self.doc.id,
+            extract_images=True,
+        )
+
+        self.assertIsNotNone(result)
+
+        # crop_image should NOT be called since embedded image was found
+        mock_crop_image.assert_not_called()
+
+        # Should still have the image annotation
+        image_annos = [
+            a for a in result["labelled_text"] if a["annotationLabel"] == "Image"
+        ]
+        self.assertEqual(len(image_annos), 1)
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
+    )
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_page_level_images_skips_small(
+        self,
+        mock_open,
+        mock_llama_parse_class,
+        mock_extract_tokens,
+        mock_find_tokens,
+        mock_extract_images,
+        mock_crop_image,
+    ):
+        """Test that small page-level images are skipped."""
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        json_response = [
+            {
+                "pages": [
+                    {
+                        "text": "Page with tiny image",
+                        "width": 612,
+                        "height": 792,
+                        "items": [],
+                        "images": [
+                            {
+                                "name": "tiny_img.jpg",
+                                "x": 100,
+                                "y": 100,
+                                "width": 20,  # Too small (< min_image_width of 50)
+                                "height": 20,  # Too small (< min_image_height of 50)
+                                "ocr": [],
+                            }
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = json_response
+        mock_llama_parse_class.return_value = mock_parser
+
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=3
+        )
+        mock_find_tokens.return_value = []
+        mock_extract_images.return_value = {}
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(
+            user_id=self.user.id,
+            doc_id=self.doc.id,
+            extract_images=True,
+        )
+
+        self.assertIsNotNone(result)
+
+        # No image annotations should be created (image too small)
+        image_annos = [
+            a for a in result["labelled_text"] if a["annotationLabel"] == "Image"
+        ]
+        self.assertEqual(len(image_annos), 0)
+
+        # crop_image should not be called for small images
+        mock_crop_image.assert_not_called()
+
+    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
+    )
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
+    @patch(
+        "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
+    )
+    @patch("llama_parse.LlamaParse")
+    @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
+    def test_parse_document_page_level_images_fallback_text(
+        self,
+        mock_open,
+        mock_llama_parse_class,
+        mock_extract_tokens,
+        mock_find_tokens,
+        mock_extract_images,
+        mock_crop_image,
+    ):
+        """Test that images without OCR text use [Image] fallback."""
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        json_response = [
+            {
+                "pages": [
+                    {
+                        "text": "Page with image",
+                        "width": 612,
+                        "height": 792,
+                        "items": [],
+                        "images": [
+                            {
+                                "name": "img_no_ocr.jpg",
+                                "x": 100,
+                                "y": 100,
+                                "width": 200,
+                                "height": 150,
+                                # No ocr key - should use fallback
+                            }
+                        ],
+                    }
+                ]
+            }
+        ]
+
+        mock_parser = MagicMock()
+        mock_parser.get_json_result.return_value = json_response
+        mock_llama_parse_class.return_value = mock_parser
+
+        mock_extract_tokens.return_value = create_mock_token_extraction_result(
+            page_count=1, tokens_per_page=3
+        )
+        mock_find_tokens.return_value = []
+        mock_extract_images.return_value = {}
+
+        mock_crop_image.return_value = {
+            "x": 100,
+            "y": 100,
+            "width": 200,
+            "height": 150,
+            "format": "jpeg",
+            "image_path": "documents/1/images/page_0_img_0.jpg",
+        }
+
+        parser = LlamaParseParser()
+        result = parser.parse_document(
+            user_id=self.user.id,
+            doc_id=self.doc.id,
+            extract_images=True,
+        )
+
+        self.assertIsNotNone(result)
+
+        image_annos = [
+            a for a in result["labelled_text"] if a["annotationLabel"] == "Image"
+        ]
+        self.assertEqual(len(image_annos), 1)
+
+        # Should use [Image] fallback text
+        self.assertEqual(image_annos[0]["rawText"], "[Image]")
+
+
 class TestLlamaParseParserTextConversion(TestCase):
     """Tests for text/markdown conversion path."""
 
