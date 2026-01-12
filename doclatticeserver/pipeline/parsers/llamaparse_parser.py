@@ -429,6 +429,140 @@ class LlamaParseParser(BaseParser):
         # Track annotation IDs
         annotation_id_counter = 0
 
+        # Process LlamaParse-detected images (from page["images"] array)
+        # These are separate from embedded images - LlamaParse visually detects images
+        # and provides their bounding boxes and OCR text
+        for page_idx, page in enumerate(pages):
+            llamaparse_images = page.get("images", [])
+            if llamaparse_images and pdf_bytes and extract_images:
+                page_width, page_height = page_dimensions.get(
+                    page_idx, (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                )
+                logger.info(
+                    f"Processing {len(llamaparse_images)} LlamaParse-detected "
+                    f"images on page {page_idx}"
+                )
+
+                for img_data in llamaparse_images:
+                    # LlamaParse provides absolute coordinates (not fractional)
+                    img_x = float(img_data.get("x", 0))
+                    img_y = float(img_data.get("y", 0))
+                    img_width = float(img_data.get("width", 0))
+                    img_height = float(img_data.get("height", 0))
+
+                    # Skip tiny images
+                    if (
+                        img_width < self.min_image_width
+                        or img_height < self.min_image_height
+                    ):
+                        logger.debug(
+                            f"Skipping small LlamaParse image: {img_width}x{img_height}"
+                        )
+                        continue
+
+                    # Create bounds from LlamaParse bbox
+                    bounds: BoundingBoxPythonType = {
+                        "left": img_x,
+                        "top": img_y,
+                        "right": img_x + img_width,
+                        "bottom": img_y + img_height,
+                    }
+
+                    # Check if we already have an embedded image at this location
+                    existing_image_refs = find_image_tokens_in_bounds(
+                        bounds,
+                        page_idx,
+                        images_by_page.get(page_idx, []),
+                        image_token_offsets.get(page_idx, 0),
+                    )
+
+                    image_token_refs: list[TokenIdPythonType] = []
+
+                    if existing_image_refs:
+                        # Use existing embedded image token
+                        image_token_refs = existing_image_refs
+                        logger.debug(
+                            f"Found existing embedded image at LlamaParse bbox on page {page_idx}"
+                        )
+                    else:
+                        # Crop the region from the PDF
+                        current_token_count = len(
+                            pawls_pages[page_idx].get("tokens", [])
+                            if page_idx < len(pawls_pages)
+                            else []
+                        )
+                        cropped_image = crop_image_from_pdf(
+                            pdf_bytes,
+                            page_idx,
+                            bounds,
+                            page_width,
+                            page_height,
+                            image_format=self.image_format,
+                            jpeg_quality=self.image_quality,
+                            dpi=self.image_dpi,
+                            storage_path=image_storage_path,
+                            img_idx=current_token_count,
+                        )
+                        if cropped_image:
+                            # Add cropped image as unified token
+                            if page_idx < len(pawls_pages):
+                                new_token_idx = len(
+                                    pawls_pages[page_idx].get("tokens", [])
+                                )
+                                unified_token: PawlsTokenPythonType = {
+                                    "x": cropped_image["x"],
+                                    "y": cropped_image["y"],
+                                    "width": cropped_image["width"],
+                                    "height": cropped_image["height"],
+                                    "text": "",
+                                    "is_image": True,
+                                    "image_path": cropped_image.get("image_path"),
+                                    "format": cropped_image.get("format", "jpeg"),
+                                    "content_hash": cropped_image.get("content_hash"),
+                                    "original_width": cropped_image.get(
+                                        "original_width"
+                                    ),
+                                    "original_height": cropped_image.get(
+                                        "original_height"
+                                    ),
+                                    "image_type": cropped_image.get("image_type"),
+                                }
+                                pawls_pages[page_idx]["tokens"].append(unified_token)
+                                image_token_refs = [
+                                    {"pageIndex": page_idx, "tokenIndex": new_token_idx}
+                                ]
+                                logger.debug(
+                                    f"Cropped LlamaParse image on page {page_idx}: "
+                                    f"{img_width:.0f}x{img_height:.0f}"
+                                )
+
+                    # Create annotation for the image if we have token refs
+                    if image_token_refs:
+                        # Get OCR text from LlamaParse if available
+                        ocr_texts = img_data.get("ocr", [])
+                        ocr_text = " ".join(
+                            ocr_item.get("text", "")
+                            for ocr_item in ocr_texts
+                            if isinstance(ocr_item, dict)
+                        )
+                        raw_text = ocr_text.strip() if ocr_text else "[Image]"
+
+                        annotation = self._create_annotation(
+                            annotation_id=str(annotation_id_counter),
+                            label="Image",
+                            raw_text=raw_text,
+                            page_idx=page_idx,
+                            bounds=bounds,
+                            token_refs=image_token_refs,
+                            has_text_tokens=False,
+                            has_image_tokens=True,
+                        )
+                        annotations.append(annotation)
+                        annotation_id_counter += 1
+                        logger.debug(
+                            f"Created annotation for LlamaParse image on page {page_idx}"
+                        )
+
         # Second pass: process items and create annotations with token references
         for page_idx, page in enumerate(pages):
             page_width, page_height = page_dimensions.get(
