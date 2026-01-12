@@ -49,10 +49,12 @@ def process_annot_on_create_atomic(sender, instance, created, **kwargs):
             f"Calculating embeddings for newly created annotation {instance.id} "
             f"(corpus_id={corpus_id})"
         )
+        # Use task_id for deduplication to prevent duplicate embedding tasks
+        # if two annotations are created simultaneously
         calculate_embedding_for_annotation_text.si(
             annotation_id=instance.id,
             corpus_id=corpus_id,
-        ).apply_async()
+        ).apply_async(task_id=f"embed-annot-{instance.id}")
 
     # No cache invalidation needed - using direct queries
 
@@ -79,10 +81,11 @@ def process_note_on_create_atomic(sender, instance, created, **kwargs):
             f"Calculating embeddings for newly created note {instance.id} "
             f"(corpus_id={corpus_id})"
         )
+        # Use task_id for deduplication to prevent duplicate embedding tasks
         calculate_embedding_for_note_text.si(
             note_id=instance.id,
             corpus_id=corpus_id,
-        ).apply_async()
+        ).apply_async(task_id=f"embed-note-{instance.id}")
 
 
 # NOTE: process_structural_annotation_for_corpuses is no longer needed with the new

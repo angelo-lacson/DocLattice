@@ -15,6 +15,7 @@ from doclatticeserver.pipeline.utils import (
     get_default_embedder,
 )
 from doclatticeserver.shared.mixins import HasEmbeddingMixin
+from doclatticeserver.types.enums import ContentModality
 
 User = get_user_model()
 
@@ -94,8 +95,8 @@ def _create_embedding_for_annotation(
     Returns:
         True if embedding was created successfully, False otherwise
     """
-    modalities = annotation.content_modalities or ["TEXT"]
-    has_images = "IMAGE" in modalities
+    modalities = annotation.content_modalities or [ContentModality.TEXT.value]
+    has_images = ContentModality.IMAGE.value in modalities
     can_embed_images = embedder.is_multimodal and embedder.supports_images
 
     if can_embed_images and has_images:
