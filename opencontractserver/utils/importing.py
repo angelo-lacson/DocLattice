@@ -102,6 +102,7 @@ def import_annotations(
             creator_id=user_id,
             annotation_type=final_annotation_type,
             structural=annotation_data.get("structural", False),
+            content_modalities=annotation_data.get("content_modalities", []),
         )
 
         set_permissions_for_obj_to_user(user_id, annot_obj, [PermissionTypes.ALL])
