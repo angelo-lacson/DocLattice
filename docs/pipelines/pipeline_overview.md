@@ -21,9 +21,8 @@ graph TD
 
     subgraph "Pipeline Components"
         B --> B1[DoclingParser REST]
-        B --> B2[NLMIngestParser]
-        B --> B3[TxtParser]
-        B --> B4[LlamaParseParser]
+        B --> B2[TxtParser]
+        B --> B3[LlamaParseParser]
 
         C --> C1[PdfThumbnailGenerator]
         C --> C2[TextThumbnailGenerator]
@@ -92,7 +91,6 @@ class BaseParser(ABC):
 Current implementations:
 - **DoclingParser**: Advanced PDF parser using machine learning (REST microservice)
 - **LlamaParseParser**: Cloud-based parser using LlamaParse API with layout extraction
-- **NLMIngestParser**: Alternative PDF parser using NLM Ingest library
 - **TxtParser**: Simple text file parser
 
 ### Thumbnailers

@@ -45,10 +45,6 @@ REDIS_URL=redis://redis:6379/0
 CELERY_FLOWER_USER=
 CELERY_FLOWER_PASSWORD=
 
-# NLM Parser
-# ------------------------------------------------------------------------------
-NLM_INGESTOR_ACTIVE=True
-
 # LLM SETTINGS
 # ------------------------------------------------------------------------------
 OPENAI_API_KEY=<YourKeyHere>

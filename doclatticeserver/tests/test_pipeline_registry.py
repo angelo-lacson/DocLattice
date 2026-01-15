@@ -108,7 +108,7 @@ class TestPipelineComponentRegistry(TestCase):
         """Test that registry discovers parsers."""
         registry = get_registry()
         self.assertIsInstance(registry.parsers, tuple)
-        # Should have at least one parser (DoclingParser, NLMIngestParser, etc.)
+        # Should have at least one parser (DoclingParser, LlamaParseParser, etc.)
         self.assertGreater(len(registry.parsers), 0)
 
     def test_registry_has_embedders(self):
