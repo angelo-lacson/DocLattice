@@ -443,6 +443,9 @@ class ImageToolsTestCase(TestCase):
         corpus.label_set = label_set
         corpus.save()
 
+        # Permission on BOTH document and corpus required (MIN rule)
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
         label = AnnotationLabel.objects.create(
             text="Figure",
             label_type="TOKEN_LABEL",
@@ -727,6 +730,9 @@ class AsyncImageToolsTestCase(TransactionTestCase):
         label_set = LabelSet.objects.create(title="Async Test LS", creator=self.user)
         corpus.label_set = label_set
         corpus.save()
+
+        # Permission on BOTH document and corpus required (MIN rule)
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
 
         label = AnnotationLabel.objects.create(
             text="Figure",
