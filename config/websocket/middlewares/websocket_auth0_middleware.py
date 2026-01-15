@@ -1,132 +1,14 @@
 """
-WebsocketAuth0TokenMiddleware provides a DRY approach to authenticating a WebSocket
-connection using the same logic as our ApiKeyTokenMiddleware for GraphQL HTTP requests.
+DEPRECATED: Auth0-specific WebSocket middleware.
 
-Instead of using GraphQL JWT tokens (as in GraphQLJWTTokenAuthMiddleware), it:
-1. Examines the token provided in the WebSocket's query string or headers.
-2. Constructs a minimal Django-style request object to reuse the existing authenticate()
-   logic from ApiKeyBackend.
-3. Sets an authenticated user on the scope if valid, otherwise AnonymousUser.
+This module is kept for backwards compatibility. The unified JWTAuthMiddleware
+in config.websocket.middleware now handles both Auth0 and non-Auth0 tokens
+automatically based on the USE_AUTH0 setting.
 
-Usage:
-    Add it to your Channels routing as a middleware:
-        from config.websocket.auth0_middleware import WebsocketAuth0TokenMiddleware
-        application = ProtocolTypeRouter({
-            "websocket": AuthMiddlewareStack(
-                WebsocketAuth0TokenMiddleware(
-                    URLRouter(
-                        # your websocket routes
-                    )
-                )
-            ),
-        })
-
-Dependencies:
-    - Django / Channels / DRF
-    - config.graphql_api_token_auth.backends.ApiKeyBackend
-    - config.graphql_api_token_auth.utils (optional for advanced token/headers logic)
+Use config.websocket.middleware.JWTAuthMiddleware instead.
 """
 
-import logging
-from typing import Any
-from urllib.parse import parse_qsl
+from config.websocket.middleware import JWTAuthMiddleware
 
-from channels.db import database_sync_to_async
-from channels.middleware import BaseMiddleware
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
-from graphql_jwt.exceptions import JSONWebTokenError, JSONWebTokenExpired
-
-from config.graphql_auth0_auth.utils import get_user_by_token
-
-logger = logging.getLogger(__name__)
-
-User = get_user_model()
-
-# WebSocket close codes for authentication errors
-# Standard codes 1000-1015 are reserved; 4000-4999 are for application use
-WS_CLOSE_TOKEN_EXPIRED = 4001  # Token has expired, client should refresh
-WS_CLOSE_TOKEN_INVALID = 4002  # Token is invalid, client should re-authenticate
-
-
-class WebsocketAuth0TokenMiddleware(BaseMiddleware):
-    """
-    Middleware that authenticates a user connecting via WebSocket using Auth0 tokens.
-
-    Steps:
-        1. Look for a token in the query string or via the 'Authorization' header in scope.
-        2. Call `get_user_by_token()` to validate the Auth0 JWT.
-        3. Set `scope["user"]` to the authenticated user or AnonymousUser.
-
-    On authentication failure, sets scope['auth_error'] with details:
-    - 'code': WS_CLOSE_TOKEN_EXPIRED (4001) or WS_CLOSE_TOKEN_INVALID (4002)
-    - 'message': Human-readable error message
-
-    Consumers can check scope['auth_error'] and close the connection with
-    the appropriate code to signal the client to refresh or re-authenticate.
-    """
-
-    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> Any:
-        # Initialize with AnonymousUser and no auth error
-        scope["user"] = AnonymousUser()
-        scope["auth_error"] = None
-
-        # 1. Extract the token from query string or scope headers
-        query_string = scope.get("query_string", b"").decode("utf-8")
-        logger.debug(f"Query string: {query_string}")
-        query_params = dict(parse_qsl(query_string))
-        token = query_params.get("token")
-        logger.debug(f"Found token in query string: {'Yes' if token else 'No'}")
-
-        # Also allow a standard 'Authorization' header (for example "Authorization: Bearer abc123")
-        # scope["headers"] is a list of tuples of the form [(b'header-name', b'value'), ...]
-        headers = scope.get("headers", [])
-
-        # 2. If we found a token or relevant header, try to authenticate
-        if token or any(h[0].lower() == b"authorization" for h in headers):
-            try:
-                user = await database_sync_to_async(get_user_by_token)(token)
-                if user and isinstance(user, User):
-                    logger.debug(f"WebSocket user authenticated: {user.username}")
-                    scope["user"] = user
-                else:
-                    logger.debug("Authentication attempt returned no valid user")
-                    scope["auth_error"] = {
-                        "code": WS_CLOSE_TOKEN_INVALID,
-                        "message": "User not found for token.",
-                    }
-
-            except JSONWebTokenExpired as e:
-                # Token has expired - client should refresh their token
-                logger.warning(f"WebSocket auth failed - Auth0 token expired: {e}")
-                scope["auth_error"] = {
-                    "code": WS_CLOSE_TOKEN_EXPIRED,
-                    "message": "Token has expired. Please refresh your session.",
-                }
-
-            except JSONWebTokenError as e:
-                # Token is invalid - client should re-authenticate
-                logger.warning(f"WebSocket auth failed - invalid Auth0 token: {e}")
-                scope["auth_error"] = {
-                    "code": WS_CLOSE_TOKEN_INVALID,
-                    "message": f"Invalid token: {e}",
-                }
-
-            except Exception as e:
-                # Unexpected error - treat as invalid token
-                logger.error(f"Error during WebSocket auth: {e}", exc_info=True)
-                scope["auth_error"] = {
-                    "code": WS_CLOSE_TOKEN_INVALID,
-                    "message": "Authentication error occurred.",
-                }
-
-        # Log final authentication state
-        auth_status = "authenticated" if scope["user"].is_authenticated else "anonymous"
-        auth_error_info = (
-            f", error: {scope['auth_error']}" if scope["auth_error"] else ""
-        )
-        logger.debug(
-            f"WS authentication complete - User: {scope['user']} ({auth_status}){auth_error_info}"
-        )
-
-        return await super().__call__(scope, receive, send)
+# Backwards compatibility alias - the unified middleware handles both modes
+WebsocketAuth0TokenMiddleware = JWTAuthMiddleware
