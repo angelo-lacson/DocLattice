@@ -61,14 +61,18 @@ LABEL_TYPES = [
 # Define embedding dimensions constants
 EMBEDDING_DIM_384 = 384
 EMBEDDING_DIM_768 = 768
+EMBEDDING_DIM_1024 = 1024
 EMBEDDING_DIM_1536 = 1536
 EMBEDDING_DIM_3072 = 3072
+EMBEDDING_DIM_4096 = 4096
 
 EMBEDDING_DIMENSIONS = [
     (EMBEDDING_DIM_384, "384"),
     (EMBEDDING_DIM_768, "768"),
+    (EMBEDDING_DIM_1024, "1024"),
     (EMBEDDING_DIM_1536, "1536"),
     (EMBEDDING_DIM_3072, "3072"),
+    (EMBEDDING_DIM_4096, "4096"),
 ]
 
 
@@ -394,8 +398,10 @@ class Embedding(BaseOCModel):
         embedder_path (str): A field storing the embedder or model path used to generate this embedding.
         vector_384 (VectorField): A 384-dimensional embedding vector, if used.
         vector_768 (VectorField): A 768-dimensional embedding vector, if used.
+        vector_1024 (VectorField): A 1024-dimensional embedding vector, if used.
         vector_1536 (VectorField): A 1536-dimensional embedding vector, if used.
         vector_3072 (VectorField): A 3072-dimensional embedding vector, if used.
+        vector_4096 (VectorField): A 4096-dimensional embedding vector, if used.
         created (datetime): Timestamp when this embedding record was created.
         modified (datetime): Timestamp when this embedding record was last updated.
     """
@@ -455,8 +461,10 @@ class Embedding(BaseOCModel):
     # Multiple dimension-specific embeddings
     vector_384 = VectorField(dimensions=EMBEDDING_DIM_384, null=True, blank=True)
     vector_768 = VectorField(dimensions=EMBEDDING_DIM_768, null=True, blank=True)
+    vector_1024 = VectorField(dimensions=EMBEDDING_DIM_1024, null=True, blank=True)
     vector_1536 = VectorField(dimensions=EMBEDDING_DIM_1536, null=True, blank=True)
     vector_3072 = VectorField(dimensions=EMBEDDING_DIM_3072, null=True, blank=True)
+    vector_4096 = VectorField(dimensions=EMBEDDING_DIM_4096, null=True, blank=True)
 
     # Metadata
     created = django.db.models.DateTimeField(default=timezone.now, blank=True)
