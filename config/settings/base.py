@@ -581,6 +581,7 @@ CELERY_RESULT_BACKEND_MAX_RETRIES = 10
 # django-rest-framework - https://www.django-rest-framework.org/api-guide/settings/
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "config.rest_jwt_auth.GraphQLJWTAuthentication",  # JWT auth (same as GraphQL)
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ),

@@ -563,7 +563,7 @@ class VectorStoreAPI:
             document_id: Filter by document ID
             embedder_path: Path to embedder model to use
             must_have_text: Filter by text content
-            embed_dim: Embedding dimension to use (384, 768, 1536, or 3072)
+            embed_dim: Embedding dimension to use (384, 768, 1024, 1536, 3072, or 4096)
             **kwargs: Additional framework-specific arguments
 
         Returns:

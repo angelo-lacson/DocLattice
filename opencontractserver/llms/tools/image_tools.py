@@ -5,6 +5,7 @@ Provides tools to access document images for multimodal analysis, with
 permission-checked variants for secure access.
 """
 
+import json
 import logging
 from functools import partial
 from typing import Optional
@@ -217,6 +218,66 @@ def get_document_image(
         return None
 
 
+def _extract_image_from_pawls(
+    pawls_data: list[dict],
+    page_index: int,
+    token_index: int,
+) -> Optional[ImageData]:
+    """
+    Extract image data directly from PAWLs data structure.
+
+    Helper function for structural annotations that don't have a document_id.
+
+    Args:
+        pawls_data: Pre-loaded PAWLs data (list of page dicts).
+        page_index: 0-based page index.
+        token_index: 0-based token index within the page's tokens array.
+
+    Returns:
+        ImageData if the token is an image token, None otherwise.
+    """
+    try:
+        if page_index < 0 or page_index >= len(pawls_data):
+            logger.warning(f"Page index {page_index} out of bounds")
+            return None
+
+        page = pawls_data[page_index]
+        if not isinstance(page, dict):
+            return None
+
+        page_tokens = page.get("tokens", [])
+
+        if token_index < 0 or token_index >= len(page_tokens):
+            logger.warning(
+                f"Token index {token_index} out of bounds for page {page_index}"
+            )
+            return None
+
+        token = page_tokens[token_index]
+
+        # Verify this is an image token
+        if not token.get("is_image"):
+            return None
+
+        base64_data = get_image_as_base64(token)
+        if not base64_data:
+            return None
+
+        data_url = get_image_data_url(token)
+        img_format = token.get("format", "jpeg")
+
+        return ImageData(
+            base64_data=base64_data,
+            format=img_format,
+            data_url=data_url or f"data:image/{img_format};base64,{base64_data}",
+            page_index=page_index,
+            token_index=token_index,
+        )
+    except Exception as e:
+        logger.error(f"Error extracting image from PAWLs: {e}")
+        return None
+
+
 def get_annotation_images(annotation_id: int) -> list[ImageData]:
     """
     Get all image tokens referenced by an annotation.
@@ -225,6 +286,9 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
     This function filters for image tokens (is_image=True) and retrieves their
     actual image data.
 
+    For structural annotations without a document, PAWLs data is loaded from the
+    structural_set.pawls_parse_file.
+
     Args:
         annotation_id: The annotation ID.
 
@@ -232,15 +296,32 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
         List of ImageData for image tokens referenced by this annotation.
     """
     try:
-        annotation = Annotation.objects.select_related("document").get(pk=annotation_id)
+        annotation = Annotation.objects.select_related(
+            "document", "structural_set"
+        ).get(pk=annotation_id)
         document = annotation.document
 
-        if not document:
-            logger.warning(f"Annotation {annotation_id} has no document")
+        # Load PAWLs data from document or structural set
+        if document:
+            pawls_data = load_pawls_data(document)
+        elif annotation.structural_set and annotation.structural_set.pawls_parse_file:
+            # Structural annotation without document - load from structural_set
+            pawls_file = annotation.structural_set.pawls_parse_file
+            try:
+                pawls_file.open("r")
+                try:
+                    pawls_data = json.load(pawls_file)
+                finally:
+                    pawls_file.close()
+            except Exception as e:
+                logger.error(f"Error loading PAWLs from structural set: {e}")
+                pawls_data = None
+        else:
+            logger.warning(
+                f"Annotation {annotation_id} has no document or structural_set with PAWLs"
+            )
             return []
 
-        # Load PAWLs data once for all token lookups (avoids N+1 queries)
-        pawls_data = load_pawls_data(document)
         if not pawls_data:
             return []
 
@@ -261,10 +342,17 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
                 page_idx = ref.get("pageIndex")
                 token_idx = ref.get("tokenIndex")
                 if page_idx is not None and token_idx is not None:
-                    # Pass pre-loaded pawls_data to avoid re-loading for each token
-                    img_data = get_document_image(
-                        document.pk, page_idx, token_idx, pawls_data=pawls_data
-                    )
+                    # For structural annotations, we don't have a document_id
+                    # but get_document_image can work with pawls_data directly
+                    if document:
+                        img_data = get_document_image(
+                            document.pk, page_idx, token_idx, pawls_data=pawls_data
+                        )
+                    else:
+                        # Extract image data directly from pawls_data for structural annotations
+                        img_data = _extract_image_from_pawls(
+                            pawls_data, page_idx, token_idx
+                        )
                     if img_data:
                         images.append(img_data)
 
@@ -352,8 +440,9 @@ def get_annotation_images_with_permission(
     """
     Permission-checked version of get_annotation_images.
 
-    Verifies the user has READ permission on the annotation's document
-    before retrieving images.
+    Verifies the user has READ permission on the annotation's document or corpus
+    before retrieving images. For structural annotations without a document,
+    checks corpus permissions.
 
     Args:
         user: The user requesting access.
@@ -363,19 +452,48 @@ def get_annotation_images_with_permission(
         List of ImageData if permitted, empty list otherwise.
     """
     try:
-        annotation = Annotation.objects.select_related("document").get(pk=annotation_id)
-        document = annotation.document
-        if not document:
-            return []
+        annotation = Annotation.objects.select_related(
+            "document", "corpus", "structural_set"
+        ).get(pk=annotation_id)
 
-        if not user_has_permission_for_obj(
-            user, document, PermissionTypes.READ, include_group_permissions=True
-        ):
-            logger.warning(
-                f"User {user} lacks permission for document {document.pk} "
-                f"(annotation {annotation_id})"
-            )
-            return []
+        # Check permissions: document takes precedence, then corpus
+        permission_obj = annotation.document or annotation.corpus
+
+        if not permission_obj:
+            # Structural annotation without corpus - check if any document uses this structural_set
+            if annotation.structural_set:
+                # Find any document that uses this structural set and user has access to
+                from opencontractserver.documents.models import Document
+
+                accessible_doc = (
+                    Document.objects.filter(
+                        structural_annotation_set=annotation.structural_set
+                    )
+                    .visible_to_user(user)
+                    .first()
+                )
+                if not accessible_doc:
+                    logger.warning(
+                        f"User {user} lacks permission for structural annotation {annotation_id}"
+                    )
+                    return []
+            else:
+                logger.warning(
+                    f"Annotation {annotation_id} has no document, corpus, or structural_set"
+                )
+                return []
+        else:
+            # Check permission on document or corpus
+            if not user_has_permission_for_obj(
+                user,
+                permission_obj,
+                PermissionTypes.READ,
+                include_group_permissions=True,
+            ):
+                logger.warning(
+                    f"User {user} lacks permission for annotation {annotation_id}"
+                )
+                return []
 
         return get_annotation_images(annotation_id)
     except Annotation.DoesNotExist:

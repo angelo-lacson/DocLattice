@@ -5,6 +5,79 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-12
+
+### Added
+
+#### Image Annotation Display in UnifiedContentFeed
+- **Modality badges for annotations**: Visual indicators showing TEXT, IMAGE, or MIXED modalities
+  - Color-coded badges: Blue (text), Orange (image), Purple (mixed)
+  - Integrated inline with annotation labels in HighlightItem
+  - Files: `frontend/src/components/annotator/sidebar/ModalityBadge.tsx`
+- **Image thumbnail previews**: Display image content directly in annotation feed
+  - 80x80px thumbnails with hover effects and lazy loading
+  - Automatic fetching only when IMAGE modality is present
+  - Files: `frontend/src/components/annotator/sidebar/AnnotationImagePreview.tsx`
+- **REST API endpoint for annotation images**: `/api/annotations/<id>/images/`
+  - Permission-checked image retrieval using existing `get_annotation_images_with_permission()`
+  - IDOR protection: Returns empty array for unauthorized access
+  - Files: `opencontractserver/annotations/views.py`, `config/urls.py`
+- **Unified JWT authentication utility**: Single entry point for token validation across all API surfaces
+  - Automatic handling of both Auth0 (RS256/JWKS) and standard graphql_jwt (HS256) tokens
+  - DRY architecture eliminates conditional Auth0/non-Auth0 switching in multiple files
+  - Files: `config/jwt_utils.py` (NEW)
+- **GraphQL content_modalities field exposure**: Added to AnnotationType schema
+  - Enables frontend to filter annotations by modality
+  - Files: `config/graphql/graphene_types.py`
+
+### Fixed
+- **Image annotations now clearly visible**: Image and mixed-modality annotations display properly in UnifiedContentFeed
+  - Previously showed as empty text with no indication of content
+  - Files: `frontend/src/components/annotator/sidebar/HighlightItem.tsx:163-167,225,249`
+  - Files: `frontend/src/components/knowledge_base/document/unified_feed/ContentItemRenderer.tsx:218`
+- **Structural annotations now return images**: Fixed image retrieval for structural annotations without direct document references
+  - **Root Cause**: `get_annotation_images_with_permission()` returned empty array for structural annotations (no `document` field)
+  - **Fix**: Load PAWLs data from `structural_set.pawls_parse_file` when document is None
+  - **Impact**: Structural image annotations (e.g., figures, charts) now display thumbnails in UI
+  - **Files Modified**:
+    - `opencontractserver/llms/tools/image_tools.py:220-305` - Added `_extract_image_from_pawls()` helper
+    - `opencontractserver/llms/tools/image_tools.py:278-305` - Updated `get_annotation_images()` to check structural_set
+    - `opencontractserver/llms/tools/image_tools.py:434-492` - Updated `get_annotation_images_with_permission()` for structural permissions
+  - **Test Coverage**: Added test for structural annotation image retrieval
+    - Files: `opencontractserver/tests/test_annotation_images_api.py:253-321`
+    - All 6 tests passing including new structural annotation test
+- **Parser pipeline now populates content_modalities**: NLM-Ingest and Text parsers now correctly set content_modalities field
+  - **NLM-Ingest Parser**: Added `_compute_content_modalities()` method to analyze tokens and detect text/image content
+    - Checks `is_image` flag on tokens in PAWLs data
+    - Files: `opencontractserver/pipeline/parsers/nlm_ingest_parser.py:33-95,180-189`
+  - **Text Parser**: Sets content_modalities to `["TEXT"]` for all text-only annotations
+    - Files: `opencontractserver/pipeline/parsers/oc_text_parser.py:108`
+  - **Backfill Command**: Created management command to populate existing annotations with missing content_modalities
+    - Analyzes token references in PAWLs data to determine modalities
+    - Fallback: Uses annotation label text as hint (e.g., "image", "figure", "chart")
+    - Files: `opencontractserver/annotations/management/commands/populate_content_modalities.py`
+    - Usage: `python manage.py populate_content_modalities [--dry-run] [--force]`
+  - **Test Coverage**: Enhanced NLM-Ingest parser tests to verify content_modalities
+    - Files: `opencontractserver/tests/test_doc_parser_nlm_ingest.py:99-105`
+
+### Changed
+- **Unified JWT authentication architecture**: Refactored authentication to use single shared utility
+  - **REST API**: `config/rest_jwt_auth.py` now uses `jwt_utils.get_user_from_jwt_token()`
+  - **WebSocket**: Unified `JWTAuthMiddleware` replaces separate Auth0/non-Auth0 middlewares
+    - Files: `config/websocket/middleware.py` - Single middleware handles both token types
+    - Files: `config/websocket/middlewares/websocket_auth0_middleware.py` - Now alias to unified middleware (deprecated)
+  - **ASGI**: Simplified `config/asgi.py` to use single middleware instead of conditional switching
+  - **Benefit**: DRY architecture - token validation logic centralized in one place
+
+### Technical Details
+- **Backend**: REST endpoint leverages existing permission-checked `image_tools.py` functions
+- **Frontend hook**: `useAnnotationImages` conditionally fetches images only for IMAGE modality (performance optimization)
+- **TypeScript types**: Added `contentModalities?: string[]` to annotation types
+  - Files: `frontend/src/types/graphql-api.ts:147`
+  - Files: `frontend/src/components/annotator/types/annotations.ts:92,145`
+- **Test coverage**: 5 backend tests for REST endpoint with authentication and permission checking
+  - Files: `opencontractserver/tests/test_annotation_images_api.py`
+
 ## [3.0.0b4] - 2026-01-11
 
 ### Added

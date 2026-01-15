@@ -177,6 +177,19 @@ Current implementations:
 **Multimodal Embedders:**
 - **MultimodalMicroserviceEmbedder**: CLIP ViT-L-14 based embedder (768-dim) supporting both text and images. Text and image embeddings are in the same vector space, enabling cross-modal similarity search.
 
+#### Supported Embedding Dimensions
+
+The OpenContracts database supports the following embedding dimensions via dedicated vector fields:
+
+- **384 dimensions** (`vector_384`): Used by MicroserviceEmbedder (sentence-transformers)
+- **768 dimensions** (`vector_768`): Used by MultimodalMicroserviceEmbedder (CLIP ViT-L-14)
+- **1024 dimensions** (`vector_1024`): Available for future embedders
+- **1536 dimensions** (`vector_1536`): Used by OpenAI text-embedding-3-small and similar models
+- **3072 dimensions** (`vector_3072`): Used by OpenAI text-embedding-3-large and large models
+- **4096 dimensions** (`vector_4096`): Available for high-dimensional embedders
+
+Each embedding dimension is stored in a separate pgvector field, allowing the system to support multiple embedding models simultaneously without conflicts.
+
 #### Multimodal Embedder Configuration
 
 The multimodal embedder requires the `multimodal-embedder` service to be running:

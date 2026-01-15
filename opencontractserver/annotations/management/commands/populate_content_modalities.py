@@ -4,7 +4,6 @@ import json
 import logging
 
 from django.core.management.base import BaseCommand
-from django.db import transaction
 
 from opencontractserver.annotations.models import Annotation
 
