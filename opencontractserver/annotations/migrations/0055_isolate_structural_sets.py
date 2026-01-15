@@ -9,7 +9,19 @@ incompatible vector dimensions.
 This migration finds all StructuralAnnotationSets that are shared by multiple
 documents and duplicates them so each document has its own isolated copy.
 The first document keeps the original set; subsequent documents get copies.
+
+ROLLBACK SUPPORT
+================
+This migration supports rollback via reverse_migration(). The content_hash format
+`{original_hash}_isolated_from{original_pk}_{uuid}` encodes the original set ID,
+allowing the reverse migration to restore document relationships and clean up
+duplicated sets.
+
+Note: Rollback will delete any embeddings generated on the duplicated sets.
 """
+
+import re
+import uuid
 
 from django.db import migrations
 from django.db.models import Count
@@ -59,9 +71,25 @@ def isolate_structural_annotation_sets(apps, schema_editor):
 
         # First document keeps original, rest get copies
         for doc in docs[1:]:
-            # Create new set for this document with unique content_hash
+            # Create collision-resistant content_hash encoding original set ID
+            # Format: {original_hash}_isolated_from{original_pk}_{uuid4}
+            # This allows reverse migration to restore original relationships
+            new_content_hash = (
+                f"{struct_set.content_hash}_isolated_from{struct_set.pk}_"
+                f"{uuid.uuid4().hex[:12]}"
+            )
+
+            # Verify uniqueness (defensive check)
+            while StructuralAnnotationSet.objects.filter(
+                content_hash=new_content_hash
+            ).exists():
+                new_content_hash = (
+                    f"{struct_set.content_hash}_isolated_from{struct_set.pk}_"
+                    f"{uuid.uuid4().hex[:12]}"
+                )
+
             new_set = StructuralAnnotationSet.objects.create(
-                content_hash=f"{struct_set.content_hash}_{doc.pk}",
+                content_hash=new_content_hash,
                 parser_name=struct_set.parser_name,
                 parser_version=struct_set.parser_version,
                 page_count=struct_set.page_count,
@@ -110,13 +138,69 @@ def isolate_structural_annotation_sets(apps, schema_editor):
 
 def reverse_migration(apps, schema_editor):
     """
-    Reverse is not practical - would require identifying which sets were
-    originally shared. Leave as-is on reverse.
+    Reverse the isolation by restoring documents to their original shared sets.
+
+    This parses the content_hash to find the original set ID, restores the
+    document's foreign key, and deletes the duplicated set with its annotations.
+
+    Note: Any embeddings generated on duplicated sets will be lost.
     """
-    print(
-        "Note: Reverse migration is a no-op. "
-        "Duplicated structural sets will remain isolated."
+    Document = apps.get_model("documents", "Document")
+    StructuralAnnotationSet = apps.get_model("annotations", "StructuralAnnotationSet")
+    Annotation = apps.get_model("annotations", "Annotation")
+
+    # Pattern to extract original set ID from content_hash
+    # Format: {original_hash}_isolated_from{original_pk}_{uuid}
+    pattern = re.compile(r"_isolated_from(\d+)_[a-f0-9]{12}$")
+
+    # Find all isolated sets
+    isolated_sets = StructuralAnnotationSet.objects.filter(
+        content_hash__contains="_isolated_from"
     )
+
+    count = isolated_sets.count()
+    if count == 0:
+        print("No isolated structural annotation sets found to restore")
+        return
+
+    print(f"Found {count} isolated sets to restore...")
+
+    restored = 0
+    errors = 0
+
+    for isolated_set in isolated_sets.iterator(chunk_size=100):
+        match = pattern.search(isolated_set.content_hash)
+        if not match:
+            print(f"  Warning: Could not parse content_hash: {isolated_set.content_hash}")
+            errors += 1
+            continue
+
+        original_pk = int(match.group(1))
+
+        # Find the original set
+        try:
+            original_set = StructuralAnnotationSet.objects.get(pk=original_pk)
+        except StructuralAnnotationSet.DoesNotExist:
+            print(f"  Warning: Original set {original_pk} not found, skipping")
+            errors += 1
+            continue
+
+        # Update documents pointing to isolated set to point back to original
+        docs_updated = Document.objects.filter(
+            structural_annotation_set=isolated_set
+        ).update(structural_annotation_set=original_set)
+
+        # Delete annotations belonging to isolated set
+        Annotation.objects.filter(structural_set=isolated_set).delete()
+
+        # Delete the isolated set
+        isolated_set.delete()
+
+        restored += 1
+        if restored % 10 == 0:
+            print(f"  Progress: {restored}/{count} sets restored...")
+
+    print(f"Completed: Restored {restored} sets ({errors} errors)")
 
 
 class Migration(migrations.Migration):

@@ -5,6 +5,7 @@ import logging
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from opencontractserver.llms.tools.image_tools import (
@@ -12,6 +13,12 @@ from opencontractserver.llms.tools.image_tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class AnnotationImagesThrottle(UserRateThrottle):
+    """Rate limiting for annotation image retrieval endpoint."""
+
+    scope = "annotation_images"
 
 
 class AnnotationImagesView(APIView):
@@ -24,9 +31,12 @@ class AnnotationImagesView(APIView):
     Uses get_annotation_images_with_permission() which:
     - Verifies user has READ permission on annotation's document
     - Returns empty array for unauthorized/missing (IDOR protection)
+
+    Rate limited to 200 requests/hour per user to prevent resource exhaustion.
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AnnotationImagesThrottle]
 
     def get(self, request, annotation_id):
         """

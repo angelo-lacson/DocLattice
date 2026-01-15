@@ -2095,6 +2095,23 @@ class Query(graphene.ObjectType):
             # Apply pagination
             paginated_results = results[offset : offset + limit]
 
+        # Defensive select_related: Re-fetch annotations with explicit prefetching
+        # to guard against changes in CoreAnnotationVectorStore implementation
+        if paginated_results:
+            from opencontractserver.annotations.models import Annotation
+
+            annotation_ids = [r.annotation.id for r in paginated_results]
+            annotations_by_id = {
+                a.id: a
+                for a in Annotation.objects.filter(
+                    id__in=annotation_ids
+                ).select_related("annotation_label", "document", "corpus")
+            }
+            # Update results with explicitly prefetched annotations
+            for result in paginated_results:
+                if result.annotation.id in annotations_by_id:
+                    result.annotation = annotations_by_id[result.annotation.id]
+
         # Convert to GraphQL result types
         return [
             SemanticSearchResultType(

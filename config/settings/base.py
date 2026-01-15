@@ -586,6 +586,15 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.TokenAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",  # Anonymous users (shouldn't hit authenticated endpoints)
+        "user": "1000/hour",  # Authenticated users
+        "annotation_images": "200/hour",  # Image retrieval endpoint (higher bandwidth)
+    },
 }
 
 
@@ -774,6 +783,15 @@ PREFERRED_PARSERS = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": _SELECTED_PDF_PARSER,  # noqa
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",  # noqa
 }
+
+# Image extraction size limits
+# These prevent storage abuse and memory issues during PDF image extraction
+MAX_IMAGE_SIZE_BYTES = env.int(
+    "MAX_IMAGE_SIZE_BYTES", default=10 * 1024 * 1024  # 10MB per individual image
+)
+MAX_TOTAL_IMAGES_SIZE_BYTES = env.int(
+    "MAX_TOTAL_IMAGES_SIZE_BYTES", default=100 * 1024 * 1024  # 100MB total per document
+)
 
 # Thumbnail extraction tasks
 THUMBNAIL_TASKS = {

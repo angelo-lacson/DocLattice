@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from opencontractserver.documents.models import Document
     from PIL import Image as PILImage
 
+from django.conf import settings
+
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
     PawlsPagePythonType,
@@ -34,9 +36,14 @@ from opencontractserver.types.dicts import (
 
 logger = logging.getLogger(__name__)
 
-# Image size limits to prevent storage abuse and memory issues
-MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB per individual image
-MAX_TOTAL_IMAGES_SIZE_BYTES = 100 * 1024 * 1024  # 100MB total per document
+# Image size limits - use settings with fallback defaults
+# These can be overridden via environment variables:
+#   MAX_IMAGE_SIZE_BYTES (default: 10MB per image)
+#   MAX_TOTAL_IMAGES_SIZE_BYTES (default: 100MB per document)
+MAX_IMAGE_SIZE_BYTES = getattr(settings, "MAX_IMAGE_SIZE_BYTES", 10 * 1024 * 1024)
+MAX_TOTAL_IMAGES_SIZE_BYTES = getattr(
+    settings, "MAX_TOTAL_IMAGES_SIZE_BYTES", 100 * 1024 * 1024
+)
 
 
 def load_pawls_data(document: "Document") -> Optional[list[dict[str, Any]]]:
