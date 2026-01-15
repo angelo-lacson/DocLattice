@@ -631,6 +631,23 @@ class StructuralAnnotationSet(BaseOCModel):
         )
 
         # Bulk copy structural annotations (without embeddings - will be generated fresh)
+        # Use select_related to avoid N+1 queries on annotation_label and creator
+        # Use only() to fetch just the fields we need for duplication
+        source_annotations = self.structural_annotations.select_related(
+            "annotation_label", "creator"
+        ).only(
+            "page",
+            "raw_text",
+            "tokens_jsons",
+            "bounding_box",
+            "json",
+            "annotation_type",
+            "annotation_label",
+            "content_modalities",
+            "is_public",
+            "creator",
+        )
+
         new_annotations = [
             Annotation(
                 structural_set=new_set,
@@ -646,7 +663,7 @@ class StructuralAnnotationSet(BaseOCModel):
                 is_public=a.is_public,
                 creator=a.creator,
             )
-            for a in self.structural_annotations.all()
+            for a in source_annotations
         ]
         Annotation.objects.bulk_create(new_annotations)
 

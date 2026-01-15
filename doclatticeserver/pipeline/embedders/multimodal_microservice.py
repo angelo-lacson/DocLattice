@@ -22,6 +22,28 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
+class EmbeddingClientError(Exception):
+    """
+    Raised for 4xx client errors from the embedding service.
+
+    These errors indicate invalid input (malformed request, bad data) and
+    should NOT be retried by Celery tasks.
+    """
+
+    pass
+
+
+class EmbeddingServerError(Exception):
+    """
+    Raised for 5xx server errors from the embedding service.
+
+    These errors indicate transient service issues and SHOULD be retried
+    by Celery tasks with exponential backoff.
+    """
+
+    pass
+
+
 class MultimodalMicroserviceEmbedder(BaseEmbedder):
     """
     Multimodal embedder using CLIP ViT-L-14 via microservice.
@@ -157,14 +179,15 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                     f"Multimodal text embedding service returned client error "
                     f"{response.status_code}. Input text length: {len(text)}"
                 )
-                return None
+                return None  # Non-retriable error
             else:
                 # Server errors (5xx) or unexpected status - worth retrying
-                logger.error(
+                error_msg = (
                     f"Multimodal text embedding service returned status {response.status_code}. "
                     f"This may be a transient error."
                 )
-                return None
+                logger.error(error_msg)
+                raise EmbeddingServerError(error_msg)  # Retriable error
 
         except requests.exceptions.Timeout:
             logger.error("Multimodal service request timed out for text embedding")
@@ -237,14 +260,15 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                     f"{response.status_code}. Image format: {image_format}, "
                     f"base64 length: {len(image_base64)}"
                 )
-                return None
+                return None  # Non-retriable error
             else:
                 # Server errors (5xx) or unexpected status - worth retrying
-                logger.error(
+                error_msg = (
                     f"Multimodal image embedding service returned status {response.status_code}. "
                     f"This may be a transient error."
                 )
-                return None
+                logger.error(error_msg)
+                raise EmbeddingServerError(error_msg)  # Retriable error
 
         except requests.exceptions.Timeout:
             logger.error("Multimodal service request timed out for image embedding")
