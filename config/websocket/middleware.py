@@ -1,11 +1,23 @@
+"""
+WebSocket JWT authentication middleware.
+
+Uses the unified jwt_utils module for token validation, ensuring consistent
+authentication behavior across REST, GraphQL, and WebSocket API surfaces.
+
+Automatically handles both Auth0 and standard graphql_jwt tokens based on
+the USE_AUTH0 setting.
+"""
+
 import logging
 from typing import Any
 from urllib.parse import parse_qsl
 
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
-from django.contrib.auth.models import AnonymousUser, User
+from django.contrib.auth.models import AnonymousUser
 from graphql_jwt.exceptions import JSONWebTokenError, JSONWebTokenExpired
+
+from config.jwt_utils import get_user_from_jwt_token
 
 logger = logging.getLogger(__name__)
 
@@ -17,36 +29,26 @@ WS_CLOSE_TOKEN_INVALID = 4002  # Token is invalid, client should re-authenticate
 
 
 @database_sync_to_async
-def get_user_from_token(token: str) -> User:
+def _get_user_from_token(token: str):
     """
-    Retrieves and returns a User object if the provided JWT token is valid.
+    Async wrapper around the unified JWT validation function.
 
-    :param token: The JWT token extracted from the query string.
-    :return: User object if valid
-    :raises JSONWebTokenExpired: When token has expired (client should refresh)
-    :raises JSONWebTokenError: When token is invalid (client should re-authenticate)
-    :raises Exception: For other unexpected errors
+    Returns the user or raises JWT exceptions.
     """
-    from graphql_jwt.utils import get_payload, get_user_by_payload
-
-    logger.debug(f"Attempting to validate token: {token[:10] if token else 'None'}...")
-    payload = get_payload(token)
-    logger.debug(f"Token payload retrieved: {payload}")
-
-    user = get_user_by_payload(payload)
-    if user is None:
-        logger.error("User not found from token payload")
-        raise JSONWebTokenError("User not found")
-
-    logger.debug(f"Successfully authenticated user: {user.username}")
-    return user
+    return get_user_from_jwt_token(token)
 
 
-class GraphQLJWTTokenAuthMiddleware(BaseMiddleware):
+class JWTAuthMiddleware(BaseMiddleware):
     """
-    Custom middleware that takes a JWT token from the query string, validates it,
-    and sets the associated user in scope['user']. If no token is provided or
-    it is invalid, scope['user'] is set to AnonymousUser.
+    WebSocket middleware that authenticates users via JWT tokens.
+
+    Supports both Auth0 and standard graphql_jwt tokens based on
+    the USE_AUTH0 setting. Uses the same validation logic as the
+    REST API and GraphQL layers.
+
+    Token extraction:
+        - Query string: ws://host/path/?token=<jwt>
+        - Authorization header: Authorization: Bearer <jwt>
 
     On authentication failure, sets scope['auth_error'] with details:
     - 'code': WS_CLOSE_TOKEN_EXPIRED (4001) or WS_CLOSE_TOKEN_INVALID (4002)
@@ -58,73 +60,76 @@ class GraphQLJWTTokenAuthMiddleware(BaseMiddleware):
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> Any:
         """
-        Extracts the 'token' from the query string and authenticates the user.
-        If token is missing or invalid, an AnonymousUser is assigned to scope['user'].
-
-        :param scope: The ASGI scope dictionary, including query_string.
-        :param receive: The receive callable provided by Channels.
-        :param send: The send callable provided by Channels.
-        :return: The result of the next layer in the application.
+        Extract token from query string or headers and authenticate user.
         """
-        # Initialize with AnonymousUser and no auth error.
-        # Note: Each WebSocket connection gets a fresh scope, so we don't need
-        # to worry about clearing previous state from reconnection attempts.
+        # Initialize with AnonymousUser and no auth error
         scope["user"] = AnonymousUser()
         scope["auth_error"] = None
 
+        # Extract token from query string
+        token = self._extract_token_from_query_string(scope)
+
+        # Fall back to Authorization header if no query string token
+        if not token:
+            token = self._extract_token_from_headers(scope)
+
+        if not token:
+            logger.debug("No token provided in WebSocket connection")
+            return await super().__call__(scope, receive, send)
+
+        # Authenticate with the token
         try:
-            # Parse query string
-            query_string = scope.get("query_string", b"").decode("utf-8")
-            query_params = dict(parse_qsl(query_string))
-
-            # Extract token
-            token = query_params.get("token")
-
-            if not token:
-                # No token is normal for anonymous access - use debug level
-                logger.debug("No token provided in WebSocket connection")
-            else:
-                logger.debug(
-                    "Token found in query parameters, attempting authentication"
-                )
-                user = await get_user_from_token(token)
-                scope["user"] = user
+            logger.debug("Attempting WebSocket JWT authentication")
+            user = await _get_user_from_token(token)
+            scope["user"] = user
+            logger.debug(f"WebSocket authenticated user: {user.username}")
 
         except JSONWebTokenExpired as e:
-            # Token has expired - client should refresh their token
             logger.warning(f"WebSocket auth failed - token expired: {e}")
-            scope["user"] = AnonymousUser()
             scope["auth_error"] = {
                 "code": WS_CLOSE_TOKEN_EXPIRED,
                 "message": "Token has expired. Please refresh your session.",
             }
 
         except JSONWebTokenError as e:
-            # Token is invalid - client should re-authenticate
             logger.warning(f"WebSocket auth failed - invalid token: {e}")
-            scope["user"] = AnonymousUser()
             scope["auth_error"] = {
                 "code": WS_CLOSE_TOKEN_INVALID,
                 "message": f"Invalid token: {e}",
             }
 
         except Exception as e:
-            # Unexpected error - treat as invalid token
-            logger.error(f"Error in auth middleware: {str(e)}", exc_info=True)
-            scope["user"] = AnonymousUser()
+            logger.error(f"WebSocket auth error: {e}", exc_info=True)
             scope["auth_error"] = {
                 "code": WS_CLOSE_TOKEN_INVALID,
                 "message": "Authentication error occurred.",
             }
 
-        # Log final authentication state
-        auth_status = "authenticated" if scope["user"].is_authenticated else "anonymous"
-        auth_error_info = (
-            f", error: {scope['auth_error']}" if scope["auth_error"] else ""
-        )
-        # Use debug for normal flow; errors are already logged above at warning level
-        logger.debug(
-            f"Authentication complete - User: {scope['user']} ({auth_status}){auth_error_info}"
-        )
-
         return await super().__call__(scope, receive, send)
+
+    def _extract_token_from_query_string(self, scope: dict[str, Any]) -> str | None:
+        """Extract token from WebSocket query string."""
+        query_string = scope.get("query_string", b"").decode("utf-8")
+        query_params = dict(parse_qsl(query_string))
+        return query_params.get("token")
+
+    def _extract_token_from_headers(self, scope: dict[str, Any]) -> str | None:
+        """Extract token from Authorization header."""
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(b"authorization", b"").decode("utf-8")
+
+        if not auth_header:
+            return None
+
+        parts = auth_header.split()
+        if len(parts) != 2:
+            return None
+
+        if parts[0].upper() not in ("JWT", "BEARER"):
+            return None
+
+        return parts[1]
+
+
+# Backwards compatibility alias
+GraphQLJWTTokenAuthMiddleware = JWTAuthMiddleware
