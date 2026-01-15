@@ -26,13 +26,31 @@ def isolate_structural_annotation_sets(apps, schema_editor):
 
     # Find structural sets used by more than one document
     # Note: related_name from Document.structural_annotation_set is "documents"
-    shared_sets = (
-        StructuralAnnotationSet.objects.annotate(doc_count=Count("documents")).filter(
-            doc_count__gt=1
-        )
+    # Process in batches to handle large databases safely
+    BATCH_SIZE = 100
+
+    # First, get count for progress indication
+    shared_sets_count = (
+        StructuralAnnotationSet.objects.annotate(doc_count=Count("documents"))
+        .filter(doc_count__gt=1)
+        .count()
     )
 
+    if shared_sets_count == 0:
+        print("No shared structural annotation sets found to isolate")
+        return
+
+    print(f"Found {shared_sets_count} shared structural annotation sets to process...")
+
     total_duplicated = 0
+    processed_sets = 0
+
+    # Process in batches using iterator to avoid loading all into memory
+    shared_sets = (
+        StructuralAnnotationSet.objects.annotate(doc_count=Count("documents"))
+        .filter(doc_count__gt=1)
+        .iterator(chunk_size=BATCH_SIZE)
+    )
 
     for struct_set in shared_sets:
         docs = list(Document.objects.filter(structural_annotation_set=struct_set))
@@ -80,15 +98,14 @@ def isolate_structural_annotation_sets(apps, schema_editor):
             doc.save(update_fields=["structural_annotation_set"])
 
             total_duplicated += 1
-            print(
-                f"  Isolated structural set for document {doc.pk}: "
-                f"old={struct_set.pk} -> new={new_set.pk}"
-            )
 
-    if total_duplicated > 0:
-        print(f"Isolated {total_duplicated} shared structural annotation sets")
-    else:
-        print("No shared structural annotation sets found to isolate")
+        processed_sets += 1
+        if processed_sets % 10 == 0:
+            print(f"  Progress: {processed_sets}/{shared_sets_count} sets processed...")
+
+    print(
+        f"Completed: Isolated {total_duplicated} documents from {processed_sets} shared sets"
+    )
 
 
 def reverse_migration(apps, schema_editor):
