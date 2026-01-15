@@ -17,6 +17,9 @@ import {
 
 import { ServerAnnotationType } from "../../types/graphql-api";
 import { sanitizeForTooltip } from "../../utils/textSanitization";
+import { useAnnotationImages } from "../annotator/hooks/useAnnotationImages";
+import { AnnotationImagePreview } from "../annotator/sidebar/AnnotationImagePreview";
+import { ModalityBadge } from "../annotator/sidebar/ModalityBadge";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -415,6 +418,18 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
   const labelType = getAnnotationLabelType(annotation);
   const visibility = getAnnotationVisibility(annotation);
 
+  // Get content modalities for image display
+  const contentModalities = annotation.contentModalities || [];
+  const hasImageModality = contentModalities.includes("IMAGE");
+  const hasTextModality = contentModalities.includes("TEXT");
+
+  // Fetch images if annotation has IMAGE modality
+  const {
+    images,
+    loading: imagesLoading,
+    error: imagesError,
+  } = useAnnotationImages(annotation.id, contentModalities);
+
   const labelColor = annotation.annotationLabel?.color || "#94a3b8";
   const labelName = annotation.annotationLabel?.text || "Unknown Label";
   const creatorName =
@@ -426,6 +441,8 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
   // Get labelset name from the corpus if available
   const labelsetName = annotation.corpus?.labelSet?.title || "Annotations";
 
+  const hasText = annotation.rawText && annotation.rawText.trim() !== "";
+
   return (
     <CardContainer $isSelected={isSelected} onClick={onClick}>
       <CardHeader>
@@ -435,6 +452,7 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
         </LabelContainer>
         <BadgesContainer>
           <SourceBadgeComponent source={source} />
+          <ModalityBadge modalities={contentModalities} />
           <TypeBadge $type={labelType}>
             {labelType === "doc" ? (
               <>
@@ -453,27 +471,57 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
         <Tag size={12} /> {labelsetName}
       </LabelsetTag>
 
-      {/*
-        XSS Protection: React's JSX automatically escapes HTML entities in text content.
-        We use sanitizeForTooltip to normalize whitespace for cleaner display.
-        See: frontend/src/utils/textSanitization.ts
-      */}
-      {labelType === "text" && annotation.rawText ? (
-        <TaggedText>
-          <HighlightedText>
-            {sanitizeForTooltip(
-              annotation.rawText.length > 150
-                ? `${annotation.rawText.substring(0, 150)}...`
-                : annotation.rawText
-            )}
-          </HighlightedText>
-        </TaggedText>
-      ) : (
-        <DocLabelPlaceholder>
-          <FileText size={16} color="#2563eb" />
-          Applies to entire document
-        </DocLabelPlaceholder>
-      )}
+      {/* Content display based on modality */}
+      {(() => {
+        // IMAGE modality - show featured image first
+        if (hasImageModality) {
+          return (
+            <>
+              <AnnotationImagePreview
+                images={images}
+                loading={imagesLoading}
+                error={imagesError}
+                compact={false}
+              />
+              {/* Show text below image if mixed content */}
+              {hasTextModality && hasText && (
+                <TaggedText style={{ marginTop: "0.5rem" }}>
+                  <HighlightedText>
+                    {sanitizeForTooltip(
+                      annotation.rawText!.length > 100
+                        ? `${annotation.rawText!.substring(0, 100)}...`
+                        : annotation.rawText!
+                    )}
+                  </HighlightedText>
+                </TaggedText>
+              )}
+            </>
+          );
+        }
+
+        // TEXT only modality or doc label
+        if (labelType === "text" && hasText) {
+          return (
+            <TaggedText>
+              <HighlightedText>
+                {sanitizeForTooltip(
+                  annotation.rawText!.length > 150
+                    ? `${annotation.rawText!.substring(0, 150)}...`
+                    : annotation.rawText!
+                )}
+              </HighlightedText>
+            </TaggedText>
+          );
+        }
+
+        // Doc label placeholder
+        return (
+          <DocLabelPlaceholder>
+            <FileText size={16} color="#2563eb" />
+            Applies to entire document
+          </DocLabelPlaceholder>
+        );
+      })()}
 
       <CardFooter>
         <DocumentLink>

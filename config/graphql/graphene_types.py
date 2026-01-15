@@ -268,6 +268,14 @@ class AnnotationInputType(AnnotatePermissionsForReadMixin, graphene.InputObjectT
 class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     json = GenericScalar()  # noqa
     feedback_count = graphene.Int(description="Count of user feedback")
+    content_modalities = graphene.List(
+        graphene.String,
+        description="Content modalities present in this annotation: TEXT, IMAGE, etc.",
+    )
+
+    def resolve_content_modalities(self, info):
+        """Return content modalities list from model."""
+        return self.content_modalities or []
 
     all_source_node_in_relationship = graphene.List(lambda: RelationshipType)
 
