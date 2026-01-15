@@ -30,6 +30,70 @@ class NLMIngestParser(BaseParser):
         super().__init__(**kwargs)
         logger.info("NLMIngestParser initialized.")
 
+    def _compute_content_modalities(
+        self, token_refs: list[dict], pawls_data: list[dict]
+    ) -> list[str]:
+        """
+        Compute content modalities from token references.
+
+        Args:
+            token_refs: List of token references with pageIndex and tokenIndex.
+            pawls_data: PAWLs data containing token information.
+
+        Returns:
+            List of modality strings (e.g., ["TEXT"], ["IMAGE"], ["TEXT", "IMAGE"]).
+        """
+        if not token_refs or not pawls_data:
+            return ["TEXT"]
+
+        has_text = False
+        has_image = False
+
+        for token_ref in token_refs:
+            page_idx = token_ref.get("pageIndex")
+            token_idx = token_ref.get("tokenIndex")
+
+            if page_idx is None or token_idx is None:
+                continue
+
+            if page_idx < 0 or page_idx >= len(pawls_data):
+                continue
+
+            page = pawls_data[page_idx]
+            if not isinstance(page, dict):
+                continue
+
+            tokens = page.get("tokens", [])
+            if token_idx < 0 or token_idx >= len(tokens):
+                continue
+
+            token = tokens[token_idx]
+            if not isinstance(token, dict):
+                continue
+
+            # Check if this is an image token
+            if token.get("is_image"):
+                has_image = True
+            else:
+                has_text = True
+
+            # Early exit if we've found both
+            if has_text and has_image:
+                break
+
+        # Build modality list
+        modalities = []
+        if has_text:
+            modalities.append("TEXT")
+        if has_image:
+            modalities.append("IMAGE")
+
+        # Default to TEXT if no modalities detected
+        if not modalities:
+            modalities = ["TEXT"]
+
+        return modalities
+
     def _parse_document_impl(
         self, user_id: int, doc_id: int, **all_kwargs
     ) -> Optional[OpenContractDocExport]:
@@ -111,10 +175,18 @@ class NLMIngestParser(BaseParser):
             return None
 
         # Ensure all annotations have 'structural' set to True and 'annotation_type' set to TOKEN_LABEL
+        # Also compute and set content_modalities based on token references
         if "labelled_text" in open_contracts_data:
+            pawls_data = open_contracts_data.get("pawls_file_content", [])
             for annotation in open_contracts_data["labelled_text"]:
                 annotation["structural"] = True
                 annotation["annotation_type"] = TOKEN_LABEL
+
+                # Compute content modalities from token references
+                token_refs = annotation.get("annotation_json", {}).get("tokens", [])
+                annotation["content_modalities"] = self._compute_content_modalities(
+                    token_refs, pawls_data
+                )
 
         logger.info(
             f"Open contracts data labelled text: {open_contracts_data.get('labelled_text', [])}"

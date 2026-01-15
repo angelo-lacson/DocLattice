@@ -95,3 +95,11 @@ class ParseWithNLMTestCase(TestCase):
         self.assertIn("labelled_text", open_contracts_data)
         self.assertEqual(len(open_contracts_data["labelled_text"]), 27)
         self.assertEqual(open_contracts_data["title"], "Grab title from parser")
+
+        # Verify content_modalities is set on all annotations
+        for annotation in open_contracts_data["labelled_text"]:
+            self.assertIn("content_modalities", annotation)
+            self.assertIsInstance(annotation["content_modalities"], list)
+            self.assertGreater(len(annotation["content_modalities"]), 0)
+            # This test fixture has no image tokens, so all should be TEXT
+            self.assertEqual(annotation["content_modalities"], ["TEXT"])
