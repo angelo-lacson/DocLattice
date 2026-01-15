@@ -759,14 +759,13 @@ SENTENCE_TRANSFORMER_MODELS_PATH = env.str(
 )
 
 # Parser selection via environment variable
-# Options: "docling" (default), "llamaparse", "nlm"
+# Options: "docling" (default), "llamaparse"
 PDF_PARSER = env.str("PDF_PARSER", default="docling")
 
 # Map parser names to their full paths
 _PDF_PARSER_MAP = {
     "docling": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",
     "llamaparse": "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser",
-    "nlm": "opencontractserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser",
 }
 
 # Get the selected PDF parser (with fallback to docling)
@@ -851,11 +850,6 @@ PARSER_KWARGS = {
         "force_ocr": False,
         "roll_up_groups": True,
         "llm_enhanced_hierarchy": False,
-    },
-    "opencontractserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser": {
-        "endpoint": "http://nlm-ingestor:5001",
-        "api_key": "",
-        "use_ocr": True,
     },
     "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
         "api_key": LLAMAPARSE_API_KEY,

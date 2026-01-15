@@ -16,10 +16,10 @@ OpenContracts implements a modular pipeline architecture with three main parser 
    - Hierarchical document structure extraction
    - Group relationship detection for contract clauses
 
-2. **NLM Ingest Parser** - Alternative parser using NLM Ingest library
-   - Faster processing for standard PDFs
-   - Good layout analysis without ML overhead
-   - Suitable for documents not requiring OCR
+2. **LlamaParse Parser** - Cloud-based parser using LlamaIndex API
+   - High-quality layout extraction
+   - Automatic OCR support
+   - Good for complex document structures
 
 3. **Text Parser** - Simple parser for plain text and markdown files
    - Direct text extraction
@@ -80,7 +80,7 @@ Advanced parsers like Docling can detect relationships between document elements
 graph LR
     A[PDF Upload] --> B{Parser Selection}
     B --> C[Docling REST API]
-    B --> D[NLM Ingest]
+    B --> D[LlamaParse API]
     B --> E[Text Parser]
 
     C --> F[PAWLs Generation]
@@ -166,5 +166,5 @@ DOCLING_PARSER_TIMEOUT = 300
 
 - [Pipeline Overview](../pipelines/pipeline_overview.md)
 - [Docling Parser Documentation](../pipelines/docling_parser.md)
-- [NLM Ingest Parser Documentation](../pipelines/nlm_ingest_parser.md)
+- [LlamaParse Parser Documentation](../pipelines/llamaparse_parser.md)
 - [Original PAWLs Project](https://github.com/allenai/pawls)

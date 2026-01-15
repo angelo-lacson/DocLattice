@@ -7,8 +7,8 @@ from django.conf import settings
 from django.test import TestCase, override_settings
 
 from opencontractserver.tests.fixtures import (
-    NLM_INGESTOR_SAMPLE_PDF,
-    NLM_INGESTOR_SAMPLE_PDF_NEEDS_OCR,
+    SAMPLE_PDF,
+    SAMPLE_PDF_NEEDS_OCR,
 )
 from opencontractserver.utils.files import (
     base_64_encode_bytes,
@@ -22,8 +22,8 @@ from opencontractserver.utils.files import (
 class PDFUtilsTestCase(TestCase):
     def setUp(self) -> None:
         # Create sample PDF contents for testing
-        self.sample_pdf_content = NLM_INGESTOR_SAMPLE_PDF.read_bytes()
-        self.need_ocr_pdf_content = NLM_INGESTOR_SAMPLE_PDF_NEEDS_OCR.read_bytes()
+        self.sample_pdf_content = SAMPLE_PDF.read_bytes()
+        self.need_ocr_pdf_content = SAMPLE_PDF_NEEDS_OCR.read_bytes()
 
     def test_check_if_pdf_needs_ocr_with_text(self):
         needs_ocr = check_if_pdf_needs_ocr(io.BytesIO(self.sample_pdf_content))

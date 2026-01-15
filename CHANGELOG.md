@@ -46,10 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Test Coverage**: Added test for structural annotation image retrieval
     - Files: `opencontractserver/tests/test_annotation_images_api.py:253-321`
     - All 6 tests passing including new structural annotation test
-- **Parser pipeline now populates content_modalities**: NLM-Ingest and Text parsers now correctly set content_modalities field
-  - **NLM-Ingest Parser**: Added `_compute_content_modalities()` method to analyze tokens and detect text/image content
-    - Checks `is_image` flag on tokens in PAWLs data
-    - Files: `opencontractserver/pipeline/parsers/nlm_ingest_parser.py:33-95,180-189`
+- **Parser pipeline now populates content_modalities**: Text parser now correctly sets content_modalities field
   - **Text Parser**: Sets content_modalities to `["TEXT"]` for all text-only annotations
     - Files: `opencontractserver/pipeline/parsers/oc_text_parser.py:108`
   - **Backfill Command**: Created management command to populate existing annotations with missing content_modalities
@@ -57,8 +54,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Fallback: Uses annotation label text as hint (e.g., "image", "figure", "chart")
     - Files: `opencontractserver/annotations/management/commands/populate_content_modalities.py`
     - Usage: `python manage.py populate_content_modalities [--dry-run] [--force]`
-  - **Test Coverage**: Enhanced NLM-Ingest parser tests to verify content_modalities
-    - Files: `opencontractserver/tests/test_doc_parser_nlm_ingest.py:99-105`
 
 ### Changed
 - **Unified JWT authentication architecture**: Refactored authentication to use single shared utility
@@ -68,6 +63,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Files: `config/websocket/middlewares/websocket_auth0_middleware.py` - Now alias to unified middleware (deprecated)
   - **ASGI**: Simplified `config/asgi.py` to use single middleware instead of conditional switching
   - **Benefit**: DRY architecture - token validation logic centralized in one place
+
+### Removed
+- **NLM Ingest Parser**: Removed legacy NLM-Ingest PDF parser in favor of Docling (default) and LlamaParse
+  - **Rationale**: Docling provides superior ML-based parsing with better structure extraction; NLM parser was rarely used
+  - **Migration**: Users with `PDF_PARSER=nlm` should switch to `PDF_PARSER=docling` (default) or `PDF_PARSER=llamaparse`
+  - **Files Removed**:
+    - `opencontractserver/pipeline/parsers/nlm_ingest_parser.py`
+    - `opencontractserver/tests/test_doc_parser_nlm_ingest.py`
+    - `docs/pipelines/nlm_ingest_parser.md`
+  - **Settings Updated**: Removed `nlm` option from `_PDF_PARSER_MAP` in `config/settings/base.py`
 
 ### Technical Details
 - **Backend**: REST endpoint leverages existing permission-checked `image_tools.py` functions
@@ -542,7 +547,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `LLAMAPARSE_LANGUAGE`: Document language - default: "en"
   - `LLAMAPARSE_VERBOSE`: Enable verbose logging - default: False
 - **Parser selection via environment variable**:
-  - `PDF_PARSER`: Set to "llamaparse", "docling" (default), or "nlm" to select default PDF parser
+  - `PDF_PARSER`: Set to "llamaparse" or "docling" (default) to select default PDF parser
   - Location: `config/settings/base.py:740-765`
 - **Comprehensive test suite** (`opencontractserver/tests/test_doc_parser_llamaparse.py`):
   - Tests for successful parsing with layout extraction
