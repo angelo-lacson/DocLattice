@@ -1,8 +1,14 @@
 """
-Multimodal embedder using CLIP ViT-L-14 via microservice.
+Multimodal embedder using CLIP via microservice.
 
 This embedder supports both text and image embeddings using the CLIP model,
-which produces 768-dimensional vectors suitable for cross-modal similarity search.
+producing vectors in a shared embedding space for cross-modal similarity search.
+
+Configuration is via environment variables:
+- MULTIMODAL_EMBEDDER_HOST: Service hostname (default: "multimodal-embedder")
+- MULTIMODAL_EMBEDDER_PORT: Service port (default: 8000)
+- MULTIMODAL_EMBEDDER_URL: Full URL (overrides host:port)
+- MULTIMODAL_EMBEDDER_VECTOR_SIZE: Embedding dimension (default: 768)
 """
 
 import base64
@@ -46,11 +52,17 @@ class EmbeddingServerError(Exception):
 
 class MultimodalMicroserviceEmbedder(BaseEmbedder):
     """
-    Multimodal embedder using CLIP ViT-L-14 via microservice.
+    Multimodal embedder using CLIP via microservice.
 
-    Supports both text and image embeddings with 768-dimensional output.
-    Text and image embeddings are in the same vector space, enabling
+    Supports both text and image embeddings in a shared vector space, enabling
     cross-modal similarity search (e.g., find images similar to text queries).
+
+    Configuration (via environment variables):
+        - MULTIMODAL_EMBEDDER_HOST: Service hostname (default: "multimodal-embedder")
+        - MULTIMODAL_EMBEDDER_PORT: Service port (default: 8000)
+        - MULTIMODAL_EMBEDDER_URL: Full URL (overrides host:port if set)
+        - MULTIMODAL_EMBEDDER_VECTOR_SIZE: Embedding dimension (default: 768)
+        - MULTIMODAL_EMBEDDER_API_KEY: Optional API key for authentication
 
     API Endpoints:
         - POST /embeddings: Text embeddings ({"text": "..."})
@@ -61,12 +73,11 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
 
     title = "Multimodal Microservice Embedder"
     description = (
-        "Generates embeddings for text and images using CLIP ViT-L-14. "
-        "Produces 768-dimensional vectors in a shared embedding space."
+        "Generates embeddings for text and images using CLIP. "
+        "Produces vectors in a shared embedding space for cross-modal search."
     )
     author = "OpenContracts"
     dependencies = ["numpy", "requests"]
-    vector_size = 768  # CLIP ViT-L-14 embedding dimension
     supported_file_types = [
         FileTypeEnum.PDF,
         FileTypeEnum.TXT,
@@ -76,10 +87,23 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
     # Multimodal support - text and images in same vector space
     supported_modalities = {ContentModality.TEXT, ContentModality.IMAGE}
 
+    @property
+    def vector_size(self) -> int:
+        """
+        Get the embedding vector dimensionality from settings.
+
+        Returns:
+            Configured vector size (default: 768 for CLIP ViT-L-14)
+        """
+        return getattr(settings, "MULTIMODAL_EMBEDDER_VECTOR_SIZE", 768)
+
     def __init__(self, **kwargs):
         """Initialize the MultimodalMicroserviceEmbedder."""
         super().__init__(**kwargs)
-        logger.info("MultimodalMicroserviceEmbedder initialized.")
+        logger.info(
+            f"MultimodalMicroserviceEmbedder initialized "
+            f"(vector_size={self.vector_size})."
+        )
 
     def _get_service_config(self, all_kwargs: dict) -> tuple[str, str, dict]:
         """
@@ -139,7 +163,8 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                          and direct call-time arguments.
 
         Returns:
-            768-dimensional embedding as list of floats, or None on error.
+            Embedding vector as list of floats, or None on error.
+            Dimension is configured via MULTIMODAL_EMBEDDER_VECTOR_SIZE.
         """
         logger.debug(
             f"MultimodalMicroserviceEmbedder generating text embedding. "
@@ -212,7 +237,8 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                          and direct call-time arguments.
 
         Returns:
-            768-dimensional embedding as list of floats, or None on error.
+            Embedding vector as list of floats, or None on error.
+            Dimension is configured via MULTIMODAL_EMBEDDER_VECTOR_SIZE.
         """
         logger.debug(
             f"MultimodalMicroserviceEmbedder generating image embedding. "
@@ -291,7 +317,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             **direct_kwargs: Additional keyword arguments.
 
         Returns:
-            List of 768-dimensional embeddings, or None on error.
+            List of embedding vectors, or None on error.
         """
         if len(texts) > 100:
             logger.warning(f"Batch size {len(texts)} exceeds max 100. Truncating.")
@@ -354,7 +380,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             **direct_kwargs: Additional keyword arguments.
 
         Returns:
-            List of 768-dimensional embeddings, or None on error.
+            List of embedding vectors, or None on error.
         """
         if len(images_base64) > 20:
             logger.warning(

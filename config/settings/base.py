@@ -663,8 +663,22 @@ DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 # Microservice URLs - read from environment with defaults
 EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
 VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
-MULTIMODAL_EMBEDDER_URL = env("MULTIMODAL_EMBEDDER_URL", default="")
+# Multimodal embedder configuration
+# URL can be set directly, or constructed from host:port
+MULTIMODAL_EMBEDDER_HOST = env(
+    "MULTIMODAL_EMBEDDER_HOST", default="multimodal-embedder"
+)
+MULTIMODAL_EMBEDDER_PORT = env.int("MULTIMODAL_EMBEDDER_PORT", default=8000)
+MULTIMODAL_EMBEDDER_URL = env(
+    "MULTIMODAL_EMBEDDER_URL",
+    default=f"http://{MULTIMODAL_EMBEDDER_HOST}:{MULTIMODAL_EMBEDDER_PORT}",
+)
 MULTIMODAL_EMBEDDER_API_KEY = env("MULTIMODAL_EMBEDDER_API_KEY", default="")
+# Vector dimensionality - must match the embedding model used by the microservice
+# CLIP ViT-L-14: 768, CLIP ViT-B-32: 512, etc.
+MULTIMODAL_EMBEDDER_VECTOR_SIZE = env.int(
+    "MULTIMODAL_EMBEDDER_VECTOR_SIZE", default=768
+)
 # Weights for combining text and image embeddings in multimodal annotations
 # Images weighted higher by default since multimodal annotations are often predominantly visual
 MULTIMODAL_EMBEDDING_WEIGHTS = {
