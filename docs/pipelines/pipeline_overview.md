@@ -173,7 +173,7 @@ Current implementations:
 - **CloudMinnModernBERTEmbedder**: Cloud-based Minnesota ModernBERT embedder
 
 **Multimodal Embedders:**
-- **MultimodalMicroserviceEmbedder**: CLIP ViT-L-14 based embedder (768-dim) supporting both text and images. Text and image embeddings are in the same vector space, enabling cross-modal similarity search.
+- **[MultimodalMicroserviceEmbedder](multimodal_embedder.md)**: Microservice-based embedder supporting both text and images. Works with any embedding service implementing the standard API. Configurable host, port, and vector dimensions.
 
 #### Supported Embedding Dimensions
 
@@ -190,20 +190,24 @@ Each embedding dimension is stored in a separate pgvector field, allowing the sy
 
 #### Multimodal Embedder Configuration
 
-The multimodal embedder requires the `multimodal-embedder` service to be running:
+Configure via environment variables:
 
-```yaml
-# In docker-compose
-multimodal-embedder:
-  image: ghcr.io/jsv4/vectorembeddermicroservice-multimodal:latest
-  container_name: multimodal-embedder
-  environment:
-    PORT: 8000
+```bash
+# Service connection
+MULTIMODAL_EMBEDDER_HOST=multimodal-embedder  # default
+MULTIMODAL_EMBEDDER_PORT=8000                  # default
+MULTIMODAL_EMBEDDER_URL=http://host:port       # auto-constructed, or set directly
+
+# Vector dimensions (must match your embedding model)
+MULTIMODAL_EMBEDDER_VECTOR_SIZE=768            # default
+
+# Optional authentication
+MULTIMODAL_EMBEDDER_API_KEY=your-api-key
 ```
 
-Environment variable: `MULTIMODAL_EMBEDDER_URL=http://multimodal-embedder:8000`
+See [Multimodal Embedder Documentation](multimodal_embedder.md) for detailed configuration.
 
-**API Endpoints:**
+**Required API Endpoints** (any service implementing these will work):
 - `POST /embeddings` - Text embeddings: `{"text": "..."}`
 - `POST /embeddings/image` - Image embeddings: `{"image": "<base64>"}`
 - `POST /embeddings/batch` - Batch text (max 100): `{"texts": [...]}`
