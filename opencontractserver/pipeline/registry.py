@@ -177,6 +177,40 @@ class PipelineComponentRegistry:
 
         return subclasses
 
+    def _get_class_or_instance_attr(
+        self, component_class: type, attr_name: str, default: Any = None
+    ) -> Any:
+        """
+        Get an attribute from a class, handling @property correctly.
+
+        When an attribute is defined as a @property, getattr on the class
+        returns the property descriptor, not the value. This method detects
+        properties and instantiates the class to get the actual value.
+
+        Args:
+            component_class: The class to get the attribute from.
+            attr_name: Name of the attribute.
+            default: Default value if attribute doesn't exist.
+
+        Returns:
+            The attribute value (from class or instance if property).
+        """
+        attr = getattr(component_class, attr_name, default)
+
+        # Check if it's a property descriptor - if so, instantiate to get value
+        if isinstance(attr, property):
+            try:
+                instance = component_class()
+                return getattr(instance, attr_name, default)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to instantiate {component_class.__name__} "
+                    f"to get property '{attr_name}': {e}"
+                )
+                return default
+
+        return attr
+
     def _create_definition(
         self, component_class: type, component_type: ComponentType
     ) -> PipelineComponentDefinition:
@@ -204,6 +238,11 @@ class PipelineComponentRegistry:
             # Fallback for any unexpected format
             supported_modalities = ("TEXT",)
 
+        # Get vector_size - handles both class attributes and @property
+        vector_size = self._get_class_or_instance_attr(
+            component_class, "vector_size", None
+        )
+
         # Build definition
         definition = PipelineComponentDefinition(
             name=component_class.__name__,
@@ -216,7 +255,7 @@ class PipelineComponentRegistry:
             dependencies=tuple(getattr(component_class, "dependencies", [])),
             supported_file_types=tuple(supported_file_types),
             input_schema=dict(getattr(component_class, "input_schema", {})),
-            vector_size=getattr(component_class, "vector_size", None),
+            vector_size=vector_size,
             supported_modalities=supported_modalities,
             component_class=component_class,
         )

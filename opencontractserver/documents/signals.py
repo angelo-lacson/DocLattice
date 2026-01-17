@@ -5,7 +5,7 @@ from django.apps import apps
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Exists, OuterRef
-from django.db.models.signals import m2m_changed
+from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import Signal
 from django.utils import timezone
 
@@ -154,13 +154,83 @@ def process_doc_on_corpus_add(sender, instance, action, pk_set, **kwargs):
         )
 
 
+# Static dispatch UID for DocumentPath signal
+DOC_PATH_CREATE_UID = "process_doc_on_document_path_create"
+
+
+def process_doc_on_document_path_create(sender, instance, created, **kwargs):
+    """
+    Signal handler to trigger document text embeddings when a DocumentPath is created.
+
+    This is triggered when documents are added to corpuses via the modern API.
+    It handles document text embedding using the corpus's preferred embedder.
+
+    Note: Structural annotation embeddings are handled by
+    StructuralAnnotationSet.duplicate() which is called during corpus.add_document().
+
+    Args:
+        sender: The DocumentPath model class.
+        instance: The DocumentPath instance being saved.
+        created (bool): True if a new record was created.
+        **kwargs: Additional keyword arguments.
+    """
+    # Only process newly created, current paths
+    if not created or not instance.is_current:
+        return
+
+    # Skip if document is still being processed (backend_lock=True)
+    # Document text embedding will be triggered when processing completes
+    # via the M2M signal or annotation signals
+    document = instance.document
+    if document.backend_lock:
+        logger.debug(
+            f"Skipping document embedding for DocumentPath {instance.id} - "
+            f"document {document.id} still processing (backend_lock=True)"
+        )
+        return
+
+    corpus = instance.corpus
+    doc_id = document.id
+
+    # Queue document text embedding task with corpus context
+    # This uses the dual embedding strategy: default + corpus-specific if different
+    transaction.on_commit(
+        lambda: calculate_embedding_for_doc_text.delay(
+            doc_id=doc_id, corpus_id=corpus.id
+        )
+    )
+    logger.info(
+        f"Queued document text embedding for doc {doc_id} via DocumentPath "
+        f"in corpus {corpus.id}"
+    )
+
+
 # Connect the signal handler to the m2m_changed signal for Corpus.documents
+# NOTE: This is kept for backwards compatibility with code that uses corpus.documents.add()
+# The preferred path is via DocumentPath creation which triggers process_doc_on_document_path_create
 def connect_corpus_document_signals():
     """
-    Connect the m2m_changed signal for Corpus.documents to our signal handler.
+    Connect signals for corpus-document relationships.
+
+    Two signals are connected:
+    1. DocumentPath post_save - The canonical trigger for the modern API
+    2. Corpus.documents m2m_changed - Backwards compatibility for legacy code
+
     Called during Django app initialization.
     """
     Corpus = apps.get_model("corpuses", "Corpus")
+    DocumentPath = apps.get_model("documents", "DocumentPath")
+
+    # Primary signal: DocumentPath creation (modern API)
+    post_save.connect(
+        process_doc_on_document_path_create,
+        sender=DocumentPath,
+        dispatch_uid=DOC_PATH_CREATE_UID,
+    )
+
+    # Legacy signal: M2M changes (backwards compatibility)
+    # Note: This may result in duplicate task queuing if both paths are used,
+    # but the embedding task has deduplication logic to handle this
     m2m_changed.connect(
         process_doc_on_corpus_add,
         sender=Corpus.documents.through,

@@ -5,6 +5,51 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-01-17
+
+### Added
+
+#### Pre-extracted Image Content for Annotations
+- **`image_content_file` FileField on Annotation model**: Stores pre-extracted image data as JSON files
+  - Eliminates need to reload full PAWLs file (~10MB) for each image embedding request
+  - Performance improvement: ~10-20x faster for image annotation embeddings
+  - Files: `opencontractserver/annotations/models.py:109-114`
+  - Migration: `opencontractserver/annotations/migrations/0060_add_annotation_image_content_file.py`
+- **Batch image extraction utilities**: Efficient batch processing during annotation creation
+  - `extract_and_store_annotation_images()` - extracts images from PAWLs and stores as JSON
+  - `batch_extract_annotation_images()` - batch processes multiple annotations sharing PAWLs data
+  - Files: `opencontractserver/utils/multimodal_embeddings.py:351-502`
+- **Unique constraints on Embedding model**: Database-level prevention of duplicate embeddings
+  - Migration: `opencontractserver/annotations/migrations/0059_add_embedding_unique_constraints.py`
+
+#### Corpus-Specific Embeddings
+- **Dual embedding strategy**: Creates both default (global search) and corpus-specific embeddings
+  - Default embedder for cross-corpus search compatibility
+  - Corpus-preferred embedder for corpus-specific semantic search
+  - Files: `opencontractserver/tasks/embeddings_task.py:88-160`
+- **Corpus ID propagation through ingestion chain**: Parser now receives corpus context
+  - Enables corpus-specific embeddings during document ingestion
+  - Files: `opencontractserver/tasks/doc_tasks.py:203-248`, `opencontractserver/pipeline/base/parser.py:130-143`
+
+### Fixed
+- **Critical: Infinite loop in corpus document copies**: Fixed chain reaction where corpus copies triggered re-ingestion
+  - **Root Cause**: `add_document()` created corpus copies without setting `processing_started`, causing the ingestion signal to fire on each copy
+  - **Impact**: Uploading one document created infinite chain of copies (doc → copy → copy of copy → ...)
+  - **Fix**: Set `processing_started=timezone.now()` on corpus copies to prevent signal from firing
+  - **Files**: `opencontractserver/corpuses/models.py:478-481`
+- **Multimodal embeddings for structural annotations**: Fixed PAWLs loading from `structural_set.pawls_parse_file`
+  - Structural annotations now correctly load images for embedding generation
+  - Files: `opencontractserver/utils/multimodal_embeddings.py:136-166`
+
+### Changed
+- **Image retrieval uses fast path**: Both REST API and embedding tasks check `image_content_file` first
+  - Falls back to PAWLs loading only for legacy annotations without pre-extracted images
+  - Files: `opencontractserver/llms/tools/image_tools.py:281-349`, `opencontractserver/utils/multimodal_embeddings.py:101-127`
+- **`import_annotations()` accepts `pawls_data` parameter**: Enables batch image extraction during import
+  - Files: `opencontractserver/utils/importing.py:58-150`
+- **`StructuralAnnotationSet.duplicate()` copies image files**: Preserves pre-extracted images during corpus isolation
+  - Files: `opencontractserver/annotations/models.py:705-745`
+
 ## [Unreleased] - 2026-01-12
 
 ### Added

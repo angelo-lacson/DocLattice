@@ -207,6 +207,7 @@ class BaseParser(PipelineComponentBase, ABC):
         logger.info(f"Existing text label lookup: {existing_text_labels}")
 
         # 3) Import annotations & store mapping of old annotation IDs to new DB IDs
+        # Pass PAWLs data for pre-extracting image content (faster embeddings)
         annotation_id_map = import_annotations(
             user_id=user_id,
             doc_obj=document,
@@ -214,6 +215,7 @@ class BaseParser(PipelineComponentBase, ABC):
             annotations_data=open_contracts_data.get("labelled_text", []),
             label_lookup=existing_text_labels,
             label_type=target_label_type,
+            pawls_data=pawls_file_content,
         )
 
         # 4) If there are relationships, load/create relationship labels and then import
@@ -363,18 +365,23 @@ class BaseParser(PipelineComponentBase, ABC):
             user_id (int): ID of the user.
             doc_id (int): ID of the document to process.
             **kwargs: Arbitrary keyword arguments that may be provided
-                      for specific parser functionalities.
+                      for specific parser functionalities. Notably:
+                      - corpus_id (Optional[int]): ID of corpus for corpus-specific embeddings
 
         Returns:
             Optional[OpenContractDocExport]: The parsed document data, or None if parsing failed.
         """
+        # Extract corpus_id for save_parsed_data (not needed by parse_document)
+        corpus_id = kwargs.pop("corpus_id", None)
+
         logger.info(
             f"Processing document {doc_id} with possible parser kwargs: {kwargs}"
+            + (f" (corpus_id={corpus_id})" if corpus_id else "")
         )
 
         parsed_data = self.parse_document(user_id, doc_id, **kwargs)
         if parsed_data is not None:
-            self.save_parsed_data(user_id, doc_id, parsed_data)
+            self.save_parsed_data(user_id, doc_id, parsed_data, corpus_id=corpus_id)
             logger.info(f"Document {doc_id} processed successfully.")
         else:
             logger.warning(f"Document {doc_id} parsing failed.")

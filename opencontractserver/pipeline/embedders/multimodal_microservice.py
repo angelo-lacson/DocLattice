@@ -87,15 +87,10 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
     # Multimodal support - text and images in same vector space
     supported_modalities = {ContentModality.TEXT, ContentModality.IMAGE}
 
-    @property
-    def vector_size(self) -> int:
-        """
-        Get the embedding vector dimensionality from settings.
-
-        Returns:
-            Configured vector size (default: 768 for CLIP ViT-L-14)
-        """
-        return getattr(settings, "MULTIMODAL_EMBEDDER_VECTOR_SIZE", 768)
+    # Vector size configurable via MULTIMODAL_EMBEDDER_VECTOR_SIZE setting
+    # Read at import time (settings are loaded before embedders are imported)
+    # Default: 768 for CLIP ViT-L-14
+    vector_size = getattr(settings, "MULTIMODAL_EMBEDDER_VECTOR_SIZE", 768)
 
     def __init__(self, **kwargs):
         """Initialize the MultimodalMicroserviceEmbedder."""

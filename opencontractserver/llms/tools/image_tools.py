@@ -278,16 +278,53 @@ def _extract_image_from_pawls(
         return None
 
 
+def _load_images_from_annotation_file(annotation: Annotation) -> list[ImageData]:
+    """
+    Load pre-extracted image data from annotation.image_content_file.
+
+    Args:
+        annotation: Annotation with image_content_file populated.
+
+    Returns:
+        List of ImageData objects, or empty list on failure.
+    """
+    try:
+        if not annotation.image_content_file:
+            return []
+
+        annotation.image_content_file.open("r")
+        try:
+            data = json.load(annotation.image_content_file)
+            images = data.get("images", [])
+            return [
+                ImageData(
+                    base64_data=img.get("base64", ""),
+                    format=img.get("format", "jpeg"),
+                    data_url=f"data:image/{img.get('format', 'jpeg')};base64,{img.get('base64', '')}",
+                    page_index=img.get("page_index", 0),
+                    token_index=img.get("token_index", 0),
+                )
+                for img in images
+                if img.get("base64")
+            ]
+        finally:
+            annotation.image_content_file.close()
+
+    except Exception as e:
+        logger.error(f"Error loading images from annotation {annotation.pk} file: {e}")
+        return []
+
+
 def get_annotation_images(annotation_id: int) -> list[ImageData]:
     """
     Get all image tokens referenced by an annotation.
 
+    Fast path: If annotation has pre-extracted image_content_file, load from there.
+    Fallback: Load from PAWLs data (document or structural_set).
+
     Annotations reference tokens via tokensJsons in their annotation_json field.
     This function filters for image tokens (is_image=True) and retrieves their
     actual image data.
-
-    For structural annotations without a document, PAWLs data is loaded from the
-    structural_set.pawls_parse_file.
 
     Args:
         annotation_id: The annotation ID.
@@ -299,9 +336,21 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
         annotation = Annotation.objects.select_related(
             "document", "structural_set"
         ).get(pk=annotation_id)
+
+        # Fast path: check for pre-extracted image content file
+        if annotation.image_content_file:
+            images = _load_images_from_annotation_file(annotation)
+            if images:
+                logger.debug(
+                    f"Annotation {annotation_id} loaded {len(images)} images from "
+                    f"image_content_file (fast path)"
+                )
+                return images
+            # Fall through to PAWLs if file load failed
+
         document = annotation.document
 
-        # Load PAWLs data from document or structural set
+        # Load PAWLs data from document or structural set (slow path)
         if document:
             pawls_data = load_pawls_data(document)
         elif annotation.structural_set and annotation.structural_set.pawls_parse_file:

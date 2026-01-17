@@ -332,3 +332,44 @@ The embedding task will automatically detect your embedder's capabilities via `s
 - **Image Size**: Large images are resized by most models (e.g., 224x224 for CLIP)
 - **Caching**: Embeddings are stored in database, not recomputed
 - **Model Loading**: First request may be slow while model loads
+
+### Pre-extracted Image Content (Performance Optimization)
+
+To avoid repeatedly loading full PAWLs files (~10MB) for image embeddings, annotations with IMAGE modality can store pre-extracted image data in `image_content_file`:
+
+```python
+# Annotation model field
+image_content_file = FileField(
+    upload_to=calc_oc_file_path,
+    blank=True,
+    null=True,
+    help_text="JSON file containing extracted image data for IMAGE modality annotations"
+)
+```
+
+**File format:**
+```json
+{
+  "images": [
+    {
+      "base64": "...",
+      "format": "jpeg",
+      "page_index": 0,
+      "token_index": 5,
+      "width": 200,
+      "height": 150
+    }
+  ]
+}
+```
+
+**How it works:**
+1. During annotation creation via `import_annotations()`, image data is pre-extracted from PAWLs
+2. `batch_extract_annotation_images()` efficiently processes multiple annotations sharing one PAWLs load
+3. When generating embeddings, `get_annotation_image_tokens()` checks `image_content_file` first (fast path)
+4. Falls back to PAWLs loading only for legacy annotations
+
+**Performance impact:**
+- Before: 100 image annotations = 100 PAWLs loads (~1GB I/O)
+- After: 100 image annotations = 100 small JSON loads (~10MB I/O)
+- Speed improvement: ~10-20x faster for image embedding generation
