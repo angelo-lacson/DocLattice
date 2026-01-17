@@ -709,6 +709,81 @@ class TestMultimodalEmbeddingTask(unittest.TestCase):
     @patch(
         "opencontractserver.utils.multimodal_embeddings.generate_multimodal_embedding"
     )
+    def test_annotation_multimodal_returns_none_fails(self, mock_multimodal_embed):
+        """Test that multimodal embedding returning None causes failure."""
+        from opencontractserver.tasks.embeddings_task import (
+            _create_embedding_for_annotation,
+        )
+
+        # Create mock annotation with IMAGE modality
+        mock_annot = MagicMock()
+        mock_annot.id = 1
+        mock_annot.raw_text = "Figure caption"
+        mock_annot.content_modalities = ["TEXT", "IMAGE"]
+
+        # Create mock multimodal embedder
+        mock_embedder = MagicMock()
+        mock_embedder.is_multimodal = True
+        mock_embedder.supports_images = True
+
+        # Make multimodal embedding return None (not an exception)
+        mock_multimodal_embed.return_value = None
+
+        result = _create_embedding_for_annotation(
+            mock_annot, mock_embedder, "multimodal.embedder.path"
+        )
+
+        # Should have called multimodal embedding
+        mock_multimodal_embed.assert_called_once_with(mock_annot, mock_embedder)
+
+        # Should NOT have stored embedding (vector was None)
+        mock_annot.add_embedding.assert_not_called()
+
+        # Should return False
+        self.assertFalse(result)
+
+    @patch(
+        "opencontractserver.utils.multimodal_embeddings.generate_multimodal_embedding"
+    )
+    def test_annotation_multimodal_add_embedding_fails(self, mock_multimodal_embed):
+        """Test that add_embedding returning None causes failure."""
+        from opencontractserver.tasks.embeddings_task import (
+            _create_embedding_for_annotation,
+        )
+
+        # Create mock annotation with IMAGE modality
+        mock_annot = MagicMock()
+        mock_annot.id = 1
+        mock_annot.raw_text = "Figure caption"
+        mock_annot.content_modalities = ["TEXT", "IMAGE"]
+        mock_annot.add_embedding.return_value = None  # Simulate storage failure
+
+        # Create mock multimodal embedder
+        mock_embedder = MagicMock()
+        mock_embedder.is_multimodal = True
+        mock_embedder.supports_images = True
+
+        test_vector = [0.5] * 768
+        mock_multimodal_embed.return_value = test_vector
+
+        result = _create_embedding_for_annotation(
+            mock_annot, mock_embedder, "multimodal.embedder.path"
+        )
+
+        # Should have called multimodal embedding
+        mock_multimodal_embed.assert_called_once_with(mock_annot, mock_embedder)
+
+        # Should have tried to store embedding
+        mock_annot.add_embedding.assert_called_once_with(
+            "multimodal.embedder.path", test_vector
+        )
+
+        # Should return False because add_embedding returned None
+        self.assertFalse(result)
+
+    @patch(
+        "opencontractserver.utils.multimodal_embeddings.generate_multimodal_embedding"
+    )
     def test_annotation_multimodal_failure_falls_back_to_text(
         self, mock_multimodal_embed
     ):
