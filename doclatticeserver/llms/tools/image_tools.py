@@ -292,9 +292,8 @@ def _load_images_from_annotation_file(annotation: Annotation) -> list[ImageData]
         if not annotation.image_content_file:
             return []
 
-        annotation.image_content_file.open("r")
-        try:
-            data = json.load(annotation.image_content_file)
+        with annotation.image_content_file.open("r") as f:
+            data = json.load(f)
             images = data.get("images", [])
             return [
                 ImageData(
@@ -307,8 +306,6 @@ def _load_images_from_annotation_file(annotation: Annotation) -> list[ImageData]
                 for img in images
                 if img.get("base64")
             ]
-        finally:
-            annotation.image_content_file.close()
 
     except Exception as e:
         logger.error(f"Error loading images from annotation {annotation.pk} file: {e}")

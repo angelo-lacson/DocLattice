@@ -111,6 +111,31 @@ def _create_embedding_for_annotation(
         )
         try:
             vector = generate_multimodal_embedding(annotation, embedder)
+
+            if vector is None:
+                logger.error(
+                    f"Embedding could not be generated for annotation {annotation.id} "
+                    f"using embedder {embedder_path}."
+                )
+                return False
+
+            logger.info(
+                f"Generated multimodal embedding for annotation {annotation.id} "
+                f"using {embedder_path} (dimension={len(vector)}, modalities={modalities})"
+            )
+
+            # Store the embedding - add_embedding handles duplicates via store_embedding
+            embedding = annotation.add_embedding(embedder_path, vector)
+
+            if embedding:
+                logger.info(
+                    f"Embedding for annotation {annotation.id} stored "
+                    f"using path: {embedder_path}"
+                )
+                return True
+
+            return False
+
         except Exception as e:
             # Graceful degradation: fall back to text-only if multimodal fails
             logger.warning(
@@ -135,29 +160,6 @@ def _create_embedding_for_annotation(
             "annotation",
             annotation.id,
         )
-
-    if vector is None:
-        logger.error(
-            f"Embedding could not be generated for annotation {annotation.id} "
-            f"using embedder {embedder_path}."
-        )
-        return False
-
-    logger.info(
-        f"Generated multimodal embedding for annotation {annotation.id} using {embedder_path} "
-        f"(dimension={len(vector)}, modalities={modalities})"
-    )
-
-    # Store the embedding - add_embedding handles duplicates via store_embedding
-    embedding = annotation.add_embedding(embedder_path, vector)
-
-    if embedding:
-        logger.info(
-            f"Embedding for annotation {annotation.id} stored using path: {embedder_path}"
-        )
-        return True
-
-    return False
 
 
 def _apply_dual_embedding_strategy(
