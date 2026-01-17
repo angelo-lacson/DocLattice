@@ -75,9 +75,13 @@ class AnnotationImagesView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        except Exception as e:
-            logger.error(f"Error fetching annotation images: {e}")
-            # Return empty array for missing/unauthorized (IDOR protection)
+        except Exception:
+            # Log with full traceback for debugging, but don't expose details to client
+            logger.exception(
+                f"Unexpected error fetching annotation images for annotation_id={annotation_id}"
+            )
+            # Return empty array for any error (IDOR protection)
+            # Same response for missing, unauthorized, or unexpected errors
             return Response(
                 {"annotation_id": str(annotation_id), "images": [], "count": 0},
                 status=status.HTTP_200_OK,
