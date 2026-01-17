@@ -27,4 +27,6 @@ comment:
 ignore:
   - "doclatticeserver/tasks/data_extract_tasks.py"
   - "doclatticeserver/tests/**/*"
-  - "**/migrations/**/*"
+  - "**/migrations/**"
+  - "doclatticeserver/**/migrations/*.py"
+  - "doclatticeserver/*/migrations/*.py"
