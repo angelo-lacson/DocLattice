@@ -475,6 +475,10 @@ class Corpus(TreeNode):
                     else None
                 ),
                 creator=user,
+                # CRITICAL: Set processing_started to prevent ingest signal from firing
+                # Corpus copies share parsing artifacts - they don't need re-parsing
+                processing_started=timezone.now(),
+                backend_lock=False,  # Already processed, not locked
                 **{
                     k: v
                     for k, v in doc_kwargs.items()

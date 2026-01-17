@@ -105,8 +105,8 @@ def get_annotation_image_tokens(
     """
     Extract image tokens referenced by an annotation.
 
-    Iterates through the annotation's json field (tokensJsons) and filters
-    for tokens that are images (is_image=True).
+    Fast path: If annotation has pre-extracted image_content_file, load from there.
+    Fallback: Load from PAWLs data (document or structural_set).
 
     Args:
         annotation: Annotation model instance.
@@ -116,15 +116,54 @@ def get_annotation_image_tokens(
     Returns:
         List of image token dicts from the PAWLs data.
     """
-    try:
-        document = annotation.document
-        if not document:
-            logger.warning(f"Annotation {annotation.pk} has no document")
-            return []
+    # Fast path: check for pre-extracted image content file
+    if annotation.image_content_file:
+        images = load_images_from_annotation_file(annotation)
+        if images:
+            logger.debug(
+                f"Annotation {annotation.pk} loaded {len(images)} images from "
+                f"image_content_file (fast path)"
+            )
+            return images
+        # Fall through to PAWLs if file load failed
 
-        # Load PAWLs data if not provided
+    try:
+        import json
+
+        document = annotation.document
+
+        # Load PAWLs data from document or structural_set (slow path)
         if pawls_data is None:
-            pawls_data = load_pawls_data(document)
+            if document:
+                pawls_data = load_pawls_data(document)
+            elif (
+                annotation.structural_set and annotation.structural_set.pawls_parse_file
+            ):
+                # Structural annotation without document - load from structural_set
+                # (same approach as get_annotation_images in image_tools.py)
+                pawls_file = annotation.structural_set.pawls_parse_file
+                try:
+                    pawls_file.open("r")
+                    try:
+                        pawls_data = json.load(pawls_file)
+                        logger.debug(
+                            f"Annotation {annotation.pk} loaded PAWLs from "
+                            f"structural_set {annotation.structural_set_id}"
+                        )
+                    finally:
+                        pawls_file.close()
+                except Exception as e:
+                    logger.error(
+                        f"Error loading PAWLs from structural set "
+                        f"{annotation.structural_set_id}: {e}"
+                    )
+                    pawls_data = None
+            else:
+                logger.warning(
+                    f"Annotation {annotation.pk} has no document or "
+                    f"structural_set with PAWLs file"
+                )
+                return []
 
         if not pawls_data:
             return []
@@ -307,3 +346,157 @@ def generate_multimodal_embedding(
             f"(modalities={modalities})"
         )
         return None
+
+
+def extract_and_store_annotation_images(
+    annotation: "Annotation",
+    pawls_data: list[dict],
+) -> bool:
+    """
+    Extract image data from PAWLs and store in annotation.image_content_file.
+
+    This pre-extracts image content so that embedding tasks don't need to reload
+    the full PAWLs file. The extracted data is stored as a small JSON file.
+
+    Args:
+        annotation: Annotation to store images for (must have IMAGE modality).
+        pawls_data: Pre-loaded PAWLs data (list of page dicts).
+
+    Returns:
+        True if images were extracted and stored, False otherwise.
+    """
+    import json
+
+    from django.core.files.base import ContentFile
+
+    try:
+        # Get token references from annotation json
+        annotation_json = annotation.json or {}
+        extracted_images = []
+
+        for page_key, page_data in annotation_json.items():
+            if not isinstance(page_data, dict):
+                continue
+
+            token_refs = page_data.get("tokensJsons", [])
+            for ref in token_refs:
+                if not isinstance(ref, dict):
+                    continue
+
+                page_idx = ref.get("pageIndex")
+                token_idx = ref.get("tokenIndex")
+
+                if page_idx is None or token_idx is None:
+                    continue
+
+                # Get actual token from PAWLs data
+                if page_idx < len(pawls_data):
+                    page = pawls_data[page_idx]
+                    if not isinstance(page, dict):
+                        continue
+
+                    tokens = page.get("tokens", [])
+                    if token_idx < len(tokens):
+                        token = tokens[token_idx]
+                        if isinstance(token, dict) and token.get("is_image"):
+                            # Extract image data
+                            base64_data = get_image_as_base64(token)
+                            if base64_data:
+                                extracted_images.append(
+                                    {
+                                        "base64": base64_data,
+                                        "format": token.get("format", "jpeg"),
+                                        "page_index": page_idx,
+                                        "token_index": token_idx,
+                                        "width": token.get("width"),
+                                        "height": token.get("height"),
+                                    }
+                                )
+
+        if not extracted_images:
+            logger.debug(f"Annotation {annotation.pk} has no images to extract")
+            return False
+
+        # Store as JSON file
+        content = json.dumps({"images": extracted_images})
+        file_content = ContentFile(content.encode("utf-8"))
+        annotation.image_content_file.save(
+            f"annot_{annotation.pk}_images.json",
+            file_content,
+            save=True,
+        )
+
+        logger.info(
+            f"Extracted and stored {len(extracted_images)} images for "
+            f"annotation {annotation.pk}"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Error extracting images for annotation {annotation.pk}: {e}")
+        return False
+
+
+def load_images_from_annotation_file(annotation: "Annotation") -> list[dict]:
+    """
+    Load pre-extracted image data from annotation.image_content_file.
+
+    Args:
+        annotation: Annotation with image_content_file populated.
+
+    Returns:
+        List of image token dicts with base64 data, or empty list on failure.
+    """
+    import json
+
+    try:
+        if not annotation.image_content_file:
+            return []
+
+        annotation.image_content_file.open("r")
+        try:
+            data = json.load(annotation.image_content_file)
+            images = data.get("images", [])
+            # Convert to token-like format expected by embed_images_average
+            return [
+                {
+                    "is_image": True,
+                    "image_data": img.get("base64"),
+                    "format": img.get("format", "jpeg"),
+                    "width": img.get("width"),
+                    "height": img.get("height"),
+                }
+                for img in images
+            ]
+        finally:
+            annotation.image_content_file.close()
+
+    except Exception as e:
+        logger.error(f"Error loading images from annotation {annotation.pk} file: {e}")
+        return []
+
+
+def batch_extract_annotation_images(
+    annotations: list["Annotation"],
+    pawls_data: list[dict],
+) -> int:
+    """
+    Batch extract and store images for multiple annotations.
+
+    Efficiently processes multiple annotations sharing the same PAWLs data,
+    avoiding repeated file loads.
+
+    Args:
+        annotations: List of annotations to process.
+        pawls_data: Shared PAWLs data for all annotations.
+
+    Returns:
+        Number of annotations that had images extracted.
+    """
+    count = 0
+    for annotation in annotations:
+        modalities = annotation.content_modalities or []
+        if ContentModality.IMAGE.value in modalities:
+            if extract_and_store_annotation_images(annotation, pawls_data):
+                count += 1
+    return count

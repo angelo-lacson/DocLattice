@@ -463,8 +463,10 @@ class TestEmbeddingTask(unittest.TestCase):
             annotation_id=1, embedder_path=explicit_embedder_path
         )
 
-        # Verify annotation was retrieved correctly
-        mock_annotation_model.objects.select_related.assert_called_with("document")
+        # Verify annotation was retrieved correctly (includes structural_set for multimodal)
+        mock_annotation_model.objects.select_related.assert_called_with(
+            "document", "structural_set"
+        )
         mock_annotation_model.objects.select_related.return_value.get.assert_called_with(
             pk=1
         )

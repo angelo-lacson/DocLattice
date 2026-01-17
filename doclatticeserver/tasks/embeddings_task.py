@@ -327,8 +327,11 @@ def calculate_embedding_for_annotation_text(
     """
     try:
         logger.info(f"Retrieving annotation with ID {annotation_id}")
-        # Use select_related to avoid N+1 query when accessing document for multimodal
-        annotation = Annotation.objects.select_related("document").get(pk=annotation_id)
+        # Use select_related to avoid N+1 queries when accessing document/structural_set
+        # for multimodal embeddings (structural annotations load PAWLs from structural_set)
+        annotation = Annotation.objects.select_related(
+            "document", "structural_set"
+        ).get(pk=annotation_id)
     except Annotation.DoesNotExist:
         logger.warning(f"Annotation {annotation_id} not found.")
         return

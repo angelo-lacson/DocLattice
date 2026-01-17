@@ -220,12 +220,15 @@ export const enableDragDropAtom = atom<boolean>(true);
 export const canCreateFoldersAtom = atom<boolean>((get) => {
   const currentFolder = get(currentFolderAtom);
 
-  // If we have a folder, check its permissions (inherited from corpus)
+  // If we have a folder, check its permissions
   if (currentFolder) {
     const perms = currentFolder.myPermissions;
     // Handle case where permissions haven't loaded yet
     if (!perms || !Array.isArray(perms)) return true;
-    return perms.includes("update_corpus") || perms.includes("create_corpus");
+    return (
+      perms.includes("create_corpusfolder") ||
+      perms.includes("update_corpusfolder")
+    );
   }
 
   // TODO: Check corpus permissions from Apollo cache
@@ -244,7 +247,7 @@ export const canUpdateCurrentFolderAtom = atom<boolean>((get) => {
   const perms = currentFolder.myPermissions;
   // Handle case where permissions haven't loaded yet
   if (!perms || !Array.isArray(perms)) return false;
-  return perms.includes("update_corpus");
+  return perms.includes("update_corpusfolder");
 });
 
 /**
@@ -258,7 +261,7 @@ export const canDeleteCurrentFolderAtom = atom<boolean>((get) => {
   const perms = currentFolder.myPermissions;
   // Handle case where permissions haven't loaded yet
   if (!perms || !Array.isArray(perms)) return false;
-  return perms.includes("delete_corpus");
+  return perms.includes("remove_corpusfolder");
 });
 
 // ============================================================================
