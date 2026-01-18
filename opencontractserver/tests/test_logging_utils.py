@@ -52,7 +52,9 @@ class TestRedactSensitiveKwargs(TestCase):
 
     def test_no_false_positives_keyboard(self):
         """Test that 'keyboard' is NOT redacted (no false positive on 'key')."""
-        result = redact_sensitive_kwargs({"keyboard": "qwerty", "keyboard_layout": "us"})
+        result = redact_sensitive_kwargs(
+            {"keyboard": "qwerty", "keyboard_layout": "us"}
+        )
         self.assertEqual(result, {"keyboard": "qwerty", "keyboard_layout": "us"})
 
     def test_no_false_positives_monkey(self):
