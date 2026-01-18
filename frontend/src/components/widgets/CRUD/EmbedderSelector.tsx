@@ -43,6 +43,10 @@ interface EmbedderSelectorProps {
   preferredEmbedder?: string;
   style?: Record<string, any>;
   onChange?: (values: any) => void;
+  /** Open dropdown upward (useful when near bottom of container) */
+  upward?: boolean;
+  /** Enable scrolling within the dropdown menu */
+  scrolling?: boolean;
 }
 
 /**
@@ -57,6 +61,8 @@ export const EmbedderSelector = ({
   read_only,
   style,
   preferredEmbedder,
+  upward = false,
+  scrolling = true,
 }: EmbedderSelectorProps) => {
   // Use cache-first policy since embedders rarely change during a user session
   // (they are configured by admins and typically require app restart to add new ones).
@@ -123,6 +129,8 @@ export const EmbedderSelector = ({
           selection
           clearable
           fluid
+          upward={upward}
+          scrolling={scrolling}
           options={options}
           style={{ ...style }}
           onChange={handleChange}

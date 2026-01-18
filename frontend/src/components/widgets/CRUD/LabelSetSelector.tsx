@@ -48,6 +48,10 @@ interface LabelSetSelectorProps {
   labelSet?: LabelSetType;
   style?: Record<string, any>;
   onChange?: (values: any) => void;
+  /** Open dropdown upward (useful when near bottom of container) */
+  upward?: boolean;
+  /** Enable scrolling within the dropdown menu */
+  scrolling?: boolean;
 }
 
 /**
@@ -59,6 +63,8 @@ export const LabelSetSelector = ({
   read_only,
   style,
   labelSet,
+  upward = false,
+  scrolling = true,
 }: LabelSetSelectorProps) => {
   const search_term = useReactiveVar(labelsetSearchTerm);
   const { refetch, loading, error, data, fetchMore } = useQuery<
@@ -114,6 +120,8 @@ export const LabelSetSelector = ({
           selection
           clearable
           fluid
+          upward={upward}
+          scrolling={scrolling}
           options={options}
           style={{ ...style }}
           onChange={handleChange}
