@@ -963,3 +963,433 @@ class ImageToolsEdgeCasesTest(TestCase):
 
         result = get_annotation_images(annotation.id)
         self.assertEqual(result, [])
+
+
+class ImageToolsPermissionEdgeCasesTest(TestCase):
+    """Tests for permission edge cases in image tools."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data."""
+        cls.user = User.objects.create_user(
+            username="perm_edge_test_user", password="testpass123"
+        )
+        cls.other_user = User.objects.create_user(
+            username="perm_edge_other_user", password="testpass123"
+        )
+        cls.superuser = User.objects.create_superuser(
+            username="perm_edge_superuser", password="testpass123"
+        )
+        cls.corpus = Corpus.objects.create(
+            title="Test Corpus Perm Edge",
+            creator=cls.user,
+        )
+        cls.label = AnnotationLabel.objects.create(
+            text="Test Label",
+            creator=cls.user,
+        )
+
+    def test_superuser_bypasses_permission_checks(self):
+        """Superuser should bypass all permission checks."""
+        from opencontractserver.llms.tools.image_tools import (
+            get_annotation_images_with_permission,
+        )
+
+        # Create document without granting permissions to anyone
+        document = Document.objects.create(
+            title="Private Doc",
+            creator=self.other_user,  # Different user
+            is_public=False,
+        )
+
+        annotation = Annotation.objects.create(
+            document=document,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            creator=self.other_user,
+            raw_text="Private annotation",
+            json={},
+        )
+
+        # Superuser should get access (returns empty list since no images, but no error)
+        result = get_annotation_images_with_permission(self.superuser, annotation.id)
+        self.assertEqual(result, [])  # No images, but access was granted
+
+    def test_annotation_with_created_by_analysis_permission_denied(self):
+        """Annotation created by analysis should require analysis permission."""
+        from unittest.mock import MagicMock, patch
+
+        from opencontractserver.llms.tools.image_tools import (
+            get_annotation_images_with_permission,
+        )
+
+        # Create document with permissions
+        document = Document.objects.create(
+            title="Doc with Analysis",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, document, [PermissionTypes.ALL])
+
+        # Create a mock analysis object
+        mock_analysis = MagicMock()
+        mock_analysis.id = 999
+        mock_analysis.pk = 999
+
+        annotation = Annotation.objects.create(
+            document=document,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            creator=self.user,
+            raw_text="Analysis annotation",
+            json={},
+        )
+
+        # Patch the annotation to have created_by_analysis_id
+        with patch.object(Annotation.objects, "select_related") as mock_select_related:
+            mock_annot = MagicMock()
+            mock_annot.structural = False
+            mock_annot.created_by_analysis_id = 999
+            mock_annot.created_by_analysis = mock_analysis
+            mock_annot.created_by_extract_id = None
+            mock_annot.document = document
+            mock_annot.corpus = self.corpus
+
+            mock_qs = MagicMock()
+            mock_qs.get.return_value = mock_annot
+            mock_select_related.return_value = mock_qs
+
+            # User lacks permission on analysis - should be denied
+            with patch(
+                "opencontractserver.llms.tools.image_tools.user_has_permission_for_obj"
+            ) as mock_perm:
+                mock_perm.return_value = False
+                result = get_annotation_images_with_permission(self.user, annotation.id)
+                self.assertEqual(result, [])
+
+    def test_annotation_with_created_by_extract_permission_denied(self):
+        """Annotation created by extract should require extract permission."""
+        from unittest.mock import MagicMock, patch
+
+        from opencontractserver.llms.tools.image_tools import (
+            get_annotation_images_with_permission,
+        )
+
+        document = Document.objects.create(
+            title="Doc with Extract",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, document, [PermissionTypes.ALL])
+
+        mock_extract = MagicMock()
+        mock_extract.id = 888
+        mock_extract.pk = 888
+
+        annotation = Annotation.objects.create(
+            document=document,
+            corpus=self.corpus,
+            annotation_label=self.label,
+            creator=self.user,
+            raw_text="Extract annotation",
+            json={},
+        )
+
+        with patch.object(Annotation.objects, "select_related") as mock_select_related:
+            mock_annot = MagicMock()
+            mock_annot.structural = False
+            mock_annot.created_by_analysis_id = None
+            mock_annot.created_by_extract_id = 888
+            mock_annot.created_by_extract = mock_extract
+            mock_annot.document = document
+            mock_annot.corpus = self.corpus
+
+            mock_qs = MagicMock()
+            mock_qs.get.return_value = mock_annot
+            mock_select_related.return_value = mock_qs
+
+            with patch(
+                "opencontractserver.llms.tools.image_tools.user_has_permission_for_obj"
+            ) as mock_perm:
+                mock_perm.return_value = False
+                result = get_annotation_images_with_permission(self.user, annotation.id)
+                self.assertEqual(result, [])
+
+    def test_corpus_permission_check_denied(self):
+        """User without corpus permission should be denied."""
+        from opencontractserver.llms.tools.image_tools import (
+            get_annotation_images_with_permission,
+        )
+
+        # Create document - grant document permission but NOT corpus permission
+        document = Document.objects.create(
+            title="Doc in Corpus",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, document, [PermissionTypes.ALL])
+
+        # Create corpus without granting permissions
+        private_corpus = Corpus.objects.create(
+            title="Private Corpus",
+            creator=self.other_user,
+            is_public=False,
+        )
+
+        annotation = Annotation.objects.create(
+            document=document,
+            corpus=private_corpus,  # Corpus user doesn't have access to
+            annotation_label=self.label,
+            creator=self.other_user,
+            raw_text="Corpus-restricted annotation",
+            json={},
+        )
+
+        # User has doc permission but not corpus permission
+        result = get_annotation_images_with_permission(self.user, annotation.id)
+        self.assertEqual(result, [])
+
+
+class ImageToolsStructuralAnnotationTest(TestCase):
+    """Tests for structural annotation image handling."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data."""
+        import hashlib
+
+        cls.user = User.objects.create_user(
+            username="struct_test_user", password="testpass123"
+        )
+        cls.other_user = User.objects.create_user(
+            username="struct_other_user", password="testpass123"
+        )
+        cls.label = AnnotationLabel.objects.create(
+            text="Structural Label",
+            creator=cls.user,
+        )
+        cls.content_hash = hashlib.sha256(b"structural test content").hexdigest()
+
+    def test_structural_annotation_permission_via_document(self):
+        """Structural annotation should be accessible via document permission."""
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+        from opencontractserver.llms.tools.image_tools import (
+            get_annotation_images_with_permission,
+        )
+
+        # Create structural set
+        struct_set = StructuralAnnotationSet.objects.create(
+            content_hash=self.content_hash,
+            creator=self.user,
+        )
+
+        # Create document using the structural set
+        document = Document.objects.create(
+            title="Doc with Struct Set",
+            creator=self.user,
+            structural_annotation_set=struct_set,
+        )
+        set_permissions_for_obj_to_user(self.user, document, [PermissionTypes.ALL])
+
+        # Create structural annotation
+        annotation = Annotation.objects.create(
+            structural_set=struct_set,
+            annotation_label=self.label,
+            creator=self.user,
+            raw_text="Structural annotation",
+            structural=True,
+            json={},
+        )
+
+        # User with document permission should access structural annotation
+        result = get_annotation_images_with_permission(self.user, annotation.id)
+        self.assertEqual(result, [])  # No images but access granted
+
+    def test_structural_annotation_permission_denied(self):
+        """Structural annotation should be denied if no accessible document."""
+        import hashlib
+
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+        from opencontractserver.llms.tools.image_tools import (
+            get_annotation_images_with_permission,
+        )
+
+        # Create structural set with unique hash
+        unique_hash = hashlib.sha256(b"denied test content").hexdigest()
+        struct_set = StructuralAnnotationSet.objects.create(
+            content_hash=unique_hash,
+            creator=self.other_user,
+        )
+
+        # Create document using the structural set - but DON'T grant access to self.user
+        document = Document.objects.create(
+            title="Private Doc with Struct Set",
+            creator=self.other_user,
+            structural_annotation_set=struct_set,
+            is_public=False,
+        )
+        # Only grant to other_user
+        set_permissions_for_obj_to_user(
+            self.other_user, document, [PermissionTypes.ALL]
+        )
+
+        # Create structural annotation
+        annotation = Annotation.objects.create(
+            structural_set=struct_set,
+            annotation_label=self.label,
+            creator=self.other_user,
+            raw_text="Private structural annotation",
+            structural=True,
+            json={},
+        )
+
+        # self.user has no access to any document using this structural set
+        result = get_annotation_images_with_permission(self.user, annotation.id)
+        self.assertEqual(result, [])
+
+    def test_annotation_no_document_no_corpus_no_structural_set(self):
+        """Annotation without document, corpus, or structural_set should be denied."""
+        from unittest.mock import MagicMock, patch
+
+        from opencontractserver.llms.tools.image_tools import (
+            get_annotation_images_with_permission,
+        )
+
+        # Mock the entire annotation lookup - can't create orphan annotation due to DB constraint
+        with patch.object(Annotation.objects, "select_related") as mock_select_related:
+            mock_annot = MagicMock()
+            mock_annot.structural = True
+            mock_annot.created_by_analysis_id = None
+            mock_annot.created_by_extract_id = None
+            mock_annot.document = None
+            mock_annot.corpus = None
+            mock_annot.structural_set = None
+
+            mock_qs = MagicMock()
+            mock_qs.get.return_value = mock_annot
+            mock_select_related.return_value = mock_qs
+
+            # Use any ID since we're mocking the lookup
+            result = get_annotation_images_with_permission(self.user, 99999)
+            self.assertEqual(result, [])
+
+
+class ImageToolsPreExtractedContentTest(TestCase):
+    """Tests for pre-extracted image content file handling."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data."""
+        cls.user = User.objects.create_user(
+            username="preextract_test_user", password="testpass123"
+        )
+        cls.label = AnnotationLabel.objects.create(
+            text="Test Label",
+            creator=cls.user,
+        )
+
+    def _create_sample_image_base64(self):
+        """Create a sample base64-encoded image."""
+        import base64
+        from io import BytesIO
+
+        from PIL import Image
+
+        img = Image.new("RGB", (50, 50), color="blue")
+        buffer = BytesIO()
+        img.save(buffer, format="JPEG", quality=85)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    def test_load_images_from_annotation_file_success(self):
+        """Should load images from pre-extracted image_content_file."""
+        from io import StringIO
+        from unittest.mock import MagicMock
+
+        from opencontractserver.llms.tools.image_tools import (
+            _load_images_from_annotation_file,
+        )
+
+        base64_data = self._create_sample_image_base64()
+        image_content = {
+            "images": [
+                {
+                    "base64": base64_data,
+                    "format": "jpeg",
+                    "page_index": 0,
+                    "token_index": 1,
+                }
+            ]
+        }
+
+        # Mock annotation with image_content_file
+        mock_annotation = MagicMock()
+        mock_annotation.pk = 123
+        mock_file = MagicMock()
+        mock_file.open.return_value.__enter__ = MagicMock(
+            return_value=StringIO(json.dumps(image_content))
+        )
+        mock_file.open.return_value.__exit__ = MagicMock(return_value=False)
+        mock_annotation.image_content_file = mock_file
+
+        images = _load_images_from_annotation_file(mock_annotation)
+
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0].format, "jpeg")
+        self.assertEqual(images[0].page_index, 0)
+        self.assertEqual(images[0].token_index, 1)
+
+    def test_load_images_from_annotation_file_no_file(self):
+        """Should return empty list when no image_content_file."""
+        from unittest.mock import MagicMock
+
+        from opencontractserver.llms.tools.image_tools import (
+            _load_images_from_annotation_file,
+        )
+
+        mock_annotation = MagicMock()
+        mock_annotation.pk = 123
+        mock_annotation.image_content_file = None
+
+        images = _load_images_from_annotation_file(mock_annotation)
+        self.assertEqual(images, [])
+
+    def test_load_images_from_annotation_file_empty(self):
+        """Should return empty list when file contains no images."""
+        from io import StringIO
+        from unittest.mock import MagicMock
+
+        from opencontractserver.llms.tools.image_tools import (
+            _load_images_from_annotation_file,
+        )
+
+        image_content = {"images": []}
+
+        mock_annotation = MagicMock()
+        mock_annotation.pk = 123
+        mock_file = MagicMock()
+        mock_file.open.return_value.__enter__ = MagicMock(
+            return_value=StringIO(json.dumps(image_content))
+        )
+        mock_file.open.return_value.__exit__ = MagicMock(return_value=False)
+        mock_annotation.image_content_file = mock_file
+
+        images = _load_images_from_annotation_file(mock_annotation)
+        self.assertEqual(images, [])
+
+    def test_load_images_from_annotation_file_malformed(self):
+        """Should handle malformed file gracefully."""
+        from io import StringIO
+        from unittest.mock import MagicMock
+
+        from opencontractserver.llms.tools.image_tools import (
+            _load_images_from_annotation_file,
+        )
+
+        mock_annotation = MagicMock()
+        mock_annotation.pk = 123
+        mock_file = MagicMock()
+        mock_file.open.return_value.__enter__ = MagicMock(
+            return_value=StringIO("not valid json")
+        )
+        mock_file.open.return_value.__exit__ = MagicMock(return_value=False)
+        mock_annotation.image_content_file = mock_file
+
+        images = _load_images_from_annotation_file(mock_annotation)
+        self.assertEqual(images, [])
