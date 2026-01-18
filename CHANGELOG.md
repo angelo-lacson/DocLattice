@@ -41,6 +41,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Structural annotations now correctly load images for embedding generation
   - Files: `opencontractserver/utils/multimodal_embeddings.py:136-166`
 
+### Security
+- **JWT authentication error message hardening** (CWE-209: Information Exposure Through Error Messages)
+  - JWT errors now return generic messages (`"Invalid token"`) instead of exposing exception details
+  - Detailed errors logged server-side only for debugging
+  - Files: `config/rest_jwt_auth.py:80-90`
+- **Sensitive data redaction in logs** (CWE-532: Insertion of Sensitive Information into Log File)
+  - New `redact_sensitive_kwargs()` utility recursively redacts API keys, secrets, passwords, tokens, credentials
+  - Applied to parser, embedder, and post-processor kwargs logging
+  - Files: `opencontractserver/utils/logging.py`, `opencontractserver/tasks/doc_tasks.py`,
+    `opencontractserver/pipeline/base/embedder.py`, `opencontractserver/pipeline/base/post_processor.py`,
+    `opencontractserver/pipeline/parsers/llamaparse_parser.py`, `opencontractserver/pipeline/post_processors/pdf_redactor.py`
+
 ### Changed
 - **Image retrieval uses fast path**: Both REST API and embedding tasks check `image_content_file` first
   - Falls back to PAWLs loading only for legacy annotations without pre-extracted images
