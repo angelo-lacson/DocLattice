@@ -66,8 +66,13 @@ def cleanup_duplicate_embeddings(apps, schema_editor):
             def score_embedding(emb):
                 vector_count = sum(1 for vf in vector_fields if emb.get(vf) is not None)
                 # Return tuple for sorting: (vector_count, modified, id)
-                # All ascending, so we negate vector_count and use modified/id directly
-                return (vector_count, emb.get("modified"), emb["id"])
+                # Use datetime.min for None modified dates so they sort last
+                from datetime import datetime, timezone as dt_timezone
+
+                modified = emb.get("modified")
+                if modified is None:
+                    modified = datetime.min.replace(tzinfo=dt_timezone.utc)
+                return (vector_count, modified, emb["id"])
 
             # Sort by score descending (most vectors, then most recent, then highest ID)
             embeddings.sort(key=score_embedding, reverse=True)
