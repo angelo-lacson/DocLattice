@@ -26,6 +26,7 @@ import {
   showBulkImportModal,
   selectedDocumentIds as selectedDocumentIdsReactiveVar,
   linkDocumentsModalState,
+  openedCorpus,
 } from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderToolbar } from "./FolderToolbar";
@@ -42,6 +43,7 @@ import {
   sidebarCollapsedAtom,
   openCreateFolderModalAtom,
   folderListAtom,
+  corpusPermissionsAtom,
 } from "../../../atoms/folderAtoms";
 import {
   MOVE_DOCUMENT_TO_FOLDER,
@@ -313,6 +315,18 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   const folderList = useAtomValue(folderListAtom);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Bridge corpus permissions from Apollo reactive var to Jotai atom
+  const corpus = useReactiveVar(openedCorpus);
+  const setCorpusPermissions = useSetAtom(corpusPermissionsAtom);
+
+  useEffect(() => {
+    if (corpus?.myPermissions) {
+      setCorpusPermissions(corpus.myPermissions);
+    } else {
+      setCorpusPermissions([]);
+    }
+  }, [corpus?.myPermissions, setCorpusPermissions]);
 
   // Drag-and-drop state
   const [activeDragId, setActiveDragId] = useState<string | null>(null);

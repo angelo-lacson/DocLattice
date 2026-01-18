@@ -1,12 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Modal, Button, Icon } from "semantic-ui-react";
 import styled from "styled-components";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Input,
+  Textarea,
+  Spinner,
+} from "@os-legal/ui";
+import { Info, Image, Settings, PlusCircle, Pencil } from "lucide-react";
 import { LabelSetSelector } from "../widgets/CRUD/LabelSetSelector";
 import { EmbedderSelector } from "../widgets/CRUD/EmbedderSelector";
 import { FilePreviewAndUpload } from "../widgets/file-controls/FilePreviewAndUpload";
 import { CategorySelector } from "./CategorySelector";
 import { CorpusType, LabelSetType } from "../../types/graphql-api";
 import { arraysEqualUnordered } from "../../utils/arrayUtils";
+import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
 
 // Types
 export type CorpusModalMode = "CREATE" | "EDIT" | "VIEW";
@@ -31,95 +42,99 @@ export interface CorpusModalProps {
   onClose: () => void;
 }
 
-// Styled Components
-const StyledModal = styled(Modal)`
-  &&& {
-    border-radius: 16px;
-    overflow: hidden;
-    max-width: 600px;
-    margin: 1rem auto;
+// Breakpoints
+const TABLET_BREAKPOINT = 1024;
 
-    @media (max-width: 768px) {
-      margin: 0;
-      border-radius: 0;
-      max-height: 100vh;
-      height: 100%;
+// Styled Components - minimal overrides for @os-legal/ui components
+const StyledModalWrapper = styled.div`
+  /* Override modal sizing and mobile behavior */
+  .oc-modal-overlay {
+    padding: var(--oc-spacing-md);
+
+    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+      padding: 0;
+      align-items: flex-end;
+    }
+  }
+
+  .oc-modal {
+    width: 100%;
+    max-width: 640px;
+    /* Allow modal to scroll internally while dropdowns overflow */
+    overflow-y: auto;
+    overflow-x: visible;
+
+    @media (max-width: ${TABLET_BREAKPOINT}px) {
+      max-width: 90vw;
+    }
+
+    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
       max-width: 100%;
+      max-height: 95vh;
+      border-radius: var(--oc-radius-lg) var(--oc-radius-lg) 0 0;
+      animation: oc-slide-up-fade 0.3s var(--oc-easing-spring);
+    }
+
+    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) and (orientation: landscape) {
+      max-height: 100vh;
+      border-radius: 0;
+    }
+  }
+
+  /* Ensure Semantic UI dropdowns appear above modal content */
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+
+  .oc-modal-body {
+    background: var(--oc-bg-subtle, #f1f5f9);
+    padding: var(--oc-spacing-lg);
+    /* Allow dropdowns to overflow the modal body */
+    overflow: visible;
+
+    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+      padding: var(--oc-spacing-md);
+      /* Extra padding for content to scroll above sticky footer */
+      padding-bottom: calc(var(--oc-spacing-xl) + 80px);
+      -webkit-overflow-scrolling: touch;
+      /* On mobile, we need scrolling */
+      overflow-y: auto;
+    }
+  }
+
+  .oc-modal-footer {
+    background: var(--oc-bg-surface);
+    border-top: 1px solid var(--oc-border-default);
+
+    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+      position: sticky;
+      bottom: 0;
+      flex-direction: column-reverse;
+      gap: var(--oc-spacing-sm);
+      padding-bottom: calc(
+        var(--oc-spacing-lg) + env(safe-area-inset-bottom, 0px)
+      );
+
+      button {
+        width: 100%;
+        justify-content: center;
+      }
     }
   }
 `;
 
-const ModalHeader = styled.div`
-  background: #ffffff;
-  padding: 1.5rem 2rem;
-  color: #1a1a1a;
-  border-bottom: 1px solid #e5e5e5;
-
-  @media (max-width: 768px) {
-    padding: 1rem 1.25rem;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-`;
-
-const HeaderTitle = styled.h2`
-  margin: 0 0 0.25rem 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-
-  @media (max-width: 768px) {
-    font-size: 1.25rem;
-  }
-`;
-
-const HeaderSubtitle = styled.p`
-  margin: 0;
-  color: #666666;
-  font-size: 0.9rem;
-
-  @media (max-width: 768px) {
-    font-size: 0.85rem;
-  }
-`;
-
-const ModalBody = styled.div`
-  padding: 2rem;
-  background: #fafafa;
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
-
-  @media (max-width: 768px) {
-    padding: 1rem;
-    /* Add extra bottom padding so content (including dropdowns) can scroll above sticky footer */
-    padding-bottom: 160px;
-    max-height: calc(100vh - 80px);
-    /* Smooth scrolling on iOS */
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Ensure Semantic UI dropdowns appear above the sticky footer (z-index: 10) */
-  /* z-index scale: header/footer=10, dropdowns=20 */
-  .ui.dropdown .menu {
-    z-index: 20;
-  }
-`;
-
 const FormSection = styled.div`
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e5e5e5;
+  background: var(--oc-bg-surface);
+  border-radius: var(--oc-radius-lg);
+  padding: var(--oc-spacing-lg);
+  margin-bottom: var(--oc-spacing-md);
+  box-shadow: var(--oc-shadow-sm);
+  border: 1px solid var(--oc-border-default);
 
-  @media (max-width: 768px) {
-    padding: 0.875rem;
-    margin-bottom: 0.75rem;
-    border-radius: 10px;
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    padding: var(--oc-spacing-md);
+    margin-bottom: var(--oc-spacing-sm);
+    border-radius: var(--oc-radius-md);
   }
 
   &:last-child {
@@ -128,239 +143,190 @@ const FormSection = styled.div`
 `;
 
 const SectionTitle = styled.h3`
-  font-size: 0.875rem;
+  font-size: var(--oc-font-size-xs);
   font-weight: 600;
-  color: #888888;
+  color: var(--oc-fg-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin: 0 0 1rem 0;
+  margin: 0 0 var(--oc-spacing-md) 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--oc-spacing-sm);
 
-  @media (max-width: 768px) {
-    font-size: 0.75rem;
-    margin-bottom: 0.5rem;
-    gap: 0.375rem;
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    font-size: 11px;
+    margin-bottom: var(--oc-spacing-sm);
   }
 `;
 
 const FormField = styled.div`
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--oc-spacing-md);
 
   &:last-child {
     margin-bottom: 0;
   }
 
-  @media (max-width: 768px) {
-    margin-bottom: 0.75rem;
-  }
-`;
-
-const Label = styled.label`
-  display: block;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 0.5rem;
-
-  @media (max-width: 768px) {
-    font-size: 0.875rem;
-  }
-`;
-
-const HelpText = styled.span`
-  display: block;
-  font-size: 0.8rem;
-  color: #888888;
-  margin-top: 0.25rem;
-
-  @media (max-width: 768px) {
-    font-size: 0.75rem;
-  }
-`;
-
-const TextInput = styled.input<{ $readOnly?: boolean }>`
-  width: 100%;
-  padding: 0.875rem 1rem;
-  border: 2px solid #e5e5e5;
-  border-radius: 10px;
-  font-size: 1rem;
-  color: #1a1a1a;
-  background: ${(props) => (props.$readOnly ? "#fafafa" : "white")};
-  transition: all 0.2s ease;
-  outline: none;
-
-  &:focus {
-    border-color: #1a1a1a;
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    margin-bottom: var(--oc-spacing-sm);
   }
 
-  &:disabled {
-    background: #f5f5f5;
-    color: #999999;
-    cursor: not-allowed;
+  /* Ensure @os-legal/ui inputs are full width and have proper mobile sizing */
+  .oc-input-wrapper,
+  .oc-textarea-wrapper {
+    width: 100%;
   }
 
-  &::placeholder {
-    color: #999999;
-  }
-
-  @media (max-width: 768px) {
-    padding: 1rem;
-    /* Prevent iOS zoom on focus */
-    font-size: 16px;
-    border-radius: 8px;
-    /* Larger touch target */
+  .oc-input-container--lg {
     min-height: 48px;
   }
-`;
 
-const TextArea = styled.textarea<{ $readOnly?: boolean }>`
-  width: 100%;
-  padding: 0.875rem 1rem;
-  border: 2px solid #e5e5e5;
-  border-radius: 10px;
-  font-size: 1rem;
-  color: #1a1a1a;
-  background: ${(props) => (props.$readOnly ? "#fafafa" : "white")};
-  transition: all 0.2s ease;
-  outline: none;
-  resize: vertical;
-  min-height: 100px;
-  font-family: inherit;
-  line-height: 1.5;
-
-  &:focus {
-    border-color: #1a1a1a;
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
-  }
-
-  &:disabled {
-    background: #f5f5f5;
-    color: #999999;
-    cursor: not-allowed;
-  }
-
-  &::placeholder {
-    color: #999999;
-  }
-
-  @media (max-width: 768px) {
-    padding: 1rem;
-    /* Prevent iOS zoom on focus */
-    font-size: 16px;
-    border-radius: 8px;
-    min-height: 120px;
-  }
-`;
-
-const ModalFooter = styled.div`
-  padding: 1.25rem 2rem;
-  background: white;
-  border-top: 1px solid #e5e5e5;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-
-  @media (max-width: 768px) {
-    padding: 1rem 1.25rem;
-    flex-direction: column-reverse;
-    gap: 0.5rem;
-    position: sticky;
-    bottom: 0;
-    z-index: 10;
-
-    button {
-      width: 100%;
-      margin: 0 !important;
-      justify-content: center;
-      min-height: 48px;
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .oc-input,
+    .oc-textarea {
+      font-size: 16px; /* Prevent iOS zoom */
     }
   }
 `;
 
-const CancelButton = styled(Button)`
-  &&& {
-    background: #f5f5f5;
-    color: #666666;
-    border: none;
-    padding: 0.875rem 1.5rem;
-    font-weight: 600;
-    border-radius: 10px;
-    transition: all 0.2s ease;
+// Two-column layout for desktop
+const FormRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--oc-spacing-md);
 
-    &:hover:not(:disabled) {
-      background: #e5e5e5;
-      color: #1a1a1a;
-    }
-
-    &:disabled {
-      opacity: 0.6;
-    }
-  }
-`;
-
-const SubmitButton = styled(Button)`
-  &&& {
-    background: #1a1a1a;
-    color: white;
-    border: none;
-    padding: 0.875rem 1.5rem;
-    font-weight: 600;
-    border-radius: 10px;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-
-    &:hover:not(:disabled) {
-      background: #333333;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    &:active:not(:disabled) {
-      background: #000000;
-    }
-
-    &:disabled {
-      background: #cccccc;
-      box-shadow: none;
-    }
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    grid-template-columns: 1fr;
   }
 `;
 
 const IconUploadWrapper = styled.div`
-  max-width: 200px;
-  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--oc-spacing-xl);
 
-  @media (max-width: 768px) {
-    max-width: 120px;
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--oc-spacing-md);
   }
 `;
 
-const CloseButton = styled.button`
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: #f5f5f5;
-  border: none;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+const IconPreview = styled.div`
+  flex-shrink: 0;
+  width: 140px;
+  height: 140px;
+  position: relative;
+  border-radius: var(--oc-radius-lg);
+  overflow: hidden;
+  background: var(--oc-bg-subtle);
+  border: 2px dashed var(--oc-border-default);
   transition: all 0.2s ease;
-  color: #666666;
 
   &:hover {
-    background: #e5e5e5;
-    color: #1a1a1a;
+    border-color: var(--oc-accent);
+    background: rgba(15, 118, 110, 0.03);
   }
 
-  @media (max-width: 768px) {
-    width: 40px;
-    height: 40px;
+  /* Completely restyle the FilePreviewAndUpload component */
+  .ui.segment {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+  }
+
+  /* Make image fill the container nicely */
+  img {
+    width: 100% !important;
+    height: 140px !important;
+    object-fit: contain !important;
+    padding: var(--oc-spacing-md) !important;
+    background: transparent !important;
+  }
+
+  /* Style the edit overlay */
+  > div > div:last-child {
+    border-radius: var(--oc-radius-lg) !important;
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    width: 120px;
+    height: 120px;
+
+    img {
+      height: 120px !important;
+      padding: var(--oc-spacing-sm) !important;
+    }
+  }
+`;
+
+const IconHelpText = styled.div`
+  flex: 1;
+
+  h4 {
+    margin: 0 0 var(--oc-spacing-xs) 0;
+    font-size: var(--oc-font-size-sm);
+    font-weight: 600;
+    color: var(--oc-fg-primary);
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--oc-font-size-sm);
+    color: var(--oc-fg-secondary);
+    line-height: var(--oc-line-height-relaxed);
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    h4 {
+      font-size: var(--oc-font-size-xs);
+    }
+
+    p {
+      font-size: var(--oc-font-size-xs);
+    }
+  }
+`;
+
+const LoadingOverlay = styled.div<{ $visible: boolean }>`
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
+  display: ${(props) => (props.$visible ? "flex" : "none")};
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: var(--oc-radius-lg);
+`;
+
+const HeaderIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--oc-radius-md);
+  background: linear-gradient(
+    135deg,
+    var(--oc-accent) 0%,
+    var(--oc-accent-hover) 100%
+  );
+  color: white;
+  margin-right: var(--oc-spacing-sm);
+
+  svg {
+    width: 18px;
+    height: 18px;
   }
 `;
 
@@ -368,8 +334,9 @@ const CloseButton = styled.button`
  * CorpusModal - A modern, mobile-friendly modal for creating and editing corpuses.
  *
  * Features:
- * - Clean, responsive design that works well on mobile
- * - Simple controlled inputs (no complex form libraries)
+ * - Clean, responsive design using @os-legal/ui components
+ * - Tablet and mobile breakpoints with proper safe area handling
+ * - Two-column layout on desktop for better space utilization
  * - Supports Create, Edit, and View modes
  * - Integrates with LabelSetSelector, EmbedderSelector, and icon upload
  */
@@ -594,7 +561,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       case "CREATE":
         return "Create New Corpus";
       case "EDIT":
-        return `Edit Corpus`;
+        return "Edit Corpus";
       case "VIEW":
         return "View Corpus";
       default:
@@ -615,148 +582,157 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     }
   };
 
+  const headerTitle = (
+    <>
+      <HeaderIcon>{isCreate ? <PlusCircle /> : <Pencil />}</HeaderIcon>
+      {getHeaderText()}
+    </>
+  );
+
   return (
-    <StyledModal open={open} onClose={onClose} size="small">
-      <ModalHeader>
-        <HeaderTitle>
-          <Icon name={isCreate ? "plus circle" : "edit"} />
-          {getHeaderText()}
-        </HeaderTitle>
-        <HeaderSubtitle>{getSubtitle()}</HeaderSubtitle>
-        <CloseButton
-          onClick={onClose}
-          disabled={loading}
-          aria-label="Close modal"
-        >
-          <Icon name="close" />
-        </CloseButton>
-      </ModalHeader>
+    <StyledModalWrapper>
+      <Modal open={open} onClose={onClose} size="lg" closeOnEscape={!loading}>
+        <ModalHeader
+          title={headerTitle}
+          subtitle={getSubtitle()}
+          onClose={onClose}
+          showCloseButton={!loading}
+        />
 
-      <ModalBody>
-        {/* Basic Info Section */}
-        <FormSection>
-          <SectionTitle>
-            <Icon name="info circle" />
-            Basic Information
-          </SectionTitle>
+        <ModalBody style={{ position: "relative" }}>
+          <LoadingOverlay $visible={loading}>
+            <Spinner size={32} />
+          </LoadingOverlay>
 
-          <FormField>
-            <Label htmlFor="corpus-title">Title *</Label>
-            <TextInput
-              id="corpus-title"
-              type="text"
-              placeholder="Enter corpus title"
-              value={title}
-              onChange={handleTitleChange}
-              disabled={loading || isReadOnly}
-              $readOnly={isReadOnly}
-              autoComplete="off"
-            />
-          </FormField>
+          {/* Basic Info Section */}
+          <FormSection>
+            <SectionTitle>
+              <Info />
+              Basic Information
+            </SectionTitle>
 
-          <FormField>
-            <Label htmlFor="corpus-slug">Slug</Label>
-            <TextInput
-              id="corpus-slug"
-              type="text"
-              placeholder="my-corpus-slug (auto-generated if blank)"
-              value={slug}
-              onChange={handleSlugChange}
-              disabled={loading || isReadOnly}
-              $readOnly={isReadOnly}
-              autoComplete="off"
-            />
-            <HelpText>
-              Case-sensitive. Allowed: A-Z, a-z, 0-9, hyphen (-). Leave blank to
-              auto-generate.
-            </HelpText>
-          </FormField>
+            <FormRow>
+              <FormField>
+                <Input
+                  label="Title *"
+                  placeholder="Enter corpus title"
+                  value={title}
+                  onChange={handleTitleChange}
+                  disabled={loading || isReadOnly}
+                  size="lg"
+                  fullWidth
+                />
+              </FormField>
 
-          <FormField>
-            <Label htmlFor="corpus-description">Description *</Label>
-            <TextArea
-              id="corpus-description"
-              placeholder="Describe what this corpus is about..."
-              value={description}
-              onChange={handleDescriptionChange}
-              disabled={loading || isReadOnly}
-              $readOnly={isReadOnly}
-            />
-          </FormField>
-        </FormSection>
+              <FormField>
+                <Input
+                  label="Slug"
+                  placeholder="my-corpus-slug (auto-generated if blank)"
+                  value={slug}
+                  onChange={handleSlugChange}
+                  disabled={loading || isReadOnly}
+                  helperText="Case-sensitive. Allowed: A-Z, a-z, 0-9, hyphen (-)"
+                  size="lg"
+                  fullWidth
+                />
+              </FormField>
+            </FormRow>
 
-        {/* Icon Section */}
-        <FormSection>
-          <SectionTitle>
-            <Icon name="image" />
-            Corpus Icon
-          </SectionTitle>
-          <IconUploadWrapper>
-            <FilePreviewAndUpload
-              isImage={true}
-              acceptedTypes="image/*"
-              file={icon || ""}
-              readOnly={isReadOnly}
-              disabled={loading}
-              onChange={handleIconChange}
-            />
-          </IconUploadWrapper>
-        </FormSection>
+            <FormField>
+              <Textarea
+                label="Description *"
+                placeholder="Describe what this corpus is about..."
+                value={description}
+                onChange={handleDescriptionChange}
+                disabled={loading || isReadOnly}
+                fullWidth
+                autoResize
+                maxRows={6}
+              />
+            </FormField>
+          </FormSection>
 
-        {/* Settings Section */}
-        <FormSection>
-          <SectionTitle>
-            <Icon name="cog" />
-            Settings
-          </SectionTitle>
+          {/* Icon Section */}
+          <FormSection>
+            <SectionTitle>
+              <Image />
+              Corpus Icon
+            </SectionTitle>
+            <IconUploadWrapper>
+              <IconPreview>
+                <FilePreviewAndUpload
+                  isImage={true}
+                  acceptedTypes="image/*"
+                  file={icon || ""}
+                  readOnly={isReadOnly}
+                  disabled={loading}
+                  onChange={handleIconChange}
+                />
+              </IconPreview>
+              <IconHelpText>
+                <h4>Upload an Icon</h4>
+                <p>
+                  Choose an image to help identify this corpus. Square images
+                  work best (256x256px or larger recommended).
+                </p>
+              </IconHelpText>
+            </IconUploadWrapper>
+          </FormSection>
 
-          <FormField>
-            <Label htmlFor="corpus-categories">Categories</Label>
-            <CategorySelector
-              selectedIds={categories}
-              onChange={setCategories}
-              disabled={isReadOnly || loading}
-            />
-            <HelpText>
-              Optional: Select one or more categories to organize this corpus.
-            </HelpText>
-          </FormField>
+          {/* Settings Section */}
+          <FormSection>
+            <SectionTitle>
+              <Settings />
+              Settings
+            </SectionTitle>
 
-          <FormField>
-            <LabelSetSelector
-              read_only={isReadOnly || loading}
-              labelSet={labelSetObj}
-              onChange={handleLabelSetChange}
-            />
-          </FormField>
+            <FormField>
+              <CategorySelector
+                selectedIds={categories}
+                onChange={setCategories}
+                disabled={isReadOnly || loading}
+              />
+            </FormField>
 
-          <FormField>
-            <EmbedderSelector
-              read_only={isReadOnly || loading}
-              preferredEmbedder={preferredEmbedder || undefined}
-              onChange={handleEmbedderChange}
-            />
-          </FormField>
-        </FormSection>
-      </ModalBody>
+            <FormField>
+              <LabelSetSelector
+                read_only={isReadOnly || loading}
+                labelSet={labelSetObj}
+                onChange={handleLabelSetChange}
+                upward
+                scrolling
+              />
+            </FormField>
 
-      <ModalFooter>
-        <CancelButton onClick={onClose} disabled={loading}>
-          <Icon name="close" />
-          {isReadOnly ? "Close" : "Cancel"}
-        </CancelButton>
-        {!isReadOnly && onSubmit && (
-          <SubmitButton
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            loading={loading}
-          >
-            <Icon name="check" />
-            {isCreate ? "Create Corpus" : "Save Changes"}
-          </SubmitButton>
-        )}
-      </ModalFooter>
-    </StyledModal>
+            <FormField>
+              <EmbedderSelector
+                read_only={isReadOnly || loading}
+                preferredEmbedder={preferredEmbedder || undefined}
+                onChange={handleEmbedderChange}
+                upward
+                scrolling
+              />
+            </FormField>
+          </FormSection>
+        </ModalBody>
+
+        <ModalFooter>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            {isReadOnly ? "Close" : "Cancel"}
+          </Button>
+          {!isReadOnly && onSubmit && (
+            <Button
+              variant="primary"
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              loading={loading}
+            >
+              {isCreate ? "Create Corpus" : "Save Changes"}
+            </Button>
+          )}
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };
 

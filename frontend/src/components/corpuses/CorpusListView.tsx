@@ -120,6 +120,12 @@ const SectionHeader = styled.div`
   margin-bottom: 20px;
   gap: 16px;
   flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
 `;
 
 const SectionTitle = styled.h2`
@@ -134,6 +140,22 @@ const ActionButtons = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  /* Make buttons full-width on very small screens */
+  @media (max-width: 480px) {
+    flex-direction: column;
+    gap: 8px;
+
+    button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 `;
 
 const CorpusListContainer = styled.section`
