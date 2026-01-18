@@ -614,6 +614,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
             <FormRow>
               <FormField>
                 <Input
+                  id="corpus-title"
                   label="Title *"
                   placeholder="Enter corpus title"
                   value={title}
@@ -626,6 +627,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
 
               <FormField>
                 <Input
+                  id="corpus-slug"
                   label="Slug"
                   placeholder="my-corpus-slug (auto-generated if blank)"
                   value={slug}
@@ -640,6 +642,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
 
             <FormField>
               <Textarea
+                id="corpus-description"
                 label="Description *"
                 placeholder="Describe what this corpus is about..."
                 value={description}
