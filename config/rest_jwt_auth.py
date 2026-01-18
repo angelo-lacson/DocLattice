@@ -78,9 +78,14 @@ class GraphQLJWTAuthentication(authentication.BaseAuthentication):
             raise exceptions.AuthenticationFailed("Token has expired")
 
         except JSONWebTokenError as e:
-            raise exceptions.AuthenticationFailed(f"Invalid token: {e}")
+            # Security: Log detailed error server-side but return generic message
+            # to prevent information disclosure to potential attackers
+            logger.warning(f"JWT validation failed: {e}")
+            raise exceptions.AuthenticationFailed("Invalid token")
 
         except Exception as e:
+            # Security: Log detailed error server-side but return generic message
+            # to prevent information disclosure to potential attackers
             logger.error(f"JWT authentication error: {e}")
             raise exceptions.AuthenticationFailed("Authentication error")
 
