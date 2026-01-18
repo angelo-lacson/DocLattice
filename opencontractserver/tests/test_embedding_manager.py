@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import MagicMock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, close_old_connections, connection
+from django.db import IntegrityError, close_old_connections
 from django.test import TestCase, TransactionTestCase
 
 from opencontractserver.annotations.models import Embedding
@@ -44,15 +44,15 @@ class EmbeddingManagerStoreEmbeddingTest(TestCase):
         self.document = Document.objects.create(
             title="Test Document",
             creator=self.user,
-            pdf_file=SimpleUploadedFile("test.pdf", pdf_content, content_type="application/pdf"),
+            pdf_file=SimpleUploadedFile(
+                "test.pdf", pdf_content, content_type="application/pdf"
+            ),
             backend_lock=False,
         )
         self.corpus.documents.add(self.document)
 
     def tearDown(self):
-        Embedding.objects.filter(
-            embedder_path__startswith="test."
-        ).delete()
+        Embedding.objects.filter(embedder_path__startswith="test.").delete()
         self.document.delete()
         self.corpus.delete()
 
@@ -103,16 +103,11 @@ class EmbeddingManagerStoreEmbeddingTest(TestCase):
         # Now simulate a race condition: patch filter().first() to return None
         # (simulating a check that misses the existing record) but then
         # create() will fail with IntegrityError because the record exists
-        original_filter = Embedding.objects.filter
-
         def mock_filter_then_fail(*args, **kwargs):
             """
-            First call returns empty queryset (simulating race condition),
-            subsequent calls work normally.
+            Return a mock queryset that returns None on first() to simulate
+            the race condition where filter misses the existing record.
             """
-            qs = original_filter(*args, **kwargs)
-            # Return a mock that returns None on first() to simulate
-            # the race condition where filter misses the existing record
             mock_qs = MagicMock()
             mock_qs.first.return_value = None
             return mock_qs
@@ -125,9 +120,7 @@ class EmbeddingManagerStoreEmbeddingTest(TestCase):
                 "create",
                 side_effect=IntegrityError("duplicate key"),
             ):
-                with patch.object(
-                    Embedding.objects, "get", return_value=embedding1
-                ):
+                with patch.object(Embedding.objects, "get", return_value=embedding1):
                     # This should catch IntegrityError and update existing
                     result = Embedding.objects.store_embedding(
                         creator=self.user,
