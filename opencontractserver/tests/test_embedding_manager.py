@@ -1,0 +1,140 @@
+"""
+Tests for EmbeddingManager in opencontractserver/shared/Managers.py
+
+Covers:
+- store_embedding ValueError when no parent ID provided (line 398)
+- store_embedding IntegrityError race condition handling (lines 432-442)
+"""
+
+from unittest.mock import MagicMock, patch
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
+from django.test import TestCase
+
+from opencontractserver.annotations.models import Embedding
+from opencontractserver.corpuses.models import Corpus
+from opencontractserver.documents.models import Document
+from opencontractserver.tests.fixtures import SAMPLE_PDF_FILE_TWO_PATH
+from opencontractserver.users.models import User
+
+
+class EmbeddingManagerStoreEmbeddingTest(TestCase):
+    """Tests for EmbeddingManager.store_embedding method."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(
+            username="embedding_manager_test_user",
+            email="embedding_manager_test@test.com",
+            password="testpassword",
+        )
+
+    def setUp(self):
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+        with open(SAMPLE_PDF_FILE_TWO_PATH, "rb") as f:
+            pdf_content = f.read()
+        self.document = Document.objects.create(
+            title="Test Document",
+            creator=self.user,
+            pdf_file=SimpleUploadedFile("test.pdf", pdf_content, content_type="application/pdf"),
+            backend_lock=False,
+        )
+        self.corpus.documents.add(self.document)
+
+    def tearDown(self):
+        Embedding.objects.filter(
+            embedder_path__startswith="test."
+        ).delete()
+        self.document.delete()
+        self.corpus.delete()
+
+    def test_store_embedding_no_parent_id_raises_value_error(self):
+        """
+        Test that store_embedding raises ValueError when no parent ID is provided.
+
+        Covers line 398 in Managers.py.
+        """
+        with self.assertRaises(ValueError) as context:
+            Embedding.objects.store_embedding(
+                creator=self.user,
+                embedder_path="test.embedder",
+                vector=[0.1] * 384,
+                dimension=384,
+                # No parent ID provided - should raise ValueError
+            )
+
+        self.assertIn(
+            "Must provide one of document_id, annotation_id, note_id, "
+            "conversation_id, or message_id",
+            str(context.exception),
+        )
+
+    def test_store_embedding_race_condition_integrity_error(self):
+        """
+        Test that store_embedding handles IntegrityError from race conditions.
+
+        When a concurrent worker creates the same embedding between our check
+        and create, we catch IntegrityError and update the existing record.
+
+        Covers lines 432-442 in Managers.py.
+        """
+        embedder_path = "test.race_condition_embedder"
+        vector_1 = [0.1] * 384
+        vector_2 = [0.2] * 384
+
+        # First, create an embedding normally
+        embedding1 = Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector_1,
+            dimension=384,
+            document_id=self.document.id,
+        )
+        self.assertIsNotNone(embedding1)
+
+        # Now simulate a race condition: patch filter().first() to return None
+        # (simulating a check that misses the existing record) but then
+        # create() will fail with IntegrityError because the record exists
+        original_filter = Embedding.objects.filter
+
+        def mock_filter_then_fail(*args, **kwargs):
+            """
+            First call returns empty queryset (simulating race condition),
+            subsequent calls work normally.
+            """
+            qs = original_filter(*args, **kwargs)
+            # Return a mock that returns None on first() to simulate
+            # the race condition where filter misses the existing record
+            mock_qs = MagicMock()
+            mock_qs.first.return_value = None
+            return mock_qs
+
+        with patch.object(
+            Embedding.objects, "filter", side_effect=mock_filter_then_fail
+        ):
+            with patch.object(
+                Embedding.objects,
+                "create",
+                side_effect=IntegrityError("duplicate key"),
+            ):
+                with patch.object(
+                    Embedding.objects, "get", return_value=embedding1
+                ):
+                    # This should catch IntegrityError and update existing
+                    result = Embedding.objects.store_embedding(
+                        creator=self.user,
+                        embedder_path=embedder_path,
+                        vector=vector_2,
+                        dimension=384,
+                        document_id=self.document.id,
+                    )
+
+        # Should return the existing embedding (now updated)
+        self.assertEqual(result.id, embedding1.id)
+        # The vector should have been updated
+        self.assertEqual(list(result.vector_384), vector_2)
