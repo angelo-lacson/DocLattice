@@ -432,7 +432,7 @@ class EmbeddingManager(BaseVisibilityManager):
         except IntegrityError:
             # Race condition: another worker created the embedding first.
             # Fetch the existing one and update it.
-            logger.debug(
+            logger.info(
                 f"Race condition in store_embedding: embedding for {lookup} was created "
                 f"by another worker. Fetching and updating instead."
             )
