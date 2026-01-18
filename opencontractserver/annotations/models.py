@@ -1,13 +1,15 @@
 import difflib
 import functools
 import hashlib
+import logging
 import uuid
 
 # Typed representations for the `json` payload
-from typing import Union, cast
+from typing import Optional, Union, cast
 
 import django
 from django.contrib.auth import get_user_model
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -43,6 +45,7 @@ from opencontractserver.shared.utils import calc_oc_file_path
 from .json_types import MultipageAnnotationJson, SpanAnnotationJson
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 # TODO - can we use the Python enum in data_types.py to drive choices
 RELATIONSHIP_LABEL = "RELATIONSHIP_LABEL"
@@ -60,14 +63,18 @@ LABEL_TYPES = [
 # Define embedding dimensions constants
 EMBEDDING_DIM_384 = 384
 EMBEDDING_DIM_768 = 768
+EMBEDDING_DIM_1024 = 1024
 EMBEDDING_DIM_1536 = 1536
 EMBEDDING_DIM_3072 = 3072
+EMBEDDING_DIM_4096 = 4096
 
 EMBEDDING_DIMENSIONS = [
     (EMBEDDING_DIM_384, "384"),
     (EMBEDDING_DIM_768, "768"),
+    (EMBEDDING_DIM_1024, "1024"),
     (EMBEDDING_DIM_1536, "1536"),
     (EMBEDDING_DIM_3072, "3072"),
+    (EMBEDDING_DIM_4096, "4096"),
 ]
 
 
@@ -393,8 +400,10 @@ class Embedding(BaseOCModel):
         embedder_path (str): A field storing the embedder or model path used to generate this embedding.
         vector_384 (VectorField): A 384-dimensional embedding vector, if used.
         vector_768 (VectorField): A 768-dimensional embedding vector, if used.
+        vector_1024 (VectorField): A 1024-dimensional embedding vector, if used.
         vector_1536 (VectorField): A 1536-dimensional embedding vector, if used.
         vector_3072 (VectorField): A 3072-dimensional embedding vector, if used.
+        vector_4096 (VectorField): A 4096-dimensional embedding vector, if used.
         created (datetime): Timestamp when this embedding record was created.
         modified (datetime): Timestamp when this embedding record was last updated.
     """
@@ -454,8 +463,10 @@ class Embedding(BaseOCModel):
     # Multiple dimension-specific embeddings
     vector_384 = VectorField(dimensions=EMBEDDING_DIM_384, null=True, blank=True)
     vector_768 = VectorField(dimensions=EMBEDDING_DIM_768, null=True, blank=True)
+    vector_1024 = VectorField(dimensions=EMBEDDING_DIM_1024, null=True, blank=True)
     vector_1536 = VectorField(dimensions=EMBEDDING_DIM_1536, null=True, blank=True)
     vector_3072 = VectorField(dimensions=EMBEDDING_DIM_3072, null=True, blank=True)
+    vector_4096 = VectorField(dimensions=EMBEDDING_DIM_4096, null=True, blank=True)
 
     # Metadata
     created = django.db.models.DateTimeField(default=timezone.now, blank=True)
@@ -498,6 +509,36 @@ class Embedding(BaseOCModel):
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
         ]
+        # Partial unique constraints to prevent duplicate embeddings per parent object
+        # Each parent type (document, annotation, etc.) can have only one embedding
+        # per embedder_path
+        constraints = [
+            django.db.models.UniqueConstraint(
+                fields=["embedder_path", "document"],
+                condition=django.db.models.Q(document__isnull=False),
+                name="unique_embedding_per_document_embedder",
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["embedder_path", "annotation"],
+                condition=django.db.models.Q(annotation__isnull=False),
+                name="unique_embedding_per_annotation_embedder",
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["embedder_path", "note"],
+                condition=django.db.models.Q(note__isnull=False),
+                name="unique_embedding_per_note_embedder",
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["embedder_path", "conversation"],
+                condition=django.db.models.Q(conversation__isnull=False),
+                name="unique_embedding_per_conversation_embedder",
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["embedder_path", "message"],
+                condition=django.db.models.Q(message__isnull=False),
+                name="unique_embedding_per_message_embedder",
+            ),
+        ]
         verbose_name = "Embedding"
         verbose_name_plural = "Embeddings"
 
@@ -518,8 +559,10 @@ class StructuralAnnotationSet(BaseOCModel):
     """
 
     # Unique identifier based on content
+    # Max length is 128 to accommodate corpus-isolated duplicates:
+    # Format: {sha256_hash}_{corpus_id} = 64 chars + 1 underscore + up to 20 digits
     content_hash = django.db.models.CharField(
-        max_length=64,
+        max_length=128,
         unique=True,
         db_index=True,
         help_text="SHA-256 hash of the document content this set belongs to",
@@ -588,6 +631,165 @@ class StructuralAnnotationSet(BaseOCModel):
     def relationship_count(self):
         """Get the count of structural relationships in this set."""
         return self.structural_relationships.count()
+
+    def duplicate(self, corpus_id: Optional[int] = None) -> "StructuralAnnotationSet":
+        """
+        Create a copy of this set with all its annotations for corpus isolation.
+
+        Each corpus copy of a document gets its own StructuralAnnotationSet to enable
+        per-corpus embeddings (different corpuses may use different embedders with
+        incompatible vector dimensions).
+
+        Args:
+            corpus_id: Optional corpus ID to include in content_hash suffix
+
+        Returns:
+            New StructuralAnnotationSet with copied structural annotations
+        """
+        import uuid
+
+        suffix = f"_{corpus_id}" if corpus_id else f"_{uuid.uuid4().hex[:8]}"
+
+        new_set = StructuralAnnotationSet.objects.create(
+            content_hash=f"{self.content_hash}{suffix}",
+            parser_name=self.parser_name,
+            parser_version=self.parser_version,
+            page_count=self.page_count,
+            token_count=self.token_count,
+            pawls_parse_file=self.pawls_parse_file,  # Same file reference is OK
+            txt_extract_file=self.txt_extract_file,  # Same file reference is OK
+            is_public=self.is_public,
+            creator=self.creator,
+        )
+
+        # Bulk copy structural annotations (without embeddings - will be generated fresh)
+        # Use select_related to avoid N+1 queries on annotation_label and creator
+        # Use only() to fetch just the fields we need for duplication
+        source_annotations = list(
+            self.structural_annotations.select_related(
+                "annotation_label", "creator"
+            ).only(
+                "page",
+                "raw_text",
+                "tokens_jsons",
+                "bounding_box",
+                "json",
+                "annotation_type",
+                "annotation_label",
+                "content_modalities",
+                "image_content_file",
+                "is_public",
+                "creator",
+            )
+        )
+
+        new_annotations = [
+            Annotation(
+                structural_set=new_set,
+                page=a.page,
+                raw_text=a.raw_text,
+                tokens_jsons=a.tokens_jsons,
+                bounding_box=a.bounding_box,
+                json=a.json,
+                annotation_type=a.annotation_type,
+                annotation_label=a.annotation_label,
+                structural=True,
+                content_modalities=a.content_modalities,
+                is_public=a.is_public,
+                creator=a.creator,
+            )
+            for a in source_annotations
+        ]
+        created_annotations = Annotation.objects.bulk_create(new_annotations)
+
+        # Copy or extract image content for IMAGE modality annotations
+        # This ensures embedding tasks don't need to reload PAWLs
+        from opencontractserver.types.enums import ContentModality
+
+        pawls_data = None  # Lazy load only if needed
+        source_to_new = dict(zip(source_annotations, created_annotations))
+
+        for source_annot, new_annot in source_to_new.items():
+            modalities = source_annot.content_modalities or []
+            if ContentModality.IMAGE.value not in modalities:
+                continue
+
+            if source_annot.image_content_file:
+                # Fast path: copy file content from source
+                try:
+                    source_annot.image_content_file.open("rb")
+                    try:
+                        new_annot.image_content_file.save(
+                            f"annot_{new_annot.pk}_images.json",
+                            source_annot.image_content_file,
+                            save=True,
+                        )
+                    finally:
+                        source_annot.image_content_file.close()
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to copy image_content_file for annotation "
+                        f"{new_annot.pk}: {e}"
+                    )
+            else:
+                # Slow path: extract from PAWLs (load once)
+                if pawls_data is None and self.pawls_parse_file:
+                    import json as json_module
+
+                    try:
+                        self.pawls_parse_file.open("r")
+                        try:
+                            pawls_data = json_module.load(self.pawls_parse_file)
+                        finally:
+                            self.pawls_parse_file.close()
+                    except Exception as e:
+                        logger.error(f"Failed to load PAWLs for image extraction: {e}")
+                        pawls_data = []  # Prevent repeated attempts
+
+                if pawls_data:
+                    from opencontractserver.utils.multimodal_embeddings import (
+                        extract_and_store_annotation_images,
+                    )
+
+                    extract_and_store_annotation_images(new_annot, pawls_data)
+
+        # Queue embedding tasks for corpus-isolated annotations
+        # bulk_create doesn't fire signals, so we must explicitly queue embeddings
+        if corpus_id and created_annotations:
+            from django.conf import settings
+            from django.db import transaction
+
+            from opencontractserver.corpuses.models import Corpus
+            from opencontractserver.tasks.embeddings_task import (
+                calculate_embedding_for_annotation_text,
+            )
+
+            try:
+                corpus = Corpus.objects.get(pk=corpus_id)
+                embedder_path = corpus.preferred_embedder or getattr(
+                    settings, "DEFAULT_EMBEDDER", None
+                )
+
+                if embedder_path:
+                    logger.info(
+                        f"Queuing embeddings for {len(created_annotations)} duplicated "
+                        f"annotations using embedder {embedder_path} (corpus {corpus_id})"
+                    )
+                    for annot in created_annotations:
+                        # Use embedder_path to bypass dual embedding strategy
+                        # and use only the corpus's preferred embedder
+                        transaction.on_commit(
+                            lambda a_id=annot.id: calculate_embedding_for_annotation_text.delay(
+                                annotation_id=a_id, embedder_path=embedder_path
+                            )
+                        )
+            except Corpus.DoesNotExist:
+                logger.warning(
+                    f"Corpus {corpus_id} not found, skipping embeddings for "
+                    f"duplicated annotations"
+                )
+
+        return new_set
 
 
 class Annotation(BaseOCModel, HasEmbeddingMixin):
@@ -695,6 +897,23 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
 
     # Mark structural / layout annotations explicitly.
     structural = django.db.models.BooleanField(default=False)
+
+    # Content modalities present in this annotation (TEXT, IMAGE, etc.)
+    content_modalities = ArrayField(
+        django.db.models.CharField(max_length=20),
+        default=list,
+        blank=True,
+        help_text="Content modalities present in this annotation: TEXT, IMAGE, etc.",
+    )
+
+    # Pre-extracted image content for IMAGE modality annotations
+    # Stores base64 image data to avoid re-loading PAWLs at embedding time
+    image_content_file = django.db.models.FileField(
+        upload_to=calc_oc_file_path,
+        blank=True,
+        null=True,
+        help_text="JSON file containing extracted image data for IMAGE modality annotations",
+    )
 
     # Sharing
     is_public = django.db.models.BooleanField(default=False)

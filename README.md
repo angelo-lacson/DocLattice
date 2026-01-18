@@ -54,8 +54,8 @@ OpenContracts is an AGPL-3.0 licensed platform for document analysis, annotation
 
 ### Parsing & Processing
 - Pluggable parser architecture supporting multiple backends:
-  - [Docling](docs/pipelines/docling_parser.md) — ML-based structure extraction
-  - [NLM-Ingest](docs/pipelines/nlm_ingest_parser.md) — Layout-aware parsing
+  - [Docling](docs/pipelines/docling_parser.md) — ML-based structure extraction (default)
+  - [LlamaParse](docs/pipelines/llamaparse_parser.md) — Cloud-based parsing with layout extraction
   - Text/Markdown — Simple text extraction
 - Automatic vector embeddings for semantic search (powered by pgvector)
 - Structural annotation extraction (headers, paragraphs, tables)

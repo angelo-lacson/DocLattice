@@ -5,7 +5,180 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-10
+## [Unreleased] - 2026-01-17
+
+### Added
+
+#### Pre-extracted Image Content for Annotations
+- **`image_content_file` FileField on Annotation model**: Stores pre-extracted image data as JSON files
+  - Eliminates need to reload full PAWLs file (~10MB) for each image embedding request
+  - Performance improvement: ~10-20x faster for image annotation embeddings
+  - Files: `opencontractserver/annotations/models.py:109-114`
+  - Migration: `opencontractserver/annotations/migrations/0060_add_annotation_image_content_file.py`
+- **Batch image extraction utilities**: Efficient batch processing during annotation creation
+  - `extract_and_store_annotation_images()` - extracts images from PAWLs and stores as JSON
+  - `batch_extract_annotation_images()` - batch processes multiple annotations sharing PAWLs data
+  - Files: `opencontractserver/utils/multimodal_embeddings.py:351-502`
+- **Unique constraints on Embedding model**: Database-level prevention of duplicate embeddings
+  - Migration: `opencontractserver/annotations/migrations/0059_add_embedding_unique_constraints.py`
+
+#### Corpus-Specific Embeddings
+- **Dual embedding strategy**: Creates both default (global search) and corpus-specific embeddings
+  - Default embedder for cross-corpus search compatibility
+  - Corpus-preferred embedder for corpus-specific semantic search
+  - Files: `opencontractserver/tasks/embeddings_task.py:88-160`
+- **Corpus ID propagation through ingestion chain**: Parser now receives corpus context
+  - Enables corpus-specific embeddings during document ingestion
+  - Files: `opencontractserver/tasks/doc_tasks.py:203-248`, `opencontractserver/pipeline/base/parser.py:130-143`
+
+### Fixed
+- **Critical: Infinite loop in corpus document copies**: Fixed chain reaction where corpus copies triggered re-ingestion
+  - **Root Cause**: `add_document()` created corpus copies without setting `processing_started`, causing the ingestion signal to fire on each copy
+  - **Impact**: Uploading one document created infinite chain of copies (doc → copy → copy of copy → ...)
+  - **Fix**: Set `processing_started=timezone.now()` on corpus copies to prevent signal from firing
+  - **Files**: `opencontractserver/corpuses/models.py:478-481`
+- **Multimodal embeddings for structural annotations**: Fixed PAWLs loading from `structural_set.pawls_parse_file`
+  - Structural annotations now correctly load images for embedding generation
+  - Files: `opencontractserver/utils/multimodal_embeddings.py:136-166`
+
+### Changed
+- **Image retrieval uses fast path**: Both REST API and embedding tasks check `image_content_file` first
+  - Falls back to PAWLs loading only for legacy annotations without pre-extracted images
+  - Files: `opencontractserver/llms/tools/image_tools.py:281-349`, `opencontractserver/utils/multimodal_embeddings.py:101-127`
+- **`import_annotations()` accepts `pawls_data` parameter**: Enables batch image extraction during import
+  - Files: `opencontractserver/utils/importing.py:58-150`
+- **`StructuralAnnotationSet.duplicate()` copies image files**: Preserves pre-extracted images during corpus isolation
+  - Files: `opencontractserver/annotations/models.py:705-745`
+
+## [Unreleased] - 2026-01-12
+
+### Added
+
+#### Image Annotation Display in UnifiedContentFeed
+- **Modality badges for annotations**: Visual indicators showing TEXT, IMAGE, or MIXED modalities
+  - Color-coded badges: Blue (text), Orange (image), Purple (mixed)
+  - Integrated inline with annotation labels in HighlightItem
+  - Files: `frontend/src/components/annotator/sidebar/ModalityBadge.tsx`
+- **Image thumbnail previews**: Display image content directly in annotation feed
+  - 80x80px thumbnails with hover effects and lazy loading
+  - Automatic fetching only when IMAGE modality is present
+  - Files: `frontend/src/components/annotator/sidebar/AnnotationImagePreview.tsx`
+- **REST API endpoint for annotation images**: `/api/annotations/<id>/images/`
+  - Permission-checked image retrieval using existing `get_annotation_images_with_permission()`
+  - IDOR protection: Returns empty array for unauthorized access
+  - Files: `opencontractserver/annotations/views.py`, `config/urls.py`
+- **Unified JWT authentication utility**: Single entry point for token validation across all API surfaces
+  - Automatic handling of both Auth0 (RS256/JWKS) and standard graphql_jwt (HS256) tokens
+  - DRY architecture eliminates conditional Auth0/non-Auth0 switching in multiple files
+  - Files: `config/jwt_utils.py` (NEW)
+- **GraphQL content_modalities field exposure**: Added to AnnotationType schema
+  - Enables frontend to filter annotations by modality
+  - Files: `config/graphql/graphene_types.py`
+
+### Fixed
+- **Image annotations now clearly visible**: Image and mixed-modality annotations display properly in UnifiedContentFeed
+  - Previously showed as empty text with no indication of content
+  - Files: `frontend/src/components/annotator/sidebar/HighlightItem.tsx:163-167,225,249`
+  - Files: `frontend/src/components/knowledge_base/document/unified_feed/ContentItemRenderer.tsx:218`
+- **Structural annotations now return images**: Fixed image retrieval for structural annotations without direct document references
+  - **Root Cause**: `get_annotation_images_with_permission()` returned empty array for structural annotations (no `document` field)
+  - **Fix**: Load PAWLs data from `structural_set.pawls_parse_file` when document is None
+  - **Impact**: Structural image annotations (e.g., figures, charts) now display thumbnails in UI
+  - **Files Modified**:
+    - `opencontractserver/llms/tools/image_tools.py:220-305` - Added `_extract_image_from_pawls()` helper
+    - `opencontractserver/llms/tools/image_tools.py:278-305` - Updated `get_annotation_images()` to check structural_set
+    - `opencontractserver/llms/tools/image_tools.py:434-492` - Updated `get_annotation_images_with_permission()` for structural permissions
+  - **Test Coverage**: Added test for structural annotation image retrieval
+    - Files: `opencontractserver/tests/test_annotation_images_api.py:253-321`
+    - All 6 tests passing including new structural annotation test
+- **Parser pipeline now populates content_modalities**: Text parser now correctly sets content_modalities field
+  - **Text Parser**: Sets content_modalities to `["TEXT"]` for all text-only annotations
+    - Files: `opencontractserver/pipeline/parsers/oc_text_parser.py:108`
+  - **Backfill Command**: Created management command to populate existing annotations with missing content_modalities
+    - Analyzes token references in PAWLs data to determine modalities
+    - Fallback: Uses annotation label text as hint (e.g., "image", "figure", "chart")
+    - Files: `opencontractserver/annotations/management/commands/populate_content_modalities.py`
+    - Usage: `python manage.py populate_content_modalities [--dry-run] [--force]`
+
+### Changed
+- **Unified JWT authentication architecture**: Refactored authentication to use single shared utility
+  - **REST API**: `config/rest_jwt_auth.py` now uses `jwt_utils.get_user_from_jwt_token()`
+  - **WebSocket**: Unified `JWTAuthMiddleware` replaces separate Auth0/non-Auth0 middlewares
+    - Files: `config/websocket/middleware.py` - Single middleware handles both token types
+    - Files: `config/websocket/middlewares/websocket_auth0_middleware.py` - Now alias to unified middleware (deprecated)
+  - **ASGI**: Simplified `config/asgi.py` to use single middleware instead of conditional switching
+  - **Benefit**: DRY architecture - token validation logic centralized in one place
+
+### Removed
+- **NLM Ingest Parser**: Removed legacy NLM-Ingest PDF parser in favor of Docling (default) and LlamaParse
+  - **Rationale**: Docling provides superior ML-based parsing with better structure extraction; NLM parser was rarely used
+  - **Migration**: Users with `PDF_PARSER=nlm` should switch to `PDF_PARSER=docling` (default) or `PDF_PARSER=llamaparse`
+  - **Files Removed**:
+    - `opencontractserver/pipeline/parsers/nlm_ingest_parser.py`
+    - `opencontractserver/tests/test_doc_parser_nlm_ingest.py`
+    - `docs/pipelines/nlm_ingest_parser.md`
+  - **Settings Updated**: Removed `nlm` option from `_PDF_PARSER_MAP` in `config/settings/base.py`
+
+### Technical Details
+- **Backend**: REST endpoint leverages existing permission-checked `image_tools.py` functions
+- **Frontend hook**: `useAnnotationImages` conditionally fetches images only for IMAGE modality (performance optimization)
+- **TypeScript types**: Added `contentModalities?: string[]` to annotation types
+  - Files: `frontend/src/types/graphql-api.ts:147`
+  - Files: `frontend/src/components/annotator/types/annotations.ts:92,145`
+- **Test coverage**: 5 backend tests for REST endpoint with authentication and permission checking
+  - Files: `opencontractserver/tests/test_annotation_images_api.py`
+
+## [3.0.0b4] - 2026-01-11
+
+### Added
+
+#### Corpus-Isolated Structural Annotations
+- **StructuralAnnotationSet duplication per corpus**: Each corpus now gets its own copy of structural annotations when documents are added
+  - Enables multi-embedder support (each corpus can use different embedding models)
+  - Maintains consistent per-corpus vector spaces for similarity search
+  - Files: `opencontractserver/annotations/models.py`, `opencontractserver/corpuses/models.py`
+- **Extended content_hash format**: Changed from `{sha256}` to `{sha256}_{corpus_id}` (max 128 chars)
+  - Migration: `opencontractserver/annotations/migrations/0056_alter_structuralannotationset_content_hash.py`
+
+#### Multimodal Embedding Support
+- **Image token extraction from PDFs**: Extract images from PDFs via Docling parser and store as unified tokens in PAWLs format
+  - Storage path convention: `document_images/{doc_id}/page_{page}_img_{idx}.{format}`
+  - Image tokens include position, dimensions, format, and storage path
+  - Files: `opencontractserver/utils/pdf_token_extraction.py`
+- **CLIP ViT-L-14 multimodal embedder**: 768-dimensional vectors in shared text/image embedding space
+  - Enables cross-modal similarity search (text queries find relevant images)
+  - Files: `opencontractserver/pipeline/embedders/multimodal_microservice.py`
+- **ContentModality enum**: Type-safe modality tracking for embedders and annotations
+  - Single source of truth: `supported_modalities: set[ContentModality]`
+  - Convenience properties: `is_multimodal`, `supports_text`, `supports_images`
+  - Files: `opencontractserver/types/enums.py`, `opencontractserver/pipeline/base/embedder.py`
+- **Multimodal embedding utilities**: Weighted averaging for mixed text+image content
+  - Default weights: 30% text, 70% image (configurable via `MULTIMODAL_EMBEDDING_WEIGHTS`)
+  - Files: `opencontractserver/utils/multimodal_embeddings.py`
+- **content_modalities field on Annotation model**: ArrayField tracking `["TEXT"]`, `["IMAGE"]`, or `["TEXT", "IMAGE"]`
+  - Computed from PAWLs token analysis during annotation creation
+  - Files: `opencontractserver/annotations/models.py`, `opencontractserver/annotations/utils.py`
+- **LLM image tools for agents**: `list_document_images`, `get_document_image`, `get_annotation_images`
+  - Permission-checked variants prevent IDOR vulnerabilities
+  - Files: `opencontractserver/llms/tools/image_tools.py`, `opencontractserver/llms/tools/tool_registry.py`
+- **Modality filtering in vector search**: Filter annotations by content type in similarity search
+  - Files: `opencontractserver/llms/vector_stores/core_vector_stores.py`
+- **Comprehensive documentation**: Architecture docs for multimodal embeddings and PAWLs format
+  - Files: `docs/architecture/multimodal-embeddings.md`, `docs/architecture/pawls-format.md`
+
+### Changed
+
+#### Corpus Isolation Architecture
+- **Removed content-based deduplication**: Each upload creates independent documents regardless of content hash
+- **Removed source_document provenance**: `source_document_id` no longer set when adding documents to corpus
+- **Structural annotations no longer shared**: Each corpus gets duplicated structural annotation sets
+- **Updated documentation**: Rewrote `structural_vs_non_structural_annotations.md`, updated `document_versioning.md`, `documents_and_annotations.md`
+
+#### Multimodal Support
+- Extended PAWLs token format to support unified image tokens (`is_image=True`)
+- Updated `BaseEmbedder` to use `ContentModality` enum instead of boolean flags
+- Updated `PipelineComponentDefinition` in registry to store `supported_modalities`
+- Enhanced embedding task to detect multimodal content and generate appropriate embeddings
 
 ### Fixed
 
@@ -419,7 +592,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `LLAMAPARSE_LANGUAGE`: Document language - default: "en"
   - `LLAMAPARSE_VERBOSE`: Enable verbose logging - default: False
 - **Parser selection via environment variable**:
-  - `PDF_PARSER`: Set to "llamaparse", "docling" (default), or "nlm" to select default PDF parser
+  - `PDF_PARSER`: Set to "llamaparse" or "docling" (default) to select default PDF parser
   - Location: `config/settings/base.py:740-765`
 - **Comprehensive test suite** (`opencontractserver/tests/test_doc_parser_llamaparse.py`):
   - Tests for successful parsing with layout extraction

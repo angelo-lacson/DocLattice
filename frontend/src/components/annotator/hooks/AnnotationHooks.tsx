@@ -301,18 +301,29 @@ export function useCreateAnnotation() {
     }
 
     // Validation for empty annotations
-    console.log(
-      "[handleCreateAnnotation] Validating annotation text:",
-      annotation.rawText
+    // Allow annotations with tokens but no text (e.g., image tokens)
+    // Only block annotations with NO tokens AND no text
+    const hasTokens =
+      annotation instanceof ServerTokenAnnotation &&
+      annotation.json &&
+      Object.values(annotation.json).some(
+        (pageData) => pageData?.tokensJsons && pageData.tokensJsons.length > 0
+      );
+    const hasText = annotation.rawText && annotation.rawText.trim().length > 0;
+
+    console.log("[handleCreateAnnotation] Validating annotation:", {
+      rawText: annotation.rawText
         ? `"${annotation.rawText.substring(0, 50)}${
             annotation.rawText.length > 50 ? "..." : ""
           }"`
-        : "empty"
-    );
+        : "empty",
+      hasTokens,
+      hasText,
+    });
 
-    if (!annotation.rawText || annotation.rawText.trim().length === 0) {
+    if (!hasTokens && !hasText) {
       console.warn(
-        "[handleCreateAnnotation] Validation failed: rawText is empty or whitespace. Skipping mutation."
+        "[handleCreateAnnotation] Validation failed: No tokens selected and no text. Skipping mutation."
       );
       return;
     }

@@ -6,6 +6,7 @@ from django.test import TestCase
 from graphene.test import Client
 
 from config.graphql.schema import schema
+from opencontractserver.pipeline.registry import reset_registry
 
 User = get_user_model()
 
@@ -36,10 +37,15 @@ class PipelineComponentQueriesTestCase(TestCase):
             importlib.import_module("opencontractserver.pipeline.post_processors")
         )
 
+        # Reset the pipeline registry to force re-discovery of components
+        reset_registry()
+
     @classmethod
     def tearDownClass(cls):
         # Remove the test components
         cls.remove_test_components()
+        # Reset registry to remove test components from cache
+        reset_registry()
         super().tearDownClass()
 
     @classmethod

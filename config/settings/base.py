@@ -581,10 +581,20 @@ CELERY_RESULT_BACKEND_MAX_RETRIES = 10
 # django-rest-framework - https://www.django-rest-framework.org/api-guide/settings/
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "config.rest_jwt_auth.GraphQLJWTAuthentication",  # JWT auth (same as GraphQL)
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",  # Anonymous users (shouldn't hit authenticated endpoints)
+        "user": "1000/hour",  # Authenticated users
+        "annotation_images": "200/hour",  # Image retrieval endpoint (higher bandwidth)
+    },
 }
 
 
@@ -653,6 +663,28 @@ DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 # Microservice URLs - read from environment with defaults
 EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
 VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
+# Multimodal embedder configuration
+# URL can be set directly, or constructed from host:port
+MULTIMODAL_EMBEDDER_HOST = env(
+    "MULTIMODAL_EMBEDDER_HOST", default="multimodal-embedder"
+)
+MULTIMODAL_EMBEDDER_PORT = env.int("MULTIMODAL_EMBEDDER_PORT", default=8000)
+MULTIMODAL_EMBEDDER_URL = env(
+    "MULTIMODAL_EMBEDDER_URL",
+    default=f"http://{MULTIMODAL_EMBEDDER_HOST}:{MULTIMODAL_EMBEDDER_PORT}",
+)
+MULTIMODAL_EMBEDDER_API_KEY = env("MULTIMODAL_EMBEDDER_API_KEY", default="")
+# Vector dimensionality - must match the embedding model used by the microservice
+# CLIP ViT-L-14: 768, CLIP ViT-B-32: 512, etc.
+MULTIMODAL_EMBEDDER_VECTOR_SIZE = env.int(
+    "MULTIMODAL_EMBEDDER_VECTOR_SIZE", default=768
+)
+# Weights for combining text and image embeddings in multimodal annotations
+# Images weighted higher by default since multimodal annotations are often predominantly visual
+MULTIMODAL_EMBEDDING_WEIGHTS = {
+    "text_weight": env.float("MULTIMODAL_TEXT_WEIGHT", default=0.3),
+    "image_weight": env.float("MULTIMODAL_IMAGE_WEIGHT", default=0.7),
+}
 DOCLING_PARSER_SERVICE_URL = env("DOCLING_PARSER_SERVICE_URL")
 DOCLING_PARSER_TIMEOUT = env.int(
     "DOCLING_PARSER_TIMEOUT", default=300  # 5 minutes default
@@ -741,14 +773,13 @@ SENTENCE_TRANSFORMER_MODELS_PATH = env.str(
 )
 
 # Parser selection via environment variable
-# Options: "docling" (default), "llamaparse", "nlm"
+# Options: "docling" (default), "llamaparse"
 PDF_PARSER = env.str("PDF_PARSER", default="docling")
 
 # Map parser names to their full paths
 _PDF_PARSER_MAP = {
     "docling": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",
     "llamaparse": "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser",
-    "nlm": "opencontractserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser",
 }
 
 # Get the selected PDF parser (with fallback to docling)
@@ -765,6 +796,15 @@ PREFERRED_PARSERS = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": _SELECTED_PDF_PARSER,  # noqa
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",  # noqa
 }
+
+# Image extraction size limits
+# These prevent storage abuse and memory issues during PDF image extraction
+MAX_IMAGE_SIZE_BYTES = env.int(
+    "MAX_IMAGE_SIZE_BYTES", default=10 * 1024 * 1024  # 10MB per individual image
+)
+MAX_TOTAL_IMAGES_SIZE_BYTES = env.int(
+    "MAX_TOTAL_IMAGES_SIZE_BYTES", default=100 * 1024 * 1024  # 100MB total per document
+)
 
 # Thumbnail extraction tasks
 THUMBNAIL_TASKS = {
@@ -824,11 +864,6 @@ PARSER_KWARGS = {
         "force_ocr": False,
         "roll_up_groups": True,
         "llm_enhanced_hierarchy": False,
-    },
-    "opencontractserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser": {
-        "endpoint": "http://nlm-ingestor:5001",
-        "api_key": "",
-        "use_ocr": True,
     },
     "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
         "api_key": LLAMAPARSE_API_KEY,

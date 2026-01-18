@@ -30,10 +30,14 @@ class VectorSearchViaEmbeddingMixin:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_384"
         elif dimension == 768:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_768"
+        elif dimension == 1024:
+            return f"{self.EMBEDDING_RELATED_NAME}__vector_1024"
         elif dimension == 1536:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
         elif dimension == 3072:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
+        elif dimension == 4096:
+            return f"{self.EMBEDDING_RELATED_NAME}__vector_4096"
         else:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
 

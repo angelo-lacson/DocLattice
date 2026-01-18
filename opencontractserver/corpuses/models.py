@@ -410,8 +410,11 @@ class Corpus(TreeNode):
         Returns:
             Tuple of (document, status, document_path) where:
             - document: The NEW corpus-isolated document (NOT the original)
-            - status: 'added' (new copy created) or 'already_exists' (content already in corpus)
-            - document_path: The DocumentPath record created or existing
+            - status: 'added' (always - no content-based deduplication)
+            - document_path: The DocumentPath record created
+
+        Note: No content-based deduplication is performed. Each call creates
+        a new corpus-isolated document regardless of content hash.
 
         Raises:
             ValueError: If user or document is not provided
@@ -445,33 +448,8 @@ class Corpus(TreeNode):
                 path = f"/documents/doc_{document.pk}"
 
         with transaction.atomic():
-            # Check if this content already exists in THIS corpus (by hash)
-            # This implements corpus isolation - we check within corpus, not globally
-            # IMPORTANT: Only deduplicate if hash is not None (avoid treating all NULL hashes as same)
-            corpus_doc_with_hash = None
-            if document.pdf_file_hash is not None:
-                corpus_doc_with_hash = (
-                    DocumentPath.objects.filter(
-                        corpus=self,
-                        document__pdf_file_hash=document.pdf_file_hash,
-                        is_current=True,
-                        is_deleted=False,
-                    )
-                    .select_related("document")
-                    .first()
-                )
-
-            if corpus_doc_with_hash:
-                # Content already exists in THIS corpus
-                existing_doc = corpus_doc_with_hash.document
-                logger.info(
-                    f"Content from doc {document.pk} already exists in corpus {self.pk} "
-                    f"as doc {existing_doc.pk}"
-                )
-                # Return the existing corpus-isolated document
-                return existing_doc, "already_exists", corpus_doc_with_hash
-
-            # Create corpus-isolated copy with new version tree
+            # Always create corpus-isolated copy (no content-based deduplication)
+            # Each add_document() call creates a new document regardless of content hash
             tree_id = uuid.uuid4()
             corpus_copy = Document.objects.create(
                 title=doc_kwargs.get("title", document.title),
@@ -490,8 +468,17 @@ class Corpus(TreeNode):
                 is_current=True,
                 parent=None,  # Root of NEW content tree
                 source_document=document,  # Provenance tracking (Rule I2)
-                structural_annotation_set=document.structural_annotation_set,  # Share structural annotations
+                # Duplicate structural annotations for corpus isolation (per-corpus embeddings)
+                structural_annotation_set=(
+                    document.structural_annotation_set.duplicate(corpus_id=self.pk)
+                    if document.structural_annotation_set
+                    else None
+                ),
                 creator=user,
+                # CRITICAL: Set processing_started to prevent ingest signal from firing
+                # Corpus copies share parsing artifacts - they don't need re-parsing
+                processing_started=timezone.now(),
+                backend_lock=False,  # Already processed, not locked
                 **{
                     k: v
                     for k, v in doc_kwargs.items()
@@ -501,7 +488,7 @@ class Corpus(TreeNode):
 
             logger.info(
                 f"Created corpus-isolated copy {corpus_copy.pk} from doc {document.pk} "
-                f"in corpus {self.pk} (structural_set={document.structural_annotation_set_id})"
+                f"in corpus {self.pk} (structural_set={corpus_copy.structural_annotation_set_id})"
             )
 
             # Check if path is occupied
@@ -575,11 +562,11 @@ class Corpus(TreeNode):
         **doc_kwargs,
     ):
         """
-        Import content into this corpus with corpus-isolated deduplication.
+        Import content into this corpus.
 
-        This uses SHA-256 hashing to detect duplicate content within THIS corpus.
-        Documents are isolated within the corpus with independent version trees.
-        Provenance is tracked via source_document field when content exists elsewhere.
+        Each upload creates a new document or document version. No content-based
+        deduplication is performed - duplicate files at different paths create
+        separate documents.
 
         Args:
             content: PDF content bytes (required)
@@ -590,11 +577,8 @@ class Corpus(TreeNode):
 
         Returns:
             Tuple of (document, status, document_path) where status is one of:
-            - 'created': Brand new document (content hash first seen globally)
-            - 'updated': Content changed at existing path (version increment)
-            - 'unchanged': No change detected at path
-            - 'linked': Same content already exists in THIS corpus at different path
-            - 'created_from_existing': New corpus-isolated doc, content exists elsewhere
+            - 'created': New document at new path
+            - 'updated': New version at existing path
 
         Raises:
             ValueError: If user or content is not provided

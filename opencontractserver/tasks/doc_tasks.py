@@ -198,6 +198,8 @@ def ingest_doc(self, user_id: int, doc_id: int) -> None:
         ValueError: If no parser is defined for the document's MIME type.
         Exception: If parsing fails.
     """
+    from opencontractserver.documents.models import DocumentPath
+
     logger.info(f"[ingest_doc] Ingesting doc {doc_id} for user {user_id}")
 
     # Fetch the document
@@ -206,6 +208,15 @@ def ingest_doc(self, user_id: int, doc_id: int) -> None:
     except Document.DoesNotExist:
         logger.error(f"Document with id {doc_id} does not exist.")
         return
+
+    # Look up corpus from DocumentPath (if document is in a corpus)
+    # This ensures structural annotations get the corpus context for proper embeddings
+    doc_path = DocumentPath.objects.filter(
+        document_id=doc_id, is_current=True, is_deleted=False
+    ).first()
+    corpus_id = doc_path.corpus_id if doc_path else None
+    if corpus_id:
+        logger.info(f"[ingest_doc] Document {doc_id} is in corpus {corpus_id}")
 
     parser_name: str | None = getattr(settings, "PREFERRED_PARSERS", {}).get(
         document.file_type
@@ -230,7 +241,9 @@ def ingest_doc(self, user_id: int, doc_id: int) -> None:
 
     # Call the parser's process_document method
     try:
-        parser_instance.process_document(user_id, doc_id, **parser_kwargs)
+        parser_instance.process_document(
+            user_id, doc_id, corpus_id=corpus_id, **parser_kwargs
+        )
         logger.info(
             f"[ingest_doc] Document {doc_id} ingested successfully with '{parser_name}'"
         )

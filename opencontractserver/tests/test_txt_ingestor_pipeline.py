@@ -7,7 +7,7 @@ from django.db import transaction
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from opencontractserver.annotations.models import Annotation, AnnotationLabel
+from opencontractserver.annotations.models import AnnotationLabel
 from opencontractserver.documents.models import Document
 from opencontractserver.tasks.doc_tasks import ingest_doc
 from opencontractserver.tests.fixtures import SAMPLE_TXT_FILE_ONE_PATH
@@ -51,12 +51,23 @@ class TxtIngestorTestCase(TestCase):
         ).first()
         self.assertIsNotNone(sentence_label)
 
-        # Check if annotations were created
-        annotations = Annotation.objects.filter(document=self.doc)
-        # for annotation in annotations:
-        #     logger.info(f"Annotation: {annotation}")
-        # logger.info(f"Total annotations: {annotations}")
-        self.assertGreater(annotations.count(), 0)
+        # Refresh the document from the database to get the structural_annotation_set
+        self.doc.refresh_from_db()
+
+        # Check that a structural annotation set was created
+        self.assertIsNotNone(
+            self.doc.structural_annotation_set,
+            "Document should have a structural_annotation_set after ingestion",
+        )
+
+        # Check if annotations were created in the structural annotation set
+        # (structural annotations are no longer linked directly to the document)
+        annotations = self.doc.structural_annotation_set.structural_annotations.all()
+        self.assertGreater(
+            annotations.count(),
+            0,
+            "Should have structural annotations in the set",
+        )
 
         # Check properties of the first annotation
         first_annotation = annotations.first()

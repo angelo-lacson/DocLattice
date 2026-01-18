@@ -94,7 +94,12 @@ export const convertAnnotationTokensToText = (
   return page_tokens
     .filter((token, index) => token_indices.includes(index))
     .reduce<string>((acc, cur) => {
-      return acc.length > 0 ? acc + " " + cur.text : cur.text;
+      // Handle image tokens and tokens with missing/null text gracefully
+      const text = cur?.text ?? "";
+      if (!text) {
+        return acc;
+      }
+      return acc.length > 0 ? acc + " " + text : text;
     }, "");
 };
 
@@ -116,7 +121,16 @@ export const createTokenStringSearch = (
     let page_text = "";
 
     for (var i = 0; i < page.tokens.length; i++) {
-      const { text, x, y } = page.tokens[i];
+      const token = page.tokens[i];
+      // Handle image tokens and tokens with missing/null text gracefully
+      // Image tokens have is_image=true and text="" or undefined
+      const text = token?.text ?? "";
+
+      // Skip tokens with no text (e.g., image tokens)
+      if (!text) {
+        continue;
+      }
+
       if (page_text.length !== 0) {
         page_text += " ";
         aggregate_text += " ";

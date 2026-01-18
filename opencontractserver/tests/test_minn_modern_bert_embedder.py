@@ -19,9 +19,7 @@ class TestMinnModernBERTEmbedder(TestCase):
         self.embedder = MinnModernBERTEmbedder()
         self.test_text = "This is a test sentence for embedding."
 
-    @patch(
-        "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.SentenceTransformer"
-    )
+    @patch("sentence_transformers.SentenceTransformer")
     def test_initialization(self, mock_transformer):
         """Test that the embedder initializes correctly."""
         embedder = MinnModernBERTEmbedder()
@@ -48,9 +46,7 @@ class TestMinnModernBERTEmbedder(TestCase):
     @patch(
         "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.os.path.exists"
     )
-    @patch(
-        "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.SentenceTransformer"
-    )
+    @patch("sentence_transformers.SentenceTransformer")
     def test_load_model_from_cache(self, mock_transformer, mock_exists):
         """Test that the model loads from cache when available."""
         # Set up mocks
@@ -68,9 +64,7 @@ class TestMinnModernBERTEmbedder(TestCase):
     @patch(
         "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.os.path.exists"
     )
-    @patch(
-        "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.SentenceTransformer"
-    )
+    @patch("sentence_transformers.SentenceTransformer")
     def test_load_model_from_huggingface(self, mock_transformer, mock_exists):
         """Test that the model loads from Hugging Face when cache is not available."""
         # Set up mocks
@@ -88,9 +82,7 @@ class TestMinnModernBERTEmbedder(TestCase):
     @patch(
         "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.os.path.exists"
     )
-    @patch(
-        "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.SentenceTransformer"
-    )
+    @patch("sentence_transformers.SentenceTransformer")
     def test_embed_text(self, mock_transformer, mock_exists):
         """Test that text embedding works correctly."""
         # Set up mocks
@@ -118,9 +110,7 @@ class TestMinnModernBERTEmbedder(TestCase):
     @patch(
         "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.os.path.exists"
     )
-    @patch(
-        "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.SentenceTransformer"
-    )
+    @patch("sentence_transformers.SentenceTransformer")
     def test_embed_empty_text(self, mock_transformer, mock_exists):
         """Test handling of empty text."""
         # Set up mocks
@@ -146,9 +136,7 @@ class TestMinnModernBERTEmbedder(TestCase):
     @patch(
         "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.os.path.exists"
     )
-    @patch(
-        "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.SentenceTransformer"
-    )
+    @patch("sentence_transformers.SentenceTransformer")
     def test_embed_text_error(self, mock_transformer, mock_exists):
         """Test error handling during embedding."""
         # Set up mocks

@@ -26,6 +26,7 @@ from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.pipeline.base.post_processor import BasePostProcessor
 from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
+from opencontractserver.types.enums import ContentModality
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +60,27 @@ class PipelineComponentDefinition:
     supported_file_types: tuple[str, ...]  # FileTypeEnum values as strings
     input_schema: dict = field(default_factory=dict)
     vector_size: Optional[int] = None  # Only for embedders
+    # Modality support (only for embedders) - stored as tuple of strings for serializability
+    supported_modalities: tuple[str, ...] = ("TEXT",)
     component_class: Optional[type] = field(
         default=None, compare=False, hash=False
     )  # Reference to actual class
+
+    # Convenience properties derived from supported_modalities
+    @property
+    def is_multimodal(self) -> bool:
+        """Whether this embedder supports multiple modalities."""
+        return len(self.supported_modalities) > 1
+
+    @property
+    def supports_text(self) -> bool:
+        """Whether this embedder supports text input."""
+        return "TEXT" in self.supported_modalities
+
+    @property
+    def supports_images(self) -> bool:
+        """Whether this embedder supports image input."""
+        return "IMAGE" in self.supported_modalities
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for GraphQL response."""
@@ -79,6 +98,13 @@ class PipelineComponentDefinition:
         }
         if self.vector_size is not None:
             result["vector_size"] = self.vector_size
+        # Include modality info for embedders
+        if self.component_type == ComponentType.EMBEDDER:
+            result["supported_modalities"] = list(self.supported_modalities)
+            # Convenience fields derived from supported_modalities
+            result["is_multimodal"] = self.is_multimodal
+            result["supports_text"] = self.supports_text
+            result["supports_images"] = self.supports_images
         return result
 
 
@@ -151,6 +177,40 @@ class PipelineComponentRegistry:
 
         return subclasses
 
+    def _get_class_or_instance_attr(
+        self, component_class: type, attr_name: str, default: Any = None
+    ) -> Any:
+        """
+        Get an attribute from a class, handling @property correctly.
+
+        When an attribute is defined as a @property, getattr on the class
+        returns the property descriptor, not the value. This method detects
+        properties and instantiates the class to get the actual value.
+
+        Args:
+            component_class: The class to get the attribute from.
+            attr_name: Name of the attribute.
+            default: Default value if attribute doesn't exist.
+
+        Returns:
+            The attribute value (from class or instance if property).
+        """
+        attr = getattr(component_class, attr_name, default)
+
+        # Check if it's a property descriptor - if so, instantiate to get value
+        if isinstance(attr, property):
+            try:
+                instance = component_class()
+                return getattr(instance, attr_name, default)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to instantiate {component_class.__name__} "
+                    f"to get property '{attr_name}': {e}"
+                )
+                return default
+
+        return attr
+
     def _create_definition(
         self, component_class: type, component_type: ComponentType
     ) -> PipelineComponentDefinition:
@@ -166,6 +226,23 @@ class PipelineComponentRegistry:
                     # Store the enum value ("pdf", "txt", "docx")
                     supported_file_types.append(ft.value)
 
+        # Get supported modalities (for embedders)
+        # Convert from set of ContentModality enums to tuple of strings
+        raw_modalities = getattr(
+            component_class, "supported_modalities", {ContentModality.TEXT}
+        )
+        if isinstance(raw_modalities, set):
+            # New format: set of ContentModality enums
+            supported_modalities = tuple(m.value for m in raw_modalities)
+        else:
+            # Fallback for any unexpected format
+            supported_modalities = ("TEXT",)
+
+        # Get vector_size - handles both class attributes and @property
+        vector_size = self._get_class_or_instance_attr(
+            component_class, "vector_size", None
+        )
+
         # Build definition
         definition = PipelineComponentDefinition(
             name=component_class.__name__,
@@ -178,7 +255,8 @@ class PipelineComponentRegistry:
             dependencies=tuple(getattr(component_class, "dependencies", [])),
             supported_file_types=tuple(supported_file_types),
             input_schema=dict(getattr(component_class, "input_schema", {})),
-            vector_size=getattr(component_class, "vector_size", None),
+            vector_size=vector_size,
+            supported_modalities=supported_modalities,
             component_class=component_class,
         )
 

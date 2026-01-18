@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from graphene_django.views import GraphQLView
 
 from opencontractserver.analyzer.views import AnalysisCallbackView
+from opencontractserver.annotations.views import AnnotationImagesView
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,11 @@ urlpatterns = [
     path("", home_redirect, name="home_redirect"),  # Root URL redirect to port 3000
     path(settings.ADMIN_URL, admin.site.urls),
     path("graphql/", csrf_exempt(GraphQLView.as_view(graphiql=settings.DEBUG))),
+    path(
+        "api/annotations/<int:annotation_id>/images/",
+        AnnotationImagesView.as_view(),
+        name="annotation_images",
+    ),
     *(
         []
         if not settings.USE_ANALYZER

@@ -164,6 +164,10 @@ class TestCreateDocumentTools(SimpleTestCase):
             "get_note_content_token_length",
             "get_partial_note_content",
             "aget_page_image",
+            # Image tools for multimodal support
+            "alist_document_images",
+            "aget_document_image",
+            "aget_annotation_images",
         }
         self.assertEqual({tool.name for tool in tools}, expected_names)
         # Ensure all returned objects are CoreTool instances

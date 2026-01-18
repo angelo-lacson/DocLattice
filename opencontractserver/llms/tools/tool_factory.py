@@ -283,6 +283,11 @@ def create_document_tools() -> list[CoreTool]:
         get_partial_note_content,
         load_document_md_summary,
     )
+    from opencontractserver.llms.tools.image_tools import (
+        aget_annotation_images,
+        aget_document_image,
+        alist_document_images,
+    )
 
     return [
         CoreTool.from_function(
@@ -318,6 +323,29 @@ def create_document_tools() -> list[CoreTool]:
                 "Get a visual image of a specific page from a PDF document. "
                 "Useful for inspecting diagrams, tables, images, and other "
                 "visual content that may not be captured in text."
+            ),
+        ),
+        # Image tools for accessing embedded/extracted images
+        CoreTool.from_function(
+            alist_document_images,
+            description=(
+                "List all images in a document. Returns metadata (position, size, format) "
+                "without the actual image data. Use get_document_image to retrieve specific images."
+            ),
+        ),
+        CoreTool.from_function(
+            aget_document_image,
+            description=(
+                "Get image data (base64) for a specific image in a document. "
+                "Returns data URL suitable for LLM vision input. Use list_document_images first "
+                "to find available images by page and index."
+            ),
+        ),
+        CoreTool.from_function(
+            aget_annotation_images,
+            description=(
+                "Get all images referenced by an annotation. Use for figure, chart, or image "
+                "annotations that have embedded or referenced images in their bounds."
             ),
         ),
     ]

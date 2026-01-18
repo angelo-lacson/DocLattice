@@ -62,6 +62,7 @@ def import_annotations(
     annotations_data: list[OpenContractsAnnotationPythonType],
     label_lookup: dict[str, AnnotationLabel],
     label_type: str = TOKEN_LABEL,
+    pawls_data: list[dict] = None,
 ) -> dict[Union[str, int], int]:
     """
     Import annotations, handling parent relationships, and return a mapping of old IDs
@@ -74,6 +75,9 @@ def import_annotations(
         annotations_data (List[OpenContractsAnnotationPythonType]): List of annotation data.
         label_lookup (Dict[str, AnnotationLabel]): Mapping of label names to AnnotationLabel objects.
         label_type (str): The type of the annotations if not specified in data.
+        pawls_data (List[dict]): Optional PAWLs data for extracting image content.
+            If provided, annotations with IMAGE modality will have their images
+            pre-extracted for faster embedding.
 
     Returns:
         Dict[Union[str, int], int]: A dictionary mapping the "id" field from each incoming annotation
@@ -102,6 +106,7 @@ def import_annotations(
             creator_id=user_id,
             annotation_type=final_annotation_type,
             structural=annotation_data.get("structural", False),
+            content_modalities=annotation_data.get("content_modalities", []),
         )
 
         set_permissions_for_obj_to_user(user_id, annot_obj, [PermissionTypes.ALL])
@@ -122,6 +127,25 @@ def import_annotations(
                 parent_annot_obj = Annotation.objects.get(pk=parent_pk)
                 annot_obj.parent = parent_annot_obj
                 annot_obj.save()
+
+    # Third pass: Extract and store image content for IMAGE modality annotations
+    # This pre-extracts images so embedding tasks don't need to reload PAWLs
+    if pawls_data and old_id_to_new_pk:
+        from opencontractserver.types.enums import ContentModality
+        from opencontractserver.utils.multimodal_embeddings import (
+            batch_extract_annotation_images,
+        )
+
+        # Get all created annotations with IMAGE modality
+        created_pks = list(old_id_to_new_pk.values())
+        image_annotations = Annotation.objects.filter(
+            pk__in=created_pks,
+            content_modalities__contains=[ContentModality.IMAGE.value],
+        )
+
+        if image_annotations.exists():
+            count = batch_extract_annotation_images(list(image_annotations), pawls_data)
+            logger.info(f"Pre-extracted images for {count} annotations")
 
     return old_id_to_new_pk
 

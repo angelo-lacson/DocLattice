@@ -205,3 +205,56 @@ class TestEmbeddingSearch(TestCase):
             self.assertNotIn(self.note1, results_other)
         except AttributeError:
             self.skipTest("NoteQuerySet does not implement search_by_embedding")
+
+
+class TestVectorSearchMixinDimensions(TestCase):
+    """
+    Tests for the VectorSearchViaEmbeddingMixin._dimension_to_field method
+    to ensure all supported vector dimensions are properly mapped.
+    """
+
+    def setUp(self):
+        """Set up a mixin instance for testing."""
+        from opencontractserver.shared.mixins import VectorSearchViaEmbeddingMixin
+
+        # Create a simple class that uses the mixin to test _dimension_to_field
+        class TestQuerySet(VectorSearchViaEmbeddingMixin):
+            EMBEDDING_RELATED_NAME = "embeddings"
+
+        self.mixin = TestQuerySet()
+
+    def test_dimension_384(self):
+        """Test that 384-dimensional vectors map to vector_384 field."""
+        result = self.mixin._dimension_to_field(384)
+        self.assertEqual(result, "embeddings__vector_384")
+
+    def test_dimension_768(self):
+        """Test that 768-dimensional vectors map to vector_768 field."""
+        result = self.mixin._dimension_to_field(768)
+        self.assertEqual(result, "embeddings__vector_768")
+
+    def test_dimension_1024(self):
+        """Test that 1024-dimensional vectors map to vector_1024 field."""
+        result = self.mixin._dimension_to_field(1024)
+        self.assertEqual(result, "embeddings__vector_1024")
+
+    def test_dimension_1536(self):
+        """Test that 1536-dimensional vectors map to vector_1536 field."""
+        result = self.mixin._dimension_to_field(1536)
+        self.assertEqual(result, "embeddings__vector_1536")
+
+    def test_dimension_3072(self):
+        """Test that 3072-dimensional vectors map to vector_3072 field."""
+        result = self.mixin._dimension_to_field(3072)
+        self.assertEqual(result, "embeddings__vector_3072")
+
+    def test_dimension_4096(self):
+        """Test that 4096-dimensional vectors map to vector_4096 field."""
+        result = self.mixin._dimension_to_field(4096)
+        self.assertEqual(result, "embeddings__vector_4096")
+
+    def test_unsupported_dimension_raises_error(self):
+        """Test that unsupported dimensions raise ValueError."""
+        with self.assertRaises(ValueError) as context:
+            self.mixin._dimension_to_field(512)
+        self.assertIn("Unsupported embedding dimension", str(context.exception))

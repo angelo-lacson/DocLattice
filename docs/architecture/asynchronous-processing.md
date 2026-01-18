@@ -124,7 +124,7 @@ When a document is uploaded, it goes through a processing pipeline:
 │     └─► Generates preview image                                  │
 │                                                                  │
 │  4. ingest_doc Task                                              │
-│     └─► Parses document (Docling/NLM-Ingest)                    │
+│     └─► Parses document (Docling/LlamaParse)                    │
 │     └─► Extracts text layers                                     │
 │     └─► Creates PAWLs tokens                                     │
 │                                                                  │

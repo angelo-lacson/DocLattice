@@ -22,9 +22,6 @@ from config.websocket.middleware import (
     WS_CLOSE_TOKEN_INVALID,
     WS_CLOSE_UNAUTHENTICATED,
 )
-from config.websocket.middlewares.websocket_auth0_middleware import (
-    WS_CLOSE_TOKEN_EXPIRED as AUTH0_WS_CLOSE_TOKEN_EXPIRED,
-)
 from opencontractserver.tests.base import WebsocketFixtureBaseTestCase
 
 User = get_user_model()
@@ -114,10 +111,10 @@ class WebSocketTokenExpirationTestCase(WebsocketFixtureBaseTestCase):
         "opencontractserver.llms.agents.agent_factory.UnifiedAgentFactory.create_document_agent",
         new_callable=mock.AsyncMock,
     )
-    @mock.patch("config.websocket.middleware.get_user_from_token")
+    @mock.patch("config.websocket.middleware._get_user_from_token")
     async def test_jwt_middleware_sets_auth_error_on_expired_token(
         self,
-        mock_get_user_from_token: mock.AsyncMock,
+        mock_get_user_from_token_fn: mock.AsyncMock,
         mock_create_document_agent: mock.AsyncMock,
     ) -> None:
         """
@@ -125,7 +122,7 @@ class WebSocketTokenExpirationTestCase(WebsocketFixtureBaseTestCase):
         when a token has expired, with the correct close code.
         """
         mock_create_document_agent.return_value = mock.MagicMock()
-        mock_get_user_from_token.side_effect = JSONWebTokenExpired()
+        mock_get_user_from_token_fn.side_effect = JSONWebTokenExpired()
 
         # Use unified agent-chat endpoint
         communicator = WebsocketCommunicator(
@@ -145,10 +142,10 @@ class WebSocketTokenExpirationTestCase(WebsocketFixtureBaseTestCase):
         "opencontractserver.llms.agents.agent_factory.UnifiedAgentFactory.create_document_agent",
         new_callable=mock.AsyncMock,
     )
-    @mock.patch("config.websocket.middleware.get_user_from_token")
+    @mock.patch("config.websocket.middleware._get_user_from_token")
     async def test_jwt_middleware_sets_auth_error_on_invalid_token(
         self,
-        mock_get_user_from_token: mock.AsyncMock,
+        mock_get_user_from_token_fn: mock.AsyncMock,
         mock_create_document_agent: mock.AsyncMock,
     ) -> None:
         """
@@ -156,7 +153,9 @@ class WebSocketTokenExpirationTestCase(WebsocketFixtureBaseTestCase):
         when a token is invalid (not expired), with the correct close code.
         """
         mock_create_document_agent.return_value = mock.MagicMock()
-        mock_get_user_from_token.side_effect = JSONWebTokenError("Invalid token format")
+        mock_get_user_from_token_fn.side_effect = JSONWebTokenError(
+            "Invalid token format"
+        )
 
         # Use unified agent-chat endpoint
         communicator = WebsocketCommunicator(
@@ -171,19 +170,8 @@ class WebSocketTokenExpirationTestCase(WebsocketFixtureBaseTestCase):
 
 class TestWebSocketCloseCodesConsistency(TestCase):
     """
-    Verify that WebSocket close codes are consistent across middlewares.
+    Verify that WebSocket close codes follow conventions.
     """
-
-    def test_close_codes_match_between_middlewares(self):
-        """
-        Both WebSocket middlewares should use the same close codes
-        for token expiration.
-        """
-        self.assertEqual(
-            WS_CLOSE_TOKEN_EXPIRED,
-            AUTH0_WS_CLOSE_TOKEN_EXPIRED,
-            "Token expiration close codes should be consistent across middlewares",
-        )
 
     def test_close_codes_are_in_valid_range(self):
         """

@@ -12,6 +12,44 @@ from opencontractserver.annotations.models import (
 )
 
 
+class ContentModalityFilter(admin.SimpleListFilter):
+    """
+    Custom filter for content_modalities ArrayField.
+    Allows filtering annotations by TEXT, IMAGE, or both modalities.
+    """
+
+    title = "content modality"
+    parameter_name = "modality"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("text", "TEXT only"),
+            ("image", "IMAGE only"),
+            ("text_and_image", "TEXT and IMAGE"),
+            ("has_image", "Has IMAGE"),
+            ("has_text", "Has TEXT"),
+            ("empty", "No modalities"),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == "text":
+            return queryset.filter(content_modalities=["TEXT"])
+        if self.value() == "image":
+            return queryset.filter(content_modalities=["IMAGE"])
+        if self.value() == "text_and_image":
+            # Match arrays containing both (order may vary)
+            return queryset.filter(content_modalities__contains=["TEXT"]).filter(
+                content_modalities__contains=["IMAGE"]
+            )
+        if self.value() == "has_image":
+            return queryset.filter(content_modalities__contains=["IMAGE"])
+        if self.value() == "has_text":
+            return queryset.filter(content_modalities__contains=["TEXT"])
+        if self.value() == "empty":
+            return queryset.filter(content_modalities=[])
+        return queryset
+
+
 class AnnotationEmbeddingInline(admin.TabularInline):
     """
     Inline admin for displaying embeddings associated with an annotation.
@@ -66,9 +104,24 @@ class NoteEmbeddingInline(admin.TabularInline):
 
 @admin.register(Annotation)
 class AnnotationAdmin(GuardedModelAdmin):
-    list_display = ["id", "page", "raw_text", "annotation_label", "total_embeddings"]
+    list_display = [
+        "id",
+        "page",
+        "raw_text",
+        "annotation_label",
+        "modality_display",
+        "total_embeddings",
+    ]
     search_fields = ["id", "raw_text", "annotation_label__text", "document__title"]
-    list_filter = ("analysis", "page", "structural", "created", "modified", "is_public")
+    list_filter = (
+        ContentModalityFilter,
+        "analysis",
+        "page",
+        "structural",
+        "created",
+        "modified",
+        "is_public",
+    )
     raw_id_fields = ("annotation_label", "document", "corpus", "analysis", "creator")
     inlines = [AnnotationEmbeddingInline]
 
@@ -87,6 +140,16 @@ class AnnotationAdmin(GuardedModelAdmin):
 
     total_embeddings.admin_order_field = "total_embeddings"
     total_embeddings.short_description = "Embeddings"
+
+    def modality_display(self, obj):
+        """
+        Display content modalities as a formatted string.
+        """
+        if obj.content_modalities:
+            return ", ".join(obj.content_modalities)
+        return "-"
+
+    modality_display.short_description = "Modality"
 
 
 @admin.register(Relationship)

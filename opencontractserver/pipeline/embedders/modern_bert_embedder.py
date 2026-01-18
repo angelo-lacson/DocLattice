@@ -2,8 +2,6 @@ import logging
 import os
 from typing import Optional
 
-from sentence_transformers import SentenceTransformer
-
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 
@@ -59,6 +57,9 @@ class ModernBERTEmbedder(BaseEmbedder):
     def _load_model(self):
         """Load the sentence transformer model if not already loaded."""
         if self.model is None:
+            # Lazy import to avoid loading PyTorch at module import time
+            from sentence_transformers import SentenceTransformer
+
             try:
                 # First try to load from the cached path
                 if os.path.exists(self.model_path):

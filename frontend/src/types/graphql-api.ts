@@ -143,6 +143,9 @@ export type RawServerAnnotationType = Node & {
   /** Raw permission strings straight from the API */
   myPermissions?: string[];
 
+  /** Content modalities present in this annotation: TEXT, IMAGE, etc. */
+  contentModalities?: string[];
+
   analysis?: Maybe<AnalysisType>;
   assignmentSet?: AssignmentTypeConnection;
   sourceNodeInRelationships?: RelationshipTypeConnection;
