@@ -50,6 +50,13 @@ export const folderCorpusIdAtom = atom<string | null>(null);
  */
 export const folderListAtom = atom<CorpusFolderType[]>([]);
 
+/**
+ * Corpus permissions for the current folder context.
+ * Populated by FolderDocumentBrowser from openedCorpus reactive var.
+ * Used to determine if user can create/modify folders.
+ */
+export const corpusPermissionsAtom = atom<string[]>([]);
+
 // ============================================================================
 // DERIVED ATOMS (Computed from Base State)
 // ============================================================================
@@ -215,25 +222,19 @@ export const enableDragDropAtom = atom<boolean>(true);
 
 /**
  * Can user create folders in current corpus?
- * Checks permissions on current folder or corpus
+ * Checks UPDATE permission on the corpus (per permission model).
+ * Folder write operations require corpus UPDATE permission.
  */
 export const canCreateFoldersAtom = atom<boolean>((get) => {
-  const currentFolder = get(currentFolderAtom);
+  const corpusPermissions = get(corpusPermissionsAtom);
 
-  // If we have a folder, check its permissions
-  if (currentFolder) {
-    const perms = currentFolder.myPermissions;
-    // Handle case where permissions haven't loaded yet
-    if (!perms || !Array.isArray(perms)) return true;
-    return (
-      perms.includes("create_corpusfolder") ||
-      perms.includes("update_corpusfolder")
-    );
+  // No permissions loaded yet - fail safe (hide button)
+  if (!corpusPermissions || corpusPermissions.length === 0) {
+    return false;
   }
 
-  // TODO: Check corpus permissions from Apollo cache
-  // For now, return true as placeholder
-  return true;
+  // Per permission model: folder write operations require UPDATE on corpus
+  return corpusPermissions.includes("update_corpus");
 });
 
 /**
