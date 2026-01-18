@@ -23,7 +23,7 @@ graph TB
         celerybeat[Celery Beat]
         flower[Flower]
         frontend[Frontend React]
-        nlm_ingestor[NLM Ingestor]
+        docling_parser[Docling Parser]
         vector_embedder[Vector Embedder]
     end
 
@@ -44,8 +44,8 @@ graph TB
     django -->|Manages| extract
     django -->|Manages| datacell
 
-    nlm_ingestor -->|Parses PDFs| django
-    nlm_ingestor -->|Creates layout annotations| annotation
+    docling_parser -->|Parses PDFs| django
+    docling_parser -->|Creates layout annotations| annotation
 
     vector_embedder -->|Generates embeddings| django
     vector_embedder -->|Stores embeddings| annotation
@@ -63,6 +63,6 @@ graph TB
     classDef container fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
     classDef model fill:#fff59d,stroke:#f57f17,stroke-width:2px;
 
-    class django,postgres,redis,celeryworker,celerybeat,flower,frontend,nlm_ingestor,vector_embedder container;
+    class django,postgres,redis,celeryworker,celerybeat,flower,frontend,docling_parser,vector_embedder container;
     class document,annotation,relationship,labelset,extract,datacell model;
 ```

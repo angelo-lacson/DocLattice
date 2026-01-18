@@ -1381,8 +1381,8 @@ class TestCorpusIsolation_Deduplication(DocumentFolderServiceTestBase):
             pdf_file_hash=None,
         )
 
-    def test_adding_same_document_twice_with_hash_returns_existing(self):
-        """Adding document with same hash returns existing copy."""
+    def test_adding_same_document_twice_creates_separate_copies(self):
+        """Adding document multiple times creates separate corpus copies (no dedup)."""
         corpus_doc1, status1, _ = DocumentFolderService.add_document_to_corpus(
             user=self.owner, document=self.document_with_hash, corpus=self.corpus
         )
@@ -1390,12 +1390,14 @@ class TestCorpusIsolation_Deduplication(DocumentFolderServiceTestBase):
             user=self.owner, document=self.document_with_hash, corpus=self.corpus
         )
 
+        # Both should be "added" - no content-based deduplication
         self.assertEqual(status1, "added")
-        self.assertEqual(status2, "already_exists")
-        self.assertEqual(corpus_doc1.id, corpus_doc2.id)  # Same document returned
+        self.assertEqual(status2, "added")
+        # Different corpus-isolated documents created
+        self.assertNotEqual(corpus_doc1.id, corpus_doc2.id)
 
     def test_adding_document_without_hash_creates_new_each_time(self):
-        """Documents without hash are not deduplicated (each add creates new)."""
+        """Documents are not deduplicated regardless of hash presence."""
         corpus_doc1, status1, _ = DocumentFolderService.add_document_to_corpus(
             user=self.owner, document=self.document_without_hash, corpus=self.corpus
         )
@@ -1403,11 +1405,10 @@ class TestCorpusIsolation_Deduplication(DocumentFolderServiceTestBase):
             user=self.owner, document=self.document_without_hash, corpus=self.corpus
         )
 
-        # Both should be "added" status since no hash for deduplication
-        # Note: Current implementation still uses hash-based dedup, so without hash
-        # each call creates a new document
-        self.assertIsNotNone(corpus_doc1)
-        self.assertIsNotNone(corpus_doc2)
+        # Both should be "added" - each call creates a new document
+        self.assertEqual(status1, "added")
+        self.assertEqual(status2, "added")
+        self.assertNotEqual(corpus_doc1.id, corpus_doc2.id)
 
 
 class TestCorpusIsolation_AddToFolder(DocumentFolderServiceTestBase):

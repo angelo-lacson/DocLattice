@@ -105,6 +105,7 @@ class TxtParser(BaseParser):
                 "parent_id": None,
                 "annotation_type": "SPAN_LABEL",
                 "structural": True,
+                "content_modalities": ["TEXT"],  # Text parser only processes text
             }
             labelled_text.append(annotation_entry)
 

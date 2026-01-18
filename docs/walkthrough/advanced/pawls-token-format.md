@@ -65,14 +65,25 @@ Each token in the `tokens` list is represented by the `PawlsTokenPythonType`:
 
 ```python
 class PawlsTokenPythonType(TypedDict):
+    # Position and dimensions (in PDF points)
     x: float
     y: float
     width: float
     height: float
-    text: str
+    text: str  # Empty string for image tokens
+
+    # Image-specific fields (only present when is_image=True)
+    is_image: NotRequired[bool]  # True for image tokens
+    image_path: NotRequired[str]  # Storage path to image file
+    format: NotRequired[str]  # Image format: "jpeg" or "png"
+    content_hash: NotRequired[str]  # SHA-256 hash for deduplication
+    original_width: NotRequired[int]  # Original image width in pixels
+    original_height: NotRequired[int]  # Original image height in pixels
+    image_type: NotRequired[str]  # "embedded" or "cropped"
 ```
 
 The `x`, `y`, `width`, and `height` fields provide the positional information for each token on the page.
+For text tokens, `text` contains the word content. For image tokens, `text` is an empty string and `is_image` is `true`.
 
 ## Annotation Process
 

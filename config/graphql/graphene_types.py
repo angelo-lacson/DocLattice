@@ -268,6 +268,14 @@ class AnnotationInputType(AnnotatePermissionsForReadMixin, graphene.InputObjectT
 class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     json = GenericScalar()  # noqa
     feedback_count = graphene.Int(description="Count of user feedback")
+    content_modalities = graphene.List(
+        graphene.String,
+        description="Content modalities present in this annotation: TEXT, IMAGE, etc.",
+    )
+
+    def resolve_content_modalities(self, info):
+        """Return content modalities list from model."""
+        return self.content_modalities or []
 
     all_source_node_in_relationship = graphene.List(lambda: RelationshipType)
 
@@ -2719,6 +2727,17 @@ class PipelineComponentType(graphene.ObjectType):
     input_schema = GenericScalar(
         description="JSONSchema schema for inputs supported from user (experimental - not fully implemented)."
     )
+    # Multimodal support flags (for embedders)
+    is_multimodal = graphene.Boolean(
+        description="Whether this embedder supports multiple modalities (text + images).",
+        required=False,
+    )
+    supports_text = graphene.Boolean(
+        description="Whether this embedder supports text input.", required=False
+    )
+    supports_images = graphene.Boolean(
+        description="Whether this embedder supports image input.", required=False
+    )
 
 
 class PipelineComponentsType(graphene.ObjectType):
@@ -3254,3 +3273,48 @@ class ModerationMetricsType(graphene.ObjectType):
     time_range_hours = graphene.Int()
     start_time = graphene.DateTime()
     end_time = graphene.DateTime()
+
+
+# ---------------- Semantic Search Types ----------------
+class SemanticSearchResultType(graphene.ObjectType):
+    """
+    Result type for semantic (vector) search across annotations.
+
+    Returns annotation matches with their similarity scores, enabling
+    relevance-ranked search results from the global embeddings.
+
+    PERMISSION MODEL:
+    - Uses Document.objects.visible_to_user() for document access control
+    - Structural annotations visible if document is accessible
+    - Non-structural annotations visible if public OR owned by user
+    """
+
+    annotation = graphene.Field(
+        AnnotationType,
+        required=True,
+        description="The matched annotation",
+    )
+    similarity_score = graphene.Float(
+        required=True,
+        description="Similarity score (0.0-1.0, higher is more similar)",
+    )
+    document = graphene.Field(
+        lambda: DocumentType,
+        description="The document containing this annotation (for convenience)",
+    )
+    corpus = graphene.Field(
+        lambda: CorpusType,
+        description="The corpus containing this annotation, if any",
+    )
+
+    def resolve_document(self, info):
+        """Resolve the document from the annotation."""
+        if self.annotation and self.annotation.document:
+            return self.annotation.document
+        return None
+
+    def resolve_corpus(self, info):
+        """Resolve the corpus from the annotation."""
+        if self.annotation:
+            return self.annotation.corpus
+        return None

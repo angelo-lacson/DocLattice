@@ -215,6 +215,7 @@ export const ContentItemRenderer: React.FC<ContentItemRendererProps> = ({
           onDelete={readOnly ? undefined : handleDeleteAnnotation}
           onToggleMultiSelect={onToggleMultiSelect}
           isMultiSelected={isMultiSelected}
+          contentModalities={annotation.contentModalities}
         />
       </ItemContainer>
     );

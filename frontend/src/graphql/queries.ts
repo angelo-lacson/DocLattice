@@ -908,6 +908,7 @@ export const GET_ANNOTATIONS = gql`
           rawText
           isPublic
           myPermissions
+          contentModalities
           __typename
         }
         __typename
@@ -1232,6 +1233,7 @@ export const REQUEST_PAGE_ANNOTATION_DATA = gql`
         rawText
         tokensJsons
         json
+        contentModalities
         sourceNodeInRelationships {
           edges {
             node {
@@ -1987,6 +1989,7 @@ export const GET_DOCUMENT_ANNOTATIONS_AND_RELATIONSHIPS = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2017,6 +2020,7 @@ export const GET_DOCUMENT_ANNOTATIONS_AND_RELATIONSHIPS = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2748,6 +2752,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2778,6 +2783,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2869,6 +2875,7 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2899,6 +2906,7 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2997,6 +3005,7 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       # Structural relationships (no corpus required)
       allRelationships {
