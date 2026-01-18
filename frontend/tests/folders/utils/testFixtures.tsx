@@ -13,6 +13,7 @@ import {
   createFolderParentIdAtom,
   folderCorpusIdAtom,
   sidebarCollapsedAtom,
+  corpusPermissionsAtom,
 } from "../../../src/atoms/folderAtoms";
 
 /**
@@ -88,45 +89,19 @@ export function ToolbarFixture({
   onNewFolder = () => {},
   onUpload = () => {},
 }: ToolbarFixtureProps) {
-  // Create a folder with permissions that will allow/disallow folder creation
-  // canCreateFoldersAtom checks for "update_corpus" or "create_corpus" permissions
-  // When canCreateFolders=false, we need to select a folder with restricted permissions
-  // (at root/null folder, canCreateFoldersAtom returns true by default)
-  const effectiveFolderId = canCreateFolders
-    ? selectedFolderId
-    : selectedFolderId || "restricted-folder";
-
-  const foldersWithPermissions = canCreateFolders
-    ? [
-        {
-          id: selectedFolderId || "root-folder",
-          name: "Test Folder",
-          parent: null,
-          path: "Test Folder",
-          myPermissions: ["update_corpus", "create_corpus"], // Allows folder creation
-          documentCount: 0,
-          children: [],
-        },
-      ]
-    : [
-        {
-          id: "restricted-folder",
-          name: "Restricted Folder",
-          parent: null,
-          path: "Restricted Folder",
-          myPermissions: ["read_corpus"], // No create/update permissions
-          documentCount: 0,
-          children: [],
-        },
-      ];
+  // canCreateFoldersAtom now reads from corpusPermissionsAtom
+  // which checks for "update_corpus" permission on the corpus
+  const corpusPermissions = canCreateFolders
+    ? ["read_corpus", "update_corpus"]
+    : ["read_corpus"];
 
   // Hydrate atoms for the toolbar to read from
-  // canCreateFoldersAtom and folderBreadcrumbAtom are derived atoms,
-  // so we set their source atoms (folderListAtom, selectedFolderIdAtom)
+  // canCreateFoldersAtom is derived from corpusPermissionsAtom
   useHydrateAtoms([
-    [selectedFolderIdAtom, effectiveFolderId],
-    [folderListAtom, foldersWithPermissions],
+    [selectedFolderIdAtom, selectedFolderId],
+    [folderListAtom, []],
     [sidebarCollapsedAtom, false],
+    [corpusPermissionsAtom, corpusPermissions],
   ] as const);
 
   return (
