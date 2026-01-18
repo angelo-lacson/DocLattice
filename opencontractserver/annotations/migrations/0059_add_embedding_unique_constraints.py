@@ -103,6 +103,10 @@ def reverse_cleanup(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # Non-atomic migration: the RunPython cleanup must commit before
+    # the AddConstraint operations, otherwise PostgreSQL raises
+    # "cannot CREATE INDEX because it has pending trigger events"
+    atomic = False
 
     dependencies = [
         ("annotations", "0058_add_vector_1024_and_4096_fields"),
