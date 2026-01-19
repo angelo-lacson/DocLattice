@@ -4,6 +4,7 @@ import { Upload, FileArchive, FileText, RefreshCw } from "lucide-react";
 import { Button } from "@os-legal/ui";
 import { DropZone, DropZoneIcon, DropZoneText } from "../UploadModalStyles";
 import { formatFileSize } from "../../../../../utils/files";
+import { UPLOAD } from "../../../../../assets/configurations/constants";
 
 export type UploadMode = "single" | "bulk";
 
@@ -56,6 +57,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
     accept: acceptConfig,
     multiple: mode === "single",
     disabled: disabled || (mode === "single" && hasFiles),
+    maxSize: UPLOAD.MAX_FILE_SIZE_BYTES,
   });
 
   const handleBrowseClick = useCallback(
@@ -72,14 +74,39 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
       if (files.length > 0) {
-        onFilesSelected(files);
+        // Validate file sizes for manual input (dropzone handles this for drag-drop)
+        const validFiles: File[] = [];
+        const oversizedFiles: FileRejection[] = [];
+
+        for (const file of files) {
+          if (file.size > UPLOAD.MAX_FILE_SIZE_BYTES) {
+            oversizedFiles.push({
+              file,
+              errors: [
+                {
+                  code: "file-too-large",
+                  message: `File exceeds ${UPLOAD.MAX_FILE_SIZE_DISPLAY} limit`,
+                },
+              ],
+            });
+          } else {
+            validFiles.push(file);
+          }
+        }
+
+        if (validFiles.length > 0) {
+          onFilesSelected(validFiles);
+        }
+        if (oversizedFiles.length > 0 && onFileRejected) {
+          onFileRejected(oversizedFiles);
+        }
       }
       // Reset input to allow selecting the same file again
       if (e.target) {
         e.target.value = "";
       }
     },
-    [onFilesSelected]
+    [onFilesSelected, onFileRejected]
   );
 
   // Render for bulk mode with a file selected
@@ -158,8 +185,8 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
         </div>
         <div className="secondary-text">
           {mode === "bulk"
-            ? "The ZIP should contain PDF documents"
-            : "or click the button below to browse"}
+            ? `ZIP should contain PDFs (max ${UPLOAD.MAX_FILE_SIZE_DISPLAY})`
+            : `Max ${UPLOAD.MAX_FILE_SIZE_DISPLAY} per file`}
         </div>
       </DropZoneText>
       <Button

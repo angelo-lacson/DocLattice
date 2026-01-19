@@ -5,9 +5,40 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-17
+## [Unreleased] - 2026-01-18
 
 ### Added
+
+#### Unified Upload Modal with @os-legal/ui Design System
+- **Consolidated `BulkUploadModal` and `DocumentUploadModal`** into single `UploadModal` component
+  - Auto-detects upload mode: ZIP files → bulk mode, PDFs → single mode
+  - Multi-step wizard for single mode (Select → Details → Corpus)
+  - Simplified single-step flow for bulk ZIP uploads
+  - Files: `frontend/src/components/widgets/modals/UploadModal/`
+- **Custom hooks for upload state management**:
+  - `useUploadState` - file list and selection state
+  - `useUploadMutations` - GraphQL mutations with consistent `makePublic` handling
+  - `useCorpusSearch` - debounced corpus search with permission filtering
+  - Files: `frontend/src/components/widgets/modals/UploadModal/hooks/`
+- **Modular sub-components**: `FileDropZone`, `FileList`, `FileDetailsForm`, `CorpusSelectorCard`, `StepIndicator`, `UploadProgress`
+- **File size validation**: 100MB limit with user feedback (configurable via `UPLOAD.MAX_FILE_SIZE_BYTES` constant)
+- **16 Playwright component tests** covering both modes, validation, and mobile responsiveness
+- **Manual test documentation**: `docs/manual-test-scripts/upload-modal.md`
+- **Upload constants**: Added `UPLOAD.MAX_FILE_SIZE_BYTES` and `DEBOUNCE.CORPUS_SEARCH_MS` to `frontend/src/assets/configurations/constants.ts`
+
+### Changed
+- **`BulkUploadModal`** is now a thin wrapper: `<UploadModal forceMode="bulk" />`
+- **`DocumentUploadModal`** is now a thin wrapper: `<UploadModal forceMode="single" />`
+- Backward compatibility maintained via existing props
+
+### Removed
+- **Deleted unused components**: `DocumentUploadList.tsx`, `DocumentListItem.tsx`
+
+### Technical Details
+- Migrated from Semantic UI to `@os-legal/ui` design system (Modal, Button, Input, Progress, etc.)
+- Uses `--oc-*` CSS design tokens for consistent theming
+- Debounce cleanup on unmount to prevent memory leaks
+- Sequential uploads to avoid server overload (documented trade-off)
 
 #### Pre-extracted Image Content for Annotations
 - **`image_content_file` FileField on Annotation model**: Stores pre-extracted image data as JSON files

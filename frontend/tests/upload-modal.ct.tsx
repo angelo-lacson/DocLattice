@@ -1,4 +1,10 @@
 // Playwright Component Test for UploadModal
+//
+// Note on duplicate mocks: MockedProvider consumes mocks in order - each query
+// execution uses the next mock in the array. Duplicating mocks handles:
+// 1. Initial query on mount
+// 2. Refetches triggered by search term changes or other state updates
+// Without duplicates, subsequent queries would fail with "No more mocked responses".
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { MockedProvider } from "@apollo/client/testing";

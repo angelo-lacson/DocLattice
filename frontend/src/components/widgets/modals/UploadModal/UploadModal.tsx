@@ -191,11 +191,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const isFormValid = useCallback(() => {
     if (!uploadState.hasFiles) return false;
 
-    // Check all files have required fields
+    // Check all files have required fields (with null guards)
     return uploadState.files.every(
       (pkg) =>
-        pkg.formData.title.trim().length > 0 &&
-        pkg.formData.description.trim().length > 0
+        pkg.formData &&
+        pkg.formData.title?.trim().length > 0 &&
+        pkg.formData.description?.trim().length > 0
     );
   }, [uploadState.files, uploadState.hasFiles]);
 

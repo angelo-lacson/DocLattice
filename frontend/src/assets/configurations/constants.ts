@@ -56,6 +56,16 @@ export const DEBOUNCE = {
   SEARCH_MS: 1000,
   EXTRACT_SEARCH_MS: 500,
   CLICK_OUTSIDE_DELAY_MS: 100,
+  CORPUS_SEARCH_MS: 400,
+  CORPUS_SEARCH_MAX_WAIT_MS: 1000,
+} as const;
+
+// Upload constraints
+export const UPLOAD = {
+  /** Maximum file size in bytes (100MB) */
+  MAX_FILE_SIZE_BYTES: 100 * 1024 * 1024,
+  /** Maximum file size display string */
+  MAX_FILE_SIZE_DISPLAY: "100MB",
 } as const;
 
 // Polling constants (legacy - most polling replaced by WebSocket notifications)

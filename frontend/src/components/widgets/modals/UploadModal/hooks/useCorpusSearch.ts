@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useQuery } from "@apollo/client";
 import _ from "lodash";
 import {
@@ -9,6 +9,7 @@ import {
 import { CorpusType } from "../../../../../types/graphql-api";
 import { getPermissions } from "../../../../../utils/transform";
 import { PermissionTypes } from "../../../../types";
+import { DEBOUNCE } from "../../../../../assets/configurations/constants";
 
 interface UseCorpusSearchProps {
   /** Skip query when modal is closed */
@@ -49,24 +50,32 @@ export function useCorpusSearch({
     skip,
   });
 
-  // Refetch when search term changes
-  useEffect(() => {
-    if (!skip) {
-      refetch();
-    }
-  }, [searchTerm, skip, refetch]);
+  // Note: No useEffect for refetch needed - Apollo's variables reactivity
+  // automatically refetches when searchTerm (and thus variables) changes.
 
-  // Debounced search term setter
-  const debouncedSetSearchTerm = useCallback(
+  // Create stable debounced function ref
+  const debouncedFnRef = useRef(
     _.debounce(
       (term: string) => {
         setSearchTerm(term);
       },
-      400,
-      { maxWait: 1000 }
-    ),
-    []
+      DEBOUNCE.CORPUS_SEARCH_MS,
+      { maxWait: DEBOUNCE.CORPUS_SEARCH_MAX_WAIT_MS }
+    )
   );
+
+  // Debounced search term setter
+  const debouncedSetSearchTerm = useCallback((term: string) => {
+    debouncedFnRef.current(term);
+  }, []);
+
+  // Cleanup debounced function on unmount to prevent memory leaks
+  useEffect(() => {
+    const debouncedFn = debouncedFnRef.current;
+    return () => {
+      debouncedFn.cancel();
+    };
+  }, []);
 
   // Extract and filter corpuses
   const corpuses = useMemo(() => {
