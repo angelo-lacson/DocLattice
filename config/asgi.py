@@ -53,15 +53,17 @@ def create_http_router(django_app, mcp_app):
     Create an HTTP router that dispatches to MCP or Django based on path.
 
     Routes MCP endpoints to the MCP ASGI app, everything else to Django.
-    The MCP server supports two transports:
+    The MCP server supports multiple transports:
     - Streamable HTTP at /mcp (recommended, stateless mode)
+    - Corpus-scoped HTTP at /mcp/corpus/{slug}/ (scoped to single corpus)
     - SSE at /sse (deprecated, for backward compatibility)
     """
 
     async def router(scope, receive, send):
         path = scope.get("path", "")
-        # Match MCP Streamable HTTP endpoints: /mcp or /mcp/*
-        # Match MCP SSE endpoints: /sse or /sse/*
+        # Match MCP endpoints:
+        # - /mcp or /mcp/* (global and corpus-scoped)
+        # - /sse or /sse/* (deprecated SSE transport)
         if (
             path == "/mcp"
             or path.startswith("/mcp/")
