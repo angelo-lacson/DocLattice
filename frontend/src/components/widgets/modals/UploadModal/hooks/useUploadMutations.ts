@@ -54,6 +54,8 @@ interface UploadDocumentsZipOutput {
 interface UseUploadMutationsProps {
   corpusId?: string | null;
   folderId?: string | null;
+  /** Whether uploaded documents should be public (default: false) */
+  makePublic?: boolean;
   onFileStatusChange: (index: number, status: UploadStatus) => void;
   onComplete?: () => void;
 }
@@ -82,6 +84,7 @@ interface UseUploadMutationsReturn {
 export function useUploadMutations({
   corpusId,
   folderId,
+  makePublic = false,
   onFileStatusChange,
   onComplete,
 }: UseUploadMutationsProps): UseUploadMutationsReturn {
@@ -125,7 +128,7 @@ export function useUploadMutations({
           slug: formData.slug || undefined,
           addToCorpusId: corpusId || undefined,
           addToFolderId: folderId || undefined,
-          makePublic: false,
+          makePublic,
         };
 
         const result = await uploadDocumentMutation({ variables });
@@ -142,14 +145,16 @@ export function useUploadMutations({
           toast.error(result.data?.uploadDocument?.message || "Upload failed");
           return false;
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("[UPLOAD] Upload error:", error);
         onFileStatusChange(index, "failed");
-        toast.error(error.message || "Upload failed");
+        const message =
+          error instanceof Error ? error.message : "Upload failed";
+        toast.error(message);
         return false;
       }
     },
-    [corpusId, folderId, uploadDocumentMutation, onFileStatusChange]
+    [corpusId, folderId, makePublic, uploadDocumentMutation, onFileStatusChange]
   );
 
   /**
@@ -180,12 +185,12 @@ export function useUploadMutations({
             base64FileString: base64String.split(",")[1],
             filename: pkg.file.name,
             customMeta: {},
-            description: pkg.formData.description || "",
-            title: pkg.formData.title || pkg.file.name,
-            slug: pkg.formData.slug || undefined,
+            description: pkg.formData?.description || "",
+            title: pkg.formData?.title || pkg.file.name,
+            slug: pkg.formData?.slug || undefined,
             addToCorpusId: effectiveCorpusId || undefined,
             addToFolderId: folderId || undefined,
-            makePublic: false,
+            makePublic,
           };
 
           const result = await uploadDocumentMutation({ variables });
@@ -202,10 +207,12 @@ export function useUploadMutations({
               result.data?.uploadDocument?.message || "Upload failed"
             );
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("[UPLOAD] Upload error:", error);
           onFileStatusChange(index, "failed");
-          toast.error(error.message || "Upload failed");
+          const message =
+            error instanceof Error ? error.message : "Upload failed";
+          toast.error(message);
         }
       }
 
@@ -219,6 +226,7 @@ export function useUploadMutations({
     [
       corpusId,
       folderId,
+      makePublic,
       uploadDocumentMutation,
       client,
       onFileStatusChange,
@@ -228,28 +236,26 @@ export function useUploadMutations({
 
   /**
    * Upload a ZIP file containing multiple documents.
+   * Uploads are processed sequentially on the backend via a Celery job.
    * Returns true on success, false on failure.
    */
   const uploadZipFile = useCallback(
     async (zipFile: File, targetCorpusId?: string | null): Promise<boolean> => {
       try {
-        // Convert to base64
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve, reject) => {
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(",")[1]); // Remove data:mime/type;base64, prefix
-          };
-          reader.onerror = () => reject(reader.error);
-        });
-        reader.readAsDataURL(zipFile);
+        // Convert to base64 using shared utility for consistency
+        const base64Result = await toBase64(zipFile);
 
-        const base64String = await base64Promise;
+        if (typeof base64Result !== "string") {
+          throw new Error("Failed to convert file to base64");
+        }
+
+        // Remove data:mime/type;base64, prefix
+        const base64String = base64Result.split(",")[1];
 
         const result = await uploadZipMutation({
           variables: {
             base64FileString: base64String,
-            makePublic: true,
+            makePublic,
             addToCorpusId: targetCorpusId || null,
           },
         });
@@ -264,17 +270,25 @@ export function useUploadMutations({
             result.data?.uploadDocumentsZip.message || "Upload failed"
           );
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("[UPLOAD] ZIP upload error:", error);
-        const errorMessage =
-          error.graphQLErrors?.[0]?.message ||
-          error.message ||
-          "An unexpected error occurred";
+        // Handle GraphQL errors and standard errors
+        let errorMessage = "An unexpected error occurred";
+        if (error instanceof Error) {
+          // Check for Apollo GraphQL error structure
+          const apolloError = error as Error & {
+            graphQLErrors?: Array<{ message: string }>;
+          };
+          errorMessage =
+            apolloError.graphQLErrors?.[0]?.message ||
+            error.message ||
+            errorMessage;
+        }
         toast.error(`Upload failed: ${errorMessage}`);
         return false;
       }
     },
-    [uploadZipMutation]
+    [makePublic, uploadZipMutation]
   );
 
   return {
